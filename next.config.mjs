@@ -16,6 +16,11 @@ const nextConfig = {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
 
+  // Aumentar límite de tamaño para Server Actions (subida de archivos)
+  serverActions: {
+    bodySizeLimit: '50mb',
+  },
+
   async headers() {
     return [
       {
