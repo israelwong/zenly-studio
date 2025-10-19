@@ -125,58 +125,64 @@ export function UtilidadTab({ studioSlug }: UtilidadTabProps) {
                         </div>
                     </ZenCardHeader>
 
-                    <ZenCardContent className="p-6 space-y-4">
-                        {/* Utilidad de Servicios */}
-                        <ZenInput
-                            label="Utilidad de Servicios"
-                            type="number"
-                            value={config.utilidad_servicio}
-                            onChange={(e) => handleInputChange('utilidad_servicio', e.target.value)}
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            required
-                            hint="Margen de utilidad aplicado a servicios (ej: 0.30 = 30% = $1000 costo → $300 utilidad)"
-                        />
+                    <ZenCardContent className="p-6 space-y-6">
+                        {/* Fila 1: Utilidades (2 columnas) */}
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Utilidad de Servicios */}
+                            <ZenInput
+                                label="Utilidad Servicios"
+                                type="number"
+                                value={config.utilidad_servicio}
+                                onChange={(e) => handleInputChange('utilidad_servicio', e.target.value)}
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                required
+                                hint="Margen de utilidad para servicios"
+                            />
 
-                        {/* Utilidad de Productos */}
-                        <ZenInput
-                            label="Utilidad de Productos"
-                            type="number"
-                            value={config.utilidad_producto}
-                            onChange={(e) => handleInputChange('utilidad_producto', e.target.value)}
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            required
-                            hint="Margen de utilidad aplicado a productos (ej: 0.40 = 40% = $1000 costo → $400 utilidad)"
-                        />
+                            {/* Utilidad de Productos */}
+                            <ZenInput
+                                label="Utilidad Productos"
+                                type="number"
+                                value={config.utilidad_producto}
+                                onChange={(e) => handleInputChange('utilidad_producto', e.target.value)}
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                required
+                                hint="Margen de utilidad para productos"
+                            />
+                        </div>
 
-                        {/* Comisión de Venta */}
-                        <ZenInput
-                            label="Comisión de Venta"
-                            type="number"
-                            value={config.comision_venta}
-                            onChange={(e) => handleInputChange('comision_venta', e.target.value)}
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            required
-                            hint="Comisión deducida del precio público (ej: 0.10 = 10% comisión)"
-                        />
+                        {/* Fila 2: Comisión y Sobreprecio (2 columnas) */}
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Comisión de Venta */}
+                            <ZenInput
+                                label="Comisión de Venta"
+                                type="number"
+                                value={config.comision_venta}
+                                onChange={(e) => handleInputChange('comision_venta', e.target.value)}
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                required
+                                hint="Comisión deducida del precio"
+                            />
 
-                        {/* Sobreprecio */}
-                        <ZenInput
-                            label="Sobreprecio / Margen de Descuento"
-                            type="number"
-                            value={config.sobreprecio}
-                            onChange={(e) => handleInputChange('sobreprecio', e.target.value)}
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            required
-                            hint="Margen adicional para aplicar descuentos sin comprometer la utilidad base (ej: 0.05 = 5% margen)"
-                        />
+                            {/* Sobreprecio */}
+                            <ZenInput
+                                label="Sobreprecio / Descuento"
+                                type="number"
+                                value={config.sobreprecio}
+                                onChange={(e) => handleInputChange('sobreprecio', e.target.value)}
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                required
+                                hint="Margen para descuentos"
+                            />
+                        </div>
                     </ZenCardContent>
                 </ZenCard>
 
