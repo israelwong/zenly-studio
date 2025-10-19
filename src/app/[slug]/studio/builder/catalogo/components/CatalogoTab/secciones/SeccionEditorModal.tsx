@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { ZenButton, ZenInput, ZenCard, ZenTextarea } from "@/components/ui/zen";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/shadcn/dialog";
-import { X } from "lucide-react";
 import { toast } from "sonner";
 
 interface SeccionEditorModalProps {
@@ -122,15 +121,8 @@ export function SeccionEditorModal({
         <Dialog open={isOpen} onOpenChange={handleClose}>
             <DialogContent className="sm:max-w-[600px] bg-zinc-900 border-zinc-800">
                 <DialogHeader>
-                    <DialogTitle className="text-xl font-bold text-zinc-100 flex items-center justify-between">
+                    <DialogTitle className="text-xl font-bold text-zinc-100">
                         {isEditMode ? "Editar Sección" : "Nueva Sección"}
-                        <button
-                            onClick={handleClose}
-                            disabled={isSaving}
-                            className="text-zinc-400 hover:text-zinc-100 transition-colors"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
                     </DialogTitle>
                 </DialogHeader>
 
