@@ -35,7 +35,7 @@ export async function obtenerMediaCategoria(categoryId: string) {
   try {
     const media = await prisma.studio_category_media.findMany({
       where: { category_id: categoryId },
-      orderBy: { order: 'asc' },
+      orderBy: { display_order: 'asc' },
     });
 
     return {

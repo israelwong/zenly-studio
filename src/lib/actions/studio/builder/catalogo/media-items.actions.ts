@@ -33,7 +33,7 @@ export async function obtenerMediaItem(itemId: string) {
   try {
     const media = await prisma.studio_item_media.findMany({
       where: { item_id: itemId },
-      orderBy: { order: 'asc' },
+      orderBy: { display_order: 'asc' },
     });
 
     return {
