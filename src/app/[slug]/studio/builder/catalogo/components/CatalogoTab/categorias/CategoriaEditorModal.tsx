@@ -179,12 +179,14 @@ export function CategoriaEditorModal({
         for (const foto of uploadedFotos) {
             const result = await crearMediaCategoria({
                 categoryId: formData.id,
+                studioId: studioSlug,
                 url: foto.url,
                 fileName: foto.fileName,
                 fileType: 'image',
                 size: foto.size,
+                mimeType: 'image/jpeg',
             });
-
+            
             if (!result.success) {
                 toast.error(`Error guardando ${foto.fileName}: ${result.error}`);
             }
@@ -208,12 +210,14 @@ export function CategoriaEditorModal({
         for (const video of uploadedVideos) {
             const result = await crearMediaCategoria({
                 categoryId: formData.id,
+                studioId: studioSlug,
                 url: video.url,
                 fileName: video.fileName,
                 fileType: 'video',
                 size: video.size,
+                mimeType: 'video/mp4',
             });
-
+            
             if (!result.success) {
                 toast.error(`Error guardando ${video.fileName}: ${result.error}`);
             }

@@ -8,14 +8,16 @@ import { revalidatePath } from "next/cache";
 const MediaItemSchema = z.object({
   id: z.string().optional(),
   categoryId: z.string(),
+  studioId: z.string(),
   url: z.string().url(),
   fileName: z.string(),
   fileType: z.enum(['image', 'video']),
   size: z.number().positive(),
-  order: z.number().int().nonnegative().default(0),
+  mimeType: z.string().optional(),
+  displayOrder: z.number().int().nonnegative().default(0),
 });
 
-const CreateMediaItemSchema = MediaItemSchema.omit({ id: true });
+const CreateMediaItemSchema = MediaItemSchema.omit({ id: true, displayOrder: true });
 const UpdateMediaItemSchema = MediaItemSchema.partial().required({ id: true });
 const DeleteMediaItemSchema = z.object({
   id: z.string(),
@@ -51,7 +53,7 @@ export async function obtenerMediaCategoria(categoryId: string) {
 
 /**
  * Crea un nuevo archivo multimedia para una categoría
- * El primer archivo automáticamente es portada (order=0)
+ * El primer archivo automáticamente es portada (display_order=0)
  */
 export async function crearMediaCategoria(data: CreateMediaItemForm) {
   try {
@@ -62,17 +64,19 @@ export async function crearMediaCategoria(data: CreateMediaItemForm) {
       where: { category_id: validatedData.categoryId },
     });
 
-    // El primer archivo es portada (order=0), los demás se incrementan
-    const order = existingCount === 0 ? 0 : existingCount;
+    // El primer archivo es portada (display_order=0), los demás se incrementan
+    const displayOrder = existingCount === 0 ? 0 : existingCount;
 
     const media = await prisma.studio_category_media.create({
       data: {
         category_id: validatedData.categoryId,
-        url: validatedData.url,
-        file_name: validatedData.fileName,
-        file_type: validatedData.fileType,
-        file_size: validatedData.size,
-        order,
+        studio_id: validatedData.studioId,
+        file_url: validatedData.url,
+        filename: validatedData.fileName,
+        file_type: validatedData.fileType.toUpperCase(),
+        storage_bytes: BigInt(validatedData.size),
+        mime_type: validatedData.mimeType || "application/octet-stream",
+        display_order: displayOrder,
       },
     });
 
@@ -122,7 +126,7 @@ export async function reordenarMediaCategoria(
       mediaIds.map((id, index) =>
         prisma.studio_category_media.update({
           where: { id },
-          data: { order: index },
+          data: { display_order: index },
         })
       )
     );
@@ -186,10 +190,10 @@ export async function obtenerTamanioMediaCategoria(categoryId: string) {
   try {
     const result = await prisma.studio_category_media.aggregate({
       where: { category_id: categoryId },
-      _sum: { file_size: true },
+      _sum: { storage_bytes: true },
     });
 
-    const totalSize = result._sum.file_size ?? 0;
+    const totalSize = result._sum.storage_bytes ? Number(result._sum.storage_bytes) : 0;
 
     return {
       success: true,
