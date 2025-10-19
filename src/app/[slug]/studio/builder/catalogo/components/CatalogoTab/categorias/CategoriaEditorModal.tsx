@@ -11,6 +11,7 @@ import { useMediaUpload } from "@/hooks/useMediaUpload";
 import {
     crearMediaCategoria,
     eliminarMediaCategoria,
+    obtenerMediaCategoria,
 } from "@/lib/actions/studio/builder/catalogo/media-categorias.actions";
 
 interface MediaItem {
@@ -88,6 +89,7 @@ export function CategoriaEditorModal({
                 name: categoria.name,
                 description: categoria.description || "",
             });
+            cargarMediaExistente(categoria.id);
         } else {
             setFormData({
                 name: "",
@@ -153,6 +155,37 @@ export function CategoriaEditorModal({
     const handleClose = () => {
         if (!isSaving && !isUploading) {
             onClose();
+        }
+    };
+
+    // Cargar media existente desde BD
+    const cargarMediaExistente = async (categoryId: string) => {
+        try {
+            const result = await obtenerMediaCategoria(categoryId);
+            if (result.success && result.data) {
+                const fotosExistentes = result.data
+                    .filter((m) => m.file_type === 'IMAGE')
+                    .map((m) => ({
+                        id: m.id,
+                        url: m.file_url,
+                        fileName: m.filename,
+                        size: Number(m.storage_bytes),
+                    }));
+
+                const videosExistentes = result.data
+                    .filter((m) => m.file_type === 'VIDEO')
+                    .map((m) => ({
+                        id: m.id,
+                        url: m.file_url,
+                        fileName: m.filename,
+                        size: Number(m.storage_bytes),
+                    }));
+
+                setFotos(fotosExistentes);
+                setVideos(videosExistentes);
+            }
+        } catch (error) {
+            console.error("Error cargando media existente:", error);
         }
     };
 
@@ -288,11 +321,11 @@ export function CategoriaEditorModal({
     };
 
     // Componente: Thumbnail Grid
-    const MediaGrid = ({ 
-        items, 
-        onDelete, 
-        isDragging, 
-        setIsDragging, 
+    const MediaGrid = ({
+        items,
+        onDelete,
+        isDragging,
+        setIsDragging,
         type,
         onUploadClick,
         onDrop
@@ -306,11 +339,10 @@ export function CategoriaEditorModal({
         onDrop: (e: React.DragEvent) => void;
     }) => (
         <div
-            className={`grid grid-cols-3 gap-3 p-4 rounded-lg border-2 border-dashed transition-all ${
-                isDragging
-                    ? "border-emerald-500 bg-emerald-500/10"
-                    : "border-zinc-700 bg-zinc-800/30"
-            }`}
+            className={`grid grid-cols-3 gap-3 p-4 rounded-lg border-2 border-dashed transition-all ${isDragging
+                ? "border-emerald-500 bg-emerald-500/10"
+                : "border-zinc-700 bg-zinc-800/30"
+                }`}
             onDragEnter={() => setIsDragging(true)}
             onDragLeave={() => setIsDragging(false)}
             onDragOver={(e) => e.preventDefault()}
