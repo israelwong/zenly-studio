@@ -207,7 +207,7 @@ export function CategoriaEditorModal({
         }
 
         const fileArray = Array.from(files);
-        const uploadedFotos = await uploadFiles(fileArray, studioSlug, "categoria-fotos", formData.id);
+        const uploadedFotos = await uploadFiles(fileArray, studioSlug, "categorias", `${formData.id}/fotos`);
 
         // Persistir en BD
         for (const foto of uploadedFotos) {
@@ -238,7 +238,7 @@ export function CategoriaEditorModal({
         }
 
         const fileArray = Array.from(files);
-        const uploadedVideos = await uploadFiles(fileArray, studioSlug, "categoria-videos", formData.id);
+        const uploadedVideos = await uploadFiles(fileArray, studioSlug, "categorias", `${formData.id}/videos`);
 
         // Persistir en BD
         for (const video of uploadedVideos) {

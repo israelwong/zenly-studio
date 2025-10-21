@@ -12,11 +12,9 @@ export const MediaCategorySchema = z.enum([
   "clientes",          // Fotos de clientes
   "documentos",        // PDFs, documentos
   "temp",              // Archivos temporales
-  "categoria-fotos",   // Fotos de categorías (catalogo)
-  "categoria-videos",  // Videos de categorías (catalogo)
-  "item-fotos",        // Fotos de items (catalogo)
-  "item-videos",       // Videos de items (catalogo)
-  "seccion-portada"    // Portada de secciones (catalogo)
+  "categorias",        // Categorías catálogo (subcategory: {categoryId}/fotos|videos)
+  "items",             // Items catálogo (subcategory: {itemId}/fotos|videos)
+  "secciones"          // Secciones catálogo (subcategory: {sectionId}/portada)
 ]);
 
 // MIME types permitidos por categoría
