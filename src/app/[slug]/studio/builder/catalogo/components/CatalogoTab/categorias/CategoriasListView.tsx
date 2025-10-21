@@ -127,14 +127,17 @@ function CategoriaCard({
                                 {categoria.description}
                             </p>
                         )}
-                        <div className="text-xs text-zinc-500 space-y-1">
-                            <div>
+                        <div className="text-xs text-zinc-500 flex items-center gap-2">
+                            <span>
                                 {categoria.items ?? 0} item{categoria.items !== 1 ? "s" : ""}
-                            </div>
+                            </span>
                             {categoria.mediaSize !== undefined && categoria.mediaSize > 0 && (
-                                <div className="text-zinc-400">
-                                    {formatBytes(categoria.mediaSize)}
-                                </div>
+                                <>
+                                    <span>•</span>
+                                    <span>
+                                        {formatBytes(categoria.mediaSize)}
+                                    </span>
+                                </>
                             )}
                         </div>
                     </div>
