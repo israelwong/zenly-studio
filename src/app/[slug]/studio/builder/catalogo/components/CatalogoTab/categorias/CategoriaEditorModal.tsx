@@ -867,6 +867,18 @@ export function CategoriaEditorModal({
                 slides={videoSlides as any}
                 index={lightboxIndex}
                 plugins={[Video]}
+                video={{
+                    controls: true,
+                    playsInline: true,
+                    autoPlay: true,
+                    loop: false,
+                    muted: false,
+                    disablePictureInPicture: false,
+                    disableRemotePlayback: false,
+                    controlsList: "nodownload nofullscreen noremoteplayback",
+                    crossOrigin: "anonymous",
+                    preload: "metadata",
+                }}
                 on={{
                     view: ({ index }) => setLightboxIndex(index),
                 }}
