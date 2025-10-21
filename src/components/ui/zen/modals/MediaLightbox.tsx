@@ -95,6 +95,7 @@ export function MediaLightbox({
                 className="w-full h-full flex items-center justify-center relative"
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
+                onClick={(e) => e.stopPropagation()}
             >
                 {currentItem.type === 'foto' ? (
                     <Image
@@ -159,11 +160,10 @@ export function MediaLightbox({
                                         e.stopPropagation();
                                         setCurrentIndex(idx);
                                     }}
-                                    className={`w-2 h-2 rounded-full transition-all ${
-                                        idx === currentIndex
+                                    className={`w-2 h-2 rounded-full transition-all ${idx === currentIndex
                                             ? "bg-emerald-500 w-6"
                                             : "bg-zinc-600 hover:bg-zinc-500"
-                                    }`}
+                                        }`}
                                     aria-label={`Go to item ${idx + 1}`}
                                 />
                             ))}
