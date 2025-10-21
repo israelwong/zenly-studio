@@ -366,7 +366,7 @@ export function CategoriaEditorModal({
                 file.type.startsWith('image/')
             );
             if (imageFiles.length > 0) {
-                await handleFotosSelected(imageFiles as FileList);
+                await handleFotosSelected(imageFiles as unknown as FileList);
             } else {
                 toast.error("Solo se permiten archivos de imagen en la pestaña de fotos");
             }
@@ -384,7 +384,7 @@ export function CategoriaEditorModal({
                 file.type.startsWith('video/')
             );
             if (videoFiles.length > 0) {
-                await handleVideosSelected(videoFiles as FileList);
+                await handleVideosSelected(videoFiles as unknown as FileList);
             } else {
                 toast.error("Solo se permiten archivos de video en la pestaña de videos");
             }

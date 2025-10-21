@@ -12,15 +12,15 @@ import { toast } from "sonner";
 import { Trash2, Upload, Loader2, GripVertical, Play, Save } from "lucide-react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useStorageTracking } from "@/hooks/useStorageTracking";
-import { 
-    crearItem, 
+import {
+    crearItem,
     actualizarItem
 } from "@/lib/actions/studio/builder/catalogo/items.actions";
-import { 
-    obtenerMediaItem, 
-    crearMediaItem, 
-    eliminarMediaItem, 
-    reordenarMediaItem 
+import {
+    obtenerMediaItem,
+    crearMediaItem,
+    eliminarMediaItem,
+    reordenarMediaItem
 } from "@/lib/actions/studio/builder/catalogo/media-items.actions";
 import { deleteFileStorage } from "@/lib/actions/shared/media.actions";
 import {
@@ -199,7 +199,7 @@ export function ItemEditorModal({
 
         try {
             setIsSaving(true);
-            
+
             if (formData.id) {
                 // Actualizar item existente
                 const result = await actualizarItem({
@@ -207,12 +207,12 @@ export function ItemEditorModal({
                     name: formData.name,
                     cost: formData.cost,
                 });
-                
+
                 if (!result.success) {
                     toast.error(result.error || "Error al actualizar el item");
                     return;
                 }
-                
+
                 toast.success("Item actualizado");
             } else {
                 // Crear nuevo item
@@ -221,17 +221,17 @@ export function ItemEditorModal({
                     name: formData.name,
                     cost: formData.cost,
                 });
-                
+
                 if (!result.success) {
                     toast.error(result.error || "Error al crear el item");
                     return;
                 }
-                
+
                 // Actualizar el ID del item para poder subir media
                 setFormData(prev => ({ ...prev, id: result.data?.id }));
                 toast.success("Item creado");
             }
-            
+
             onClose();
         } catch (error) {
             console.error("Error saving item:", error);
@@ -268,6 +268,7 @@ export function ItemEditorModal({
                     fileType: 'image',
                     size: foto.size,
                     order: fotos.length,
+                    studioId: studioSlug,
                 });
 
                 if (!result.success) {
@@ -312,6 +313,7 @@ export function ItemEditorModal({
                     fileType: 'video',
                     size: video.size,
                     order: videos.length,
+                    studioId: studioSlug,
                 });
 
                 if (!result.success) {
@@ -381,7 +383,7 @@ export function ItemEditorModal({
                 publicUrl: foto.url,
                 studioSlug: studioSlug,
             });
-            
+
             if (success.success) {
                 // Eliminar de BD
                 const dbResult = await eliminarMediaItem({
@@ -414,7 +416,7 @@ export function ItemEditorModal({
                 publicUrl: video.url,
                 studioSlug: studioSlug,
             });
-            
+
             if (success.success) {
                 // Eliminar de BD
                 const dbResult = await eliminarMediaItem({

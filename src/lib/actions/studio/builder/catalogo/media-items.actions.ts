@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 const MediaItemSchema = z.object({
   id: z.string().optional(),
   itemId: z.string(),
+  studioId: z.string(),
   url: z.string().url(),
   fileName: z.string(),
   fileType: z.enum(['image', 'video']),
