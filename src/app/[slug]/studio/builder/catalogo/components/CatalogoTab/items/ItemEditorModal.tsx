@@ -12,6 +12,17 @@ import { toast } from "sonner";
 import { Trash2, Upload, Loader2, GripVertical, Play, Save } from "lucide-react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useStorageTracking } from "@/hooks/useStorageTracking";
+import { 
+    crearItem, 
+    actualizarItem
+} from "@/lib/actions/studio/builder/catalogo/items.actions";
+import { 
+    obtenerMediaItem, 
+    crearMediaItem, 
+    eliminarMediaItem, 
+    reordenarMediaItem 
+} from "@/lib/actions/studio/builder/catalogo/media-items.actions";
+import { deleteFileStorage } from "@/lib/actions/shared/media.actions";
 import {
     DndContext,
     closestCenter,
@@ -40,12 +51,12 @@ interface ItemFormData {
     name: string;
     cost: number;
     description?: string;
+    categoriaeId?: string;
 }
 
 interface ItemEditorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (data: ItemFormData) => Promise<void>;
     item?: ItemFormData;
     studioSlug: string;
     categoriaId: string;
@@ -58,7 +69,6 @@ interface ItemEditorModalProps {
 export function ItemEditorModal({
     isOpen,
     onClose,
-    onSave,
     item,
     studioSlug,
     categoriaId,
@@ -68,6 +78,7 @@ export function ItemEditorModal({
         name: "",
         cost: 0,
         description: "",
+        categoriaeId: categoriaId,
     });
 
     // Estados de multimedia
@@ -101,6 +112,37 @@ export function ItemEditorModal({
     const { uploadFiles } = useMediaUpload();
     const { } = useStorageTracking(studioSlug);
 
+    // Cargar media existente desde BD
+    const cargarMediaExistente = async (itemId: string) => {
+        try {
+            const result = await obtenerMediaItem(itemId);
+            if (result.success && result.data) {
+                const fotosExistentes = result.data
+                    .filter((m) => m.file_type === 'IMAGE')
+                    .map((m) => ({
+                        id: m.id,
+                        url: m.file_url,
+                        fileName: m.filename,
+                        size: Number(m.storage_bytes),
+                    }));
+
+                const videosExistentes = result.data
+                    .filter((m) => m.file_type === 'VIDEO')
+                    .map((m) => ({
+                        id: m.id,
+                        url: m.file_url,
+                        fileName: m.filename,
+                        size: Number(m.storage_bytes),
+                    }));
+
+                setFotos(fotosExistentes);
+                setVideos(videosExistentes);
+            }
+        } catch (error) {
+            console.error("Error cargando media existente:", error);
+        }
+    };
+
     // Reset form when modal opens/closes
     useEffect(() => {
         if (isOpen) {
@@ -110,18 +152,24 @@ export function ItemEditorModal({
                     name: item.name,
                     cost: item.cost,
                     description: item.description || "",
+                    categoriaeId: categoriaId,
                 });
+                // Cargar media existente si es edición
+                if (item.id) {
+                    cargarMediaExistente(item.id);
+                }
             } else {
                 setFormData({
                     name: "",
                     cost: 0,
                     description: "",
+                    categoriaeId: categoriaId,
                 });
+                setFotos([]);
+                setVideos([]);
             }
-            setFotos([]);
-            setVideos([]);
         }
-    }, [isOpen, item]);
+    }, [isOpen, item, categoriaId]);
 
     // Reset lightbox when sheet opens to prevent auto-opening
     useEffect(() => {
@@ -151,8 +199,39 @@ export function ItemEditorModal({
 
         try {
             setIsSaving(true);
-            await onSave(formData);
-            toast.success(item ? "Item actualizado" : "Item creado");
+            
+            if (formData.id) {
+                // Actualizar item existente
+                const result = await actualizarItem({
+                    id: formData.id,
+                    name: formData.name,
+                    cost: formData.cost,
+                });
+                
+                if (!result.success) {
+                    toast.error(result.error || "Error al actualizar el item");
+                    return;
+                }
+                
+                toast.success("Item actualizado");
+            } else {
+                // Crear nuevo item
+                const result = await crearItem({
+                    categoriaeId: categoriaId,
+                    name: formData.name,
+                    cost: formData.cost,
+                });
+                
+                if (!result.success) {
+                    toast.error(result.error || "Error al crear el item");
+                    return;
+                }
+                
+                // Actualizar el ID del item para poder subir media
+                setFormData(prev => ({ ...prev, id: result.data?.id }));
+                toast.success("Item creado");
+            }
+            
             onClose();
         } catch (error) {
             console.error("Error saving item:", error);
@@ -170,11 +249,31 @@ export function ItemEditorModal({
     // File upload handlers
     const handleFotosUpload = async (files: FileList) => {
         if (!files.length) return;
+        if (!formData.id) {
+            toast.error("Guarda el item primero antes de subir fotos");
+            return;
+        }
 
         setIsUploading(true);
         try {
             const fileArray = Array.from(files);
-            const uploadedFiles = await uploadFiles(fileArray, studioSlug, `items/${categoriaId}/fotos`);
+            const uploadedFiles = await uploadFiles(fileArray, studioSlug, `items/${formData.id}/fotos`);
+
+            // Persistir en BD
+            for (const foto of uploadedFiles) {
+                const result = await crearMediaItem({
+                    itemId: formData.id,
+                    url: foto.url,
+                    fileName: foto.fileName,
+                    fileType: 'image',
+                    size: foto.size,
+                    order: fotos.length,
+                });
+
+                if (!result.success) {
+                    toast.error(`Error guardando ${foto.fileName}: ${result.error}`);
+                }
+            }
 
             const mediaItems = uploadedFiles.map(file => ({
                 id: file.id,
@@ -183,7 +282,6 @@ export function ItemEditorModal({
             }));
 
             setFotos(prev => [...prev, ...mediaItems]);
-            // Note: fileSize tracking handled by uploadFiles hook
             toast.success(`${uploadedFiles.length} foto(s) subida(s)`);
         } catch (error) {
             console.error("Error uploading photos:", error);
@@ -195,11 +293,31 @@ export function ItemEditorModal({
 
     const handleVideosUpload = async (files: FileList) => {
         if (!files.length) return;
+        if (!formData.id) {
+            toast.error("Guarda el item primero antes de subir videos");
+            return;
+        }
 
         setIsUploading(true);
         try {
             const fileArray = Array.from(files);
-            const uploadedFiles = await uploadFiles(fileArray, studioSlug, `items/${categoriaId}/videos`);
+            const uploadedFiles = await uploadFiles(fileArray, studioSlug, `items/${formData.id}/videos`);
+
+            // Persistir en BD
+            for (const video of uploadedFiles) {
+                const result = await crearMediaItem({
+                    itemId: formData.id,
+                    url: video.url,
+                    fileName: video.fileName,
+                    fileType: 'video',
+                    size: video.size,
+                    order: videos.length,
+                });
+
+                if (!result.success) {
+                    toast.error(`Error guardando ${video.fileName}: ${result.error}`);
+                }
+            }
 
             const mediaItems = uploadedFiles.map(file => ({
                 id: file.id,
@@ -208,7 +326,6 @@ export function ItemEditorModal({
             }));
 
             setVideos(prev => [...prev, ...mediaItems]);
-            // Note: fileSize tracking handled by uploadFiles hook
             toast.success(`${uploadedFiles.length} video(s) subido(s)`);
         } catch (error) {
             console.error("Error uploading videos:", error);
@@ -225,11 +342,11 @@ export function ItemEditorModal({
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             // Filtrar solo archivos de imagen
-            const imageFiles = Array.from(files).filter(file => 
+            const imageFiles = Array.from(files).filter(file =>
                 file.type.startsWith('image/')
             );
             if (imageFiles.length > 0) {
-                handleFotosUpload(imageFiles as FileList);
+                handleFotosUpload(imageFiles as unknown as FileList);
             } else {
                 toast.error("Solo se permiten archivos de imagen en la pestaña de fotos");
             }
@@ -242,11 +359,11 @@ export function ItemEditorModal({
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             // Filtrar solo archivos de video
-            const videoFiles = Array.from(files).filter(file => 
+            const videoFiles = Array.from(files).filter(file =>
                 file.type.startsWith('video/')
             );
             if (videoFiles.length > 0) {
-                handleVideosUpload(videoFiles as FileList);
+                handleVideosUpload(videoFiles as unknown as FileList);
             } else {
                 toast.error("Solo se permiten archivos de video en la pestaña de videos");
             }
@@ -254,21 +371,107 @@ export function ItemEditorModal({
     };
 
     // Delete handlers
-    const handleDeleteFoto = (id: string) => {
-        setFotos(prev => prev.filter(f => f.id !== id));
+    const handleDeleteFoto = async (id: string) => {
+        const foto = fotos.find(f => f.id === id);
+        if (!foto || !formData.id) return;
+
+        try {
+            // Eliminar de Supabase
+            const success = await deleteFileStorage({
+                publicUrl: foto.url,
+                studioSlug: studioSlug,
+            });
+            
+            if (success.success) {
+                // Eliminar de BD
+                const dbResult = await eliminarMediaItem({
+                    id: foto.id,
+                    itemId: formData.id,
+                });
+
+                if (dbResult.success) {
+                    setFotos(fotos.filter(f => f.id !== id));
+                    toast.success("Foto eliminada");
+                } else {
+                    toast.error(`Error eliminando foto: ${dbResult.error}`);
+                }
+            } else {
+                toast.error("Error eliminando archivo de almacenamiento");
+            }
+        } catch (error) {
+            console.error("Error eliminando foto:", error);
+            toast.error("Error al eliminar la foto");
+        }
     };
 
-    const handleDeleteVideo = (id: string) => {
-        setVideos(prev => prev.filter(v => v.id !== id));
+    const handleDeleteVideo = async (id: string) => {
+        const video = videos.find(v => v.id === id);
+        if (!video || !formData.id) return;
+
+        try {
+            // Eliminar de Supabase
+            const success = await deleteFileStorage({
+                publicUrl: video.url,
+                studioSlug: studioSlug,
+            });
+            
+            if (success.success) {
+                // Eliminar de BD
+                const dbResult = await eliminarMediaItem({
+                    id: video.id,
+                    itemId: formData.id,
+                });
+
+                if (dbResult.success) {
+                    setVideos(videos.filter(v => v.id !== id));
+                    toast.success("Video eliminado");
+                } else {
+                    toast.error(`Error eliminando video: ${dbResult.error}`);
+                }
+            } else {
+                toast.error("Error eliminando archivo de almacenamiento");
+            }
+        } catch (error) {
+            console.error("Error eliminando video:", error);
+            toast.error("Error al eliminar el video");
+        }
     };
 
     // Reorder handlers
-    const handleReorderFotos = (newFotos: MediaItem[]) => {
+    const handleReorderFotos = async (newFotos: MediaItem[]) => {
         setFotos(newFotos);
+
+        // Persistir nuevo orden en BD
+        if (formData.id) {
+            const mediaIds = newFotos.map(f => f.id);
+            const result = await reordenarMediaItem(formData.id, mediaIds);
+
+            if (!result.success) {
+                toast.error(`Error reordenando fotos: ${result.error}`);
+                // Revertir cambios locales
+                await cargarMediaExistente(formData.id);
+            } else {
+                toast.success('Fotos reordenadas correctamente');
+            }
+        }
     };
 
-    const handleReorderVideos = (newVideos: MediaItem[]) => {
+    const handleReorderVideos = async (newVideos: MediaItem[]) => {
         setVideos(newVideos);
+
+        // Persistir nuevo orden en BD
+        if (formData.id) {
+            const mediaIds = newVideos.map(v => v.id);
+            const result = await reordenarMediaItem(formData.id, mediaIds);
+
+            if (!result.success) {
+                toast.error(`Error reordenando videos: ${result.error}`);
+                // Revertir cambios locales
+                await cargarMediaExistente(formData.id);
+            } else {
+                toast.success('Videos reordenados correctamente');
+            }
+        }
     };
 
     // Sortable Media Item Component

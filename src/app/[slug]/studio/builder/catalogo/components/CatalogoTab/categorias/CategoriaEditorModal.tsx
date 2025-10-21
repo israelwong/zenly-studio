@@ -362,7 +362,7 @@ export function CategoriaEditorModal({
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             // Filtrar solo archivos de imagen
-            const imageFiles = Array.from(files).filter(file => 
+            const imageFiles = Array.from(files).filter(file =>
                 file.type.startsWith('image/')
             );
             if (imageFiles.length > 0) {
@@ -380,7 +380,7 @@ export function CategoriaEditorModal({
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             // Filtrar solo archivos de video
-            const videoFiles = Array.from(files).filter(file => 
+            const videoFiles = Array.from(files).filter(file =>
                 file.type.startsWith('video/')
             );
             if (videoFiles.length > 0) {
