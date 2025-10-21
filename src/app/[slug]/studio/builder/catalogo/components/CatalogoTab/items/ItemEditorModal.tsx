@@ -1,431 +1,744 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
+import { ZenButton, ZenInput, ZenCard, ZenTextarea } from "@/components/ui/zen";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/shadcn/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/shadcn/tabs";
+import Lightbox from "yet-another-react-lightbox";
+import Video from "yet-another-react-lightbox/plugins/video";
+import "yet-another-react-lightbox/styles.css";
 import { toast } from "sonner";
-import { ZenButton, ZenInput, ZenTextarea } from "@/components/ui/zen";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/shadcn/dialog";
-import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
-import { calcularPrecio, type ConfiguracionPrecios, type ResultadoPrecio } from "@/lib/actions/studio/builder/catalogo/calcular-precio";
+import { Trash2, Upload, Loader2, GripVertical, Play, Save } from "lucide-react";
+import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { useStorageTracking } from "@/hooks/useStorageTracking";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+    useSortable,
+} from "@dnd-kit/sortable";
+import { arrayMove } from "@dnd-kit/sortable";
 
-interface Gasto {
-    nombre: string;
-    costo: string;
+interface MediaItem {
+    id: string;
+    url: string;
+    fileName: string;
+    isUploading?: boolean;
 }
 
-export interface ItemFormData {
+interface ItemFormData {
     id?: string;
     name: string;
     cost: number;
     description?: string;
-    tipoUtilidad?: 'servicio' | 'producto';
-    gastos?: Array<{ nombre: string; costo: number }>;
 }
 
 interface ItemEditorModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (data: ItemFormData) => Promise<void>;
-    item?: ItemFormData | null;
-    preciosConfig?: ConfiguracionPrecios;
+    item?: ItemFormData;
+    studioSlug: string;
+    categoriaId: string;
 }
 
 /**
- * Modal para crear/editar items con cálculo dinámico de precios
- * Incluye gastos, tipo de utilidad y desglose de precios
+ * Modal para crear/editar items con gestión completa de multimedia
+ * Incluye tabs para datos, fotos y videos con drag & drop
  */
 export function ItemEditorModal({
     isOpen,
     onClose,
     onSave,
     item,
-    preciosConfig,
+    studioSlug,
+    categoriaId,
 }: ItemEditorModalProps) {
+    // Estados del formulario
     const [formData, setFormData] = useState<ItemFormData>({
         name: "",
         cost: 0,
         description: "",
-        tipoUtilidad: "servicio",
     });
-    const [errors, setErrors] = useState<Record<string, string>>({});
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [gastos, setGastos] = useState<Gasto[]>([]);
-    const [nuevoGastoNombre, setNuevoGastoNombre] = useState("");
-    const [nuevoGastoCosto, setNuevoGastoCosto] = useState("");
-    const [showDesglosePrecios, setShowDesglosePrecios] = useState(false);
-    const [configuracion, setConfiguracion] = useState<ConfiguracionPrecios | null>(preciosConfig || null);
 
-    // Configuración por defecto si no se proporciona
-    useEffect(() => {
-        if (!configuracion && !preciosConfig) {
-            setConfiguracion({
-                utilidad_servicio: 0.30,
-                utilidad_producto: 0.40,
-                comision_venta: 0.10,
-                sobreprecio: 0.05,
-            });
-        }
-    }, [preciosConfig, configuracion]);
+    // Estados de multimedia
+    const [fotos, setFotos] = useState<MediaItem[]>([]);
+    const [videos, setVideos] = useState<MediaItem[]>([]);
+    const [isDraggingFotos, setIsDraggingFotos] = useState(false);
+    const [isDraggingVideos, setIsDraggingVideos] = useState(false);
 
-    // Resetear formulario cuando se abre/cierra
+    // Lightbox states - completamente independiente del Sheet
+    const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false);
+    const [isVideoLightboxOpen, setIsVideoLightboxOpen] = useState(false);
+    const [imageSlides, setImageSlides] = useState<Array<{ src: string; alt: string }>>([]);
+    const [videoSlides, setVideoSlides] = useState<Array<{
+        type: 'video';
+        width: number;
+        height: number;
+        poster: string;
+        sources: Array<{ src: string; type: string }>;
+    }>>([]);
+    const [lightboxIndex, setLightboxIndex] = useState(0);
+
+    // File inputs refs
+    const fotosInputRef = useRef<HTMLInputElement>(null);
+    const videosInputRef = useRef<HTMLInputElement>(null);
+
+    // Estados de UI
+    const [isSaving, setIsSaving] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Hooks
+    const { uploadFiles } = useMediaUpload();
+    const { addMediaSize } = useStorageTracking(studioSlug);
+
+    // Reset form when modal opens/closes
     useEffect(() => {
         if (isOpen) {
             if (item) {
-                setFormData(item);
-                setGastos(
-                    item.gastos?.map((g) => ({ nombre: g.nombre, costo: g.costo.toString() })) || []
-                );
+                setFormData({
+                    id: item.id,
+                    name: item.name,
+                    cost: item.cost,
+                    description: item.description || "",
+                });
             } else {
                 setFormData({
                     name: "",
                     cost: 0,
                     description: "",
-                    tipoUtilidad: "servicio",
                 });
-                setGastos([]);
             }
-            setErrors({});
-            setShowDesglosePrecios(false);
+            setFotos([]);
+            setVideos([]);
         }
     }, [isOpen, item]);
 
-    // Cálculo dinámico de precios
-    const resultadoPrecio: ResultadoPrecio = useMemo(() => {
-        const costoNum = formData.cost || 0;
-        const gastosArray = gastos.map((g) => parseFloat(g.costo) || 0);
-        const totalGastos = parseFloat(
-            gastosArray.reduce((acc, g) => acc + g, 0).toFixed(2)
-        );
-
-        if (!configuracion) {
-            return {
-                precio_final: costoNum + totalGastos,
-                precio_base: costoNum + totalGastos,
-                costo: costoNum,
-                gasto: totalGastos,
-                utilidad_base: 0,
-                subtotal: costoNum + totalGastos,
-                monto_comision: 0,
-                monto_sobreprecio: 0,
-                porcentaje_utilidad: 0,
-                porcentaje_comision: 0,
-                porcentaje_sobreprecio: 0,
-                utilidad_real: 0,
-                porcentaje_utilidad_real: 0,
-            };
+    // Reset lightbox when sheet opens to prevent auto-opening
+    useEffect(() => {
+        if (isOpen) {
+            setIsImageLightboxOpen(false);
+            setIsVideoLightboxOpen(false);
         }
+    }, [isOpen]);
 
-        return calcularPrecio(
-            costoNum,
-            totalGastos,
-            formData.tipoUtilidad || "servicio",
-            configuracion
-        );
-    }, [formData.cost, formData.tipoUtilidad, gastos, configuracion]);
-
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat("es-MX", {
-            style: "currency",
-            currency: "MXN",
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amount);
+    const handleInputChange = (field: keyof ItemFormData, value: string | number) => {
+        setFormData(prev => ({
+            ...prev,
+            [field]: value
+        }));
     };
 
-    const formatearNumero = (valor: string): string => {
-        if (!valor) return "";
-        const numero = parseFloat(valor);
-        if (isNaN(numero)) return "";
-        if (numero < 0) return "0.00";
-        return numero.toFixed(2);
-    };
-
-    const validarNumeroInput = (valor: string): string => {
-        if (!valor) return "";
-        const valorLimpio = valor.replace(/[^0-9.]/g, "");
-        const partes = valorLimpio.split(".");
-        if (partes.length > 2) {
-            return partes[0] + "." + partes.slice(1).join("");
-        }
-        if (partes[1] && partes[1].length > 2) {
-            return partes[0] + "." + partes[1].substring(0, 2);
-        }
-        return valorLimpio;
-    };
-
-    const handleAgregarGasto = () => {
-        if (!nuevoGastoNombre.trim()) {
-            toast.error("Ingresa el concepto del gasto");
-            return;
-        }
-
-        const costoNum = parseFloat(nuevoGastoCosto);
-        if (isNaN(costoNum) || costoNum < 0) {
-            toast.error("Ingresa un monto válido (no puede ser negativo)");
-            return;
-        }
-
-        const costoFormateado = formatearNumero(nuevoGastoCosto);
-        setGastos([...gastos, { nombre: nuevoGastoNombre, costo: costoFormateado }]);
-        setNuevoGastoNombre("");
-        setNuevoGastoCosto("");
-    };
-
-    const handleEliminarGasto = (index: number) => {
-        setGastos(gastos.filter((_, i) => i !== index));
-    };
-
-    const validateForm = (): boolean => {
-        const newErrors: Record<string, string> = {};
-
+    const handleSave = async () => {
         if (!formData.name.trim()) {
-            newErrors.name = "El nombre es requerido";
+            toast.error("El nombre es requerido");
+            return;
         }
 
         if (formData.cost < 0) {
-            newErrors.cost = "El costo no puede ser negativo";
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!validateForm()) {
+            toast.error("El costo debe ser mayor o igual a 0");
             return;
         }
 
         try {
-            setIsSubmitting(true);
-            await onSave({
-                ...formData,
-                gastos: gastos.map((g) => ({
-                    nombre: g.nombre,
-                    costo: parseFloat(g.costo),
-                })),
-            });
+            setIsSaving(true);
+            await onSave(formData);
+            toast.success(item ? "Item actualizado" : "Item creado");
             onClose();
         } catch (error) {
-            console.error("Error guardando item:", error);
+            console.error("Error saving item:", error);
+            toast.error("Error al guardar el item");
         } finally {
-            setIsSubmitting(false);
+            setIsSaving(false);
         }
     };
 
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>
-                        {item?.id ? "Editar Item" : "Crear Nuevo Item"}
-                    </DialogTitle>
-                </DialogHeader>
+    const handleClose = () => {
+        if (isSaving) return;
+        onClose();
+    };
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Nombre del Item como Textarea */}
-                    <ZenTextarea
-                        label="Nombre del Item"
-                        name="name"
-                        value={formData.name}
-                        onChange={(e) => {
-                            setFormData({ ...formData, name: e.target.value });
-                            if (errors.name) {
-                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                                const { name, ...rest } = errors;
-                                setErrors(rest);
-                            }
-                        }}
-                        error={errors.name}
-                        placeholder="Ej: Fotografía de retrato"
-                        minRows={2}
-                        maxLength={200}
-                        required
-                    />
+    // File upload handlers
+    const handleFotosUpload = async (files: FileList) => {
+        if (!files.length) return;
 
-                    {/* Fila 1: Costo Base y Tipo de Utilidad (2 columnas) */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <ZenInput
-                            label="Costo Base (MXN)"
-                            name="cost"
-                            type="number"
-                            value={formData.cost === 0 ? "" : formData.cost}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                const cost = value === "" ? 0 : parseFloat(value);
-                                if (!isNaN(cost)) {
-                                    setFormData({ ...formData, cost });
-                                    if (errors.cost) {
-                                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                                        const { cost: _, ...rest } = errors;
-                                        setErrors(rest);
-                                    }
-                                }
-                            }}
-                            error={errors.cost}
-                            placeholder="0.00"
-                            step="0.01"
-                            min="0"
-                            required
-                        />
+        setIsUploading(true);
+        try {
+            const fileArray = Array.from(files);
+            const uploadedFiles = await uploadFiles(fileArray, studioSlug, `items/${categoriaId}/fotos`);
 
-                        {/* Tipo de utilidad */}
-                        <div>
-                            <label className="block text-sm font-medium text-zinc-200 mb-2">
-                                Tipo de Utilidad
-                            </label>
-                            <select
-                                value={formData.tipoUtilidad || "servicio"}
-                                onChange={(e) =>
-                                    setFormData({ ...formData, tipoUtilidad: e.target.value as 'servicio' | 'producto' })
-                                }
-                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-zinc-100"
-                            >
-                                <option value="servicio">Servicio (30%)</option>
-                                <option value="producto">Producto (40%)</option>
-                            </select>
-                        </div>
-                    </div>
+            const mediaItems = uploadedFiles.map(file => ({
+                id: file.id,
+                url: file.url,
+                fileName: file.fileName,
+            }));
 
-                    {/* Gastos */}
-                    <div className="space-y-3">
-                        <label className="block text-sm font-medium text-zinc-200">Gastos Adicionales</label>
-                        {gastos.length > 0 && (
-                            <div className="space-y-2">
-                                {gastos.map((gasto, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 bg-zinc-800/50 p-2 rounded">
-                                        <div className="flex-1">
-                                            <p className="text-sm text-zinc-200">{gasto.nombre}</p>
-                                            <p className="text-xs text-zinc-400">{formatCurrency(parseFloat(gasto.costo))}</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleEliminarGasto(idx)}
-                                            className="p-1 text-red-500 hover:bg-red-500/10 rounded"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+            setFotos(prev => [...prev, ...mediaItems]);
+            // Note: fileSize tracking handled by uploadFiles hook
+            toast.success(`${uploadedFiles.length} foto(s) subida(s)`);
+        } catch (error) {
+            console.error("Error uploading photos:", error);
+            toast.error("Error al subir las fotos");
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
-                        <div className="flex gap-2">
-                            <ZenInput
-                                placeholder="Concepto"
-                                value={nuevoGastoNombre}
-                                onChange={(e) => setNuevoGastoNombre(e.target.value)}
-                            />
-                            <ZenInput
-                                placeholder="Costo"
-                                type="number"
-                                value={nuevoGastoCosto}
-                                onChange={(e) => setNuevoGastoCosto(validarNumeroInput(e.target.value))}
-                                step="0.01"
-                                min="0"
-                            />
-                            <ZenButton
-                                type="button"
-                                onClick={handleAgregarGasto}
-                                variant="secondary"
-                                className="flex-shrink-0"
-                            >
-                                <Plus className="w-4 h-4" />
-                            </ZenButton>
-                        </div>
-                    </div>
+    const handleVideosUpload = async (files: FileList) => {
+        if (!files.length) return;
 
-                    {/* Desglose de precios */}
-                    <div className="space-y-2">
-                        <button
-                            type="button"
-                            onClick={() => setShowDesglosePrecios(!showDesglosePrecios)}
-                            className="flex items-center gap-2 text-sm font-medium text-zinc-300 hover:text-zinc-100"
-                        >
-                            Desglose de Precios
-                            {showDesglosePrecios ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
+        setIsUploading(true);
+        try {
+            const fileArray = Array.from(files);
+            const uploadedFiles = await uploadFiles(fileArray, studioSlug, `items/${categoriaId}/videos`);
 
-                        {/* Precio Calculado del Sistema - SIEMPRE VISIBLE */}
-                        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-emerald-300">Precio del Sistema</span>
-                                <span className="text-3xl font-bold text-emerald-400">
-                                    {formatCurrency(resultadoPrecio.precio_final)}
-                                </span>
-                            </div>
-                            <p className="text-xs text-emerald-300/70">
-                                Costo: {formatCurrency(resultadoPrecio.costo)} + Gastos: {formatCurrency(resultadoPrecio.gasto)} = {formatCurrency(resultadoPrecio.precio_final)}
-                            </p>
-                        </div>
+            const mediaItems = uploadedFiles.map(file => ({
+                id: file.id,
+                url: file.url,
+                fileName: file.fileName,
+            }));
 
-                        {showDesglosePrecios && (
-                            <div className="bg-zinc-800/50 p-4 rounded space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Costo Base:</span>
-                                    <span className="text-zinc-100">{formatCurrency(resultadoPrecio.costo)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Gastos:</span>
-                                    <span className="text-zinc-100">{formatCurrency(resultadoPrecio.gasto)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Utilidad Base ({resultadoPrecio.porcentaje_utilidad}%):</span>
-                                    <span className="text-zinc-100">{formatCurrency(resultadoPrecio.utilidad_base)}</span>
-                                </div>
-                                <div className="border-t border-zinc-600 pt-2 flex justify-between font-semibold">
-                                    <span className="text-zinc-300">Subtotal:</span>
-                                    <span className="text-emerald-400">{formatCurrency(resultadoPrecio.subtotal)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Comisión ({resultadoPrecio.porcentaje_comision}%):</span>
-                                    <span className="text-zinc-100">{formatCurrency(resultadoPrecio.monto_comision)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Sobreprecio ({resultadoPrecio.porcentaje_sobreprecio}%):</span>
-                                    <span className="text-zinc-100">{formatCurrency(resultadoPrecio.monto_sobreprecio)}</span>
-                                </div>
-                                <div className="border-t border-zinc-600 pt-2 flex justify-between font-bold text-lg">
-                                    <span className="text-zinc-200">Precio Final:</span>
-                                    <span className="text-emerald-500">{formatCurrency(resultadoPrecio.precio_final)}</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+            setVideos(prev => [...prev, ...mediaItems]);
+            // Note: fileSize tracking handled by uploadFiles hook
+            toast.success(`${uploadedFiles.length} video(s) subido(s)`);
+        } catch (error) {
+            console.error("Error uploading videos:", error);
+            toast.error("Error al subir los videos");
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
-                    <ZenTextarea
-                        label="Descripción (Opcional)"
-                        name="description"
-                        value={formData.description || ""}
-                        onChange={(e) =>
-                            setFormData({ ...formData, description: e.target.value })
+    // Drag & Drop handlers
+    const handleFotosDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDraggingFotos(false);
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFotosUpload(files);
+        }
+    };
+
+    const handleVideosDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDraggingVideos(false);
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleVideosUpload(files);
+        }
+    };
+
+    // Delete handlers
+    const handleDeleteFoto = (id: string) => {
+        setFotos(prev => prev.filter(f => f.id !== id));
+    };
+
+    const handleDeleteVideo = (id: string) => {
+        setVideos(prev => prev.filter(v => v.id !== id));
+    };
+
+    // Reorder handlers
+    const handleReorderFotos = (newFotos: MediaItem[]) => {
+        setFotos(newFotos);
+    };
+
+    const handleReorderVideos = (newVideos: MediaItem[]) => {
+        setVideos(newVideos);
+    };
+
+    // Sortable Media Item Component
+    const SortableMediaItem = ({ item, type, onDelete }: {
+        item: MediaItem;
+        type: 'foto' | 'video';
+        onDelete: (id: string) => void;
+    }) => {
+        const {
+            attributes,
+            listeners,
+            setNodeRef,
+            transform,
+            transition,
+            isDragging,
+        } = useSortable({ id: item.id });
+
+        const style = {
+            transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+            transition,
+            opacity: isDragging ? 0.5 : 1,
+        };
+
+        const handleOpenLightbox = () => {
+            if (type === 'foto') {
+                // Lightbox para imágenes
+                const slides = fotos.map(f => ({
+                    src: f.url,
+                    alt: f.fileName
+                }));
+                const index = fotos.findIndex(f => f.id === item.id);
+
+                setImageSlides(slides);
+                setLightboxIndex(Math.max(0, index));
+                setIsImageLightboxOpen(true);
+            } else {
+                // Lightbox para videos
+                const slides = videos.map(v => ({
+                    type: 'video' as const,
+                    width: 800,
+                    height: 450,
+                    poster: v.url, // Usar el video como poster temporal
+                    sources: [
+                        {
+                            src: v.url,
+                            type: 'video/mp4'
                         }
-                        placeholder="Describe el item..."
-                        rows={3}
-                    />
+                    ]
+                }));
+                const index = videos.findIndex(v => v.id === item.id);
 
-                    <div className="flex gap-3 pt-4">
-                        <ZenButton
-                            type="button"
-                            variant="ghost"
-                            onClick={onClose}
-                            disabled={isSubmitting}
-                            className="flex-1"
-                        >
-                            Cancelar
-                        </ZenButton>
-                        <ZenButton
-                            type="submit"
-                            variant="primary"
-                            loading={isSubmitting}
-                            loadingText="Guardando..."
-                            className="flex-1"
-                        >
-                            {item?.id ? "Actualizar" : "Crear"}
-                        </ZenButton>
+                setVideoSlides(slides);
+                setLightboxIndex(Math.max(0, index));
+                setIsVideoLightboxOpen(true);
+            }
+        };
+
+        return (
+            <div
+                ref={setNodeRef}
+                style={style}
+                className="aspect-square bg-zinc-900 border border-zinc-700 rounded-lg overflow-hidden group relative cursor-pointer"
+                onClick={handleOpenLightbox}
+            >
+                {/* Drag handle */}
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className="absolute top-1 left-1 bg-zinc-800/80 hover:bg-zinc-700 p-1 rounded cursor-grab active:cursor-grabbing z-10"
+                >
+                    <GripVertical className="w-4 h-4 text-zinc-400" />
+                </div>
+
+                {/* Preview - Show actual image */}
+                {type === 'foto' ? (
+                    <Image
+                        src={item.url}
+                        alt={item.fileName}
+                        layout="fill"
+                        objectFit="cover"
+                    />
+                ) : (
+                    <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
+                        <video
+                            src={item.url}
+                            className="w-full h-full object-cover"
+                            muted
+                            preload="metadata"
+                            onError={(e) => {
+                                // Si el video no se puede cargar, mostrar fallback
+                                const target = e.target as HTMLVideoElement;
+                                target.style.display = 'none';
+                                const fallback = target.nextElementSibling as HTMLElement;
+                                if (fallback) fallback.style.display = 'flex';
+                            }}
+                        />
+                        <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center" style={{ display: 'none' }}>
+                            <span className="text-xs text-zinc-500">🎬 {item.fileName}</span>
+                        </div>
+                        {/* Play icon overlay */}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                                <Play className="w-4 h-4 text-white ml-0.5" />
+                            </div>
+                        </div>
                     </div>
-                </form>
-            </DialogContent>
-        </Dialog>
+                )}
+
+                {/* Uploading indicator */}
+                {item.isUploading && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
+                    </div>
+                )}
+
+                {/* Delete button */}
+                {!item.isUploading && (
+                    <button
+                        type="button"
+                        onClick={() => onDelete(item.id)}
+                        disabled={isUploading}
+                        className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-600 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Eliminar"
+                    >
+                        <Trash2 className="w-3 h-3 text-white" />
+                    </button>
+                )}
+            </div>
+        );
+    };
+
+    // Media Grid Component
+    const MediaGrid = ({
+        items,
+        onDelete,
+        isDragging,
+        setIsDragging,
+        type,
+        onUploadClick,
+        onDrop,
+        onReorder,
+    }: {
+        items: MediaItem[];
+        onDelete: (id: string) => void;
+        isDragging: boolean;
+        setIsDragging: (value: boolean) => void;
+        type: 'foto' | 'video';
+        onUploadClick: () => void;
+        onDrop: (e: React.DragEvent) => void;
+        onReorder: (newItems: MediaItem[]) => void;
+    }) => {
+        const sensors = useSensors(
+            useSensor(PointerSensor),
+            useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+        );
+
+        const handleDragEnd = (event: DragEndEvent) => {
+            const { active, over } = event;
+
+            if (over && active.id !== over.id) {
+                const oldIndex = items.findIndex(item => item.id === active.id);
+                const newIndex = items.findIndex(item => item.id === over.id);
+
+                if (oldIndex !== -1 && newIndex !== -1) {
+                    const newItems = arrayMove(items, oldIndex, newIndex);
+                    onReorder(newItems);
+                }
+            }
+        };
+
+        return (
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+            >
+                <div
+                    className={`grid grid-cols-3 gap-3 p-4 rounded-lg border-2 border-dashed transition-all ${isDragging
+                        ? "border-emerald-500 bg-emerald-500/10"
+                        : "border-zinc-700 bg-zinc-800/30"
+                        }`}
+                    onDragEnter={() => setIsDragging(true)}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={onDrop}
+                >
+                    {/* Slot: Subir */}
+                    <button
+                        type="button"
+                        onClick={onUploadClick}
+                        disabled={isUploading}
+                        className="aspect-square bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-lg flex items-center justify-center cursor-pointer hover:bg-zinc-700 hover:border-zinc-600 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <div className="flex flex-col items-center gap-2">
+                            {isUploading ? (
+                                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                            ) : (
+                                <Upload className="w-6 h-6 text-zinc-400 group-hover:text-zinc-200" />
+                            )}
+                            <span className="text-xs text-zinc-500 group-hover:text-zinc-300 text-center">
+                                {type === 'foto' ? 'Subir Fotos' : 'Subir Videos'}
+                            </span>
+                        </div>
+                    </button>
+
+                    {/* Sortable Thumbnails */}
+                    <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                        {items.map((item) => (
+                            <SortableMediaItem
+                                key={item.id}
+                                item={item}
+                                type={type}
+                                onDelete={onDelete}
+                            />
+                        ))}
+                    </SortableContext>
+                </div>
+            </DndContext>
+        );
+    };
+
+    return (
+        <>
+            <Sheet
+                open={isOpen}
+                onOpenChange={(open) => {
+                    // Only handle close (when open = false), let parent handle open
+                    // Don't close Sheet if lightbox is open
+                    if (!open && !isImageLightboxOpen && !isVideoLightboxOpen) {
+                        onClose();
+                    }
+                }}
+                modal={false}
+            >
+                <SheetContent className="w-full max-w-4xl p-0 bg-zinc-900 border-l border-zinc-800">
+                    <SheetHeader className="p-6 pb-4">
+                        <SheetTitle className="text-xl font-semibold text-zinc-100">
+                            {item ? "Editar Item" : "Nuevo Item"}
+                        </SheetTitle>
+                    </SheetHeader>
+
+                    <Tabs defaultValue="datos" className="w-full px-6">
+                        {/* Tab Navigation */}
+                        <TabsList className="grid w-full grid-cols-3 bg-zinc-800/50">
+                            <TabsTrigger
+                                value="datos"
+                                className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"
+                            >
+                                Datos
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="fotos"
+                                className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"
+                            >
+                                Fotos
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="videos"
+                                className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"
+                            >
+                                Videos
+                            </TabsTrigger>
+                        </TabsList>
+
+                        {/* Tab 1: Datos del Item */}
+                        <TabsContent value="datos" className="space-y-6 mt-6 pb-6">
+                            <form className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-200 mb-2">
+                                        Nombre del Item
+                                    </label>
+                                    <ZenTextarea
+                                        label=""
+                                        value={formData.name}
+                                        onChange={(e) => handleInputChange("name", e.target.value)}
+                                        placeholder="Ej: Sesión de fotos de 1 hora"
+                                        disabled={isSaving}
+                                        rows={2}
+                                        maxLength={100}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-200 mb-2">
+                                        Costo Base (MXN)
+                                    </label>
+                                    <ZenInput
+                                        type="number"
+                                        value={formData.cost}
+                                        onChange={(e) => handleInputChange("cost", parseFloat(e.target.value) || 0)}
+                                        placeholder="0.00"
+                                        disabled={isSaving}
+                                        min="0"
+                                        step="0.01"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-200 mb-2">
+                                        Descripción (Opcional)
+                                    </label>
+                                    <ZenTextarea
+                                        label=""
+                                        value={formData.description}
+                                        onChange={(e) => handleInputChange("description", e.target.value)}
+                                        placeholder="Describe el item..."
+                                        disabled={isSaving}
+                                        rows={3}
+                                    />
+                                </div>
+
+                                {/* Botones de acción */}
+                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+                                    <SheetClose asChild>
+                                        <ZenButton
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={handleClose}
+                                            disabled={isSaving || isUploading}
+                                        >
+                                            Cerrar
+                                        </ZenButton>
+                                    </SheetClose>
+                                    <ZenButton
+                                        onClick={handleSave}
+                                        disabled={isSaving || isUploading || !formData.name.trim()}
+                                        className="gap-2"
+                                    >
+                                        {isSaving ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Save className="w-4 h-4" />
+                                        )}
+                                        {item ? "Actualizar" : "Crear"} Item
+                                    </ZenButton>
+                                </div>
+                            </form>
+                        </TabsContent>
+
+                        {/* Tab 2: Fotos */}
+                        <TabsContent value="fotos" className="space-y-6 mt-6 pb-6">
+                            <div className="space-y-4">
+                                {/* Galería de Fotos */}
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-200 mb-3">
+                                        Galería de Fotos
+                                    </label>
+                                    <MediaGrid
+                                        items={fotos}
+                                        onDelete={handleDeleteFoto}
+                                        isDragging={isDraggingFotos}
+                                        setIsDragging={setIsDraggingFotos}
+                                        type="foto"
+                                        onUploadClick={() => fotosInputRef.current?.click()}
+                                        onDrop={handleFotosDrop}
+                                        onReorder={handleReorderFotos}
+                                    />
+                                </div>
+
+                                {/* Info */}
+                                <ZenCard className="p-3 bg-blue-500/10 border-blue-500/30">
+                                    <p className="text-xs text-blue-300">
+                                        📸 Soportados: JPG, PNG, GIF (máx. 5MB cada una)
+                                    </p>
+                                </ZenCard>
+
+                                {/* Botones de acción */}
+                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+                                    <SheetClose asChild>
+                                        <ZenButton
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={handleClose}
+                                            disabled={isSaving || isUploading}
+                                        >
+                                            Cerrar
+                                        </ZenButton>
+                                    </SheetClose>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        {/* Tab 3: Videos */}
+                        <TabsContent value="videos" className="space-y-6 mt-6 pb-6">
+                            <div className="space-y-4">
+                                {/* Galería de Videos */}
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-200 mb-3">
+                                        Galería de Videos
+                                    </label>
+                                    <MediaGrid
+                                        items={videos}
+                                        onDelete={handleDeleteVideo}
+                                        isDragging={isDraggingVideos}
+                                        setIsDragging={setIsDraggingVideos}
+                                        type="video"
+                                        onUploadClick={() => videosInputRef.current?.click()}
+                                        onDrop={handleVideosDrop}
+                                        onReorder={handleReorderVideos}
+                                    />
+                                </div>
+
+                                {/* Info */}
+                                <ZenCard className="p-3 bg-purple-500/10 border-purple-500/30">
+                                    <p className="text-xs text-purple-300">
+                                        🎬 Soportados: MP4, MOV, AVI (máx. 100MB cada uno)
+                                    </p>
+                                </ZenCard>
+
+                                {/* Botones de acción */}
+                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+                                    <SheetClose asChild>
+                                        <ZenButton
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={handleClose}
+                                            disabled={isSaving || isUploading}
+                                        >
+                                            Cerrar
+                                        </ZenButton>
+                                    </SheetClose>
+                                </div>
+                            </div>
+                        </TabsContent>
+                    </Tabs>
+                </SheetContent>
+            </Sheet>
+
+            {/* Inputs ocultos para file upload */}
+            <input
+                ref={fotosInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => e.target.files && handleFotosUpload(e.target.files)}
+                className="hidden"
+            />
+            <input
+                ref={videosInputRef}
+                type="file"
+                accept="video/*"
+                multiple
+                onChange={(e) => e.target.files && handleVideosUpload(e.target.files)}
+                className="hidden"
+            />
+
+            {/* Lightbox para imágenes */}
+            <Lightbox
+                open={isImageLightboxOpen}
+                close={() => setIsImageLightboxOpen(false)}
+                slides={imageSlides}
+                index={lightboxIndex}
+                on={{
+                    view: ({ index }) => setLightboxIndex(index),
+                }}
+            />
+
+            {/* Lightbox para videos */}
+            <Lightbox
+                open={isVideoLightboxOpen}
+                close={() => setIsVideoLightboxOpen(false)}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                slides={videoSlides as any}
+                index={lightboxIndex}
+                plugins={[Video]}
+                video={{
+                    controls: true,
+                    playsInline: true,
+                    autoPlay: true,
+                    loop: false,
+                    muted: false,
+                    disablePictureInPicture: false,
+                    disableRemotePlayback: false,
+                    controlsList: "nodownload nofullscreen noremoteplayback",
+                    crossOrigin: "anonymous",
+                    preload: "metadata",
+                }}
+                on={{
+                    view: ({ index }) => setLightboxIndex(index),
+                }}
+            />
+        </>
     );
+}
+
+// Helper function for keyboard sensor
+function sortableKeyboardCoordinates() {
+    return { x: 0, y: 0 };
 }

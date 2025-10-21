@@ -697,7 +697,7 @@ export function CategoriaEditorModal({
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 {/* Nombre */}
                                 <div>
-                                    <ZenInput
+                                    <ZenTextarea
                                         label="Nombre de la categoría"
                                         name="name"
                                         value={formData.name}
@@ -707,10 +707,8 @@ export function CategoriaEditorModal({
                                         error={errors.name}
                                         disabled={isSaving || isUploading}
                                         maxLength={100}
+                                        rows={2}
                                     />
-                                    <p className="text-xs text-zinc-500 mt-1">
-                                        {formData.name.length}/100 caracteres
-                                    </p>
                                 </div>
 
                                 {/* Descripción */}
