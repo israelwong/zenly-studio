@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Trash2, Upload, Loader2, GripVertical, Play, Save } from "lucide-react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useStorageTracking } from "@/hooks/useStorageTracking";
+import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import {
     crearItem,
     actualizarItem
@@ -110,7 +111,8 @@ export function ItemEditorModal({
 
     // Hooks
     const { uploadFiles } = useMediaUpload();
-    const { } = useStorageTracking(studioSlug);
+    const { refreshStorageUsage } = useStorageTracking(studioSlug);
+    const { triggerRefresh } = useStorageRefresh(studioSlug);
 
     // Cargar media existente desde BD
     const cargarMediaExistente = async (itemId: string) => {
@@ -284,6 +286,10 @@ export function ItemEditorModal({
 
             setFotos(prev => [...prev, ...mediaItems]);
             toast.success(`${uploadedFiles.length} foto(s) subida(s)`);
+            
+            // Actualizar storage tracking
+            await refreshStorageUsage();
+            triggerRefresh();
         } catch (error) {
             console.error("Error uploading photos:", error);
             toast.error("Error al subir las fotos");
@@ -329,6 +335,10 @@ export function ItemEditorModal({
 
             setVideos(prev => [...prev, ...mediaItems]);
             toast.success(`${uploadedFiles.length} video(s) subido(s)`);
+            
+            // Actualizar storage tracking
+            await refreshStorageUsage();
+            triggerRefresh();
         } catch (error) {
             console.error("Error uploading videos:", error);
             toast.error("Error al subir los videos");
@@ -394,6 +404,10 @@ export function ItemEditorModal({
                 if (dbResult.success) {
                     setFotos(fotos.filter(f => f.id !== id));
                     toast.success("Foto eliminada");
+                    
+                    // Actualizar storage tracking
+                    await refreshStorageUsage();
+                    triggerRefresh();
                 } else {
                     toast.error(`Error eliminando foto: ${dbResult.error}`);
                 }
@@ -427,6 +441,10 @@ export function ItemEditorModal({
                 if (dbResult.success) {
                     setVideos(videos.filter(v => v.id !== id));
                     toast.success("Video eliminado");
+                    
+                    // Actualizar storage tracking
+                    await refreshStorageUsage();
+                    triggerRefresh();
                 } else {
                     toast.error(`Error eliminando video: ${dbResult.error}`);
                 }

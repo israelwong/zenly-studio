@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Trash2, Upload, Loader2, GripVertical, Play } from "lucide-react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useStorageTracking } from "@/hooks/useStorageTracking";
+import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import {
     DndContext,
     closestCenter,
@@ -113,6 +114,7 @@ export function CategoriaEditorModal({
 
     // Storage tracking hook
     const { addMediaSize, removeMediaSize, refreshStorageUsage } = useStorageTracking(studioSlug);
+    const { triggerRefresh } = useStorageRefresh(studioSlug);
 
     // Media upload hook
     const { uploadFiles, deleteFile, isUploading } = useMediaUpload(
@@ -274,6 +276,7 @@ export function CategoriaEditorModal({
 
         // Refrescar storage después de guardar
         await refreshStorageUsage();
+        triggerRefresh();
         setFotos(prev => [...prev, ...uploadedFotos]);
     };
 
@@ -307,6 +310,7 @@ export function CategoriaEditorModal({
 
         setVideos(prev => [...prev, ...uploadedVideos]);
         await refreshStorageUsage();
+        triggerRefresh();
     };
 
     // Eliminar foto
@@ -326,6 +330,7 @@ export function CategoriaEditorModal({
             if (dbResult.success) {
                 setFotos(fotos.filter(f => f.id !== id));
                 await refreshStorageUsage();
+        triggerRefresh();
             } else {
                 toast.error(`Error eliminando foto: ${dbResult.error}`);
             }
@@ -349,6 +354,7 @@ export function CategoriaEditorModal({
             if (dbResult.success) {
                 setVideos(videos.filter(v => v.id !== id));
                 await refreshStorageUsage();
+        triggerRefresh();
             } else {
                 toast.error(`Error eliminando video: ${dbResult.error}`);
             }

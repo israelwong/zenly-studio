@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { HardDrive, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { calcularStorageCompleto, type StorageStats } from "@/lib/actions/studio/builder/catalogo/calculate-storage.actions";
+import { useStorageRefreshListener } from "@/hooks/useStorageRefresh";
 
 interface StorageBadgeProps {
     studioSlug: string;
@@ -23,6 +24,9 @@ export function StorageBadge({
     const [isLoading, setIsLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    
+    // Suscribirse a cambios de storage
+    const refreshTrigger = useStorageRefreshListener(studioSlug);
 
     const cargarStorage = useCallback(async () => {
         try {
@@ -41,6 +45,13 @@ export function StorageBadge({
     useEffect(() => {
         cargarStorage();
     }, [cargarStorage]);
+
+    // Recargar cuando se dispare el evento de refresh
+    useEffect(() => {
+        if (refreshTrigger > 0) {
+            cargarStorage();
+        }
+    }, [refreshTrigger, cargarStorage]);
 
     // Cerrar panel al hacer click fuera
     useEffect(() => {

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { ZenCard } from "@/components/ui/zen";
 import { AlertCircle, HardDrive } from "lucide-react";
 import { calcularStorageCompleto, type StorageStats } from "@/lib/actions/studio/builder/catalogo/calculate-storage.actions";
+import { useStorageRefreshListener } from "@/hooks/useStorageRefresh";
 
 interface StorageIndicatorProps {
     studioSlug: string;
@@ -24,6 +25,9 @@ export function StorageIndicator({
     const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+    
+    // Suscribirse a cambios de storage
+    const refreshTrigger = useStorageRefreshListener(studioSlug);
 
     const cargarStorage = useCallback(async () => {
         try {
@@ -42,6 +46,13 @@ export function StorageIndicator({
     useEffect(() => {
         cargarStorage();
     }, [cargarStorage]);
+
+    // Recargar cuando se dispare el evento de refresh
+    useEffect(() => {
+        if (refreshTrigger > 0) {
+            cargarStorage();
+        }
+    }, [refreshTrigger, cargarStorage]);
 
     const totalBytes = storageStats?.totalBytes || 0;
     const percentageUsed = (totalBytes / quotaLimitBytes) * 100;
