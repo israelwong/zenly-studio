@@ -100,7 +100,7 @@ export async function crearPortadaSeccion(data: CreateSeccionPortadaForm) {
     return {
       success: false,
       error: error instanceof z.ZodError
-        ? `Validación fallida: ${error.errors[0].message}`
+        ? `Validación fallida: ${error.errors?.[0]?.message || error.message || 'Error de validación'}`
         : "Error al crear portada",
     };
   }
@@ -128,7 +128,7 @@ export async function eliminarPortadaSeccion(data: DeleteSeccionPortadaForm) {
     return {
       success: false,
       error: error instanceof z.ZodError
-        ? `Validación fallida: ${error.errors[0].message}`
+        ? `Validación fallida: ${error.errors?.[0]?.message || error.message || 'Error de validación'}`
         : "Error al eliminar portada",
     };
   }

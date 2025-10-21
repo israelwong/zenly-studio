@@ -182,7 +182,7 @@ export async function crearItem(
         if (error instanceof z.ZodError) {
             return {
                 success: false,
-                error: error.errors[0].message,
+                error: error.errors?.[0]?.message || error.message || 'Error de validación',
             };
         }
 
@@ -265,7 +265,7 @@ export async function actualizarItem(
         if (error instanceof z.ZodError) {
             return {
                 success: false,
-                error: error.errors[0].message,
+                error: error.errors?.[0]?.message || error.message || 'Error de validación',
             };
         }
 

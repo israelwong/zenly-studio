@@ -103,8 +103,10 @@ export async function crearMediaItem(data: CreateMediaItemForm) {
     return {
       success: false,
       error: error instanceof z.ZodError
-        ? `Validación fallida: ${error.errors[0].message}`
-        : "Error al crear archivo multimedia",
+        ? `Validación fallida: ${error.errors?.[0]?.message || error.message || 'Error de validación'}`
+        : error instanceof Error 
+          ? error.message 
+          : "Error al crear archivo multimedia",
     };
   }
 }
@@ -189,8 +191,10 @@ export async function eliminarMediaItem(data: DeleteMediaItemForm) {
     return {
       success: false,
       error: error instanceof z.ZodError
-        ? `Validación fallida: ${error.errors[0].message}`
-        : "Error al eliminar archivo",
+        ? `Validación fallida: ${error.errors?.[0]?.message || error.message || 'Error de validación'}`
+        : error instanceof Error 
+          ? error.message 
+          : "Error al eliminar archivo",
     };
   }
 }

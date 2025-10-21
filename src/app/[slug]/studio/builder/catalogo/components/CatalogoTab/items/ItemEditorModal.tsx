@@ -286,7 +286,7 @@ export function ItemEditorModal({
 
             setFotos(prev => [...prev, ...mediaItems]);
             toast.success(`${uploadedFiles.length} foto(s) subida(s)`);
-            
+
             // Actualizar storage tracking
             await refreshStorageUsage();
             triggerRefresh();
@@ -335,7 +335,7 @@ export function ItemEditorModal({
 
             setVideos(prev => [...prev, ...mediaItems]);
             toast.success(`${uploadedFiles.length} video(s) subido(s)`);
-            
+
             // Actualizar storage tracking
             await refreshStorageUsage();
             triggerRefresh();
@@ -404,7 +404,7 @@ export function ItemEditorModal({
                 if (dbResult.success) {
                     setFotos(fotos.filter(f => f.id !== id));
                     toast.success("Foto eliminada");
-                    
+
                     // Actualizar storage tracking
                     await refreshStorageUsage();
                     triggerRefresh();
@@ -441,7 +441,7 @@ export function ItemEditorModal({
                 if (dbResult.success) {
                     setVideos(videos.filter(v => v.id !== id));
                     toast.success("Video eliminado");
-                    
+
                     // Actualizar storage tracking
                     await refreshStorageUsage();
                     triggerRefresh();

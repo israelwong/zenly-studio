@@ -277,7 +277,7 @@ export async function uploadMediaToEntity(
     console.error("Error uploading media:", error);
 
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
+      return { success: false, error: error.errors?.[0]?.message || error.message || 'Error de validación' };
     }
 
     if (error instanceof Error) {

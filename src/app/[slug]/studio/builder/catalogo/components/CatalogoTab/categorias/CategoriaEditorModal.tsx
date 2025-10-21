@@ -330,7 +330,7 @@ export function CategoriaEditorModal({
             if (dbResult.success) {
                 setFotos(fotos.filter(f => f.id !== id));
                 await refreshStorageUsage();
-        triggerRefresh();
+                triggerRefresh();
             } else {
                 toast.error(`Error eliminando foto: ${dbResult.error}`);
             }
@@ -354,7 +354,7 @@ export function CategoriaEditorModal({
             if (dbResult.success) {
                 setVideos(videos.filter(v => v.id !== id));
                 await refreshStorageUsage();
-        triggerRefresh();
+                triggerRefresh();
             } else {
                 toast.error(`Error eliminando video: ${dbResult.error}`);
             }
