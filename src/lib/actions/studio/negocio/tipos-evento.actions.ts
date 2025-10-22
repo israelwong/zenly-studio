@@ -53,29 +53,29 @@ export async function obtenerTiposEvento(
                 paquetes: {
                     select: {
                         id: true,
-                        nombre: true,
+                        name: true,
                         precio: true,
                         status: true,
                     },
                 },
             },
-            orderBy: { orden: 'asc' },
+            orderBy: { order: 'asc' },
         });
 
         const tiposEventoData: TipoEventoData[] = tiposEvento.map((tipo) => ({
             id: tipo.id,
             studio_id: tipo.studio_id,
-            nombre: tipo.nombre,
+            nombre: tipo.name,
             descripcion: tipo.descripcion,
             color: tipo.color,
             icono: tipo.icono,
             status: tipo.status,
-            orden: tipo.orden,
+            orden: tipo.order,
             createdAt: tipo.createdAt,
             updatedAt: tipo.updatedAt,
             paquetes: tipo.paquetes.map((p) => ({
                 id: p.id,
-                nombre: p.nombre,
+                nombre: p.name,
                 precio: p.precio || 0,
                 status: p.status,
             })),
@@ -109,18 +109,18 @@ export async function crearTipoEvento(
         // Obtener el siguiente número de posición
         const ultimoTipo = await prisma.studio_event_types.findFirst({
             where: { studio_id },
-            orderBy: { orden: 'desc' },
-            select: { orden: true },
+            orderBy: { order: 'desc' },
+            select: { order: true },
         });
 
-        const nuevaPosicion = ultimoTipo ? ultimoTipo.orden + 1 : 0;
+        const nuevaPosicion = ultimoTipo ? ultimoTipo.order + 1 : 0;
 
         const tipoEvento = await prisma.studio_event_types.create({
             data: {
                 studio_id,
-                nombre: validatedData.nombre,
+                name: validatedData.nombre,
                 status: validatedData.status,
-                orden: nuevaPosicion,
+                order: nuevaPosicion,
                 updated_at: new Date(),
             },
         });
@@ -132,12 +132,12 @@ export async function crearTipoEvento(
             data: {
                 id: tipoEvento.id,
                 studio_id: tipoEvento.studio_id,
-                nombre: tipoEvento.nombre,
+                nombre: tipoEvento.name,
                 descripcion: tipoEvento.descripcion,
                 color: tipoEvento.color,
                 icono: tipoEvento.icono,
                 status: tipoEvento.status,
-                orden: tipoEvento.orden,
+                orden: tipoEvento.order,
                 createdAt: tipoEvento.createdAt,
                 updatedAt: tipoEvento.updatedAt,
                 paquetes: [],
@@ -168,7 +168,7 @@ export async function actualizarTipoEvento(
         const tipoEvento = await prisma.studio_event_types.update({
             where: { id: tipoId },
             data: {
-                nombre: validatedData.nombre,
+                name: validatedData.nombre,
                 status: validatedData.status,
             },
         });
@@ -188,12 +188,12 @@ export async function actualizarTipoEvento(
             data: {
                 id: tipoEvento.id,
                 studio_id: tipoEvento.studio_id,
-                nombre: tipoEvento.nombre,
+                nombre: tipoEvento.name,
                 descripcion: tipoEvento.descripcion,
                 color: tipoEvento.color,
                 icono: tipoEvento.icono,
                 status: tipoEvento.status,
-                orden: tipoEvento.orden,
+                orden: tipoEvento.order,
                 createdAt: tipoEvento.createdAt,
                 updatedAt: tipoEvento.updatedAt,
                 paquetes: [],
@@ -280,7 +280,7 @@ export async function actualizarOrdenTiposEvento(
             validatedData.tipos.map((tipo) =>
                 prisma.studio_event_types.update({
                     where: { id: tipo.id },
-                    data: { orden: tipo.orden },
+                    data: { order: tipo.orden },
                 })
             )
         );
@@ -313,7 +313,7 @@ export async function obtenerTipoEventoPorId(
                 paquetes: {
                     select: {
                         id: true,
-                        nombre: true,
+                        name: true,
                         precio: true,
                         status: true,
                     },
@@ -330,17 +330,17 @@ export async function obtenerTipoEventoPorId(
             data: {
                 id: tipoEvento.id,
                 studio_id: tipoEvento.studio_id,
-                nombre: tipoEvento.nombre,
+                nombre: tipoEvento.name,
                 descripcion: tipoEvento.descripcion,
                 color: tipoEvento.color,
                 icono: tipoEvento.icono,
                 status: tipoEvento.status,
-                orden: tipoEvento.orden,
+                orden: tipoEvento.order,
                 createdAt: tipoEvento.createdAt,
                 updatedAt: tipoEvento.updatedAt,
                 paquetes: tipoEvento.paquetes.map((p) => ({
                     id: p.id,
-                    nombre: p.nombre,
+                    nombre: p.name,
                     precio: p.precio || 0,
                     status: p.status,
                 })),
