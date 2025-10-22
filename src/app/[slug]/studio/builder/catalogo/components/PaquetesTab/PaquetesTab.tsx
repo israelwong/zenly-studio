@@ -126,7 +126,7 @@ export function PaquetesTab({ studioSlug }: PaquetesTabProps) {
             <PaquetesPorTipo
                 studioSlug={studioSlug}
                 tipoEvento={selectedTipoEvento}
-                paquetes={paquetes.filter(p => p.event_types?.name === selectedTipoEvento.name)}
+                paquetes={paquetes.filter(p => p.event_types?.name === selectedTipoEvento.nombre)}
                 onNavigateToPaquete={navigateToPaquete}
                 onNavigateBack={navigateBack}
                 onPaquetesChange={handlePaquetesChange}

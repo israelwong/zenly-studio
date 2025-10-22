@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 
 // Types
 export interface ItemData {
@@ -9,6 +10,7 @@ export interface ItemData {
     name: string;
     cost: number;
     description?: string | null;
+    tipoUtilidad?: 'servicio' | 'producto';
     order: number;
     status: string;
     createdAt: Date;
@@ -36,6 +38,7 @@ const UpdateItemSchema = z.object({
     name: z.string().min(1, "El nombre es requerido"),
     cost: z.number().min(0, "El costo no puede ser negativo"),
     description: z.string().optional(),
+    tipoUtilidad: z.enum(['servicio', 'producto']).optional(),
 });
 
 /**
@@ -54,7 +57,15 @@ export async function obtenerItemsConStats(
                 service_category_id: categoriaeId,
                 status: "active",
             },
-            include: {
+            select: {
+                id: true,
+                name: true,
+                cost: true,
+                utility_type: true,
+                order: true,
+                status: true,
+                created_at: true,
+                updated_at: true,
                 item_media: {
                     select: {
                         id: true,
@@ -77,6 +88,7 @@ export async function obtenerItemsConStats(
                 name: item.name,
                 cost: item.cost,
                 description: null,
+                tipoUtilidad: item.utility_type === 'service' ? 'servicio' : 'producto',
                 order: item.order,
                 status: item.status,
                 createdAt: item.created_at,
@@ -203,8 +215,11 @@ export async function actualizarItem(
     data: unknown
 ): Promise<ActionResponse<ItemData>> {
     try {
+        console.log("[ITEMS] Iniciando actualización de item:", data);
+
         // Validar datos
         const validated = UpdateItemSchema.parse(data);
+        console.log("[ITEMS] Datos validados:", validated);
 
         // Verificar que existe
         const existente = await prisma.studio_items.findUnique({
@@ -212,11 +227,14 @@ export async function actualizarItem(
         });
 
         if (!existente) {
+            console.log("[ITEMS] Item no encontrado:", validated.id);
             return {
                 success: false,
                 error: "Item no encontrado",
             };
         }
+
+        console.log("[ITEMS] Item existente encontrado:", existente);
 
         // Actualizar item
         const item = await prisma.studio_items.update({
@@ -224,6 +242,9 @@ export async function actualizarItem(
             data: {
                 name: validated.name,
                 cost: validated.cost,
+                ...(validated.tipoUtilidad && {
+                    utility_type: validated.tipoUtilidad === 'servicio' ? 'service' : 'product'
+                }),
             },
             include: {
                 item_media: {
@@ -234,6 +255,8 @@ export async function actualizarItem(
                 },
             },
         });
+
+        console.log("[ITEMS] Item actualizado en BD:", item);
 
         const mediaSize = item.item_media.reduce(
             (acc, media) => acc + Number(media.storage_bytes),
@@ -253,7 +276,10 @@ export async function actualizarItem(
             mediaSize,
         };
 
-        console.log(`[ITEMS] Item actualizado: ${item.id} - ${item.name}`);
+        console.log(`[ITEMS] Item actualizado exitosamente: ${item.id} - ${item.name} - Costo: ${item.cost}`);
+
+        // Revalidar la ruta para actualizar la UI
+        revalidatePath(`/[slug]/studio/builder/catalogo`);
 
         return {
             success: true,
@@ -263,6 +289,7 @@ export async function actualizarItem(
         console.error("[ITEMS] Error actualizando item:", error);
 
         if (error instanceof z.ZodError) {
+            console.error("[ITEMS] Error de validación Zod:", error.errors);
             return {
                 success: false,
                 error: error.errors?.[0]?.message || error.message || 'Error de validación',

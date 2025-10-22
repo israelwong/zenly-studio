@@ -55,89 +55,68 @@ function SortableTipoEventoCard({ tipo, onNavigateToTipoEvento }: SortableTipoEv
     };
 
     return (
-        <ZenCard 
+        <div
             ref={setNodeRef}
             style={style}
-            className={`hover:scale-105 transition-transform cursor-pointer group ${
-                isDragging ? 'shadow-2xl border-emerald-500' : ''
-            }`}
-            onClick={() => onNavigateToTipoEvento(tipo)}
+            className={isDragging ? "opacity-50" : ""}
         >
-            <div className="p-6">
-                {/* Header del tipo de evento */}
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                        {/* Handle de arrastre */}
-                        <div
-                            {...attributes}
-                            {...listeners}
-                            className="cursor-grab hover:cursor-grabbing p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <GripVertical className="w-4 h-4" />
-                        </div>
-                        
-                        {tipo.icono && (
-                            <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
-                                <span className="text-lg">{tipo.icono}</span>
+            <ZenCard
+                className="p-4 hover:bg-zinc-800/80 transition-colors group cursor-pointer"
+                onClick={() => onNavigateToTipoEvento(tipo)}
+            >
+                <div className="flex items-start gap-3">
+                    {/* Drag Handle */}
+                    <button
+                        {...attributes}
+                        {...listeners}
+                        className="p-1 text-zinc-500 hover:text-zinc-300 cursor-grab active:cursor-grabbing flex-shrink-0 mt-1"
+                        title="Arrastra para reordenar"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <GripVertical className="w-4 h-4" />
+                    </button>
+
+                    {/* Contenido */}
+                    <div className="flex-1">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-3">
+                                {tipo.icono && (
+                                    <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center">
+                                        <span className="text-sm">{tipo.icono}</span>
+                                    </div>
+                                )}
+                                <h3 className="font-semibold text-zinc-100 break-words">
+                                    {tipo.nombre}
+                                </h3>
                             </div>
+                        </div>
+                        {tipo.descripcion && (
+                            <p className="text-xs text-zinc-400 break-words mb-2">
+                                {tipo.descripcion}
+                            </p>
                         )}
-                        <div>
-                            <h3 className="text-lg font-semibold text-white group-hover:text-emerald-400 transition-colors">
-                                {tipo.nombre}
-                            </h3>
-                            {tipo.descripcion && (
-                                <p className="text-sm text-zinc-400 mt-1">
-                                    {tipo.descripcion}
-                                </p>
+                        <div className="text-xs text-zinc-500 flex items-center gap-2">
+                            <span>
+                                {tipo.paquetesCount} paquete{tipo.paquetesCount !== 1 ? "s" : ""}
+                            </span>
+                            {tipo.precioPromedio > 0 && (
+                                <>
+                                    <span>•</span>
+                                    <span className="text-emerald-400">
+                                        {formatearMoneda(tipo.precioPromedio)} promedio
+                                    </span>
+                                </>
                             )}
                         </div>
                     </div>
-                    <ArrowRight className="w-5 h-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
-                </div>
 
-                {/* Estadísticas */}
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-400">Paquetes</span>
-                        <ZenBadge variant="secondary">
-                            {tipo.paquetesCount} {tipo.paquetesCount === 1 ? 'paquete' : 'paquetes'}
-                        </ZenBadge>
+                    {/* Arrow */}
+                    <div className="flex items-center flex-shrink-0">
+                        <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
                     </div>
-                    
-                    {tipo.precioPromedio > 0 && (
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-zinc-400">Precio promedio</span>
-                            <span className="text-sm font-medium text-emerald-400">
-                                {formatearMoneda(tipo.precioPromedio)}
-                            </span>
-                        </div>
-                    )}
-
-                    {tipo.paquetesCount === 0 && (
-                        <div className="text-center py-4">
-                            <p className="text-sm text-zinc-500">
-                                Sin paquetes configurados
-                            </p>
-                        </div>
-                    )}
                 </div>
-
-                {/* Acción */}
-                <div className="mt-4 pt-4 border-t border-zinc-800">
-                    <ZenButton 
-                        variant="secondary" 
-                        className="w-full group-hover:bg-emerald-600 group-hover:text-white transition-colors"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigateToTipoEvento(tipo);
-                        }}
-                    >
-                        Gestionar Paquetes
-                    </ZenButton>
-                </div>
-            </div>
-        </ZenCard>
+            </ZenCard>
+        </div>
     );
 }
 
@@ -219,11 +198,11 @@ export function TiposEventoList({
 
     // Calcular estadísticas por tipo de evento
     const tiposConStats = localTiposEvento.map(tipo => {
-        const paquetesDelTipo = paquetes.filter(p => p.event_types?.name === tipo.name);
-        const precioPromedio = paquetesDelTipo.length > 0 
+        const paquetesDelTipo = paquetes.filter(p => p.event_types?.name === tipo.nombre);
+        const precioPromedio = paquetesDelTipo.length > 0
             ? paquetesDelTipo.reduce((sum, p) => sum + (p.precio || 0), 0) / paquetesDelTipo.length
             : 0;
-        
+
         return {
             ...tipo,
             paquetesCount: paquetesDelTipo.length,
@@ -236,61 +215,59 @@ export function TiposEventoList({
         console.log('Crear nuevo tipo de evento');
     };
 
-    if (localTiposEvento.length === 0) {
-        return (
-            <div className="text-center py-12">
-                <Package className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-white mb-2">
-                    No hay tipos de evento configurados
-                </h3>
-                <p className="text-zinc-400 mb-6 max-w-md mx-auto">
-                    Primero necesitas crear tipos de evento (Bodas, XV Años, etc.) antes de poder crear paquetes.
-                </p>
-                <ZenButton onClick={handleCrearTipoEvento}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Crear Tipo de Evento
-                </ZenButton>
-            </div>
-        );
-    }
 
     return (
-        <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-        >
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-xl sm:text-2xl font-bold text-white">Paquetes por Tipo de Evento</h2>
-                        <p className="text-zinc-400 mt-1 text-sm sm:text-base">
-                            Organiza tus paquetes según el tipo de evento. Arrastra para reordenar.
-                        </p>
-                    </div>
-                    <ZenButton onClick={handleCrearTipoEvento} className="w-full sm:w-auto">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nuevo Tipo de Evento
-                    </ZenButton>
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-zinc-100">Tipos de Evento</h2>
+                    <p className="text-sm text-zinc-400 mt-1">
+                        Organiza tus paquetes según el tipo de evento (arrastra para reordenar)
+                    </p>
                 </div>
-
-                {/* Grid de tipos de evento con drag & drop */}
-                <SortableContext
-                    items={localTiposEvento.map(tipo => tipo.id)}
-                    strategy={verticalListSortingStrategy}
+                <ZenButton
+                    onClick={handleCrearTipoEvento}
+                    variant="primary"
+                    className="gap-2"
                 >
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
-                        {tiposConStats.map((tipo) => (
-                            <SortableTipoEventoCard
-                                key={tipo.id}
-                                tipo={tipo}
-                                onNavigateToTipoEvento={onNavigateToTipoEvento}
-                            />
-                        ))}
-                    </div>
-                </SortableContext>
+                    <Plus className="w-4 h-4" />
+                    Nuevo Tipo
+                </ZenButton>
             </div>
-        </DndContext>
+
+            {/* Lista de tipos de evento con drag & drop */}
+            {localTiposEvento.length === 0 ? (
+                <ZenCard className="p-12 text-center">
+                    <Package className="w-12 h-12 text-zinc-500 mx-auto mb-4" />
+                    <p className="text-zinc-400 mb-4">Sin tipos de evento configurados</p>
+                    <ZenButton onClick={handleCrearTipoEvento} variant="primary">
+                        <Plus className="w-4 h-4" />
+                        Crear primer tipo de evento
+                    </ZenButton>
+                </ZenCard>
+            ) : (
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <SortableContext
+                        items={localTiposEvento.map(tipo => tipo.id)}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        <div className="space-y-2">
+                            {tiposConStats.map((tipo) => (
+                                <SortableTipoEventoCard
+                                    key={tipo.id}
+                                    tipo={tipo}
+                                    onNavigateToTipoEvento={onNavigateToTipoEvento}
+                                />
+                            ))}
+                        </div>
+                    </SortableContext>
+                </DndContext>
+            )}
+        </div>
     );
 }

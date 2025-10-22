@@ -33,8 +33,8 @@ export async function obtenerConfiguracionPrecios(
         }
 
         return {
-            utilidad_servicio: String(config.service_margin ?? 0.30), // 30% por defecto
-            utilidad_producto: String(config.product_margin ?? 0.40), // 40% por defecto
+            utilidad_servicio: String(config.service_margin ?? 0.30),
+            utilidad_producto: String(config.product_margin ?? 0.30),
             comision_venta: String(config.sales_commission ?? 0.10), // 10% por defecto
             sobreprecio: String(config.markup ?? 0.05), // 5% por defecto
         };

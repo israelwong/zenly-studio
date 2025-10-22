@@ -100,6 +100,7 @@ export async function obtenerCatalogo(
                     costo: s.cost,
                     gasto: s.expense,
                     tipo_utilidad: s.utility_type,
+                    type: s.type, // Agregar campo type del enum
                     orden: s.order,
                     status: s.status,
                     createdAt: s.created_at,

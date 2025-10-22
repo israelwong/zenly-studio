@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, MoreVertical, Edit2, Trash2 } from "lucide-react";
-import { ZenCard } from "@/components/ui/zen";
+import { ZenCard, ZenBadge } from "@/components/ui/zen";
 
 interface Item {
     id: string;
@@ -13,6 +13,7 @@ interface Item {
     mediaSize?: number;
     isNew?: boolean;
     isFeatured?: boolean;
+    tipoUtilidad?: 'servicio' | 'producto';
 }
 
 interface ItemCardProps {
@@ -103,12 +104,27 @@ export function ItemCard({ item, onEdit, onDelete, precioPublico }: ItemCardProp
                         <div className="text-sm text-zinc-200">
                             {item.name}
                         </div>
-                        {/* Conteo de bytes */}
-                        {item.mediaSize !== undefined && item.mediaSize > 0 && (
-                            <div className="text-xs text-zinc-500 mt-0.5">
-                                {formatBytes(item.mediaSize)}
-                            </div>
-                        )}
+                        {/* Badge de tipo de utilidad y conteo de bytes */}
+                        <div className="flex items-center gap-2 mt-0.5">
+                            {/* Badge de tipo de utilidad */}
+                            {item.tipoUtilidad && (
+                                <ZenBadge
+                                    variant={item.tipoUtilidad === 'servicio' ? 'secondary' : 'default'}
+                                    className={`text-[10px] px-1.5 py-0.5 ${item.tipoUtilidad === 'servicio'
+                                        ? 'bg-blue-900/50 text-blue-300 border-blue-700/50'
+                                        : 'bg-green-900/50 text-green-300 border-green-700/50'
+                                        }`}
+                                >
+                                    {item.tipoUtilidad === 'servicio' ? 'Servicio' : 'Producto'}
+                                </ZenBadge>
+                            )}
+                            {/* Conteo de bytes */}
+                            {item.mediaSize !== undefined && item.mediaSize > 0 && (
+                                <div className="text-xs text-zinc-500">
+                                    {formatBytes(item.mediaSize)}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Precio público calculado */}

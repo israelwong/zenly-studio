@@ -44,6 +44,8 @@ export interface TipoEventoData {
     orden: number;
     createdAt: Date;
     updatedAt: Date;
+    icono?: string;
+    descripcion?: string;
     // Relaciones
     paquetes?: PaqueteData[];
 }

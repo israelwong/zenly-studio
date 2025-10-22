@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Store, Package, Layers, DollarSign } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
@@ -28,6 +28,7 @@ interface Seccion {
 
 export default function CatalogoPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
     const studioSlug = params.slug as string;
 
     const [activeTab, setActiveTab] = useState<TabValue>('items');
@@ -57,6 +58,27 @@ export default function CatalogoPage() {
 
         loadBuilderData();
     }, [studioSlug]);
+
+    // Inicializar tab desde hash después de hidratación
+    useEffect(() => {
+        const hash = window.location.hash.replace('#', '');
+        if (hash === 'paquetes' || hash === 'utilidad' || hash === 'items') {
+            setActiveTab(hash as TabValue);
+        }
+    }, []);
+
+    // Escuchar cambios en el hash de la URL
+    useEffect(() => {
+        const handleHashChange = () => {
+            const hash = window.location.hash.replace('#', '');
+            if (hash === 'paquetes' || hash === 'utilidad' || hash === 'items') {
+                setActiveTab(hash as TabValue);
+            }
+        };
+
+        window.addEventListener('hashchange', handleHashChange);
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
 
     // Cargar secciones y configuración de precios
     useEffect(() => {
@@ -156,7 +178,11 @@ export default function CatalogoPage() {
                 </ZenCardHeader>
 
                 <ZenCardContent className="p-6">
-                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
+                    <Tabs value={activeTab} onValueChange={(v) => {
+                        setActiveTab(v as TabValue);
+                        // Actualizar URL hash
+                        window.location.hash = v;
+                    }}>
                         <TabsList className="grid w-full grid-cols-3 mb-6 bg-zinc-800/50 p-1 rounded-lg">
                             <TabsTrigger
                                 value="items"

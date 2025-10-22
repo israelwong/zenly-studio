@@ -52,6 +52,7 @@ interface Item {
   id: string;
   name: string;
   cost: number;
+  tipoUtilidad?: 'servicio' | 'producto';
   isNew?: boolean;
   isFeatured?: boolean;
   mediaSize?: number;
@@ -89,6 +90,11 @@ export function CatalogoContainer({
 
   // Estados de carga
   const [isLoading, setIsLoading] = useState(false);
+
+  // Cargar configuración de precios al montar el componente
+  useEffect(() => {
+    loadConfiguracionPrecios();
+  }, [studioSlug]);
 
   // Estados de modales
   const [isSeccionModalOpen, setIsSeccionModalOpen] = useState(false);
@@ -134,7 +140,7 @@ export function CatalogoContainer({
         const result = await calcularStorageCompleto(studioSlug);
         if (result.success && result.data) {
           setStorageUsage(result.data);
-          
+
           // Actualizar secciones con mediaSize
           const seccionesActualizadas = secciones.map(sec => {
             const storageSection = result.data!.sections.find(s => s.sectionId === sec.id);
@@ -277,6 +283,7 @@ export function CatalogoContainer({
           id: item.id,
           name: item.name,
           cost: item.cost,
+          tipoUtilidad: item.tipoUtilidad,
           mediaSize: item.mediaSize,
         }));
         setItems(itemsTransformadas);
@@ -564,6 +571,7 @@ export function CatalogoContainer({
                 ...i,
                 name: data.name,
                 cost: data.cost,
+                tipoUtilidad: data.tipoUtilidad,
               }
               : i
           )
@@ -830,9 +838,11 @@ export function CatalogoContainer({
             setIsItemModalOpen(false);
             setItemToEdit(null);
           }}
+          onSave={handleSaveItem}
           item={itemToEdit}
           studioSlug={studioSlug}
           categoriaId={selectedCategoria?.id || ""}
+          preciosConfig={preciosConfig || undefined}
         />
 
         {/* Modal de confirmación de eliminación de item */}

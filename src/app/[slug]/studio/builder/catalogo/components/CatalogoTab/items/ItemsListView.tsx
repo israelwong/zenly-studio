@@ -24,6 +24,7 @@ interface Item {
   id: string;
   name: string;
   cost: number;
+  tipoUtilidad?: 'servicio' | 'producto';
   mediaSize?: number;
   isNew?: boolean;
   isFeatured?: boolean;
@@ -34,6 +35,7 @@ interface ItemFormData {
   name: string;
   cost: number;
   description?: string;
+  tipoUtilidad?: 'servicio' | 'producto';
 }
 
 interface ItemsListViewProps {
@@ -88,17 +90,26 @@ export function ItemsListView({
     useSensor(KeyboardSensor)
   );
 
+  // Ordenar items por orden (medida de seguridad)
+  const itemsOrdenados = useMemo(() => {
+    return [...items].sort((a, b) => {
+      // Si los items tienen un campo de orden, usarlo
+      // Si no, mantener el orden original
+      return 0;
+    });
+  }, [items]);
+
   // Calcular precios finales para cada item
   const preciosCalculados = useMemo(() => {
     if (!configuracion) return {};
 
-    return items.reduce(
+    return itemsOrdenados.reduce(
       (acc, item) => {
         try {
           const resultado = calcularPrecio(
             item.cost,
             0, // Sin gastos por ahora
-            'servicio', // Default tipo
+            item.tipoUtilidad || 'servicio', // Usar tipoUtilidad del item
             configuracion
           );
           acc[item.id] = resultado.precio_final;
@@ -110,7 +121,7 @@ export function ItemsListView({
       },
       {} as Record<string, number>
     );
-  }, [items, configuracion]);
+  }, [itemsOrdenados, configuracion]);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -120,18 +131,18 @@ export function ItemsListView({
         return;
       }
 
-      const oldIndex = items.findIndex((item) => item.id === active.id);
-      const newIndex = items.findIndex((item) => item.id === over.id);
+      const oldIndex = itemsOrdenados.findIndex((item) => item.id === active.id);
+      const newIndex = itemsOrdenados.findIndex((item) => item.id === over.id);
 
       if (oldIndex !== -1 && newIndex !== -1) {
-        const reordenados = Array.from(items);
+        const reordenados = Array.from(itemsOrdenados);
         const [removed] = reordenados.splice(oldIndex, 1);
         reordenados.splice(newIndex, 0, removed);
 
         onReorderItems(reordenados.map((item) => item.id));
       }
     },
-    [items, onReorderItems]
+    [itemsOrdenados, onReorderItems]
   );
 
   return (
@@ -183,7 +194,7 @@ export function ItemsListView({
             Configurar Utilidades
           </ZenButton>
         </ZenCard>
-      ) : items.length === 0 ? (
+      ) : itemsOrdenados.length === 0 ? (
         <ZenCard className="p-12 text-center">
           <Package className="w-12 h-12 text-zinc-500 mx-auto mb-4" />
           <p className="text-zinc-400 mb-4">Sin items</p>
@@ -199,11 +210,11 @@ export function ItemsListView({
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={items.map((i) => i.id)}
+            items={itemsOrdenados.map((i) => i.id)}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-2">
-              {items.map((item) => (
+              {itemsOrdenados.map((item) => (
                 <ItemCard
                   key={item.id}
                   item={item}
@@ -213,6 +224,7 @@ export function ItemsListView({
                       id: item.id,
                       name: item.name,
                       cost: item.cost,
+                      tipoUtilidad: item.tipoUtilidad,
                     })
                   }
                   onDelete={() => onDeleteItem(item.id, item.name)}

@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
-import { ZenButton, ZenInput, ZenCard, ZenTextarea } from "@/components/ui/zen";
+import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSelect } from "@/components/ui/zen";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/shadcn/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/shadcn/tabs";
 import Lightbox from "yet-another-react-lightbox";
 import Video from "yet-another-react-lightbox/plugins/video";
 import "yet-another-react-lightbox/styles.css";
 import { toast } from "sonner";
-import { Trash2, Upload, Loader2, GripVertical, Play, Save } from "lucide-react";
+import { Trash2, Upload, Loader2, GripVertical, Play, Save, Plus, Minus, Calculator } from "lucide-react";
+import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from "@/lib/actions/studio/builder/catalogo/calcular-precio";
+import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/builder/catalogo/utilidad.actions";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useStorageTracking } from "@/hooks/useStorageTracking";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
@@ -47,20 +49,29 @@ interface MediaItem {
     isUploading?: boolean;
 }
 
+interface Gasto {
+    nombre: string;
+    costo: number;
+}
+
 interface ItemFormData {
     id?: string;
     name: string;
     cost: number;
     description?: string;
     categoriaeId?: string;
+    tipoUtilidad?: 'servicio' | 'producto';
+    gastos?: Gasto[];
 }
 
 interface ItemEditorModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onSave?: (data: ItemFormData) => Promise<void>;
     item?: ItemFormData;
     studioSlug: string;
     categoriaId: string;
+    preciosConfig?: ConfiguracionPrecios;
 }
 
 /**
@@ -70,9 +81,11 @@ interface ItemEditorModalProps {
 export function ItemEditorModal({
     isOpen,
     onClose,
+    onSave,
     item,
     studioSlug,
     categoriaId,
+    preciosConfig,
 }: ItemEditorModalProps) {
     // Estados del formulario
     const [formData, setFormData] = useState<ItemFormData>({
@@ -80,7 +93,22 @@ export function ItemEditorModal({
         cost: 0,
         description: "",
         categoriaeId: categoriaId,
+        tipoUtilidad: "servicio",
+        gastos: [],
     });
+
+    // Estados para gastos
+    const [gastos, setGastos] = useState<Gasto[]>([]);
+    const [nuevoGastoNombre, setNuevoGastoNombre] = useState("");
+    const [nuevoGastoCosto, setNuevoGastoCosto] = useState("");
+    const [showDesglosePrecios, setShowDesglosePrecios] = useState(false);
+    const [configuracion, setConfiguracion] = useState<ConfiguracionPrecios | null>(preciosConfig || null);
+
+    // Tipos de utilidad disponibles
+    const tiposUtilidad = [
+        { value: "servicio", label: "Servicio" },
+        { value: "producto", label: "Producto" }
+    ];
 
     // Estados de multimedia
     const [fotos, setFotos] = useState<MediaItem[]>([]);
@@ -113,6 +141,76 @@ export function ItemEditorModal({
     const { uploadFiles } = useMediaUpload();
     const { refreshStorageUsage } = useStorageTracking(studioSlug);
     const { triggerRefresh } = useStorageRefresh(studioSlug);
+
+    // Cargar configuración de precios del estudio
+    useEffect(() => {
+        const cargarConfiguracion = async () => {
+            if (!configuracion && !preciosConfig) {
+                try {
+                    const config = await obtenerConfiguracionPrecios(studioSlug);
+                    if (config) {
+                        setConfiguracion({
+                            utilidad_servicio: parseFloat(config.utilidad_servicio),
+                            utilidad_producto: parseFloat(config.utilidad_producto),
+                            comision_venta: parseFloat(config.comision_venta),
+                            sobreprecio: parseFloat(config.sobreprecio),
+                        });
+                    } else {
+                        // Configuración por defecto si no existe
+                        setConfiguracion({
+                            utilidad_servicio: 0.30,
+                            utilidad_producto: 0.40,
+                            comision_venta: 0.10,
+                            sobreprecio: 0.05,
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error cargando configuración de precios:", error);
+                    // Usar configuración por defecto en caso de error
+                    setConfiguracion({
+                        utilidad_servicio: 0.30,
+                        utilidad_producto: 0.40,
+                        comision_venta: 0.10,
+                        sobreprecio: 0.05,
+                    });
+                }
+            }
+        };
+
+        cargarConfiguracion();
+    }, [studioSlug, preciosConfig, configuracion]);
+
+    // Cálculo dinámico de precios
+    const resultadoPrecio: ResultadoPrecio = useMemo(() => {
+        if (!configuracion) {
+            return {
+                precio_final: 0,
+                precio_base: 0,
+                costo: 0,
+                gasto: 0,
+                utilidad_base: 0,
+                subtotal: 0,
+                monto_comision: 0,
+                monto_sobreprecio: 0,
+                porcentaje_utilidad: 0,
+                porcentaje_comision: 0,
+                porcentaje_sobreprecio: 0,
+                utilidad_real: 0,
+                porcentaje_utilidad_real: 0,
+            };
+        }
+
+        const costoNum = formData.cost || 0;
+        const gastosArray = gastos.map((g) => g.costo);
+        const totalGastos = gastosArray.reduce((acc, g) => acc + g, 0);
+
+        return calcularPrecio(
+            costoNum,
+            totalGastos,
+            formData.tipoUtilidad || 'servicio',
+            configuracion
+        );
+    }, [formData.cost, formData.tipoUtilidad, gastos, configuracion]);
 
     // Cargar media existente desde BD
     const cargarMediaExistente = async (itemId: string) => {
@@ -155,7 +253,10 @@ export function ItemEditorModal({
                     cost: item.cost,
                     description: item.description || "",
                     categoriaeId: categoriaId,
+                    tipoUtilidad: item.tipoUtilidad || "servicio",
+                    gastos: item.gastos || [],
                 });
+                setGastos(item.gastos?.map((g) => ({ nombre: g.nombre, costo: g.costo })) || []);
                 // Cargar media existente si es edición
                 if (item.id) {
                     cargarMediaExistente(item.id);
@@ -166,7 +267,10 @@ export function ItemEditorModal({
                     cost: 0,
                     description: "",
                     categoriaeId: categoriaId,
+                    tipoUtilidad: "servicio",
+                    gastos: [],
                 });
+                setGastos([]);
                 setFotos([]);
                 setVideos([]);
             }
@@ -188,6 +292,35 @@ export function ItemEditorModal({
         }));
     };
 
+    // Funciones para manejar gastos
+    const agregarGasto = () => {
+        if (!nuevoGastoNombre.trim() || !nuevoGastoCosto) return;
+
+        const nuevoGasto: Gasto = {
+            nombre: nuevoGastoNombre.trim(),
+            costo: parseFloat(nuevoGastoCosto) || 0,
+        };
+
+        const nuevosGastos = [...gastos, nuevoGasto];
+        setGastos(nuevosGastos);
+        setFormData(prev => ({
+            ...prev,
+            gastos: nuevosGastos
+        }));
+
+        setNuevoGastoNombre("");
+        setNuevoGastoCosto("");
+    };
+
+    const eliminarGasto = (index: number) => {
+        const nuevosGastos = gastos.filter((_, i) => i !== index);
+        setGastos(nuevosGastos);
+        setFormData(prev => ({
+            ...prev,
+            gastos: nuevosGastos
+        }));
+    };
+
     const handleSave = async () => {
         if (!formData.name.trim()) {
             toast.error("El nombre es requerido");
@@ -202,36 +335,40 @@ export function ItemEditorModal({
         try {
             setIsSaving(true);
 
-            if (formData.id) {
-                // Actualizar item existente
-                const result = await actualizarItem({
-                    id: formData.id,
-                    name: formData.name,
-                    cost: formData.cost,
-                });
-
-                if (!result.success) {
-                    toast.error(result.error || "Error al actualizar el item");
-                    return;
-                }
-
-                toast.success("Item actualizado");
+            if (onSave) {
+                // Usar callback del padre para mantener sincronización
+                await onSave(formData);
             } else {
-                // Crear nuevo item
-                const result = await crearItem({
-                    categoriaeId: categoriaId,
-                    name: formData.name,
-                    cost: formData.cost,
-                });
+                // Fallback: llamar directamente a las acciones (comportamiento anterior)
+                if (formData.id) {
+                    const result = await actualizarItem({
+                        id: formData.id,
+                        name: formData.name,
+                        cost: formData.cost,
+                        tipoUtilidad: formData.tipoUtilidad,
+                    });
 
-                if (!result.success) {
-                    toast.error(result.error || "Error al crear el item");
-                    return;
+                    if (!result.success) {
+                        toast.error(result.error || "Error al actualizar el item");
+                        return;
+                    }
+
+                    toast.success("Item actualizado");
+                } else {
+                    const result = await crearItem({
+                        categoriaeId: categoriaId,
+                        name: formData.name,
+                        cost: formData.cost,
+                    });
+
+                    if (!result.success) {
+                        toast.error(result.error || "Error al crear el item");
+                        return;
+                    }
+
+                    setFormData(prev => ({ ...prev, id: result.data?.id }));
+                    toast.success("Item creado");
                 }
-
-                // Actualizar el ID del item para poder subir media
-                setFormData(prev => ({ ...prev, id: result.data?.id }));
-                toast.success("Item creado");
             }
 
             onClose();
@@ -726,7 +863,7 @@ export function ItemEditorModal({
                 }}
                 modal={false}
             >
-                <SheetContent className="w-full max-w-4xl p-0 bg-zinc-900 border-l border-zinc-800">
+                <SheetContent className="w-full max-w-4xl p-0 bg-zinc-900 border-l border-zinc-800 overflow-y-auto">
                     <SheetHeader className="p-6 pb-4">
                         <SheetTitle className="text-xl font-semibold text-zinc-100">
                             {item ? "Editar Item" : "Nuevo Item"}
@@ -759,6 +896,7 @@ export function ItemEditorModal({
                         {/* Tab 1: Datos del Item */}
                         <TabsContent value="datos" className="space-y-6 mt-6 pb-6">
                             <form className="space-y-6">
+                                {/* Nombre del Item */}
                                 <div>
                                     <label className="block text-sm font-medium text-zinc-200 mb-2">
                                         Nombre del Item
@@ -774,6 +912,7 @@ export function ItemEditorModal({
                                     />
                                 </div>
 
+                                {/* Costo Base */}
                                 <div>
                                     <label className="block text-sm font-medium text-zinc-200 mb-2">
                                         Costo Base (MXN)
@@ -789,19 +928,172 @@ export function ItemEditorModal({
                                     />
                                 </div>
 
+                                {/* Tipo de Utilidad */}
                                 <div>
                                     <label className="block text-sm font-medium text-zinc-200 mb-2">
-                                        Descripción (Opcional)
+                                        Tipo de Utilidad
                                     </label>
-                                    <ZenTextarea
-                                        label=""
-                                        value={formData.description}
-                                        onChange={(e) => handleInputChange("description", e.target.value)}
-                                        placeholder="Describe el item..."
+                                    <ZenSelect
+                                        value={formData.tipoUtilidad || "servicio"}
+                                        onValueChange={(value) => handleInputChange("tipoUtilidad", value)}
                                         disabled={isSaving}
-                                        rows={3}
+                                        options={tiposUtilidad}
                                     />
                                 </div>
+
+                                {/* Gastos Asociados */}
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-200 mb-2">
+                                        Gastos Asociados
+                                    </label>
+
+                                    {/* Lista de gastos existentes */}
+                                    {gastos.length > 0 && (
+                                        <div className="space-y-2 mb-4">
+                                            {gastos.map((gasto, index) => (
+                                                <div key={index} className="flex items-center gap-2 p-2 bg-zinc-800 rounded-lg">
+                                                    <span className="flex-1 text-sm text-zinc-300">
+                                                        {gasto.nombre}: {formatearMoneda(gasto.costo)}
+                                                    </span>
+                                                    <ZenButton
+                                                        type="button"
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => eliminarGasto(index)}
+                                                        disabled={isSaving}
+                                                    >
+                                                        <Minus className="w-3 h-3" />
+                                                    </ZenButton>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Formulario para agregar gasto */}
+                                    <div className="flex gap-2">
+                                        <ZenInput
+                                            placeholder="Nombre del gasto"
+                                            value={nuevoGastoNombre}
+                                            onChange={(e) => setNuevoGastoNombre(e.target.value)}
+                                            disabled={isSaving}
+                                            className="flex-1"
+                                        />
+                                        <ZenInput
+                                            type="number"
+                                            placeholder="Costo"
+                                            value={nuevoGastoCosto}
+                                            onChange={(e) => setNuevoGastoCosto(e.target.value)}
+                                            disabled={isSaving}
+                                            min="0"
+                                            step="0.01"
+                                            className="w-24"
+                                        />
+                                        <ZenButton
+                                            type="button"
+                                            onClick={agregarGasto}
+                                            disabled={isSaving || !nuevoGastoNombre.trim() || !nuevoGastoCosto}
+                                            size="sm"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </ZenButton>
+                                    </div>
+                                </div>
+
+                                {/* Precio del Sistema */}
+                                {configuracion && (
+                                    <div>
+                                        <div className="mb-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm font-medium text-zinc-200">Precio del Sistema</span>
+                                                <span className="text-2xl font-bold text-emerald-400">
+                                                    {formatearMoneda(resultadoPrecio.precio_final)}
+                                                </span>
+                                            </div>
+                                            <div className="text-xs text-zinc-400 mt-1">
+                                                Utilidad real: {resultadoPrecio.porcentaje_utilidad_real}%
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between mb-3">
+                                            <label className="block text-sm font-medium text-zinc-200">
+                                                Desglose de Precios
+                                            </label>
+                                            <ZenButton
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setShowDesglosePrecios(!showDesglosePrecios)}
+                                                className="gap-2"
+                                            >
+                                                <Calculator className="w-4 h-4" />
+                                                {showDesglosePrecios ? "Ocultar" : "Mostrar"}
+                                            </ZenButton>
+                                        </div>
+
+                                        {showDesglosePrecios && (
+                                            <ZenCard className="p-4 bg-zinc-800/50 border-zinc-700">
+                                                <div className="space-y-4">
+                                                    {/* Resumen de costos */}
+                                                    <div className="space-y-2 py-3 border-b border-zinc-700">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm text-zinc-400">Costo Base</span>
+                                                            <span className="text-sm font-medium text-zinc-200">
+                                                                {formatearMoneda(resultadoPrecio.costo)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm text-zinc-400">+ Gastos</span>
+                                                            <span className="text-sm font-medium text-zinc-200">
+                                                                {formatearMoneda(resultadoPrecio.gasto)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center pt-1 border-t border-zinc-600">
+                                                            <span className="text-sm font-medium text-zinc-300">Subtotal Costos</span>
+                                                            <span className="text-sm font-semibold text-zinc-100">
+                                                                {formatearMoneda(resultadoPrecio.costo + resultadoPrecio.gasto)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Desglose detallado */}
+                                                    <div className="space-y-3">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm text-zinc-400">Utilidad Base ({resultadoPrecio.porcentaje_utilidad}%)</span>
+                                                            <span className="text-sm font-medium text-emerald-400">{formatearMoneda(resultadoPrecio.utilidad_base)}</span>
+                                                        </div>
+
+                                                        <div className="flex justify-between items-center py-2 border-t border-zinc-700">
+                                                            <span className="text-sm text-zinc-400">Subtotal</span>
+                                                            <span className="text-sm font-medium text-zinc-200">{formatearMoneda(resultadoPrecio.subtotal)}</span>
+                                                        </div>
+
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm text-zinc-400">Comisión ({resultadoPrecio.porcentaje_comision}%)</span>
+                                                            <span className="text-sm font-medium text-blue-400">{formatearMoneda(resultadoPrecio.monto_comision)}</span>
+                                                        </div>
+
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm text-zinc-400">Sobreprecio ({resultadoPrecio.porcentaje_sobreprecio}%)</span>
+                                                            <span className="text-sm font-medium text-purple-400">{formatearMoneda(resultadoPrecio.monto_sobreprecio)}</span>
+                                                        </div>
+
+                                                        <div className="border-t border-zinc-600 pt-3">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-base font-semibold text-zinc-200">Precio Final</span>
+                                                                <span className="text-xl font-bold text-emerald-400">{formatearMoneda(resultadoPrecio.precio_final)}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center mt-1">
+                                                                <span className="text-xs text-zinc-500">Utilidad Real</span>
+                                                                <span className="text-xs font-medium text-emerald-300">{resultadoPrecio.porcentaje_utilidad_real}%</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </ZenCard>
+                                        )}
+                                    </div>
+                                )}
+
 
                                 {/* Botones de acción */}
                                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">

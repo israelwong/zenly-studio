@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { ArrowLeft, Plus, Search, Filter, Edit, Copy, Trash2, GripVertical } from 'lucide-react';
 import { ZenCard, ZenButton, ZenInput, ZenBadge } from '@/components/ui/zen';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { PaqueteFormularioAvanzado } from './PaqueteFormularioAvanzado';
 import { formatearMoneda } from '@/lib/actions/studio/builder/catalogo/calcular-precio';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
@@ -27,17 +29,40 @@ export function PaquetesPorTipo({
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [loading, setLoading] = useState(false);
+    const [showForm, setShowForm] = useState(false);
+    const [editingPaquete, setEditingPaquete] = useState<PaqueteFromDB | null>(null);
 
     // Filtrar paquetes
     const filteredPaquetes = paquetes.filter(paquete => {
-        const matchesSearch = paquete.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = paquete.name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = statusFilter === 'all' || paquete.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
 
     const handleCrearPaquete = () => {
-        // TODO: Implementar modal de creación de paquete
-        console.log('Crear nuevo paquete para:', tipoEvento.nombre);
+        setEditingPaquete(null);
+        setShowForm(true);
+    };
+
+    const handleSave = (savedPaquete: PaqueteFromDB) => {
+        if (editingPaquete) {
+            // Actualizar paquete existente
+            const newPaquetes = paquetes.map((p) =>
+                p.id === editingPaquete.id ? savedPaquete : p
+            );
+            onPaquetesChange(newPaquetes);
+        } else {
+            // Crear nuevo paquete
+            const newPaquetes = [...paquetes, savedPaquete];
+            onPaquetesChange(newPaquetes);
+        }
+        setShowForm(false);
+        setEditingPaquete(null);
+    };
+
+    const handleCancel = () => {
+        setShowForm(false);
+        setEditingPaquete(null);
     };
 
     const handleEditPaquete = (paquete: PaqueteFromDB) => {
@@ -110,9 +135,9 @@ export function PaquetesPorTipo({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="flex-1"
-                    icon={<Search className="w-4 h-4" />}
+                    icon={Search}
                 />
-                
+
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
@@ -217,7 +242,7 @@ export function PaquetesPorTipo({
                                         <Edit className="w-4 h-4 mr-1" />
                                         <span className="hidden sm:inline">Editar</span>
                                     </ZenButton>
-                                    
+
                                     <div className="flex gap-2">
                                         <ZenButton
                                             variant="secondary"
@@ -228,7 +253,7 @@ export function PaquetesPorTipo({
                                         >
                                             <Copy className="w-4 h-4" />
                                         </ZenButton>
-                                        
+
                                         <ZenButton
                                             variant="destructive"
                                             size="sm"
@@ -245,6 +270,23 @@ export function PaquetesPorTipo({
                     ))}
                 </div>
             )}
+
+            {/* Modal de formulario */}
+            <Dialog open={showForm} onOpenChange={setShowForm}>
+                <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-700">
+                    <DialogHeader>
+                        <DialogTitle className="text-white">
+                            {editingPaquete ? 'Editar Paquete' : 'Nuevo Paquete'}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <PaqueteFormularioAvanzado
+                        studioSlug={studioSlug}
+                        paquete={editingPaquete}
+                        onSave={handleSave}
+                        onCancel={handleCancel}
+                    />
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

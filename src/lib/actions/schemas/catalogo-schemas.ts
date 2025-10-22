@@ -165,6 +165,7 @@ export interface ServicioData {
     utilidad?: number; // Se calcula dinámicamente
     precio_publico?: number; // Se calcula dinámicamente
     tipo_utilidad: string;
+    type: string; // Agregar campo type del enum
     orden: number;
     status: string;
     createdAt: Date;
