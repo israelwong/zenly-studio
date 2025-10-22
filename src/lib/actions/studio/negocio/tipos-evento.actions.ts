@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import {
     TipoEventoSchema,
     ActualizarTipoEventoSchema,
@@ -9,8 +9,6 @@ import {
     type TipoEventoData,
     type TipoEventoFormData,
 } from '@/lib/actions/schemas/tipos-evento-schemas';
-
-const prisma = new PrismaClient();
 
 /**
  * Obtener el ID del proyecto desde el slug
