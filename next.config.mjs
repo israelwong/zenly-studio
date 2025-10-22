@@ -17,8 +17,10 @@ const nextConfig = {
   },
 
   // Aumentar límite de tamaño para Server Actions (subida de archivos)
-  serverActions: {
-    bodySizeLimit: "150mb",
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "150mb",
+    },
   },
 
   async headers() {

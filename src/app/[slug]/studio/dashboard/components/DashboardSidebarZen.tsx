@@ -27,8 +27,8 @@ interface DashboardSidebarZenProps {
 }
 
 export async function DashboardSidebarZen({ className, studioSlug }: DashboardSidebarZenProps) {
-    console.log('🔍 DashboardSidebarZen - studioSlug recibido:', studioSlug);
-    console.log('🔍 DashboardSidebarZen - tipo de studioSlug:', typeof studioSlug);
+    // console.log('🔍 DashboardSidebarZen - studioSlug recibido:', studioSlug);
+    // console.log('🔍 DashboardSidebarZen - tipo de studioSlug:', typeof studioSlug);
 
     let studio: { id: string; studio_name: string; slug: string } | null = null;
     let allStudios: { id: string; studio_name: string; slug: string }[] = [];
@@ -38,8 +38,8 @@ export async function DashboardSidebarZen({ className, studioSlug }: DashboardSi
         allStudios = await prisma.studios.findMany({
             select: { id: true, studio_name: true, slug: true }
         });
-        console.log('🔍 DashboardSidebarZen - todos los studios:', allStudios);
-        console.log('🔍 DashboardSidebarZen - cantidad de studios:', allStudios.length);
+        // console.log('🔍 DashboardSidebarZen - todos los studios:', allStudios);
+        // console.log('🔍 DashboardSidebarZen - cantidad de studios:', allStudios.length);
 
         // Buscar el studio específico
         studio = await prisma.studios.findUnique({
@@ -47,17 +47,17 @@ export async function DashboardSidebarZen({ className, studioSlug }: DashboardSi
             select: { id: true, studio_name: true, slug: true }
         });
 
-        console.log('🔍 DashboardSidebarZen - studio encontrado:', studio);
-        console.log('🔍 DashboardSidebarZen - búsqueda por slug:', studioSlug);
+        // console.log('🔍 DashboardSidebarZen - studio encontrado:', studio);
+        // console.log('🔍 DashboardSidebarZen - búsqueda por slug:', studioSlug);
 
         // También intentar buscar por ID si el slug no funciona
         if (!studio && allStudios.length > 0) {
-            console.log('🔍 DashboardSidebarZen - Intentando buscar por otros criterios...');
+            // console.log('🔍 DashboardSidebarZen - Intentando buscar por otros criterios...');
             const firstStudio = allStudios[0];
-            console.log('🔍 DashboardSidebarZen - Primer studio disponible:', firstStudio);
+            // console.log('🔍 DashboardSidebarZen - Primer studio disponible:', firstStudio);
 
             // TEMPORAL: Usar el primer studio disponible si no se encuentra el slug específico
-            console.log('⚠️ DashboardSidebarZen - USANDO PRIMER STUDIO DISPONIBLE COMO FALLBACK');
+            //      console.log('⚠️ DashboardSidebarZen - USANDO PRIMER STUDIO DISPONIBLE COMO FALLBACK');
             studio = firstStudio;
         }
 
@@ -75,8 +75,8 @@ export async function DashboardSidebarZen({ className, studioSlug }: DashboardSi
 
     if (!studio) {
         // Manejar el caso donde el studio no se encuentra
-        console.error('❌ DashboardSidebarZen - Studio no encontrado para slug:', studioSlug);
-        console.error('❌ DashboardSidebarZen - Studios disponibles:', allStudios.map(s => s.slug));
+        //      console.error('❌ DashboardSidebarZen - Studio no encontrado para slug:', studioSlug);
+        //      console.error('❌ DashboardSidebarZen - Studios disponibles:', allStudios.map(s => s.slug));
         return (
             <ZenSidebar className={className}>
                 <div className="p-4 text-red-400">
