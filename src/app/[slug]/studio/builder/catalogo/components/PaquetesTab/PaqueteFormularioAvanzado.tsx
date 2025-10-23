@@ -423,11 +423,17 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         try {
             const serviciosData = Object.entries(items)
                 .filter(([, cantidad]) => cantidad > 0)
-                .map(([servicioId, cantidad]) => ({
-                    servicioId,
-                    cantidad,
-                    servicioCategoriaId: servicioMap.get(servicioId)?.servicio_categoria_id || ''
-                }));
+                .map(([servicioId, cantidad]) => {
+                    const servicio = servicioMap.get(servicioId);
+                    console.log('🔍 Servicio encontrado:', servicio);
+                    console.log('🔍 service_category_id:', servicio?.service_category_id);
+                    
+                    return {
+                        servicioId,
+                        cantidad,
+                        servicioCategoriaId: servicio?.service_category_id || ''
+                    };
+                });
 
             const data = {
                 name: nombre,
