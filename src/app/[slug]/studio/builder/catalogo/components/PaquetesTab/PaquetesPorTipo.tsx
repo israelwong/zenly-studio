@@ -117,7 +117,7 @@ export function PaquetesPorTipo({
 
     const confirmDuplicate = async () => {
         if (!selectedPaquete) return;
-        
+
         setIsDuplicating(true);
         try {
             const result = await duplicarPaquete(studioSlug, selectedPaquete.id);
@@ -140,7 +140,7 @@ export function PaquetesPorTipo({
 
     const confirmDelete = async () => {
         if (!selectedPaquete) return;
-        
+
         setIsDeleting(true);
         try {
             const result = await eliminarPaquete(studioSlug, selectedPaquete.id);

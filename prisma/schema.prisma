@@ -1412,7 +1412,7 @@ model studio_paquetes {
   utilidad          Float?
   precio            Float?
   status            String                     @default("active")
-  position          Int                        @default(0)
+  order             Int                        @default(0)
   created_at        DateTime                   @default(now())
   updated_at        DateTime                   @updatedAt
   paquete_items studio_paquete_items[]

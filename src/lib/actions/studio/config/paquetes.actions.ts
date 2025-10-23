@@ -383,7 +383,7 @@ export async function actualizarPosicionPaquete(
             await prisma.studio_paquetes.update({
                 where: { id: update.id },
                 data: {
-                    position: update.position
+                    order: update.position
                 }
             });
         }

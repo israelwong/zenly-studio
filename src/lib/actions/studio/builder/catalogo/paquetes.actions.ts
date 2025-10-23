@@ -41,7 +41,7 @@ export async function obtenerPaquetes(
                 },
                 paquete_items: true,
             },
-            orderBy: { position: "asc" },
+            orderBy: { order: "asc" },
         });
 
         console.log('🔍 Paquetes obtenidos de DB:', paquetes);
@@ -136,11 +136,11 @@ export async function crearPaquete(
         // Obtener la posición máxima actual
         const maxPosition = await prisma.studio_paquetes.findFirst({
             where: { studio_id: studio.id },
-            orderBy: { position: "desc" },
-            select: { position: true },
+            orderBy: { order: "desc" },
+            select: { order: true },
         });
 
-        const newPosition = (maxPosition?.position ?? -1) + 1;
+        const newPosition = (maxPosition?.order ?? -1) + 1;
 
         const paquete = await prisma.studio_paquetes.create({
             data: {
@@ -151,7 +151,7 @@ export async function crearPaquete(
                 expense: paqueteData.expense,
                 utilidad: paqueteData.utilidad,
                 precio: paqueteData.precio,
-                position: newPosition,
+                order: newPosition,
                 status: "active",
                 // Crear paquete_items si existen servicios
                 paquete_items: paqueteData.servicios && paqueteData.servicios.length > 0 ? {
@@ -159,7 +159,7 @@ export async function crearPaquete(
                         item_id: servicio.servicioId,
                         service_category_id: servicio.servicioCategoriaId,
                         quantity: servicio.cantidad,
-                        position: index,
+                        order: index,
                         visible_to_client: true,
                         status: "active"
                     }))
@@ -254,7 +254,7 @@ export async function actualizarPaquete(
                     item_id: servicio.servicioId,
                     service_category_id: servicio.servicioCategoriaId,
                     quantity: servicio.cantidad,
-                    position: index,
+                    order: index,
                     visible_to_client: true,
                     status: "active"
                 }))
@@ -417,11 +417,11 @@ export async function duplicarPaquete(
         // Obtener la posición máxima
         const maxPosition = await prisma.studio_paquetes.findFirst({
             where: { studio_id: studio.id },
-            orderBy: { position: "desc" },
-            select: { position: true },
+            orderBy: { order: "desc" },
+            select: { order: true },
         });
 
-        const newPosition = (maxPosition?.position ?? -1) + 1;
+        const newPosition = (maxPosition?.order ?? -1) + 1;
 
         // Crear el nuevo paquete
         const paqueteDuplicado = await prisma.studio_paquetes.create({
@@ -433,7 +433,7 @@ export async function duplicarPaquete(
                 expense: paqueteOriginal.expense,
                 utilidad: paqueteOriginal.utilidad,
                 precio: paqueteOriginal.precio,
-                position: newPosition,
+                order: newPosition,
                 status: "active",
                 paquete_items: {
                     create: paqueteOriginal.paquete_items.map((item) => ({
@@ -441,7 +441,7 @@ export async function duplicarPaquete(
                         service_category_id: item.service_category_id,
                         quantity: item.quantity,
                         visible_to_client: item.visible_to_client,
-                        position: item.position,
+                        order: item.order,
                         status: "active",
                     })),
                 },
