@@ -22,9 +22,16 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 
+interface PaqueteData {
+    id: string;
+    event_type_id: string;
+    precio?: number;
+}
+
 interface TiposEventoListProps {
     studioSlug: string;
     tiposEvento: TipoEventoData[];
+    paquetes: PaqueteData[];
     onNavigateToTipoEvento: (tipoEvento: TipoEventoData) => void;
     onTiposEventoChange: (tiposEvento: TipoEventoData[]) => void;
 }
@@ -120,6 +127,7 @@ function SortableTipoEventoCard({ tipo, onNavigateToTipoEvento }: SortableTipoEv
 export function TiposEventoList({
     studioSlug,
     tiposEvento,
+    paquetes,
     onNavigateToTipoEvento,
     onTiposEventoChange
 }: TiposEventoListProps) {
@@ -195,12 +203,20 @@ export function TiposEventoList({
         [localTiposEvento, studioSlug, onTiposEventoChange]
     );
 
-    // Mostrar tipos de evento sin filtrado de paquetes
-    const tiposConStats = localTiposEvento.map(tipo => ({
-        ...tipo,
-        paquetesCount: 0,
-        precioPromedio: 0
-    }));
+    // Calcular estadísticas reales de paquetes por tipo de evento
+    const tiposConStats = localTiposEvento.map(tipo => {
+        const paquetesDelTipo = paquetes.filter(paquete => paquete.event_type_id === tipo.id);
+        const paquetesCount = paquetesDelTipo.length;
+        const precioPromedio = paquetesCount > 0 
+            ? paquetesDelTipo.reduce((sum, paquete) => sum + (paquete.precio || 0), 0) / paquetesCount
+            : 0;
+
+        return {
+            ...tipo,
+            paquetesCount,
+            precioPromedio
+        };
+    });
 
     const handleCrearTipoEvento = () => {
         // TODO: Implementar modal de creación de tipo de evento
