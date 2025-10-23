@@ -168,7 +168,7 @@ export function TiposEventoList({
 
             try {
                 setIsReordering(true);
-                
+
                 // Actualizar en el backend
                 const result = await actualizarOrdenTiposEvento(studioSlug, {
                     tipos: newTipos.map((tipo, index) => ({
@@ -221,7 +221,7 @@ export function TiposEventoList({
                                 <span>Actualizando orden...</span>
                             </div>
                         ) : (
-                            "Organiza tus paquetes según el tipo de evento (arrastra para reordenar)"
+                            "Organiza por tipo de evento (arrastra para reordenar)"
                         )}
                     </div>
                 </div>
