@@ -124,6 +124,7 @@ export function TiposEventoList({
     onTiposEventoChange
 }: TiposEventoListProps) {
     const [localTiposEvento, setLocalTiposEvento] = useState<TipoEventoData[]>(tiposEvento);
+    const [isReordering, setIsReordering] = useState(false);
 
     // Configurar sensores para drag & drop
     const sensors = useSensors(
@@ -166,6 +167,8 @@ export function TiposEventoList({
             setLocalTiposEvento(newTipos);
 
             try {
+                setIsReordering(true);
+                
                 // Actualizar en el backend
                 const result = await actualizarOrdenTiposEvento(studioSlug, {
                     tipos: newTipos.map((tipo, index) => ({
@@ -185,6 +188,8 @@ export function TiposEventoList({
                 console.error('Error updating order:', error);
                 toast.error('Error al actualizar la posición');
                 setLocalTiposEvento(originalTipos);
+            } finally {
+                setIsReordering(false);
             }
         },
         [localTiposEvento, studioSlug, onTiposEventoChange]
@@ -209,9 +214,16 @@ export function TiposEventoList({
             <div className="flex items-center justify-between">
                 <div className="pr-4">
                     <h2 className="text-2xl font-bold text-zinc-100">Tipos de Evento</h2>
-                    <p className="text-sm text-zinc-400 mt-1">
-                        Organiza tus paquetes según el tipo de evento (arrastra para reordenar)
-                    </p>
+                    <div className="text-sm text-zinc-400 mt-1">
+                        {isReordering ? (
+                            <div className="flex items-center space-x-2">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
+                                <span>Actualizando orden...</span>
+                            </div>
+                        ) : (
+                            "Organiza tus paquetes según el tipo de evento (arrastra para reordenar)"
+                        )}
+                    </div>
                 </div>
                 <ZenButton
                     onClick={handleCrearTipoEvento}
