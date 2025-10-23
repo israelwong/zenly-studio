@@ -97,10 +97,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                         setPrecioPersonalizado('');
                     }
 
-                    // Expandir la primera sección por defecto
-                    if (catalogoResult.data.length > 0) {
-                        setSeccionesExpandidas(new Set([catalogoResult.data[0].id]));
-                    }
+                    // No expandir automáticamente para evitar parpadeo
                 }
 
                 if (configResult) {
@@ -235,11 +232,8 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 });
             });
             setCategoriasExpandidas(categoriasConResultados);
-        } else if (!filtroServicio.trim()) {
-            // Cuando se limpia el filtro, colapsar todo
-            setSeccionesExpandidas(new Set());
-            setCategoriasExpandidas(new Set());
         }
+        // No colapsar automáticamente cuando se limpia el filtro para evitar parpadeo
     }, [filtroServicio, catalogoFiltrado]);
 
     // Verificar si hay items seleccionados
