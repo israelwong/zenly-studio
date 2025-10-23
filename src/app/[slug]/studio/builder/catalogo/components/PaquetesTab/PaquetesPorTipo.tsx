@@ -418,16 +418,16 @@ export function PaquetesPorTipo({
                 ) : (
                     <div className="space-y-2">
                         <div className="flex items-center justify-between mb-4">
-                            <p className="text-sm text-zinc-400">
+                            <div className="text-sm text-zinc-400">
                                 {isReordering ? (
-                                    <span className="flex items-center space-x-2">
+                                    <div className="flex items-center space-x-2">
                                         <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
                                         <span>Actualizando posición...</span>
-                                    </span>
+                                    </div>
                                 ) : (
                                     "Arrastra para reordenar los paquetes"
                                 )}
-                            </p>
+                            </div>
                         </div>
                         <DndContext
                             sensors={sensors}
