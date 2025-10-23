@@ -466,3 +466,67 @@ export async function duplicarPaquete(
         };
     }
 }
+
+/**
+ * Reordenar paquetes por sus IDs
+ */
+export async function reorderPaquetes(
+    studioSlug: string,
+    paqueteIds: string[]
+): Promise<ActionResponse<null>> {
+    try {
+        // Verificar que el estudio existe
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
+        });
+
+        if (!studio) {
+            return {
+                success: false,
+                error: "Estudio no encontrado"
+            };
+        }
+
+        // Verificar que los paquetes existan y pertenezcan al estudio
+        const existingPaquetes = await prisma.studio_paquetes.findMany({
+            where: { 
+                id: { in: paqueteIds },
+                studio_id: studio.id
+            },
+            select: { id: true, name: true }
+        });
+
+        if (existingPaquetes.length !== paqueteIds.length) {
+            const missingIds = paqueteIds.filter(id => !existingPaquetes.find(paquete => paquete.id === id));
+            return {
+                success: false,
+                error: `No se encontraron ${missingIds.length} paquetes: ${missingIds.join(', ')}`
+            };
+        }
+
+        // Actualizar el orden de cada paquete
+        const updatePromises = paqueteIds.map((paqueteId, index) => 
+            prisma.studio_paquetes.update({
+                where: { id: paqueteId },
+                data: { 
+                    order: index,
+                    updated_at: new Date()
+                }
+            })
+        );
+
+        await Promise.all(updatePromises);
+
+        return {
+            success: true,
+            data: null
+        };
+    } catch (error) {
+        console.error("[reorderPaquetes] Error:", error);
+        return {
+            success: false,
+            error: "Error al reordenar paquetes",
+        };
+    }
+}

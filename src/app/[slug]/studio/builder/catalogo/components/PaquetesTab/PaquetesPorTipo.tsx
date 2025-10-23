@@ -5,7 +5,7 @@ import { ArrowLeft, Plus, Edit, Copy, Trash2, AlertTriangle, GripVertical } from
 import { ZenCard, ZenButton } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { toast } from 'sonner';
-import { eliminarPaquete, duplicarPaquete } from '@/lib/actions/studio/builder/catalogo/paquetes.actions';
+import { eliminarPaquete, duplicarPaquete, reorderPaquetes } from '@/lib/actions/studio/builder/catalogo/paquetes.actions';
 import {
     DndContext,
     closestCenter,
@@ -220,15 +220,18 @@ export function PaquetesPorTipo({
                 setLocalPaquetes(newPaquetes);
 
                 // Actualizar el orden en la base de datos
-                // const paqueteIds = newPaquetes.map(paquete => paquete.id);
-                // TODO: Implementar función para reordenar paquetes
-                // const result = await reorderPaquetes(studioSlug, paqueteIds);
+                const paqueteIds = newPaquetes.map(paquete => paquete.id);
+                const result = await reorderPaquetes(studioSlug, paqueteIds);
 
-                // if (!result.success) {
-                //     console.error('Error reordering paquetes:', result.error);
-                //     // Revertir el cambio local si falla
-                //     setLocalPaquetes(paquetes);
-                // }
+                if (!result.success) {
+                    console.error('Error reordering paquetes:', result.error);
+                    toast.error(result.error || 'Error al reordenar paquetes');
+                    // Revertir el cambio local si falla
+                    setLocalPaquetes(paquetes);
+                } else {
+                    // Actualizar la lista de paquetes en el componente padre
+                    onPaquetesChange(newPaquetes);
+                }
             } catch (error) {
                 console.error('Error reordering paquetes:', error);
                 // Revertir el cambio local si falla
