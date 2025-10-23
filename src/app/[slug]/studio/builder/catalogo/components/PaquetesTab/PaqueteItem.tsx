@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { Edit, Trash2, Copy } from 'lucide-react';
-import { ZenButton, ZenCard } from '@/components/ui/zen';
 import {
     eliminarPaquete,
     duplicarPaquete,
@@ -84,60 +83,45 @@ export function PaqueteItem({
     };
 
     return (
-        <ZenCard className="group relative overflow-hidden hover:shadow-lg hover:shadow-blue-500/10 transition-all">
-            <div className="p-4 space-y-4">
-                {/* Header */}
-                <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-white group-hover:text-blue-400 transition-colors">
-                            {paquete.name}
-                        </h3>
-                    </div>
-                </div>
-
-                {/* Precio */}
-                <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-emerald-400">
+        <div className="group relative bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-3 hover:bg-zinc-800/70 hover:border-zinc-600/50 transition-all duration-200">
+            <div className="flex items-center justify-between">
+                {/* Información principal */}
+                <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-medium text-white truncate">
+                        {paquete.name}
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">
                         {precioFormateado}
-                    </span>
-                    {paquete.cost !== null && paquete.cost !== undefined && (
-                        <span className="text-sm text-zinc-500">
-                            Costo: {formatearMoneda(paquete.cost)}
-                        </span>
-                    )}
+                    </p>
                 </div>
 
-                {/* Acciones */}
-                <div className="flex gap-2 pt-2">
-                    <ZenButton
+                {/* Acciones minimalistas */}
+                <div className="flex items-center gap-1 ml-3">
+                    <button
                         onClick={() => onEdit(paquete.id)}
-                        variant="secondary"
-                        size="sm"
-                        className="flex-1 flex items-center justify-center gap-2"
+                        className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition-colors"
+                        title="Editar"
                     >
-                        <Edit className="w-4 h-4" />
-                        Editar
-                    </ZenButton>
-                    <ZenButton
+                        <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                         onClick={handleDuplicar}
-                        variant="secondary"
-                        size="sm"
                         disabled={isDuplicating}
-                        className="flex items-center justify-center gap-2"
+                        className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition-colors disabled:opacity-50"
+                        title="Duplicar"
                     >
-                        <Copy className="w-4 h-4" />
-                    </ZenButton>
-                    <ZenButton
+                        <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                         onClick={handleEliminar}
-                        variant="destructive"
-                        size="sm"
                         disabled={isDeleting}
-                        className="flex items-center justify-center gap-2"
+                        className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
+                        title="Eliminar"
                     >
-                        <Trash2 className="w-4 h-4" />
-                    </ZenButton>
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                 </div>
             </div>
-        </ZenCard>
+        </div>
     );
 }
