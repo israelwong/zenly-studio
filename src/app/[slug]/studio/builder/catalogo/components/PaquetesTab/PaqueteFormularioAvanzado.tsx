@@ -425,13 +425,16 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 .filter(([, cantidad]) => cantidad > 0)
                 .map(([servicioId, cantidad]) => {
                     const servicio = servicioMap.get(servicioId);
-                    console.log('🔍 Servicio encontrado:', servicio);
-                    console.log('🔍 servicioCategoriaId:', servicio?.servicioCategoriaId);
+                    
+                    if (!servicio?.servicioCategoriaId) {
+                        console.error('❌ Servicio sin servicioCategoriaId:', servicio);
+                        throw new Error(`Servicio ${servicioId} no tiene categoría asociada`);
+                    }
                     
                     return {
                         servicioId,
                         cantidad,
-                        servicioCategoriaId: servicio?.servicioCategoriaId || ''
+                        servicioCategoriaId: servicio.servicioCategoriaId
                     };
                 });
 

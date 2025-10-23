@@ -155,21 +155,14 @@ export async function crearPaquete(
                 status: "active",
                 // Crear paquete_items si existen servicios
                 paquete_items: paqueteData.servicios && paqueteData.servicios.length > 0 ? {
-                    create: paqueteData.servicios.map((servicio, index) => {
-                        console.log('🔍 Creando paquete_item:', {
-                            item_id: servicio.servicioId,
-                            service_category_id: servicio.servicioCategoriaId,
-                            quantity: servicio.cantidad
-                        });
-                        return {
-                            item_id: servicio.servicioId,
-                            service_category_id: servicio.servicioCategoriaId,
-                            quantity: servicio.cantidad,
-                            position: index,
-                            visible_to_client: true,
-                            status: "active"
-                        };
-                    })
+                    create: paqueteData.servicios.map((servicio, index) => ({
+                        item_id: servicio.servicioId,
+                        service_category_id: servicio.servicioCategoriaId,
+                        quantity: servicio.cantidad,
+                        position: index,
+                        visible_to_client: true,
+                        status: "active"
+                    }))
                 } : undefined
             },
             include: {
@@ -249,35 +242,10 @@ export async function actualizarPaquete(
 
         // Si hay servicios, actualizar paquete_items
         if (paqueteData.servicios && paqueteData.servicios.length > 0) {
-            console.log('🔍 Servicios recibidos:', paqueteData.servicios);
-            
             // Eliminar items existentes
             await prisma.studio_paquete_items.deleteMany({
                 where: { paquete_id: paqueteId }
             });
-
-            // Validar que todos los service_category_id existan
-            const serviceCategoryIds = paqueteData.servicios.map(s => s.servicioCategoriaId).filter(Boolean);
-            console.log('🔍 Service category IDs:', serviceCategoryIds);
-            
-            if (serviceCategoryIds.length > 0) {
-                const existingCategories = await prisma.studio_service_categories.findMany({
-                    where: { id: { in: serviceCategoryIds } },
-                    select: { id: true }
-                });
-                console.log('🔍 Categorías existentes:', existingCategories);
-                
-                const existingIds = new Set(existingCategories.map(c => c.id));
-                const invalidIds = serviceCategoryIds.filter(id => !existingIds.has(id));
-                
-                if (invalidIds.length > 0) {
-                    console.error('❌ IDs de categoría inválidos:', invalidIds);
-                    return {
-                        success: false,
-                        error: `Categorías de servicio no encontradas: ${invalidIds.join(', ')}`
-                    };
-                }
-            }
 
             // Crear nuevos items
             await prisma.studio_paquete_items.createMany({
