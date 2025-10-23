@@ -39,18 +39,7 @@ export async function obtenerPaquetes(
                         name: true,
                     },
                 },
-                paquete_items: {
-                    select: {
-                        id: true,
-                        quantity: true,
-                        items: {
-                            select: {
-                                id: true,
-                                name: true,
-                            },
-                        },
-                    },
-                },
+                paquete_items: true,
             },
             orderBy: { position: "asc" },
         });
