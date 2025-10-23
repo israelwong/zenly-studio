@@ -426,12 +426,12 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 .map(([servicioId, cantidad]) => {
                     const servicio = servicioMap.get(servicioId);
                     console.log('🔍 Servicio encontrado:', servicio);
-                    console.log('🔍 service_category_id:', servicio?.service_category_id);
-
+                    console.log('🔍 servicioCategoriaId:', servicio?.servicioCategoriaId);
+                    
                     return {
                         servicioId,
                         cantidad,
-                        servicioCategoriaId: servicio?.service_category_id || ''
+                        servicioCategoriaId: servicio?.servicioCategoriaId || ''
                     };
                 });
 
