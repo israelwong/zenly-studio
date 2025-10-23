@@ -25,7 +25,6 @@ import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas'
 interface PaqueteData {
     id: string;
     event_type_id: string;
-    precio?: number;
 }
 
 interface TiposEventoListProps {
@@ -207,14 +206,11 @@ export function TiposEventoList({
     const tiposConStats = localTiposEvento.map(tipo => {
         const paquetesDelTipo = paquetes.filter(paquete => paquete.event_type_id === tipo.id);
         const paquetesCount = paquetesDelTipo.length;
-        const precioPromedio = paquetesCount > 0 
-            ? paquetesDelTipo.reduce((sum, paquete) => sum + (paquete.precio || 0), 0) / paquetesCount
-            : 0;
 
         return {
             ...tipo,
             paquetesCount,
-            precioPromedio
+            precioPromedio: 0 // No relevante
         };
     });
 
