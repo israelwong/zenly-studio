@@ -96,12 +96,13 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         cargarDatos();
     }, [studioSlug]);
 
-    // Cargar datos del paquete cuando cambie el prop paquete
+    // Cargar datos del paquete cuando cambie el prop paquete Y cuando el catálogo esté disponible
     useEffect(() => {
-        if (paquete?.id) {
+        if (paquete?.id && catalogo.length > 0) {
             console.log('🔍 Cargando datos del paquete para editar:', paquete);
             console.log('🔍 Tiene paquete_items?', paquete.paquete_items);
-
+            console.log('🔍 Catálogo disponible:', catalogo.length, 'secciones');
+            
             setNombre(paquete.name || '');
             setDescripcion(''); // No hay descripcion en PaqueteFromDB
             setPrecioPersonalizado(paquete.precio || 0);
@@ -121,14 +122,14 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 console.log('⚠️ No hay paquete_items o está vacío');
                 setItems({});
             }
-        } else {
+        } else if (!paquete?.id) {
             // Si no hay paquete, limpiar el formulario
             setNombre('');
             setDescripcion('');
             setPrecioPersonalizado(0);
             setItems({});
         }
-    }, [paquete]);
+    }, [paquete, catalogo]);
 
 
     // Crear mapa de servicios para acceso rápido
