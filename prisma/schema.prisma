@@ -1343,7 +1343,7 @@ model studio_items {
 
   quote_items        studio_cotizacion_items[]
   package_items      studio_paquete_items[]
-  item_expenses      studio_service_expenses[]
+  item_expenses      studio_item_expenses[]
   item_media         studio_item_media[]
   studio             studios                       @relation(fields: [studio_id], references: [id])
   service_categories studio_service_categories     @relation(fields: [service_category_id], references: [id])
@@ -1391,14 +1391,14 @@ model studio_section_categories {
   service_sections   studio_service_sections   @relation(fields: [section_id], references: [id], onDelete: Cascade)
 }
 
-model studio_service_expenses {
+model studio_item_expenses {
   id         String          @id @default(cuid())
-  service_id String
+  item_id    String
   name       String
   cost       Float
   created_at DateTime        @default(now())
   updated_at DateTime        @updatedAt
-  items   studio_items @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  items   studio_items @relation(fields: [item_id], references: [id], onDelete: Cascade)
 }
 
 // Paquetes
