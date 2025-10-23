@@ -80,7 +80,7 @@ export async function obtenerCategoriasConStats(
                     },
                 },
             },
-            orderBy: { id: "asc" },
+            orderBy: { service_categories: { order: "asc" } },
         });
 
         // Mapear a formato CategoriaData
