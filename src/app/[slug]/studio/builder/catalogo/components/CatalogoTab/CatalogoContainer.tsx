@@ -696,7 +696,7 @@ export function CatalogoContainer({
       <div className="space-y-6">
         <StorageIndicator
           studioSlug={studioSlug}
-          quotaLimitBytes={storageUsage?.quotaLimitBytes || 100 * 1024 * 1024 * 1024}
+          quotaLimitBytes={100 * 1024 * 1024 * 1024}
         />
         <SeccionesListView
           secciones={secciones}
@@ -757,7 +757,7 @@ export function CatalogoContainer({
       <div className="space-y-6">
         <StorageIndicator
           studioSlug={studioSlug}
-          quotaLimitBytes={storageUsage?.quotaLimitBytes || 100 * 1024 * 1024 * 1024}
+          quotaLimitBytes={100 * 1024 * 1024 * 1024}
         />
         <CategoriasListView
           seccionName={selectedSeccion.name}
@@ -821,7 +821,7 @@ export function CatalogoContainer({
       <div className="space-y-6">
         <StorageIndicator
           studioSlug={studioSlug}
-          quotaLimitBytes={storageUsage?.quotaLimitBytes || 100 * 1024 * 1024 * 1024}
+          quotaLimitBytes={100 * 1024 * 1024 * 1024}
         />
         <ItemsListView
           categoriaNombre={selectedCategoria.name}
