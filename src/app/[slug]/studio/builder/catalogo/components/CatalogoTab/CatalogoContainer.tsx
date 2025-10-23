@@ -56,6 +56,10 @@ interface Item {
   isNew?: boolean;
   isFeatured?: boolean;
   mediaSize?: number;
+  gastos?: Array<{
+    nombre: string;
+    costo: number;
+  }>;
 }
 
 interface CatalogoContainerProps {
@@ -285,6 +289,7 @@ export function CatalogoContainer({
           cost: item.cost,
           tipoUtilidad: item.tipoUtilidad,
           mediaSize: item.mediaSize,
+          gastos: item.gastos,
         }));
         setItems(itemsTransformadas);
       } else {

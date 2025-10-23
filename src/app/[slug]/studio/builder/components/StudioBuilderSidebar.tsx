@@ -36,7 +36,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             icon: Star,
             items: [
                 { id: 'identidad', name: 'Identidad', href: `/identidad`, icon: Star },
-                { id: 'promociones', name: 'Promociones', href: `/promociones`, icon: Zap },
+                // { id: 'promociones', name: 'Promociones', href: `/promociones`, icon: Zap },
             ],
         },
         {

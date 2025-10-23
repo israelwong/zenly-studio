@@ -346,6 +346,7 @@ export function ItemEditorModal({
                         name: formData.name,
                         cost: formData.cost,
                         tipoUtilidad: formData.tipoUtilidad,
+                        gastos: formData.gastos || [],
                     });
 
                     if (!result.success) {
@@ -359,6 +360,7 @@ export function ItemEditorModal({
                         categoriaeId: categoriaId,
                         name: formData.name,
                         cost: formData.cost,
+                        gastos: formData.gastos || [],
                     });
 
                     if (!result.success) {

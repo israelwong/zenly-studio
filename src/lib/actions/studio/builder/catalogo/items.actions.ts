@@ -17,6 +17,10 @@ export interface ItemData {
     updatedAt: Date;
     mediaCount: number;
     mediaSize: number;
+    gastos?: Array<{
+        nombre: string;
+        costo: number;
+    }>;
 }
 
 export interface ActionResponse<T = null> {
@@ -26,11 +30,17 @@ export interface ActionResponse<T = null> {
 }
 
 // Schemas
+const GastoSchema = z.object({
+    nombre: z.string().min(1, "El nombre del gasto es requerido"),
+    costo: z.number().min(0, "El costo no puede ser negativo"),
+});
+
 const CreateItemSchema = z.object({
     name: z.string().min(1, "El nombre es requerido"),
     cost: z.number().min(0, "El costo no puede ser negativo"),
     description: z.string().optional(),
     categoriaeId: z.string(),
+    gastos: z.array(GastoSchema).optional().default([]),
 });
 
 const UpdateItemSchema = z.object({
@@ -39,6 +49,7 @@ const UpdateItemSchema = z.object({
     cost: z.number().min(0, "El costo no puede ser negativo"),
     description: z.string().optional(),
     tipoUtilidad: z.enum(['servicio', 'producto']).optional(),
+    gastos: z.array(GastoSchema).optional(),
 });
 
 /**
@@ -72,6 +83,13 @@ export async function obtenerItemsConStats(
                         storage_bytes: true,
                     },
                 },
+                item_expenses: {
+                    select: {
+                        id: true,
+                        name: true,
+                        cost: true,
+                    },
+                },
             },
             orderBy: { order: "asc" },
         });
@@ -95,6 +113,10 @@ export async function obtenerItemsConStats(
                 updatedAt: item.updated_at,
                 mediaCount: item.item_media.length,
                 mediaSize,
+                gastos: item.item_expenses.map(expense => ({
+                    nombre: expense.name,
+                    costo: expense.cost,
+                })),
             };
         });
 
@@ -153,12 +175,25 @@ export async function crearItem(
                 order: itemCount,
                 status: "active",
                 studio_id: "", // Será llenado por el trigger o middleware
+                item_expenses: {
+                    create: validated.gastos?.map(gasto => ({
+                        name: gasto.nombre,
+                        cost: gasto.costo,
+                    })) || [],
+                },
             },
             include: {
                 item_media: {
                     select: {
                         id: true,
                         storage_bytes: true,
+                    },
+                },
+                item_expenses: {
+                    select: {
+                        id: true,
+                        name: true,
+                        cost: true,
                     },
                 },
             },
@@ -180,9 +215,13 @@ export async function crearItem(
             updatedAt: item.updated_at,
             mediaCount: item.item_media.length,
             mediaSize,
+            gastos: item.item_expenses.map(expense => ({
+                nombre: expense.name,
+                costo: expense.cost,
+            })),
         };
 
-        console.log(`[ITEMS] Item creado: ${item.id} - ${item.name}`);
+        console.log(`[ITEMS] Item creado: ${item.id} - ${item.name} - Gastos: ${JSON.stringify(item.item_expenses)}`);
 
         return {
             success: true,
@@ -245,12 +284,29 @@ export async function actualizarItem(
                 ...(validated.tipoUtilidad && {
                     utility_type: validated.tipoUtilidad === 'servicio' ? 'service' : 'product'
                 }),
+                // Actualizar gastos si se proporcionan
+                ...(validated.gastos !== undefined && {
+                    item_expenses: {
+                        deleteMany: {}, // Eliminar gastos existentes
+                        create: validated.gastos.map(gasto => ({
+                            name: gasto.nombre,
+                            cost: gasto.costo,
+                        })),
+                    },
+                }),
             },
             include: {
                 item_media: {
                     select: {
                         id: true,
                         storage_bytes: true,
+                    },
+                },
+                item_expenses: {
+                    select: {
+                        id: true,
+                        name: true,
+                        cost: true,
                     },
                 },
             },
@@ -274,9 +330,13 @@ export async function actualizarItem(
             updatedAt: item.updated_at,
             mediaCount: item.item_media.length,
             mediaSize,
+            gastos: item.item_expenses.map(expense => ({
+                nombre: expense.name,
+                costo: expense.cost,
+            })),
         };
 
-        console.log(`[ITEMS] Item actualizado exitosamente: ${item.id} - ${item.name} - Costo: ${item.cost}`);
+        console.log(`[ITEMS] Item actualizado exitosamente: ${item.id} - ${item.name} - Costo: ${item.cost} - Gastos: ${JSON.stringify(item.item_expenses)}`);
 
         // Revalidar la ruta para actualizar la UI
         revalidatePath(`/[slug]/studio/builder/catalogo`);

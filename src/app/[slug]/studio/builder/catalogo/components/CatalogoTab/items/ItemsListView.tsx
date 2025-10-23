@@ -28,6 +28,10 @@ interface Item {
   mediaSize?: number;
   isNew?: boolean;
   isFeatured?: boolean;
+  gastos?: Array<{
+    nombre: string;
+    costo: number;
+  }>;
 }
 
 interface ItemFormData {
@@ -36,6 +40,10 @@ interface ItemFormData {
   cost: number;
   description?: string;
   tipoUtilidad?: 'servicio' | 'producto';
+  gastos?: Array<{
+    nombre: string;
+    costo: number;
+  }>;
 }
 
 interface ItemsListViewProps {
@@ -106,9 +114,10 @@ export function ItemsListView({
     return itemsOrdenados.reduce(
       (acc, item) => {
         try {
+          const totalGastos = item.gastos?.reduce((acc, gasto) => acc + gasto.costo, 0) || 0;
           const resultado = calcularPrecio(
             item.cost,
-            0, // Sin gastos por ahora
+            totalGastos,
             item.tipoUtilidad || 'servicio', // Usar tipoUtilidad del item
             configuracion
           );
@@ -225,6 +234,7 @@ export function ItemsListView({
                       name: item.name,
                       cost: item.cost,
                       tipoUtilidad: item.tipoUtilidad,
+                      gastos: item.gastos,
                     })
                   }
                   onDelete={() => onDeleteItem(item.id, item.name)}
