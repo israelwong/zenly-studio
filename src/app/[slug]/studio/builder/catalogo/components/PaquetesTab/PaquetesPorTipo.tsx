@@ -1,11 +1,28 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { ArrowLeft, Plus, Edit, Copy, Trash2, AlertTriangle } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ArrowLeft, Plus, Edit, Copy, Trash2, AlertTriangle, GripVertical } from 'lucide-react';
 import { ZenCard, ZenButton } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { toast } from 'sonner';
 import { eliminarPaquete, duplicarPaquete } from '@/lib/actions/studio/builder/catalogo/paquetes.actions';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { PaqueteFormularioAvanzado, type PaqueteFormularioRef } from './PaqueteFormularioAvanzado';
 import { formatearMoneda } from '@/lib/actions/studio/builder/catalogo/calcular-precio';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
@@ -26,7 +43,6 @@ export function PaquetesPorTipo({
     onNavigateBack,
     onPaquetesChange
 }: PaquetesPorTipoProps) {
-    const [loading] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingPaquete, setEditingPaquete] = useState<PaqueteFromDB | null>(null);
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -36,10 +52,23 @@ export function PaquetesPorTipo({
     const [selectedPaquete, setSelectedPaquete] = useState<PaqueteFromDB | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDuplicating, setIsDuplicating] = useState(false);
+    const [localPaquetes, setLocalPaquetes] = useState<PaqueteFromDB[]>(paquetes);
+    const [isReordering, setIsReordering] = useState(false);
+    const [isHydrated, setIsHydrated] = useState(false);
     const formRef = useRef<PaqueteFormularioRef>(null);
 
+    // Sincronizar el estado local cuando cambien las props
+    useEffect(() => {
+        setLocalPaquetes(paquetes);
+    }, [paquetes]);
+
+    // Evitar problemas de hidratación con @dnd-kit
+    useEffect(() => {
+        setIsHydrated(true);
+    }, []);
+
     // Mostrar todos los paquetes sin filtrado
-    const filteredPaquetes = paquetes;
+    const filteredPaquetes = localPaquetes;
 
     const handleCrearPaquete = () => {
         setEditingPaquete(null);
@@ -140,7 +169,7 @@ export function PaquetesPorTipo({
 
     const confirmDelete = async () => {
         if (!selectedPaquete) return;
-
+        
         setIsDeleting(true);
         try {
             const result = await eliminarPaquete(studioSlug, selectedPaquete.id);
@@ -160,6 +189,128 @@ export function PaquetesPorTipo({
             setIsDeleting(false);
         }
     };
+
+    // Configuración de sensores para drag and drop
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    // Manejar el final del drag and drop
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        // No permitir drag and drop si ya se está reordenando
+        if (isReordering) {
+            return;
+        }
+
+        if (over && active.id !== over.id) {
+            const oldIndex = localPaquetes.findIndex((paquete) => paquete.id === active.id);
+            const newIndex = localPaquetes.findIndex((paquete) => paquete.id === over.id);
+
+            const newPaquetes = arrayMove(localPaquetes, oldIndex, newIndex);
+
+            try {
+                setIsReordering(true);
+
+                // Actualizar el orden en el estado local primero
+                setLocalPaquetes(newPaquetes);
+
+                // Actualizar el orden en la base de datos
+                // const paqueteIds = newPaquetes.map(paquete => paquete.id);
+                // TODO: Implementar función para reordenar paquetes
+                // const result = await reorderPaquetes(studioSlug, paqueteIds);
+
+                // if (!result.success) {
+                //     console.error('Error reordering paquetes:', result.error);
+                //     // Revertir el cambio local si falla
+                //     setLocalPaquetes(paquetes);
+                // }
+            } catch (error) {
+                console.error('Error reordering paquetes:', error);
+                // Revertir el cambio local si falla
+                setLocalPaquetes(paquetes);
+            } finally {
+                setIsReordering(false);
+            }
+        }
+    };
+
+    // Componente sortable para cada paquete
+    function SortablePaqueteItem({ paquete }: { paquete: PaqueteFromDB }) {
+        const {
+            attributes,
+            listeners,
+            setNodeRef,
+            transform,
+            transition,
+            isDragging,
+        } = useSortable({ id: paquete.id });
+
+        const style = {
+            transform: CSS.Transform.toString(transform),
+            transition,
+            opacity: isDragging ? 0.5 : 1,
+        };
+
+        return (
+            <div
+                ref={setNodeRef}
+                style={style}
+                className="group relative bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-3 hover:bg-zinc-800/70 hover:border-zinc-600/50 transition-all duration-200"
+            >
+                <div className="flex items-center justify-between">
+                    {/* Información principal */}
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-medium text-white truncate">
+                            {paquete.name}
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                            {formatearMoneda(paquete.precio || 0)}
+                        </p>
+                    </div>
+
+                    {/* Acciones minimalistas */}
+                    <div className="flex items-center gap-1 ml-3">
+                        <div
+                            {...attributes}
+                            {...listeners}
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition-colors cursor-grab active:cursor-grabbing"
+                            title="Arrastrar para reordenar"
+                        >
+                            <GripVertical className="w-3.5 h-3.5" />
+                        </div>
+                        <button
+                            onClick={() => handleEditPaquete(paquete)}
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition-colors"
+                            title="Editar"
+                        >
+                            <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                            onClick={() => handleDuplicatePaquete(paquete)}
+                            disabled={isDuplicating}
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition-colors disabled:opacity-50"
+                            title="Duplicar"
+                        >
+                            <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                            onClick={() => handleDeletePaquete(paquete)}
+                            disabled={isDeleting}
+                            className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
+                            title="Eliminar"
+                        >
+                            <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -225,50 +376,73 @@ export function PaquetesPorTipo({
                     </div>
                 </ZenCard>
             ) : (
-                <div className="space-y-2">
-                    {filteredPaquetes.map((paquete) => (
-                        <div key={paquete.id} className="group relative bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-3 hover:bg-zinc-800/70 hover:border-zinc-600/50 transition-all duration-200">
-                            <div className="flex items-center justify-between">
-                                {/* Información principal */}
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-sm font-medium text-white truncate">
-                                        {paquete.name}
-                                    </h3>
-                                    <p className="text-xs text-zinc-400 mt-0.5">
-                                        {formatearMoneda(paquete.precio || 0)}
-                                    </p>
-                                </div>
-
-                                {/* Acciones minimalistas */}
-                                <div className="flex items-center gap-1 ml-3">
-                                    <button
-                                        onClick={() => handleEditPaquete(paquete)}
-                                        className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition-colors"
-                                        title="Editar"
-                                    >
-                                        <Edit className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDuplicatePaquete(paquete)}
-                                        disabled={loading}
-                                        className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition-colors disabled:opacity-50"
-                                        title="Duplicar"
-                                    >
-                                        <Copy className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeletePaquete(paquete)}
-                                        disabled={loading}
-                                        className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
-                                        title="Eliminar"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                // Evitar problemas de hidratación renderizando solo en el cliente
+                !isHydrated ? (
+                    <div className="space-y-2">
+                        {filteredPaquetes.map((paquete) => (
+                            <div key={paquete.id} className="group relative bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-3 hover:bg-zinc-800/70 hover:border-zinc-600/50 transition-all duration-200">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="text-sm font-medium text-white truncate">
+                                            {paquete.name}
+                                        </h3>
+                                        <p className="text-xs text-zinc-400 mt-0.5">
+                                            {formatearMoneda(paquete.precio || 0)}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 ml-3">
+                                        <div className="p-1.5 text-zinc-400">
+                                            <GripVertical className="w-3.5 h-3.5" />
+                                        </div>
+                                        <button className="p-1.5 text-zinc-400">
+                                            <Edit className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button className="p-1.5 text-zinc-400">
+                                            <Copy className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button className="p-1.5 text-zinc-400">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm text-zinc-400">
+                                {isReordering ? (
+                                    <span className="flex items-center space-x-2">
+                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
+                                        <span>Actualizando posición...</span>
+                                    </span>
+                                ) : (
+                                    "Arrastra para reordenar los paquetes"
+                                )}
+                            </p>
                         </div>
-                    ))}
-                </div>
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <SortableContext
+                                items={filteredPaquetes.map(paquete => paquete.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                <div className={`space-y-2 ${isReordering ? 'pointer-events-none opacity-50' : ''}`}>
+                                    {filteredPaquetes.map((paquete) => (
+                                        <SortablePaqueteItem
+                                            key={paquete.id}
+                                            paquete={paquete}
+                                        />
+                                    ))}
+                                </div>
+                            </SortableContext>
+                        </DndContext>
+                    </div>
+                )
             )}
 
             {/* Modal de formulario */}
