@@ -71,7 +71,7 @@ export function PaqueteItem({
 
             if (result.success && result.data) {
                 toast.success('Paquete duplicado correctamente');
-                onDuplicate(result.data);
+                onDuplicate(result.data.id);
             } else {
                 toast.error(result.error || 'Error al duplicar el paquete');
             }
