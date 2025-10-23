@@ -167,11 +167,11 @@ export function CatalogoContainer({
     try {
       // TODO: Implementar llamada a server action para obtener storage usage
       const usage: StorageStats = {
+        studioId: studioSlug,
         totalBytes: 0,
-        quotaLimitBytes: 100 * 1024 * 1024 * 1024, // 100GB default
-        sectionMediaBytes: 0,
-        categoryMediaBytes: 0,
-        itemMediaBytes: 0,
+        sections: [],
+        categoriesGlobalBytes: 0,
+        itemsGlobalBytes: 0,
       };
       setStorageUsage(usage);
     } catch (error) {
