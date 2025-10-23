@@ -55,6 +55,9 @@ export async function obtenerPaquetes(
             orderBy: { position: "asc" },
         });
 
+        console.log('🔍 Paquetes obtenidos de DB:', paquetes);
+        console.log('🔍 Primer paquete paquete_items:', paquetes[0]?.paquete_items);
+        
         return {
             success: true,
             data: paquetes as unknown as PaqueteFromDB[],
