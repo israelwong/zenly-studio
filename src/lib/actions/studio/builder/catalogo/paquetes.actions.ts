@@ -102,6 +102,14 @@ export async function crearPaquete(
             precio?: number;
         };
 
+        // Validar campos requeridos
+        if (!paqueteData.name || !paqueteData.name.trim()) {
+            return {
+                success: false,
+                error: "El nombre del paquete es requerido",
+            };
+        }
+
         // Obtener la posición máxima actual
         const maxPosition = await prisma.studio_paquetes.findFirst({
             where: { studio_id: studio.id },

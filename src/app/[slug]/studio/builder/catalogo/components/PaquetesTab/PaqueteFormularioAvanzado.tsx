@@ -194,7 +194,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             // Expandir todas las secciones que tengan resultados
             const seccionesConResultados = new Set(catalogoFiltrado.map(seccion => seccion.id));
             setSeccionesExpandidas(seccionesConResultados);
-            
+
             // Expandir todas las categorías que tengan resultados
             const categoriasConResultados = new Set<string>();
             catalogoFiltrado.forEach(seccion => {
@@ -374,6 +374,8 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             return;
         }
 
+        console.log('Datos del paquete:', { nombre, descripcion, precio: calculoPrecio.total });
+
         if (Object.keys(items).length === 0) {
             toast.error('Agrega al menos un servicio');
             return;
@@ -390,7 +392,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 }));
 
             const data = {
-                nombre,
+                name: nombre,
                 descripcion,
                 event_type_id: 'temp', // TODO: Obtener del contexto
                 precio: calculoPrecio.total,
@@ -480,7 +482,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                         catalogoFiltrado
                             .sort((a, b) => (a.orden || 0) - (b.orden || 0))
                             .map((seccion) => {
-                            const isSeccionExpandida = seccionesExpandidas.has(seccion.id);
+                                const isSeccionExpandida = seccionesExpandidas.has(seccion.id);
 
                                 return (
                                     <div key={seccion.id} className="border border-zinc-700 rounded-lg overflow-hidden">
@@ -513,8 +515,8 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                                             <div className="bg-zinc-900/50">
                                                 {seccion.categorias
                                                     .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-                                                .map((categoria, categoriaIndex) => {
-                                                    const isCategoriaExpandida = categoriasExpandidas.has(categoria.id);
+                                                    .map((categoria, categoriaIndex) => {
+                                                        const isCategoriaExpandida = categoriasExpandidas.has(categoria.id);
 
                                                         return (
                                                             <div key={categoria.id} className={`${categoriaIndex > 0 ? 'border-t border-zinc-700/50' : ''}`}>
@@ -631,6 +633,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                             onChange={(e) => setNombre(e.target.value)}
                             placeholder="Ej: Paquete Fotógrafo Boda"
                             required
+                            className="mb-4"
                         />
 
                         <ZenTextarea
