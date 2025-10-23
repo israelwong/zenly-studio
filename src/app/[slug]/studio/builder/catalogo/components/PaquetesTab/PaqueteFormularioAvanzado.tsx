@@ -32,7 +32,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     // Estado del formulario
     const [nombre, setNombre] = useState(paquete?.name || '');
     const [descripcion, setDescripcion] = useState('');
-    const [precioPersonalizado, setPrecioPersonalizado] = useState(0);
+    const [precioPersonalizado, setPrecioPersonalizado] = useState<string | number>('');
     const [items, setItems] = useState<{ [servicioId: string]: number }>({});
     const [catalogo, setCatalogo] = useState<SeccionData[]>([]);
     const [configuracionPrecios, setConfiguracionPrecios] = useState<ConfiguracionPrecios | null>(null);
@@ -72,7 +72,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                         console.log('🔍 Cargando datos del paquete para editar:', paquete);
                         setNombre(paquete.name || '');
                         setDescripcion(''); // No hay descripcion en PaqueteFromDB
-                        setPrecioPersonalizado(paquete.precio || 0);
+                        setPrecioPersonalizado(paquete.precio || '');
 
                         // Cargar items del paquete si existen
                         if (paquete.paquete_items && paquete.paquete_items.length > 0) {
@@ -94,7 +94,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                         setItems(initialItems);
                         setNombre('');
                         setDescripcion('');
-                        setPrecioPersonalizado(0);
+                        setPrecioPersonalizado('');
                     }
 
                     // Expandir la primera sección por defecto
@@ -328,7 +328,8 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             totalGasto += (s.gasto || 0) * s.cantidad;
         });
 
-        const total = precioPersonalizado > 0 ? precioPersonalizado : subtotal;
+        const precioPersonalizadoNum = Number(precioPersonalizado) || 0;
+        const total = precioPersonalizadoNum > 0 ? precioPersonalizadoNum : subtotal;
         const utilidadNeta = total - (totalCosto + totalGasto);
 
         return {
