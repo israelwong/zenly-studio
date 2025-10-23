@@ -13,7 +13,6 @@ interface PaquetesPorTipoProps {
     studioSlug: string;
     tipoEvento: TipoEventoData;
     paquetes: PaqueteFromDB[];
-    onNavigateToPaquete: (paquete: PaqueteFromDB) => void;
     onNavigateBack: () => void;
     onPaquetesChange: (paquetes: PaqueteFromDB[]) => void;
 }
@@ -22,7 +21,6 @@ export function PaquetesPorTipo({
     studioSlug,
     tipoEvento,
     paquetes,
-    onNavigateToPaquete,
     onNavigateBack,
     onPaquetesChange
 }: PaquetesPorTipoProps) {
@@ -96,7 +94,8 @@ export function PaquetesPorTipo({
     };
 
     const handleEditPaquete = (paquete: PaqueteFromDB) => {
-        onNavigateToPaquete(paquete);
+        setEditingPaquete(paquete);
+        setShowForm(true);
     };
 
     const handleDuplicatePaquete = async (paquete: PaqueteFromDB) => {

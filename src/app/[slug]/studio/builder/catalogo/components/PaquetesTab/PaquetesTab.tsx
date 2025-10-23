@@ -11,7 +11,7 @@ import { obtenerPaquetes } from '@/lib/actions/studio/builder/catalogo/paquetes.
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
 
-type NavigationLevel = 1 | 2 | 3;
+type NavigationLevel = 1 | 2;
 
 interface PaquetesTabProps {
     studioSlug: string;
@@ -21,7 +21,6 @@ export function PaquetesTab({ studioSlug }: PaquetesTabProps) {
     // Estado de navegación
     const [currentLevel, setCurrentLevel] = useState<NavigationLevel>(1);
     const [selectedTipoEvento, setSelectedTipoEvento] = useState<TipoEventoData | null>(null);
-    const [selectedPaquete, setSelectedPaquete] = useState<PaqueteFromDB | null>(null);
 
     // Datos
     const [tiposEvento, setTiposEvento] = useState<TipoEventoData[]>([]);
@@ -67,16 +66,10 @@ export function PaquetesTab({ studioSlug }: PaquetesTabProps) {
         setCurrentLevel(2);
     };
 
-    const navigateToPaquete = (paquete: PaqueteFromDB) => {
-        setSelectedPaquete(paquete);
-        setCurrentLevel(3);
-    };
+    // navigateToPaquete eliminado - ahora se usa modal en PaquetesList
 
     const navigateBack = () => {
-        if (currentLevel === 3) {
-            setCurrentLevel(2);
-            setSelectedPaquete(null);
-        } else if (currentLevel === 2) {
+        if (currentLevel === 2) {
             setCurrentLevel(1);
             setSelectedTipoEvento(null);
         }
@@ -137,44 +130,13 @@ export function PaquetesTab({ studioSlug }: PaquetesTabProps) {
                 studioSlug={studioSlug}
                 tipoEvento={selectedTipoEvento}
                 paquetes={paquetes.filter(p => p.event_types?.name === selectedTipoEvento.nombre)}
-                onNavigateToPaquete={navigateToPaquete}
                 onNavigateBack={navigateBack}
                 onPaquetesChange={handlePaquetesChange}
             />
         );
     }
 
-    if (currentLevel === 3 && selectedPaquete) {
-        return (
-            <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={navigateBack}
-                        className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Volver
-                    </button>
-                    <h2 className="text-2xl font-bold text-zinc-100">
-                        Editar Paquete
-                    </h2>
-                </div>
-                
-                <PaqueteFormularioAvanzado
-                    studioSlug={studioSlug}
-                    paquete={selectedPaquete}
-                    onSave={(updatedPaquete) => {
-                        const newPaquetes = paquetes.map(p =>
-                            p.id === updatedPaquete.id ? updatedPaquete : p
-                        );
-                        setPaquetes(newPaquetes);
-                        navigateBack();
-                    }}
-                    onCancel={navigateBack}
-                />
-            </div>
-        );
-    }
+    // Level 3 eliminado - ahora se usa modal en PaquetesList
 
     return null;
 }
