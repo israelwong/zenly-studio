@@ -282,23 +282,65 @@ export function CatalogoAcordeonNavigation({
     };
 
     // Función para manejar drag over - expandir categorías automáticamente
-    const handleDragOver = useCallback((event: DragOverEvent) => {
+    const handleDragOver = useCallback(async (event: DragOverEvent) => {
         const { over } = event;
         if (!over) return;
 
         const overId = String(over.id);
-        
-        // Si se está arrastrando sobre una categoría contraída, expandirla
+
+        // Buscar si el overId corresponde a una categoría
+        let categoriaId = null;
+
+        // Verificar si es el EmptyCategoryDropZone
         if (overId.startsWith("categoria-")) {
-            const categoriaId = overId.replace("categoria-", "");
-            
-            // Verificar si la categoría está contraída
-            if (!categoriasExpandidas.has(categoriaId)) {
-                console.log("🔍 Expandiendo categoría automáticamente:", categoriaId);
-                setCategoriasExpandidas(prev => new Set([...prev, categoriaId]));
+            categoriaId = overId.replace("categoria-", "");
+        } else {
+            // Verificar si es directamente el ID de una categoría
+            for (const [, categorias] of Object.entries(categoriasData)) {
+                if (categorias.some(cat => cat.id === overId)) {
+                    categoriaId = overId;
+                    break;
+                }
             }
         }
-    }, [categoriasExpandidas]);
+
+        // Si encontramos una categoría y está contraída, expandirla y cargar items
+        if (categoriaId && !categoriasExpandidas.has(categoriaId)) {
+            console.log("🔍 Expandiendo categoría automáticamente:", categoriaId);
+            setCategoriasExpandidas(prev => new Set([...prev, categoriaId]));
+
+            // Cargar items si no están cargados
+            if (!itemsData[categoriaId]) {
+                setLoadingCategorias(prev => new Set(prev).add(categoriaId));
+
+                try {
+                    const response = await obtenerItemsConStats(categoriaId);
+                    if (response.success && response.data) {
+                        const items = response.data.map(item => ({
+                            id: item.id,
+                            name: item.name,
+                            cost: item.cost,
+                            tipoUtilidad: item.tipoUtilidad,
+                            order: item.order,
+                            isNew: false,
+                            isFeatured: false,
+                            mediaSize: item.mediaSize,
+                            gastos: item.gastos,
+                        }));
+                        setItemsData(prev => ({ ...prev, [categoriaId]: items }));
+                    }
+                } catch (error) {
+                    console.error("Error cargando items:", error);
+                } finally {
+                    setLoadingCategorias(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(categoriaId);
+                        return newSet;
+                    });
+                }
+            }
+        }
+    }, [categoriasExpandidas, categoriasData, itemsData]);
 
     // Nueva función unificada de drag & drop siguiendo la guía
     const handleDragEnd = useCallback(
@@ -463,7 +505,7 @@ export function CatalogoAcordeonNavigation({
             } catch (error) {
                 console.error("Error en drag & drop:", error);
                 toast.error("Error al actualizar la posición del item");
-                
+
                 // Revertir cambios
                 setItemsData(originalItemsData);
                 setCategoriasData(originalCategoriasData);
@@ -486,11 +528,10 @@ export function CatalogoAcordeonNavigation({
         return (
             <div
                 ref={setNodeRef}
-                className={`text-center py-8 min-h-[100px] flex items-center justify-center border-2 border-dashed rounded-lg m-4 transition-colors ${
-                    isOver
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-zinc-700 bg-zinc-800/30'
-                }`}
+                className={`text-center py-8 min-h-[100px] flex items-center justify-center border-2 border-dashed rounded-lg m-4 transition-colors ${isOver
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-zinc-700 bg-zinc-800/30'
+                    }`}
             >
                 <div className="text-center">
                     <div className="text-zinc-500 mb-2">
@@ -619,16 +660,16 @@ export function CatalogoAcordeonNavigation({
                                     items={categorias.map(c => c.id)}
                                     strategy={verticalListSortingStrategy}
                                 >
-                                        {categorias
-                                            .sort((a, b) => (a.order || 0) - (b.order || 0))
-                                            .map((categoria, categoriaIndex) => (
-                                                <SortableCategoria
-                                                    key={categoria.id}
-                                                    categoria={categoria}
-                                                    categoriaIndex={categoriaIndex}
-                                                />
-                                            ))}
-                                    </SortableContext>
+                                    {categorias
+                                        .sort((a, b) => (a.order || 0) - (b.order || 0))
+                                        .map((categoria, categoriaIndex) => (
+                                            <SortableCategoria
+                                                key={categoria.id}
+                                                categoria={categoria}
+                                                categoriaIndex={categoriaIndex}
+                                            />
+                                        ))}
+                                </SortableContext>
                             )}
                         </div>
                     )}
@@ -743,16 +784,16 @@ export function CatalogoAcordeonNavigation({
                                 items={items.map(i => i.id)}
                                 strategy={verticalListSortingStrategy}
                             >
-                                    {items
-                                        .sort((a, b) => (a.order || 0) - (b.order || 0))
-                                        .map((item, itemIndex) => (
-                                            <SortableItem
-                                                key={item.id}
-                                                item={item}
-                                                itemIndex={itemIndex}
-                                            />
-                                        ))}
-                                </SortableContext>
+                                {items
+                                    .sort((a, b) => (a.order || 0) - (b.order || 0))
+                                    .map((item, itemIndex) => (
+                                        <SortableItem
+                                            key={item.id}
+                                            item={item}
+                                            itemIndex={itemIndex}
+                                        />
+                                    ))}
+                            </SortableContext>
                         )}
                     </div>
                 )}
