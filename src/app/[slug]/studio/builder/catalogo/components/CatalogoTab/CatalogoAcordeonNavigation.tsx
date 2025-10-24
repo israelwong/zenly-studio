@@ -25,7 +25,7 @@ import {
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/builder/catalogo/utilidad.actions";
 import { reordenarSecciones } from "@/lib/actions/studio/builder/catalogo/secciones.actions";
 import { reordenarCategorias } from "@/lib/actions/studio/builder/catalogo/categorias.actions";
-import { reordenarItems, moverItemACategoria } from "@/lib/actions/studio/builder/catalogo/items.actions";
+import { reordenarItems } from "@/lib/actions/studio/builder/catalogo/items.actions";
 import {
     DndContext,
     closestCenter,
@@ -109,7 +109,6 @@ export function CatalogoAcordeonNavigation({
     // Estados para drag & drop
     const [activeId, setActiveId] = useState<string | null>(null);
     const [isReordering, setIsReordering] = useState(false);
-    const [activeItemCategoria, setActiveItemCategoria] = useState<string | null>(null);
 
     // Configuración de sensores para drag & drop
     const sensors = useSensors(
@@ -282,16 +281,7 @@ export function CatalogoAcordeonNavigation({
 
     // Funciones de drag & drop
     const handleDragStart = (event: DragStartEvent) => {
-        const activeId = event.active.id as string;
-        setActiveId(activeId);
-        
-        // Buscar en qué categoría está el item
-        for (const [categoriaId, items] of Object.entries(itemsData)) {
-            if (items.some(item => item.id === activeId)) {
-                setActiveItemCategoria(categoriaId);
-                break;
-            }
-        }
+        setActiveId(event.active.id as string);
     };
 
     const handleSeccionDragEnd = async (event: DragEndEvent) => {
@@ -455,205 +445,6 @@ export function CatalogoAcordeonNavigation({
         } finally {
             setIsReordering(false);
             setActiveId(null);
-        }
-    };
-
-    // Función para manejar drag & drop global
-    const handleGlobalItemDragEnd = async (event: DragEndEvent) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) {
-            setActiveId(null);
-            setActiveItemCategoria(null);
-            return;
-        }
-
-        const activeId = active.id as string;
-        const overId = over.id as string;
-
-        // Determinar el tipo de elemento activo
-        const isSeccion = secciones.some(s => s.id === activeId);
-        const isCategoria = Object.values(categoriasData).flat().some(c => c.id === activeId);
-        const isItem = Object.values(itemsData).flat().some(i => i.id === activeId);
-
-        // Manejar reordenamiento de secciones
-        if (isSeccion) {
-            return handleSeccionDragEnd(event);
-        }
-
-        // Manejar reordenamiento de categorías
-        if (isCategoria) {
-            // Encontrar la sección de la categoría
-            for (const [seccionId, categorias] of Object.entries(categoriasData)) {
-                if (categorias.some(c => c.id === activeId)) {
-                    return handleCategoriaDragEnd(event, seccionId);
-                }
-            }
-            return;
-        }
-
-        // Manejar items (reordenamiento dentro de categoría o movimiento entre categorías)
-        if (isItem) {
-            const itemId = activeId;
-
-        // Determinar si el drop target es una categoría o un item
-        let targetCategoriaId: string | null = null;
-        
-        // Buscar si el over es un item (para reordenamiento dentro de categoría)
-        for (const [categoriaId, items] of Object.entries(itemsData)) {
-            if (items.some(item => item.id === overId)) {
-                targetCategoriaId = categoriaId;
-                break;
-            }
-        }
-
-        // Si no se encontró como item, buscar si es una categoría
-        if (!targetCategoriaId) {
-            for (const [seccionId, categorias] of Object.entries(categoriasData)) {
-                if (categorias.some(cat => cat.id === overId)) {
-                    targetCategoriaId = overId;
-                    break;
-                }
-            }
-        }
-
-        if (!targetCategoriaId || !activeItemCategoria) {
-            setActiveId(null);
-            setActiveItemCategoria(null);
-            return;
-        }
-
-        // Si es la misma categoría, hacer reordenamiento normal
-        if (targetCategoriaId === activeItemCategoria) {
-            const items = itemsData[activeItemCategoria] || [];
-            const oldIndex = items.findIndex(item => item.id === itemId);
-            const newIndex = items.findIndex(item => item.id === overId);
-
-            if (oldIndex === -1 || newIndex === -1) {
-                setActiveId(null);
-                setActiveItemCategoria(null);
-                return;
-            }
-
-            // Reordenamiento dentro de la misma categoría
-            const originalItems = [...items];
-
-            try {
-                setIsReordering(true);
-                const newItems = arrayMove(items, oldIndex, newIndex);
-                const itemsConOrder = newItems.map((item, index) => ({
-                    ...item,
-                    order: index
-                }));
-                setItemsData(prev => ({
-                    ...prev,
-                    [activeItemCategoria]: itemsConOrder
-                }));
-
-                const itemIds = newItems.map(i => i.id);
-                const response = await reordenarItems(itemIds);
-                
-                if (!response.success) {
-                    throw new Error(response.error);
-                }
-
-                toast.success("Orden de items actualizado");
-            } catch (error) {
-                console.error("Error reordenando items:", error);
-                toast.error("Error al actualizar el orden");
-                setItemsData(prev => ({
-                    ...prev,
-                    [activeItemCategoria]: originalItems
-                }));
-            } finally {
-                setIsReordering(false);
-                setActiveId(null);
-                setActiveItemCategoria(null);
-            }
-        } else {
-            // Mover item a otra categoría
-            const item = itemsData[activeItemCategoria]?.find(i => i.id === itemId);
-            if (!item) {
-                setActiveId(null);
-                setActiveItemCategoria(null);
-                return;
-            }
-
-            try {
-                setIsReordering(true);
-
-                // Actualizar estado local inmediatamente
-                const newItem = { ...item, order: 0 };
-                
-                // Remover de categoría origen
-                setItemsData(prev => ({
-                    ...prev,
-                    [activeItemCategoria]: prev[activeItemCategoria]?.filter(i => i.id !== itemId) || []
-                }));
-
-                // Agregar a categoría destino
-                setItemsData(prev => ({
-                    ...prev,
-                    [targetCategoriaId]: [...(prev[targetCategoriaId] || []), newItem]
-                }));
-
-                // Actualizar contadores de categorías
-                setCategoriasData(prev => {
-                    const newData = { ...prev };
-                    Object.keys(newData).forEach(seccionId => {
-                        newData[seccionId] = newData[seccionId].map(cat => {
-                            if (cat.id === activeItemCategoria) {
-                                return { ...cat, items: Math.max(0, (cat.items || 0) - 1) };
-                            }
-                            if (cat.id === targetCategoriaId) {
-                                return { ...cat, items: (cat.items || 0) + 1 };
-                            }
-                            return cat;
-                        });
-                    });
-                    return newData;
-                });
-
-                // Actualizar en el backend
-                const response = await moverItemACategoria(itemId, targetCategoriaId);
-                
-                if (!response.success) {
-                    throw new Error(response.error);
-                }
-
-                toast.success(`Item movido a ${categoriasData[Object.keys(categoriasData).find(s => 
-                    categoriasData[s].some(c => c.id === targetCategoriaId)
-                ) || '']?.find(c => c.id === targetCategoriaId)?.name || 'nueva categoría'}`);
-            } catch (error) {
-                console.error("Error moviendo item:", error);
-                toast.error("Error al mover item");
-                
-                // Revertir cambios
-                setItemsData(prev => ({
-                    ...prev,
-                    [activeItemCategoria]: [...(prev[activeItemCategoria] || []), item],
-                    [targetCategoriaId]: prev[targetCategoriaId]?.filter(i => i.id !== itemId) || []
-                }));
-
-                setCategoriasData(prev => {
-                    const newData = { ...prev };
-                    Object.keys(newData).forEach(seccionId => {
-                        newData[seccionId] = newData[seccionId].map(cat => {
-                            if (cat.id === activeItemCategoria) {
-                                return { ...cat, items: (cat.items || 0) + 1 };
-                            }
-                            if (cat.id === targetCategoriaId) {
-                                return { ...cat, items: Math.max(0, (cat.items || 0) - 1) };
-                            }
-                            return cat;
-                        });
-                    });
-                    return newData;
-                });
-            } finally {
-                setIsReordering(false);
-                setActiveId(null);
-                setActiveItemCategoria(null);
-            }
         }
     };
 
@@ -1423,14 +1214,10 @@ export function CatalogoAcordeonNavigation({
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragStart={handleDragStart}
-                onDragEnd={handleGlobalItemDragEnd}
+                onDragEnd={handleSeccionDragEnd}
             >
                 <SortableContext
-                    items={[
-                        ...secciones.map(s => s.id),
-                        ...Object.values(categoriasData).flat().map(c => c.id),
-                        ...Object.values(itemsData).flat().map(i => i.id)
-                    ]}
+                    items={secciones.map(s => s.id)}
                     strategy={verticalListSortingStrategy}
                 >
                     <div className="space-y-2">
@@ -1550,5 +1337,4 @@ export function CatalogoAcordeonNavigation({
             />
         </div>
     );
-}
 }
