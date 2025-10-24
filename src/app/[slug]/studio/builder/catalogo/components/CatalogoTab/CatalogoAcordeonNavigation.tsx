@@ -1102,6 +1102,7 @@ export function CatalogoAcordeonNavigation({
                 description: item.description,
                 categoriaeId: item.categoriaId || '',
                 gastos: item.gastos || [],
+                studioSlug: studioSlug,
             };
 
             const response = await crearItem(duplicatedItemData);
