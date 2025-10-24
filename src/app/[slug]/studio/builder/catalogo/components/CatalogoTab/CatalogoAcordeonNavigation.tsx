@@ -1100,7 +1100,7 @@ export function CatalogoAcordeonNavigation({
                 name: `${item.name} (Copia)`,
                 cost: item.cost,
                 description: item.description,
-                categoriaId: item.categoriaId || '',
+                categoriaeId: item.categoriaId || '',
                 gastos: item.gastos || [],
             };
 
