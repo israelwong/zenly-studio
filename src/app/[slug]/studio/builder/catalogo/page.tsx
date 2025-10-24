@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
 import { SectionLayout, StorageIndicator } from '../components';
 import { UtilidadTab } from './components';
-import { CatalogoContainer, CatalogoTabSkeletonContainer } from './components/CatalogoTab';
+import { CatalogoNavigationWrapper, CatalogoTabSkeletonContainer } from './components/CatalogoTab';
 import { getBuilderProfileData } from '@/lib/actions/studio/builder/builder-profile.actions';
 import { obtenerSeccionesConStats } from '@/lib/actions/studio/builder/catalogo';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/builder/catalogo/utilidad.actions';
@@ -209,7 +209,7 @@ export default function CatalogoPage() {
                                 {!studioConfig ? (
                                     <CatalogoTabSkeletonContainer />
                                 ) : (
-                                    <CatalogoContainer
+                                    <CatalogoNavigationWrapper
                                         studioSlug={studioSlug}
                                         secciones={secciones}
                                         onNavigateToUtilidad={() => setActiveTab('utilidad')}

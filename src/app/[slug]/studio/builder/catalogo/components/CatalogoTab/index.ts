@@ -1,5 +1,7 @@
 // Container principal
 export { CatalogoContainer } from "./CatalogoContainer";
+export { CatalogoNavigationWrapper } from "./CatalogoNavigationWrapper";
+export { CatalogoAcordeonNavigation } from "./CatalogoAcordeonNavigation";
 
 // Storage & UI Components
 
