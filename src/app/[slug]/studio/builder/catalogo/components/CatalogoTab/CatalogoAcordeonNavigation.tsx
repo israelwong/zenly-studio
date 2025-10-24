@@ -455,60 +455,75 @@ export function CatalogoAcordeonNavigation({
 
         return (
             <div ref={setNodeRef} style={style} className="relative">
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg">
+                <div className="border border-zinc-700 rounded-lg overflow-hidden">
                     {/* Header de la sección */}
-                    <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-                        <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors bg-zinc-800/30">
+                        <div className="flex items-center gap-3 flex-1 text-left">
                             <button
                                 {...attributes}
                                 {...listeners}
-                                className="p-1 hover:bg-zinc-800 rounded cursor-grab active:cursor-grabbing"
+                                className="p-1 hover:bg-zinc-700 rounded cursor-grab active:cursor-grabbing mr-2"
                                 title="Arrastrar para reordenar"
                             >
                                 <GripVertical className="h-4 w-4 text-zinc-500" />
                             </button>
                             <button
                                 onClick={() => toggleSeccion(seccion.id)}
-                                className="flex items-center gap-2 hover:text-emerald-400 transition-colors"
+                                className="flex items-center gap-3 flex-1 text-left"
                             >
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <div>
+                                    <h4 className="font-semibold text-white">{seccion.name}</h4>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-1 rounded">
+                                            {categorias.length} {categorias.length === 1 ? 'categoría' : 'categorías'}
+                                        </span>
+                                        <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-1 rounded">
+                                            {categorias.reduce((acc, cat) => acc + (cat.items || 0), 0)} {categorias.reduce((acc, cat) => acc + (cat.items || 0), 0) === 1 ? 'item' : 'items'}
+                                        </span>
+                                    </div>
+                                </div>
                                 {isSeccionExpandida ? (
-                                    <ChevronDown className="w-4 h-4" />
+                                    <ChevronDown className="w-4 h-4 text-zinc-400" />
                                 ) : (
-                                    <ChevronRight className="w-4 h-4" />
+                                    <ChevronRight className="w-4 h-4 text-zinc-400" />
                                 )}
-                                <span className="font-medium text-white">{seccion.name}</span>
                             </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-zinc-500">
-                                {categorias.length} categoría{categorias.length !== 1 ? 's' : ''}
-                            </span>
-                            <div className="flex items-center gap-1">
-                                <ZenButton
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleCreateCategoria(seccion.id)}
-                                    className="h-8 w-8 p-0"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                </ZenButton>
-                                <ZenButton
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleEditSeccion(seccion)}
-                                    className="h-8 w-8 p-0"
-                                >
-                                    <Edit2 className="h-4 w-4" />
-                                </ZenButton>
-                                <ZenButton
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDeleteSeccion(seccion)}
-                                    className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </ZenButton>
-                            </div>
+                        <div className="flex items-center gap-1">
+                            <ZenButton
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCreateCategoria(seccion.id);
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="w-8 h-8 p-0"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </ZenButton>
+                            <ZenButton
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditSeccion(seccion);
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="w-8 h-8 p-0"
+                            >
+                                <Edit2 className="w-4 h-4" />
+                            </ZenButton>
+                            <ZenButton
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSeccion(seccion);
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="w-8 h-8 p-0 text-red-400 hover:text-red-300"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </ZenButton>
                         </div>
                     </div>
 
@@ -589,64 +604,78 @@ export function CatalogoAcordeonNavigation({
         return (
             <div ref={setNodeRef} style={style} className={`${categoriaIndex > 0 ? 'border-t border-zinc-700/50' : ''}`}>
                 <div className="flex items-center justify-between p-3 pl-8 hover:bg-zinc-800/30 transition-colors">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-1 text-left">
                         <button
                             {...attributes}
                             {...listeners}
-                            className="p-1 hover:bg-zinc-700 rounded cursor-grab active:cursor-grabbing"
+                            className="p-1 hover:bg-zinc-700 rounded cursor-grab active:cursor-grabbing mr-2"
                             title="Arrastrar para reordenar"
                         >
                             <GripVertical className="h-4 w-4 text-zinc-500" />
                         </button>
                         <button
                             onClick={() => toggleCategoria(categoria.id)}
-                            className="flex items-center gap-2 hover:text-emerald-400 transition-colors"
+                            className="flex items-center gap-3 flex-1 text-left"
                         >
+                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                            <div>
+                                <h5 className="text-sm font-medium text-zinc-300">{categoria.name}</h5>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-1 rounded">
+                                        {categoria.items || 0} {categoria.items === 1 ? 'item' : 'items'}
+                                    </span>
+                                </div>
+                            </div>
                             {isCategoriaExpandida ? (
-                                <ChevronDown className="w-4 h-4" />
+                                <ChevronDown className="w-4 h-4 text-zinc-400" />
                             ) : (
-                                <ChevronRight className="w-4 h-4" />
+                                <ChevronRight className="w-4 h-4 text-zinc-400" />
                             )}
-                            <span className="font-medium text-white">{categoria.name}</span>
                         </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-zinc-500">
-                            {categoria.items || 0} item{(categoria.items || 0) !== 1 ? 's' : ''}
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <ZenButton
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleCreateItem(categoria.id)}
-                                className="h-8 w-8 p-0"
-                            >
-                                <Plus className="h-4 w-4" />
-                            </ZenButton>
-                            <ZenButton
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditCategoria(categoria)}
-                                className="h-8 w-8 p-0"
-                            >
-                                <Edit2 className="h-4 w-4" />
-                            </ZenButton>
-                            <ZenButton
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteCategoria(categoria)}
-                                className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </ZenButton>
-                        </div>
+                    <div className="flex items-center gap-1">
+                        <ZenButton
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleCreateItem(categoria.id);
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="w-8 h-8 p-0"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </ZenButton>
+                        <ZenButton
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditCategoria(categoria);
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="w-8 h-8 p-0"
+                        >
+                            <Edit2 className="w-4 h-4" />
+                        </ZenButton>
+                        <ZenButton
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCategoria(categoria);
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="w-8 h-8 p-0 text-red-400 hover:text-red-300"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </ZenButton>
                     </div>
                 </div>
 
                 {/* Contenido de la categoría */}
                 {isCategoriaExpandida && (
                     <div className="bg-zinc-800/20 border-l-2 border-zinc-700/30 ml-8">
-                        {items.length === 0 ? (
+                        {loadingCategorias.has(categoria.id) ? (
+                            <ItemsSkeleton />
+                        ) : items.length === 0 ? (
                             <div className="p-6 text-center text-zinc-500">
                                 <p>No hay items en esta categoría</p>
                                 <ZenButton
@@ -726,11 +755,11 @@ export function CatalogoAcordeonNavigation({
                 style={style} 
                 className={`flex items-center justify-between p-2 pl-6 ${itemIndex > 0 ? 'border-t border-zinc-700/30' : ''} hover:bg-zinc-700/20 transition-colors`}
             >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-1 text-left">
                     <button
                         {...attributes}
                         {...listeners}
-                        className="p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing"
+                        className="p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing mr-2"
                         title="Arrastrar para reordenar"
                     >
                         <GripVertical className="h-4 w-4 text-zinc-500" />
