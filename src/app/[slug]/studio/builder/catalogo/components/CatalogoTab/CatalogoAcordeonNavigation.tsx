@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical } from "lucide-react";
 import { ZenButton } from "@/components/ui/zen";
@@ -23,9 +23,7 @@ import {
     obtenerItemsConStats,
 } from "@/lib/actions/studio/builder/catalogo";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/builder/catalogo/utilidad.actions";
-import { reordenarSecciones } from "@/lib/actions/studio/builder/catalogo/secciones.actions";
-import { reordenarCategorias } from "@/lib/actions/studio/builder/catalogo/categorias.actions";
-import { reordenarItems } from "@/lib/actions/studio/builder/catalogo/items.actions";
+import { reordenarItems, moverItemACategoria } from "@/lib/actions/studio/builder/catalogo/items.actions";
 import {
     DndContext,
     closestCenter,
@@ -36,6 +34,7 @@ import {
     DragEndEvent,
     DragStartEvent,
     DragOverlay,
+    useDroppable,
 } from '@dnd-kit/core';
 import {
     arrayMove,
@@ -83,13 +82,11 @@ interface Item {
 interface CatalogoAcordeonNavigationProps {
     studioSlug: string;
     secciones: Seccion[];
-    onNavigateToUtilidad?: () => void;
 }
 
 export function CatalogoAcordeonNavigation({
     studioSlug,
     secciones: initialSecciones,
-    onNavigateToUtilidad,
 }: CatalogoAcordeonNavigationProps) {
     // Estados de expansión
     const [seccionesExpandidas, setSeccionesExpandidas] = useState<Set<string>>(new Set());
@@ -108,7 +105,6 @@ export function CatalogoAcordeonNavigation({
 
     // Estados para drag & drop
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [isReordering, setIsReordering] = useState(false);
 
     // Configuración de sensores para drag & drop
     const sensors = useSensors(
@@ -284,168 +280,208 @@ export function CatalogoAcordeonNavigation({
         setActiveId(event.active.id as string);
     };
 
-    const handleSeccionDragEnd = async (event: DragEndEvent) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) {
-            setActiveId(null);
-            return;
-        }
+    // Nueva función unificada de drag & drop siguiendo la guía
+    const handleDragEnd = useCallback(
+        async (event: DragEndEvent) => {
+            const { active, over } = event;
 
-        const oldIndex = secciones.findIndex(item => item.id === active.id);
-        const newIndex = secciones.findIndex(item => item.id === over.id);
+            if (!over || !active) return;
 
-        if (oldIndex === -1 || newIndex === -1) {
-            setActiveId(null);
-            return;
-        }
+            const activeId = String(active.id);
+            const overId = String(over.id);
 
-        // Guardar estado original para revertir en caso de error
-        const originalSecciones = [...secciones];
+            if (activeId === overId) return;
 
-        try {
-            setIsReordering(true);
+            console.log("🔍 Debug drag end:", {
+                activeId,
+                overId,
+                activeType: "item", // Por ahora asumimos que siempre arrastramos items
+            });
 
-            // Actualizar estado local inmediatamente (optimistic update)
-            const newSecciones = arrayMove(secciones, oldIndex, newIndex);
-            // Actualizar el campo order para reflejar el nuevo orden
-            const seccionesConOrder = newSecciones.map((seccion, index) => ({
-                ...seccion,
-                order: index
-            }));
-            setSecciones(seccionesConOrder);
+            // Determinar si se está arrastrando a una categoría vacía
+            const isDroppingOnEmptyCategory = overId.startsWith("categoria-");
+            let targetCategoriaId = null;
+            let overItem = null;
 
-            // Actualizar en el backend
-            const seccionIds = newSecciones.map(s => s.id);
-            const response = await reordenarSecciones(studioSlug, seccionIds);
-
-            if (!response.success) {
-                throw new Error(response.error);
+            if (isDroppingOnEmptyCategory) {
+                // Extraer el ID de la categoría del ID del drop zone
+                targetCategoriaId = overId.replace("categoria-", "");
+            } else {
+                // Buscar el item sobre el que se está soltando
+                for (const [categoriaId, items] of Object.entries(itemsData)) {
+                    overItem = items.find(item => item.id === overId);
+                    if (overItem) {
+                        targetCategoriaId = categoriaId;
+                        break;
+                    }
+                }
             }
 
-            toast.success("Orden de secciones actualizado");
-        } catch (error) {
-            console.error("Error reordenando secciones:", error);
-            toast.error("Error al actualizar el orden");
-            // Revertir cambios
-            setSecciones(originalSecciones);
-        } finally {
-            setIsReordering(false);
-            setActiveId(null);
-        }
-    };
-
-    const handleCategoriaDragEnd = async (event: DragEndEvent, seccionId: string) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) {
-            setActiveId(null);
-            return;
-        }
-
-        const categorias = categoriasData[seccionId] || [];
-        const oldIndex = categorias.findIndex(item => item.id === active.id);
-        const newIndex = categorias.findIndex(item => item.id === over.id);
-
-        if (oldIndex === -1 || newIndex === -1) {
-            setActiveId(null);
-            return;
-        }
-
-        // Guardar estado original para revertir en caso de error
-        const originalCategorias = [...categorias];
-
-        try {
-            setIsReordering(true);
-
-            // Actualizar estado local inmediatamente (optimistic update)
-            const newCategorias = arrayMove(categorias, oldIndex, newIndex);
-            // Actualizar el campo order para reflejar el nuevo orden
-            const categoriasConOrder = newCategorias.map((categoria, index) => ({
-                ...categoria,
-                order: index
-            }));
-            setCategoriasData(prev => ({
-                ...prev,
-                [seccionId]: categoriasConOrder
-            }));
-
-            // Actualizar en el backend
-            const categoriaIds = newCategorias.map(c => c.id);
-            const response = await reordenarCategorias(categoriaIds);
-
-            if (!response.success) {
-                throw new Error(response.error);
+            if (!targetCategoriaId) {
+                console.log("❌ No se pudo determinar la categoría destino");
+                setActiveId(null);
+                return;
             }
 
-            toast.success("Orden de categorías actualizado");
-        } catch (error) {
-            console.error("Error reordenando categorías:", error);
-            toast.error("Error al actualizar el orden");
-            // Revertir cambios
-            setCategoriasData(prev => ({
-                ...prev,
-                [seccionId]: originalCategorias
-            }));
-        } finally {
-            setIsReordering(false);
-            setActiveId(null);
-        }
-    };
-
-    const handleItemDragEnd = async (event: DragEndEvent, categoriaId: string) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) {
-            setActiveId(null);
-            return;
-        }
-
-        const items = itemsData[categoriaId] || [];
-        const oldIndex = items.findIndex(item => item.id === active.id);
-        const newIndex = items.findIndex(item => item.id === over.id);
-
-        if (oldIndex === -1 || newIndex === -1) {
-            setActiveId(null);
-            return;
-        }
-
-        // Guardar estado original para revertir en caso de error
-        const originalItems = [...items];
-
-        try {
-            setIsReordering(true);
-
-            // Actualizar estado local inmediatamente (optimistic update)
-            const newItems = arrayMove(items, oldIndex, newIndex);
-            // Actualizar el campo order para reflejar el nuevo orden
-            const itemsConOrder = newItems.map((item, index) => ({
-                ...item,
-                order: index
-            }));
-            setItemsData(prev => ({
-                ...prev,
-                [categoriaId]: itemsConOrder
-            }));
-
-            // Actualizar en el backend
-            const itemIds = newItems.map(i => i.id);
-            const response = await reordenarItems(itemIds);
-
-            if (!response.success) {
-                throw new Error(response.error);
+            // Buscar el item que se está arrastrando
+            let activeItem = null;
+            let activeCategoriaId = null;
+            for (const [categoriaId, items] of Object.entries(itemsData)) {
+                activeItem = items.find(item => item.id === activeId);
+                if (activeItem) {
+                    activeCategoriaId = categoriaId;
+                    break;
+                }
             }
 
-            toast.success("Orden de items actualizado");
-        } catch (error) {
-            console.error("Error reordenando items:", error);
-            toast.error("Error al actualizar el orden");
-            // Revertir cambios
-            setItemsData(prev => ({
-                ...prev,
-                [categoriaId]: originalItems
-            }));
-        } finally {
-            setIsReordering(false);
-            setActiveId(null);
-        }
+            if (!activeItem || !activeCategoriaId) {
+                console.log("❌ No se pudo encontrar el item activo");
+                setActiveId(null);
+                return;
+            }
+
+            // Determinar si es reordenamiento dentro de la misma categoría
+            const isReordering = activeCategoriaId === targetCategoriaId;
+
+            console.log("📁 Tipo de operación:", {
+                isReordering,
+                fromCategory: activeCategoriaId,
+                toCategory: targetCategoriaId,
+                activeItem: activeItem.name,
+                overItem: overItem?.name,
+            });
+
+            // Guardar estado original para revertir en caso de error
+            const originalItemsData = JSON.parse(JSON.stringify(itemsData));
+            const originalCategoriasData = JSON.parse(JSON.stringify(categoriasData));
+
+            try {
+
+                if (isReordering) {
+                    // Reordenamiento dentro de la misma categoría
+                    const items = itemsData[activeCategoriaId] || [];
+                    const activeIndex = items.findIndex(item => item.id === activeId);
+                    const overIndex = items.findIndex(item => item.id === overId);
+
+                    if (activeIndex === -1 || overIndex === -1) {
+                        setActiveId(null);
+                        return;
+                    }
+
+                    const newItems = arrayMove(items, activeIndex, overIndex);
+                    const itemsConOrder = newItems.map((item, index) => ({
+                        ...item,
+                        order: index
+                    }));
+
+                    setItemsData(prev => ({
+                        ...prev,
+                        [activeCategoriaId]: itemsConOrder
+                    }));
+
+                    const itemIds = newItems.map(i => i.id);
+                    const response = await reordenarItems(itemIds);
+
+                    if (!response.success) {
+                        throw new Error(response.error);
+                    }
+
+                    toast.success("Orden de items actualizado");
+                } else {
+                    // Movimiento entre categorías
+                    const targetItems = itemsData[targetCategoriaId] || [];
+                    let newIndex = targetItems.length;
+
+                    if (!isDroppingOnEmptyCategory && overItem) {
+                        // Si se suelta sobre un item, insertar en su posición
+                        const overIndex = targetItems.findIndex(item => item.id === overId);
+                        newIndex = overIndex === -1 ? targetItems.length : overIndex;
+                    }
+
+                    // Actualizar estado local inmediatamente (optimistic update)
+                    const newItem = { ...activeItem, order: newIndex };
+
+                    // Remover de categoría origen
+                    setItemsData(prev => ({
+                        ...prev,
+                        [activeCategoriaId]: prev[activeCategoriaId]?.filter(i => i.id !== activeId) || []
+                    }));
+
+                    // Agregar a categoría destino
+                    setItemsData(prev => ({
+                        ...prev,
+                        [targetCategoriaId]: [...(prev[targetCategoriaId] || []), newItem]
+                    }));
+
+                    // Actualizar contadores de categorías
+                    setCategoriasData(prev => {
+                        const newData = { ...prev };
+                        Object.keys(newData).forEach(seccionId => {
+                            newData[seccionId] = newData[seccionId].map(cat => {
+                                if (cat.id === activeCategoriaId) {
+                                    return { ...cat, items: Math.max(0, (cat.items || 0) - 1) };
+                                }
+                                if (cat.id === targetCategoriaId) {
+                                    return { ...cat, items: (cat.items || 0) + 1 };
+                                }
+                                return cat;
+                            });
+                        });
+                        return newData;
+                    });
+
+                    // Actualizar en el backend
+                    const response = await moverItemACategoria(activeId, targetCategoriaId);
+
+                    if (!response.success) {
+                        throw new Error(response.error);
+                    }
+
+                    const targetCategoriaName = Object.values(categoriasData).flat().find(c => c.id === targetCategoriaId)?.name || 'nueva categoría';
+                    toast.success(`Item movido a ${targetCategoriaName}`);
+                }
+            } catch (error) {
+                console.error("Error en drag & drop:", error);
+                toast.error("Error al actualizar la posición del item");
+                
+                // Revertir cambios
+                setItemsData(originalItemsData);
+                setCategoriasData(originalCategoriasData);
+            } finally {
+                setActiveId(null);
+            }
+        },
+        [itemsData, categoriasData]
+    );
+
+
+
+
+    // Componente para zonas de drop vacías
+    const EmptyCategoryDropZone = ({ categoria }: { categoria: Categoria }) => {
+        const { setNodeRef, isOver } = useDroppable({
+            id: `categoria-${categoria.id}`,
+        });
+
+        return (
+            <div
+                ref={setNodeRef}
+                className={`text-center py-8 min-h-[100px] flex items-center justify-center border-2 border-dashed rounded-lg m-4 transition-colors ${
+                    isOver
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-zinc-700 bg-zinc-800/30'
+                }`}
+            >
+                <div className="text-center">
+                    <div className="text-zinc-500 mb-2">
+                        <Plus className="h-8 w-8 mx-auto" />
+                    </div>
+                    <p className="text-sm text-zinc-400">
+                        {isOver ? 'Suelta aquí para agregar a esta categoría' : 'Arrastra items aquí para agregarlos a esta categoría'}
+                    </p>
+                </div>
+            </div>
+        );
     };
 
     // Componentes sortables
@@ -559,28 +595,20 @@ export function CatalogoAcordeonNavigation({
                                     </ZenButton>
                                 </div>
                             ) : (
-                                <DndContext
-                                    sensors={sensors}
-                                    collisionDetection={closestCenter}
-                                    onDragStart={handleDragStart}
-                                    onDragEnd={(event) => handleCategoriaDragEnd(event, seccion.id)}
+                                <SortableContext
+                                    items={categorias.map(c => c.id)}
+                                    strategy={verticalListSortingStrategy}
                                 >
-                                    <SortableContext
-                                        items={categorias.map(c => c.id)}
-                                        strategy={verticalListSortingStrategy}
-                                    >
                                         {categorias
                                             .sort((a, b) => (a.order || 0) - (b.order || 0))
                                             .map((categoria, categoriaIndex) => (
                                                 <SortableCategoria
                                                     key={categoria.id}
                                                     categoria={categoria}
-                                                    seccionId={seccion.id}
                                                     categoriaIndex={categoriaIndex}
                                                 />
                                             ))}
                                     </SortableContext>
-                                </DndContext>
                             )}
                         </div>
                     )}
@@ -591,11 +619,9 @@ export function CatalogoAcordeonNavigation({
 
     const SortableCategoria = ({
         categoria,
-        seccionId,
         categoriaIndex
     }: {
         categoria: Categoria;
-        seccionId: string;
         categoriaIndex: number;
     }) => {
         const {
@@ -691,41 +717,22 @@ export function CatalogoAcordeonNavigation({
                         {loadingCategorias.has(categoria.id) ? (
                             <ItemsSkeleton />
                         ) : items.length === 0 ? (
-                            <div className="p-6 text-center text-zinc-500">
-                                <p>No hay items en esta categoría</p>
-                                <ZenButton
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleCreateItem(categoria.id)}
-                                    className="mt-2"
-                                >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Crear item
-                                </ZenButton>
-                            </div>
+                            <EmptyCategoryDropZone categoria={categoria} />
                         ) : (
-                            <DndContext
-                                sensors={sensors}
-                                collisionDetection={closestCenter}
-                                onDragStart={handleDragStart}
-                                onDragEnd={(event) => handleItemDragEnd(event, categoria.id)}
+                            <SortableContext
+                                items={items.map(i => i.id)}
+                                strategy={verticalListSortingStrategy}
                             >
-                                <SortableContext
-                                    items={items.map(i => i.id)}
-                                    strategy={verticalListSortingStrategy}
-                                >
                                     {items
                                         .sort((a, b) => (a.order || 0) - (b.order || 0))
                                         .map((item, itemIndex) => (
                                             <SortableItem
                                                 key={item.id}
                                                 item={item}
-                                                categoriaId={categoria.id}
                                                 itemIndex={itemIndex}
                                             />
                                         ))}
                                 </SortableContext>
-                            </DndContext>
                         )}
                     </div>
                 )}
@@ -735,11 +742,9 @@ export function CatalogoAcordeonNavigation({
 
     const SortableItem = ({
         item,
-        categoriaId,
         itemIndex
     }: {
         item: Item;
-        categoriaId: string;
         itemIndex: number;
     }) => {
         const {
@@ -1144,21 +1149,6 @@ export function CatalogoAcordeonNavigation({
         </div>
     );
 
-    const CategoriasSkeleton = () => (
-        <div className="space-y-1">
-            {[1, 2, 3].map((i) => (
-                <div key={i} className="p-3 pl-8 animate-pulse">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-4 h-4 bg-zinc-700 rounded"></div>
-                            <div className="h-4 bg-zinc-700 rounded w-24"></div>
-                        </div>
-                        <div className="h-4 bg-zinc-700 rounded w-12"></div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
 
     const ItemsSkeleton = () => (
         <div className="space-y-1">
@@ -1209,15 +1199,19 @@ export function CatalogoAcordeonNavigation({
                 </ZenButton>
             </div>
 
-            {/* Lista de secciones con drag & drop */}
+            {/* Lista de secciones con drag & drop unificado */}
             <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragStart={handleDragStart}
-                onDragEnd={handleSeccionDragEnd}
+                onDragEnd={handleDragEnd}
             >
                 <SortableContext
-                    items={secciones.map(s => s.id)}
+                    items={[
+                        ...secciones.map(s => s.id),
+                        ...Object.values(categoriasData).flat().map(c => c.id),
+                        ...Object.values(itemsData).flat().map(i => i.id)
+                    ]}
                     strategy={verticalListSortingStrategy}
                 >
                     <div className="space-y-2">

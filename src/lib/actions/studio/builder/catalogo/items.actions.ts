@@ -443,3 +443,94 @@ export async function reordenarItems(
         };
     }
 }
+
+/**
+ * Mueve un item de una categoría a otra
+ *
+ * @param itemId - ID del item a mover
+ * @param nuevaCategoriaId - ID de la nueva categoría
+ * @returns Confirmación
+ */
+export async function moverItemACategoria(
+    itemId: string,
+    nuevaCategoriaId: string
+): Promise<ActionResponse<boolean>> {
+    try {
+        if (!itemId || !nuevaCategoriaId) {
+            return { success: false, error: "IDs requeridos" };
+        }
+
+        // Verificar que el item existe
+        const item = await prisma.studio_items.findUnique({
+            where: { id: itemId },
+            select: { id: true, categoriaId: true, order: true },
+        });
+
+        if (!item) {
+            return { success: false, error: "Item no encontrado" };
+        }
+
+        // Verificar que la nueva categoría existe
+        const categoria = await prisma.studio_categorias.findUnique({
+            where: { id: nuevaCategoriaId },
+            select: { id: true },
+        });
+
+        if (!categoria) {
+            return { success: false, error: "Categoría no encontrada" };
+        }
+
+        // Si es la misma categoría, no hacer nada
+        if (item.categoriaId === nuevaCategoriaId) {
+            return { success: true, data: true };
+        }
+
+        await prisma.$transaction(async (tx) => {
+            // 1. Reordenar items en la categoría origen (si existe)
+            if (item.categoriaId) {
+                const itemsOrigen = await tx.studio_items.findMany({
+                    where: { categoriaId: item.categoriaId },
+                    orderBy: { order: "asc" },
+                });
+
+                // Reindexar items en categoría origen
+                for (let i = 0; i < itemsOrigen.length; i++) {
+                    if (itemsOrigen[i].id !== itemId) {
+                        await tx.studio_items.update({
+                            where: { id: itemsOrigen[i].id },
+                            data: { order: i },
+                        });
+                    }
+                }
+            }
+
+            // 2. Obtener el nuevo orden en la categoría destino
+            const itemsDestino = await tx.studio_items.findMany({
+                where: { categoriaId: nuevaCategoriaId },
+                orderBy: { order: "asc" },
+            });
+
+            // 3. Mover el item a la nueva categoría con el último orden
+            await tx.studio_items.update({
+                where: { id: itemId },
+                data: {
+                    categoriaId: nuevaCategoriaId,
+                    order: itemsDestino.length,
+                },
+            });
+        });
+
+        console.log(`[ITEMS] Item ${itemId} movido a categoría ${nuevaCategoriaId}`);
+
+        return {
+            success: true,
+            data: true,
+        };
+    } catch (error) {
+        console.error("[ITEMS] Error moviendo item:", error);
+        return {
+            success: false,
+            error: "Error al mover item",
+        };
+    }
+}
