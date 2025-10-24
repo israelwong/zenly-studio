@@ -72,7 +72,6 @@ export function CatalogoNavigationWrapper({
                 <CatalogoAcordeonNavigation
                     studioSlug={studioSlug}
                     secciones={secciones}
-                    onNavigateToUtilidad={onNavigateToUtilidad}
                 />
             ) : (
                 <CatalogoContainer

@@ -463,7 +463,7 @@ export async function moverItemACategoria(
         // Verificar que el item existe
         const item = await prisma.studio_items.findUnique({
             where: { id: itemId },
-            select: { id: true, categoriaId: true, order: true },
+            select: { id: true, service_category_id: true, order: true },
         });
 
         if (!item) {
@@ -471,7 +471,7 @@ export async function moverItemACategoria(
         }
 
         // Verificar que la nueva categoría existe
-        const categoria = await prisma.studio_categorias.findUnique({
+        const categoria = await prisma.studio_service_categories.findUnique({
             where: { id: nuevaCategoriaId },
             select: { id: true },
         });
@@ -481,15 +481,15 @@ export async function moverItemACategoria(
         }
 
         // Si es la misma categoría, no hacer nada
-        if (item.categoriaId === nuevaCategoriaId) {
+        if (item.service_category_id === nuevaCategoriaId) {
             return { success: true, data: true };
         }
 
         await prisma.$transaction(async (tx) => {
             // 1. Reordenar items en la categoría origen (si existe)
-            if (item.categoriaId) {
+            if (item.service_category_id) {
                 const itemsOrigen = await tx.studio_items.findMany({
-                    where: { categoriaId: item.categoriaId },
+                    where: { service_category_id: item.service_category_id },
                     orderBy: { order: "asc" },
                 });
 
@@ -506,7 +506,7 @@ export async function moverItemACategoria(
 
             // 2. Obtener el nuevo orden en la categoría destino
             const itemsDestino = await tx.studio_items.findMany({
-                where: { categoriaId: nuevaCategoriaId },
+                where: { service_category_id: nuevaCategoriaId },
                 orderBy: { order: "asc" },
             });
 
@@ -514,7 +514,7 @@ export async function moverItemACategoria(
             await tx.studio_items.update({
                 where: { id: itemId },
                 data: {
-                    categoriaId: nuevaCategoriaId,
+                    service_category_id: nuevaCategoriaId,
                     order: itemsDestino.length,
                 },
             });
