@@ -220,7 +220,7 @@ export async function eliminarTipoEvento(
     try {
         // Verificar si tiene paquetes asociados
         const paquetesAsociados = await prisma.studio_paquetes.count({
-            where: { eventoTipoId: tipoId },
+            where: { event_type_id: tipoId },
         });
 
         if (paquetesAsociados > 0) {

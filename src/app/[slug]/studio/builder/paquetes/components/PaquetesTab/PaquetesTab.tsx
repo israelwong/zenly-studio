@@ -142,14 +142,42 @@ export function PaquetesTab({ studioSlug }: PaquetesTabProps) {
             </TabsList>
 
             <TabsContent value="paquetes">
-                <PaquetesNavigationWrapper
-                    studioSlug={studioSlug}
-                    tiposEvento={tiposEvento}
-                    paquetes={paquetes}
-                    onNavigateToTipoEvento={navigateToTipoEvento}
-                    onTiposEventoChange={handleTipoEventoChange}
-                    onPaquetesChange={handlePaquetesChange}
-                />
+                {currentLevel === 1 ? (
+                    <PaquetesNavigationWrapper
+                        studioSlug={studioSlug}
+                        tiposEvento={tiposEvento}
+                        paquetes={paquetes}
+                        onNavigateToTipoEvento={navigateToTipoEvento}
+                        onTiposEventoChange={handleTipoEventoChange}
+                        onPaquetesChange={handlePaquetesChange}
+                    />
+                ) : (
+                    selectedTipoEvento && (
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={navigateBack}
+                                    className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    Volver
+                                </button>
+                                <div className="h-4 w-px bg-zinc-700"></div>
+                                <h3 className="text-lg font-semibold text-white">
+                                    {selectedTipoEvento.nombre}
+                                </h3>
+                            </div>
+
+                            <PaquetesPorTipo
+                                studioSlug={studioSlug}
+                                tipoEvento={selectedTipoEvento}
+                                paquetes={paquetes.filter(p => p.event_type_id === selectedTipoEvento.id)}
+                                onNavigateBack={navigateBack}
+                                onPaquetesChange={handlePaquetesChange}
+                            />
+                        </div>
+                    )
+                )}
             </TabsContent>
 
             <TabsContent value="configuracion">

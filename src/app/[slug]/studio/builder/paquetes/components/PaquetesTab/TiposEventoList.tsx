@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Plus, ArrowRight, Package, GripVertical } from 'lucide-react';
-import { ZenCard, ZenButton } from '@/components/ui/zen';
+import { Plus, ArrowRight, Package, GripVertical, Edit2, MoreHorizontal } from 'lucide-react';
+import { ZenCard, ZenButton, ZenDropdownMenu, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuTrigger } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/builder/catalogo/calcular-precio';
 import { actualizarOrdenTiposEvento } from '@/lib/actions/studio/negocio/tipos-evento.actions';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { TipoEventoForm } from '@/app/[slug]/studio/configuracion/operacion/tipos/components/TipoEventoFormSimple';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 
 interface PaqueteData {
@@ -39,9 +40,10 @@ interface TiposEventoListProps {
 interface SortableTipoEventoCardProps {
     tipo: TipoEventoData & { paquetesCount: number; precioPromedio: number };
     onNavigateToTipoEvento: (tipoEvento: TipoEventoData) => void;
+    onEditTipoEvento: (tipoEvento: TipoEventoData) => void;
 }
 
-function SortableTipoEventoCard({ tipo, onNavigateToTipoEvento }: SortableTipoEventoCardProps) {
+function SortableTipoEventoCard({ tipo, onNavigateToTipoEvento, onEditTipoEvento }: SortableTipoEventoCardProps) {
     const {
         attributes,
         listeners,
@@ -113,9 +115,30 @@ function SortableTipoEventoCard({ tipo, onNavigateToTipoEvento }: SortableTipoEv
                         </div>
                     </div>
 
-                    {/* Arrow */}
-                    <div className="flex items-center flex-shrink-0">
-                        <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                    {/* Actions */}
+                    <div className="flex items-center flex-shrink-0 gap-2">
+                        <ZenDropdownMenu>
+                            <ZenDropdownMenuTrigger asChild>
+                                <ZenButton
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-8 h-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <MoreHorizontal className="w-4 h-4" />
+                                </ZenButton>
+                            </ZenDropdownMenuTrigger>
+                            <ZenDropdownMenuContent align="end" className="w-48">
+                                <ZenDropdownMenuItem onClick={() => onEditTipoEvento(tipo)}>
+                                    <Edit2 className="h-4 w-4 mr-2" />
+                                    Editar tipo de evento
+                                </ZenDropdownMenuItem>
+                            </ZenDropdownMenuContent>
+                        </ZenDropdownMenu>
+
+                        <div className="flex items-center">
+                            <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                        </div>
                     </div>
                 </div>
             </ZenCard>
@@ -132,6 +155,10 @@ export function TiposEventoList({
 }: TiposEventoListProps) {
     const [localTiposEvento, setLocalTiposEvento] = useState<TipoEventoData[]>(tiposEvento);
     const [isReordering, setIsReordering] = useState(false);
+
+    // Estados para modal de edición
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingTipoEvento, setEditingTipoEvento] = useState<TipoEventoData | null>(null);
 
     // Configurar sensores para drag & drop
     const sensors = useSensors(
@@ -201,6 +228,28 @@ export function TiposEventoList({
         },
         [localTiposEvento, studioSlug, onTiposEventoChange]
     );
+
+    // Funciones para manejar la edición
+    const handleEditTipoEvento = (tipoEvento: TipoEventoData) => {
+        setEditingTipoEvento(tipoEvento);
+        setShowEditModal(true);
+    };
+
+    const handleTipoEventoUpdated = (updatedTipoEvento: TipoEventoData) => {
+        const updatedTipos = localTiposEvento.map(tipo =>
+            tipo.id === updatedTipoEvento.id ? updatedTipoEvento : tipo
+        );
+        setLocalTiposEvento(updatedTipos);
+        onTiposEventoChange(updatedTipos);
+        setShowEditModal(false);
+        setEditingTipoEvento(null);
+        toast.success("Tipo de evento actualizado correctamente");
+    };
+
+    const handleCancelEdit = () => {
+        setShowEditModal(false);
+        setEditingTipoEvento(null);
+    };
 
     // Calcular estadísticas reales de paquetes por tipo de evento
     const tiposConStats = localTiposEvento.map(tipo => {
@@ -273,12 +322,22 @@ export function TiposEventoList({
                                     key={tipo.id}
                                     tipo={tipo}
                                     onNavigateToTipoEvento={onNavigateToTipoEvento}
+                                    onEditTipoEvento={handleEditTipoEvento}
                                 />
                             ))}
                         </div>
                     </SortableContext>
                 </DndContext>
             )}
+
+            {/* Modal de edición de tipo de evento */}
+            <TipoEventoForm
+                isOpen={showEditModal}
+                onClose={handleCancelEdit}
+                onSuccess={handleTipoEventoUpdated}
+                studioSlug={studioSlug}
+                tipoEvento={editingTipoEvento}
+            />
         </div>
     );
 }

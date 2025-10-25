@@ -9,7 +9,7 @@ import { StudioHeaderModal } from '../../components/StudioHeaderModal';
 import { ActiveLink } from '../../components/ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
 import {
-    Star, Phone, Zap, Camera, X, Home, CreditCard, File, User, Grid3X3, Store, Package,
+    Star, Phone, Zap, Camera, X, Home, CreditCard, File, User, Grid3X3, Store, Package, Calendar,
 } from 'lucide-react';
 
 interface StudioBuilderSidebarProps {
@@ -56,6 +56,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             title: 'Addons',
             icon: Zap,
             items: [
+                { id: 'agendamiento', name: 'Agendamiento', href: `/agendamiento`, icon: Calendar },
                 { id: 'zona-pago', name: 'Zona de pago', href: `/zona-pago`, icon: CreditCard },
                 { id: 'cotizaciones', name: 'Cotizaciones', href: `/cotizaciones`, icon: File },
                 { id: 'portal-cliente', name: 'Portal cliente', href: `/portal-cliente`, icon: User },

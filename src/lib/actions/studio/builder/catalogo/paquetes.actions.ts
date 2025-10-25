@@ -46,7 +46,7 @@ export async function obtenerPaquetes(
 
         console.log('🔍 Paquetes obtenidos de DB:', paquetes);
         console.log('🔍 Primer paquete paquete_items:', paquetes[0]?.paquete_items);
-        
+
         return {
             success: true,
             data: paquetes as unknown as PaqueteFromDB[],
@@ -109,7 +109,7 @@ export async function crearPaquete(
 
         // Obtener o crear un tipo de evento por defecto
         let eventTypeId = paqueteData.event_type_id;
-        
+
         if (!eventTypeId || eventTypeId === 'temp') {
             // Buscar un tipo de evento existente
             const existingEventType = await prisma.studio_event_types.findFirst({
@@ -240,30 +240,113 @@ export async function actualizarPaquete(
             }>;
         };
 
-        // Si hay servicios, actualizar paquete_items
+        // Si hay servicios, actualizar paquete_items de manera inteligente
         if (paqueteData.servicios && paqueteData.servicios.length > 0) {
-            // Eliminar items existentes
-            await prisma.studio_paquete_items.deleteMany({
-                where: { paquete_id: paqueteId }
+            // Obtener items existentes
+            const itemsExistentes = await prisma.studio_paquete_items.findMany({
+                where: { paquete_id: paqueteId },
+                orderBy: { position: "asc" }
             });
 
+            // Crear mapa de items existentes por item_id
+            const itemsExistentesMap = new Map(
+                itemsExistentes.map(item => [item.item_id, item])
+            );
+
+            // Crear mapa de nuevos items por item_id
+            const nuevosItemsMap = new Map(
+                paqueteData.servicios.map((servicio, index) => [
+                    servicio.servicioId,
+                    {
+                        item_id: servicio.servicioId,
+                        service_category_id: servicio.servicioCategoriaId,
+                        quantity: servicio.cantidad,
+                        position: index,
+                        visible_to_client: true,
+                        status: "active"
+                    }
+                ])
+            );
+
+            // Identificar items a eliminar (existen en DB pero no en nuevos datos)
+            const itemsAEliminar = itemsExistentes.filter(
+                item => !nuevosItemsMap.has(item.item_id)
+            );
+
+            // Identificar items a crear (existen en nuevos datos pero no en DB)
+            const itemsACrear = paqueteData.servicios.filter(
+                servicio => !itemsExistentesMap.has(servicio.servicioId)
+            );
+
+            // Identificar items a actualizar (existen en ambos pero pueden haber cambiado)
+            const itemsAActualizar = paqueteData.servicios.filter(
+                servicio => {
+                    const itemExistente = itemsExistentesMap.get(servicio.servicioId);
+                    if (!itemExistente) return false;
+
+                    return (
+                        itemExistente.quantity !== servicio.cantidad ||
+                        itemExistente.service_category_id !== servicio.servicioCategoriaId ||
+                        itemExistente.position !== (paqueteData.servicios?.indexOf(servicio) ?? -1)
+                    );
+                }
+            );
+
+            // Ejecutar operaciones en paralelo
+            const operaciones = [];
+
+            // Eliminar items que ya no están
+            if (itemsAEliminar.length > 0) {
+                operaciones.push(
+                    prisma.studio_paquete_items.deleteMany({
+                        where: {
+                            id: { in: itemsAEliminar.map(item => item.id) }
+                        }
+                    })
+                );
+            }
+
             // Crear nuevos items
-            await prisma.studio_paquete_items.createMany({
-                data: paqueteData.servicios.map((servicio, index) => ({
-                    paquete_id: paqueteId,
-                    item_id: servicio.servicioId,
-                    service_category_id: servicio.servicioCategoriaId,
-                    quantity: servicio.cantidad,
-                    order: index,
-                    visible_to_client: true,
-                    status: "active"
-                }))
-            });
+            if (itemsACrear.length > 0) {
+                operaciones.push(
+                    prisma.studio_paquete_items.createMany({
+                        data: itemsACrear.map((servicio, index) => ({
+                            paquete_id: paqueteId,
+                            item_id: servicio.servicioId,
+                            service_category_id: servicio.servicioCategoriaId,
+                            quantity: servicio.cantidad,
+                            position: paqueteData.servicios?.indexOf(servicio) ?? 0,
+                            visible_to_client: true,
+                            status: "active"
+                        }))
+                    })
+                );
+            }
+
+            // Actualizar items existentes
+            for (const servicio of itemsAActualizar) {
+                const itemExistente = itemsExistentesMap.get(servicio.servicioId);
+                if (itemExistente) {
+                    operaciones.push(
+                        prisma.studio_paquete_items.update({
+                            where: { id: itemExistente.id },
+                            data: {
+                                quantity: servicio.cantidad,
+                                service_category_id: servicio.servicioCategoriaId,
+                                position: paqueteData.servicios.indexOf(servicio)
+                            }
+                        })
+                    );
+                }
+            }
+
+            // Ejecutar todas las operaciones
+            await Promise.all(operaciones);
         }
 
         // Manejar event_type_id si es 'temp'
         let eventTypeId = paqueteData.event_type_id;
-        
+
         if (!eventTypeId || eventTypeId === 'temp') {
             // Buscar un tipo de evento existente
             const existingEventType = await prisma.studio_event_types.findFirst({
@@ -441,7 +524,7 @@ export async function duplicarPaquete(
                         service_category_id: item.service_category_id,
                         quantity: item.quantity,
                         visible_to_client: item.visible_to_client,
-                        order: item.order,
+                        position: item.position,
                         status: "active",
                     })),
                 },
@@ -473,7 +556,11 @@ export async function duplicarPaquete(
 export async function reorderPaquetes(
     studioSlug: string,
     paqueteIds: string[]
-): Promise<ActionResponse<null>> {
+): Promise<{
+    success: boolean;
+    data?: null;
+    error?: string;
+}> {
     try {
         // Verificar que el estudio existe
         const studio = await prisma.studios.findUnique({
@@ -490,7 +577,7 @@ export async function reorderPaquetes(
 
         // Verificar que los paquetes existan y pertenezcan al estudio
         const existingPaquetes = await prisma.studio_paquetes.findMany({
-            where: { 
+            where: {
                 id: { in: paqueteIds },
                 studio_id: studio.id
             },
@@ -506,10 +593,10 @@ export async function reorderPaquetes(
         }
 
         // Actualizar el orden de cada paquete
-        const updatePromises = paqueteIds.map((paqueteId, index) => 
+        const updatePromises = paqueteIds.map((paqueteId, index) =>
             prisma.studio_paquetes.update({
                 where: { id: paqueteId },
-                data: { 
+                data: {
                     order: index,
                     updated_at: new Date()
                 }
