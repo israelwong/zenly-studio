@@ -5,7 +5,7 @@ import { IdentidadEditorZen } from './components/';
 import { SectionLayout } from '../components';
 import { useParams } from 'next/navigation';
 import { getBuilderProfileData } from '@/lib/actions/studio/builder/builder-profile.actions';
-import { actualizarLogo } from '@/lib/actions/studio/builder/identidad.actions';
+import { actualizarLogo } from '@/lib/actions/studio/builder/identidad';
 import { IdentidadData } from './types';
 import { BuilderProfileData, BuilderStudioProfile } from '@/types/builder-profile';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';

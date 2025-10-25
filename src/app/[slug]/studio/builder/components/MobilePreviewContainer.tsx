@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { ProfileIdentity, ProfileContent, ProfileFooter, ProfileNavigation } from '@/components/profile';
+import { ProfileIdentity, ProfileContent, ProfileFooter, ProfileNavigation, ProfileFAQ } from '@/components/profile';
 
 interface MobilePreviewContainerProps {
     children?: React.ReactNode;
@@ -83,6 +83,16 @@ export function MobilePreviewContainer({
                         )}
 
                         {children}
+
+                        {/* FAQ Section - Persistente antes del footer */}
+                        {data?.faq && Array.isArray(data.faq) && data.faq.length > 0 && (
+                            <div className="mt-6">
+                                <ProfileFAQ
+                                    data={data}
+                                    loading={loading}
+                                />
+                            </div>
+                        )}
 
                         {/* Footer dentro del contenido */}
                         {showFooter && (

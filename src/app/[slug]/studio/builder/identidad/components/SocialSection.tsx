@@ -16,7 +16,7 @@ import {
     eliminarRedSocial,
     reordenarRedesSociales,
     toggleRedSocialEstado
-} from '@/lib/actions/studio/config/redes-sociales.actions';
+} from '@/lib/actions/studio/builder/identidad';
 import {
     DndContext,
     closestCenter,
@@ -33,12 +33,12 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
-interface RedesSocialesSectionProps {
+interface SocialSectionProps {
     studioSlug: string;
     onLocalUpdate: (data: Partial<IdentidadData>) => void;
 }
 
-export function RedesSocialesSection({ studioSlug, onLocalUpdate }: RedesSocialesSectionProps) {
+export function SocialSection({ studioSlug, onLocalUpdate }: SocialSectionProps) {
     const [redes, setRedes] = useState<RedSocial[]>([]);
     const [plataformas, setPlataformas] = useState<Plataforma[]>([]);
     const [loading, setLoading] = useState(true);
@@ -164,10 +164,6 @@ export function RedesSocialesSection({ studioSlug, onLocalUpdate }: RedesSociale
         }
     };
 
-    const getPlataformaInfo = (plataformaId: string | null): Plataforma | null => {
-        if (!plataformaId) return null;
-        return plataformas.find(p => p.id === plataformaId) || null;
-    };
 
     const handleAddRed = () => {
         setEditingRed(null);
@@ -327,6 +323,8 @@ export function RedesSocialesSection({ studioSlug, onLocalUpdate }: RedesSociale
                         onClick={handleAddRed}
                         variant="primary"
                         className="bg-blue-600 hover:bg-blue-700 text-white"
+                        disabled={plataformas.filter(p => p.isActive).length === 0}
+                        title={plataformas.filter(p => p.isActive).length === 0 ? 'No hay plataformas disponibles' : ''}
                     >
                         <Plus className="h-4 w-4 mr-2" />
                         Agregar Red Social
@@ -353,6 +351,16 @@ export function RedesSocialesSection({ studioSlug, onLocalUpdate }: RedesSociale
                         <div className="text-xs text-zinc-600">
                             Plataformas disponibles: {plataformas.filter(p => p.isActive).length} de {plataformas.length}
                         </div>
+                        {plataformas.filter(p => p.isActive).length === 0 && (
+                            <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                                <p className="text-yellow-400 text-sm">
+                                    ⚠️ No hay plataformas de redes sociales configuradas en el sistema.
+                                </p>
+                                <p className="text-yellow-300 text-xs mt-1">
+                                    Contacta al administrador para configurar las plataformas disponibles.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <DndContext
@@ -366,12 +374,11 @@ export function RedesSocialesSection({ studioSlug, onLocalUpdate }: RedesSociale
                         >
                             <div className="space-y-3">
                                 {redes.map((red) => {
-                                    const plataformaInfo = getPlataformaInfo(red.plataformaId);
                                     return (
                                         <RedSocialItem
                                             key={red.id}
                                             red={red}
-                                            plataforma={plataformaInfo}
+                                            plataforma={red.plataforma || null}
                                             onEdit={handleEditRed}
                                             onDelete={handleDeleteRed}
                                             onToggleActive={handleToggleActive}

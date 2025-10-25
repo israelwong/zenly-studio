@@ -764,6 +764,7 @@ model studios {
   user_profiles              studio_user_profiles[]
   studio_users               studio_users[]
   zonas_trabajo              studio_zonas_trabajo[]
+  faq                        studio_faq[]
   plan                       platform_plans?                  @relation(fields: [plan_id], references: [id])
   subscriptions              subscriptions[]
   usage_tracking             usage_tracking[]
@@ -2327,6 +2328,21 @@ model studio_storage_log {
 
   @@index([studio_id, action])
   @@index([studio_id, created_at])
+}
+
+model studio_faq {
+  id         String   @id @default(cuid())
+  studio_id  String
+  pregunta   String
+  respuesta  String
+  orden      Int      @default(0)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  studio     studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id, is_active])
+  @@index([studio_id, orden])
 }
 
 enum ModuleCategory {

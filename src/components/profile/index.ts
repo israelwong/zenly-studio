@@ -15,6 +15,7 @@ export { ProfileHeader } from './ProfileHeader';
 export { ProfileNavTabs } from './ProfileNavTabs';
 export { ProfileContent } from './ProfileContent';
 export { ProfileFooter } from './ProfileFooter';
+export { ProfileFAQ } from './ProfileFAQ';
 
 // Container Components
 // MobilePreviewContainer moved to builder components

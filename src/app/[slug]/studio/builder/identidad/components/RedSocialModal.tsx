@@ -151,14 +151,23 @@ export function RedSocialModal({
                                             <SelectItem
                                                 key={plataforma.id}
                                                 value={plataforma.id}
-                                                className="text-white hover:bg-zinc-700"
+                                                className="text-white hover:bg-zinc-700 focus:bg-zinc-700"
                                             >
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-3 w-full">
                                                     <div
-                                                        className="w-3 h-3 rounded-full"
+                                                        className="w-4 h-4 rounded-full flex-shrink-0"
                                                         style={{ backgroundColor: plataforma.color || '#6B7280' }}
                                                     ></div>
-                                                    {plataforma.name}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-medium text-white truncate">
+                                                            {plataforma.name}
+                                                        </div>
+                                                        {plataforma.description && (
+                                                            <div className="text-xs text-zinc-400 truncate">
+                                                                {plataforma.description}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </SelectItem>
                                         ))}
@@ -172,6 +181,9 @@ export function RedSocialModal({
                                     {selectedPlataforma.description}
                                 </p>
                             )}
+                            <p className="text-xs text-zinc-600">
+                                {plataformas.filter(p => p.isActive).length} plataformas disponibles
+                            </p>
                         </div>
 
                         {/* URL */}

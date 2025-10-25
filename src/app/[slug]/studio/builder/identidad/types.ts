@@ -1,3 +1,11 @@
+export interface FAQItem {
+    id: string;
+    pregunta: string;
+    respuesta: string;
+    orden: number;
+    is_active: boolean;
+}
+
 export interface IdentidadData {
     id: string;
     studio_name: string;
@@ -7,6 +15,7 @@ export interface IdentidadData {
     palabras_clave: string[];
     logo_url: string | null;
     pagina_web?: string | null;
+    faq?: FAQItem[];
 }
 
 export interface IdentidadUpdate {

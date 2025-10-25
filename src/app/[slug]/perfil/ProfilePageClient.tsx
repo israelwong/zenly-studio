@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { PublicProfileData } from '@/types/public-profile';
-import { ProfileIdentity, ProfileNavTabs, ProfileCTA, ProfileAIChat, ProfileFooter } from '@/components/profile';
+import { ProfileIdentity, ProfileNavTabs, ProfileCTA, ProfileAIChat, ProfileFooter, ProfileFAQ } from '@/components/profile';
 import { ProfileContentView } from './ProfileContentView';
 import { isProPlan } from '@/lib/utils/profile-utils';
 
@@ -54,6 +54,16 @@ export function ProfilePageClient({ profileData }: ProfilePageClientProps) {
                     profileData={profileData}
                 />
 
+                {/* FAQ Section - Persistente antes del footer */}
+                {profileData.studio.faq && Array.isArray(profileData.studio.faq) && profileData.studio.faq.length > 0 && (
+                    <div className="mt-6">
+                        <ProfileFAQ
+                            data={{ faq: profileData.studio.faq }}
+                            loading={false}
+                        />
+                    </div>
+                )}
+
                 {/* Footer */}
                 <ProfileFooter
                     data={{
@@ -99,6 +109,16 @@ export function ProfilePageClient({ profileData }: ProfilePageClientProps) {
                         activeTab={activeTab}
                         profileData={profileData}
                     />
+
+                    {/* FAQ Section - Persistente antes del footer */}
+                    {profileData.studio.faq && Array.isArray(profileData.studio.faq) && profileData.studio.faq.length > 0 && (
+                        <div className="mt-6">
+                            <ProfileFAQ
+                                data={{ faq: profileData.studio.faq }}
+                                loading={false}
+                            />
+                        </div>
+                    )}
 
                     {/* Footer */}
                     <ProfileFooter
