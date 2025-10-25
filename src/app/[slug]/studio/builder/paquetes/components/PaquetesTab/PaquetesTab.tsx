@@ -4,18 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Package, Settings } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
-import { TiposEventoList } from './TiposEventoList';
-import { PaquetesPorTipo } from './PaquetesPorTipo';
-import { PaqueteFormularioAvanzado } from './PaqueteFormularioAvanzado';
 import { PaquetesConfiguracion } from './PaquetesConfiguracion';
-import { PaquetesNavigationWrapper } from './PaquetesNavigationWrapper';
-import { ArrowLeft } from 'lucide-react';
+import { PaquetesAcordeonNavigation } from './PaquetesAcordeonNavigation';
 import { obtenerTiposEvento } from '@/lib/actions/studio/negocio/tipos-evento.actions';
 import { obtenerPaquetes } from '@/lib/actions/studio/builder/catalogo/paquetes.actions';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
 
-type NavigationLevel = 1 | 2;
 type TabType = 'paquetes' | 'configuracion';
 
 interface PaquetesTabProps {
@@ -25,10 +20,6 @@ interface PaquetesTabProps {
 export function PaquetesTab({ studioSlug }: PaquetesTabProps) {
     // Estado de pestañas
     const [activeTab, setActiveTab] = useState<TabType>('paquetes');
-
-    // Estado de navegación (solo para pestaña paquetes)
-    const [currentLevel, setCurrentLevel] = useState<NavigationLevel>(1);
-    const [selectedTipoEvento, setSelectedTipoEvento] = useState<TipoEventoData | null>(null);
 
     // Datos
     const [tiposEvento, setTiposEvento] = useState<TipoEventoData[]>([]);
@@ -68,20 +59,6 @@ export function PaquetesTab({ studioSlug }: PaquetesTabProps) {
         cargarDatos();
     }, [cargarDatos]);
 
-    // Navegación entre niveles
-    const navigateToTipoEvento = (tipoEvento: TipoEventoData) => {
-        setSelectedTipoEvento(tipoEvento);
-        setCurrentLevel(2);
-    };
-
-    // navigateToPaquete eliminado - ahora se usa modal en PaquetesList
-
-    const navigateBack = () => {
-        if (currentLevel === 2) {
-            setCurrentLevel(1);
-            setSelectedTipoEvento(null);
-        }
-    };
 
 
     // Handlers para actualizar datos
@@ -142,42 +119,13 @@ export function PaquetesTab({ studioSlug }: PaquetesTabProps) {
             </TabsList>
 
             <TabsContent value="paquetes">
-                {currentLevel === 1 ? (
-                    <PaquetesNavigationWrapper
-                        studioSlug={studioSlug}
-                        tiposEvento={tiposEvento}
-                        paquetes={paquetes}
-                        onNavigateToTipoEvento={navigateToTipoEvento}
-                        onTiposEventoChange={handleTipoEventoChange}
-                        onPaquetesChange={handlePaquetesChange}
-                    />
-                ) : (
-                    selectedTipoEvento && (
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={navigateBack}
-                                    className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
-                                >
-                                    <ArrowLeft className="w-4 h-4" />
-                                    Volver
-                                </button>
-                                <div className="h-4 w-px bg-zinc-700"></div>
-                                <h3 className="text-lg font-semibold text-white">
-                                    {selectedTipoEvento.nombre}
-                                </h3>
-                            </div>
-
-                            <PaquetesPorTipo
-                                studioSlug={studioSlug}
-                                tipoEvento={selectedTipoEvento}
-                                paquetes={paquetes.filter(p => p.event_type_id === selectedTipoEvento.id)}
-                                onNavigateBack={navigateBack}
-                                onPaquetesChange={handlePaquetesChange}
-                            />
-                        </div>
-                    )
-                )}
+                <PaquetesAcordeonNavigation
+                    studioSlug={studioSlug}
+                    tiposEvento={tiposEvento}
+                    paquetes={paquetes}
+                    onTiposEventoChange={handleTipoEventoChange}
+                    onPaquetesChange={handlePaquetesChange}
+                />
             </TabsContent>
 
             <TabsContent value="configuracion">
