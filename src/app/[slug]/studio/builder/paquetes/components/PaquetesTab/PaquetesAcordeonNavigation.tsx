@@ -295,7 +295,7 @@ export function PaquetesAcordeonNavigation({
                                                             <div className="flex items-center gap-3 flex-1 text-left">
                                                                 <div className="w-1.5 h-1.5 bg-purple-400 rounded-full"></div>
                                                                 <div>
-                                                                    <h5 className="text-sm font-medium text-zinc-300">{paquete.nombre}</h5>
+                                                                    <h5 className="text-sm font-medium text-zinc-300">{paquete.name}</h5>
                                                                     <div className="flex items-center gap-2 mt-1">
                                                                         <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-1 rounded">
                                                                             ${paquete.precio?.toLocaleString() || '0'}
@@ -369,7 +369,7 @@ export function PaquetesAcordeonNavigation({
                 }}
                 onConfirm={handleConfirmDeletePaquete}
                 title="Eliminar paquete"
-                description={`¿Estás seguro de que deseas eliminar el paquete "${paqueteToDelete?.nombre}"? Esta acción no se puede deshacer.`}
+                description={`¿Estás seguro de que deseas eliminar el paquete "${paqueteToDelete?.name}"? Esta acción no se puede deshacer.`}
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="destructive"
