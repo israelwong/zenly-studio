@@ -159,7 +159,7 @@ export async function crearPaquete(
                         item_id: servicio.servicioId,
                         service_category_id: servicio.servicioCategoriaId,
                         quantity: servicio.cantidad,
-                        order: index,
+                        position: index,
                         visible_to_client: true,
                         status: "active"
                     }))
@@ -310,7 +310,7 @@ export async function actualizarPaquete(
             if (itemsACrear.length > 0) {
                 operaciones.push(
                     prisma.studio_paquete_items.createMany({
-                        data: itemsACrear.map((servicio, index) => ({
+                        data: itemsACrear.map((servicio) => ({
                             paquete_id: paqueteId,
                             item_id: servicio.servicioId,
                             service_category_id: servicio.servicioCategoriaId,
