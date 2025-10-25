@@ -512,9 +512,8 @@ export function PaquetesAcordeonNavigation({
                     </div>
                 ) : null}
             </DragOverlay>
-        </DndContext>
 
-        {/* Modales de confirmación */}
+            {/* Modales de confirmación */}
             <ZenConfirmModal
                 isOpen={isDeleteTipoEventoModalOpen}
                 onClose={() => {
@@ -544,6 +543,6 @@ export function PaquetesAcordeonNavigation({
                 variant="destructive"
                 loading={isLoading}
             />
-        </div>
+        </DndContext>
     );
 }
