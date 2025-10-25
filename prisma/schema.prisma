@@ -1077,12 +1077,12 @@ model studio_paquete_items {
   item_id              String
   service_category_id  String
   quantity             Int                       @default(1)
-  order                Int                       @default(0)
   visible_to_client    Boolean                   @default(true)
   status               String                    @default("active")
   created_at           DateTime                  @default(now())
   updated_at           DateTime                  @updatedAt
   precio_personalizado Float?
+  order                Int                       @default(0)
   items                studio_items              @relation(fields: [item_id], references: [id])
   paquetes             studio_paquetes           @relation(fields: [paquete_id], references: [id], onDelete: Cascade)
   service_categories   studio_service_categories @relation(fields: [service_category_id], references: [id])
