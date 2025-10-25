@@ -159,7 +159,7 @@ export async function crearPaquete(
                         item_id: servicio.servicioId,
                         service_category_id: servicio.servicioCategoriaId,
                         quantity: servicio.cantidad,
-                        position: index,
+                        order: index,
                         visible_to_client: true,
                         status: "active"
                     }))
@@ -245,7 +245,7 @@ export async function actualizarPaquete(
             // Obtener items existentes
             const itemsExistentes = await prisma.studio_paquete_items.findMany({
                 where: { paquete_id: paqueteId },
-                orderBy: { position: "asc" }
+                orderBy: { order: "asc" }
             });
 
             // Crear mapa de items existentes por item_id
@@ -261,7 +261,7 @@ export async function actualizarPaquete(
                         item_id: servicio.servicioId,
                         service_category_id: servicio.servicioCategoriaId,
                         quantity: servicio.cantidad,
-                        position: index,
+                        order: index,
                         visible_to_client: true,
                         status: "active"
                     }
@@ -287,7 +287,7 @@ export async function actualizarPaquete(
                     return (
                         itemExistente.quantity !== servicio.cantidad ||
                         itemExistente.service_category_id !== servicio.servicioCategoriaId ||
-                        itemExistente.position !== (paqueteData.servicios?.indexOf(servicio) ?? -1)
+                        itemExistente.order !== (paqueteData.servicios?.indexOf(servicio) ?? -1)
                     );
                 }
             );
@@ -315,7 +315,7 @@ export async function actualizarPaquete(
                             item_id: servicio.servicioId,
                             service_category_id: servicio.servicioCategoriaId,
                             quantity: servicio.cantidad,
-                            position: paqueteData.servicios?.indexOf(servicio) ?? 0,
+                            order: paqueteData.servicios?.indexOf(servicio) ?? 0,
                             visible_to_client: true,
                             status: "active"
                         }))
@@ -333,7 +333,7 @@ export async function actualizarPaquete(
                             data: {
                                 quantity: servicio.cantidad,
                                 service_category_id: servicio.servicioCategoriaId,
-                                position: paqueteData.servicios.indexOf(servicio)
+                                order: paqueteData.servicios.indexOf(servicio)
                             }
                         })
                     );
@@ -524,7 +524,7 @@ export async function duplicarPaquete(
                         service_category_id: item.service_category_id,
                         quantity: item.quantity,
                         visible_to_client: item.visible_to_client,
-                        position: item.position,
+                        order: item.order,
                         status: "active",
                     })),
                 },
