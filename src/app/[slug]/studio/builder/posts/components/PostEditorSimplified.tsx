@@ -140,7 +140,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
 
         return {
             ...previewData,
-            posts: [tempPost, ...(previewData.posts?.filter((p: PostItem) => p.id !== tempCuid) || [])]
+            post: tempPost // Usar 'post' en lugar de 'posts' para PostDetailSection
         };
     }, [previewData, formData, eventTypes, tempCuid]);
 
@@ -374,7 +374,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
 
                         <MobilePreviewFull
                             data={finalPreviewData as Record<string, unknown>}
-                            contentVariant="posts"
+                            contentVariant="post-detail"
                             activeTab="inicio"
                             loading={isLoadingPreview}
                             onClose={handleBack}

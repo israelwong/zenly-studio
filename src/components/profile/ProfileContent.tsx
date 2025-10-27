@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { MainSection, PortfolioSection, PostSection, CatalogSection, ContactSection, PaquetesSection } from './sections';
+import { MainSection, PortfolioSection, PostSection, PostDetailSection, CatalogSection, ContactSection, PaquetesSection } from './sections';
 import { PublicPortfolio, PublicCatalogItem, PublicStudioProfile, PublicContactInfo, PublicSocialNetwork, PublicPaquete } from '@/types/public-profile';
 
 interface ProfileContentProps {
-    variant?: 'skeleton' | 'posts' | 'portfolio' | 'shop' | 'info' | 'paquetes';
+    variant?: 'skeleton' | 'posts' | 'post-detail' | 'portfolio' | 'shop' | 'info' | 'paquetes';
     data?: Record<string, unknown>;
     loading?: boolean;
 }
@@ -63,6 +63,24 @@ export function ProfileContent({
     if (variant === 'posts') {
         const posts = data?.posts || [];
         return <PostSection posts={posts} />;
+    }
+
+    // Post detail content (para editor)
+    if (variant === 'post-detail') {
+        const post = data?.post;
+        if (!post) {
+            return (
+                <div className="p-8 text-center">
+                    <h3 className="text-lg font-medium text-zinc-300 mb-2">
+                        Sin contenido
+                    </h3>
+                    <p className="text-sm text-zinc-500">
+                        Agrega contenido al post para ver la vista previa
+                    </p>
+                </div>
+            );
+        }
+        return <PostDetailSection post={post} />;
     }
 
     // Portfolio content
