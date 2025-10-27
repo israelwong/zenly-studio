@@ -437,7 +437,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                                 onClick={() => handleRemoveTag(tag)}
                                             >
                                                 #{tag}
-                                                <X className="h-2.5 w-2.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                <X className="h-2.5 w-2.5 ml-1 opacity-100 transition-opacity" />
                                             </ZenBadge>
                                         ))}
                                     </div>
