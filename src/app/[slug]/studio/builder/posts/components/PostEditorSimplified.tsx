@@ -250,35 +250,19 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
     return (
         <div className="space-y-6">
             {/* Header con botón de regresar */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <ZenButton variant="ghost" onClick={handleBack} className="gap-2">
-                        <ArrowLeft className="h-4 w-4" />
-                        Regresar
-                    </ZenButton>
-                    <div>
-                        <h1 className="text-2xl font-bold text-zinc-100">
-                            {mode === "create" ? "Nuevo Post" : "Editar Post"}
-                        </h1>
-                        <p className="text-zinc-400">
-                            {mode === "create" ? "Crea una nueva publicación" : "Modifica tu publicación"}
-                        </p>
-                    </div>
-                </div>
-                
-                {/* Botón de Destacar */}
-                <ZenButton
-                    variant={formData.is_featured ? "default" : "outline"}
-                    onClick={() => handleInputChange("is_featured", !formData.is_featured)}
-                    className={`gap-2 transition-all ${
-                        formData.is_featured 
-                            ? "bg-yellow-500 hover:bg-yellow-600 text-black" 
-                            : "hover:bg-yellow-500/10 hover:border-yellow-500/50"
-                    }`}
-                >
-                    <Star className={`h-4 w-4 ${formData.is_featured ? "fill-current" : ""}`} />
-                    {formData.is_featured ? "Destacado" : "Destacar"}
+            <div className="flex items-center gap-4">
+                <ZenButton variant="ghost" onClick={handleBack} className="gap-2">
+                    <ArrowLeft className="h-4 w-4" />
+                    Regresar
                 </ZenButton>
+                <div>
+                    <h1 className="text-2xl font-bold text-zinc-100">
+                        {mode === "create" ? "Nuevo Post" : "Editar Post"}
+                    </h1>
+                    <p className="text-zinc-400">
+                        {mode === "create" ? "Crea una nueva publicación" : "Modifica tu publicación"}
+                    </p>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -286,9 +270,26 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                 <div className="space-y-6">
                     <ZenCard>
                         <ZenCardHeader>
-                            <ZenCardTitle>
-                                {mode === "create" ? "Crear Nuevo Post" : "Editar Post"}
-                            </ZenCardTitle>
+                            <div className="flex items-center justify-between">
+                                <ZenCardTitle>
+                                    {mode === "create" ? "Crear Nuevo Post" : "Editar Post"}
+                                </ZenCardTitle>
+                                
+                                {/* Botón de Destacar */}
+                                <ZenButton
+                                    variant={formData.is_featured ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => handleInputChange("is_featured", !formData.is_featured)}
+                                    className={`gap-2 transition-all ${
+                                        formData.is_featured 
+                                            ? "bg-yellow-500 hover:bg-yellow-600 text-black" 
+                                            : "hover:bg-yellow-500/10 hover:border-yellow-500/50"
+                                    }`}
+                                >
+                                    <Star className={`h-4 w-4 ${formData.is_featured ? "fill-current" : ""}`} />
+                                    {formData.is_featured ? "Destacado" : "Destacar"}
+                                </ZenButton>
+                            </div>
                         </ZenCardHeader>
                         <ZenCardContent className="space-y-6">
                             {/* Título */}
