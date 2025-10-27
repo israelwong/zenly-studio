@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Image from "next/image";
 import { ZenButton, ZenInput, ZenTextarea, ZenSelect, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenSwitch, ZenBadge, ZenTagModal } from "@/components/ui/zen";
 import { MobilePreviewFull } from "../../components/MobilePreviewFull";
 import { obtenerIdentidadStudio } from "@/lib/actions/studio/builder/identidad.actions";
@@ -416,10 +417,11 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                                         }`}
                                                 >
                                                     {item.file_type === 'image' ? (
-                                                        <img
+                                                        <Image
                                                             src={item.file_url}
                                                             alt={`Portada ${index + 1}`}
-                                                            className="w-full h-full object-cover"
+                                                            fill
+                                                            className="object-cover"
                                                         />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center bg-zinc-700">
