@@ -274,17 +274,16 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                 <ZenCardTitle>
                                     {mode === "create" ? "Crear Nuevo Post" : "Editar Post"}
                                 </ZenCardTitle>
-                                
+
                                 {/* Botón de Destacar */}
                                 <ZenButton
-                                    variant={formData.is_featured ? "default" : "outline"}
+                                    variant={formData.is_featured ? "primary" : "outline"}
                                     size="sm"
                                     onClick={() => handleInputChange("is_featured", !formData.is_featured)}
-                                    className={`gap-2 transition-all ${
-                                        formData.is_featured 
-                                            ? "bg-yellow-500 hover:bg-yellow-600 text-black" 
-                                            : "hover:bg-yellow-500/10 hover:border-yellow-500/50"
-                                    }`}
+                                    className={`gap-2 transition-all ${formData.is_featured
+                                        ? "bg-yellow-500 hover:bg-yellow-600 text-black"
+                                        : "hover:bg-yellow-500/10 hover:border-yellow-500/50"
+                                        }`}
                                 >
                                     <Star className={`h-4 w-4 ${formData.is_featured ? "fill-current" : ""}`} />
                                     {formData.is_featured ? "Destacado" : "Destacar"}
@@ -433,7 +432,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                             <ZenBadge
                                                 key={index}
                                                 variant="secondary"
-                                                className="cursor-pointer hover:bg-zinc-600 transition-colors group"
+                                                className="cursor-pointer hover:bg-zinc-600 transition-colors group rounded-full px-3 py-1"
                                                 onClick={() => handleRemoveTag(tag)}
                                             >
                                                 #{tag}
