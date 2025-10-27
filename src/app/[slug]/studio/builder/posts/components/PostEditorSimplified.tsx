@@ -66,11 +66,11 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
 
                 // Obtener datos del estudio
                 const identidadResult = await obtenerIdentidadStudio(studioSlug);
-                const studioData = identidadResult.success ? identidadResult.data : null;
+                const studioData = identidadResult.success ? identidadResult.data : undefined;
 
                 // Obtener posts publicados
                 const postsResult = await getStudioPostsBySlug(studioSlug, { is_published: true });
-                const publishedPosts = postsResult.success ? postsResult.data || [] : [];
+                const publishedPosts = postsResult.success && postsResult.data ? postsResult.data : [];
 
                 // Crear datos de preview
                 const preview: PreviewData = {
@@ -80,7 +80,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                     posts: publishedPosts,
                     studio: studioData,
                     redes_sociales: [],
-                    email: null,
+                    email: undefined,
                     telefonos: [],
                     direccion: studioData?.address,
                     google_maps_url: studioData?.maps_url
@@ -123,7 +123,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
 
         return {
             ...previewData,
-            posts: [tempPost, ...(previewData.posts?.filter(p => p.id !== tempCuid) || [])]
+            posts: [tempPost, ...(previewData.posts?.filter((p: unknown) => (p as any).id !== tempCuid) || [])]
         };
     }, [previewData, formData, eventTypes, tempCuid]);
 
@@ -132,7 +132,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
     };
 
     const handleMediaChange = (media: unknown[]) => {
-        setFormData(prev => ({ ...prev, media }));
+        setFormData(prev => ({ ...prev, media: media as any }));
     };
 
     const handleSave = async () => {
@@ -214,26 +214,34 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
 
                             {/* Categoría y Tipo de Evento */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                    Categoría
+                                </label>
                                 <ZenSelect
-                                    label="Categoría"
                                     value={formData.category}
-                                    onChange={(value) => handleInputChange("category", value)}
+                                    onChange={(value: string) => handleInputChange("category", value)}
                                     options={[
                                         { value: "portfolio", label: "Portfolio" },
                                         { value: "blog", label: "Blog" },
                                         { value: "promo", label: "Promoción" },
                                     ]}
                                 />
+                            </div>
 
+                            <div>
+                                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                    Tipo de Evento
+                                </label>
                                 <ZenSelect
-                                    label="Tipo de Evento"
-                                    value={formData.event_type_id}
-                                    onChange={(value) => handleInputChange("event_type_id", value)}
+                                    value={formData.event_type_id || ""}
+                                    onChange={(value: string) => handleInputChange("event_type_id", value)}
                                     options={[
                                         { value: "", label: "Sin especificar" },
                                         ...eventTypes.map(et => ({ value: et.id, label: et.name }))
                                     ]}
                                 />
+                            </div>
                             </div>
 
                             {/* CTA */}
@@ -260,16 +268,20 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                             placeholder="¡Contáctanos!"
                                         />
 
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                            Acción
+                                        </label>
                                         <ZenSelect
-                                            label="Acción"
                                             value={formData.cta_action}
-                                            onChange={(value) => handleInputChange("cta_action", value)}
+                                            onChange={(value: string) => handleInputChange("cta_action", value)}
                                             options={[
                                                 { value: "whatsapp", label: "WhatsApp" },
                                                 { value: "lead_form", label: "Formulario" },
                                                 { value: "calendar", label: "Calendario" },
                                             ]}
                                         />
+                                    </div>
 
                                         {formData.cta_action === "lead_form" && (
                                             <ZenInput
@@ -336,7 +348,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                         </div>
 
                         <MobilePreviewFull
-                            data={finalPreviewData}
+                            data={finalPreviewData as Record<string, unknown>}
                             contentVariant="posts"
                             activeTab="inicio"
                             loading={isLoadingPreview}
