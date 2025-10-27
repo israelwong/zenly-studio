@@ -467,6 +467,13 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                                     <div className="absolute top-1 left-1 bg-black/50 text-white text-xs px-1 rounded">
                                                         {index + 1}
                                                     </div>
+                                                    
+                                                    {/* Tamaño del archivo */}
+                                                    {item.storage_bytes && (
+                                                        <div className="absolute top-1 right-1 bg-black/50 text-white text-xs px-1 rounded">
+                                                            {formatBytes(item.storage_bytes)}
+                                                        </div>
+                                                    )}
                                                 </button>
                                             ))}
                                         </div>

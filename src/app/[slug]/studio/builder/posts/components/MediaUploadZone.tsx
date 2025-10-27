@@ -26,8 +26,18 @@ interface MediaItem {
     file_type: 'image' | 'video';
     filename: string;
     storage_path: string;
+    storage_bytes?: number;
     isUploading?: boolean;
 }
+
+// Función para formatear bytes a formato legible
+const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
 interface MediaUploadZoneProps {
     media: MediaItem[];
@@ -147,6 +157,13 @@ export function MediaUploadZone({ media, onMediaChange, studioSlug, postId }: Me
                     {item.isUploading && (
                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                             <Loader2 className="h-6 w-6 text-white animate-spin" />
+                        </div>
+                    )}
+
+                    {/* Tamaño del archivo */}
+                    {item.storage_bytes && (
+                        <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                            {formatBytes(item.storage_bytes)}
                         </div>
                     )}
                 </div>
