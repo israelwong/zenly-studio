@@ -308,6 +308,49 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                 rows={4}
                             />
 
+                            {/* Palabras Clave */}
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <label className="block text-sm font-medium text-zinc-300">
+                                        Palabras Clave
+                                    </label>
+                                    <ZenButton
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowTagModal(true)}
+                                        disabled={(formData.tags || []).length >= 10}
+                                    >
+                                        <Plus className="h-4 w-4 mr-1" />
+                                        Agregar
+                                    </ZenButton>
+                                </div>
+
+                                {formData.tags && formData.tags.length > 0 ? (
+                                    <div className="flex flex-wrap justify-start gap-2">
+                                        {formData.tags.map((tag, index) => (
+                                            <ZenBadge
+                                                key={index}
+                                                variant="secondary"
+                                                size="sm"
+                                                className="cursor-pointer hover:bg-zinc-600 transition-colors group rounded-full px-2 py-0.5 text-xs text-center"
+                                                onClick={() => handleRemoveTag(tag)}
+                                            >
+                                                #{tag}
+                                                <X className="h-2.5 w-2.5 ml-1 opacity-100 transition-opacity" />
+                                            </ZenBadge>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-zinc-700 italic mb-4">
+                                        No hay palabras clave agregadas. Haz clic en &quot;Agregar&quot; para añadir algunas.
+                                    </p>
+                                )}
+
+                                <p className="text-xs text-zinc-400 mt-2">
+                                    Las palabras clave ayudan a que tu post sea más fácil de encontrar
+                                </p>
+                            </div>
+
                             {/* Categoría y Tipo de Evento */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -407,49 +450,6 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                         </p>
                                     </div>
                                 )}
-                            </div>
-
-                            {/* Palabras Clave */}
-                            <div>
-                                <div className="flex items-center justify-between mb-3">
-                                    <label className="block text-sm font-medium text-zinc-300">
-                                        Palabras Clave
-                                    </label>
-                                    <ZenButton
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setShowTagModal(true)}
-                                        disabled={(formData.tags || []).length >= 10}
-                                    >
-                                        <Plus className="h-4 w-4 mr-1" />
-                                        Agregar
-                                    </ZenButton>
-                                </div>
-
-                                {formData.tags && formData.tags.length > 0 ? (
-                                    <div className="flex flex-wrap justify-start gap-2">
-                                        {formData.tags.map((tag, index) => (
-                                            <ZenBadge
-                                                key={index}
-                                                variant="secondary"
-                                                size="sm"
-                                                className="cursor-pointer hover:bg-zinc-600 transition-colors group rounded-full px-2 py-0.5 text-xs text-center"
-                                                onClick={() => handleRemoveTag(tag)}
-                                            >
-                                                #{tag}
-                                                <X className="h-2.5 w-2.5 ml-1 opacity-100 transition-opacity" />
-                                            </ZenBadge>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-zinc-500 italic">
-                                        No hay palabras clave agregadas. Haz clic en &quot;Agregar&quot; para añadir algunas.
-                                    </p>
-                                )}
-
-                                <p className="text-xs text-zinc-400 mt-2">
-                                    Las palabras clave ayudan a que tu post sea más fácil de encontrar
-                                </p>
                             </div>
 
                             {/* CTA */}
