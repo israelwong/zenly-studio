@@ -160,14 +160,25 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
             ...item,
             id: item.id || cuid()
         }));
-
-        // Actualizar cover_index si es necesario
-        const newCoverIndex = Math.min(formData.cover_index, mediaWithIds.length - 1);
-
-        setFormData(prev => ({
-            ...prev,
+        
+        // Calcular nuevo cover_index basado en la imagen actual seleccionada
+        let newCoverIndex = formData.cover_index;
+        
+        // Si se eliminó la imagen de portada actual, ajustar el índice
+        if (mediaWithIds.length === 0) {
+            newCoverIndex = 0;
+        } else if (formData.cover_index >= mediaWithIds.length) {
+            // Si el índice actual es mayor que el número de imágenes, usar la última
+            newCoverIndex = mediaWithIds.length - 1;
+        } else if (formData.cover_index < 0) {
+            // Si el índice es negativo, usar la primera imagen
+            newCoverIndex = 0;
+        }
+        
+        setFormData(prev => ({ 
+            ...prev, 
             media: mediaWithIds,
-            cover_index: newCoverIndex >= 0 ? newCoverIndex : 0
+            cover_index: newCoverIndex
         }));
     };
 
@@ -467,7 +478,7 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                                     <div className="absolute top-1 left-1 bg-black/50 text-white text-xs px-1 rounded">
                                                         {index + 1}
                                                     </div>
-                                                    
+
                                                     {/* Tamaño del archivo */}
                                                     {item.storage_bytes && (
                                                         <div className="absolute top-1 right-1 bg-black/50 text-white text-xs px-1 rounded">
