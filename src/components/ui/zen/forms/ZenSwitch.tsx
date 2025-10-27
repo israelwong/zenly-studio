@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useId } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface ZenSwitchProps {
@@ -32,7 +32,8 @@ export function ZenSwitch({
     className,
     id
 }: ZenSwitchProps) {
-    const switchId = id || `switch-${Math.random().toString(36).substr(2, 9)}`;
+    const generatedId = useId();
+    const switchId = id || `switch-${generatedId}`;
 
     return (
         <div className={cn("flex items-start space-x-3", className)}>
