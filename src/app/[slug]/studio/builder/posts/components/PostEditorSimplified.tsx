@@ -248,6 +248,22 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
         }));
     };
 
+    // Función para formatear bytes a formato legible
+    const formatBytes = (bytes: number): string => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    // Calcular tamaño total de multimedia
+    const totalMediaSize = useMemo(() => {
+        return formData.media.reduce((total, item) => {
+            return total + (item.storage_bytes || 0);
+        }, 0);
+    }, [formData.media]);
+
     return (
         <div className="space-y-6">
             {/* Header con botón de regresar */}
@@ -386,9 +402,16 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
 
                             {/* Zona de Media */}
                             <div>
-                                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                                    Multimedia
-                                </label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-zinc-300">
+                                        Multimedia
+                                    </label>
+                                    {formData.media.length > 0 && (
+                                        <div className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
+                                            {formatBytes(totalMediaSize)}
+                                        </div>
+                                    )}
+                                </div>
                                 <MediaUploadZone
                                     media={formData.media.map(item => ({
                                         ...item,
