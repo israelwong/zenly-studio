@@ -427,13 +427,13 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
                                 </div>
 
                                 {formData.tags && formData.tags.length > 0 ? (
-                                    <div className="flex flex-wrap justify-center gap-2">
+                                    <div className="flex flex-wrap justify-start gap-2">
                                         {formData.tags.map((tag, index) => (
                                             <ZenBadge
                                                 key={index}
                                                 variant="secondary"
                                                 size="sm"
-                                                className="cursor-pointer hover:bg-zinc-600 transition-colors group rounded-full px-2 py-0.5 text-xs"
+                                                className="cursor-pointer hover:bg-zinc-600 transition-colors group rounded-full px-2 py-0.5 text-xs text-center"
                                                 onClick={() => handleRemoveTag(tag)}
                                             >
                                                 #{tag}

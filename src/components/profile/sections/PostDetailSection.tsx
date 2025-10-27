@@ -115,11 +115,11 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
                         </ZenCardTitle>
                     </ZenCardHeader>
                     <ZenCardContent className="p-4 pt-0">
-                        <div className="flex flex-wrap justify-center gap-2">
+                        <div className="flex flex-wrap justify-start gap-2">
                             {post.tags.map((tag, index) => (
                                 <span
                                     key={index}
-                                    className="text-xs text-zinc-300 bg-zinc-700 px-2 py-0.5 rounded-full border border-zinc-600"
+                                    className="text-xs text-zinc-300 bg-zinc-700 px-2 py-0.5 rounded-full border border-zinc-600 text-center"
                                 >
                                     #{tag}
                                 </span>
