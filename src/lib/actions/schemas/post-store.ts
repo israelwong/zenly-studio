@@ -1,18 +1,31 @@
 import { create } from "zustand";
 
 interface MediaItem {
-    url: string;
-    type: "image" | "video";
+    id?: string;
+    file_url: string;
+    file_type: "image" | "video";
+    filename: string;
+    storage_bytes?: number;
+    mime_type?: string;
+    dimensions?: { width: number; height: number };
+    duration_seconds?: number;
+    display_order?: number;
+    alt_text?: string;
+    thumbnail_url?: string;
+    storage_path: string;
+    // Propiedades adicionales para el componente
+    url?: string; // Alias para file_url
+    type?: "image" | "video"; // Alias para file_type
     width?: number;
     height?: number;
-    thumbnail_url?: string;
-    storage_path?: string;
+    fileName?: string; // Alias para filename
+    isUploading?: boolean;
 }
 
 interface PostPreview {
     id?: string;
-    title?: string;
-    caption?: string;
+    title?: string | null;
+    caption?: string | null;
     media: MediaItem[];
     cover_index: number;
     category: string;

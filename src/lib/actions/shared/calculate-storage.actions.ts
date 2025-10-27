@@ -18,6 +18,7 @@ export interface StorageStats {
     sections: StorageBreakdown[];
     categoriesGlobalBytes: number;
     itemsGlobalBytes: number;
+    postsGlobalBytes: number;
 }
 
 /**
@@ -60,6 +61,17 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
                 },
             },
         });
+
+        // Obtener multimedia de posts
+        const postsMedia = await prisma.studio_post_media.findMany({
+            where: { studio_id: studio.id },
+            select: { storage_bytes: true },
+        });
+
+        const totalPostsBytes = postsMedia.reduce(
+            (sum: number, m: { storage_bytes: bigint }) => sum + Number(m.storage_bytes),
+            0
+        );
 
         // Agrupar por sección
         const sectionMap = new Map<string, StorageBreakdown>();
@@ -112,7 +124,7 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
         }
 
         const sections = Array.from(sectionMap.values());
-        const totalBytes = totalCategoryBytes + totalItemBytes;
+        const totalBytes = totalCategoryBytes + totalItemBytes + totalPostsBytes;
 
         // Actualizar studio_storage_usage
         await prisma.studio_storage_usage.upsert({
@@ -123,7 +135,7 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
                 category_media_bytes: BigInt(totalCategoryBytes),
                 item_media_bytes: BigInt(totalItemBytes),
                 section_media_bytes: BigInt(0),
-                portfolio_media_bytes: BigInt(0),
+                portfolio_media_bytes: BigInt(totalPostsBytes),
                 page_media_bytes: BigInt(0),
                 quota_limit_bytes: BigInt(10 * 1024 * 1024 * 1024), // 10GB default
             },
@@ -131,6 +143,7 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
                 total_storage_bytes: BigInt(totalBytes),
                 category_media_bytes: BigInt(totalCategoryBytes),
                 item_media_bytes: BigInt(totalItemBytes),
+                portfolio_media_bytes: BigInt(totalPostsBytes),
                 last_calculated_at: new Date(),
             },
         });
@@ -143,6 +156,7 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
                 sections,
                 categoriesGlobalBytes: totalCategoryBytes,
                 itemsGlobalBytes: totalItemBytes,
+                postsGlobalBytes: totalPostsBytes,
             },
         };
     } catch (error) {

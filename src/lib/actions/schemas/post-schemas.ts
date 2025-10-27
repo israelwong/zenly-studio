@@ -1,19 +1,33 @@
 import { z } from "zod";
 
-// Media Item Schema
+// Media Item Schema (coincide con studio_post_media)
 export const mediaItemSchema = z.object({
-    url: z.string().url("URL inválida"),
-    type: z.enum(["image", "video"]),
+    id: z.string().optional(),
+    file_url: z.string().url("URL inválida"),
+    file_type: z.enum(["image", "video"]),
+    filename: z.string(),
+    storage_bytes: z.number().optional(),
+    mime_type: z.string().optional(),
+    dimensions: z.object({ width: z.number(), height: z.number() }).optional(),
+    duration_seconds: z.number().optional(),
+    display_order: z.number().optional(),
+    alt_text: z.string().optional(),
+    thumbnail_url: z.string().url().optional(),
+    storage_path: z.string(),
+    // Propiedades adicionales para compatibilidad
+    url: z.string().url().optional(), // Alias para file_url
+    type: z.enum(["image", "video"]).optional(), // Alias para file_type
     width: z.number().optional(),
     height: z.number().optional(),
-    thumbnail_url: z.string().url().optional(),
-    storage_path: z.string().optional(),
+    fileName: z.string().optional(), // Alias para filename
+    isUploading: z.boolean().optional(),
 });
 
 export type MediaItem = z.infer<typeof mediaItemSchema>;
 
 // Create/Update Post Schema
 export const postFormSchema = z.object({
+    id: z.string().optional(),
     title: z.string().max(200).optional().nullable(),
     caption: z.string().max(2000).optional().nullable(),
     media: z.array(mediaItemSchema).min(1, "Agrega al menos una foto o video"),

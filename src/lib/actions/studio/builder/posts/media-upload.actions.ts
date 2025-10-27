@@ -1,15 +1,18 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import sharp from "sharp";
 
 interface UploadResult {
+    id: string;
     url: string;
     thumbnail_url?: string;
     storage_path: string;
     width?: number;
     height?: number;
     type: "image" | "video";
+    display_order: number;
 }
 
 // UPLOAD IMAGE
@@ -87,15 +90,42 @@ export async function uploadPostImage(
             .from("media")
             .getPublicUrl(thumbPath);
 
+        // Obtener el siguiente display_order
+        const lastMedia = await prisma.studio_post_media.findFirst({
+            where: { post_id: postId },
+            orderBy: { display_order: 'desc' },
+            select: { display_order: true },
+        });
+        const nextOrder = (lastMedia?.display_order || 0) + 1;
+
+        // Crear registro en BD
+        const mediaRecord = await prisma.studio_post_media.create({
+            data: {
+                post_id: postId,
+                studio_id: studioId,
+                file_url: imageUrl.publicUrl,
+                file_type: "image",
+                filename: file.name,
+                storage_bytes: BigInt(optimized.length),
+                mime_type: "image/jpeg",
+                dimensions: { width, height },
+                display_order: nextOrder,
+                thumbnail_url: thumbUrl.publicUrl,
+                storage_path: imagePath,
+            },
+        });
+
         return {
             success: true,
             data: {
+                id: mediaRecord.id,
                 url: imageUrl.publicUrl,
                 thumbnail_url: thumbUrl.publicUrl,
                 storage_path: imagePath,
                 width,
                 height,
                 type: "image",
+                display_order: nextOrder,
             },
         };
     } catch (error) {
@@ -141,15 +171,42 @@ export async function uploadPostVideo(
             .from("media")
             .getPublicUrl(videoPath);
 
+        // Obtener el siguiente display_order
+        const lastMedia = await prisma.studio_post_media.findFirst({
+            where: { post_id: postId },
+            orderBy: { display_order: 'desc' },
+            select: { display_order: true },
+        });
+        const nextOrder = (lastMedia?.display_order || 0) + 1;
+
+        // Crear registro en BD
+        const mediaRecord = await prisma.studio_post_media.create({
+            data: {
+                post_id: postId,
+                studio_id: studioId,
+                file_url: videoUrl.publicUrl,
+                file_type: "video",
+                filename: file.name,
+                storage_bytes: BigInt(file.size),
+                mime_type: file.type,
+                dimensions: { width: 1920, height: 1080 }, // TODO: Obtener dimensiones reales
+                display_order: nextOrder,
+                thumbnail_url: videoUrl.publicUrl, // TODO: Generar thumbnail
+                storage_path: videoPath,
+            },
+        });
+
         return {
             success: true,
             data: {
+                id: mediaRecord.id,
                 url: videoUrl.publicUrl,
                 thumbnail_url: videoUrl.publicUrl, // TODO: Generar thumbnail
                 storage_path: videoPath,
                 width: 1920,
                 height: 1080,
                 type: "video",
+                display_order: nextOrder,
             },
         };
     } catch (error) {
@@ -162,19 +219,55 @@ export async function uploadPostVideo(
 }
 
 // DELETE MEDIA
-export async function deletePostMedia(storagePath: string) {
+export async function deletePostMedia(mediaId: string) {
     try {
         const supabase = await createClient();
 
+        // Obtener información del media
+        const media = await prisma.studio_post_media.findUnique({
+            where: { id: mediaId },
+            select: { storage_path: true, thumbnail_url: true },
+        });
+
+        if (!media) {
+            return { success: false, error: "Media no encontrado" };
+        }
+
+        // Eliminar de Supabase Storage
         const { error } = await supabase.storage
             .from("media")
-            .remove([storagePath]);
+            .remove([media.storage_path]);
 
         if (error) throw error;
+
+        // Eliminar registro de BD
+        await prisma.studio_post_media.delete({
+            where: { id: mediaId },
+        });
 
         return { success: true };
     } catch (error) {
         console.error("Error deleting media:", error);
         return { success: false, error: "Error al eliminar archivo" };
+    }
+}
+
+// REORDER MEDIA
+export async function reorderPostMedia(mediaIds: string[]) {
+    try {
+        // Actualizar display_order para cada media
+        await Promise.all(
+            mediaIds.map((mediaId, index) =>
+                prisma.studio_post_media.update({
+                    where: { id: mediaId },
+                    data: { display_order: index + 1 },
+                })
+            )
+        );
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error reordering media:", error);
+        return { success: false, error: "Error al reordenar archivos" };
     }
 }

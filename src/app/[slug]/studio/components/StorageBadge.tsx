@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { HardDrive, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
-import { calcularStorageCompleto, type StorageStats } from "@/lib/actions/studio/builder/catalogo/calculate-storage.actions";
+import { calcularStorageCompleto, type StorageStats } from "@/lib/actions/shared/calculate-storage.actions";
 import { useStorageRefreshListener } from "@/hooks/useStorageRefresh";
 
 interface StorageBadgeProps {
@@ -24,7 +24,7 @@ export function StorageBadge({
     const [isLoading, setIsLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    
+
     // Suscribirse a cambios de storage
     const refreshTrigger = useStorageRefreshListener(studioSlug);
 
@@ -164,18 +164,24 @@ export function StorageBadge({
 
                         {/* Breakdown */}
                         <div className="space-y-2 text-xs">
-                            {storageStats.breakdown?.map((item, index) => (
-                                <div key={index} className="flex justify-between items-center">
-                                    <span className="text-zinc-400">{item.name}</span>
-                                    <span className="text-zinc-300 font-medium">
-                                        {formatBytes(item.bytes)}
-                                    </span>
-                                </div>
-                            )) || (
-                                    <div className="text-zinc-500 text-center py-2">
-                                        No hay datos de breakdown disponibles
-                                    </div>
-                                )}
+                            <div className="flex justify-between items-center">
+                                <span className="text-zinc-400">Categorías</span>
+                                <span className="text-zinc-300 font-medium">
+                                    {formatBytes(storageStats.categoriesGlobalBytes)}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-zinc-400">Items</span>
+                                <span className="text-zinc-300 font-medium">
+                                    {formatBytes(storageStats.itemsGlobalBytes)}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-zinc-400">Posts</span>
+                                <span className="text-zinc-300 font-medium">
+                                    {formatBytes(storageStats.postsGlobalBytes)}
+                                </span>
+                            </div>
                         </div>
 
                         {/* Advertencia si está cerca del límite */}

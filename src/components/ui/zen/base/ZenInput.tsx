@@ -5,17 +5,10 @@ import { cn } from '@/lib/utils';
 import { ZEN_COLORS } from '../tokens/colors';
 import { ZEN_SPACING } from '../tokens/spacing';
 
-// Contador global para IDs estables
-let idCounter = 0;
-
 // Hook para generar IDs estables en SSR
 function useStableId(prefix: string = 'zen-input'): string {
-  const [id] = React.useState(() => {
-    // Incrementar contador para IDs únicos y estables
-    idCounter += 1;
-    return `${prefix}-${idCounter}`;
-  });
-  return id;
+  const reactId = React.useId();
+  return `${prefix}-${reactId.replace(/:/g, '')}`;
 }
 
 // =============================================================================

@@ -1,46 +1,44 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PostCard } from "./PostCard";
 import { EmptyState } from "./EmptyState";
-import { getStudioPosts } from "@/lib/actions/studio/builder/posts";
+import { getStudioPostsBySlug } from "@/lib/actions/studio/builder/posts";
 import { ZenSelect } from "@/components/ui/zen";
 import { Loader2 } from "lucide-react";
+import { StudioPost } from "@/types/studio-posts";
 
 interface PostsListProps {
     studioSlug: string;
 }
 
 export function PostsList({ studioSlug }: PostsListProps) {
-    const [posts, setPosts] = useState<any[]>([]);
+    const [posts, setPosts] = useState<StudioPost[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<string>("all");
 
-    useEffect(() => {
-        loadPosts();
-    }, [filter]);
-
-    const loadPosts = async () => {
+    const loadPosts = useCallback(async () => {
         setLoading(true);
         try {
-            // TODO: Obtener studioId desde el slug
-            const studioId = "temp-studio-id"; // Reemplazar con lógica real
-
             const filters = filter === "all" ? undefined : {
                 is_published: filter === "published",
-                category: filter !== "all" && filter !== "published" ? filter as any : undefined,
+                category: filter !== "all" && filter !== "published" ? filter as "portfolio" | "blog" | "promo" : undefined,
             };
 
-            const result = await getStudioPosts(studioId, filters);
+            const result = await getStudioPostsBySlug(studioSlug, filters);
             if (result.success) {
-                setPosts(result.data || []);
+                setPosts(result.data);
             }
         } catch (error) {
             console.error("Error loading posts:", error);
         } finally {
             setLoading(false);
         }
-    };
+    }, [filter, studioSlug]);
+
+    useEffect(() => {
+        loadPosts();
+    }, [loadPosts]);
 
     const filterOptions = [
         { value: "all", label: "Todos" },

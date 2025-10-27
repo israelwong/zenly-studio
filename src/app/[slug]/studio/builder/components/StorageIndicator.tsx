@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { ZenCard } from "@/components/ui/zen";
 import { AlertCircle, HardDrive } from "lucide-react";
-import { calcularStorageCompleto, type StorageStats } from "@/lib/actions/studio/builder/catalogo/calculate-storage.actions";
+import { calcularStorageCompleto, type StorageStats } from "@/lib/actions/shared/calculate-storage.actions";
 import { useStorageRefreshListener } from "@/hooks/useStorageRefresh";
 
 interface StorageIndicatorProps {
@@ -169,9 +169,13 @@ export function StorageIndicator({
                                 <span>Total Categorías:</span>
                                 <span>{formatBytes(storageStats.categoriesGlobalBytes)}</span>
                             </div>
-                            <div className="flex justify-between text-xs text-zinc-300">
+                            <div className="flex justify-between text-xs text-zinc-300 mb-1">
                                 <span>Total Items:</span>
                                 <span>{formatBytes(storageStats.itemsGlobalBytes)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-zinc-300">
+                                <span>Total Posts:</span>
+                                <span>{formatBytes(storageStats.postsGlobalBytes)}</span>
                             </div>
                         </div>
                     </div>

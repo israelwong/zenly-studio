@@ -767,6 +767,7 @@ model studios {
   zonas_trabajo              studio_zonas_trabajo[]
   faq                        studio_faq[]
   posts                      studio_posts[]
+  post_media                 studio_post_media[]               @relation("post_media")
   plan                       platform_plans?                  @relation(fields: [plan_id], references: [id])
   subscriptions              subscriptions[]
   usage_tracking             usage_tracking[]
@@ -2574,7 +2575,6 @@ model studio_posts {
   // Contenido
   title           String?
   caption         String?
-  media           Json     // [{ url, type, width, height, thumbnail_url, storage_path }]
   cover_index     Int      @default(0)
 
   // Clasificación
@@ -2603,9 +2603,37 @@ model studio_posts {
   // Relations
   studio          studios              @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   event_type      studio_event_types?  @relation(fields: [event_type_id], references: [id])
+  media           studio_post_media[]  @relation("post_media")
 
   @@index([studio_id, is_published, published_at])
   @@index([studio_id, is_featured])
   @@index([category])
   @@index([event_type_id])
+}
+
+model studio_post_media {
+  id               String      @id @default(cuid())
+  post_id          String
+  studio_id        String
+  file_url         String
+  file_type        String      // "image" | "video"
+  filename         String
+  storage_bytes    BigInt
+  mime_type        String
+  dimensions       Json?       // { width, height }
+  duration_seconds Int?        // Para videos
+  display_order    Int         @default(0)  // Para ordenamiento drag & drop
+  alt_text         String?
+  thumbnail_url    String?     // Para videos
+  storage_path     String      // Para eliminación
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+  
+  post             studio_posts @relation("post_media", fields: [post_id], references: [id], onDelete: Cascade)
+  studio           studios      @relation("post_media", fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id])
+  @@index([studio_id])
+  @@index([display_order])
+  @@index([storage_bytes])
 }

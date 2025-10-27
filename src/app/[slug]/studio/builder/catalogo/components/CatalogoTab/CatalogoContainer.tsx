@@ -25,7 +25,7 @@ import {
   obtenerItemsConStats,
 } from "@/lib/actions/studio/builder/catalogo";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/builder/catalogo/utilidad.actions";
-import { calcularStorageCompleto, type StorageStats } from "@/lib/actions/studio/builder/catalogo/calculate-storage.actions";
+import { calcularStorageCompleto, type StorageStats } from "@/lib/actions/shared/calculate-storage.actions";
 
 type NavigationLevel = 1 | 2 | 3 | 4;
 

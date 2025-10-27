@@ -18,9 +18,11 @@ import {
     toggleStudioPostPublish
 } from "@/lib/actions/studio/builder/posts";
 import { toast } from "sonner";
+import { MediaItem } from "@/lib/actions/schemas/post-schemas";
+import { StudioPost } from "@/types/studio-posts";
 
 interface PostCardProps {
-    post: any;
+    post: StudioPost;
     studioSlug: string;
     onUpdate: () => void;
 }
@@ -141,7 +143,7 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
                 {/* Meta Info */}
                 <div className="flex items-center justify-between text-xs text-zinc-500">
                     <span className="capitalize">{post.category}</span>
-                    <span>{new Date(post.created_at).toLocaleDateString()}</span>
+                    <span>{post.created_at.toLocaleDateString()}</span>
                 </div>
 
                 {/* Actions */}

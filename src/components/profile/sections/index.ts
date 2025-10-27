@@ -15,6 +15,7 @@
 // Secciones principales
 export { MainSection } from './MainSection';
 export { PortfolioSection } from './PortfolioSection';
+export { PostSection } from './PostSection';
 export { PaquetesSection } from './PaquetesSection';
 export { CatalogSection } from './CatalogSection';
 export { ContactSection } from './ContactSection';

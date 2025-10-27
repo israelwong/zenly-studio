@@ -9,7 +9,7 @@ import Video from "yet-another-react-lightbox/plugins/video";
 import "yet-another-react-lightbox/styles.css";
 import { toast } from "sonner";
 import { Trash2, Upload, Loader2, GripVertical, Play, Save, Eye, Send } from "lucide-react";
-import { usePostStore } from "@/lib/stores/postStore";
+import { usePostStore } from "@/lib/actions/schemas/post-store";
 import {
   DndContext,
   closestCenter,
@@ -29,16 +29,22 @@ import { createStudioPost, updateStudioPost } from "@/lib/actions/studio/builder
 import { PostFormData, MediaItem } from "@/lib/actions/schemas/post-schemas";
 import { useRouter } from "next/navigation";
 
+// Tipo local para el componente (incluye propiedades adicionales)
+interface LocalMediaItem extends MediaItem {
+  fileName?: string;
+  isUploading?: boolean;
+}
+
 interface PostEditorProps {
   studioSlug: string;
   eventTypes: Array<{ id: string; name: string }>;
   mode: "create" | "edit";
-  post?: any;
+  post?: PostFormData;
 }
 
 export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorProps) {
   const router = useRouter();
-  
+
   // ============================================
   // ESTADOS DEL FORMULARIO
   // ============================================
@@ -61,12 +67,12 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
   // ============================================
   // ESTADOS DE MULTIMEDIA
   // ============================================
-  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [media, setMedia] = useState<LocalMediaItem[]>([]);
   const [isDraggingMedia, setIsDraggingMedia] = useState(false);
 
   // Lightbox states
   const [isMediaLightboxOpen, setIsMediaLightboxOpen] = useState(false);
-  const [lightboxSlides, setLightboxSlides] = useState<any[]>([]);
+  const [lightboxSlides, setLightboxSlides] = useState<Array<{ src: string; alt?: string } | { type: "video"; width: number; height: number; poster: string; sources: { src: string; type: string }[] }>>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // File input refs
@@ -119,8 +125,8 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
       // Actualizar preview
       setPreview({
         id: post.id,
-        title: post.title,
-        caption: post.caption,
+        title: post.title || undefined,
+        caption: post.caption || undefined,
         media: post.media || [],
         cover_index: post.cover_index || 0,
         category: post.category || "portfolio",
@@ -173,7 +179,7 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
   // ============================================
   // HANDLERS - FORM
   // ============================================
-  const handleInputChange = (field: keyof PostFormData, value: any) => {
+  const handleInputChange = (field: keyof PostFormData, value: string | boolean | number | string[] | undefined) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -195,18 +201,19 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
     }
 
     setIsUploading(true);
-    const uploadedItems: MediaItem[] = [];
+    const uploadedItems: LocalMediaItem[] = [];
 
     try {
       for (const file of validFiles) {
-        const tempId = `temp-${Date.now()}-${Math.random()}`;
         const tempUrl = URL.createObjectURL(file);
         const isVideo = file.type.startsWith("video/");
 
         // Agregar item temporal con loading state
-        const tempItem: MediaItem = {
-          url: tempUrl,
-          type: isVideo ? 'video' : 'image',
+        const tempItem: LocalMediaItem = {
+          file_url: tempUrl,
+          file_type: isVideo ? 'video' : 'image',
+          filename: file.name,
+          storage_path: '', // Se llenará después del upload
           fileName: file.name,
           isUploading: true,
         };
@@ -220,21 +227,21 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         // Actualizar con datos reales del servidor
-        const uploadedItem: MediaItem = {
-          url: tempUrl, // Reemplazar con URL real de Supabase
-          type: isVideo ? 'video' : 'image',
-          fileName: file.name,
-          thumbnail_url: tempUrl,
+        const uploadedItem: LocalMediaItem = {
+          file_url: tempUrl, // Reemplazar con URL real de Supabase
+          file_type: isVideo ? 'video' : 'image',
+          filename: file.name,
           storage_path: `studios/${studioSlug}/posts/temp/${file.name}`,
-          width: isVideo ? 1920 : undefined,
-          height: isVideo ? 1080 : undefined,
+          thumbnail_url: tempUrl,
+          fileName: file.name,
+          isUploading: false,
         };
 
         uploadedItems.push(uploadedItem);
 
         // Actualizar el item temporal con datos reales
         setMedia((prev) =>
-          prev.map((item) => (item.fileName === file.name ? uploadedItem : item))
+          prev.map((item) => (item.filename === file.name ? uploadedItem : item))
         );
       }
 
@@ -279,8 +286,8 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
 
     if (over && active.id !== over.id) {
       setMedia((items) => {
-        const oldIndex = items.findIndex((item) => item.fileName === active.id);
-        const newIndex = items.findIndex((item) => item.fileName === over.id);
+        const oldIndex = items.findIndex((item) => item.filename === active.id);
+        const newIndex = items.findIndex((item) => item.filename === over.id);
         return arrayMove(items, oldIndex, newIndex);
       });
 
@@ -324,15 +331,15 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
   // ============================================
   const openLightbox = (index: number) => {
     const slides = media.map((item) => {
-      if (item.type === 'image') {
-        return { src: item.url, alt: item.fileName };
+      if (item.file_type === 'image') {
+        return { src: item.file_url, alt: item.filename };
       } else {
         return {
-          type: 'video',
-          width: item.width || 1920,
-          height: item.height || 1080,
-          poster: item.thumbnail_url || item.url,
-          sources: [{ src: item.url, type: 'video/mp4' }],
+          type: 'video' as const,
+          width: item.dimensions?.width || 1920,
+          height: item.dimensions?.height || 1080,
+          poster: item.thumbnail_url || item.file_url,
+          sources: [{ src: item.file_url, type: 'video/mp4' }],
         };
       }
     });
@@ -374,7 +381,7 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
       if (mode === "create") {
         result = await createStudioPost(studioId, dataToSave);
       } else {
-        result = await updateStudioPost(post.id, dataToSave);
+        result = await updateStudioPost(post?.id || "", dataToSave);
       }
 
       if (result.success) {
@@ -448,6 +455,7 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
                     Descripción
                   </label>
                   <ZenTextarea
+                    label="Descripción"
                     value={formData.caption || ""}
                     onChange={(e) => handleInputChange("caption", e.target.value)}
                     placeholder="Describe tu trabajo..."
@@ -659,7 +667,7 @@ export function PostEditor({ studioSlug, eventTypes, mode, post }: PostEditorPro
 // COMPONENTE: MediaGrid
 // ============================================
 interface MediaGridProps {
-  items: MediaItem[];
+  items: LocalMediaItem[];
   onDelete: (fileName: string) => void;
   isDragging: boolean;
   onUploadClick: () => void;
@@ -670,7 +678,7 @@ interface MediaGridProps {
   onItemClick: (index: number) => void;
   coverIndex: number;
   onSetCover: (index: number) => void;
-  sensors: any;
+  sensors: ReturnType<typeof useSensors>;
 }
 
 function MediaGrid({
@@ -689,11 +697,10 @@ function MediaGrid({
 }: MediaGridProps) {
   return (
     <div
-      className={`relative border-2 border-dashed rounded-lg p-4 transition-colors ${
-        isDragging
-          ? "border-emerald-500 bg-emerald-500/5"
-          : "border-zinc-700 hover:border-zinc-600"
-      }`}
+      className={`relative border-2 border-dashed rounded-lg p-4 transition-colors ${isDragging
+        ? "border-emerald-500 bg-emerald-500/5"
+        : "border-zinc-700 hover:border-zinc-600"
+        }`}
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -716,17 +723,17 @@ function MediaGrid({
           onDragEnd={onReorder}
         >
           <SortableContext
-            items={items.map((item) => item.fileName)}
+            items={items.map((item, index) => item.filename || item.id || `item-${index}`)}
             strategy={verticalListSortingStrategy}
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {items.map((item, index) => (
                 <SortableMediaItem
-                  key={item.fileName}
+                  key={item.filename || item.id}
                   item={item}
                   index={index}
                   isCover={index === coverIndex}
-                  onDelete={() => onDelete(item.fileName)}
+                  onDelete={() => onDelete(item.filename || item.id || `item-${index}`)}
                   onClick={() => onItemClick(index)}
                   onSetCover={() => onSetCover(index)}
                 />
@@ -769,7 +776,7 @@ function SortableMediaItem({
   onSetCover,
 }: SortableMediaItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.fileName,
+    id: (item.filename || item.id || `item-${Date.now()}`) as string,
   });
 
   const style = {
@@ -782,16 +789,15 @@ function SortableMediaItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative aspect-square rounded-lg overflow-hidden group ${
-        isCover ? 'ring-2 ring-emerald-500' : ''
-      }`}
+      className={`relative aspect-square rounded-lg overflow-hidden group ${isCover ? 'ring-2 ring-emerald-500' : ''
+        }`}
     >
       {/* Image/Video Preview */}
       <div className="w-full h-full cursor-pointer" onClick={onClick}>
-        {item.type === 'image' ? (
+        {item.file_type === 'image' ? (
           <Image
-            src={item.thumbnail_url || item.url}
-            alt={item.fileName}
+            src={(item.thumbnail_url || item.file_url || '/placeholder.jpg') as string}
+            alt={(item.filename || 'Media item') as string}
             fill
             className="object-cover"
           />

@@ -94,6 +94,20 @@ function InicioPreview({ data, loading = false }: { data?: Record<string, unknow
     );
 }
 
+// Componente PostsPreview integrado
+function PostsPreview({ data, loading = false }: { data?: Record<string, unknown>; loading?: boolean }) {
+    return (
+        <MobilePreviewContainer
+            data={data}
+            loading={loading}
+            showNavbar={true}
+            showContent={true}
+            activeTab="inicio"
+            contentVariant="posts"
+        />
+    );
+}
+
 export function SectionPreview({ section, studioSlug, data, loading = false }: SectionPreviewProps) {
     // studioSlug is available for future use if needed
     console.log('SectionPreview for studio:', studioSlug);
@@ -103,6 +117,8 @@ export function SectionPreview({ section, studioSlug, data, loading = false }: S
             return <IdentidadPreview data={data} loading={loading} />;
         case 'inicio':
             return <InicioPreview data={data} loading={loading} />;
+        case 'posts':
+            return <PostsPreview data={data} loading={loading} />;
         case 'contacto':
             return <ContactoPreview data={data} loading={loading} />;
         case 'portafolio':

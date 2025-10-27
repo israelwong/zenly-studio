@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 export interface ZenSelectOption {
     value: string;
-    label: string;
+    label?: string;
 }
 
 export interface ZenSelectProps {
@@ -32,7 +32,7 @@ export function ZenSelect({
     const [searchTerm, setSearchTerm] = React.useState('');
 
     const filteredOptions = [...options].filter(option =>
-        option.label.toLowerCase().includes(searchTerm.toLowerCase())
+        option.label?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const selectedOption = options.find(option => option.value === value);
@@ -56,7 +56,7 @@ export function ZenSelect({
                 )}
             >
                 <span className={selectedOption ? "text-white" : "text-zinc-400"}>
-                    {selectedOption ? selectedOption.label : placeholder}
+                    {selectedOption ? (selectedOption.label || selectedOption.value) : placeholder}
                 </span>
                 <ChevronDown className={cn(
                     "h-4 w-4 text-zinc-400 transition-transform",
@@ -87,7 +87,7 @@ export function ZenSelect({
                                         value === option.value && "bg-blue-600/20 text-blue-400"
                                     )}
                                 >
-                                    {option.label}
+                                    {option.label || option.value}
                                 </button>
                             ))
                         ) : (

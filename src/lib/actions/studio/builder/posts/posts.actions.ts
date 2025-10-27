@@ -7,6 +7,12 @@ import {
     type PostFormData,
     type PostFilters,
 } from "@/lib/actions/schemas/post-schemas";
+import { StudioPost } from "@/types/studio-posts";
+
+// Tipo específico para el resultado de posts
+type PostsResult =
+    | { success: true; data: StudioPost[] }
+    | { success: false; error: string };
 
 // CREATE
 export async function createStudioPost(studioId: string, data: PostFormData) {
@@ -53,7 +59,7 @@ export async function createStudioPost(studioId: string, data: PostFormData) {
 }
 
 // READ
-export async function getStudioPosts(studioId: string, filters?: PostFilters) {
+export async function getStudioPosts(studioId: string, filters?: PostFilters): Promise<PostsResult> {
     try {
         const posts = await prisma.studio_posts.findMany({
             where: {
@@ -71,6 +77,27 @@ export async function getStudioPosts(studioId: string, filters?: PostFilters) {
         return { success: true, data: posts };
     } catch (error) {
         console.error("Error fetching posts:", error);
+        return { success: false, error: "Error al obtener posts" };
+    }
+}
+
+// READ by slug - Helper para builder
+export async function getStudioPostsBySlug(studioSlug: string, filters?: PostFilters): Promise<PostsResult> {
+    try {
+        // Obtener studioId desde slug
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
+        });
+
+        if (!studio) {
+            return { success: false, error: "Studio no encontrado" };
+        }
+
+        const result = await getStudioPosts(studio.id, filters);
+        return result;
+    } catch (error) {
+        console.error("Error fetching posts by slug:", error);
         return { success: false, error: "Error al obtener posts" };
     }
 }

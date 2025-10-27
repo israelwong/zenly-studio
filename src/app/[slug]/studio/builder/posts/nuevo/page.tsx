@@ -1,16 +1,20 @@
-import { PostEditor } from "../components/PostEditor";
-import { getStudioEventTypes } from "@/lib/actions/studio/builder/eventos/eventos.actions";
+import { PostEditorSimplified } from "../components/PostEditorSimplified";
+import { obtenerTiposEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 
 interface NuevoPostPageProps {
-    params: {
+    params: Promise<{
         slug: string;
-    };
+    }>;
 }
 
 export default async function NuevoPostPage({ params }: NuevoPostPageProps) {
+    const { slug } = await params;
+
     // Obtener tipos de evento para el select
-    const eventTypesResult = await getStudioEventTypes(params.slug);
-    const eventTypes = eventTypesResult.success ? eventTypesResult.data : [];
+    const eventTypesResult = await obtenerTiposEvento(slug);
+    const eventTypes = eventTypesResult.success
+        ? (eventTypesResult.data || []).map(et => ({ id: et.id, name: et.nombre }))
+        : [];
 
     return (
         <div className="space-y-6">
@@ -23,8 +27,8 @@ export default async function NuevoPostPage({ params }: NuevoPostPageProps) {
             </div>
 
             {/* Editor */}
-            <PostEditor
-                studioSlug={params.slug}
+            <PostEditorSimplified
+                studioSlug={slug}
                 eventTypes={eventTypes}
                 mode="create"
             />

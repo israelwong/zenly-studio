@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { MainSection, PortfolioSection, CatalogSection, ContactSection, PaquetesSection } from './sections';
+import { MainSection, PortfolioSection, PostSection, CatalogSection, ContactSection, PaquetesSection } from './sections';
 import { PublicPortfolio, PublicCatalogItem, PublicStudioProfile, PublicContactInfo, PublicSocialNetwork, PublicPaquete } from '@/types/public-profile';
 
 interface ProfileContentProps {
@@ -59,10 +59,10 @@ export function ProfileContent({
         );
     }
 
-    // Posts/Main content
+    // Posts content
     if (variant === 'posts') {
-        const portfolios = data?.portfolios as PublicPortfolio[] || [];
-        return <MainSection portfolios={portfolios} />;
+        const posts = data?.posts || [];
+        return <PostSection posts={posts} />;
     }
 
     // Portfolio content

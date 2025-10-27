@@ -10,6 +10,7 @@ import { ActiveLink } from '../../components/ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
 import {
     Star, Phone, Zap, Camera, X, Home, CreditCard, File, User, Grid3X3, Store, Package, Calendar,
+    Newspaper,
 } from 'lucide-react';
 
 interface StudioBuilderSidebarProps {
@@ -45,6 +46,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             items: [
                 { id: 'inicio', name: 'Inicio*', href: `/inicio`, icon: Home },
                 { id: 'portafolio', name: 'Portafolio*', href: `/portafolio`, icon: Grid3X3 },
+                { id: 'posts', name: 'Publicaciones', href: `/posts`, icon: Newspaper },
                 { id: 'catalogo', name: 'Catálogo', href: `/catalogo`, icon: Store },
                 { id: 'paquetes', name: 'Paquetes', href: `/paquetes`, icon: Package },
                 { id: 'contacto', name: 'Contacto', href: `/contacto`, icon: Phone },
