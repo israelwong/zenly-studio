@@ -160,10 +160,10 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
             ...item,
             id: item.id || cuid()
         }));
-        
+
         // Calcular nuevo cover_index basado en la imagen actual seleccionada
         let newCoverIndex = formData.cover_index;
-        
+
         // Si se eliminó la imagen de portada actual, ajustar el índice
         if (mediaWithIds.length === 0) {
             newCoverIndex = 0;
@@ -174,9 +174,9 @@ export function PostEditorSimplified({ studioSlug, eventTypes, mode, post }: Pos
             // Si el índice es negativo, usar la primera imagen
             newCoverIndex = 0;
         }
-        
-        setFormData(prev => ({ 
-            ...prev, 
+
+        setFormData(prev => ({
+            ...prev,
             media: mediaWithIds,
             cover_index: newCoverIndex
         }));
