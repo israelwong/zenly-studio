@@ -44,9 +44,9 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             title: 'Navegación Pública',
             icon: Camera,
             items: [
-                { id: 'inicio', name: 'Inicio*', href: `/inicio`, icon: Home },
-                { id: 'portafolio', name: 'Portafolio*', href: `/portafolio`, icon: Grid3X3 },
-                { id: 'posts', name: 'Publicaciones', href: `/posts`, icon: Newspaper },
+                // { id: 'inicio', name: 'Inicio*', href: `/inicio`, icon: Home },
+                // { id: 'portafolio', name: 'Portafolio*', href: `/portafolio`, icon: Grid3X3 },
+                { id: 'posts', name: 'Feed', href: `/posts`, icon: Newspaper },
                 { id: 'catalogo', name: 'Catálogo', href: `/catalogo`, icon: Store },
                 { id: 'paquetes', name: 'Paquetes', href: `/paquetes`, icon: Package },
                 { id: 'contacto', name: 'Contacto', href: `/contacto`, icon: Phone },

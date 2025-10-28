@@ -1,4 +1,4 @@
-import { PostEditorSimplified } from "../components/PostEditorSimplified";
+import { PostEditor } from "../components/PostEditor";
 import { obtenerTiposEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 
 interface NuevoPostPageProps {
@@ -17,7 +17,7 @@ export default async function NuevoPostPage({ params }: NuevoPostPageProps) {
         : [];
 
     return (
-        <PostEditorSimplified
+        <PostEditor
             studioSlug={slug}
             eventTypes={eventTypes}
             mode="create"

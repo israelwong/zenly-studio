@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useState, useRef } from "react";
+import React, { useState, useRef } from "react";
+import Image from "next/image";
 import { Upload, Video, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
@@ -157,10 +158,11 @@ export function MediaUploadZone({ media, onMediaChange, studioSlug, postId }: Me
                 >
                     <div className="aspect-square bg-zinc-800 rounded-lg overflow-hidden cursor-grab">
                         {item.file_type === 'image' ? (
-                            <img
+                            <Image
                                 src={item.file_url}
                                 alt={item.filename}
-                                className="w-full h-full object-cover"
+                                fill
+                                className="object-cover"
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center bg-zinc-700">

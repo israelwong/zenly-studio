@@ -1,6 +1,8 @@
 import React from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { Image, Video, Eye, Calendar, Tag, Star } from 'lucide-react';
+import { ContentBlocksPreview } from '@/components/content-blocks';
+import { ContentBlock } from '@/types/content-blocks';
 
 interface PostMedia {
     id: string;
@@ -31,6 +33,7 @@ interface PostDetail {
     cta_text: string | null;
     cta_action: string | null;
     cta_link: string | null;
+    content_blocks?: ContentBlock[]; // Agregar soporte para bloques de contenido
 }
 
 interface PostDetailSectionProps {
@@ -51,7 +54,7 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
                 <h1 className="text-2xl font-bold text-white">
                     {post.title || 'Sin título'}
                 </h1>
-                
+
                 <div className="flex items-center justify-center gap-2 flex-wrap">
                     {post.is_featured && (
                         <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-full flex items-center gap-1">
@@ -103,6 +106,11 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
                         </p>
                     </ZenCardContent>
                 </ZenCard>
+            )}
+
+            {/* Bloques de Contenido */}
+            {post.content_blocks && post.content_blocks.length > 0 && (
+                <ContentBlocksPreview blocks={post.content_blocks} />
             )}
 
             {/* Tags/Palabras Clave */}

@@ -1,4 +1,4 @@
-import { PostEditorSimplified } from "../../components/PostEditorSimplified";
+import { PostEditor } from "../../components/PostEditor";
 import { obtenerTiposEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 import { getStudioPostById } from "@/lib/actions/studio/builder/posts";
 import { notFound } from "next/navigation";
@@ -50,7 +50,7 @@ export default async function EditarPostPage({ params }: EditarPostPageProps) {
         : [];
 
     return (
-        <PostEditorSimplified
+        <PostEditor
             studioSlug={slug}
             eventTypes={eventTypes}
             mode="edit"
