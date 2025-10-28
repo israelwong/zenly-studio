@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Play } from 'lucide-react';
 import { MediaBlockConfig } from '@/types/content-blocks';
 import { formatBytes } from '@/lib/utils/storage';
 

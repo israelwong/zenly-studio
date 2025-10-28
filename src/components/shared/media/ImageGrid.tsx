@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { Trash2 } from 'lucide-react';
 import { MediaItem, MediaBlockConfig } from '@/types/content-blocks';
 import { formatBytes } from '@/lib/utils/storage';
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 interface ImageGridProps {
     media: MediaItem[];
@@ -174,54 +176,19 @@ export function ImageGrid({
             </div>
 
             {/* Lightbox */}
-            {configLightbox && lightboxOpen && (
-                <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
-                    <div className="relative max-w-4xl max-h-[90vh] mx-4">
-                        <button
-                            onClick={() => setLightboxOpen(false)}
-                            className="absolute -top-12 right-0 text-white hover:text-zinc-300"
-                        >
-                            <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-
-                        <Image
-                            src={media[lightboxIndex]?.file_url || ''}
-                            alt={media[lightboxIndex]?.filename || ''}
-                            width={800}
-                            height={600}
-                            className="rounded-lg"
-                        />
-
-                        {/* Navigation */}
-                        {media.length > 1 && (
-                            <>
-                                {lightboxIndex > 0 && (
-                                    <button
-                                        onClick={() => setLightboxIndex(lightboxIndex - 1)}
-                                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-zinc-300"
-                                    >
-                                        <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                        </svg>
-                                    </button>
-                                )}
-
-                                {lightboxIndex < media.length - 1 && (
-                                    <button
-                                        onClick={() => setLightboxIndex(lightboxIndex + 1)}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-zinc-300"
-                                    >
-                                        <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </button>
-                                )}
-                            </>
-                        )}
-                    </div>
-                </div>
+            {configLightbox && (
+                <Lightbox
+                    open={lightboxOpen}
+                    close={() => setLightboxOpen(false)}
+                    slides={media.map(item => ({
+                        src: item.file_url,
+                        alt: item.filename
+                    }))}
+                    index={lightboxIndex}
+                    on={{
+                        view: ({ index }) => setLightboxIndex(index),
+                    }}
+                />
             )}
         </div>
     );

@@ -204,14 +204,14 @@ export function ImageSingle({
                                 onError={handleImageError}
                             />
                         ) : (
-                            <Image
-                                src={media.file_url}
-                                alt={media.filename}
-                                fill
-                                className="object-cover"
-                                sizes="(max-width: 768px) 100vw, 80vw"
-                                onError={handleImageError}
-                            />
+                        <Image
+                            src={media.file_url}
+                            alt={media.filename}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, 80vw"
+                            onError={handleImageError}
+                        />
                         )}
 
                         {/* Storage Size Label */}
