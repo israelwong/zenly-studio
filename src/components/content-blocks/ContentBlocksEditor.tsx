@@ -111,6 +111,7 @@ export function ContentBlocksEditor({
 }: ContentBlocksEditorProps) {
     const [activeBlock, setActiveBlock] = useState<ContentBlock | null>(null);
     const [showComponentSelector, setShowComponentSelector] = useState(false);
+    const [uploadingBlocks, setUploadingBlocks] = useState<Set<string>>(new Set());
     const { uploadFiles } = useMediaUpload();
 
     // Configuración de sensores
@@ -221,6 +222,19 @@ export function ContentBlocksEditor({
 
     const storageInfo = getStorageInfo(totalStorage);
 
+    // Funciones para manejar estado de carga
+    const setBlockUploading = useCallback((blockId: string, isUploading: boolean) => {
+        setUploadingBlocks(prev => {
+            const newSet = new Set(prev);
+            if (isUploading) {
+                newSet.add(blockId);
+            } else {
+                newSet.delete(blockId);
+            }
+            return newSet;
+        });
+    }, []);
+
     return (
         <div className={`space-y-4 ${className}`}>
             {/* Header */}
@@ -319,6 +333,8 @@ export function ContentBlocksEditor({
                                     onDelete={handleDeleteBlock}
                                     onMediaUpload={uploadFiles}
                                     studioSlug={studioSlug}
+                                    isUploading={uploadingBlocks.has(block.id)}
+                                    setUploading={setBlockUploading}
                                 />
                             ))}
                         </div>
@@ -346,13 +362,17 @@ function SortableBlock({
     onUpdate,
     onDelete,
     onMediaUpload,
-    studioSlug
+    studioSlug,
+    isUploading,
+    setUploading
 }: {
     block: ContentBlock;
     onUpdate: (blockId: string, updates: Partial<ContentBlock>) => void;
     onDelete: (blockId: string) => void;
     onMediaUpload: (files: File[], studioSlug: string, category: string, subcategory?: string) => Promise<UploadedFile[]>;
     studioSlug: string;
+    isUploading: boolean;
+    setUploading: (blockId: string, isUploading: boolean) => void;
 }) {
     const {
         attributes,
@@ -373,6 +393,9 @@ function SortableBlock({
         const files = Array.from(e.dataTransfer.files);
         if (files.length > 0) {
             try {
+                // Activar estado de carga
+                setUploading(blockId, true);
+                
                 const uploadedFiles = await onMediaUpload(files, studioSlug, 'posts', 'content');
 
                 // Convertir UploadedFile a MediaItem
@@ -393,6 +416,9 @@ function SortableBlock({
             } catch (error) {
                 console.error('Error uploading files:', error);
                 toast.error('Error al subir archivos');
+            } finally {
+                // Desactivar estado de carga
+                setUploading(blockId, false);
             }
         }
     };
@@ -424,10 +450,20 @@ function SortableBlock({
             <div className="space-y-3">
                 <div className="text-sm font-medium text-zinc-300">Imagen</div>
                 <div
-                    className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-emerald-500 transition-colors"
+                    className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-emerald-500 transition-colors relative"
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={block.media && block.media.length > 0 ? undefined : (e) => handleDrop(e, block.id)}
                 >
+                    {/* Overlay de carga */}
+                    {isUploading && (
+                        <div className="absolute inset-0 bg-zinc-800/80 flex items-center justify-center z-10 rounded-lg">
+                            <div className="text-center">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400 mx-auto mb-2"></div>
+                                <p className="text-sm text-zinc-300">Subiendo imagen...</p>
+                            </div>
+                        </div>
+                    )}
+                    
                     {block.media && block.media.length > 0 ? (
                         <div className="space-y-2">
                             <ImageSingle
@@ -451,7 +487,9 @@ function SortableBlock({
                     ) : (
                         <div className="space-y-2">
                             <ImageIcon className="h-8 w-8 text-zinc-500 mx-auto" />
-                            <div className="text-sm text-zinc-500">Arrastra una imagen aquí</div>
+                            <div className="text-sm text-zinc-500">
+                                {isUploading ? 'Subiendo imagen...' : 'Arrastra una imagen aquí'}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -472,10 +510,20 @@ function SortableBlock({
             <div className="space-y-3">
                 <div className="text-sm font-medium text-zinc-300">Galería {modeLabels[mode]}</div>
                 <div
-                    className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-emerald-500 transition-colors"
+                    className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-emerald-500 transition-colors relative"
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => handleDrop(e, block.id)}
                 >
+                    {/* Overlay de carga */}
+                    {isUploading && (
+                        <div className="absolute inset-0 bg-zinc-800/80 flex items-center justify-center z-10 rounded-lg">
+                            <div className="text-center">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400 mx-auto mb-2"></div>
+                                <p className="text-sm text-zinc-300">Subiendo imágenes...</p>
+                            </div>
+                        </div>
+                    )}
+                    
                     {block.media && block.media.length > 0 ? (
                         <div className="space-y-2">
                             <ImageGrid
@@ -489,7 +537,9 @@ function SortableBlock({
                     ) : (
                         <div className="space-y-2">
                             <Grid3X3 className="h-8 w-8 text-zinc-500 mx-auto" />
-                            <div className="text-sm text-zinc-500">Arrastra imágenes aquí</div>
+                            <div className="text-sm text-zinc-500">
+                                {isUploading ? 'Subiendo imágenes...' : 'Arrastra imágenes aquí'}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -502,10 +552,20 @@ function SortableBlock({
             <div className="space-y-3">
                 <div className="text-sm font-medium text-zinc-300">Video</div>
                 <div
-                    className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-emerald-500 transition-colors"
+                    className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-emerald-500 transition-colors relative"
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={block.media && block.media.length > 0 ? undefined : (e) => handleDrop(e, block.id)}
                 >
+                    {/* Overlay de carga */}
+                    {isUploading && (
+                        <div className="absolute inset-0 bg-zinc-800/80 flex items-center justify-center z-10 rounded-lg">
+                            <div className="text-center">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400 mx-auto mb-2"></div>
+                                <p className="text-sm text-zinc-300">Subiendo video...</p>
+                            </div>
+                        </div>
+                    )}
+                    
                     {block.media && block.media.length > 0 ? (
                         <div className="space-y-2">
                             <VideoSingle
@@ -520,7 +580,9 @@ function SortableBlock({
                     ) : (
                         <div className="space-y-2">
                             <Video className="h-8 w-8 text-zinc-500 mx-auto" />
-                            <div className="text-sm text-zinc-500">Arrastra un video aquí</div>
+                            <div className="text-sm text-zinc-500">
+                                {isUploading ? 'Subiendo video...' : 'Arrastra un video aquí'}
+                            </div>
                         </div>
                     )}
                 </div>
