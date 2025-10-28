@@ -395,7 +395,7 @@ function SortableBlock({
             try {
                 // Activar estado de carga
                 setUploading(blockId, true);
-                
+
                 const uploadedFiles = await onMediaUpload(files, studioSlug, 'posts', 'content');
 
                 // Convertir UploadedFile a MediaItem
@@ -454,16 +454,6 @@ function SortableBlock({
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={block.media && block.media.length > 0 ? undefined : (e) => handleDrop(e, block.id)}
                 >
-                    {/* Overlay de carga */}
-                    {isUploading && (
-                        <div className="absolute inset-0 bg-zinc-800/80 flex items-center justify-center z-10 rounded-lg">
-                            <div className="text-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400 mx-auto mb-2"></div>
-                                <p className="text-sm text-zinc-300">Subiendo imagen...</p>
-                            </div>
-                        </div>
-                    )}
-                    
                     {block.media && block.media.length > 0 ? (
                         <div className="space-y-2">
                             <ImageSingle
@@ -485,8 +475,16 @@ function SortableBlock({
                             />
                         </div>
                     ) : (
-                        <div className="space-y-2">
-                            <ImageIcon className="h-8 w-8 text-zinc-500 mx-auto" />
+                        <div className="space-y-2 relative">
+                            <div className="relative">
+                                <ImageIcon className="h-8 w-8 text-zinc-500 mx-auto" />
+                                {/* Spinner minimalista sobre el ícono */}
+                                {isUploading && (
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-400 border-t-transparent"></div>
+                                    </div>
+                                )}
+                            </div>
                             <div className="text-sm text-zinc-500">
                                 {isUploading ? 'Subiendo imagen...' : 'Arrastra una imagen aquí'}
                             </div>
@@ -514,16 +512,6 @@ function SortableBlock({
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => handleDrop(e, block.id)}
                 >
-                    {/* Overlay de carga */}
-                    {isUploading && (
-                        <div className="absolute inset-0 bg-zinc-800/80 flex items-center justify-center z-10 rounded-lg">
-                            <div className="text-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400 mx-auto mb-2"></div>
-                                <p className="text-sm text-zinc-300">Subiendo imágenes...</p>
-                            </div>
-                        </div>
-                    )}
-                    
                     {block.media && block.media.length > 0 ? (
                         <div className="space-y-2">
                             <ImageGrid
@@ -535,8 +523,16 @@ function SortableBlock({
                             />
                         </div>
                     ) : (
-                        <div className="space-y-2">
-                            <Grid3X3 className="h-8 w-8 text-zinc-500 mx-auto" />
+                        <div className="space-y-2 relative">
+                            <div className="relative">
+                                <Grid3X3 className="h-8 w-8 text-zinc-500 mx-auto" />
+                                {/* Spinner minimalista sobre el ícono */}
+                                {isUploading && (
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-400 border-t-transparent"></div>
+                                    </div>
+                                )}
+                            </div>
                             <div className="text-sm text-zinc-500">
                                 {isUploading ? 'Subiendo imágenes...' : 'Arrastra imágenes aquí'}
                             </div>
@@ -556,16 +552,6 @@ function SortableBlock({
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={block.media && block.media.length > 0 ? undefined : (e) => handleDrop(e, block.id)}
                 >
-                    {/* Overlay de carga */}
-                    {isUploading && (
-                        <div className="absolute inset-0 bg-zinc-800/80 flex items-center justify-center z-10 rounded-lg">
-                            <div className="text-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400 mx-auto mb-2"></div>
-                                <p className="text-sm text-zinc-300">Subiendo video...</p>
-                            </div>
-                        </div>
-                    )}
-                    
                     {block.media && block.media.length > 0 ? (
                         <div className="space-y-2">
                             <VideoSingle
@@ -578,8 +564,16 @@ function SortableBlock({
                             />
                         </div>
                     ) : (
-                        <div className="space-y-2">
-                            <Video className="h-8 w-8 text-zinc-500 mx-auto" />
+                        <div className="space-y-2 relative">
+                            <div className="relative">
+                                <Video className="h-8 w-8 text-zinc-500 mx-auto" />
+                                {/* Spinner minimalista sobre el ícono */}
+                                {isUploading && (
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-400 border-t-transparent"></div>
+                                    </div>
+                                )}
+                            </div>
                             <div className="text-sm text-zinc-500">
                                 {isUploading ? 'Subiendo video...' : 'Arrastra un video aquí'}
                             </div>
