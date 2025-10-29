@@ -155,7 +155,7 @@ export function MasonryGallery({
                     </div>
                 )}
 
-                {/* Delete Button */}
+                {/* Delete Button - Dentro de la imagen */}
                 {showDeleteButtons && onDelete && (
                     <button
                         onClick={(e) => {
@@ -164,6 +164,7 @@ export function MasonryGallery({
                         }}
                         className="absolute bottom-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 z-20"
                         title="Eliminar imagen"
+                        style={{ pointerEvents: 'auto' }}
                     >
                         <Trash2 className="h-3 w-3" />
                     </button>

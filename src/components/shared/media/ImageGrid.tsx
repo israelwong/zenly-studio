@@ -149,7 +149,7 @@ export function ImageGrid({
                 className={`relative group ${isDragging ? 'opacity-50' : ''}`}
                 {...(isEditable ? { ...attributes, ...listeners } : {})}
             >
-                <div
+                <div 
                     className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass} ${isEditable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                     onClick={!isEditable && configLightbox ? () => handleImageClick(index) : undefined}
                 >
@@ -188,22 +188,23 @@ export function ImageGrid({
                             {formatBytes(item.storage_bytes)}
                         </div>
                     )}
-                </div>
 
-                {/* Delete Button - Fuera del área arrastrable */}
-                {showDeleteButtons && onDelete && (
-                    <button
-                        onClick={(e) => {
-                            console.log('Delete button clicked for item:', item.id);
-                            e.stopPropagation();
-                            onDelete(item.id);
-                        }}
-                        className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 z-50 shadow-lg border-2 border-white"
-                        title="Eliminar imagen"
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </button>
-                )}
+                    {/* Delete Button - Dentro de la imagen pero sin interferir con drag */}
+                    {showDeleteButtons && onDelete && (
+                        <button
+                            onClick={(e) => {
+                                console.log('Delete button clicked for item:', item.id);
+                                e.stopPropagation();
+                                onDelete(item.id);
+                            }}
+                            className="absolute bottom-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 z-20"
+                            title="Eliminar imagen"
+                            style={{ pointerEvents: 'auto' }}
+                        >
+                            <Trash2 className="h-3 w-3" />
+                        </button>
+                    )}
+                </div>
 
                 {/* Caption */}
                 {showCaptions && item.filename && (
