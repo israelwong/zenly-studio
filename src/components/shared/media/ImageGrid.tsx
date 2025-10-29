@@ -282,7 +282,7 @@ export function ImageGrid({
                 </div>
             )}
 
-            {/* Sortable Grid con Dropzone siempre visible */}
+            {/* Grid con Dropzone integrado - Siguiendo patrón ItemEditorModal */}
             {isEditable ? (
                 <DndContext
                     sensors={sensors}
@@ -290,18 +290,21 @@ export function ImageGrid({
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                 >
-                    <div className={`grid ${columnsClass} ${gapClass}`}>
-                        {/* Slot de Upload - Siempre visible */}
-                        <div
-                            className={`relative bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors ${aspectClass} cursor-pointer group`}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                const files = Array.from(e.dataTransfer.files);
-                                if (files.length > 0 && onDrop) {
-                                    onDrop(files);
-                                }
-                            }}
+                    <div
+                        className={`grid ${columnsClass} ${gapClass} p-4 rounded-lg border-2 border-dashed transition-all border-zinc-700 bg-zinc-800/30`}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                            e.preventDefault();
+                            const files = Array.from(e.dataTransfer.files);
+                            if (files.length > 0 && onDrop) {
+                                onDrop(files);
+                            }
+                        }}
+                    >
+                        {/* Slot de Upload - Siempre visible como primer elemento */}
+                        <button
+                            type="button"
+                            className={`relative bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 hover:bg-zinc-700 transition-colors ${aspectClass} cursor-pointer group`}
                             onClick={() => {
                                 if (onUploadClick) {
                                     onUploadClick();
@@ -316,9 +319,9 @@ export function ImageGrid({
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </button>
 
-                        {/* Sortable Items */}
+                        {/* Sortable Items existentes */}
                         <SortableContext
                             key={media.map(item => item.id).join('-')} // Forzar re-render cuando cambien los IDs
                             items={media.map(item => item.id)}
