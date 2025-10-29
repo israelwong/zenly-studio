@@ -99,13 +99,11 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
 
             {/* Descripción */}
             {post.caption && (
-                <ZenCard>
-                    <ZenCardContent className="p-4">
-                        <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                            {post.caption}
-                        </p>
-                    </ZenCardContent>
-                </ZenCard>
+                <div>
+                    <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap font-normal">
+                        {post.caption}
+                    </p>
+                </div>
             )}
 
             {/* Bloques de Contenido */}
