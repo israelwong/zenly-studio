@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Video, Type, Grid3X3, X } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video, Type, Grid3X3, X, LayoutGrid } from 'lucide-react';
 import {
     DndContext,
     DragOverlay,
@@ -385,8 +385,8 @@ export function ContentBlocksEditor({
 
             {/* Lista de Componentes */}
             {blocks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center min-h-[300px] border-2 border-dashed border-zinc-700 rounded-lg">
-                    <Plus className="h-12 w-12 text-zinc-500 mb-4" />
+                <div className="flex flex-col items-center justify-center min-h-[300px] border border-zinc-700 rounded-lg bg-zinc-800/30">
+                    <LayoutGrid className="h-12 w-12 text-zinc-500 mb-4" />
                     <h4 className="text-lg font-semibold text-zinc-300 mb-2">Sin componentes</h4>
                     <p className="text-zinc-500 text-center mb-4">Agrega tu primer componente para comenzar</p>
                     <ZenButton
@@ -445,7 +445,7 @@ export function ContentBlocksEditor({
                 onConfirm={confirmDeleteBlock}
                 title={blockToDelete?.type === 'text' ? "Eliminar bloque de texto" : "Eliminar componente"}
                 description={
-                    blockToDelete?.type === 'text' 
+                    blockToDelete?.type === 'text'
                         ? "¿Estás seguro de que quieres eliminar este bloque de texto? El contenido se perderá permanentemente."
                         : "¿Estás seguro de que deseas eliminar este componente? Esta acción no se puede deshacer."
                 }
