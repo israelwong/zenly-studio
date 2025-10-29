@@ -328,7 +328,9 @@ export function ImageGrid({
                         {(!media || media.length === 0 || isUploading) && (
                             <button
                                 type="button"
-                                className={`relative bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 hover:bg-zinc-700 transition-colors ${aspectClass} cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed`}
+                                className={`relative bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 hover:bg-zinc-700 transition-colors ${
+                                    media.length === 0 ? 'col-span-full' : aspectClass
+                                } cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed`}
                                 onClick={() => {
                                     if (onUploadClick && !isUploading) {
                                         onUploadClick();
