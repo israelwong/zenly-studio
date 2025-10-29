@@ -119,13 +119,11 @@ export function ImageGrid({
 
     const handleDragStart = (event: DragStartEvent) => {
         const { active } = event;
-        console.log('Drag started:', active.id);
         setActiveId(String(active.id));
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
-        console.log('Drag ended:', { active: active.id, over: over?.id });
 
         if (over && active.id !== over.id) {
             const oldIndex = media.findIndex(item => item.id === active.id);
@@ -133,7 +131,6 @@ export function ImageGrid({
 
             if (oldIndex !== -1 && newIndex !== -1) {
                 const reorderedMedia = arrayMove(media, oldIndex, newIndex);
-                console.log('Reordering media:', { oldIndex, newIndex, reorderedMedia: reorderedMedia.map(m => m.id) });
                 onReorder?.(reorderedMedia);
             }
         }
