@@ -320,6 +320,17 @@ export function ContentBlocksEditor({
             config
         };
         onBlocksChange([...blocks, newBlock]);
+        
+        // Scroll automático al nuevo componente después de un breve delay
+        setTimeout(() => {
+            const newBlockElement = document.getElementById(newBlock.id);
+            if (newBlockElement) {
+                newBlockElement.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'center' 
+                });
+            }
+        }, 100);
     }, [blocks, onBlocksChange]);
 
 
@@ -943,6 +954,7 @@ function SortableBlock({
 
     return (
         <div
+            id={block.id}
             ref={setNodeRef}
             style={style}
             className={`bg-zinc-800 border border-zinc-700 rounded-lg p-4 ${isDragging ? 'opacity-50' : ''
