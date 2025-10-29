@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Trash2, GripVertical } from 'lucide-react';
+import { Trash2, GripVertical, ZoomIn } from 'lucide-react';
 import { MediaItem, MediaBlockConfig } from '@/types/content-blocks';
 import { formatBytes } from '@/lib/utils/storage';
 import Lightbox from "yet-another-react-lightbox";
@@ -145,61 +145,58 @@ export function ImageGrid({
                 ref={setNodeRef}
                 style={style}
                 className={`relative group ${isDragging ? 'opacity-50' : ''}`}
+                {...attributes}
+                {...listeners}
             >
-                <div
-                    className="relative cursor-pointer"
-                    onClick={() => handleImageClick(index)}
-                >
-                    <div className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass}`}>
-                        <Image
-                            src={item.file_url}
-                            alt={item.filename}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                        />
+                <div className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass} cursor-grab active:cursor-grabbing`}>
+                    <Image
+                        src={item.file_url}
+                        alt={item.filename}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                    />
 
-                        {/* Drag Handle */}
-                        <div
-                            {...attributes}
-                            {...listeners}
-                            className="absolute top-2 left-2 bg-black/70 text-white p-1 rounded cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                            <GripVertical className="h-3 w-3" />
-                        </div>
-
-                        {/* Storage Size Label */}
-                        {item.storage_bytes && showSizeLabel && (
-                            <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                                {formatBytes(item.storage_bytes)}
-                            </div>
-                        )}
-
-                        {/* Delete Button */}
-                        {showDeleteButtons && onDelete && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDelete(item.id);
-                                }}
-                                className="absolute bottom-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 z-10"
-                                title="Eliminar imagen"
-                            >
-                                <Trash2 className="h-3 w-3" />
-                            </button>
-                        )}
+                    {/* Drag Handle */}
+                    <div className="absolute top-2 left-2 bg-black/70 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                        <GripVertical className="h-3 w-3" />
                     </div>
 
-                    {/* Overlay for lightbox */}
+                    {/* Zoom Button for Lightbox */}
                     {configLightbox && (
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                </svg>
-                            </div>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleImageClick(index);
+                            }}
+                            className="absolute top-2 right-2 bg-black/70 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            title="Ver en pantalla completa"
+                        >
+                            <ZoomIn className="h-3 w-3" />
+                        </button>
+                    )}
+
+                    {/* Storage Size Label */}
+                    {item.storage_bytes && showSizeLabel && (
+                        <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                            {formatBytes(item.storage_bytes)}
                         </div>
                     )}
+
+                    {/* Delete Button */}
+                    {showDeleteButtons && onDelete && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(item.id);
+                            }}
+                            className="absolute bottom-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 z-10"
+                            title="Eliminar imagen"
+                        >
+                            <Trash2 className="h-3 w-3" />
+                        </button>
+                    )}
+                    </div>
 
                     {/* Caption */}
                     {showCaptions && item.filename && (
@@ -209,7 +206,6 @@ export function ImageGrid({
                             </p>
                         </div>
                     )}
-                </div>
             </div>
         );
     }
