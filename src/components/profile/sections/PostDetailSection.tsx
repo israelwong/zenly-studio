@@ -99,8 +99,8 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
 
             {/* Descripción */}
             {post.caption && (
-                <div>
-                    <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap font-normal">
+                <div className="w-full">
+                    <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap font-normal break-words overflow-wrap-anywhere">
                         {post.caption}
                     </p>
                 </div>
