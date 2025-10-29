@@ -65,7 +65,7 @@ export function ImageGrid({
     isEditable = true,
     config = {},
     lightbox = true,
-    showTitles, // eslint-disable-line @typescript-eslint/no-unused-vars
+    showTitles: _showTitles, // eslint-disable-line @typescript-eslint/no-unused-vars
     showSizeLabel = true,
     onDrop,
     onUploadClick,
@@ -170,11 +170,10 @@ export function ImageGrid({
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`relative group transition-all duration-200 ease-out ${
-                    isDragging || activeId === item.id 
-                        ? 'opacity-50 scale-105 shadow-2xl' 
-                        : 'opacity-100 scale-100'
-                }`}
+                className={`relative group transition-all duration-200 ease-out ${isDragging || activeId === item.id
+                    ? 'opacity-50 scale-105 shadow-2xl'
+                    : 'opacity-100 scale-100'
+                    }`}
                 {...(isEditable ? { ...attributes, ...listeners } : {})}
                 onMouseDown={(e) => {
                     // Si el click es en el botón eliminar, no iniciar drag
@@ -190,11 +189,10 @@ export function ImageGrid({
                 }}
             >
                 <div
-                    className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass} transition-all duration-200 ease-out ${
-                        isEditable 
-                            ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg' 
-                            : 'cursor-pointer hover:scale-[1.02] hover:shadow-lg'
-                    }`}
+                    className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass} transition-all duration-200 ease-out ${isEditable
+                        ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg'
+                        : 'cursor-pointer hover:scale-[1.02] hover:shadow-lg'
+                        }`}
                     onClick={!isEditable && configLightbox ? () => handleImageClick(index) : undefined}
                 >
                     <Image
@@ -373,20 +371,6 @@ export function ImageGrid({
                 </div>
             )}
 
-            {/* DragOverlay para feedback visual mejorado */}
-            {isEditable && (
-                <div className="fixed inset-0 pointer-events-none z-50">
-                    {activeId && (
-                        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                            <div className="bg-zinc-800 border-2 border-emerald-500 rounded-lg p-4 shadow-2xl transform rotate-3 scale-110 opacity-90">
-                                <div className="text-sm text-emerald-400 font-medium">
-                                    Reordenando...
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
 
             {/* Lightbox - Solo en modo no editable */}
             {configLightbox && !isEditable && (
