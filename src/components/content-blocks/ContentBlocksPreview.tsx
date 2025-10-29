@@ -16,9 +16,6 @@ export function ContentBlocksPreview({
     if (!blocks || blocks.length === 0) {
         return (
             <div className={`text-center py-12 px-4 ${className}`}>
-                <div className="text-zinc-500 mb-4 text-4xl">
-                    📱
-                </div>
                 <h3 className="text-lg font-semibold text-zinc-300 mb-2">
                     Agrega componentes multimedia
                 </h3>
