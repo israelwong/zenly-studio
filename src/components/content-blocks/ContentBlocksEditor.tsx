@@ -282,6 +282,43 @@ export function ContentBlocksEditor({
         setBlockToDelete(null);
     }, []);
 
+    // Función para manejar subida de archivos (drag & drop y click)
+    const handleDropFiles = useCallback(async (files: File[], blockId: string) => {
+        if (files.length === 0) return;
+        
+        try {
+            // Activar estado de carga
+            setBlockUploading(blockId, true);
+
+            const uploadedFiles = await uploadFiles(files, studioSlug, 'posts', 'content');
+
+            // Convertir UploadedFile a MediaItem
+            const mediaItems: MediaItem[] = uploadedFiles.map((file) => ({
+                id: file.id,
+                file_url: file.url,
+                file_type: file.fileName.toLowerCase().includes('.mp4') || file.fileName.toLowerCase().includes('.mov') ? 'video' as const : 'image' as const,
+                filename: file.fileName,
+                storage_path: file.url,
+                storage_bytes: file.size
+            }));
+
+            // Actualizar el bloque específico con los nuevos media items
+            const block = blocks.find(b => b.id === blockId);
+            if (block) {
+                const updatedMedia = [...(block.media || []), ...mediaItems];
+                handleUpdateBlock(blockId, { media: updatedMedia });
+            }
+
+            toast.success(`${files.length} archivo(s) subido(s) correctamente`);
+        } catch (error) {
+            console.error('Error uploading files:', error);
+            toast.error('Error al subir archivos');
+        } finally {
+            // Desactivar estado de carga
+            setBlockUploading(blockId, false);
+        }
+    }, [uploadFiles, studioSlug, blocks, handleUpdateBlock, setBlockUploading]);
+
     return (
         <div className={`space-y-4 ${className}`}>
             {/* Header */}
@@ -382,6 +419,7 @@ export function ContentBlocksEditor({
                                     studioSlug={studioSlug}
                                     isUploading={uploadingBlocks.has(block.id)}
                                     setUploading={setBlockUploading}
+                                    onDropFiles={handleDropFiles}
                                 />
                             ))}
                         </div>
@@ -423,7 +461,8 @@ function SortableBlock({
     onMediaUpload,
     studioSlug,
     isUploading,
-    setUploading
+    setUploading,
+    onDropFiles
 }: {
     block: ContentBlock;
     onUpdate: (blockId: string, updates: Partial<ContentBlock>) => void;
@@ -432,6 +471,7 @@ function SortableBlock({
     studioSlug: string;
     isUploading: boolean;
     setUploading: (blockId: string, isUploading: boolean) => void;
+    onDropFiles: (files: File[], blockId: string) => Promise<void>;
 }) {
     const {
         attributes,
@@ -451,34 +491,7 @@ function SortableBlock({
         e.preventDefault();
         const files = Array.from(e.dataTransfer.files);
         if (files.length > 0) {
-            try {
-                // Activar estado de carga
-                setUploading(blockId, true);
-
-                const uploadedFiles = await onMediaUpload(files, studioSlug, 'posts', 'content');
-
-                // Convertir UploadedFile a MediaItem
-                const mediaItems: MediaItem[] = uploadedFiles.map((file) => ({
-                    id: file.id,
-                    file_url: file.url,
-                    file_type: file.fileName.toLowerCase().includes('.mp4') || file.fileName.toLowerCase().includes('.mov') ? 'video' as const : 'image' as const,
-                    filename: file.fileName,
-                    storage_path: file.url,
-                    storage_bytes: file.size
-                }));
-
-                // Actualizar el bloque específico con los nuevos media items
-                const updatedMedia = [...(block.media || []), ...mediaItems];
-                onUpdate(blockId, { media: updatedMedia });
-
-                toast.success(`${files.length} archivo(s) subido(s) correctamente`);
-            } catch (error) {
-                console.error('Error uploading files:', error);
-                toast.error('Error al subir archivos');
-            } finally {
-                // Desactivar estado de carga
-                setUploading(blockId, false);
-            }
+            await onDropFiles(files, blockId);
         }
     };
 
@@ -486,10 +499,18 @@ function SortableBlock({
     const removeMedia = (mediaId: string) => {
         console.log('removeMedia called with mediaId:', mediaId);
         console.log('Current block.media:', block.media);
+        console.log('Looking for item with id:', mediaId);
+        console.log('Items in media array:', block.media.map(item => ({ id: item.id, filename: item.filename })));
+
+        const itemToRemove = block.media.find(item => item.id === mediaId);
+        console.log('Item found to remove:', itemToRemove);
+
         const newMedia = block.media.filter(item => item.id !== mediaId);
         console.log('New media after filter:', newMedia);
+        console.log('Original length:', block.media.length, 'New length:', newMedia.length);
+
         onUpdate(block.id, { media: newMedia });
-        console.log('onUpdate called');
+        console.log('onUpdate called with block.id:', block.id);
     };
 
 
@@ -560,42 +581,34 @@ function SortableBlock({
     const renderGalleryContent = () => {
         return (
             <div className="space-y-2">
-                {block.media && block.media.length > 0 ? (
-                    // Solo mostrar la galería sin header cuando hay contenido
-                    <ImageGrid
-                        media={block.media}
-                        config={block.config as Partial<MediaBlockConfig>}
-                        className=""
-                        showDeleteButtons={true}
-                        onDelete={(mediaId) => removeMedia(mediaId)}
-                        onReorder={(reorderedMedia) => {
-                            onUpdate(block.id, { media: reorderedMedia });
-                        }}
-                        isEditable={true}
-                        lightbox={true}
-                    />
-                ) : (
-                    // Solo área de drop cuando está vacío
-                    <div
-                        className="border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors relative"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => handleDrop(e, block.id)}
-                    >
-                        <div className="p-6 space-y-2">
-                            {isUploading ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto"></div>
-                                    <div className="text-sm text-zinc-500">Subiendo imágenes...</div>
-                                </>
-                            ) : (
-                                <>
-                                    <Grid3X3 className="h-8 w-8 text-zinc-500 mx-auto" />
-                                    <div className="text-sm text-zinc-500">Arrastra imágenes aquí</div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
+                {/* Siempre mostrar ImageGrid con dropzone integrado */}
+                <ImageGrid
+                    media={block.media || []}
+                    config={block.config as Partial<MediaBlockConfig>}
+                    className=""
+                    showDeleteButtons={true}
+                    onDelete={(mediaId) => removeMedia(mediaId)}
+                    onReorder={(reorderedMedia) => {
+                        onUpdate(block.id, { media: reorderedMedia });
+                    }}
+                    isEditable={true}
+                    lightbox={true}
+                    onDrop={(files) => onDropFiles(files, block.id)}
+                    onUploadClick={() => {
+                        // Crear input file temporal para trigger upload
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.multiple = true;
+                        input.accept = 'image/*';
+                        input.onchange = (e) => {
+                            const files = Array.from((e.target as HTMLInputElement).files || []);
+                            if (files.length > 0) {
+                                onDropFiles(files, block.id);
+                            }
+                        };
+                        input.click();
+                    }}
+                />
             </div>
         );
     };

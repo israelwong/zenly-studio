@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Trash2, GripVertical, ZoomIn } from 'lucide-react';
+import { Trash2, GripVertical, ZoomIn, Upload } from 'lucide-react';
 import { MediaItem, MediaBlockConfig } from '@/types/content-blocks';
 import { formatBytes } from '@/lib/utils/storage';
 import Lightbox from "yet-another-react-lightbox";
@@ -42,6 +42,9 @@ interface ImageGridProps {
     lightbox?: boolean;
     showTitles?: boolean;
     showSizeLabel?: boolean;
+    // Dropzone props
+    onDrop?: (files: File[]) => void;
+    onUploadClick?: () => void;
 }
 
 export function ImageGrid({
@@ -60,7 +63,9 @@ export function ImageGrid({
     config = {},
     lightbox = true,
     showTitles, // eslint-disable-line @typescript-eslint/no-unused-vars
-    showSizeLabel = true
+    showSizeLabel = true,
+    onDrop,
+    onUploadClick
 }: ImageGridProps) {
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -134,7 +139,7 @@ export function ImageGrid({
                 onReorder?.(reorderedMedia);
             }
         }
-        
+
         setActiveId(null);
     };
 
@@ -277,7 +282,7 @@ export function ImageGrid({
                 </div>
             )}
 
-            {/* Sortable Grid */}
+            {/* Sortable Grid con Dropzone siempre visible */}
             {isEditable ? (
                 <DndContext
                     sensors={sensors}
@@ -285,12 +290,40 @@ export function ImageGrid({
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                 >
-                    <SortableContext
-                        key={media.map(item => item.id).join('-')} // Forzar re-render cuando cambien los IDs
-                        items={media.map(item => item.id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        <div className={`grid ${columnsClass} ${gapClass}`}>
+                    <div className={`grid ${columnsClass} ${gapClass}`}>
+                        {/* Slot de Upload - Siempre visible */}
+                        <div
+                            className={`relative bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors ${aspectClass} cursor-pointer group`}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                const files = Array.from(e.dataTransfer.files);
+                                if (files.length > 0 && onDrop) {
+                                    onDrop(files);
+                                }
+                            }}
+                            onClick={() => {
+                                if (onUploadClick) {
+                                    onUploadClick();
+                                }
+                            }}
+                        >
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="text-center">
+                                    <Upload className="h-8 w-8 text-zinc-500 mx-auto mb-2 group-hover:text-emerald-400" />
+                                    <div className="text-sm text-zinc-500 group-hover:text-emerald-400">
+                                        Arrastra archivos aquí
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Sortable Items */}
+                        <SortableContext
+                            key={media.map(item => item.id).join('-')} // Forzar re-render cuando cambien los IDs
+                            items={media.map(item => item.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
                             {media.map((item, index) => (
                                 <SortableImageItem
                                     key={item.id}
@@ -298,8 +331,8 @@ export function ImageGrid({
                                     index={index}
                                 />
                             ))}
-                        </div>
-                    </SortableContext>
+                        </SortableContext>
+                    </div>
                 </DndContext>
             ) : (
                 <div className={`grid ${columnsClass} ${gapClass}`}>
