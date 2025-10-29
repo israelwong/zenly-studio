@@ -443,8 +443,12 @@ export function ContentBlocksEditor({
                 isOpen={showDeleteModal}
                 onClose={cancelDeleteBlock}
                 onConfirm={confirmDeleteBlock}
-                title="Eliminar componente"
-                description={`¿Estás seguro de que deseas eliminar este componente? Esta acción no se puede deshacer.`}
+                title={blockToDelete?.type === 'text' ? "Eliminar bloque de texto" : "Eliminar componente"}
+                description={
+                    blockToDelete?.type === 'text' 
+                        ? "¿Estás seguro de que quieres eliminar este bloque de texto? El contenido se perderá permanentemente."
+                        : "¿Estás seguro de que deseas eliminar este componente? Esta acción no se puede deshacer."
+                }
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="destructive"
@@ -695,7 +699,18 @@ function SortableBlock({
                     </span>
                 </div>
                 <button
-                    onClick={() => onDelete(block)}
+                    onClick={() => {
+                        // Si es bloque de texto con contenido, mostrar confirmación
+                        const textContent = block.config?.text;
+                        if (block.type === 'text' && textContent && String(textContent).trim()) {
+                            const confirmed = window.confirm('¿Estás seguro de que quieres eliminar este bloque de texto? El contenido se perderá permanentemente.');
+                            if (confirmed) {
+                                onDelete(block);
+                            }
+                        } else {
+                            onDelete(block);
+                        }
+                    }}
                     className="text-zinc-400 hover:text-red-400 transition-colors"
                 >
                     <X className="h-4 w-4" />
