@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { MediaItem } from '@/types/content-blocks';
-import { formatBytes } from '@/lib/utils/storage';
+import Glide from '@glidejs/glide';
+import '@glidejs/glide/dist/css/glide.core.min.css';
+import '@glidejs/glide/dist/css/glide.theme.min.css';
 
 interface ImageSliderProps {
     media: MediaItem[];
@@ -24,10 +26,11 @@ export function ImageSlider({
     aspectRatio = 'video',
     showArrows = true,
     showDots = true,
-    autoplay,
+    autoplay = 4000,
     className = ''
 }: ImageSliderProps) {
-    const [currentIndex, setCurrentIndex] = useState(0);
+    const glideRef = useRef<HTMLDivElement>(null);
+    const glideInstanceRef = useRef<Glide | null>(null);
 
     const aspectRatioClasses = {
         square: 'aspect-square',
@@ -38,25 +41,34 @@ export function ImageSlider({
 
     const aspectClass = aspectRatioClasses[aspectRatio];
 
-    const nextSlide = () => {
-        setCurrentIndex((prev) => (prev + 1) % media.length);
-    };
+    useEffect(() => {
+        if (!glideRef.current || !media.length) return;
 
-    const prevSlide = () => {
-        setCurrentIndex((prev) => (prev - 1 + media.length) % media.length);
-    };
+        const glideInstance = new Glide(glideRef.current, {
+            type: 'carousel',
+            focusAt: 'center',
+            perView: 1,
+            autoplay: autoplay,
+            animationDuration: 600,
+            gap: 0,
+            classes: {
+                activeNav: '[&>*]:bg-emerald-500',
+            },
+            breakpoints: {
+                768: { perView: 1 }
+            }
+        });
 
-    const goToSlide = (index: number) => {
-        setCurrentIndex(index);
-    };
+        glideInstance.mount();
+        glideInstanceRef.current = glideInstance;
 
-    // Autoplay effect
-    React.useEffect(() => {
-        if (autoplay && media.length > 1) {
-            const interval = setInterval(nextSlide, autoplay);
-            return () => clearInterval(interval);
-        }
-    }, [autoplay, media.length]);
+        return () => {
+            if (glideInstanceRef.current) {
+                glideInstanceRef.current.destroy();
+                glideInstanceRef.current = null;
+            }
+        };
+    }, [media, autoplay]);
 
     if (!media || media.length === 0) {
         return (
@@ -84,63 +96,55 @@ export function ImageSlider({
                 </div>
             )}
 
-            {/* Slider */}
-            <div className="relative group">
-                <div className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass}`}>
-                    <Image
-                        src={media[currentIndex].file_url}
-                        alt={media[currentIndex].filename}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, 80vw"
-                    />
-
-                    {/* Storage Size Label */}
-                    {media[currentIndex].storage_bytes && (
-                        <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                            {formatBytes(media[currentIndex].storage_bytes)}
-                        </div>
-                    )}
+            {/* Glide Slider */}
+            <div ref={glideRef} className="glide relative w-full">
+                <div className="overflow-hidden" data-glide-el="track">
+                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-Y] [will-change: transform] relative flex w-full overflow-hidden p-0">
+                        {media.map((item, index) => (
+                            <li key={item.id} className="glide__slide">
+                                <div className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass}`}>
+                                    <Image
+                                        src={item.file_url}
+                                        alt={item.filename}
+                                        fill
+                                        className="object-cover"
+                                        sizes="(max-width: 768px) 100vw, 80vw"
+                                        priority={index === 0}
+                                    />
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
 
                 {/* Navigation Arrows */}
                 {showArrows && media.length > 1 && (
-                    <>
+                    <div className="glide__arrows absolute inset-y-0 left-0 right-0 flex items-center justify-between pointer-events-none" data-glide-el="controls">
                         <button
-                            onClick={prevSlide}
-                            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="glide__arrow glide__arrow--left pointer-events-auto bg-black/60 text-white p-2 rounded-full ml-2 hover:bg-black/80 transition-colors"
+                            data-glide-dir="<"
                         >
-                            <ChevronLeft className="h-5 w-5" />
+                            <ChevronLeft className="h-4 w-4" />
                         </button>
                         <button
-                            onClick={nextSlide}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="glide__arrow glide__arrow--right pointer-events-auto bg-black/60 text-white p-2 rounded-full mr-2 hover:bg-black/80 transition-colors"
+                            data-glide-dir=">"
                         >
-                            <ChevronRight className="h-5 w-5" />
+                            <ChevronRight className="h-4 w-4" />
                         </button>
-                    </>
+                    </div>
                 )}
 
                 {/* Dots Indicator */}
                 {showDots && media.length > 1 && (
-                    <div className="flex justify-center space-x-2 mt-4">
+                    <div className="glide__bullets flex justify-center gap-2 mt-4" data-glide-el="controls[nav]">
                         {media.map((_, index) => (
                             <button
                                 key={index}
-                                onClick={() => goToSlide(index)}
-                                className={`w-2 h-2 rounded-full transition-colors ${index === currentIndex
-                                    ? 'bg-emerald-500'
-                                    : 'bg-zinc-600 hover:bg-zinc-500'
-                                    }`}
+                                className="w-2 h-2 rounded-full bg-zinc-600 hover:bg-zinc-500 transition-colors"
+                                data-glide-dir={`=${index}`}
                             />
                         ))}
-                    </div>
-                )}
-
-                {/* Image Counter */}
-                {media.length > 1 && (
-                    <div className="absolute top-4 right-4 bg-black/50 text-white text-sm px-2 py-1 rounded">
-                        {currentIndex + 1} / {media.length}
                     </div>
                 )}
             </div>

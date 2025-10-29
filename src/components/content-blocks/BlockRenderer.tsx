@@ -3,7 +3,7 @@
 import React from 'react';
 import { ContentBlock, TextBlockConfig, MediaBlockConfig } from '@/types/content-blocks';
 import { VideoSingle } from '@/components/shared/video';
-import { ImageSingle, ImageGrid } from '@/components/shared/media';
+import { ImageSingle, ImageGrid, ImageSlider } from '@/components/shared/media';
 import { MasonryGallery } from '@/components/shared/media/MasonryGallery';
 
 interface BlockRendererProps {
@@ -62,17 +62,16 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                             />
                         );
                     case 'slide':
-                        // TODO: Implementar GallerySlide
                         return (
-                            <ImageGrid
+                            <ImageSlider
                                 media={block.media}
                                 title={block.title}
                                 description={block.description}
-                                config={block.config}
+                                aspectRatio="video"
+                                showArrows={true}
+                                showDots={true}
+                                autoplay={4000}
                                 className={className}
-                                showSizeLabel={false}
-                                isEditable={false}
-                                lightbox={true}
                             />
                         );
                     case 'grid':
