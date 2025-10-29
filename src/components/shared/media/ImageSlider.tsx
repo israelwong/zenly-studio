@@ -48,14 +48,16 @@ export function ImageSlider({
             type: 'carousel',
             focusAt: 'center',
             perView: 1,
+            peek: { before: 0, after: 50 },
             autoplay: autoplay,
             animationDuration: 600,
-            gap: 0,
+            gap: 16,
             classes: {
                 activeNav: '[&>*]:bg-emerald-500',
             },
             breakpoints: {
-                768: { perView: 1 }
+                768: { peek: { before: 0, after: 40 }, gap: 12 },
+                640: { peek: { before: 0, after: 30 }, gap: 8 }
             }
         });
 
@@ -80,6 +82,24 @@ export function ImageSlider({
 
     return (
         <div className={`space-y-4 ${className}`}>
+            {/* Custom CSS for consistent height */}
+            <style jsx>{`
+                .glide__slide {
+                    height: 300px !important;
+                    flex-shrink: 0;
+                }
+                .glide__slide img {
+                    width: 100% !important;
+                    height: 100% !important;
+                    object-fit: cover !important;
+                }
+                @media (max-width: 768px) {
+                    .glide__slide {
+                        height: 250px !important;
+                    }
+                }
+            `}</style>
+
             {/* Header */}
             {(title || description) && (
                 <div className="text-center">
@@ -99,10 +119,10 @@ export function ImageSlider({
             {/* Glide Slider */}
             <div ref={glideRef} className="glide relative w-full">
                 <div className="overflow-hidden" data-glide-el="track">
-                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-Y] [will-change: transform] relative flex w-full overflow-hidden p-0">
+                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-Y] [will-change: transform] relative flex w-full overflow-hidden p-0" style={{ alignItems: 'flex-start' }}>
                         {media.map((item, index) => (
                             <li key={item.id} className="glide__slide">
-                                <div className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass}`}>
+                                <div className="relative bg-zinc-800 rounded-lg overflow-hidden w-full h-full">
                                     <Image
                                         src={item.file_url}
                                         alt={item.filename}
@@ -121,13 +141,13 @@ export function ImageSlider({
                 {showArrows && media.length > 1 && (
                     <div className="glide__arrows absolute inset-y-0 left-0 right-0 flex items-center justify-between pointer-events-none" data-glide-el="controls">
                         <button
-                            className="glide__arrow glide__arrow--left pointer-events-auto bg-black/60 text-white p-2 rounded-full ml-2 hover:bg-black/80 transition-colors"
+                            className="glide__arrow glide__arrow--left pointer-events-auto bg-black/60 text-white p-2 rounded-full -ml-2 hover:bg-black/80 transition-colors"
                             data-glide-dir="<"
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </button>
                         <button
-                            className="glide__arrow glide__arrow--right pointer-events-auto bg-black/60 text-white p-2 rounded-full mr-2 hover:bg-black/80 transition-colors"
+                            className="glide__arrow glide__arrow--right pointer-events-auto bg-black/60 text-white p-2 rounded-full -mr-2 hover:bg-black/80 transition-colors"
                             data-glide-dir=">"
                         >
                             <ChevronRight className="h-4 w-4" />
