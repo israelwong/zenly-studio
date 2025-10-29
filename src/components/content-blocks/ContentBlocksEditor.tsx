@@ -183,6 +183,7 @@ export function ContentBlocksEditor({
     const [uploadingBlocks, setUploadingBlocks] = useState<Set<string>>(new Set());
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [blockToDelete, setBlockToDelete] = useState<ContentBlock | null>(null);
+    const [deletingBlocks, setDeletingBlocks] = useState<Set<string>>(new Set());
     const { uploadFiles } = useMediaUpload();
 
     // Configuración de sensores
@@ -320,14 +321,14 @@ export function ContentBlocksEditor({
             config
         };
         onBlocksChange([...blocks, newBlock]);
-        
+
         // Scroll automático al nuevo componente después de un breve delay
         setTimeout(() => {
             const newBlockElement = document.getElementById(newBlock.id);
             if (newBlockElement) {
-                newBlockElement.scrollIntoView({ 
-                    behavior: 'smooth', 
-                    block: 'center' 
+                newBlockElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
                 });
             }
         }, 100);
@@ -394,17 +395,37 @@ export function ContentBlocksEditor({
             setBlockToDelete(block);
             setShowDeleteModal(true);
         } else {
-            // Si no tiene media, eliminar directamente
-            onBlocksChange(blocks.filter(b => b.id !== block.id));
-            toast.success('Componente eliminado correctamente');
+            // Si no tiene media, eliminar con animación
+            setDeletingBlocks(prev => new Set(prev).add(block.id));
+            
+            // Esperar a que termine la animación antes de eliminar del estado
+            setTimeout(() => {
+                onBlocksChange(blocks.filter(b => b.id !== block.id));
+                setDeletingBlocks(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(block.id);
+                    return newSet;
+                });
+                toast.success('Componente eliminado correctamente');
+            }, 300); // Duración de la animación CSS
         }
     }, [blocks, onBlocksChange]);
 
     // Función para confirmar eliminación
     const confirmDeleteBlock = useCallback(() => {
         if (blockToDelete) {
-            onBlocksChange(blocks.filter(block => block.id !== blockToDelete.id));
-            toast.success('Componente eliminado correctamente');
+            setDeletingBlocks(prev => new Set(prev).add(blockToDelete.id));
+            
+            // Esperar a que termine la animación antes de eliminar del estado
+            setTimeout(() => {
+                onBlocksChange(blocks.filter(block => block.id !== blockToDelete.id));
+                setDeletingBlocks(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(blockToDelete.id);
+                    return newSet;
+                });
+                toast.success('Componente eliminado correctamente');
+            }, 300); // Duración de la animación CSS
         }
         setShowDeleteModal(false);
         setBlockToDelete(null);
@@ -553,6 +574,7 @@ export function ContentBlocksEditor({
                                     onMediaUpload={uploadFiles}
                                     studioSlug={studioSlug}
                                     isUploading={uploadingBlocks.has(block.id)}
+                                    isDeleting={deletingBlocks.has(block.id)}
                                     setUploading={setBlockUploading}
                                     onDropFiles={handleDropFiles}
                                 />
@@ -600,6 +622,7 @@ function SortableBlock({
     onMediaUpload,
     studioSlug,
     isUploading,
+    isDeleting,
     setUploading,
     onDropFiles
 }: {
@@ -609,6 +632,7 @@ function SortableBlock({
     onMediaUpload: (files: File[], studioSlug: string, category: string, subcategory?: string) => Promise<UploadedFile[]>;
     studioSlug: string;
     isUploading: boolean;
+    isDeleting: boolean;
     setUploading: (blockId: string, isUploading: boolean) => void;
     onDropFiles: (files: File[], blockId: string) => Promise<void>;
 }) {
@@ -957,8 +981,11 @@ function SortableBlock({
             id={block.id}
             ref={setNodeRef}
             style={style}
-            className={`bg-zinc-800 border border-zinc-700 rounded-lg p-4 ${isDragging ? 'opacity-50' : ''
-                }`}
+            className={`bg-zinc-800 border border-zinc-700 rounded-lg p-4 transition-all duration-300 ${
+                isDragging ? 'opacity-50' : ''
+            } ${
+                isDeleting ? 'opacity-0 scale-95 transform -translate-y-2' : 'opacity-100 scale-100'
+            }`}
         >
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
