@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
-import { ContentBlock, TextBlockConfig } from '@/types/content-blocks';
+import { ContentBlock, TextBlockConfig, MediaBlockConfig } from '@/types/content-blocks';
 import { VideoSingle } from '@/components/shared/video';
 import { ImageSingle, ImageGrid } from '@/components/shared/media';
+import { MasonryGallery } from '@/components/shared/media/MasonryGallery';
 
 interface BlockRendererProps {
     block: ContentBlock;
@@ -41,18 +42,52 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                         </div>
                     );
                 }
-                return (
-                    <ImageGrid
-                        media={block.media}
-                        title={block.title}
-                        description={block.description}
-                        config={block.config}
-                        className={className}
-                        showSizeLabel={false}
-                        isEditable={false}
-                        lightbox={true}
-                    />
-                );
+
+                // Determinar el modo de la galería
+                const mode = (block.config as Partial<MediaBlockConfig>)?.mode || 'grid';
+                
+                // Renderizar según el modo
+                switch (mode) {
+                    case 'masonry':
+                        return (
+                            <MasonryGallery
+                                media={block.media}
+                                className={className}
+                                enableLightbox={true}
+                                showSizeLabel={false}
+                                columns={3}
+                                spacing={4}
+                            />
+                        );
+                    case 'slide':
+                        // TODO: Implementar GallerySlide
+                        return (
+                            <ImageGrid
+                                media={block.media}
+                                title={block.title}
+                                description={block.description}
+                                config={block.config}
+                                className={className}
+                                showSizeLabel={false}
+                                isEditable={false}
+                                lightbox={true}
+                            />
+                        );
+                    case 'grid':
+                    default:
+                        return (
+                            <ImageGrid
+                                media={block.media}
+                                title={block.title}
+                                description={block.description}
+                                config={block.config}
+                                className={className}
+                                showSizeLabel={false}
+                                isEditable={false}
+                                lightbox={true}
+                            />
+                        );
+                }
 
             case 'video':
                 if (!block.media || block.media.length === 0) {
