@@ -15,13 +15,8 @@ function convertDatabasePostToFormData(dbPost: DatabasePost): PostFormData {
         caption: dbPost.caption,
         media: [], // Se cargará desde studio_post_media
         cover_index: dbPost.cover_index,
-        category: dbPost.category as "portfolio" | "blog" | "promo",
         event_type_id: dbPost.event_type_id,
         tags: dbPost.tags,
-        cta_enabled: dbPost.cta_enabled,
-        cta_text: dbPost.cta_text,
-        cta_action: dbPost.cta_action as "whatsapp" | "lead_form" | "calendar",
-        cta_link: dbPost.cta_link,
         is_featured: dbPost.is_featured,
         is_published: dbPost.is_published,
     };

@@ -101,7 +101,6 @@ function convertPrismaPostToStudioPost(
         id: post.id,
         title: post.title,
         caption: post.caption,
-        category: post.category,
         is_featured: post.is_featured,
         is_published: post.is_published,
         cover_index: post.cover_index,
@@ -110,10 +109,6 @@ function convertPrismaPostToStudioPost(
         studio_id: post.studio_id,
         event_type_id: post.event_type_id,
         tags: post.tags,
-        cta_enabled: post.cta_enabled,
-        cta_text: post.cta_text,
-        cta_action: post.cta_action,
-        cta_link: post.cta_link,
         published_at: post.published_at,
         view_count: post.view_count,
         event_type: post.event_type,
@@ -135,13 +130,8 @@ export async function createStudioPost(studioId: string, data: PostFormData) {
                     title: validatedData.title,
                     caption: validatedData.caption,
                     cover_index: validatedData.cover_index,
-                    category: validatedData.category,
                     event_type_id: validatedData.event_type_id,
                     tags: validatedData.tags,
-                    cta_enabled: validatedData.cta_enabled,
-                    cta_text: validatedData.cta_text,
-                    cta_action: validatedData.cta_action,
-                    cta_link: validatedData.cta_link,
                     is_featured: validatedData.is_featured,
                     is_published: validatedData.is_published,
                     published_at: validatedData.is_published ? new Date() : null,
@@ -197,7 +187,6 @@ export async function getStudioPosts(studioId: string, filters?: PostFilters): P
             where: {
                 studio_id: studioId,
                 is_published: filters?.is_published,
-                category: filters?.category,
                 event_type_id: filters?.event_type_id,
             },
             include: {
@@ -308,13 +297,8 @@ export async function updateStudioPost(
                 title?: string;
                 caption?: string | null;
                 cover_index?: number;
-                category?: string;
                 event_type_id?: string | null;
                 tags?: string[];
-                cta_enabled?: boolean;
-                cta_text?: string;
-                cta_action?: string;
-                cta_link?: string | null;
                 is_featured?: boolean;
                 is_published?: boolean;
                 published_at?: Date | null;
@@ -327,13 +311,8 @@ export async function updateStudioPost(
             if (validatedData.title !== undefined) updateData.title = validatedData.title;
             if (validatedData.caption !== undefined) updateData.caption = validatedData.caption;
             if (validatedData.cover_index !== undefined) updateData.cover_index = validatedData.cover_index;
-            if (validatedData.category !== undefined) updateData.category = validatedData.category;
             if (validatedData.event_type_id !== undefined) updateData.event_type_id = validatedData.event_type_id ?? null;
             if (validatedData.tags !== undefined) updateData.tags = validatedData.tags;
-            if (validatedData.cta_enabled !== undefined) updateData.cta_enabled = validatedData.cta_enabled;
-            if (validatedData.cta_text !== undefined) updateData.cta_text = validatedData.cta_text;
-            if (validatedData.cta_action !== undefined) updateData.cta_action = validatedData.cta_action;
-            if (validatedData.cta_link !== undefined) updateData.cta_link = validatedData.cta_link ?? null;
             if (validatedData.is_featured !== undefined) updateData.is_featured = validatedData.is_featured;
 
             // Manejar is_published y published_at

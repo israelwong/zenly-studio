@@ -62,12 +62,13 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
     const { uploadFiles, isUploading } = useMediaUpload();
 
     // Estado del formulario simplificado
-    const [formData, setFormData] = useState<{ title: string; caption: string; tags: string[]; media: PostMediaItem[]; is_published: boolean }>({
+    const [formData, setFormData] = useState<{ title: string; caption: string; tags: string[]; media: PostMediaItem[]; is_published: boolean; is_featured: boolean }>({
         title: post?.title || "",
         caption: post?.caption || "",
         tags: post?.tags || [],
         media: post?.media || [],
         is_published: post?.is_published ?? true,
+        is_featured: post?.is_featured ?? false,
     });
 
     // Estado para input de palabras clave
@@ -274,14 +275,9 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                     display_order: index
                 })),
                 cover_index: 0,
-                category: "portfolio" as const,
                 event_type_id: null,
                 tags: formData.tags,
-                cta_enabled: false,
-                cta_text: "",
-                cta_action: "whatsapp" as const,
-                cta_link: null,
-                is_featured: false,
+                is_featured: formData.is_featured,
                 is_published: formData.is_published,
             };
 
@@ -356,11 +352,19 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                                 <ZenCardTitle>
                                     {mode === "create" ? "Crear Nuevo Post" : "Editar Post"}
                                 </ZenCardTitle>
-                                <ZenSwitch
-                                    checked={formData.is_published}
-                                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_published: checked }))}
-                                    label="Publicado"
-                                />
+                                <div className="flex items-center gap-4">
+                                    <ZenSwitch
+                                        checked={formData.is_published}
+                                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_published: checked }))}
+                                        label="Publicado"
+                                    />
+                                    <ZenSwitch
+                                        checked={formData.is_featured}
+                                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_featured: checked }))}
+                                        label="Destacado"
+                                        variant="amber"
+                                    />
+                                </div>
                             </div>
                         </ZenCardHeader>
 

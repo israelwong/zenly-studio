@@ -29,11 +29,6 @@ export function PostsList({ studioSlug }: PostsListProps) {
                 filters = undefined; // Traer todos los posts (publicados y no publicados)
             } else if (filter === "published") {
                 filters = { is_published: true };
-            } else {
-                // Filtro por categoría (traer todos de esa categoría, publicados y no publicados)
-                filters = {
-                    category: filter as "portfolio" | "blog" | "promo",
-                };
             }
 
             const result = await getStudioPostsBySlug(studioSlug, filters);
@@ -63,9 +58,6 @@ export function PostsList({ studioSlug }: PostsListProps) {
     const filterOptions = [
         { value: "all", label: "Todos" },
         { value: "published", label: "Publicados" },
-        { value: "portfolio", label: "Portfolio" },
-        { value: "blog", label: "Blog" },
-        { value: "promo", label: "Promoción" },
     ];
 
     if (loading) {

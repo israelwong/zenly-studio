@@ -2618,28 +2618,21 @@ model studio_posts {
   id        String @id @default(cuid())
   studio_id String
 
-  // Contenido
+  // Content
   title       String?
   caption     String?
   cover_index Int     @default(0)
 
-  // Clasificación
-  category      String   @default("portfolio") // "portfolio" | "blog" | "promo"
+  // Classification
   event_type_id String?
   tags          String[] @default([])
 
-  // CTA
-  cta_enabled Boolean @default(true)
-  cta_text    String  @default("Cotiza tu evento")
-  cta_action  String  @default("whatsapp") // "whatsapp" | "lead_form" | "calendar"
-  cta_link    String?
-
-  // Visibilidad
+  // Visibility
   is_featured  Boolean   @default(false)
   is_published Boolean   @default(false)
   published_at DateTime?
 
-  // Métricas
+  // Metrics
   view_count Int @default(0)
 
   // Timestamps
@@ -2653,7 +2646,6 @@ model studio_posts {
 
   @@index([studio_id, is_published, published_at])
   @@index([studio_id, is_featured])
-  @@index([category])
   @@index([event_type_id])
 }
 

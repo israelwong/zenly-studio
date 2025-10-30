@@ -79,14 +79,20 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
     };
 
     const coverImage = getCoverImage();
+    
+    // Obtener URL válida para la imagen (no vacía)
+    const imageUrl = coverImage 
+        ? (coverImage.thumbnail_url || coverImage.url || coverImage.file_url)
+        : null;
+    const isValidImageUrl = imageUrl && imageUrl.trim() !== "";
 
     return (
         <ZenCard className="overflow-hidden">
             {/* Cover Image */}
             <div className="aspect-square relative bg-zinc-800">
-                {coverImage ? (
+                {isValidImageUrl ? (
                     <Image
-                        src={coverImage.thumbnail_url || coverImage.url}
+                        src={imageUrl}
                         alt={post.title || "Post"}
                         fill
                         className="object-cover"
@@ -141,8 +147,7 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
                 </div>
 
                 {/* Meta Info */}
-                <div className="flex items-center justify-between text-xs text-zinc-500">
-                    <span className="capitalize">{post.category}</span>
+                <div className="flex items-center justify-end text-xs text-zinc-500">
                     <span>{post.created_at.toLocaleDateString()}</span>
                 </div>
 
