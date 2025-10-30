@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { CaptionWithLinks } from '@/app/[slug]/studio/builder/content/posts/components/CaptionWithLinks';
 import { ImageCarousel } from '@/components/shared/media';
@@ -6,6 +6,8 @@ import { MediaItem } from '@/types/content-blocks';
 import Lightbox from "yet-another-react-lightbox";
 import Video from "yet-another-react-lightbox/plugins/video";
 import "yet-another-react-lightbox/styles.css";
+import { obtenerIdentidadStudio } from '@/lib/actions/studio/builder/identidad.actions';
+import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 
 // Función para formatear tiempo relativo corto (1h, 2d)
 function formatTimeAgo(date: Date | null): string {
@@ -54,6 +56,8 @@ interface PostDetail {
 
 interface PostDetailSectionProps {
     post: PostDetail;
+    logoUrl?: string | null;
+    studioSlug?: string;
 }
 
 /**
@@ -64,10 +68,39 @@ interface PostDetailSectionProps {
  * - Una sola foto: fullwidth
  * - Múltiples fotos/videos: carousel usando ImageCarousel
  */
-export function PostDetailSection({ post }: PostDetailSectionProps) {
+export function PostDetailSection({ post, logoUrl: logoUrlProp, studioSlug }: PostDetailSectionProps) {
     const hasMultipleMedia = post.media.length > 1;
     const firstMedia = post.media[0];
     const [lightboxOpen, setLightboxOpen] = useState(false);
+    const [logoUrl, setLogoUrl] = useState<string | null | undefined>(logoUrlProp);
+    const [isLoadingLogo, setIsLoadingLogo] = useState(false);
+
+    // Si no hay logoUrl pero hay studioSlug, obtener el logo del studio
+    useEffect(() => {
+        if (!logoUrl && studioSlug && !isLoadingLogo) {
+            setIsLoadingLogo(true);
+            obtenerIdentidadStudio(studioSlug)
+                .then((result) => {
+                    if (result && !('success' in result && result.success === false)) {
+                        const studioData = result as { logo_url?: string | null };
+                        setLogoUrl(studioData.logo_url || null);
+                    }
+                })
+                .catch((error) => {
+                    console.error('[PostDetailSection] Error obteniendo logo:', error);
+                })
+                .finally(() => {
+                    setIsLoadingLogo(false);
+                });
+        }
+    }, [logoUrl, studioSlug, isLoadingLogo]);
+
+    // Actualizar logoUrl si cambia el prop
+    useEffect(() => {
+        if (logoUrlProp !== undefined) {
+            setLogoUrl(logoUrlProp);
+        }
+    }, [logoUrlProp]);
 
     const timeAgo = useMemo(() => formatTimeAgo(post.published_at), [post.published_at]);
 
@@ -97,33 +130,62 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
         playsInline: true
     } : null;
 
+    // Helpers para verificar valores vacíos
+    const hasTitle = post.title && post.title.trim().length > 0;
+    const hasCaption = post.caption && post.caption.trim().length > 0;
+    const hasMedia = post.media && post.media.length > 0;
+    const hasTags = post.tags && post.tags.length > 0;
+
     return (
-        <div className="mt-10 space-y-2">
-            {/* Título y tiempo de publicación */}
-            {(post.title || timeAgo) && (
-                <div className="flex items-center gap-2 mb-2">
-                    {post.title && (
-                        <span className="text-white font-light leading-relaxed whitespace-pre-wrap break-words text-base">
-                            {post.title}
-                        </span>
-                    )}
-                    {timeAgo && (
-                        <span className="text-zinc-500 text-sm">
-                            {timeAgo}
-                        </span>
-                    )}
-                </div>
-            )}
+        <div className="mt-3 space-y-2">
+            {/* Logo, Título y tiempo de publicación */}
+            <div className="flex items-center gap-2 mb-2">
+                {/* Avatar con logo */}
+                {logoUrl ? (
+                    <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <Image
+                            src={logoUrl}
+                            alt="Logo"
+                            width={24}
+                            height={24}
+                            className="w-full h-full object-cover"
+                        />
+                    </div>
+                ) : (
+                    <Skeleton className="w-8 h-8 rounded-full flex-shrink-0 bg-zinc-700" />
+                )}
+
+                {hasTitle ? (
+                    <span className="text-white font-light leading-relaxed whitespace-pre-wrap break-words text-base">
+                        {post.title}
+                    </span>
+                ) : (
+                    <Skeleton className="h-5 w-48 bg-zinc-700" />
+                )}
+
+                {timeAgo ? (
+                    <span className="text-zinc-500 text-sm flex-shrink-0">
+                        {timeAgo}
+                    </span>
+                ) : (
+                    <Skeleton className="h-4 w-8 flex-shrink-0 bg-zinc-700" />
+                )}
+            </div>
 
             {/* Descripción */}
-            {post.caption && (
+            {hasCaption ? (
                 <div className="w-full mb-2">
-                    <CaptionWithLinks caption={post.caption} className="text-zinc-400" />
+                    <CaptionWithLinks caption={post.caption!} className="text-zinc-400" />
+                </div>
+            ) : (
+                <div className="w-full mb-2 space-y-2">
+                    <Skeleton className="h-4 w-full bg-zinc-700" />
+                    <Skeleton className="h-4 w-3/4 bg-zinc-700" />
                 </div>
             )}
 
             {/* Media */}
-            {firstMedia && (
+            {hasMedia && firstMedia ? (
                 <div className="relative">
                     {/* Una sola foto/video: fullwidth */}
                     {!hasMultipleMedia ? (
@@ -167,6 +229,10 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
                             className=""
                         />
                     )}
+                </div>
+            ) : (
+                <div className="relative w-full">
+                    <Skeleton className="w-full aspect-square rounded-md bg-zinc-700" />
                 </div>
             )}
 
@@ -249,9 +315,9 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
             )}
 
             {/* Palabras clave */}
-            {post.tags && post.tags.length > 0 && (
+            {hasTags ? (
                 <div className="flex flex-wrap gap-2 mt-3">
-                    {post.tags.map((tag, index) => (
+                    {post.tags!.map((tag, index) => (
                         <span
                             key={index}
                             className="text-zinc-600 text-sm"
@@ -259,6 +325,12 @@ export function PostDetailSection({ post }: PostDetailSectionProps) {
                             #{tag}
                         </span>
                     ))}
+                </div>
+            ) : (
+                <div className="flex flex-wrap gap-2 mt-3">
+                    <Skeleton className="h-5 w-16 rounded-full bg-zinc-700" />
+                    <Skeleton className="h-5 w-20 rounded-full bg-zinc-700" />
+                    <Skeleton className="h-5 w-14 rounded-full bg-zinc-700" />
                 </div>
             )}
         </div>
