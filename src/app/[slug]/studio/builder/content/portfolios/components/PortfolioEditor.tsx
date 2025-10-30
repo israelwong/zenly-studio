@@ -5,14 +5,17 @@ import { ZenButton, ZenInput, ZenTextarea, ZenSelect, ZenCard, ZenCardContent, Z
 import { MobilePreviewFull } from "../../../components/MobilePreviewFull";
 import { ContentBlocksEditor } from "@/components/content-blocks";
 import { ContentBlock } from "@/types/content-blocks";
+import { CategorizedComponentSelector, ComponentOption } from "./CategorizedComponentSelector";
 import { obtenerIdentidadStudio } from "@/lib/actions/studio/builder/identidad.actions";
 import { getStudioPortfoliosBySlug } from "@/lib/actions/studio/builder/portfolios/portfolios.actions";
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
 import { useTempCuid } from "@/hooks/useTempCuid";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, X, Star } from "lucide-react";
+import { ArrowLeft, Plus, X, Star, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import cuid from "cuid";
+import Image from "next/image";
+import { useMediaUpload } from "@/hooks/useMediaUpload";
 
 interface PortfolioEditorProps {
     studioSlug: string;
@@ -67,7 +70,6 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
         title: portfolio?.title || "",
         slug: portfolio?.slug || generateSlug(portfolio?.title || ""),
         description: portfolio?.description || "",
-        caption: portfolio?.caption || "",
         cover_image_url: portfolio?.cover_image_url || null,
         media: portfolio?.media || [],
         cover_index: portfolio?.cover_index || 0,
@@ -95,6 +97,10 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showTagModal, setShowTagModal] = useState(false);
+    const [showComponentSelector, setShowComponentSelector] = useState(false);
+    const [isUploadingCover, setIsUploadingCover] = useState(false);
+    const [isDragOverCover, setIsDragOverCover] = useState(false);
+    const { uploadFiles } = useMediaUpload();
 
     // Generar slug automáticamente cuando cambia el título
     useEffect(() => {
@@ -168,7 +174,6 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
             title: formData.title,
             slug: formData.slug || generateSlug(formData.title || ""),
             description: formData.description,
-            caption: formData.caption,
             category: formData.category,
             event_type: eventTypes.find(et => et.id === formData.event_type_id) ? {
                 id: formData.event_type_id,
@@ -288,6 +293,226 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
         }));
     };
 
+    // Función para crear un bloque desde el selector categorizado
+    const handleAddComponentFromSelector = (component: ComponentOption) => {
+        const generateId = () => `block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        let config: Record<string, unknown> = {};
+
+        // Configuración específica por tipo
+        if (component.type === 'image') {
+            config = {
+                aspectRatio: 'square',
+                showCaptions: false
+            };
+        } else if (component.type === 'gallery') {
+            config = {
+                mode: component.mode,
+                columns: component.mode === 'grid' ? 3 : undefined,
+                gap: 4,
+                aspectRatio: 'square',
+                showCaptions: false,
+                showTitles: false,
+                lightbox: component.mode !== 'slide',
+                autoplay: component.mode === 'slide' ? 3000 : undefined,
+                perView: component.mode === 'slide' ? 1 : undefined,
+                showArrows: component.mode === 'slide',
+                showDots: component.mode === 'slide'
+            };
+        } else if (component.type === 'video') {
+            config = {
+                autoPlay: false,
+                muted: true,
+                loop: false,
+                controls: true
+            };
+        } else if (component.type === 'heading-1') {
+            config = {
+                text: 'Tu Título Principal',
+                fontSize: '2xl',
+                fontWeight: 'bold',
+                alignment: 'left'
+            };
+        } else if (component.type === 'heading-3') {
+            config = {
+                text: 'Tu Subtítulo',
+                fontSize: 'xl',
+                fontWeight: 'semibold',
+                alignment: 'left'
+            };
+        } else if (component.type === 'blockquote') {
+            config = {
+                text: 'Tu cita destacada aquí',
+                fontSize: 'lg',
+                fontWeight: 'medium',
+                alignment: 'left'
+            };
+        } else if (component.type === 'text') {
+            config = {
+                text: '',
+                alignment: 'left'
+            };
+        } else if (component.type === 'hero-contact') {
+            config = {
+                evento: 'Eventos',
+                titulo: 'Contáctanos Hoy Mismo',
+                descripcion: 'Nos emociona saber que nos estás considerando para cubrir tu evento. Especialistas en bodas, XV años y eventos corporativos.',
+                gradientFrom: 'from-purple-600',
+                gradientTo: 'to-blue-600',
+                showScrollIndicator: true
+            };
+        } else if (component.type === 'hero-image') {
+            config = {
+                title: 'Tu Título Aquí',
+                subtitle: 'Subtítulo Impactante',
+                description: 'Descripción que cautive a tus prospectos',
+                buttons: [
+                    {
+                        text: 'Ver Trabajo',
+                        variant: 'primary',
+                        size: 'lg'
+                    },
+                    {
+                        text: 'Contactar',
+                        variant: 'outline',
+                        size: 'lg'
+                    }
+                ],
+                overlay: true,
+                overlayOpacity: 50,
+                textAlignment: 'center',
+                imagePosition: 'center'
+            };
+        } else if (component.type === 'hero-video') {
+            config = {
+                title: 'Tu Título Aquí',
+                subtitle: 'Subtítulo Impactante',
+                description: 'Descripción que cautive a tus prospectos',
+                buttons: [
+                    {
+                        text: 'Ver Trabajo',
+                        variant: 'primary',
+                        size: 'lg'
+                    },
+                    {
+                        text: 'Contactar',
+                        variant: 'outline',
+                        size: 'lg'
+                    }
+                ],
+                overlay: true,
+                overlayOpacity: 50,
+                textAlignment: 'center',
+                autoPlay: true,
+                muted: true,
+                loop: true
+            };
+        } else if (component.type === 'hero-text') {
+            config = {
+                title: 'Tu Título Aquí',
+                subtitle: 'Subtítulo Impactante',
+                description: 'Descripción que cautive a tus prospectos',
+                buttons: [
+                    {
+                        text: 'Ver Trabajo',
+                        variant: 'primary',
+                        size: 'lg'
+                    },
+                    {
+                        text: 'Contactar',
+                        variant: 'outline',
+                        size: 'lg'
+                    }
+                ],
+                backgroundVariant: 'gradient',
+                backgroundGradient: 'from-zinc-900 via-zinc-800 to-zinc-900',
+                textAlignment: 'center',
+                pattern: 'dots',
+                textColor: 'text-white'
+            };
+        }
+
+        const newBlock: ContentBlock = {
+            id: generateId(),
+            type: component.type,
+            order: contentBlocks.length,
+            presentation: 'block',
+            media: [],
+            config
+        };
+
+        setContentBlocks([...contentBlocks, newBlock]);
+        setShowComponentSelector(false);
+    };
+
+    // Manejar upload de cover
+    const handleCoverUpload = async (files: File[]) => {
+        if (!files || files.length === 0) return;
+
+        // Solo tomar la primera imagen
+        const imageFile = files[0];
+        if (!imageFile.type.startsWith('image/')) {
+            toast.error('Solo se permiten archivos de imagen');
+            return;
+        }
+
+        setIsUploadingCover(true);
+        try {
+            const uploadedFiles = await uploadFiles([imageFile], studioSlug, 'portfolios', 'covers');
+            if (uploadedFiles.length > 0) {
+                setFormData(prev => ({
+                    ...prev,
+                    cover_image_url: uploadedFiles[0].url
+                }));
+                toast.success('Carátula subida correctamente');
+            }
+        } catch (error) {
+            console.error("Error uploading cover:", error);
+            toast.error('Error al subir la carátula');
+        } finally {
+            setIsUploadingCover(false);
+        }
+    };
+
+    const handleCoverFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            handleCoverUpload(Array.from(files));
+            // Reset input
+            e.target.value = '';
+        }
+    };
+
+    const handleCoverDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOverCover(true);
+    };
+
+    const handleCoverDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOverCover(false);
+    };
+
+    const handleCoverDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOverCover(false);
+
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            handleCoverUpload(Array.from(files));
+        }
+    };
+
+    const handleRemoveCover = () => {
+        setFormData(prev => ({
+            ...prev,
+            cover_image_url: null
+        }));
+        toast.success('Carátula eliminada');
+    };
+
     return (
         <div className="space-y-6">
             {/* Header con botón de regresar */}
@@ -350,6 +575,68 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                                 hint="Se genera automáticamente desde el título. Puedes editarlo manualmente."
                             />
 
+                            {/* Carátula */}
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-zinc-300">
+                                    Carátula del Portfolio
+                                </label>
+                                <p className="text-xs text-zinc-500 mb-3">
+                                    Esta imagen se mostrará en el listado de portfolios
+                                </p>
+                                
+                                {formData.cover_image_url ? (
+                                    <div className="relative group">
+                                        <div className="aspect-square relative bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700">
+                                            <Image
+                                                src={formData.cover_image_url}
+                                                alt="Carátula del portfolio"
+                                                fill
+                                                className="object-cover"
+                                            />
+                                            <button
+                                                onClick={handleRemoveCover}
+                                                className="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <label className="block">
+                                        <div
+                                            className={`aspect-square border-2 border-dashed rounded-lg transition-colors cursor-pointer flex items-center justify-center bg-zinc-800/30 ${
+                                                isDragOverCover
+                                                    ? 'border-emerald-500 bg-emerald-500/10'
+                                                    : 'border-zinc-700 hover:border-emerald-500'
+                                            }`}
+                                            onDragOver={handleCoverDragOver}
+                                            onDragLeave={handleCoverDragLeave}
+                                            onDrop={handleCoverDrop}
+                                        >
+                                            {isUploadingCover ? (
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent"></div>
+                                                    <span className="text-sm text-zinc-400">Subiendo...</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 text-zinc-400">
+                                                    <Upload className="h-8 w-8" />
+                                                    <span className="text-sm">Haz clic para subir carátula</span>
+                                                    <span className="text-xs">o arrastra una imagen aquí</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleCoverFileInput}
+                                            className="hidden"
+                                            disabled={isUploadingCover}
+                                        />
+                                    </label>
+                                )}
+                            </div>
+
                             {/* Descripción */}
                             <ZenTextarea
                                 label="Descripción"
@@ -359,21 +646,20 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                                 rows={4}
                             />
 
-                            {/* Caption */}
-                            <ZenTextarea
-                                label="Caption (con soporte para links)"
-                                value={formData.caption || ""}
-                                onChange={(e) => handleInputChange("caption", e.target.value)}
-                                placeholder="Texto adicional con enlaces"
-                                rows={3}
-                            />
-
                             {/* //! Sistema de Bloques de Contenido */}
                             <div>
                                 <ContentBlocksEditor
                                     blocks={contentBlocks}
                                     onBlocksChange={setContentBlocks}
                                     studioSlug={studioSlug}
+                                    onAddComponentClick={() => setShowComponentSelector(true)}
+                                    customSelector={
+                                        <CategorizedComponentSelector
+                                            isOpen={showComponentSelector}
+                                            onClose={() => setShowComponentSelector(false)}
+                                            onSelect={handleAddComponentFromSelector}
+                                        />
+                                    }
                                 />
                             </div>
 

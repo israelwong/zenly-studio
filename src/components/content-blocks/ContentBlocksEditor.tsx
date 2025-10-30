@@ -56,6 +56,12 @@ function getComponentDisplayName(block: ContentBlock): string {
             return 'Video';
         case 'text':
             return 'Bloque de Texto';
+        case 'heading-1':
+            return 'Título (H1)';
+        case 'heading-3':
+            return 'Subtítulo (H3)';
+        case 'blockquote':
+            return 'Blockquote';
         case 'hero-contact':
             return 'Hero Contacto';
         case 'hero-image':
@@ -75,6 +81,8 @@ interface ContentBlocksEditorProps {
     onBlocksChange: (blocks: ContentBlock[]) => void;
     studioSlug: string;
     className?: string;
+    customSelector?: React.ReactNode;
+    onAddComponentClick?: () => void;
 }
 
 // Componentes esenciales - Simplificados
@@ -176,7 +184,9 @@ export function ContentBlocksEditor({
     blocks,
     onBlocksChange,
     studioSlug,
-    className = ''
+    className = '',
+    customSelector,
+    onAddComponentClick
 }: ContentBlocksEditorProps) {
     const [activeBlock, setActiveBlock] = useState<ContentBlock | null>(null);
     const [showComponentSelector, setShowComponentSelector] = useState(false);
@@ -309,6 +319,27 @@ export function ContentBlocksEditor({
                 textAlignment: 'center',
                 pattern: 'dots',
                 textColor: 'text-white'
+            };
+        } else if (component.type === 'heading-1') {
+            config = {
+                text: 'Tu Título Principal',
+                fontSize: '2xl',
+                fontWeight: 'bold',
+                alignment: 'left'
+            };
+        } else if (component.type === 'heading-3') {
+            config = {
+                text: 'Tu Subtítulo',
+                fontSize: 'xl',
+                fontWeight: 'semibold',
+                alignment: 'left'
+            };
+        } else if (component.type === 'blockquote') {
+            config = {
+                text: 'Tu cita destacada aquí',
+                fontSize: 'lg',
+                fontWeight: 'medium',
+                alignment: 'left'
             };
         }
 
@@ -494,7 +525,13 @@ export function ContentBlocksEditor({
                     </div>
                 </div>
                 <ZenButton
-                    onClick={() => setShowComponentSelector(true)}
+                    onClick={() => {
+                        if (onAddComponentClick) {
+                            onAddComponentClick();
+                        } else {
+                            setShowComponentSelector(true);
+                        }
+                    }}
                     className="flex items-center space-x-2 flex-shrink-0 w-full sm:w-auto"
                 >
                     <Plus className="h-4 w-4" />
@@ -504,38 +541,42 @@ export function ContentBlocksEditor({
             </div>
 
             {/* Modal Selector de Componentes - Todos los componentes */}
-            {showComponentSelector && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-zinc-900 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-semibold text-zinc-300">Seleccionar Componente</h3>
-                            <button
-                                onClick={() => setShowComponentSelector(false)}
-                                className="text-zinc-400 hover:text-zinc-200"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        {/* Grid de todos los componentes */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                            {ALL_COMPONENTS.map((component, index) => (
+            {customSelector ? (
+                customSelector
+            ) : (
+                showComponentSelector && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-zinc-900 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-lg font-semibold text-zinc-300">Seleccionar Componente</h3>
                                 <button
-                                    key={`${component.type}-${component.mode}-${component.mediaType}-${index}`}
-                                    onClick={() => {
-                                        handleAddComponent(component);
-                                        setShowComponentSelector(false);
-                                    }}
-                                    className="p-4 border border-zinc-700 rounded-lg hover:border-emerald-500 hover:bg-emerald-500/10 transition-all text-left group"
+                                    onClick={() => setShowComponentSelector(false)}
+                                    className="text-zinc-400 hover:text-zinc-200"
                                 >
-                                    <component.icon className="h-6 w-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
-                                    <div className="font-medium text-zinc-300 text-sm mb-1">{component.label}</div>
-                                    <div className="text-xs text-zinc-500 leading-tight">{component.description}</div>
+                                    <X className="h-5 w-5" />
                                 </button>
-                            ))}
+                            </div>
+
+                            {/* Grid de todos los componentes */}
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {ALL_COMPONENTS.map((component, index) => (
+                                    <button
+                                        key={`${component.type}-${component.mode}-${component.mediaType}-${index}`}
+                                        onClick={() => {
+                                            handleAddComponent(component);
+                                            setShowComponentSelector(false);
+                                        }}
+                                        className="p-4 border border-zinc-700 rounded-lg hover:border-emerald-500 hover:bg-emerald-500/10 transition-all text-left group"
+                                    >
+                                        <component.icon className="h-6 w-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
+                                        <div className="font-medium text-zinc-300 text-sm mb-1">{component.label}</div>
+                                        <div className="text-xs text-zinc-500 leading-tight">{component.description}</div>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )
             )}
 
 
@@ -546,7 +587,13 @@ export function ContentBlocksEditor({
                     <h4 className="text-lg font-semibold text-zinc-300 mb-2">Sin componentes</h4>
                     <p className="text-zinc-500 text-center mb-4">Agrega tu primer componente para comenzar</p>
                     <ZenButton
-                        onClick={() => setShowComponentSelector(true)}
+                        onClick={() => {
+                            if (onAddComponentClick) {
+                                onAddComponentClick();
+                            } else {
+                                setShowComponentSelector(true);
+                            }
+                        }}
                         className="flex items-center space-x-2"
                     >
                         <Plus className="h-4 w-4" />
@@ -687,6 +734,12 @@ function SortableBlock({
                 return renderVideoContent();
             case 'text':
                 return renderTextContent();
+            case 'heading-1':
+                return renderHeading1Content();
+            case 'heading-3':
+                return renderHeading3Content();
+            case 'blockquote':
+                return renderBlockquoteContent();
             case 'hero-contact':
                 return renderHeroContactContent();
             case 'hero-image':
@@ -838,6 +891,63 @@ function SortableBlock({
                     placeholder="Escribe tu texto aquí..."
                     className="w-full min-h-[120px] p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none resize-none text-sm font-light leading-relaxed"
                     rows={4}
+                />
+            </div>
+        );
+    };
+
+    const renderHeading1Content = () => {
+        return (
+            <div className="space-y-3">
+                <input
+                    type="text"
+                    value={String(block.config?.text || '')}
+                    onChange={(e) => onUpdate(block.id, {
+                        config: {
+                            ...block.config,
+                            text: e.target.value
+                        }
+                    })}
+                    placeholder="Escribe tu título principal..."
+                    className="w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none text-2xl font-bold"
+                />
+            </div>
+        );
+    };
+
+    const renderHeading3Content = () => {
+        return (
+            <div className="space-y-3">
+                <input
+                    type="text"
+                    value={String(block.config?.text || '')}
+                    onChange={(e) => onUpdate(block.id, {
+                        config: {
+                            ...block.config,
+                            text: e.target.value
+                        }
+                    })}
+                    placeholder="Escribe tu subtítulo..."
+                    className="w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none text-xl font-semibold"
+                />
+            </div>
+        );
+    };
+
+    const renderBlockquoteContent = () => {
+        return (
+            <div className="space-y-3">
+                <textarea
+                    value={String(block.config?.text || '')}
+                    onChange={(e) => onUpdate(block.id, {
+                        config: {
+                            ...block.config,
+                            text: e.target.value
+                        }
+                    })}
+                    placeholder="Escribe tu cita destacada..."
+                    className="w-full min-h-[100px] p-4 bg-zinc-800 border-l-4 border-emerald-500 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none resize-none text-lg font-medium italic leading-relaxed"
+                    rows={3}
                 />
             </div>
         );
