@@ -74,7 +74,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             icon: Camera,
             items: [
                 { id: 'posts', name: 'Posts*', href: `/content/posts`, icon: Newspaper },
-                { id: 'portfolios', name: 'Portafolios', href: `/content/portafolio`, icon: Grid3X3 },
+                { id: 'portfolios', name: 'Portafolios', href: `/content/portfolios`, icon: Grid3X3 },
                 { id: 'catalogo', name: 'Catálogo*', href: `/content/catalogo`, icon: Store },
                 { id: 'paquetes', name: 'Paquetes*', href: `/content/paquetes`, icon: Package },
             ],
