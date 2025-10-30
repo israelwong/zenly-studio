@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Trash2, GripVertical, ZoomIn, Upload } from 'lucide-react';
 import { MediaItem, MediaBlockConfig } from '@/types/content-blocks';
@@ -24,6 +24,119 @@ import {
     sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { arrayMove } from "@dnd-kit/sortable";
+
+// Componente para mostrar thumbnail de video
+function VideoThumbnail({ videoUrl, thumbnailUrl, alt }: { videoUrl: string; thumbnailUrl?: string; alt: string }) {
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | null>(null);
+    const [hasThumbnail, setHasThumbnail] = useState(!!thumbnailUrl);
+
+    useEffect(() => {
+        // Si hay thumbnail_url, usarlo directamente
+        if (thumbnailUrl) {
+            setHasThumbnail(true);
+            return;
+        }
+
+        // Si no hay thumbnail, intentar capturar el primer frame
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        
+        if (!video || !canvas) return;
+
+        const captureFrame = () => {
+            try {
+                video.currentTime = 0.1; // Ir al primer frame
+                const onSeeked = () => {
+                    const ctx = canvas.getContext('2d');
+                    if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                        setThumbnailDataUrl(dataUrl);
+                        setHasThumbnail(true);
+                    }
+                };
+                video.addEventListener('seeked', onSeeked, { once: true });
+            } catch (error) {
+                console.error('Error capturing video frame:', error);
+            }
+        };
+
+        video.addEventListener('loadedmetadata', captureFrame, { once: true });
+        video.load(); // Forzar carga del video
+
+        return () => {
+            video.removeEventListener('loadedmetadata', captureFrame);
+        };
+    }, [videoUrl, thumbnailUrl]);
+
+    return (
+        <>
+            {/* Video oculto para capturar frame */}
+            <video
+                ref={videoRef}
+                src={videoUrl}
+                className="hidden"
+                preload="metadata"
+                muted
+                crossOrigin="anonymous"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+            
+            {/* Mostrar thumbnail si existe o fue capturado */}
+            {hasThumbnail ? (
+                <>
+                    {thumbnailUrl ? (
+                        <Image
+                            src={thumbnailUrl}
+                            alt={alt}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                    ) : thumbnailDataUrl ? (
+                        <Image
+                            src={thumbnailDataUrl}
+                            alt={alt}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                            unoptimized
+                        />
+                    ) : null}
+                    {/* Indicador de video */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <div className="bg-black/60 rounded-full p-2">
+                            <svg
+                                className="w-6 h-6 text-white"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                // Fallback: mostrar fondo con indicador mientras carga
+                <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center">
+                    <div className="bg-black/60 rounded-full p-2">
+                        <svg
+                            className="w-6 h-6 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path d="M8 5v14l11-7z" />
+                        </svg>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
 
 interface ImageGridProps {
     media: MediaItem[];
@@ -195,13 +308,21 @@ export function ImageGrid({
                         }`}
                     onClick={!isEditable && configLightbox ? () => handleImageClick(index) : undefined}
                 >
-                    <Image
-                        src={item.file_url}
-                        alt={item.filename}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, 50vw"
-                    />
+                    {item.file_type === 'video' ? (
+                        <VideoThumbnail
+                            videoUrl={item.file_url}
+                            thumbnailUrl={item.thumbnail_url}
+                            alt={item.filename}
+                        />
+                    ) : (
+                        <Image
+                            src={item.file_url}
+                            alt={item.filename}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                    )}
 
                     {/* Drag Handle */}
                     {isEditable && (
@@ -350,7 +471,7 @@ export function ImageGrid({
                                             <>
                                                 <Upload className="h-8 w-8 text-zinc-500 mx-auto mb-2 group-hover:text-emerald-400" />
                                                 <div className="text-sm text-zinc-500 group-hover:text-emerald-400">
-                                                    Arrastra imágenes aquí
+                                                    Arrastra imágenes o videos aquí
                                                 </div>
                                             </>
                                         )}

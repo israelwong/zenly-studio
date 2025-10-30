@@ -1,8 +1,11 @@
-import React from 'react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
-import { Image, Video, Eye, Calendar, Tag, Star } from 'lucide-react';
-import { ContentBlocksPreview } from '@/components/content-blocks';
-import { ContentBlock } from '@/types/content-blocks';
+import React, { useState } from 'react';
+import Image from 'next/image';
+import { CaptionWithLinks } from '@/app/[slug]/studio/builder/content/posts/components/CaptionWithLinks';
+import { ImageCarousel } from '@/components/shared/media';
+import { MediaItem } from '@/types/content-blocks';
+import Lightbox from "yet-another-react-lightbox";
+import Video from "yet-another-react-lightbox/plugins/video";
+import "yet-another-react-lightbox/styles.css";
 
 interface PostMedia {
     id: string;
@@ -15,25 +18,11 @@ interface PostMedia {
 
 interface PostDetail {
     id: string;
-    title: string | null;
     caption: string | null;
-    category: string;
-    event_type?: {
-        id: string;
-        nombre: string;
-    } | null;
-    tags: string[];
-    is_featured: boolean;
+    media: PostMedia[];
     is_published: boolean;
     published_at: Date | null;
     view_count: number;
-    media: PostMedia[];
-    cover_index: number;
-    cta_enabled: boolean;
-    cta_text: string | null;
-    cta_action: string | null;
-    cta_link: string | null;
-    content_blocks?: ContentBlock[]; // Agregar soporte para bloques de contenido
 }
 
 interface PostDetailSectionProps {
@@ -43,164 +32,176 @@ interface PostDetailSectionProps {
 /**
  * PostDetailSection - Vista detallada de un post individual
  * Usado en el editor para preview del post que se está editando
+ * 
+ * Reglas de visualización:
+ * - Una sola foto: fullwidth
+ * - Múltiples fotos/videos: carousel usando ImageCarousel
  */
 export function PostDetailSection({ post }: PostDetailSectionProps) {
-    const coverMedia = post.media[post.cover_index] || post.media[0];
+    const hasMultipleMedia = post.media.length > 1;
+    const firstMedia = post.media[0];
+    const [lightboxOpen, setLightboxOpen] = useState(false);
+
+    // Convertir PostMedia a MediaItem para ImageCarousel
+    const mediaItems: MediaItem[] = post.media.map(item => ({
+        id: item.id,
+        file_url: item.file_url,
+        file_type: item.file_type,
+        filename: item.filename,
+        thumbnail_url: item.thumbnail_url,
+        storage_path: item.file_url,
+        display_order: item.display_order,
+    }));
+
+    // Preparar slide para lightbox de video único
+    const videoLightboxSlide = firstMedia && firstMedia.file_type === 'video' ? {
+        type: 'video' as const,
+        sources: [{
+            src: firstMedia.file_url,
+            type: 'video/mp4'
+        }],
+        poster: firstMedia.thumbnail_url || firstMedia.file_url,
+        // No especificar width/height para que use tamaño natural del video
+        autoPlay: true,
+        muted: false,
+        controls: true,
+        playsInline: true
+    } : null;
 
     return (
-        <div className="space-y-6">
-            {/* Header del Post */}
-            <div className="text-center space-y-2">
-                <h1 className="text-2xl font-bold text-white">
-                    {post.title || 'Sin título'}
-                </h1>
-
-                <div className="flex items-center justify-center gap-2 flex-wrap">
-                    {post.is_featured && (
-                        <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-full flex items-center gap-1">
-                            <Star className="h-3 w-3" />
-                            Destacado
-                        </span>
-                    )}
-                    <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded-full">
-                        {post.category}
-                    </span>
-                    {post.event_type && (
-                        <span className="text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded-full">
-                            {post.event_type.nombre}
-                        </span>
-                    )}
+        <div className="space-y-2">
+            {/* Descripción arriba */}
+            {post.caption && (
+                <div className="w-full mb-2">
+                    <CaptionWithLinks caption={post.caption} />
                 </div>
-            </div>
+            )}
 
-            {/* Media Principal */}
-            {coverMedia && (
+            {/* Media */}
+            {firstMedia && (
                 <div className="relative">
-                    <ZenCard className="overflow-hidden">
-                        <div className="aspect-video relative bg-zinc-800">
-                            {coverMedia.file_type === 'image' ? (
-                                <img
-                                    src={coverMedia.file_url}
-                                    alt={post.title || 'Post image'}
-                                    className="w-full h-full object-cover"
-                                />
+                    {/* Una sola foto/video: fullwidth */}
+                    {!hasMultipleMedia ? (
+                        <div className="relative w-full">
+                            {firstMedia.file_type === 'image' ? (
+                                <div
+                                    onClick={() => setLightboxOpen(true)}
+                                    className="cursor-pointer"
+                                >
+                                    <Image
+                                        src={firstMedia.file_url}
+                                        alt="Post"
+                                        width={800}
+                                        height={800}
+                                        className="w-full h-auto object-contain rounded-md"
+                                        unoptimized
+                                        style={{ maxHeight: 'none' }}
+                                    />
+                                </div>
                             ) : (
                                 <video
-                                    src={coverMedia.file_url}
+                                    src={firstMedia.file_url}
                                     controls
-                                    className="w-full h-full object-cover"
-                                    poster={coverMedia.thumbnail_url}
+                                    className="w-full h-auto rounded-md cursor-pointer"
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                    loop
+                                    poster={firstMedia.thumbnail_url}
+                                    onClick={() => setLightboxOpen(true)}
                                 />
                             )}
                         </div>
-                    </ZenCard>
+                    ) : (
+                        /* Múltiples elementos: usar ImageCarousel */
+                        <ImageCarousel
+                            media={mediaItems}
+                            showArrows={false}
+                            showDots={false}
+                            autoplay={0}
+                            className=""
+                        />
+                    )}
                 </div>
             )}
 
-            {/* Descripción */}
-            {post.caption && (
-                <div className="w-full">
-                    <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap font-normal break-words overflow-wrap-anywhere">
-                        {post.caption}
-                    </p>
-                </div>
+            {/* Lightbox para imagen única */}
+            {!hasMultipleMedia && firstMedia && firstMedia.file_type === 'image' && (
+                <Lightbox
+                    open={lightboxOpen}
+                    close={() => setLightboxOpen(false)}
+                    slides={[{
+                        src: firstMedia.file_url,
+                        alt: firstMedia.filename || 'Post',
+                        width: 1920,
+                        height: 1080
+                    }]}
+                />
             )}
 
-            {/* Bloques de Contenido */}
-            <ContentBlocksPreview blocks={post.content_blocks || []} />
-
-            {/* Tags/Palabras Clave */}
-            {post.tags && post.tags.length > 0 && (
-                <ZenCard>
-                    <ZenCardHeader>
-                        <ZenCardTitle className="text-sm flex items-center gap-2">
-                            <Tag className="h-4 w-4" />
-                            Palabras Clave
-                        </ZenCardTitle>
-                    </ZenCardHeader>
-                    <ZenCardContent className="p-4 pt-0">
-                        <div className="flex flex-wrap justify-start gap-2">
-                            {post.tags.map((tag, index) => (
-                                <span
-                                    key={index}
-                                    className="text-xs text-zinc-300 bg-zinc-700 px-2 py-0.5 rounded-full border border-zinc-600 text-center"
-                                >
-                                    #{tag}
-                                </span>
-                            ))}
-                        </div>
-                    </ZenCardContent>
-                </ZenCard>
-            )}
-
-            {/* Media Adicional */}
-            {post.media.length > 1 && (
-                <ZenCard>
-                    <ZenCardHeader>
-                        <ZenCardTitle className="text-sm">
-                            Galería ({post.media.length} elementos)
-                        </ZenCardTitle>
-                    </ZenCardHeader>
-                    <ZenCardContent className="p-4 pt-0">
-                        <div className="grid grid-cols-2 gap-2">
-                            {post.media.slice(0, 4).map((media, index) => (
-                                <div key={media.id} className="aspect-square relative bg-zinc-800 rounded-lg overflow-hidden">
-                                    {media.file_type === 'image' ? (
-                                        <img
-                                            src={media.file_url}
-                                            alt={`${post.title} - ${index + 1}`}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    ) : (
+            {/* Lightbox para video único */}
+            {!hasMultipleMedia && videoLightboxSlide && (
+                <Lightbox
+                    open={lightboxOpen}
+                    close={() => setLightboxOpen(false)}
+                    slides={[videoLightboxSlide]}
+                    plugins={[Video]}
+                    video={{
+                        controls: true,
+                        playsInline: true,
+                        autoPlay: true,
+                        muted: false,
+                        loop: false
+                    }}
+                    styles={{
+                        container: {
+                            backgroundColor: "rgba(0, 0, 0, .98)",
+                            padding: 0
+                        },
+                        slide: {
+                            padding: 0,
+                            margin: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100vw',
+                            height: '100vh'
+                        }
+                    }}
+                    render={{
+                        slide: ({ slide }) => {
+                            if (slide.type === 'video') {
+                                return (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: '100%',
+                                        height: '100%'
+                                    }}>
                                         <video
-                                            src={media.file_url}
-                                            className="w-full h-full object-cover"
-                                            poster={media.thumbnail_url}
+                                            src={slide.sources?.[0]?.src}
+                                            poster={slide.poster}
+                                            autoPlay={slide.autoPlay}
+                                            muted={slide.muted}
+                                            controls={slide.controls}
+                                            playsInline={slide.playsInline}
+                                            style={{
+                                                maxWidth: '100%',
+                                                maxHeight: '100vh',
+                                                width: 'auto',
+                                                height: 'auto',
+                                                objectFit: 'contain'
+                                            }}
                                         />
-                                    )}
-                                    {index === 3 && post.media.length > 4 && (
-                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                            <span className="text-white text-sm font-medium">
-                                                +{post.media.length - 4}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </ZenCardContent>
-                </ZenCard>
+                                    </div>
+                                );
+                            }
+                            return undefined;
+                        }
+                    }}
+                />
             )}
-
-            {/* CTA */}
-            {post.cta_enabled && post.cta_text && (
-                <ZenCard>
-                    <ZenCardContent className="p-4">
-                        <div className="text-center space-y-3">
-                            <p className="text-zinc-300">{post.cta_text}</p>
-                            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                                {post.cta_action === 'whatsapp' && '📱 WhatsApp'}
-                                {post.cta_action === 'lead_form' && '📝 Formulario'}
-                                {post.cta_action === 'calendar' && '📅 Agendar'}
-                            </button>
-                        </div>
-                    </ZenCardContent>
-                </ZenCard>
-            )}
-
-            {/* Stats */}
-            <div className="flex items-center justify-center gap-4 text-xs text-zinc-500">
-                <div className="flex items-center gap-1">
-                    <Eye className="h-3 w-3" />
-                    {post.view_count} vistas
-                </div>
-                {post.published_at && (
-                    <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(post.published_at).toLocaleDateString()}
-                    </div>
-                )}
-            </div>
         </div>
     );
 }

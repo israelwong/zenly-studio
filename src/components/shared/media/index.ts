@@ -1,3 +1,4 @@
 export { ImageSingle } from './ImageSingle';
 export { ImageGrid } from './ImageGrid';
-export { ImageSlider } from './ImageSlider';
+export { ImageCarousel } from './ImageCarousel';
+export { VideoPostCarousel } from './VideoPostCarousel';
