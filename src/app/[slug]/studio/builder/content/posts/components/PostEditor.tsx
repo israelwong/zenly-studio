@@ -36,7 +36,7 @@ interface PostItem {
 
 interface StudioData {
     studio_name?: string;
-    logo_url?: string;
+    logo_url?: string | null;
     slogan?: string;
     address?: string;
     maps_url?: string;
@@ -44,7 +44,7 @@ interface StudioData {
 
 interface PreviewData {
     studio_name?: string;
-    logo_url?: string;
+    logo_url?: string | null;
     slogan?: string;
     posts?: PostItem[];
     studio?: unknown;
@@ -88,7 +88,13 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
 
                 // Obtener datos del estudio
                 const identidadResult = await obtenerIdentidadStudio(studioSlug);
-                const studioData = identidadResult.success && 'data' in identidadResult ? identidadResult.data as StudioData : undefined;
+                // obtenerIdentidadStudio devuelve directamente los datos del studio o { success: false, error: "..." }
+                const studioData = identidadResult && !('success' in identidadResult && identidadResult.success === false)
+                    ? (identidadResult as unknown as StudioData)
+                    : undefined;
+
+                console.log('[PostEditor] Studio data:', studioData);
+                console.log('[PostEditor] Logo URL:', studioData?.logo_url);
 
                 // Obtener posts publicados
                 const postsResult = await getStudioPostsBySlug(studioSlug, { is_published: true });
@@ -97,7 +103,7 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                 // Crear datos de preview
                 const preview: PreviewData = {
                     studio_name: studioData?.studio_name,
-                    logo_url: studioData?.logo_url,
+                    logo_url: studioData?.logo_url ?? null,
                     slogan: studioData?.slogan,
                     posts: publishedPosts as unknown as PostItem[],
                     studio: studioData,
@@ -107,6 +113,8 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                     direccion: studioData?.address,
                     google_maps_url: studioData?.maps_url
                 };
+
+                console.log('[PostEditor] Preview data logo_url:', preview.logo_url);
 
                 setPreviewData(preview);
             } catch (error) {
@@ -137,9 +145,12 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
 
         return {
             ...previewData,
-            post: tempPost
+            post: tempPost,
+            // Asegurar que logo_url y studioSlug estén presentes
+            logo_url: previewData.logo_url || undefined,
+            studioSlug: studioSlug
         };
-    }, [previewData, formData, tempCuid]);
+    }, [previewData, formData, tempCuid, studioSlug]);
 
     // Manejar subida de archivos
     const handleDropFiles = useCallback(async (files: File[]) => {
@@ -241,6 +252,10 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
             setIsSaving(true);
 
             // Validación básica
+            if (!formData.title || formData.title.trim() === "") {
+                toast.error("El título es obligatorio");
+                return;
+            }
             if (!formData.media || formData.media.length === 0) {
                 toast.error("Agrega al menos una imagen o video");
                 return;
@@ -249,7 +264,7 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
             // Preparar datos para guardar con ordenamiento preservado
             const postData = {
                 id: post?.id || tempCuid,
-                title: formData.title || null,
+                title: formData.title,
                 caption: formData.caption || null,
                 media: formData.media.map((item, index) => ({
                     ...item,
@@ -334,7 +349,8 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                                 label="Título"
                                 value={formData.title || ""}
                                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                                placeholder="Título del post (opcional)"
+                                placeholder="Título del post"
+                                required
                             />
 
                             {/* Descripción */}
@@ -451,6 +467,7 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                             activeTab="inicio"
                             loading={isLoadingPreview}
                             onClose={handleBack}
+                            isEditMode={true}
                         />
                     </div>
                 </div>

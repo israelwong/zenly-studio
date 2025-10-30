@@ -825,6 +825,7 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                             activeTab="inicio"
                             loading={isLoadingPreview}
                             onClose={handleBack}
+                            isEditMode={true}
                         />
                     </div>
                 </div>

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { ProfileIdentity, ProfileContent, ProfileFooter } from '@/components/profile';
-import { X } from 'lucide-react';
+import { ProfileContent, ProfileFooter } from '@/components/profile';
+import { Share2, ArrowLeft } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 
 interface MobilePreviewFullProps {
@@ -16,6 +16,8 @@ interface MobilePreviewFullProps {
     // Callbacks
     onClose?: () => void;
     onBack?: () => void;
+    // Modo edición - deshabilita botones de navegación
+    isEditMode?: boolean;
 }
 
 /**
@@ -27,34 +29,44 @@ export function MobilePreviewFull({
     data,
     loading = false,
     contentVariant = 'post-detail',
-    activeTab = 'inicio',
     onClose,
-    onBack
+    onBack,
+    isEditMode = false
 }: MobilePreviewFullProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     return (
         <div className="w-full max-w-sm mx-auto relative">
-            {/* Botón de cerrar/regresar */}
-            <div className="absolute top-4 right-4 z-10">
-                <ZenButton
-                    variant="ghost"
-                    size="sm"
-                    onClick={onClose || onBack}
-                    className="bg-zinc-900/80 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800"
-                >
-                    <X className="h-4 w-4" />
-                </ZenButton>
-            </div>
-
             {/* Simulador de móvil con proporciones reales */}
             <div className="bg-zinc-900 border border-zinc-700 rounded-3xl shadow-2xl w-[375px] h-[812px] flex flex-col relative overflow-hidden">
-                {/* Header de identidad - fijo con bordes redondeados */}
-                <div className="flex-shrink-0 rounded-t-3xl overflow-hidden">
-                    <ProfileIdentity
-                        data={data}
-                        loading={loading}
-                    />
+                {/* Header simple - fijo con bordes redondeados */}
+                <div className="flex-shrink-0 rounded-t-3xl bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3">
+                    <div className="flex items-center justify-between">
+                        {/* Botón de regresar */}
+                        <ZenButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={isEditMode ? undefined : (onBack || onClose)}
+                            disabled={isEditMode}
+                            className="p-2 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ArrowLeft className="h-5 w-5 text-zinc-300" /> Regresar
+                        </ZenButton>
+
+                        {/* Icono de compartir */}
+                        <ZenButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={isEditMode ? undefined : () => {
+                                // TODO: Implementar funcionalidad de compartir
+                                console.log('Compartir post');
+                            }}
+                            disabled={isEditMode}
+                            className="p-2 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Share2 className="h-5 w-5 text-zinc-300" />
+                        </ZenButton>
+                    </div>
                 </div>
 
                 {/* Contenido con scroll interno */}
