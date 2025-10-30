@@ -11,7 +11,8 @@ import { LogoutButton } from '@/components/auth/logout-button';
 import {
     Star, Phone, Camera, X, CreditCard, File, User, Grid3X3, Store, Package, Calendar,
     Newspaper, Briefcase, Users, Sparkles, BarChart3, Mail, ImageIcon, FileText, UserCheck,
-    ChevronDown, ChevronRight, Share2, HelpCircle, MapPin, Settings, Shield
+    ChevronDown, ChevronRight, Share2, HelpCircle, MapPin, Settings, Shield, ClipboardList,
+    FileSignature, UserCog, DollarSign, Target, ShoppingCart
 } from 'lucide-react';
 
 interface StudioBuilderSidebarProps {
@@ -22,7 +23,7 @@ interface StudioBuilderSidebarProps {
 export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSidebarProps) {
     console.log('🔍 StudioBuilderSidebar - studioSlug recibido:', studioSlug);
     const { isOpen, toggleSidebar } = useZenSidebar();
-    
+
     // Estado para grupo expandido (solo uno a la vez) - Ninguno expandido por defecto
     const [expandedGroup, setExpandedGroup] = React.useState<string | null>(null);
 
@@ -43,7 +44,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
         // 1. PERFIL (Gratuito - Base)
         {
             id: 'profile',
-            title: 'Perfil',
+            title: 'Profile',
             icon: User,
             items: [
                 { id: 'identidad', name: 'Identidad', href: `/profile/identidad`, icon: Star },
@@ -54,48 +55,66 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
                 { id: 'zonas-trabajo', name: 'Zonas de Trabajo', href: `/profile/zonas-trabajo`, icon: MapPin },
             ],
         },
-        
+
         // 2. CUENTA
         {
             id: 'account',
-            title: 'Cuenta',
-            icon: Settings,
+            title: 'Account',
+            icon: UserCog,
             items: [
-                { id: 'perfil', name: 'Perfil', href: `/cuenta/perfil`, icon: UserCheck },
-                { id: 'seguridad', name: 'Seguridad', href: `/cuenta/seguridad`, icon: Shield },
-                { id: 'suscripcion', name: 'Suscripción', href: `/cuenta/suscripcion`, icon: CreditCard },
+                { id: 'perfil', name: 'Perfil', href: `/account/perfil`, icon: UserCheck },
+                { id: 'seguridad', name: 'Seguridad', href: `/account/seguridad`, icon: Shield },
+                { id: 'suscripcion', name: 'Suscripción', href: `/account/suscripcion`, icon: CreditCard },
             ],
         },
-        
+
         // 3. CONTENT (Freemium)
         {
             id: 'content',
             title: 'Content',
             icon: Camera,
             items: [
-                { id: 'posts', name: 'Posts*', href: `/content/posts`, icon: Newspaper },
+                { id: 'posts', name: 'Posts', href: `/content/posts`, icon: Newspaper },
                 { id: 'portfolios', name: 'Portafolios', href: `/content/portfolios`, icon: Grid3X3 },
-                { id: 'catalogo', name: 'Catálogo*', href: `/content/catalogo`, icon: Store },
-                { id: 'paquetes', name: 'Paquetes*', href: `/content/paquetes`, icon: Package },
+                { id: 'catalogo', name: 'Catalog', href: `/content/catalogo`, icon: Store },
+                { id: 'paquetes', name: 'Packages', href: `/content/paquetes`, icon: Package },
             ],
         },
-        
+
+        // 5. COMERCIAL (Pago - Plan Pro+)
+        {
+            id: 'comercial',
+            title: 'Comercial',
+            icon: ShoppingCart,
+            items: [
+                { id: 'marketing', name: 'Marketing', href: `/marketing`, icon: BarChart3 },
+                { id: 'scheduling', name: 'Agendamiento*', href: `/agendamiento`, icon: Calendar },
+                { id: 'cotizaciones', name: 'Cotizaciones*', href: `/cotizaciones`, icon: File },
+                { id: 'leadform', name: 'Lead Form', href: `/business/leadform`, icon: ClipboardList },
+                { id: 'crm', name: 'CRM', href: `/business/crm`, icon: Target },
+                { id: 'condiciones-comerciales', name: 'Condiciones Comerciales', href: `/business/condiciones-comerciales`, icon: FileSignature },
+                { id: 'email', name: 'Email Marketing', href: `/business/email`, icon: Mail },
+            ],
+        },
+
         // 4. BUSINESS (Pago - Plan Pro+)
         {
             id: 'business',
             title: 'Business',
             icon: Briefcase,
             items: [
-                { id: 'marketing', name: 'Marketing', href: `/marketing`, icon: BarChart3 },
                 { id: 'projects', name: 'Proyectos', href: `/projects`, icon: FileText },
                 { id: 'payments', name: 'Pagos*', href: `/pagos`, icon: CreditCard },
                 { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
-                { id: 'scheduling', name: 'Agendamiento*', href: `/agendamiento`, icon: Calendar },
-                { id: 'cotizaciones', name: 'Cotizaciones*', href: `/cotizaciones`, icon: File },
+                { id: 'contratos', name: 'Contratos', href: `/business/contratos`, icon: FileText },
+                { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
+                { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
             ],
         },
-        
-        // 5. CLIENTS (Pago - Monetización)
+
+
+
+        // 6. CLIENTS (Pago - Monetización)
         {
             id: 'clients',
             title: 'Clients',
@@ -105,8 +124,8 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
                 { id: 'portal', name: 'Portal Cliente*', href: `/portal-cliente`, icon: UserCheck },
             ],
         },
-        
-        // 6. MAGIC (IA - Multiplicador)
+
+        // 7. MAGIC (IA - Multiplicador)
         {
             id: 'magic',
             title: 'Magic',
@@ -115,16 +134,16 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
                 { id: 'magic', name: 'Asistente IA', href: `/magic`, icon: Sparkles },
             ],
         },
-        
+
     ];
 
     // Componente para grupo colapsible con estructura de árbol
-    const CollapsibleGroup = ({ group, children }: { 
-        group: { id: string; title: string; icon: React.ComponentType<{ className?: string }> }, 
-        children: React.ReactNode 
+    const CollapsibleGroup = ({ group, children }: {
+        group: { id: string; title: string; icon: React.ComponentType<{ className?: string }> },
+        children: React.ReactNode
     }) => {
         const isExpanded = expandedGroup === group.id;
-        
+
         return (
             <div className="mb-3">
                 {/* Header del grupo colapsible */}
@@ -142,13 +161,13 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
                         <ChevronRight className="w-4 h-4 text-zinc-500" />
                     )}
                 </button>
-                
+
                 {/* Contenido del grupo con estructura de árbol */}
                 {isExpanded && (
                     <div className="relative">
                         {/* Línea vertical conectora */}
                         <div className="absolute left-6 top-0 w-px h-full bg-zinc-700/60"></div>
-                        
+
                         {/* Elementos del menú con indentación y menos espaciado */}
                         <div className="pl-8 space-y-0.5">
                             {children}
@@ -184,7 +203,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
                         <CollapsibleGroup key={group.id} group={group}>
                             {group.items.map(item => (
                                 <ZenSidebarMenuItem key={item.id}>
-                                    <ActiveLink 
+                                    <ActiveLink
                                         href={`/${studioSlug}/studio/builder${item.href}`}
                                         className="flex items-center gap-3 px-3 py-1.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/30 transition-all duration-200 rounded-md group"
                                     >

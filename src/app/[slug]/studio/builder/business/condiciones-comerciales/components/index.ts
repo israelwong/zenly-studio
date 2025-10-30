@@ -1,0 +1,2 @@
+export { CondicionesComercialesWrapper } from './CondicionesComercialesWrapper';
+

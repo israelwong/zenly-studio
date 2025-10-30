@@ -1,0 +1,97 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { FileText } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
+import { SectionLayout, StorageIndicator } from '../../components';
+import { ContratosWrapper } from './components';
+import { getBuilderProfileData } from '@/lib/actions/studio/builder/builder-profile.actions';
+import type { BuilderProfileData } from '@/types/builder-profile';
+import { toast } from 'sonner';
+
+export default function ContratosPage() {
+    const params = useParams();
+    const studioSlug = params.slug as string;
+
+    const [loading, setLoading] = useState(true);
+    const [builderData, setBuilderData] = useState<BuilderProfileData | null>(null);
+
+    useEffect(() => {
+        const loadBuilderData = async () => {
+            try {
+                setLoading(true);
+                const result = await getBuilderProfileData(studioSlug);
+
+                if (result.success && result.data) {
+                    setBuilderData(result.data);
+                } else {
+                    console.error('Error loading builder data:', result.error);
+                }
+            } catch (error) {
+                console.error('Error in loadBuilderData:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadBuilderData();
+    }, [studioSlug]);
+
+    const previewData = builderData ? {
+        studio_name: builderData.studio.studio_name,
+        logo_url: builderData.studio.logo_url,
+        slogan: builderData.studio.slogan,
+        studio: builderData.studio,
+        items: builderData.items,
+        paquetes: builderData.paquetes,
+        pagina_web: builderData.studio.website,
+        palabras_clave: builderData.studio.keywords,
+        redes_sociales: builderData.socialNetworks.map(network => ({
+            plataforma: network.platform?.name || 'Red Social',
+            url: network.url
+        })),
+        email: null,
+        telefonos: builderData.contactInfo.phones.map(phone => ({
+            numero: phone.number,
+            tipo: phone.type === 'principal' ? 'ambos' as const :
+                phone.type === 'whatsapp' ? 'whatsapp' as const : 'llamadas' as const,
+            is_active: true
+        })),
+        direccion: builderData.contactInfo.address,
+        google_maps_url: builderData.studio.maps_url
+    } : null;
+
+    return (
+        <SectionLayout
+            section="contratos"
+            studioSlug={studioSlug}
+            data={previewData as unknown as Record<string, unknown>}
+            loading={loading}
+        >
+            <ZenCard variant="default" padding="none">
+                <ZenCardHeader className="border-b border-zinc-800">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-600/20 rounded-lg">
+                            <FileText className="h-5 w-5 text-blue-400" />
+                        </div>
+                        <div>
+                            <ZenCardTitle>Contratos</ZenCardTitle>
+                            <ZenCardDescription>
+                                Gestiona los contratos de tus servicios
+                            </ZenCardDescription>
+                        </div>
+                    </div>
+                </ZenCardHeader>
+
+                <ZenCardContent className="p-6">
+                    <div className="space-y-6">
+                        <StorageIndicator studioSlug={studioSlug} />
+                        <ContratosWrapper studioSlug={studioSlug} />
+                    </div>
+                </ZenCardContent>
+            </ZenCard>
+        </SectionLayout>
+    );
+}
+

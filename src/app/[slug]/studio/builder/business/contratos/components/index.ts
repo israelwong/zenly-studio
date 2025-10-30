@@ -1,0 +1,2 @@
+export { ContratosWrapper } from './ContratosWrapper';
+
