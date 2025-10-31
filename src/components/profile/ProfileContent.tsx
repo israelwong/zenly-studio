@@ -2,12 +2,13 @@
 
 import React from 'react';
 import { MainSection, PortfolioSection, PortfolioDetailSection, PostSection, PostDetailSection, CatalogSection, ContactSection, PaquetesSection } from './sections';
-import { PublicPortfolio, PublicCatalogItem, PublicStudioProfile, PublicContactInfo, PublicSocialNetwork, PublicPaquete } from '@/types/public-profile';
+import { PublicPortfolio, PublicCatalogItem, PublicStudioProfile, PublicContactInfo, PublicPaquete } from '@/types/public-profile';
 
 interface ProfileContentProps {
     variant?: 'skeleton' | 'inicio' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'shop' | 'info' | 'paquetes';
     data?: Record<string, unknown>;
     loading?: boolean;
+    hidePortfolioHeader?: boolean; // Ocultar título y categoría en portfolio-detail cuando está en modo preview del editor
 }
 
 /**
@@ -21,7 +22,8 @@ interface ProfileContentProps {
 export function ProfileContent({
     variant = 'skeleton',
     data,
-    loading = false
+    loading = false,
+    hidePortfolioHeader = false
 }: ProfileContentProps) {
     // Skeleton loading state
     if (loading) {
@@ -61,20 +63,36 @@ export function ProfileContent({
 
     // Inicio/Feed content - Usa MainSection para feed de posts
     if (variant === 'inicio' || variant === 'posts') {
-        const posts = data?.posts || [];
+        const posts = Array.isArray(data?.posts) ? (data.posts as unknown[]) : [];
         if (variant === 'inicio' || (variant === 'posts' && !data?.portfolios)) {
-            return <MainSection posts={posts} />;
+            return <MainSection posts={posts as Parameters<typeof MainSection>[0]['posts']} />;
         }
         // Fallback a PostSection si no hay posts pero hay variant posts
-        return <PostSection posts={posts} />;
+        return <PostSection posts={posts as Parameters<typeof PostSection>[0]['posts']} />;
     }
 
     // Post detail content (para editor)
     if (variant === 'post-detail') {
-        const post = data?.post;
+        const post = data?.post as {
+            id: string;
+            title?: string | null;
+            caption: string | null;
+            tags?: string[];
+            media: Array<{
+                id: string;
+                file_url: string;
+                file_type: 'image' | 'video';
+                filename: string;
+                thumbnail_url?: string;
+                display_order: number;
+            }>;
+            is_published: boolean;
+            published_at: Date | null;
+            view_count: number;
+        } | undefined;
         const logoUrl = data?.logo_url as string | null | undefined;
         const studioSlug = data?.studioSlug as string | undefined;
-        
+
         if (!post) {
             return (
                 <div className="p-8 text-center">
@@ -98,7 +116,7 @@ export function ProfileContent({
 
     // Portfolio detail content (para editor)
     if (variant === 'portfolio-detail') {
-        const portfolio = data?.portfolio;
+        const portfolio = data?.portfolio as Parameters<typeof PortfolioDetailSection>[0]['portfolio'] | undefined;
         if (!portfolio) {
             return (
                 <div className="p-8 text-center">
@@ -111,7 +129,8 @@ export function ProfileContent({
                 </div>
             );
         }
-        return <PortfolioDetailSection portfolio={portfolio} />;
+        // Los datos vienen dinámicamente desde el editor
+        return <PortfolioDetailSection portfolio={portfolio as unknown as Parameters<typeof PortfolioDetailSection>[0]['portfolio']} hideHeader={hidePortfolioHeader} />;
     }
 
     // Shop/Catalog content

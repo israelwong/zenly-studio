@@ -18,6 +18,8 @@ interface MobilePreviewFullProps {
     onBack?: () => void;
     // Modo edición - deshabilita botones de navegación
     isEditMode?: boolean;
+    // Ocultar header del portfolio (título y categoría) cuando está en modo preview del editor
+    hidePortfolioHeader?: boolean;
 }
 
 /**
@@ -31,7 +33,8 @@ export function MobilePreviewFull({
     contentVariant = 'post-detail',
     onClose,
     onBack,
-    isEditMode = false
+    isEditMode = false,
+    hidePortfolioHeader = false
 }: MobilePreviewFullProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -84,6 +87,7 @@ export function MobilePreviewFull({
                                 variant={contentVariant}
                                 data={data}
                                 loading={loading}
+                                hidePortfolioHeader={hidePortfolioHeader}
                             />
                         )}
 

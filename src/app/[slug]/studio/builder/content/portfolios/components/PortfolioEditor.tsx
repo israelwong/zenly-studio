@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ZenButton, ZenInput, ZenSelect, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenSwitch, ZenBadge, ZenTagModal } from "@/components/ui/zen";
 import { MobilePreviewFull } from "../../../components/MobilePreviewFull";
 import { ContentBlocksEditor } from "@/components/content-blocks";
@@ -61,7 +61,7 @@ function generateSlug(title: string): string {
         .replace(/(^-|-$)/g, "");
 }
 
-// Componente para inyectar botones después de cada bloque renderizado por ContentBlocksEditor
+// Componente para inyectar botones entre cada bloque renderizado por ContentBlocksEditor
 function InjectAddButtons({
     contentBlocks,
     activeBlockId,
@@ -72,38 +72,64 @@ function InjectAddButtons({
     onInsertAt: (index: number) => void;
 }) {
     useEffect(() => {
-        // Remover todos los botones inyectados cuando se arrastra
-        if (activeBlockId) {
+        console.log('🔵 [InjectAddButtons] useEffect ejecutado:', {
+            contentBlocksLength: contentBlocks.length,
+            activeBlockId,
+            timestamp: new Date().toISOString()
+        });
+
+        // Remover todos los botones inyectados cuando se arrastra (solo cuando es 'dragging')
+        if (activeBlockId === 'dragging') {
+            console.log('🔵 [InjectAddButtons] Ocultando botones - drag activo');
             document.querySelectorAll('[data-injected-add-button]').forEach(btn => btn.remove());
             return;
         }
 
         if (contentBlocks.length === 0) {
+            console.log('🔵 [InjectAddButtons] No hay bloques - saliendo');
             return;
         }
 
         // Esperar a que el DOM se actualice
         const timeoutId = setTimeout(() => {
-            // Para cada bloque, agregar botón después
+            console.log('🔵 [InjectAddButtons] Agregando botones para', contentBlocks.length, 'bloques');
+
+            // Para cada bloque, agregar botón después (entre bloques)
             contentBlocks.forEach((block, index) => {
                 const blockElement = document.getElementById(block.id);
-                if (!blockElement) return;
+                if (!blockElement) {
+                    console.log('🔵 [InjectAddButtons] No se encontró elemento para bloque:', block.id);
+                    return;
+                }
 
                 // Verificar si ya existe un botón inyectado para este bloque
                 const existingButton = document.querySelector(`[data-injected-add-button="${block.id}"]`);
-                if (existingButton) return;
+                if (existingButton) {
+                    console.log('🔵 [InjectAddButtons] Botón ya existe para bloque:', block.id);
+                    return;
+                }
 
                 // Buscar el contenedor del bloque (el div con bg-zinc-800 que contiene el bloque)
-                const blockContainer = blockElement.closest('div[class*="bg-zinc-800"]') ||
-                    blockElement.parentElement?.querySelector('div[class*="bg-zinc-800"]') ||
-                    blockElement.parentElement;
+                // Este es el elemento raíz del componente SortableBlock
+                // Buscar el elemento padre que tiene las clases características del bloque
+                let blockContainer = blockElement.closest('div.bg-zinc-800.border.rounded-lg');
 
-                if (!blockContainer) return;
+                // Si no se encuentra con clases específicas, buscar cualquier div padre con bg-zinc-800
+                if (!blockContainer) {
+                    blockContainer = blockElement.closest('div[class*="bg-zinc-800"]');
+                }
+
+                if (!blockContainer) {
+                    console.log('🔵 [InjectAddButtons] No se encontró contenedor para bloque:', block.id);
+                    return;
+                }
+
+                console.log('🔵 [InjectAddButtons] Creando botón para bloque:', block.id, 'índice:', index);
 
                 // Crear botón usando React.createElement para mejor integración
                 const button = document.createElement('button');
                 button.setAttribute('data-injected-add-button', block.id);
-                button.className = 'w-full py-2 px-4 text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-md transition-all bg-zinc-900 hover:bg-zinc-400 hover:text-zinc-900 hover:border-zinc-400 mt-2';
+                button.className = 'w-full py-2 px-4 text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-md transition-all bg-zinc-900 hover:bg-zinc-400 hover:text-zinc-900 hover:border-zinc-400';
 
                 // Crear el icono SVG
                 const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -123,17 +149,19 @@ function InjectAddButtons({
 
                 button.onclick = () => onInsertAt(index + 1);
 
-                // Insertar después del contenedor del bloque
+                // Insertar después del contenedor del bloque (entre bloques, no dentro)
+                // Esto lo coloca como elemento hermano del bloque, fuera del componente
                 blockContainer.insertAdjacentElement('afterend', button);
+                console.log('🔵 [InjectAddButtons] ✅ Botón agregado después de bloque:', block.id);
             });
-        }, 100);
+        }, 200); // Delay para asegurar que el DOM esté listo
 
         return () => {
             clearTimeout(timeoutId);
-            // Cleanup: remover botones inyectados
-            document.querySelectorAll('[data-injected-add-button]').forEach(btn => btn.remove());
+            // NO remover botones aquí para evitar parpadeos durante interacciones
+            // Solo se removerán cuando activeBlockId === 'dragging'
         };
-    }, [contentBlocks, activeBlockId, onInsertAt]);
+    }, [contentBlocks.length, activeBlockId, onInsertAt]); // Solo re-ejecutar cuando cambia la cantidad de bloques o el estado de drag
 
     return null;
 }
@@ -192,47 +220,16 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
     const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
     const { uploadFiles } = useMediaUpload();
 
-    // Detectar cuando se está arrastrando desde ContentBlocksEditor
-    useEffect(() => {
-        let isDragging = false;
-
-        const handlePointerDown = (e: PointerEvent) => {
-            const target = e.target as HTMLElement;
-            // Detectar si se hace clic en el handle de arrastre o cerca
-            if (target.closest('.cursor-grab') ||
-                target.closest('[style*="cursor: grab"]') ||
-                target.closest('svg[viewBox="0 0 24 24"]') ||
-                target.closest('path[d*="M4 8h16"]')) {
-                isDragging = true;
-                setActiveBlockId('dragging');
-            }
-        };
-
-        const handlePointerMove = () => {
-            if (isDragging) {
-                setActiveBlockId('dragging');
-            }
-        };
-
-        const handlePointerUp = () => {
-            if (isDragging) {
-                // Delay para permitir que la animación termine
-                setTimeout(() => {
-                    setActiveBlockId(null);
-                    isDragging = false;
-                }, 300);
-            }
-        };
-
-        document.addEventListener('pointerdown', handlePointerDown);
-        document.addEventListener('pointermove', handlePointerMove);
-        document.addEventListener('pointerup', handlePointerUp);
-
-        return () => {
-            document.removeEventListener('pointerdown', handlePointerDown);
-            document.removeEventListener('pointermove', handlePointerMove);
-            document.removeEventListener('pointerup', handlePointerUp);
-        };
+    // Manejar cambio de estado de drag desde ContentBlocksEditor
+    const handleDragStateChange = useCallback((isDragging: boolean) => {
+        if (isDragging) {
+            setActiveBlockId('dragging');
+        } else {
+            // Delay para permitir que la animación termine
+            setTimeout(() => {
+                setActiveBlockId(null);
+            }, 300);
+        }
     }, []);
 
     // Generar slug automáticamente cuando cambia el título
@@ -882,6 +879,7 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                                             setInsertAtIndex(undefined);
                                             setShowComponentSelector(true);
                                         }}
+                                        onDragStateChange={handleDragStateChange}
                                     />
 
                                     {/* Inyectar botones después de cada bloque usando useEffect - Solo si hay componentes */}
@@ -1074,6 +1072,7 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                             loading={isLoadingPreview}
                             onClose={handleBack}
                             isEditMode={true}
+                            hidePortfolioHeader={true}
                         />
                     </div>
                 </div>

@@ -32,7 +32,7 @@ export function ContentBlocksPreview({
     }
 
     return (
-        <div className={`space-y-6 ${className}`}>
+        <div className={`space-y-2 ${className}`}>
             {blocks
                 .sort((a, b) => a.order - b.order) // Asegurar orden correcto
                 .map((block) => (

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Video, Type, Grid3X3, X, LayoutGrid, MessageCircle, Play, FileText } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video, Type, Grid3X3, X, LayoutGrid, MessageCircle, Play, FileText, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import {
     DndContext,
     DragOverlay,
@@ -84,6 +84,7 @@ interface ContentBlocksEditorProps {
     customSelector?: React.ReactNode;
     onAddComponentClick?: () => void;
     hideHeader?: boolean;
+    onDragStateChange?: (isDragging: boolean) => void;
 }
 
 // Componentes esenciales - Simplificados
@@ -188,7 +189,8 @@ export function ContentBlocksEditor({
     className = '',
     customSelector,
     onAddComponentClick,
-    hideHeader = false
+    hideHeader = false,
+    onDragStateChange
 }: ContentBlocksEditorProps) {
     const [activeBlock, setActiveBlock] = useState<ContentBlock | null>(null);
     const [showComponentSelector, setShowComponentSelector] = useState(false);
@@ -208,24 +210,61 @@ export function ContentBlocksEditor({
             shouldCancelStart: (event: PointerEvent) => {
                 const target = event.target as HTMLElement;
 
-                // Si es un botón de eliminar o está dentro de uno, cancelar SIEMPRE
-                const deleteButton = target.closest('[data-delete-button="true"]');
-                if (deleteButton) {
-                    console.log('🟠 [SENSOR] Cancelando drag - botón de eliminar detectado');
+                console.log('🟠 [SENSOR] shouldCancelStart llamado:', {
+                    tagName: target.tagName,
+                    isButton: target.tagName === 'BUTTON' || target.closest('button'),
+                    isInput: target.tagName === 'INPUT' || target.closest('input'),
+                    isTextarea: target.tagName === 'TEXTAREA' || target.closest('textarea'),
+                    isDeleteButton: target.closest('[data-delete-button="true"]'),
+                    isInternalButton: target.closest('[data-internal-button="true"]'),
+                    isDragHandle: target.closest('[data-sortable-handle]'),
+                    closestHandle: target.closest('[data-sortable-handle]')?.getAttribute('data-sortable-handle')
+                });
+
+                // PRIMERO: Si es un botón interno (TextToolbar, etc.), cancelar SIEMPRE
+                const internalButton = target.closest('[data-internal-button="true"]');
+                if (internalButton) {
+                    console.log('🟠 [SENSOR] ✅ Cancelando drag - botón interno detectado');
                     return true;
                 }
 
-                // Si es cualquier botón (excepto el handle de arrastre), cancelar
+                // Si es un botón de eliminar o está dentro de uno, cancelar SIEMPRE
+                const deleteButton = target.closest('[data-delete-button="true"]');
+                if (deleteButton) {
+                    console.log('🟠 [SENSOR] ✅ Cancelando drag - botón de eliminar');
+                    return true;
+                }
+
+                // Si es un input, textarea o cualquier elemento editable, cancelar SIEMPRE
+                if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' ||
+                    target.closest('input') || target.closest('textarea') ||
+                    target.isContentEditable || target.closest('[contenteditable="true"]')) {
+                    console.log('🟠 [SENSOR] ✅ Cancelando drag - elemento editable');
+                    return true;
+                }
+
+                // Si es cualquier botón, verificar si es el handle de arrastre
                 if (target.tagName === 'BUTTON' || target.closest('button')) {
-                    // Pero permitir drag si es el handle de arrastre
-                    const isDragHandle = target.closest('[class*="cursor-grab"]') ||
-                        target.closest('svg[viewBox="0 0 24 24"]')?.parentElement?.classList.contains('cursor-grab');
+                    // Permitir drag SOLO si es el handle de arrastre (tiene data-sortable-handle)
+                    const isDragHandle = target.closest('[data-sortable-handle]') !== null;
                     if (!isDragHandle) {
-                        console.log('🟠 [SENSOR] Cancelando drag - botón detectado');
+                        console.log('🟠 [SENSOR] ✅ Cancelando drag - botón no es handle');
+                    } else {
+                        console.log('🟠 [SENSOR] ❌ Permitir drag - botón ES handle');
                     }
                     return !isDragHandle;
                 }
 
+                // Si NO está dentro del handle de arrastre, cancelar
+                // Solo permitir drag si el click viene específicamente del handle
+                const isDragHandle = target.closest('[data-sortable-handle]') !== null;
+                if (!isDragHandle) {
+                    console.log('🟠 [SENSOR] ✅ Cancelando drag - no es handle');
+                    return true;
+                }
+
+                // Si llegamos aquí, es un click en el handle - permitir drag
+                console.log('🟠 [SENSOR] ❌ Permitir drag - es handle');
                 return false;
             },
         }),
@@ -401,6 +440,86 @@ export function ContentBlocksEditor({
     }, [blocks, onBlocksChange]);
 
     // Reordenar componentes
+    const handleDragStart = useCallback((event: DragStartEvent) => {
+        const { active } = event;
+
+        // CRITICAL: This function is called by dnd-kit when drag starts
+        // But we need to verify it's actually from the handle before notifying parent
+        console.log('🟠 [ContentBlocksEditor] handleDragStart llamado:', {
+            activeId: active.id,
+            event: event
+        });
+
+        const block = blocks.find(b => b.id === active.id);
+        if (!block) {
+            console.log('🟠 [ContentBlocksEditor] Bloque no encontrado - cancelando');
+            return;
+        }
+
+        // Get the original pointer event that started the drag
+        const pointerEvent = (event as unknown as { activatorEvent?: PointerEvent })?.activatorEvent;
+
+        if (!pointerEvent) {
+            console.log('🟠 [ContentBlocksEditor] No hay pointerEvent - cancelando notificación');
+            return;
+        }
+
+        const eventTarget = pointerEvent.target as HTMLElement;
+        if (!eventTarget) {
+            console.log('🟠 [ContentBlocksEditor] No hay eventTarget - cancelando notificación');
+            return;
+        }
+
+        console.log('🟠 [ContentBlocksEditor] Event target:', {
+            tagName: eventTarget.tagName,
+            closestHandle: eventTarget.closest('[data-sortable-handle]'),
+            closestButton: eventTarget.closest('button'),
+            closestInput: eventTarget.closest('input'),
+            closestTextarea: eventTarget.closest('textarea'),
+            closestInternalButton: eventTarget.closest('[data-internal-button="true"]'),
+            closestDeleteButton: eventTarget.closest('[data-delete-button="true"]')
+        });
+
+        // Check if it's an interactive element - if so, DON'T notify parent
+        const isInteractive = eventTarget.tagName === 'INPUT' ||
+            eventTarget.tagName === 'TEXTAREA' ||
+            eventTarget.tagName === 'BUTTON' ||
+            eventTarget.closest('button') ||
+            eventTarget.closest('input') ||
+            eventTarget.closest('textarea') ||
+            eventTarget.isContentEditable ||
+            eventTarget.closest('[data-delete-button="true"]') ||
+            eventTarget.closest('[data-internal-button="true"]'); // NUEVO: Detectar botones internos
+
+        if (isInteractive) {
+            console.log('🟠 [ContentBlocksEditor] ❌ Elemento interactivo detectado - NO notificando parent');
+            // Still set activeBlock for dnd-kit, but don't notify parent
+            setActiveBlock(block);
+            return;
+        }
+
+        // Verify it came from the drag handle
+        const clickedHandle = eventTarget.closest('[data-sortable-handle]');
+        if (!clickedHandle) {
+            console.log('🟠 [ContentBlocksEditor] ❌ NO se hizo click en handle - NO notificando parent');
+            setActiveBlock(block);
+            return;
+        }
+
+        // Verify it's the correct handle for this block
+        if (clickedHandle.getAttribute('data-sortable-handle') !== String(active.id)) {
+            console.log('🟠 [ContentBlocksEditor] ❌ Handle incorrecto - NO notificando parent');
+            setActiveBlock(block);
+            return;
+        }
+
+        console.log('🟠 [ContentBlocksEditor] ✅ Drag iniciado correctamente desde handle - notificando parent');
+
+        setActiveBlock(block);
+        // ONLY notify parent when drag actually starts from handle
+        onDragStateChange?.(true);
+    }, [blocks, onDragStateChange]);
+
     const handleDragEnd = useCallback((event: DragEndEvent) => {
         const { active, over } = event;
 
@@ -416,13 +535,9 @@ export function ContentBlocksEditor({
         }
 
         setActiveBlock(null);
-    }, [blocks, onBlocksChange]);
-
-    const handleDragStart = useCallback((event: DragStartEvent) => {
-        const { active } = event;
-        const block = blocks.find(b => b.id === active.id);
-        setActiveBlock(block || null);
-    }, [blocks]);
+        // Notificar al padre que terminó el drag
+        onDragStateChange?.(false);
+    }, [blocks, onBlocksChange, onDragStateChange]);
 
     // Calcular total de almacenamiento
     const totalStorage = React.useMemo(() => {
@@ -458,9 +573,14 @@ export function ContentBlocksEditor({
             timestamp: new Date().toISOString()
         });
 
-        // Si tiene media asociada, mostrar modal de confirmación
-        if (block.media && block.media.length > 0) {
-            console.log('🟠 [requestDeleteBlock] Bloque tiene media, mostrando modal');
+        // Componentes de texto que requieren confirmación si tienen contenido
+        const textComponentTypes: ComponentType[] = ['text', 'heading-1', 'heading-3', 'blockquote'];
+        const isTextComponent = textComponentTypes.includes(block.type);
+        const hasTextContent = block.config?.text && String(block.config.text).trim().length > 0;
+
+        // Si tiene media asociada o es componente de texto con contenido, mostrar modal de confirmación
+        if ((block.media && block.media.length > 0) || (isTextComponent && hasTextContent)) {
+            console.log('🟠 [requestDeleteBlock] Bloque requiere confirmación (media o texto con contenido), mostrando modal');
             setBlockToDelete(block);
             setShowDeleteModal(true);
         } else {
@@ -764,10 +884,17 @@ export function ContentBlocksEditor({
                 isOpen={showDeleteModal}
                 onClose={cancelDeleteBlock}
                 onConfirm={confirmDeleteBlock}
-                title={blockToDelete?.type === 'text' ? "Eliminar bloque de texto" : "Eliminar componente"}
+                title={
+                    blockToDelete?.type === 'text' ? "Eliminar párrafo" :
+                        blockToDelete?.type === 'heading-1' ? "Eliminar título" :
+                            blockToDelete?.type === 'heading-3' ? "Eliminar subtítulo" :
+                                blockToDelete?.type === 'blockquote' ? "Eliminar cita" :
+                                    "Eliminar componente"
+                }
                 description={
-                    blockToDelete?.type === 'text'
-                        ? "¿Estás seguro de que quieres eliminar este bloque de texto? El contenido se perderá permanentemente."
+                    blockToDelete?.type === 'text' || blockToDelete?.type === 'heading-1' ||
+                        blockToDelete?.type === 'heading-3' || blockToDelete?.type === 'blockquote'
+                        ? "¿Estás seguro de que quieres eliminar este componente de texto? El contenido se perderá permanentemente."
                         : "¿Estás seguro de que deseas eliminar este componente? Esta acción no se puede deshacer."
                 }
                 confirmText="Eliminar"
@@ -838,6 +965,50 @@ function SortableBlock({
 
         onUpdate(block.id, { media: newMedia });
         console.log('onUpdate called with block.id:', block.id);
+    };
+
+    // Componente TextToolbar para controles de alineación
+    const TextToolbar = ({ alignment, onAlignmentChange }: { alignment?: string; onAlignmentChange: (align: string) => void }) => {
+        const alignments = [
+            { value: 'left', icon: AlignLeft, label: 'Izquierda' },
+            { value: 'center', icon: AlignCenter, label: 'Centro' },
+            { value: 'right', icon: AlignRight, label: 'Derecha' },
+        ];
+
+        const currentAlignment = alignment || 'left';
+
+        return (
+            <div className="flex items-center gap-1 p-2 bg-zinc-900/50 border border-zinc-800 rounded-md">
+                {alignments.map(({ value, icon: Icon, label }) => (
+                    <button
+                        key={value}
+                        type="button"
+                        data-internal-button="true"
+                        onMouseDown={(e) => {
+                            // Prevenir que el evento active el drag
+                            e.stopPropagation();
+                            e.nativeEvent.stopImmediatePropagation();
+                        }}
+                        onPointerDown={(e) => {
+                            // Prevenir que el evento active el drag
+                            e.stopPropagation();
+                            e.nativeEvent.stopImmediatePropagation();
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onAlignmentChange(value);
+                        }}
+                        className={`p-1.5 rounded transition-colors ${currentAlignment === value
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
+                            }`}
+                        title={label}
+                    >
+                        <Icon className="h-4 w-4 pointer-events-none" />
+                    </button>
+                ))}
+            </div>
+        );
     };
 
 
@@ -995,8 +1166,26 @@ function SortableBlock({
     };
 
     const renderTextContent = () => {
+        const alignment = (block.config?.alignment as string) || 'left';
+        const alignmentClasses = {
+            left: 'text-left',
+            center: 'text-center',
+            right: 'text-right'
+        };
+
         return (
             <div className="space-y-3">
+                <TextToolbar
+                    alignment={alignment}
+                    onAlignmentChange={(align) => {
+                        onUpdate(block.id, {
+                            config: {
+                                ...block.config,
+                                alignment: align
+                            }
+                        });
+                    }}
+                />
                 <textarea
                     value={String(block.config?.text || '')}
                     onChange={(e) => onUpdate(block.id, {
@@ -1005,8 +1194,16 @@ function SortableBlock({
                             text: e.target.value
                         }
                     })}
+                    onMouseDown={(e) => {
+                        // Prevenir que el drag se active cuando se interactúa con el textarea
+                        e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => {
+                        // Prevenir que el drag se active cuando se interactúa con el textarea
+                        e.stopPropagation();
+                    }}
                     placeholder="Escribe tu texto aquí..."
-                    className="w-full min-h-[120px] p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none resize-none text-sm font-light leading-relaxed"
+                    className={`w-full min-h-[120px] p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none resize-none text-sm font-light leading-relaxed ${alignmentClasses[alignment as keyof typeof alignmentClasses] || alignmentClasses.left}`}
                     rows={4}
                 />
             </div>
@@ -1014,8 +1211,26 @@ function SortableBlock({
     };
 
     const renderHeading1Content = () => {
+        const alignment = (block.config?.alignment as string) || 'left';
+        const alignmentClasses = {
+            left: 'text-left',
+            center: 'text-center',
+            right: 'text-right'
+        };
+
         return (
             <div className="space-y-3">
+                <TextToolbar
+                    alignment={alignment}
+                    onAlignmentChange={(align) => {
+                        onUpdate(block.id, {
+                            config: {
+                                ...block.config,
+                                alignment: align
+                            }
+                        });
+                    }}
+                />
                 <input
                     type="text"
                     value={String(block.config?.text || '')}
@@ -1025,16 +1240,42 @@ function SortableBlock({
                             text: e.target.value
                         }
                     })}
+                    onMouseDown={(e) => {
+                        // Prevenir que el drag se active cuando se interactúa con el input
+                        e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => {
+                        // Prevenir que el drag se active cuando se interactúa con el input
+                        e.stopPropagation();
+                    }}
                     placeholder="Escribe tu título principal..."
-                    className="w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none text-2xl font-bold"
+                    className={`w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none text-2xl font-bold ${alignmentClasses[alignment as keyof typeof alignmentClasses] || alignmentClasses.left}`}
                 />
             </div>
         );
     };
 
     const renderHeading3Content = () => {
+        const alignment = (block.config?.alignment as string) || 'left';
+        const alignmentClasses = {
+            left: 'text-left',
+            center: 'text-center',
+            right: 'text-right'
+        };
+
         return (
             <div className="space-y-3">
+                <TextToolbar
+                    alignment={alignment}
+                    onAlignmentChange={(align) => {
+                        onUpdate(block.id, {
+                            config: {
+                                ...block.config,
+                                alignment: align
+                            }
+                        });
+                    }}
+                />
                 <input
                     type="text"
                     value={String(block.config?.text || '')}
@@ -1044,16 +1285,42 @@ function SortableBlock({
                             text: e.target.value
                         }
                     })}
+                    onMouseDown={(e) => {
+                        // Prevenir que el drag se active cuando se interactúa con el input
+                        e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => {
+                        // Prevenir que el drag se active cuando se interactúa con el input
+                        e.stopPropagation();
+                    }}
                     placeholder="Escribe tu subtítulo..."
-                    className="w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none text-xl font-semibold"
+                    className={`w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none text-xl font-semibold ${alignmentClasses[alignment as keyof typeof alignmentClasses] || alignmentClasses.left}`}
                 />
             </div>
         );
     };
 
     const renderBlockquoteContent = () => {
+        const alignment = (block.config?.alignment as string) || 'left';
+        const alignmentClasses = {
+            left: 'text-left',
+            center: 'text-center',
+            right: 'text-right'
+        };
+
         return (
             <div className="space-y-3">
+                <TextToolbar
+                    alignment={alignment}
+                    onAlignmentChange={(align) => {
+                        onUpdate(block.id, {
+                            config: {
+                                ...block.config,
+                                alignment: align
+                            }
+                        });
+                    }}
+                />
                 <textarea
                     value={String(block.config?.text || '')}
                     onChange={(e) => onUpdate(block.id, {
@@ -1062,8 +1329,16 @@ function SortableBlock({
                             text: e.target.value
                         }
                     })}
+                    onMouseDown={(e) => {
+                        // Prevenir que el drag se active cuando se interactúa con el textarea
+                        e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => {
+                        // Prevenir que el drag se active cuando se interactúa con el textarea
+                        e.stopPropagation();
+                    }}
                     placeholder="Escribe tu cita destacada..."
-                    className="w-full min-h-[100px] p-4 bg-zinc-800 border-l-4 border-emerald-500 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none resize-none text-lg font-medium italic leading-relaxed"
+                    className={`w-full min-h-[100px] p-4 bg-zinc-800 border-l-4 border-emerald-500 rounded-lg text-zinc-300 placeholder-zinc-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none resize-none text-lg font-medium italic leading-relaxed ${alignmentClasses[alignment as keyof typeof alignmentClasses] || alignmentClasses.left}`}
                     rows={3}
                 />
             </div>
@@ -1211,6 +1486,16 @@ function SortableBlock({
             className={`bg-zinc-800 border border-zinc-700 rounded-lg p-4 transition-all duration-300 ${isDragging ? 'opacity-50' : ''
                 } ${isDeleting ? 'opacity-0 scale-95 transform -translate-y-2' : 'opacity-100 scale-100'
                 }`}
+            onMouseDown={(e) => {
+                // Prevenir que clicks en el contenedor activen el drag
+                const target = e.target as HTMLElement;
+                // Solo permitir drag si es específicamente el handle
+                if (!target.closest('.cursor-grab') &&
+                    !target.closest('[data-sortable-handle]') &&
+                    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.closest('button'))) {
+                    e.stopPropagation();
+                }
+            }}
         >
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
@@ -1225,6 +1510,7 @@ function SortableBlock({
                                 e.stopPropagation();
                             }
                         }}
+                        data-sortable-handle={block.id}
                     >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
@@ -1263,20 +1549,9 @@ function SortableBlock({
                             timestamp: new Date().toISOString()
                         });
 
-                        // Si es bloque de texto con contenido, mostrar confirmación
-                        const textContent = block.config?.text;
-                        if (block.type === 'text' && textContent && String(textContent).trim()) {
-                            const confirmed = window.confirm('¿Estás seguro de que quieres eliminar este bloque de texto? El contenido se perderá permanentemente.');
-                            if (confirmed) {
-                                console.log('🔴 [SORTABLE_BLOCK] Confirmación aceptada, llamando onDelete:', block.id);
-                                onDelete(block);
-                            } else {
-                                console.log('🔴 [SORTABLE_BLOCK] Eliminación cancelada por usuario');
-                            }
-                        } else {
-                            console.log('🔴 [SORTABLE_BLOCK] Llamando onDelete directamente:', block.id);
-                            onDelete(block);
-                        }
+                        // requestDeleteBlock maneja la confirmación automáticamente
+                        console.log('🔴 [SORTABLE_BLOCK] Llamando onDelete:', block.id);
+                        onDelete(block);
                     }}
                     className="text-zinc-400 hover:text-red-400 transition-colors relative z-50"
                     style={{

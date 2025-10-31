@@ -114,10 +114,17 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
             case 'text':
                 const textConfig = block.config as TextBlockConfig;
                 const textContent = textConfig?.text || block.description || '';
+                const textAlignment = textConfig?.alignment || 'left';
+                const alignmentClasses = {
+                    left: 'text-left',
+                    center: 'text-center',
+                    right: 'text-right'
+                };
+
                 return (
                     <div
                         className={`${className} ${block.presentation === 'fullwidth' ? 'w-full' : 'max-w-4xl mx-auto'
-                            }`}
+                            } mb-5`}
                     >
                         {block.title && (
                             <h3 className="text-xl font-semibold text-zinc-300 mb-3">
@@ -125,14 +132,91 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                             </h3>
                         )}
                         <div
-                            className={`text-${textConfig?.fontSize || 'sm'} font-${textConfig?.fontWeight || 'light'} leading-relaxed`}
+                            className={`text-sm font-light leading-relaxed ${alignmentClasses[textAlignment as keyof typeof alignmentClasses] || alignmentClasses.left}`}
                             style={{
                                 color: textConfig?.color || '#d4d4d8',
-                                textAlign: textConfig?.alignment || 'left'
                             }}
                         >
                             {textContent}
                         </div>
+                    </div>
+                );
+
+            case 'heading-1':
+                const heading1Config = block.config as TextBlockConfig;
+                const heading1Content = heading1Config?.text || block.description || '';
+                const heading1Alignment = heading1Config?.alignment || 'left';
+                const heading1AlignmentClasses = {
+                    left: 'text-left',
+                    center: 'text-center',
+                    right: 'text-right'
+                };
+
+                return (
+                    <div
+                        className={`${className} ${block.presentation === 'fullwidth' ? 'w-full' : 'max-w-4xl mx-auto'
+                            } mt-5`}
+                    >
+                        <h1
+                            className={`text-2xl font-bold text-zinc-300 leading-tight ${heading1AlignmentClasses[heading1Alignment as keyof typeof heading1AlignmentClasses] || heading1AlignmentClasses.left}`}
+                            style={{
+                                color: heading1Config?.color || '#e4e4e7',
+                            }}
+                        >
+                            {heading1Content}
+                        </h1>
+                    </div>
+                );
+
+            case 'heading-3':
+                const heading3Config = block.config as TextBlockConfig;
+                const heading3Content = heading3Config?.text || block.description || '';
+                const heading3Alignment = heading3Config?.alignment || 'left';
+                const heading3AlignmentClasses = {
+                    left: 'text-left',
+                    center: 'text-center',
+                    right: 'text-right'
+                };
+
+                return (
+                    <div
+                        className={`${className} ${block.presentation === 'fullwidth' ? 'w-full' : 'max-w-4xl mx-auto'
+                            }`}
+                    >
+                        <h3
+                            className={`text-xl font-semibold text-zinc-300 leading-tight ${heading3AlignmentClasses[heading3Alignment as keyof typeof heading3AlignmentClasses] || heading3AlignmentClasses.left}`}
+                            style={{
+                                color: heading3Config?.color || '#e4e4e7',
+                            }}
+                        >
+                            {heading3Content}
+                        </h3>
+                    </div>
+                );
+
+            case 'blockquote':
+                const blockquoteConfig = block.config as TextBlockConfig;
+                const blockquoteContent = blockquoteConfig?.text || block.description || '';
+                const blockquoteAlignment = blockquoteConfig?.alignment || 'left';
+                const blockquoteAlignmentClasses = {
+                    left: 'text-left',
+                    center: 'text-center',
+                    right: 'text-right'
+                };
+
+                return (
+                    <div
+                        className={`${className} ${block.presentation === 'fullwidth' ? 'w-full' : 'max-w-4xl mx-auto'
+                            }`}
+                    >
+                        <blockquote
+                            className={`border-l-4 border-emerald-500 pl-4 py-1 text-lg font-medium italic text-zinc-300 leading-relaxed ${blockquoteAlignmentClasses[blockquoteAlignment as keyof typeof blockquoteAlignmentClasses] || blockquoteAlignmentClasses.left}`}
+                            style={{
+                                color: blockquoteConfig?.color || '#e4e4e7',
+                            }}
+                        >
+                            {blockquoteContent}
+                        </blockquote>
                     </div>
                 );
 

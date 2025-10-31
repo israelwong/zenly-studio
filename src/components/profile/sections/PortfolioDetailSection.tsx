@@ -40,42 +40,45 @@ interface PortfolioDetail {
 
 interface PortfolioDetailSectionProps {
     portfolio: PortfolioDetail;
+    hideHeader?: boolean; // Ocultar título y categoría cuando está en modo preview del editor
 }
 
 /**
  * PortfolioDetailSection - Vista detallada de un portfolio individual
  * Usado en el editor para preview del portfolio que se está editando
  */
-export function PortfolioDetailSection({ portfolio }: PortfolioDetailSectionProps) {
+export function PortfolioDetailSection({ portfolio, hideHeader = false }: PortfolioDetailSectionProps) {
     const coverMedia = portfolio.media[portfolio.cover_index] || portfolio.media[0];
 
     return (
         <div className="space-y-6">
-            {/* Header del Portfolio */}
-            <div className="text-center space-y-2">
-                <h1 className="text-2xl font-bold text-white">
-                    {portfolio.title || 'Sin título'}
-                </h1>
+            {/* Header del Portfolio - Solo mostrar si no está oculto */}
+            {!hideHeader && (
+                <div className="text-center space-y-2">
+                    <h1 className="text-2xl font-bold text-white">
+                        {portfolio.title || 'Sin título'}
+                    </h1>
 
-                <div className="flex items-center justify-center gap-2 flex-wrap">
-                    {portfolio.is_featured && (
-                        <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-full flex items-center gap-1">
-                            <Star className="h-3 w-3" />
-                            Destacado
-                        </span>
-                    )}
-                    {portfolio.category && (
-                        <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded-full">
-                            {portfolio.category}
-                        </span>
-                    )}
-                    {portfolio.event_type && (
-                        <span className="text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded-full">
-                            {portfolio.event_type.nombre}
-                        </span>
-                    )}
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                        {portfolio.is_featured && (
+                            <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-full flex items-center gap-1">
+                                <Star className="h-3 w-3" />
+                                Destacado
+                            </span>
+                        )}
+                        {portfolio.category && (
+                            <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded-full">
+                                {portfolio.category}
+                            </span>
+                        )}
+                        {portfolio.event_type && (
+                            <span className="text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded-full">
+                                {portfolio.event_type.nombre}
+                            </span>
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Descripción */}
             {portfolio.description && (

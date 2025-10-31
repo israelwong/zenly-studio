@@ -517,6 +517,10 @@ export function ImageGrid({
                     on={{
                         view: ({ index }) => setLightboxIndex(index),
                     }}
+                    controller={{
+                        closeOnPullDown: true,
+                        closeOnBackdropClick: true
+                    }}
                 />
             )}
         </div>
