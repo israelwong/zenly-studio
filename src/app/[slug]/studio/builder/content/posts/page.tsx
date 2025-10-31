@@ -62,6 +62,23 @@ export default function PostsPage() {
 
 
     // ✅ Mapear datos para preview - Header, Footer y Contenido de posts
+    // Limitar posts para preview a 5 para evitar sobrecarga en mobile preview
+    // Filtrar solo posts publicados y ordenar: destacados primero, luego por fecha de creación
+    const PREVIEW_POSTS_LIMIT = 5;
+    const publishedPosts = posts
+        .filter(p => p.is_published)
+        .sort((a, b) => {
+            // Primero destacados (sin importar fecha de creación)
+            if (a.is_featured && !b.is_featured) return -1;
+            if (!a.is_featured && b.is_featured) return 1;
+            
+            // Si ambos son destacados o ambos no son destacados, ordenar por fecha de creación (más nueva primero)
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateB - dateA;
+        })
+        .slice(0, PREVIEW_POSTS_LIMIT);
+    
     const previewData = builderData ? {
         // Para ProfileIdentity
         studio_name: builderData.studio.studio_name,
@@ -84,8 +101,8 @@ export default function PostsPage() {
         })),
         direccion: builderData.contactInfo.address,
         google_maps_url: builderData.studio.maps_url,
-        // Para ProfileContent (sección posts)
-        posts: posts
+        // Para ProfileContent (sección posts) - Limitado para preview
+        posts: publishedPosts
     } : null;
 
     return (
@@ -121,7 +138,13 @@ export default function PostsPage() {
                         </div>
                     ) : (
                         <Suspense fallback={<div>Cargando posts...</div>}>
-                            <PostsList studioSlug={studioSlug} />
+                            <PostsList 
+                                studioSlug={studioSlug} 
+                                onPostsChange={(updatedPosts) => {
+                                    // Actualizar posts locales y recalcular preview
+                                    setPosts(updatedPosts);
+                                }}
+                            />
                         </Suspense>
                     )}
                 </ZenCardContent>

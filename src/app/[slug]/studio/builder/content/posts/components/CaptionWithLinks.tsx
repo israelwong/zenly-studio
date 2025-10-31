@@ -21,13 +21,13 @@ export function CaptionWithLinks({ caption, className = "" }: CaptionWithLinksPr
 
     const renderContent = () => {
         const parts = caption.split(urlPattern);
-        
+
         return parts.map((part, index) => {
             // Verificar si es una URL
             if (urlPattern.test(part)) {
                 // Asegurar que tenga protocolo si empieza con www
                 const href = part.startsWith('www.') ? `https://${part}` : part;
-                
+
                 return (
                     <Link
                         key={index}
@@ -35,13 +35,16 @@ export function CaptionWithLinks({ caption, className = "" }: CaptionWithLinksPr
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 underline transition-colors"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                        }}
                     >
                         {part}
                         <ExternalLink className="w-3 h-3" />
                     </Link>
                 );
             }
-            
+
             return <span key={index}>{part}</span>;
         });
     };
@@ -50,7 +53,7 @@ export function CaptionWithLinks({ caption, className = "" }: CaptionWithLinksPr
     // Si className tiene algún valor, usarlo (puede incluir text-white)
     const defaultColor = className ? '' : 'text-zinc-300';
     const finalClassName = className ? className : defaultColor;
-    
+
     return (
         <div className={`leading-relaxed whitespace-pre-wrap font-light break-words overflow-wrap-anywhere ${finalClassName}`}>
             {renderContent()}

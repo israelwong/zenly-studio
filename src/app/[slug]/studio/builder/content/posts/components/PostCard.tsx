@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ZenCard, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from "@/components/ui/zen";
@@ -27,7 +27,7 @@ import { StudioPost } from "@/types/studio-posts";
 interface PostCardProps {
     post: StudioPost;
     studioSlug: string;
-    onUpdate: () => void;
+    onUpdate: (updatedPost: StudioPost | null) => void; // null para eliminación
 }
 
 export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
@@ -35,6 +35,12 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
     const [isTogglingFeatured, setIsTogglingFeatured] = useState(false);
+    const [localPost, setLocalPost] = useState<StudioPost>(post);
+
+    // Sincronizar post local cuando cambia el prop
+    useEffect(() => {
+        setLocalPost(post);
+    }, [post]);
 
     const handleDelete = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -44,10 +50,11 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
 
         setIsDeleting(true);
         try {
-            const result = await deleteStudioPost(post.id);
+            const result = await deleteStudioPost(localPost.id);
             if (result.success) {
                 toast.success("Post eliminado");
-                onUpdate();
+                // Notificar eliminación (null = eliminar)
+                onUpdate(null);
             } else {
                 toast.error(result.error || "Error al eliminar post");
             }
@@ -60,18 +67,37 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
 
     const handleTogglePublish = async (e: React.MouseEvent) => {
         e.stopPropagation();
+
+        // Actualización optimista
+        const newPublishedState = !localPost.is_published;
+        const optimisticPost: StudioPost = {
+            ...localPost,
+            is_published: newPublishedState,
+            // Si se despublica y está destacado, quitar también el destacado
+            is_featured: newPublishedState ? localPost.is_featured : false
+        };
+        setLocalPost(optimisticPost);
+        onUpdate(optimisticPost);
+
         setIsToggling(true);
         try {
-            const result = await toggleStudioPostPublish(post.id);
+            const result = await toggleStudioPostPublish(localPost.id);
             if (result.success) {
                 toast.success(
-                    post.is_published ? "Post despublicado" : "Post publicado"
+                    newPublishedState ? "Post publicado" : "Post despublicado"
                 );
-                onUpdate();
+                // La actualización optimista ya aplicó el cambio
+                // PostsList recargará desde el servidor en background para sincronización completa
             } else {
+                // Revertir en caso de error
+                setLocalPost(post);
+                onUpdate(post);
                 toast.error(result.error || "Error al cambiar estado");
             }
         } catch (error) {
+            // Revertir en caso de error
+            setLocalPost(post);
+            onUpdate(post);
             toast.error("Error al cambiar estado");
         } finally {
             setIsToggling(false);
@@ -80,20 +106,53 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
 
     const handleToggleFeatured = async (e: React.MouseEvent) => {
         e.stopPropagation();
+
+        // Actualización optimista
+        const newFeaturedState = !localPost.is_featured;
+        const optimisticPost: StudioPost = {
+            ...localPost,
+            is_featured: newFeaturedState,
+            // NO cambiar is_published al destacar/quitar destacado
+            // Mantener el estado de publicación actual en ambos casos
+            is_published: localPost.is_published,
+            published_at: localPost.published_at
+        };
+        setLocalPost(optimisticPost);
+        onUpdate(optimisticPost);
+
         setIsTogglingFeatured(true);
         try {
-            const result = await updateStudioPost(post.id, {
-                is_featured: !post.is_featured
+            const result = await updateStudioPost(localPost.id, {
+                is_featured: newFeaturedState
             });
             if (result.success) {
                 toast.success(
-                    post.is_featured ? "Post desmarcado como destacado" : "Post destacado"
+                    newFeaturedState ? "Post destacado" : "Post desmarcado como destacado"
                 );
-                onUpdate();
+                // Actualizar con datos del servidor pero preservar is_published del estado optimista
+                // porque solo actualizamos is_featured, no is_published
+                if (result.data) {
+                    const updatedPost = {
+                        ...result.data,
+                        is_published: optimisticPost.is_published, // Preservar estado optimista
+                        published_at: optimisticPost.published_at
+                    };
+                    setLocalPost(updatedPost);
+                    onUpdate(updatedPost);
+                } else {
+                    // Fallback: usar el estado optimista que ya está aplicado
+                    // PostsList recargará desde el servidor en background
+                }
             } else {
+                // Revertir en caso de error
+                setLocalPost(post);
+                onUpdate(post);
                 toast.error(result.error || "Error al cambiar destacado");
             }
         } catch (error) {
+            // Revertir en caso de error
+            setLocalPost(post);
+            onUpdate(post);
             toast.error("Error al cambiar destacado");
         } finally {
             setIsTogglingFeatured(false);
@@ -101,90 +160,180 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
     };
 
     const getCoverImage = () => {
-        if (!post.media || post.media.length === 0) return null;
-        const media = Array.isArray(post.media) ? post.media : [];
-        const coverIndex = Math.min(post.cover_index || 0, media.length - 1);
+        if (!localPost.media || localPost.media.length === 0) return null;
+        const media = Array.isArray(localPost.media) ? localPost.media : [];
+        const coverIndex = Math.min(localPost.cover_index || 0, media.length - 1);
         return media[coverIndex];
     };
 
     const coverImage = getCoverImage();
-    
-    // Obtener URL válida para la imagen (no vacía)
-    const imageUrl = coverImage 
-        ? (coverImage.thumbnail_url || coverImage.file_url)
+
+    // Para videos, siempre usar thumbnail_url como prioridad (frame 1)
+    // Para imágenes, usar thumbnail_url si existe, sino file_url
+    const imageUrl = coverImage
+        ? (coverImage.file_type === 'video'
+            ? coverImage.thumbnail_url || null
+            : (coverImage.thumbnail_url || coverImage.file_url))
         : null;
     const isValidImageUrl = imageUrl && imageUrl.trim() !== "";
+
+    // Video ref para capturar frame 1 si no hay thumbnail_url
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null);
+
+    // Capturar frame 1 del video si no hay thumbnail_url
+    useEffect(() => {
+        if (coverImage?.file_type === 'video' && !coverImage.thumbnail_url && coverImage.file_url) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+
+            if (!video || !canvas) return;
+
+            const captureFrame = () => {
+                try {
+                    video.currentTime = 0.1; // Ir al primer frame
+                    const onSeeked = () => {
+                        const ctx = canvas.getContext('2d');
+                        if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            setVideoThumbnail(dataUrl);
+                        }
+                    };
+                    video.addEventListener('seeked', onSeeked, { once: true });
+                } catch (error) {
+                    console.error('Error capturing video frame:', error);
+                }
+            };
+
+            video.addEventListener('loadedmetadata', captureFrame, { once: true });
+            video.load();
+
+            return () => {
+                video.removeEventListener('loadedmetadata', captureFrame);
+            };
+        }
+    }, [coverImage?.file_type, coverImage?.file_url, coverImage?.thumbnail_url]);
 
     // Truncar descripción a 100 caracteres y remover markdown básico
     const truncateText = (text: string, maxLength: number) => {
         // Remover markdown básico
-        let cleanText = text
+        const cleanText = text
             .replace(/\*\*/g, '')
             .replace(/\*/g, '')
             .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Links markdown
             .replace(/#{1,6}\s+/g, '') // Headers
             .replace(/`([^`]+)`/g, '$1') // Code
             .trim();
-        
+
         if (cleanText.length > maxLength) {
             return cleanText.substring(0, maxLength) + "...";
         }
         return cleanText;
     };
 
-    const truncatedCaption = post.caption ? truncateText(post.caption, 100) : null;
+    const truncatedCaption = localPost.caption ? truncateText(localPost.caption, 100) : null;
 
     // Mostrar hasta 3 tags, si hay más mostrar +
-    const visibleTags = post.tags?.slice(0, 3) || [];
-    const remainingTagsCount = post.tags && post.tags.length > 3 ? post.tags.length - 3 : 0;
+    const visibleTags = localPost.tags?.slice(0, 3) || [];
+    const remainingTagsCount = localPost.tags && localPost.tags.length > 3 ? localPost.tags.length - 3 : 0;
 
     // Formatear fecha de publicación
-    const publishedDate = post.published_at 
-        ? new Date(post.published_at).toLocaleDateString('es-ES', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
+    const publishedDate = localPost.published_at
+        ? new Date(localPost.published_at).toLocaleDateString('es-ES', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
         })
         : null;
 
     const handleCardClick = () => {
-        router.push(`/${studioSlug}/studio/builder/content/posts/${post.id}/editar`);
+        router.push(`/${studioSlug}/studio/builder/content/posts/${localPost.id}/editar`);
     };
 
     return (
-        <ZenCard 
+        <ZenCard
             className="overflow-hidden hover:bg-zinc-800/50 transition-colors cursor-pointer relative"
             onClick={handleCardClick}
         >
             <div className="flex gap-4 p-4">
                 {/* Columna 1: Portada */}
                 <div className="relative w-32 h-32 flex-shrink-0 bg-zinc-800 rounded-lg overflow-hidden">
-                    {isValidImageUrl ? (
+                    {/* Video oculto para capturar frame si no hay thumbnail_url */}
+                    {coverImage?.file_type === 'video' && !coverImage.thumbnail_url && (
                         <>
-                            <Image
-                                src={imageUrl}
-                                alt={post.title || "Post"}
-                                fill
-                                className="object-cover"
+                            <video
+                                ref={videoRef}
+                                src={coverImage.file_url}
+                                className="hidden"
+                                preload="metadata"
+                                muted
+                                crossOrigin="anonymous"
                             />
-                            {coverImage?.file_type === 'video' && (
+                            <canvas ref={canvasRef} className="hidden" />
+                        </>
+                    )}
+
+                    {coverImage?.file_type === 'video' ? (
+                        // Video: usar thumbnail_url o frame capturado
+                        (coverImage.thumbnail_url || videoThumbnail) ? (
+                            <>
+                                <Image
+                                    src={coverImage.thumbnail_url || videoThumbnail!}
+                                    alt={localPost.title || "Post"}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized={!!videoThumbnail}
+                                />
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                                     <Video className="w-6 h-6 text-white" />
                                 </div>
-                            )}
-                        </>
+                            </>
+                        ) : (
+                            // Fallback mientras carga/captura frame
+                            <div className="w-full h-full flex items-center justify-center bg-black/50">
+                                <Video className="w-6 h-6 text-white" />
+                            </div>
+                        )
+                    ) : isValidImageUrl ? (
+                        // Imagen normal
+                        <Image
+                            src={imageUrl!}
+                            alt={localPost.title || "Post"}
+                            fill
+                            className="object-cover"
+                        />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-zinc-500">
                             <ImageIcon className="w-8 h-8" />
                         </div>
                     )}
-                    
-                    {/* Badge cantidad de fotos */}
-                    {post.media && Array.isArray(post.media) && post.media.length > 0 && (
-                        <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-xs rounded">
-                            {post.media.length} {post.media.length === 1 ? 'foto' : 'fotos'}
-                        </div>
-                    )}
+
+                    {/* Badge cantidad de media */}
+                    {localPost.media && Array.isArray(localPost.media) && localPost.media.length > 0 && (() => {
+                        const videoCount = localPost.media.filter(m => m.file_type === 'video').length;
+                        const imageCount = localPost.media.filter(m => m.file_type === 'image').length;
+                        const isOnlyVideo = videoCount > 0 && imageCount === 0;
+                        const isOnlyImage = imageCount > 0 && videoCount === 0;
+
+                        let label = '';
+                        if (isOnlyVideo) {
+                            label = localPost.media.length === 1 ? 'video' : 'videos';
+                        } else if (isOnlyImage) {
+                            label = localPost.media.length === 1 ? 'foto' : 'fotos';
+                        } else {
+                            label = localPost.media.length === 1 ? 'archivo' : 'archivos';
+                        }
+
+                        return (
+                            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-xs rounded">
+                                {localPost.media.length} {label}
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Columna 2: Contenido */}
@@ -193,7 +342,7 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
                     <div className="flex items-center gap-2">
                         {/* Estado publicado */}
                         <span className="text-xs text-zinc-400">
-                            {post.is_published ? 'Publicado' : 'No publicado'}
+                            {localPost.is_published ? 'Publicado' : 'No publicado'}
                         </span>
 
                         {/* Separador */}
@@ -208,11 +357,10 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
                         <span className="w-2" />
 
                         {/* Dot status de publicación */}
-                        <div 
-                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                post.is_published ? 'bg-emerald-500' : 'bg-zinc-500'
-                            }`}
-                            title={post.is_published ? 'Publicado' : 'No publicado'}
+                        <div
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${localPost.is_published ? 'bg-emerald-500' : 'bg-zinc-500'
+                                }`}
+                            title={localPost.is_published ? 'Publicado' : 'No publicado'}
                         />
 
                         {/* Separador */}
@@ -220,77 +368,77 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
 
                         {/* Vistas */}
                         <span className="text-xs text-zinc-500 whitespace-nowrap">
-                            {post.view_count || 0} {post.view_count === 1 ? 'vista' : 'vistas'}
+                            {localPost.view_count || 0} {localPost.view_count === 1 ? 'vista' : 'vistas'}
                         </span>
 
                         {/* Menú de acciones - Alineado a la derecha */}
                         <div className="ml-auto">
-                        <ZenDropdownMenu>
-                            <ZenDropdownMenuTrigger 
-                                asChild
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <button
-                                    className="p-1 hover:bg-zinc-700/50 rounded transition-colors ml-auto"
+                            <ZenDropdownMenu>
+                                <ZenDropdownMenuTrigger
+                                    asChild
                                     onClick={(e) => e.stopPropagation()}
                                 >
-                                    <MoreVertical className="w-4 h-4 text-zinc-400" />
-                                </button>
-                            </ZenDropdownMenuTrigger>
-                            <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                <ZenDropdownMenuItem
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleCardClick();
-                                    }}
-                                >
-                                    <Edit className="w-4 h-4 mr-2" />
-                                    Editar
-                                </ZenDropdownMenuItem>
-                                
-                                <ZenDropdownMenuItem
-                                    onClick={handleTogglePublish}
-                                    disabled={isToggling}
-                                >
-                                    {post.is_published ? (
-                                        <>
-                                            <EyeOff className="w-4 h-4 mr-2" />
-                                            No publicar
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Eye className="w-4 h-4 mr-2" />
-                                            Publicar
-                                        </>
-                                    )}
-                                </ZenDropdownMenuItem>
+                                    <button
+                                        className="p-1 hover:bg-zinc-700/50 rounded transition-colors ml-auto"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <MoreVertical className="w-4 h-4 text-zinc-400" />
+                                    </button>
+                                </ZenDropdownMenuTrigger>
+                                <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                    <ZenDropdownMenuItem
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCardClick();
+                                        }}
+                                    >
+                                        <Edit className="w-4 h-4 mr-2" />
+                                        Editar
+                                    </ZenDropdownMenuItem>
 
-                                <ZenDropdownMenuItem
-                                    onClick={handleToggleFeatured}
-                                    disabled={isTogglingFeatured}
-                                >
-                                    <Star className={`w-4 h-4 mr-2 ${post.is_featured ? 'text-amber-400' : ''}`} />
-                                    {post.is_featured ? 'Quitar destacado' : 'Destacar'}
-                                </ZenDropdownMenuItem>
+                                    <ZenDropdownMenuItem
+                                        onClick={handleTogglePublish}
+                                        disabled={isToggling}
+                                    >
+                                        {localPost.is_published ? (
+                                            <>
+                                                <EyeOff className="w-4 h-4 mr-2" />
+                                                No publicar
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Eye className="w-4 h-4 mr-2" />
+                                                Publicar
+                                            </>
+                                        )}
+                                    </ZenDropdownMenuItem>
 
-                                <ZenDropdownMenuSeparator />
+                                    <ZenDropdownMenuItem
+                                        onClick={handleToggleFeatured}
+                                        disabled={isTogglingFeatured}
+                                    >
+                                        <Star className={`w-4 h-4 mr-2 ${localPost.is_featured ? 'text-amber-400' : ''}`} />
+                                        {localPost.is_featured ? 'Quitar destacado' : 'Destacar'}
+                                    </ZenDropdownMenuItem>
 
-                                <ZenDropdownMenuItem
-                                    onClick={handleDelete}
-                                    disabled={isDeleting}
-                                    className="text-red-400 focus:text-red-300"
-                                >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Eliminar
-                                </ZenDropdownMenuItem>
-                            </ZenDropdownMenuContent>
-                        </ZenDropdownMenu>
+                                    <ZenDropdownMenuSeparator />
+
+                                    <ZenDropdownMenuItem
+                                        onClick={handleDelete}
+                                        disabled={isDeleting}
+                                        className="text-red-400 focus:text-red-300"
+                                    >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Eliminar
+                                    </ZenDropdownMenuItem>
+                                </ZenDropdownMenuContent>
+                            </ZenDropdownMenu>
                         </div>
                     </div>
 
                     {/* Línea 2: Título */}
                     <h3 className="font-medium text-zinc-100 line-clamp-1">
-                        {post.title || "Sin título"}
+                        {localPost.title || "Sin título"}
                     </h3>
 
                     {/* Línea 3: Descripción truncada */}

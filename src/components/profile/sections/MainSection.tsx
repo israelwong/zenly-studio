@@ -18,6 +18,7 @@ interface PublicPost {
     is_published: boolean;
     is_featured: boolean;
     published_at: Date | null;
+    created_at?: Date;
 }
 
 interface MainSectionProps {
@@ -27,23 +28,29 @@ interface MainSectionProps {
 /**
  * MainSection - Feed de inicio con posts
  * Diseño consistente, fluido y usable con separadores entre posts
- * Ordenamiento: destacados primero, luego por fecha (más nueva primero)
+ * Ordenamiento: destacados primero (sin importar fecha de creación), 
+ * luego no destacados por fecha de creación (más nueva primero)
  */
 export function MainSection({ posts }: MainSectionProps) {
     // Filtrar solo posts publicados
     const publishedPosts = posts.filter(post => post.is_published);
 
-    // Ordenar: destacados primero, luego por fecha (más nueva primero)
+    // Ordenar: destacados primero (sin importar fecha), luego por fecha de creación (más nueva primero)
     const sortedPosts = useMemo(() => {
         return [...publishedPosts].sort((a, b) => {
-            // Primero destacados
+            // Primero destacados (sin importar fecha de creación)
             if (a.is_featured && !b.is_featured) return -1;
             if (!a.is_featured && b.is_featured) return 1;
 
-            // Luego por fecha (más nueva primero)
-            const dateA = a.published_at ? new Date(a.published_at).getTime() : 0;
-            const dateB = b.published_at ? new Date(b.published_at).getTime() : 0;
-            return dateB - dateA;
+            // Si ambos son destacados o ambos no son destacados, ordenar por fecha de creación
+            // Usar created_at si está disponible, sino published_at como fallback
+            const dateA = a.created_at
+                ? new Date(a.created_at).getTime()
+                : (a.published_at ? new Date(a.published_at).getTime() : 0);
+            const dateB = b.created_at
+                ? new Date(b.created_at).getTime()
+                : (b.published_at ? new Date(b.published_at).getTime() : 0);
+            return dateB - dateA; // Más nueva primero
         });
     }, [publishedPosts]);
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Video, Type, Grid3X3, X, LayoutGrid, MessageCircle, Play, FileText, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video, Type, Grid3X3, X, LayoutGrid, MessageCircle, Play, FileText, AlignLeft, AlignCenter, AlignRight, Copy } from 'lucide-react';
 import {
     DndContext,
     DragOverlay,
@@ -49,7 +49,7 @@ function getComponentDisplayName(block: ContentBlock): string {
                 single: 'Imagen',
                 grid: 'Galería Grid',
                 masonry: 'Imagen Masonry',
-                slide: 'Galería Slide'
+                slide: 'Galería Carousel'
             };
             return modeLabels[mode];
         case 'video':
@@ -116,12 +116,12 @@ const ALL_COMPONENTS = [
         icon: Grid3X3,
         description: 'Diseño tipo Pinterest'
     },
-    // Galería Slide
+    // Galería Carousel
     {
         type: 'gallery' as ComponentType,
         mode: 'slide' as MediaMode,
         mediaType: 'images' as MediaType,
-        label: 'Galería Slide',
+        label: 'Galería Carousel',
         icon: ImageIcon,
         description: 'Carrusel de imágenes'
     },
@@ -210,16 +210,17 @@ export function ContentBlocksEditor({
             shouldCancelStart: (event: PointerEvent) => {
                 const target = event.target as HTMLElement;
 
-                console.log('🟠 [SENSOR] shouldCancelStart llamado:', {
-                    tagName: target.tagName,
-                    isButton: target.tagName === 'BUTTON' || target.closest('button'),
-                    isInput: target.tagName === 'INPUT' || target.closest('input'),
-                    isTextarea: target.tagName === 'TEXTAREA' || target.closest('textarea'),
-                    isDeleteButton: target.closest('[data-delete-button="true"]'),
-                    isInternalButton: target.closest('[data-internal-button="true"]'),
-                    isDragHandle: target.closest('[data-sortable-handle]'),
-                    closestHandle: target.closest('[data-sortable-handle]')?.getAttribute('data-sortable-handle')
-                });
+            console.log('🟠 [SENSOR] shouldCancelStart llamado:', {
+                tagName: target.tagName,
+                isButton: target.tagName === 'BUTTON' || target.closest('button'),
+                isInput: target.tagName === 'INPUT' || target.closest('input'),
+                isTextarea: target.tagName === 'TEXTAREA' || target.closest('textarea'),
+                isDeleteButton: target.closest('[data-delete-button="true"]'),
+                isDuplicateButton: target.closest('[data-duplicate-button="true"]'),
+                isInternalButton: target.closest('[data-internal-button="true"]'),
+                isDragHandle: target.closest('[data-sortable-handle]'),
+                closestHandle: target.closest('[data-sortable-handle]')?.getAttribute('data-sortable-handle')
+            });
 
                 // PRIMERO: Si es un botón interno (TextToolbar, etc.), cancelar SIEMPRE
                 const internalButton = target.closest('[data-internal-button="true"]');
@@ -228,12 +229,13 @@ export function ContentBlocksEditor({
                     return true;
                 }
 
-                // Si es un botón de eliminar o está dentro de uno, cancelar SIEMPRE
-                const deleteButton = target.closest('[data-delete-button="true"]');
-                if (deleteButton) {
-                    console.log('🟠 [SENSOR] ✅ Cancelando drag - botón de eliminar');
-                    return true;
-                }
+            // Si es un botón de eliminar o duplicar o está dentro de uno, cancelar SIEMPRE
+            const deleteButton = target.closest('[data-delete-button="true"]');
+            const duplicateButton = target.closest('[data-duplicate-button="true"]');
+            if (deleteButton || duplicateButton) {
+                console.log('🟠 [SENSOR] ✅ Cancelando drag - botón de eliminar/duplicar');
+                return true;
+            }
 
                 // Si es un input, textarea o cualquier elemento editable, cancelar SIEMPRE
                 if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' ||
@@ -431,6 +433,60 @@ export function ContentBlocksEditor({
     }, [blocks, onBlocksChange]);
 
 
+    // Duplicar componente
+    const handleDuplicateBlock = useCallback((block: ContentBlock) => {
+        console.log('🟢 [handleDuplicateBlock] Duplicando componente:', {
+            blockId: block.id,
+            blockType: block.type,
+            blockOrder: block.order,
+            currentBlocksCount: blocks.length,
+            timestamp: new Date().toISOString()
+        });
+
+        const currentIndex = blocks.findIndex(b => b.id === block.id);
+        if (currentIndex === -1) {
+            console.log('🟢 [handleDuplicateBlock] ERROR: Componente no encontrado');
+            return;
+        }
+
+        // Crear componente duplicado con nuevo ID y order
+        const duplicatedBlock: ContentBlock = {
+            ...block,
+            id: generateId(),
+            order: block.order + 1,
+            // Copiar media si existe (sin duplicar las referencias de archivos)
+            media: block.media ? block.media.map(item => ({
+                ...item,
+                id: `${item.id}_copy_${Date.now()}`
+            })) : []
+        };
+
+        // Insertar después del componente original y actualizar orders de los siguientes
+        const newBlocks = [...blocks];
+        newBlocks.splice(currentIndex + 1, 0, duplicatedBlock);
+
+        // Actualizar orders de todos los componentes después del duplicado
+        const updatedBlocks = newBlocks.map((b, index) => ({
+            ...b,
+            order: index
+        }));
+
+        onBlocksChange(updatedBlocks);
+
+        // Scroll automático al componente duplicado después de un breve delay
+        setTimeout(() => {
+            const duplicatedBlockElement = document.getElementById(duplicatedBlock.id);
+            if (duplicatedBlockElement) {
+                duplicatedBlockElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }
+        }, 100);
+
+        toast.success('Componente duplicado correctamente');
+    }, [blocks, onBlocksChange]);
+
     // Actualizar componente
     const handleUpdateBlock = useCallback((blockId: string, updates: Partial<ContentBlock>) => {
         const newBlocks = blocks.map(block =>
@@ -489,6 +545,7 @@ export function ContentBlocksEditor({
             eventTarget.closest('textarea') ||
             eventTarget.isContentEditable ||
             eventTarget.closest('[data-delete-button="true"]') ||
+            eventTarget.closest('[data-duplicate-button="true"]') ||
             eventTarget.closest('[data-internal-button="true"]'); // NUEVO: Detectar botones internos
 
         if (isInteractive) {
@@ -869,6 +926,7 @@ export function ContentBlocksEditor({
                                     block={block}
                                     onUpdate={handleUpdateBlock}
                                     onDelete={requestDeleteBlock}
+                                    onDuplicate={handleDuplicateBlock}
                                     onMediaUpload={uploadFiles}
                                     studioSlug={studioSlug}
                                     isUploading={uploadingBlocks.has(block.id)}
@@ -924,6 +982,7 @@ function SortableBlock({
     block,
     onUpdate,
     onDelete,
+    onDuplicate,
     onMediaUpload,
     studioSlug,
     isUploading,
@@ -934,6 +993,7 @@ function SortableBlock({
     block: ContentBlock;
     onUpdate: (blockId: string, updates: Partial<ContentBlock>) => void;
     onDelete: (block: ContentBlock) => void;
+    onDuplicate: (block: ContentBlock) => void;
     onMediaUpload: (files: File[], studioSlug: string, category: string, subcategory?: string) => Promise<UploadedFile[]>;
     studioSlug: string;
     isUploading: boolean;
@@ -1594,9 +1654,9 @@ function SortableBlock({
                         {...listeners}
                         className="cursor-grab hover:cursor-grabbing text-zinc-400 hover:text-zinc-300"
                         onMouseDown={(e) => {
-                            // Solo permitir drag si NO es el botón de eliminar
+                            // Solo permitir drag si NO es el botón de eliminar o duplicar
                             const target = e.target as HTMLElement;
-                            if (target.closest('[data-delete-button="true"]')) {
+                            if (target.closest('[data-delete-button="true"]') || target.closest('[data-duplicate-button="true"]')) {
                                 e.stopPropagation();
                             }
                         }}
@@ -1610,50 +1670,87 @@ function SortableBlock({
                         {getComponentDisplayName(block)}
                     </span>
                 </div>
-                <button
-                    type="button"
-                    onMouseDown={(e) => {
-                        // CRÍTICO: Detener inmediatamente para evitar que drag capture el evento
-                        e.stopPropagation();
-                        e.preventDefault();
-                        if (e.nativeEvent) {
-                            e.nativeEvent.stopImmediatePropagation();
-                        }
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (e.nativeEvent) {
+                                e.nativeEvent.stopImmediatePropagation();
+                            }
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (e.nativeEvent) {
+                                e.nativeEvent.stopImmediatePropagation();
+                            }
+                            console.log('🟢 [SORTABLE_BLOCK] Botón duplicar clickeado:', {
+                                blockId: block.id,
+                                blockType: block.type,
+                                timestamp: new Date().toISOString()
+                            });
+                            onDuplicate(block);
+                        }}
+                        className="text-zinc-400 hover:text-emerald-400 transition-colors relative z-50"
+                        style={{
+                            pointerEvents: 'auto',
+                            position: 'relative',
+                            cursor: 'pointer',
+                            zIndex: 9999
+                        }}
+                        data-duplicate-button="true"
+                        title="Duplicar componente"
+                    >
+                        <Copy className="h-4 w-4 pointer-events-none" />
+                    </button>
+                    <button
+                        type="button"
+                        onMouseDown={(e) => {
+                            // CRÍTICO: Detener inmediatamente para evitar que drag capture el evento
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (e.nativeEvent) {
+                                e.nativeEvent.stopImmediatePropagation();
+                            }
 
-                        console.log('🔴 [SORTABLE_BLOCK] MouseDown en botón eliminar:', {
-                            blockId: block.id,
-                            timestamp: new Date().toISOString()
-                        });
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        if (e.nativeEvent) {
-                            e.nativeEvent.stopImmediatePropagation();
-                        }
+                            console.log('🔴 [SORTABLE_BLOCK] MouseDown en botón eliminar:', {
+                                blockId: block.id,
+                                timestamp: new Date().toISOString()
+                            });
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (e.nativeEvent) {
+                                e.nativeEvent.stopImmediatePropagation();
+                            }
 
-                        console.log('🔴 [SORTABLE_BLOCK] Botón eliminar clickeado:', {
-                            blockId: block.id,
-                            blockType: block.type,
-                            blockOrder: block.order,
-                            timestamp: new Date().toISOString()
-                        });
+                            console.log('🔴 [SORTABLE_BLOCK] Botón eliminar clickeado:', {
+                                blockId: block.id,
+                                blockType: block.type,
+                                blockOrder: block.order,
+                                timestamp: new Date().toISOString()
+                            });
 
-                        // requestDeleteBlock maneja la confirmación automáticamente
-                        console.log('🔴 [SORTABLE_BLOCK] Llamando onDelete:', block.id);
-                        onDelete(block);
-                    }}
-                    className="text-zinc-400 hover:text-red-400 transition-colors relative z-50"
-                    style={{
-                        pointerEvents: 'auto',
-                        position: 'relative',
-                        cursor: 'pointer',
-                        zIndex: 9999
-                    }}
-                    data-delete-button="true"
-                >
-                    <X className="h-4 w-4 pointer-events-none" />
-                </button>
+                            // requestDeleteBlock maneja la confirmación automáticamente
+                            console.log('🔴 [SORTABLE_BLOCK] Llamando onDelete:', block.id);
+                            onDelete(block);
+                        }}
+                        className="text-zinc-400 hover:text-red-400 transition-colors relative z-50"
+                        style={{
+                            pointerEvents: 'auto',
+                            position: 'relative',
+                            cursor: 'pointer',
+                            zIndex: 9999
+                        }}
+                        data-delete-button="true"
+                        title="Eliminar componente"
+                    >
+                        <X className="h-4 w-4 pointer-events-none" />
+                    </button>
+                </div>
             </div>
             {renderContent()}
         </div>

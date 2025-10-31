@@ -313,12 +313,28 @@ export async function updateStudioPost(
             if (validatedData.cover_index !== undefined) updateData.cover_index = validatedData.cover_index;
             if (validatedData.event_type_id !== undefined) updateData.event_type_id = validatedData.event_type_id ?? null;
             if (validatedData.tags !== undefined) updateData.tags = validatedData.tags;
-            if (validatedData.is_featured !== undefined) updateData.is_featured = validatedData.is_featured;
+            
+            // Verificar estado actual del post para aplicar lógica de destacado
+            const currentPost = await tx.studio_posts.findUnique({
+                where: { id: postId },
+                select: { is_published: true, is_featured: true },
+            });
 
-            // Manejar is_published y published_at
+            // Solo actualizar is_featured si se proporciona - NO modificar is_published
+            if (validatedData.is_featured !== undefined) {
+                updateData.is_featured = validatedData.is_featured;
+                // NO publicar automáticamente al destacar
+                // Cada función debe cumplir su función específica sin alterar otras propiedades
+            }
+
+            // Manejar is_published y published_at (solo si se proporciona explícitamente)
             if (validatedData.is_published !== undefined) {
                 updateData.is_published = validatedData.is_published;
                 updateData.published_at = validatedData.is_published ? new Date() : null;
+                // Si se despublica y está destacado, quitar también el destacado
+                if (!validatedData.is_published && currentPost?.is_featured) {
+                    updateData.is_featured = false;
+                }
             }
 
             // Obtener studio_id para operaciones de media
@@ -420,6 +436,7 @@ export async function toggleStudioPostPublish(postId: string) {
             where: { id: postId },
             select: {
                 is_published: true,
+                is_featured: true,
                 studio: { select: { slug: true } },
             },
         });
@@ -428,12 +445,26 @@ export async function toggleStudioPostPublish(postId: string) {
             return { success: false, error: "Post no encontrado" };
         }
 
+        const newPublishedState = !post.is_published;
+        
+        // Si se despublica y está destacado, quitar también el destacado
+        const updateData: {
+            is_published: boolean;
+            published_at: Date | null;
+            is_featured?: boolean;
+        } = {
+            is_published: newPublishedState,
+            published_at: newPublishedState ? new Date() : null,
+        };
+
+        // Si se despublica y está destacado, quitar el destacado
+        if (!newPublishedState && post.is_featured) {
+            updateData.is_featured = false;
+        }
+
         const updatedPost = await prisma.studio_posts.update({
             where: { id: postId },
-            data: {
-                is_published: !post.is_published,
-                published_at: !post.is_published ? new Date() : null,
-            },
+            data: updateData,
         });
 
         revalidatePath(`/${post.studio.slug}/studio/builder/posts`);

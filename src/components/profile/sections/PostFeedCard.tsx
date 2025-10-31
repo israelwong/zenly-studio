@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { CaptionWithLinks } from '@/app/[slug]/studio/builder/content/posts/components/CaptionWithLinks';
 import { PostCarouselContent } from './PostCarouselContent';
 import Lightbox from "yet-another-react-lightbox";
@@ -39,6 +38,7 @@ interface PostFeedCardProps {
  */
 export function PostFeedCard({ post }: PostFeedCardProps) {
     const params = useParams();
+    const router = useRouter();
     const studioSlug = params?.slug as string;
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const firstMedia = post.media?.[0];
@@ -79,20 +79,19 @@ export function PostFeedCard({ post }: PostFeedCardProps) {
         <div className="space-y-3">
             {/* Descripción con links, sin saltos de línea, truncada - clickeable para post detalle */}
             {processedCaption && (
-                <Link
-                    href={postDetailUrl}
-                    className="block w-full hover:opacity-80 transition-opacity"
+                <div
                     onClick={(e) => {
-                        // Si el click es en un link interno, no navegar al post detalle
+                        // Si el click es en un link, no navegar al post detalle
                         const target = e.target as HTMLElement;
                         if (target.closest('a')) {
-                            e.preventDefault();
-                            e.stopPropagation();
+                            return;
                         }
+                        router.push(postDetailUrl);
                     }}
+                    className="block w-full hover:opacity-80 transition-opacity cursor-pointer"
                 >
                     <CaptionWithLinks caption={processedCaption} className="text-zinc-300 text-sm leading-relaxed" />
-                </Link>
+                </div>
             )}
 
             {/* Media - Una imagen, galería (si hay más de una), o video */}
