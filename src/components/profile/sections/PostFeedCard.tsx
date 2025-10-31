@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { CaptionWithLinks } from '@/app/[slug]/studio/builder/content/posts/components/CaptionWithLinks';
 import { PostCarouselContent } from './PostCarouselContent';
 import Lightbox from "yet-another-react-lightbox";
 import Video from "yet-another-react-lightbox/plugins/video";
+import { Star } from "lucide-react";
 import "yet-another-react-lightbox/styles.css";
 
 interface PostMedia {
@@ -21,10 +22,12 @@ interface PostMedia {
 interface PostFeedCardProps {
     post: {
         id: string;
+        title?: string | null;
         caption: string | null;
         tags?: string[];
         media: PostMedia[];
         is_published: boolean;
+        is_featured?: boolean;
         published_at: Date | null;
     };
 }
@@ -32,7 +35,7 @@ interface PostFeedCardProps {
 /**
  * PostFeedCard - Componente para mostrar posts en el feed
  * Basado en PostDetailSection pero simplificado para feed:
- * - NO muestra título
+ * - Encabezado minimalista: título, tiempo relativo y estrella si destacado
  * - Muestra descripción
  * - Galería con carousel y lightbox completo
  */
@@ -43,10 +46,36 @@ export function PostFeedCard({ post }: PostFeedCardProps) {
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const firstMedia = post.media?.[0];
 
+    // Función para calcular tiempo relativo
+    const getRelativeTime = (date: Date | null): string => {
+        if (!date) return 'ahora';
+
+        const now = new Date();
+        const diffMs = now.getTime() - new Date(date).getTime();
+        const diffSeconds = Math.floor(diffMs / 1000);
+        const diffMinutes = Math.floor(diffSeconds / 60);
+        const diffHours = Math.floor(diffMinutes / 60);
+        const diffDays = Math.floor(diffHours / 24);
+        const diffMonths = Math.floor(diffDays / 30);
+        const diffYears = Math.floor(diffDays / 365);
+
+        if (diffSeconds < 60) return diffSeconds < 5 ? 'ahora' : `${diffSeconds}s`;
+        if (diffMinutes < 60) return `${diffMinutes}min`;
+        if (diffHours < 24) return `${diffHours}h`;
+        if (diffDays < 30) return `${diffDays}d`;
+        if (diffMonths < 12) return `${diffMonths}mes`;
+        return `${diffYears}año`;
+    };
+
+    const relativeTime = useMemo(() => {
+        return getRelativeTime(post.published_at);
+    }, [post.published_at]);
+
     // Helpers para verificar valores vacíos
     const hasCaption = post.caption && post.caption.trim().length > 0;
     const hasMedia = post.media && post.media.length > 0;
     const hasTags = post.tags && post.tags.length > 0;
+    const hasTitle = post.title && post.title.trim().length > 0;
 
     // Preparar caption: remover saltos de línea pero mantener links, truncar a 80 caracteres, primera letra mayúscula
     const prepareCaption = (caption: string): string => {
@@ -77,6 +106,25 @@ export function PostFeedCard({ post }: PostFeedCardProps) {
 
     return (
         <div className="space-y-3">
+            {/* Encabezado minimalista: título, tiempo y estrella si destacado */}
+            <div className="flex items-center gap-2 flex-wrap">
+                {hasTitle && (
+                    <h3 className="text-zinc-300 font-medium text-sm">
+                        {post.title}
+                    </h3>
+                )}
+                {post.published_at && (
+                    <span className="text-zinc-500 text-xs">
+                        {relativeTime}
+                    </span>
+                )}
+                {post.is_featured && (
+                    <span className="flex items-center" title="Post destacado">
+                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                    </span>
+                )}
+            </div>
+
             {/* Descripción con links, sin saltos de línea, truncada - clickeable para post detalle */}
             {processedCaption && (
                 <div

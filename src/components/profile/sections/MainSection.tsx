@@ -12,6 +12,7 @@ interface PostMedia {
 
 interface PublicPost {
     id: string;
+    title?: string | null;
     caption: string | null;
     tags?: string[];
     media: PostMedia[];
