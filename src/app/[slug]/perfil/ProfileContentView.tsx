@@ -29,8 +29,8 @@ export function ProfileContentView({ activeTab, profileData }: ProfileContentVie
         case 'inicio':
             return (
                 <ProfileContent
-                    variant="posts"
-                    data={{ portfolios }}
+                    variant="inicio"
+                    data={{ posts: profileData.posts || [] }}
                 />
             );
 

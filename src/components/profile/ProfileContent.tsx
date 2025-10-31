@@ -5,7 +5,7 @@ import { MainSection, PortfolioSection, PortfolioDetailSection, PostSection, Pos
 import { PublicPortfolio, PublicCatalogItem, PublicStudioProfile, PublicContactInfo, PublicSocialNetwork, PublicPaquete } from '@/types/public-profile';
 
 interface ProfileContentProps {
-    variant?: 'skeleton' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'shop' | 'info' | 'paquetes';
+    variant?: 'skeleton' | 'inicio' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'shop' | 'info' | 'paquetes';
     data?: Record<string, unknown>;
     loading?: boolean;
 }
@@ -59,9 +59,13 @@ export function ProfileContent({
         );
     }
 
-    // Posts content
-    if (variant === 'posts') {
+    // Inicio/Feed content - Usa MainSection para feed de posts
+    if (variant === 'inicio' || variant === 'posts') {
         const posts = data?.posts || [];
+        if (variant === 'inicio' || (variant === 'posts' && !data?.portfolios)) {
+            return <MainSection posts={posts} />;
+        }
+        // Fallback a PostSection si no hay posts pero hay variant posts
         return <PostSection posts={posts} />;
     }
 

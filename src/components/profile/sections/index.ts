@@ -18,6 +18,8 @@ export { PortfolioSection } from './PortfolioSection';
 export { PortfolioDetailSection } from './PortfolioDetailSection';
 export { PostSection } from './PostSection';
 export { PostDetailSection } from './PostDetailSection';
+export { PostFeedCard } from './PostFeedCard';
+export { PostCarouselContent } from './PostCarouselContent';
 export { PaquetesSection } from './PaquetesSection';
 export { CatalogSection } from './CatalogSection';
 export { ContactSection } from './ContactSection';
