@@ -19,11 +19,12 @@ import {
 } from "@dnd-kit/core";
 import {
     SortableContext,
-    verticalListSortingStrategy,
+    rectSortingStrategy,
     useSortable,
     sortableKeyboardCoordinates,
+    arrayMove,
 } from "@dnd-kit/sortable";
-import { arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // Componente para mostrar thumbnail de video
 function VideoThumbnail({ videoUrl, thumbnailUrl, alt }: { videoUrl: string; thumbnailUrl?: string; alt: string }) {
@@ -188,11 +189,11 @@ export function ImageGrid({
     const [lightboxIndex, setLightboxIndex] = useState(0);
     const [activeId, setActiveId] = useState<string | null>(null);
 
-    // Drag and drop sensors con configuración mejorada
+    // Drag and drop sensors con configuración mejorada para animaciones suaves
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 8,
+                distance: 5,
             },
         }),
         useSensor(KeyboardSensor, {
@@ -262,7 +263,7 @@ export function ImageGrid({
         setActiveId(null);
     };
 
-    // Componente para cada imagen sortable
+    // Componente para cada imagen sortable con animaciones mejoradas
     function SortableImageItem({ item, index }: { item: MediaItem; index: number }) {
         const {
             attributes,
@@ -273,20 +274,29 @@ export function ImageGrid({
             isDragging,
         } = useSortable({ id: item.id });
 
+        const isActive = activeId === item.id;
+        const isBeingReplaced = activeId !== null && activeId !== item.id;
+
+        // Estilo con transformación suave usando CSS.Transform
         const style = {
-            transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-            transition: transition || 'transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-            zIndex: isDragging ? 1000 : 'auto',
+            transform: CSS.Transform.toString(transform),
+            transition: isDragging 
+                ? undefined // Sin transición mientras se arrastra para respuesta inmediata
+                : transition || 'transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1)', // Animación suave para empujar items
+            zIndex: isDragging ? 1000 : isBeingReplaced ? 10 : 'auto',
+            opacity: isDragging ? 0.8 : 1,
         };
 
         return (
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`relative group transition-all duration-200 ease-out ${isDragging || activeId === item.id
-                    ? 'opacity-50 scale-105 shadow-2xl'
-                    : 'opacity-100 scale-100'
-                    }`}
+                className={`relative group ${isDragging || isActive
+                    ? 'scale-105 shadow-2xl z-50'
+                    : isBeingReplaced
+                    ? 'scale-[1.01]'
+                    : 'scale-100'
+                    } transition-all duration-300 ease-out`}
                 {...(isEditable ? { ...attributes, ...listeners } : {})}
                 onMouseDown={(e) => {
                     // Si el click es en el botón eliminar, no iniciar drag
@@ -305,7 +315,7 @@ export function ImageGrid({
                     className={`relative bg-zinc-800 rounded-lg overflow-hidden ${aspectClass} transition-all duration-200 ease-out ${isEditable
                         ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg'
                         : 'cursor-pointer hover:scale-[1.02] hover:shadow-lg'
-                        }`}
+                        } ${isDragging ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
                     onClick={!isEditable && configLightbox ? () => handleImageClick(index) : undefined}
                 >
                     {item.file_type === 'video' ? (
@@ -434,7 +444,7 @@ export function ImageGrid({
                         <SortableContext
                             key={media.map(item => item.id).join('-')} // Forzar re-render cuando cambien los IDs
                             items={media.map(item => item.id)}
-                            strategy={verticalListSortingStrategy}
+                            strategy={rectSortingStrategy}
                         >
                             {media.map((item, index) => (
                                 <SortableImageItem

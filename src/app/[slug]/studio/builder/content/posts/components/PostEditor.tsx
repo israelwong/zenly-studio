@@ -155,6 +155,31 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
         };
     }, [previewData, formData, tempCuid, studioSlug]);
 
+    // Helper para obtener dimensions de una imagen
+    const getImageDimensions = (file: File): Promise<{ width: number; height: number } | undefined> => {
+        return new Promise((resolve) => {
+            if (!file.type.startsWith('image/')) {
+                resolve(undefined);
+                return;
+            }
+
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+
+            img.onload = () => {
+                resolve({ width: img.naturalWidth, height: img.naturalHeight });
+                URL.revokeObjectURL(objectUrl);
+            };
+
+            img.onerror = () => {
+                resolve(undefined);
+                URL.revokeObjectURL(objectUrl);
+            };
+
+            img.src = objectUrl;
+        });
+    };
+
     // Manejar subida de archivos
     const handleDropFiles = useCallback(async (files: File[]) => {
         if (files.length === 0) return;
@@ -164,20 +189,35 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
 
             const uploadedFiles = await uploadFiles(files, studioSlug, 'posts', 'content');
 
-            // Convertir UploadedFile a MediaItem
-            const mediaItems: PostMediaItem[] = uploadedFiles.map((file) => ({
-                id: file.id,
-                file_url: file.url,
-                file_type: file.fileName.toLowerCase().includes('.mp4') ||
-                    file.fileName.toLowerCase().includes('.mov') ||
-                    file.fileName.toLowerCase().includes('.webm')
-                    ? 'video' as const
-                    : 'image' as const,
-                filename: file.fileName,
-                storage_path: file.url,
-                storage_bytes: file.size,
-                display_order: formData.media.length,
-            }));
+            // Convertir UploadedFile a MediaItem con todos los campos del schema
+            const mediaItemsPromises = uploadedFiles.map(async (uploadedFile, index) => {
+                const originalFile = files[index];
+                const isVideo = originalFile.type.startsWith('video/');
+                const isImage = originalFile.type.startsWith('image/');
+
+                // Obtener dimensions para imágenes
+                let dimensions: { width: number; height: number } | undefined;
+                if (isImage) {
+                    dimensions = await getImageDimensions(originalFile);
+                }
+
+                return {
+                    id: uploadedFile.id,
+                    file_url: uploadedFile.url,
+                    file_type: isVideo ? 'video' as const : 'image' as const,
+                    filename: uploadedFile.fileName,
+                    storage_path: uploadedFile.url,
+                    storage_bytes: uploadedFile.size,
+                    mime_type: originalFile.type,
+                    dimensions: dimensions,
+                    duration_seconds: undefined, // Para videos se puede obtener después si es necesario
+                    display_order: formData.media.length + index,
+                    alt_text: undefined,
+                    thumbnail_url: undefined, // Para videos se puede generar después si es necesario
+                } as PostMediaItem;
+            });
+
+            const mediaItems = await Promise.all(mediaItemsPromises);
 
             setFormData(prev => ({
                 ...prev,

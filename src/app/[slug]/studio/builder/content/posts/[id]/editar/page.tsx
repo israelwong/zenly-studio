@@ -13,7 +13,7 @@ function convertDatabasePostToFormData(dbPost: DatabasePost): PostFormData {
         id: dbPost.id,
         title: dbPost.title,
         caption: dbPost.caption,
-        media: [], // Se cargará desde studio_post_media
+        media: dbPost.media || [], // Incluir media items con todos los campos del schema
         cover_index: dbPost.cover_index,
         event_type_id: dbPost.event_type_id,
         tags: dbPost.tags,
