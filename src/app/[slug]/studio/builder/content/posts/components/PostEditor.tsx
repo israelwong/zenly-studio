@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ZenButton, ZenInput, ZenTextarea, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenBadge, ZenSwitch } from "@/components/ui/zen";
+import { Star } from "lucide-react";
 import { MobilePreviewFull } from "../../../components/MobilePreviewFull";
 import { ImageGrid } from "@/components/shared/media";
 import { MediaItem } from "@/types/content-blocks";
@@ -398,12 +399,16 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                                         onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_published: checked }))}
                                         label="Publicado"
                                     />
-                                    <ZenSwitch
-                                        checked={formData.is_featured}
-                                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_featured: checked }))}
-                                        label="Destacado"
-                                        variant="amber"
-                                    />
+                                    <ZenButton
+                                        type="button"
+                                        variant={formData.is_featured ? undefined : "outline"}
+                                        size="sm"
+                                        onClick={() => setFormData(prev => ({ ...prev, is_featured: !prev.is_featured }))}
+                                        className={`rounded-full ${formData.is_featured ? "bg-amber-500 hover:bg-amber-600 text-black border-amber-500" : ""}`}
+                                    >
+                                        <Star className={`w-4 h-4 mr-1.5 ${formData.is_featured ? 'fill-current' : ''}`} />
+                                        Destacar
+                                    </ZenButton>
                                 </div>
                             </div>
                         </ZenCardHeader>
