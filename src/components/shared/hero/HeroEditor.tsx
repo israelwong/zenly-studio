@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Plus, X, Image as ImageIcon, Video, AlignStartVertical, AlignVerticalDistributeCenter, AlignEndVertical, AlignEndHorizontal, AlignStartHorizontal, Square, RectangleVertical, Maximize2, Shrink, AlignVerticalJustifyCenter, Copy, ChevronUp, ChevronDown, Layers } from 'lucide-react';
+import { Plus, X, AlignStartVertical, AlignVerticalDistributeCenter, AlignEndVertical, AlignEndHorizontal, AlignStartHorizontal, Square, RectangleVertical, Maximize2, Shrink, AlignVerticalJustifyCenter, Copy, ChevronUp, ChevronDown, Layers, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { ZenInput, ZenTextarea, ZenSelect, ZenButton, ZenCard, ZenCardContent, ZenSwitch } from '@/components/ui/zen';
 import { HeroConfig, ButtonConfig, MediaItem } from '@/types/content-blocks';
 import { cn } from '@/lib/utils';
+import HeroDropzone from './HeroDropzone';
 
 interface HeroEditorProps {
     config: HeroConfig;
@@ -112,24 +113,35 @@ export default function HeroEditor({
         updateConfig({ buttons: updatedButtons });
     };
 
-    const handleDrop = useCallback(async (e: React.DragEvent) => {
-        e.preventDefault();
-        const files = Array.from(e.dataTransfer.files);
-        if (files.length > 0 && onDropFiles) {
-            await onDropFiles(files);
-        }
-    }, [onDropFiles]);
-
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
+    const handleRemoveMedia = () => {
+        onMediaChange([]);
     };
 
-    const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        if (files.length > 0 && onDropFiles) {
-            await onDropFiles(files);
+    // Wrapper para asegurar que siempre se reemplace el archivo, no se agregue
+    const handleDropFilesWrapper = useCallback(async (files: File[]) => {
+        if (!onDropFiles || files.length === 0) return;
+
+        // Si ya hay media, eliminarlo primero antes de subir el nuevo
+        if (media.length > 0) {
+            onMediaChange([]);
         }
-    };
+
+        // Llamar a onDropFiles para hacer el upload
+        await onDropFiles(files);
+
+        // Nota: onDropFiles internamente actualiza el bloque con el nuevo archivo
+        // pero lo agrega. Usaremos un efecto para asegurar el reemplazo después.
+    }, [onDropFiles, media, onMediaChange]);
+
+    // Efecto para asegurar que solo haya 1 archivo (el más reciente)
+    useEffect(() => {
+        if (media.length > 1) {
+            // Si hay más de 1 archivo, mantener solo el más reciente
+            // El más reciente será el último en el array (el recién subido)
+            const mostRecent = media[media.length - 1];
+            onMediaChange([mostRecent]);
+        }
+    }, [media, onMediaChange]);
 
     const aspectRatioOptions = [
         { value: 'square' as const, icon: Square, label: 'Cuadrado' },
@@ -259,6 +271,13 @@ export default function HeroEditor({
         { value: 'bottom' as const, label: 'Solo abajo', icon: ShadowBottomIcon }
     ];
 
+
+    const gradientPositionOptions = [
+        { value: 'top' as const, icon: ArrowUp, label: 'Arriba' },
+        { value: 'bottom' as const, icon: ArrowDown, label: 'Abajo' },
+        { value: 'left' as const, icon: ArrowLeft, label: 'Izquierda' },
+        { value: 'right' as const, icon: ArrowRight, label: 'Derecha' }
+    ];
 
     const tabs = [
         { id: 'informacion', label: 'Información' },
@@ -891,85 +910,60 @@ export default function HeroEditor({
 
                     {/* Pestaña: Fondo */}
                     {activeTab === 'fondo' && (
-                        <div>
-                            {media.length > 0 ? (
-                                <div className="relative">
-                                    {media[0].file_type === 'video' ? (
-                                        <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900">
-                                            <video
-                                                src={media[0].file_url}
-                                                className="w-full h-full object-cover"
-                                                muted
-                                                loop
-                                                playsInline
-                                            />
-                                            <button
-                                                onClick={() => onMediaChange([])}
-                                                className="absolute top-2 right-2 p-2 bg-red-500/80 hover:bg-red-500 rounded-full text-white"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="relative">
-                                            <img
-                                                src={media[0].file_url}
-                                                alt={media[0].filename}
-                                                className="w-full rounded-lg"
-                                            />
-                                            <button
-                                                onClick={() => onMediaChange([])}
-                                                className="absolute top-2 right-2 p-2 bg-red-500/80 hover:bg-red-500 rounded-full text-white"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    )}
+                        <div className="space-y-4">
+                            {/* Dropzone - siempre visible */}
+                            <HeroDropzone
+                                media={media}
+                                onDropFiles={handleDropFilesWrapper}
+                                onRemoveMedia={handleRemoveMedia}
+                                isUploading={isUploading}
+                            />
+
+                            {/* Controles de Degradado */}
+                            <div className="p-3 border border-zinc-700 rounded-lg bg-zinc-800/30 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-zinc-200">Degradado de Contraste</span>
+                                    <ZenSwitch
+                                        checked={localConfig.gradientOverlay || false}
+                                        onCheckedChange={(checked) => updateConfig({ gradientOverlay: checked })}
+                                    />
                                 </div>
-                            ) : (
-                                <div
-                                    className="border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors cursor-pointer"
-                                    onDragOver={handleDragOver}
-                                    onDrop={handleDrop}
-                                    onClick={() => {
-                                        const input = document.createElement('input');
-                                        input.type = 'file';
-                                        input.accept = 'image/*,video/*';
-                                        input.onchange = (e: Event) => {
-                                            const target = e.target as HTMLInputElement;
-                                            const reactEvent = {
-                                                ...e,
-                                                target,
-                                                currentTarget: target,
-                                                nativeEvent: e,
-                                                isDefaultPrevented: () => e.defaultPrevented,
-                                                isPropagationStopped: () => false,
-                                                persist: () => { }
-                                            } as React.ChangeEvent<HTMLInputElement>;
-                                            handleFileInput(reactEvent);
-                                        };
-                                        input.click();
-                                    }}
-                                >
-                                    <div className="p-8 space-y-3">
-                                        {isUploading ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto"></div>
-                                                <div className="text-sm text-zinc-500">Subiendo archivo...</div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="flex justify-center gap-4">
-                                                    <ImageIcon className="h-8 w-8 text-zinc-500" />
-                                                    <Video className="h-8 w-8 text-zinc-500" />
-                                                </div>
-                                                <div className="text-sm font-medium text-zinc-300">Arrastra imagen o video aquí</div>
-                                                <div className="text-xs text-zinc-500">O haz clic para seleccionar</div>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+
+                                {/* Posición del degradado - solo visible si está activo */}
+                                {localConfig.gradientOverlay && (
+                                    <>
+                                        <div className="border-t border-zinc-700/50"></div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-zinc-200 mb-2">
+                                                Posición del Degradado
+                                            </label>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {gradientPositionOptions.map((option) => {
+                                                    const Icon = option.icon;
+                                                    const isActive = (localConfig.gradientPosition || 'top') === option.value;
+                                                    return (
+                                                        <button
+                                                            key={option.value}
+                                                            type="button"
+                                                            onClick={() => updateConfig({ gradientPosition: option.value })}
+                                                            className={cn(
+                                                                "p-3 rounded transition-colors flex flex-col items-center gap-1",
+                                                                isActive
+                                                                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                                    : "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 border border-transparent"
+                                                            )}
+                                                            title={option.label}
+                                                        >
+                                                            <Icon className="h-5 w-5" />
+                                                            <span className="text-xs">{option.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>

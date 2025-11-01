@@ -16,6 +16,7 @@ export interface ZenSelectProps {
     placeholder?: string;
     error?: string;
     disabled?: boolean;
+    disableSearch?: boolean;
     className?: string;
 }
 
@@ -26,14 +27,18 @@ export function ZenSelect({
     placeholder = "Selecciona una opción",
     error,
     disabled = false,
+    disableSearch = false,
     className
 }: ZenSelectProps) {
     const [isOpen, setIsOpen] = React.useState(false);
     const [searchTerm, setSearchTerm] = React.useState('');
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
-    const filteredOptions = [...options].filter(option =>
-        option.label?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredOptions = disableSearch 
+        ? [...options]
+        : [...options].filter(option =>
+            option.label?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
     const selectedOption = options.find(option => option.value === value);
 
@@ -43,8 +48,26 @@ export function ZenSelect({
         setSearchTerm('');
     };
 
+    // Cerrar al hacer click fuera
+    React.useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+                setSearchTerm('');
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
     return (
-        <div className="relative">
+        <div className="relative" ref={containerRef}>
             <button
                 type="button"
                 onClick={() => !disabled && setIsOpen(!isOpen)}
@@ -66,15 +89,17 @@ export function ZenSelect({
 
             {isOpen && (
                 <div className="absolute z-50 mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg">
-                    <div className="p-2">
-                        <input
-                            type="text"
-                            placeholder="Buscar..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full rounded-md border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                    </div>
+                    {!disableSearch && (
+                        <div className="p-2">
+                            <input
+                                type="text"
+                                placeholder="Buscar..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full rounded-md border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                        </div>
+                    )}
                     <div className="max-h-60 overflow-y-auto">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((option) => (

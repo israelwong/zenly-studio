@@ -41,6 +41,8 @@ export default function HeroComponent({
         borderColor,
         borderWidth,
         borderStyle,
+        gradientOverlay = false,
+        gradientPosition = 'top',
     } = config;
 
     const backgroundMedia = media[0];
@@ -278,6 +280,31 @@ export default function HeroComponent({
                 <div
                     className={`absolute inset-0 bg-black/${overlayOpacity}`}
                     style={{ zIndex: 2 }}
+                />
+            )}
+
+            {/* Degradado de contraste */}
+            {gradientOverlay && (
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        zIndex: 3,
+                        background: (() => {
+                            const position = gradientPosition || 'top';
+                            switch (position) {
+                                case 'top':
+                                    return 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)';
+                                case 'bottom':
+                                    return 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%)';
+                                case 'left':
+                                    return 'linear-gradient(to right, rgba(0,0,0,0.6) 0%, transparent 100%)';
+                                case 'right':
+                                    return 'linear-gradient(to left, rgba(0,0,0,0.6) 0%, transparent 100%)';
+                                default:
+                                    return 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)';
+                            }
+                        })()
+                    }}
                 />
             )}
 

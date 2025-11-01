@@ -159,6 +159,9 @@ export interface HeroConfig {
     // Configuración global de botones
     buttonSize?: 'sm' | 'md' | 'lg';
     buttonBorderRadius?: 'normal' | 'sm' | 'full';
+    // Degradado para contrastar contenido
+    gradientOverlay?: boolean;
+    gradientPosition?: 'top' | 'bottom' | 'left' | 'right';
 }
 
 export interface SeparatorBlockConfig {

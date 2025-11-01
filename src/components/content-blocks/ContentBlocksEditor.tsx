@@ -28,7 +28,8 @@ import { toast } from 'sonner';
 import { VideoSingle } from '@/components/shared/video';
 import { ImageSingle, ImageGrid, MediaGallery } from '@/components/shared/media';
 import { RichTextBlock } from '@/components/shared/text';
-import HeroComponent from '@/components/shared/HeroComponent';
+import HeroComponent from '@/components/shared/hero/HeroComponent';
+import HeroEditor from '@/components/shared/hero/HeroEditor';
 import { formatBytes, calculateTotalStorage, getStorageInfo } from '@/lib/utils/storage';
 
 // Importar tipo UploadedFile
@@ -1078,13 +1079,9 @@ function SortableBlock({
             case 'separator':
                 return renderSeparatorContent();
             case 'hero-contact':
-                return renderHeroContactContent();
             case 'hero-image':
-                return renderHeroImageContent();
             case 'hero-video':
-                return renderHeroVideoContent();
             case 'hero-text':
-                return renderHeroTextContent();
             case 'hero':
                 return renderHeroContent();
             default:
@@ -1365,177 +1362,95 @@ function SortableBlock({
         );
     };
 
-    const renderHeroContactContent = () => {
-        return (
-            <div className="space-y-3 p-4 bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-700/30 rounded-lg">
-                <div className="flex items-center gap-2 mb-3">
-                    <MessageCircle className="h-5 w-5 text-purple-400" />
-                    <span className="text-sm font-medium text-purple-300">Hero de Contacto</span>
-                </div>
-                <p className="text-xs text-zinc-400">
-                    Hero con animaciones y call-to-action integrado. Ideal para páginas de contacto.
-                </p>
-            </div>
-        );
-    };
-
-    const renderHeroImageContent = () => {
-        return (
-            <div className="space-y-3">
-                {block.media && block.media.length > 0 ? (
-                    <div className="relative">
-                        <ImageSingle
-                            media={block.media[0]}
-                            aspectRatio="video"
-                            className=""
-                            showDeleteButton={true}
-                            onDelete={() => removeMedia(block.media[0].id)}
-                            onMediaChange={(newMedia) => {
-                                if (newMedia) {
-                                    const updatedMedia = [...block.media];
-                                    updatedMedia[0] = newMedia;
-                                    onUpdate(block.id, { media: updatedMedia });
-                                }
-                            }}
-                            studioSlug={studioSlug}
-                            category="posts"
-                            subcategory="hero"
-                            showBorder={false}
-                        />
-                        <div className="mt-3 p-3 bg-zinc-900/50 border border-zinc-700 rounded-lg">
-                            <p className="text-xs text-zinc-400">Hero con imagen de fondo y texto superpuesto</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div
-                        className="border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => handleDrop(e, block.id)}
-                    >
-                        <div className="p-8 space-y-3">
-                            {isUploading ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto"></div>
-                                    <div className="text-sm text-zinc-500">Subiendo imagen...</div>
-                                </>
-                            ) : (
-                                <>
-                                    <ImageIcon className="h-12 w-12 text-zinc-500 mx-auto" />
-                                    <div className="text-sm font-medium text-zinc-300">Agrega imagen de fondo para el Hero</div>
-                                    <div className="text-xs text-zinc-500">Arrastra una imagen aquí o haz clic para seleccionar</div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    const renderHeroVideoContent = () => {
-        return (
-            <div className="space-y-3">
-                {block.media && block.media.length > 0 ? (
-                    <div className="relative">
-                        {/* Preview del video */}
-                        <div className="relative h-48 bg-zinc-800 rounded-lg overflow-hidden">
-                            <video
-                                className="w-full h-full object-cover"
-                                controls
-                                poster={block.media[0].thumbnail_url}
-                            >
-                                <source src={block.media[0].file_url} type="video/mp4" />
-                                Tu navegador no soporta el elemento video.
-                            </video>
-                            <button
-                                onClick={() => removeMedia(block.media[0].id)}
-                                className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full hover:bg-red-700 transition-colors"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        </div>
-                        <div className="mt-3 p-3 bg-zinc-900/50 border border-zinc-700 rounded-lg">
-                            <p className="text-xs text-zinc-400">Hero con video de fondo y texto superpuesto</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div
-                        className="border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => handleDrop(e, block.id)}
-                    >
-                        <div className="p-8 space-y-3">
-                            {isUploading ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto"></div>
-                                    <div className="text-sm text-zinc-500">Subiendo video...</div>
-                                </>
-                            ) : (
-                                <>
-                                    <Video className="h-12 w-12 text-zinc-500 mx-auto" />
-                                    <div className="text-sm font-medium text-zinc-300">Agrega video de fondo para el Hero</div>
-                                    <div className="text-xs text-zinc-500">Arrastra un video aquí o haz clic para seleccionar</div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    const renderHeroTextContent = () => {
-        return (
-            <div className="space-y-3 p-4 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 border border-zinc-700 rounded-lg">
-                <div className="flex items-center gap-2 mb-3">
-                    <FileText className="h-5 w-5 text-zinc-400" />
-                    <span className="text-sm font-medium text-zinc-300">Hero con Texto</span>
-                </div>
-                <p className="text-xs text-zinc-400">
-                    Hero con fondo decorativo (gradientes o patrones SVG) y texto personalizable.
-                </p>
-            </div>
-        );
-    };
-
     const renderHeroContent = () => {
-        const heroConfig = (block.config || {}) as HeroConfig;
-        const hasMedia = block.media && block.media.length > 0;
-        const isVideo = heroConfig.backgroundType === 'video' || (hasMedia && block.media[0]?.file_type === 'video');
+        // Convertir configuraciones antiguas a HeroConfig unificado
+        let heroConfig: HeroConfig = {};
+        
+        if (block.type === 'hero-contact') {
+            const oldConfig = block.config as HeroContactConfig;
+            heroConfig = {
+                title: oldConfig.titulo,
+                subtitle: oldConfig.evento,
+                description: oldConfig.descripcion,
+                textAlignment: 'center',
+                verticalAlignment: 'center',
+                backgroundType: 'image',
+                containerStyle: 'fullscreen'
+            };
+        } else if (block.type === 'hero-image') {
+            const oldConfig = block.config as HeroImageConfig;
+            heroConfig = {
+                title: oldConfig.title,
+                subtitle: oldConfig.subtitle,
+                description: oldConfig.description,
+                buttons: oldConfig.buttons,
+                overlay: oldConfig.overlay,
+                overlayOpacity: oldConfig.overlayOpacity,
+                textAlignment: oldConfig.textAlignment || 'center',
+                verticalAlignment: oldConfig.imagePosition === 'top' ? 'top' : oldConfig.imagePosition === 'bottom' ? 'bottom' : 'center',
+                backgroundType: 'image',
+                containerStyle: 'fullscreen'
+            };
+        } else if (block.type === 'hero-video') {
+            const oldConfig = block.config as HeroVideoConfig;
+            heroConfig = {
+                title: oldConfig.title,
+                subtitle: oldConfig.subtitle,
+                description: oldConfig.description,
+                buttons: oldConfig.buttons,
+                overlay: oldConfig.overlay,
+                overlayOpacity: oldConfig.overlayOpacity,
+                textAlignment: oldConfig.textAlignment || 'center',
+                verticalAlignment: 'center',
+                backgroundType: 'video',
+                autoPlay: oldConfig.autoPlay,
+                muted: oldConfig.muted,
+                loop: oldConfig.loop,
+                containerStyle: 'fullscreen'
+            };
+        } else if (block.type === 'hero-text') {
+            const oldConfig = block.config as HeroTextConfig;
+            heroConfig = {
+                title: oldConfig.title,
+                subtitle: oldConfig.subtitle,
+                description: oldConfig.description,
+                buttons: oldConfig.buttons,
+                textAlignment: oldConfig.textAlignment || 'center',
+                verticalAlignment: 'center',
+                backgroundType: 'image',
+                containerStyle: 'fullscreen'
+            };
+        } else {
+            // Caso 'hero' - usar configuración directamente
+            heroConfig = (block.config || {}) as HeroConfig;
+        }
+
+        const handleConfigChange = (newConfig: HeroConfig) => {
+            onUpdate(block.id, {
+                config: newConfig
+            });
+        };
+
+        const handleMediaChange = (newMedia: MediaItem[]) => {
+            onUpdate(block.id, {
+                media: newMedia
+            });
+        };
+
+        const handleDropFiles = async (files: File[]) => {
+            await onDropFiles(files, block.id);
+        };
 
         return (
-            <div className="space-y-3">
-                {hasMedia ? (
-                    <div className="relative">
-                        <HeroComponent
-                            config={heroConfig}
-                            media={block.media}
-                            isEditable={true}
-                        />
-                    </div>
-                ) : (
-                    <div
-                        className="border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => handleDrop(e, block.id)}
-                    >
-                        <div className="p-8 space-y-3">
-                            {isUploading ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto"></div>
-                                    <div className="text-sm text-zinc-500">Subiendo archivo...</div>
-                                </>
-                            ) : (
-                                <>
-                                    <ImageIcon className="h-12 w-12 text-zinc-500 mx-auto" />
-                                    <div className="text-sm font-medium text-zinc-300">Agrega imagen o video de fondo para el Hero</div>
-                                    <div className="text-xs text-zinc-500">Arrastra un archivo aquí o haz clic para seleccionar</div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
+            <HeroEditor
+                config={heroConfig}
+                media={block.media || []}
+                onConfigChange={handleConfigChange}
+                onMediaChange={handleMediaChange}
+                onDropFiles={handleDropFiles}
+                isUploading={isUploading}
+                studioSlug={studioSlug}
+            />
         );
     };
 

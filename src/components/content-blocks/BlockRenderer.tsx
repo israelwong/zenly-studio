@@ -5,11 +5,7 @@ import { ContentBlock, TextBlockConfig, MediaBlockConfig, HeroContactConfig, Her
 import { VideoSingle } from '@/components/shared/video';
 import { ImageSingle, ImageGrid, ImageCarousel } from '@/components/shared/media';
 import { MasonryGallery } from '@/components/shared/media/MasonryGallery';
-import HeroContact from '@/components/shared/heroes/HeroContact';
-import HeroImage from '@/components/shared/heroes/HeroImage';
-import HeroVideo from '@/components/shared/heroes/HeroVideo';
-import HeroText from '@/components/shared/heroes/HeroText';
-import HeroComponent from '@/components/shared/HeroComponent';
+import HeroComponent from '@/components/shared/hero/HeroComponent';
 
 interface BlockRendererProps {
     block: ContentBlock;
@@ -245,45 +241,72 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                 );
 
             case 'hero-contact':
-                const heroContactConfig = block.config as HeroContactConfig;
-                return (
-                    <HeroContact
-                        config={heroContactConfig}
-                        className={className}
-                    />
-                );
-
             case 'hero-image':
-                const heroImageConfig = block.config as HeroImageConfig;
-                return (
-                    <HeroImage
-                        config={heroImageConfig}
-                        media={block.media || []}
-                        className={className}
-                    />
-                );
-
             case 'hero-video':
-                const heroVideoConfig = block.config as HeroVideoConfig;
-                return (
-                    <HeroVideo
-                        config={heroVideoConfig}
-                        media={block.media || []}
-                        className={className}
-                    />
-                );
-
             case 'hero-text':
-                const heroTextConfig = block.config as HeroTextConfig;
-                return (
-                    <HeroText
-                        config={heroTextConfig}
-                        className={className}
-                    />
-                );
-
             case 'hero':
-                const heroConfig = (block.config || {}) as HeroConfig;
+                // Convertir configuraciones antiguas a HeroConfig unificado
+                let heroConfig: HeroConfig = {};
+                
+                if (block.type === 'hero-contact') {
+                    const oldConfig = block.config as HeroContactConfig;
+                    heroConfig = {
+                        title: oldConfig.titulo,
+                        subtitle: oldConfig.evento,
+                        description: oldConfig.descripcion,
+                        textAlignment: 'center',
+                        verticalAlignment: 'center',
+                        backgroundType: 'image',
+                        containerStyle: 'fullscreen'
+                    };
+                } else if (block.type === 'hero-image') {
+                    const oldConfig = block.config as HeroImageConfig;
+                    heroConfig = {
+                        title: oldConfig.title,
+                        subtitle: oldConfig.subtitle,
+                        description: oldConfig.description,
+                        buttons: oldConfig.buttons,
+                        overlay: oldConfig.overlay,
+                        overlayOpacity: oldConfig.overlayOpacity,
+                        textAlignment: oldConfig.textAlignment || 'center',
+                        verticalAlignment: oldConfig.imagePosition === 'top' ? 'top' : oldConfig.imagePosition === 'bottom' ? 'bottom' : 'center',
+                        backgroundType: 'image',
+                        containerStyle: 'fullscreen'
+                    };
+                } else if (block.type === 'hero-video') {
+                    const oldConfig = block.config as HeroVideoConfig;
+                    heroConfig = {
+                        title: oldConfig.title,
+                        subtitle: oldConfig.subtitle,
+                        description: oldConfig.description,
+                        buttons: oldConfig.buttons,
+                        overlay: oldConfig.overlay,
+                        overlayOpacity: oldConfig.overlayOpacity,
+                        textAlignment: oldConfig.textAlignment || 'center',
+                        verticalAlignment: 'center',
+                        backgroundType: 'video',
+                        autoPlay: oldConfig.autoPlay,
+                        muted: oldConfig.muted,
+                        loop: oldConfig.loop,
+                        containerStyle: 'fullscreen'
+                    };
+                } else if (block.type === 'hero-text') {
+                    const oldConfig = block.config as HeroTextConfig;
+                    heroConfig = {
+                        title: oldConfig.title,
+                        subtitle: oldConfig.subtitle,
+                        description: oldConfig.description,
+                        buttons: oldConfig.buttons,
+                        textAlignment: oldConfig.textAlignment || 'center',
+                        verticalAlignment: 'center',
+                        backgroundType: 'image',
+                        containerStyle: 'fullscreen'
+                    };
+                } else {
+                    // Caso 'hero' - usar configuración directamente
+                    heroConfig = (block.config || {}) as HeroConfig;
+                }
+
                 return (
                     <HeroComponent
                         config={heroConfig}

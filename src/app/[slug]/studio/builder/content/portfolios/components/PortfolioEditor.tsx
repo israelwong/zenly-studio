@@ -473,88 +473,11 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                 };
                 break;
             case 'hero-contact':
-                config = {
-                    evento: 'Eventos',
-                    titulo: 'Contáctanos Hoy Mismo',
-                    descripcion: 'Nos emociona saber que nos estás considerando para cubrir tu evento. Especialistas en bodas, XV años y eventos corporativos.',
-                    gradientFrom: 'from-purple-600',
-                    gradientTo: 'to-blue-600',
-                    showScrollIndicator: true
-                };
-                break;
             case 'hero-image':
-                config = {
-                    title: 'Tu Título Aquí',
-                    subtitle: 'Subtítulo Impactante',
-                    description: 'Descripción que cautive a tus prospectos',
-                    buttons: [
-                        {
-                            text: 'Ver Trabajo',
-                            variant: 'primary',
-                            size: 'lg'
-                        },
-                        {
-                            text: 'Contactar',
-                            variant: 'outline',
-                            size: 'lg'
-                        }
-                    ],
-                    overlay: true,
-                    overlayOpacity: 50,
-                    textAlignment: 'center',
-                    imagePosition: 'center'
-                };
-                break;
             case 'hero-video':
-                config = {
-                    title: 'Tu Título Aquí',
-                    subtitle: 'Subtítulo Impactante',
-                    description: 'Descripción que cautive a tus prospectos',
-                    buttons: [
-                        {
-                            text: 'Ver Trabajo',
-                            variant: 'primary',
-                            size: 'lg'
-                        },
-                        {
-                            text: 'Contactar',
-                            variant: 'outline',
-                            size: 'lg'
-                        }
-                    ],
-                    overlay: true,
-                    overlayOpacity: 50,
-                    textAlignment: 'center',
-                    autoPlay: true,
-                    muted: true,
-                    loop: true
-                };
-                break;
             case 'hero-text':
-                config = {
-                    title: 'Tu Título Aquí',
-                    subtitle: 'Subtítulo Impactante',
-                    description: 'Descripción que cautive a tus prospectos',
-                    buttons: [
-                        {
-                            text: 'Ver Trabajo',
-                            variant: 'primary',
-                            size: 'lg'
-                        },
-                        {
-                            text: 'Contactar',
-                            variant: 'outline',
-                            size: 'lg'
-                        }
-                    ],
-                    backgroundVariant: 'gradient',
-                    backgroundGradient: 'from-zinc-900 via-zinc-800 to-zinc-900',
-                    textAlignment: 'center',
-                    pattern: 'dots',
-                    textColor: 'text-white'
-                };
-                break;
             case 'hero':
+                // Usar configuración unificada para todos los tipos hero
                 config = {
                     title: 'Tu Título Aquí',
                     subtitle: 'Subtítulo Impactante',
@@ -577,11 +500,11 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                     overlayOpacity: 50,
                     textAlignment: 'center',
                     verticalAlignment: 'center',
-                    layout: 'fullwidth',
-                    backgroundType: 'image',
-                    autoPlay: true,
-                    muted: true,
-                    loop: true
+                    backgroundType: component.type === 'hero-video' ? 'video' : 'image',
+                    containerStyle: 'fullscreen',
+                    autoPlay: component.type === 'hero-video' ? true : undefined,
+                    muted: component.type === 'hero-video' ? true : undefined,
+                    loop: component.type === 'hero-video' ? true : undefined
                 };
                 break;
             default:
