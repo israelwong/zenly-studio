@@ -7,7 +7,11 @@ import { ContentBlocksEditor } from "@/components/content-blocks";
 import { ContentBlock } from "@/types/content-blocks";
 import { CategorizedComponentSelector, ComponentOption } from "./CategorizedComponentSelector";
 import { obtenerIdentidadStudio } from "@/lib/actions/studio/builder/identidad.actions";
-import { getStudioPortfoliosBySlug } from "@/lib/actions/studio/builder/portfolios/portfolios.actions";
+import {
+    getStudioPortfoliosBySlug,
+    createStudioPortfolioFromSlug,
+    updateStudioPortfolioFromSlug
+} from "@/lib/actions/studio/builder/portfolios/portfolios.actions";
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
 import { useTempCuid } from "@/hooks/useTempCuid";
 import { toast } from "sonner";
@@ -341,11 +345,59 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
         });
     };
 
+    // Validar que un componente tenga información válida
+    const hasComponentContent = (block: ContentBlock): boolean => {
+        const { type, config, media } = block;
+
+        switch (type) {
+            case 'text':
+                // Text debe tener texto en config
+                const textConfig = config as { text?: string };
+                return !!(textConfig?.text?.trim());
+
+            case 'image':
+            case 'gallery':
+            case 'media-gallery':
+            case 'video':
+            case 'grid':
+            case 'slider':
+                // Componentes de media deben tener media
+                return !!(media && media.length > 0);
+
+            case 'hero':
+            case 'hero-image':
+            case 'hero-video':
+            case 'hero-text':
+            case 'hero-contact':
+                // Hero debe tener title, subtitle, description, media o buttons
+                const heroConfig = config as {
+                    title?: string;
+                    subtitle?: string;
+                    description?: string;
+                    buttons?: Array<{ text?: string }>;
+                };
+                const hasHeroText = !!(heroConfig?.title?.trim() ||
+                    heroConfig?.subtitle?.trim() ||
+                    heroConfig?.description?.trim());
+                const hasHeroButtons = !!(heroConfig?.buttons && heroConfig.buttons.length > 0);
+                const hasHeroMedia = !!(media && media.length > 0);
+                return hasHeroText || hasHeroButtons || hasHeroMedia;
+
+            case 'separator':
+                // Separator siempre es válido (solo necesita existir)
+                return true;
+
+            default:
+                // Por defecto, cualquier componente con media o config es válido
+                return !!(media && media.length > 0) || !!config;
+        }
+    };
+
     const handleSave = async () => {
         try {
             setIsSaving(true);
 
-            // Validación básica
+            // Validación 1: Título requerido
             if (!formData.title?.trim()) {
                 toast.error("El título es requerido");
                 return;
@@ -356,8 +408,16 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                 return;
             }
 
-            if (!formData.media || formData.media.length === 0) {
-                toast.error("Agrega al menos una imagen o video");
+            // Validación 2: Al menos un componente
+            if (!contentBlocks || contentBlocks.length === 0) {
+                toast.error("Agrega al menos un componente de contenido");
+                return;
+            }
+
+            // Validación 3: Cada componente debe tener información válida
+            const invalidBlocks = contentBlocks.filter(block => !hasComponentContent(block));
+            if (invalidBlocks.length > 0) {
+                toast.error(`Completa la información de los componentes. ${invalidBlocks.length} componente(s) sin contenido`);
                 return;
             }
 
@@ -365,9 +425,11 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
             const portfolioData = {
                 ...formData,
                 // Asegurar que el cover_index esté dentro del rango válido
-                cover_index: Math.min(formData.cover_index, formData.media.length - 1),
+                cover_index: formData.media && formData.media.length > 0
+                    ? Math.min(formData.cover_index, formData.media.length - 1)
+                    : 0,
                 // Asegurar que todos los media items tengan IDs
-                media: formData.media.map((item, index) => ({
+                media: (formData.media || []).map((item, index) => ({
                     ...item,
                     id: item.id || cuid(),
                     display_order: index // Agregar orden explícito
@@ -378,9 +440,22 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
 
             console.log("Guardando portfolio con datos:", portfolioData);
 
-            // TODO: Aquí iría la lógica para guardar el portfolio usando createStudioPortfolio o updateStudioPortfolio
-            // Por ahora simulamos el guardado
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Guardar usando server actions
+            let result;
+            if (mode === "create") {
+                result = await createStudioPortfolioFromSlug(studioSlug, portfolioData);
+            } else {
+                if (!portfolioData.id) {
+                    toast.error("ID del portfolio es requerido para actualizar");
+                    return;
+                }
+                result = await updateStudioPortfolioFromSlug(portfolioData.id, studioSlug, portfolioData);
+            }
+
+            if (!result.success) {
+                toast.error(result.error || "Error al guardar el portfolio");
+                return;
+            }
 
             toast.success(mode === "create" ? "Portfolio creado exitosamente" : "Portfolio actualizado exitosamente");
 

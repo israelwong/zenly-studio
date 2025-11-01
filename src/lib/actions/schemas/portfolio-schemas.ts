@@ -46,7 +46,8 @@ export const portfolioFormSchema = z.object({
     is_published: z.boolean().default(false),
     
     // Media y Content Blocks
-    media: z.array(mediaItemSchema).min(1, "Agrega al menos una foto o video"),
+    // Media es opcional si hay content_blocks con media
+    media: z.array(mediaItemSchema).optional().default([]),
     content_blocks: z.array(z.any()).optional().default([]), // ContentBlock[] - validación más flexible
     
     // Orden
