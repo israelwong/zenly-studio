@@ -22,12 +22,13 @@ import {
 } from '@dnd-kit/sortable';
 import { ZenButton } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { ContentBlock, ComponentType, MediaMode, MediaType, MediaItem, MediaBlockConfig } from '@/types/content-blocks';
+import { ContentBlock, ComponentType, MediaMode, MediaType, MediaItem, MediaBlockConfig, HeroConfig } from '@/types/content-blocks';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
 import { toast } from 'sonner';
 import { VideoSingle } from '@/components/shared/video';
 import { ImageSingle, ImageGrid, MediaGallery } from '@/components/shared/media';
 import { RichTextBlock } from '@/components/shared/text';
+import HeroComponent from '@/components/shared/HeroComponent';
 import { formatBytes, calculateTotalStorage, getStorageInfo } from '@/lib/utils/storage';
 
 // Importar tipo UploadedFile
@@ -81,6 +82,8 @@ function getComponentDisplayName(block: ContentBlock): string {
             return 'Hero Video';
         case 'hero-text':
             return 'Hero Texto';
+        case 'hero':
+            return 'Hero';
         default:
             return 'Componente';
     }
@@ -1082,6 +1085,8 @@ function SortableBlock({
                 return renderHeroVideoContent();
             case 'hero-text':
                 return renderHeroTextContent();
+            case 'hero':
+                return renderHeroContent();
             default:
                 return null;
         }
@@ -1489,6 +1494,47 @@ function SortableBlock({
                 <p className="text-xs text-zinc-400">
                     Hero con fondo decorativo (gradientes o patrones SVG) y texto personalizable.
                 </p>
+            </div>
+        );
+    };
+
+    const renderHeroContent = () => {
+        const heroConfig = (block.config || {}) as HeroConfig;
+        const hasMedia = block.media && block.media.length > 0;
+        const isVideo = heroConfig.backgroundType === 'video' || (hasMedia && block.media[0]?.file_type === 'video');
+
+        return (
+            <div className="space-y-3">
+                {hasMedia ? (
+                    <div className="relative">
+                        <HeroComponent
+                            config={heroConfig}
+                            media={block.media}
+                            isEditable={true}
+                        />
+                    </div>
+                ) : (
+                    <div
+                        className="border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => handleDrop(e, block.id)}
+                    >
+                        <div className="p-8 space-y-3">
+                            {isUploading ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto"></div>
+                                    <div className="text-sm text-zinc-500">Subiendo archivo...</div>
+                                </>
+                            ) : (
+                                <>
+                                    <ImageIcon className="h-12 w-12 text-zinc-500 mx-auto" />
+                                    <div className="text-sm font-medium text-zinc-300">Agrega imagen o video de fondo para el Hero</div>
+                                    <div className="text-xs text-zinc-500">Arrastra un archivo aquí o haz clic para seleccionar</div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         );
     };

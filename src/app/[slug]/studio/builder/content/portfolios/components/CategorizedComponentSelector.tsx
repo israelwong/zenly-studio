@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, Image as ImageIcon, MessageCircle, FileText, Type, Minus } from 'lucide-react';
+import { X, Image as ImageIcon, MessageCircle, FileText, Type, Minus, Sparkles } from 'lucide-react';
 import { ComponentType, MediaMode, MediaType } from '@/types/content-blocks';
 
 export interface ComponentOption {
@@ -63,6 +63,12 @@ const COMPONENT_CATEGORIES: Category[] = [
         id: 'heros',
         label: 'Heros',
         components: [
+            {
+                type: 'hero',
+                label: 'Hero',
+                icon: Sparkles,
+                description: 'Hero unificado con imagen o video de fondo, título, descripción y botones',
+            },
             {
                 type: 'hero-contact',
                 label: 'Hero Contacto',

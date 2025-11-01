@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ContentBlock, TextBlockConfig, MediaBlockConfig, HeroContactConfig, HeroImageConfig, HeroVideoConfig, HeroTextConfig, SeparatorBlockConfig } from '@/types/content-blocks';
+import { ContentBlock, TextBlockConfig, MediaBlockConfig, HeroContactConfig, HeroImageConfig, HeroVideoConfig, HeroTextConfig, HeroConfig, SeparatorBlockConfig } from '@/types/content-blocks';
 import { VideoSingle } from '@/components/shared/video';
 import { ImageSingle, ImageGrid, ImageCarousel } from '@/components/shared/media';
 import { MasonryGallery } from '@/components/shared/media/MasonryGallery';
@@ -9,6 +9,7 @@ import HeroContact from '@/components/shared/heroes/HeroContact';
 import HeroImage from '@/components/shared/heroes/HeroImage';
 import HeroVideo from '@/components/shared/heroes/HeroVideo';
 import HeroText from '@/components/shared/heroes/HeroText';
+import HeroComponent from '@/components/shared/HeroComponent';
 
 interface BlockRendererProps {
     block: ContentBlock;
@@ -277,6 +278,16 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                 return (
                     <HeroText
                         config={heroTextConfig}
+                        className={className}
+                    />
+                );
+
+            case 'hero':
+                const heroConfig = (block.config || {}) as HeroConfig;
+                return (
+                    <HeroComponent
+                        config={heroConfig}
+                        media={block.media || []}
                         className={className}
                     />
                 );

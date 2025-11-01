@@ -3,7 +3,7 @@
  * Reutilizables entre ZEN Posts, ZEN Invitations y otros módulos
  */
 
-export type ComponentType = 'image' | 'gallery' | 'video' | 'text' | 'grid' | 'slider' | 'hero-contact' | 'hero-image' | 'hero-video' | 'hero-text' | 'separator' | 'media-gallery';
+export type ComponentType = 'image' | 'gallery' | 'video' | 'text' | 'grid' | 'slider' | 'hero-contact' | 'hero-image' | 'hero-video' | 'hero-text' | 'hero' | 'separator' | 'media-gallery';
 
 export type MediaMode = 'single' | 'grid' | 'masonry' | 'slide';
 
@@ -129,6 +129,22 @@ export interface HeroTextConfig {
     textColor?: string;
 }
 
+export interface HeroConfig {
+    title?: string;
+    subtitle?: string;
+    description?: string;
+    buttons?: ButtonConfig[];
+    overlay?: boolean;
+    overlayOpacity?: number;
+    textAlignment?: TextAlignment;
+    verticalAlignment?: 'top' | 'center' | 'bottom';
+    layout?: 'fullwidth' | 'wrapped';
+    backgroundType?: 'image' | 'video';
+    autoPlay?: boolean;
+    muted?: boolean;
+    loop?: boolean;
+}
+
 export interface SeparatorBlockConfig {
     style: 'space' | 'solid' | 'dotted';
     height?: number; // Altura en píxeles (default: 24 para space, 0.5 para lines)
@@ -136,7 +152,7 @@ export interface SeparatorBlockConfig {
 }
 
 // Union type para todas las configuraciones
-export type BlockConfig = MediaBlockConfig | TextBlockConfig | HeroContactConfig | HeroImageConfig | HeroVideoConfig | HeroTextConfig | SeparatorBlockConfig;
+export type BlockConfig = MediaBlockConfig | TextBlockConfig | HeroContactConfig | HeroImageConfig | HeroVideoConfig | HeroTextConfig | HeroConfig | SeparatorBlockConfig;
 
 // Props base para todos los componentes de bloque
 export interface BaseBlockProps {

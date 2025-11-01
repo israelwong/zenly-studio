@@ -554,6 +554,36 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                     textColor: 'text-white'
                 };
                 break;
+            case 'hero':
+                config = {
+                    title: 'Tu Título Aquí',
+                    subtitle: 'Subtítulo Impactante',
+                    description: 'Descripción que cautive a tus prospectos',
+                    buttons: [
+                        {
+                            text: 'Ver Trabajo',
+                            href: '#',
+                            variant: 'primary',
+                            size: 'lg'
+                        },
+                        {
+                            text: 'Contactar',
+                            href: '#',
+                            variant: 'outline',
+                            size: 'lg'
+                        }
+                    ],
+                    overlay: true,
+                    overlayOpacity: 50,
+                    textAlignment: 'center',
+                    verticalAlignment: 'center',
+                    layout: 'fullwidth',
+                    backgroundType: 'image',
+                    autoPlay: true,
+                    muted: true,
+                    loop: true
+                };
+                break;
             default:
                 // Tipo no reconocido o sin configuración específica
                 config = {};
