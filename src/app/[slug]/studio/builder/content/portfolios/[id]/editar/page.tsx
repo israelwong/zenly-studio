@@ -1,5 +1,4 @@
 import { PortfolioEditor } from "../../components/PortfolioEditor";
-import { obtenerTiposEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 import { getStudioPortfolioById } from "@/lib/actions/studio/builder/portfolios/portfolios.actions";
 import { notFound } from "next/navigation";
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
@@ -58,10 +57,6 @@ function convertDatabasePortfolioToFormData(dbPortfolio: DatabasePortfolio): Por
         category: dbPortfolio.category as "portfolio" | "blog" | "promo" | null,
         event_type_id: dbPortfolio.event_type_id || "",
         tags: dbPortfolio.tags,
-        cta_enabled: dbPortfolio.cta_enabled,
-        cta_text: dbPortfolio.cta_text,
-        cta_action: dbPortfolio.cta_action as "whatsapp" | "lead_form" | "calendar",
-        cta_link: dbPortfolio.cta_link || "",
         is_featured: dbPortfolio.is_featured,
         is_published: dbPortfolio.is_published,
         content_blocks: contentBlocks,
@@ -85,16 +80,9 @@ export default async function EditarPortfolioPage({ params }: EditarPortfolioPag
         notFound();
     }
 
-    // Obtener tipos de evento para el select
-    const eventTypesResult = await obtenerTiposEvento(slug);
-    const eventTypes = eventTypesResult.success
-        ? (eventTypesResult.data || []).map(et => ({ id: et.id, name: et.nombre }))
-        : [];
-
     return (
         <PortfolioEditor
             studioSlug={slug}
-            eventTypes={eventTypes}
             mode="edit"
             portfolio={convertDatabasePortfolioToFormData(portfolioResult.data)}
         />

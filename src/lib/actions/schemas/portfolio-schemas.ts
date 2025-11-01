@@ -41,12 +41,6 @@ export const portfolioFormSchema = z.object({
     event_type_id: z.string().cuid().optional().nullable(),
     tags: z.array(z.string()).default([]),
     
-    // CTA
-    cta_enabled: z.boolean().default(true),
-    cta_text: z.string().default("Cotiza tu evento"),
-    cta_action: z.enum(["whatsapp", "lead_form", "calendar"]).default("whatsapp"),
-    cta_link: z.string().url().optional().nullable(),
-    
     // Visibilidad
     is_featured: z.boolean().default(false),
     is_published: z.boolean().default(false),

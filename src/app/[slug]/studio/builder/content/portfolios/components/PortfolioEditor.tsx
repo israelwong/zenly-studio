@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { ZenButton, ZenInput, ZenSelect, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenSwitch, ZenBadge, ZenTagModal } from "@/components/ui/zen";
+import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenSwitch, ZenBadge, ZenTagModal } from "@/components/ui/zen";
 import { MobilePreviewFull } from "../../../components/MobilePreviewFull";
 import { ContentBlocksEditor } from "@/components/content-blocks";
 import { ContentBlock } from "@/types/content-blocks";
@@ -20,7 +20,6 @@ import { calculateTotalStorage, formatBytes } from "@/lib/utils/storage";
 
 interface PortfolioEditorProps {
     studioSlug: string;
-    eventTypes: { id: string; name: string }[];
     mode: "create" | "edit";
     portfolio?: PortfolioFormData;
 }
@@ -178,7 +177,7 @@ function InjectAddButtons({
     return null;
 }
 
-export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: PortfolioEditorProps) {
+export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditorProps) {
     const router = useRouter();
     const tempCuid = useTempCuid();
 
@@ -191,13 +190,7 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
         cover_image_url: portfolio?.cover_image_url || null,
         media: portfolio?.media || [],
         cover_index: portfolio?.cover_index || 0,
-        category: portfolio?.category || "portfolio",
-        event_type_id: portfolio?.event_type_id || "",
         tags: portfolio?.tags || [],
-        cta_enabled: portfolio?.cta_enabled || false,
-        cta_text: portfolio?.cta_text || "",
-        cta_action: portfolio?.cta_action || "whatsapp",
-        cta_link: portfolio?.cta_link || "",
         is_featured: portfolio?.is_featured || false,
         is_published: portfolio?.is_published ?? true,
         content_blocks: portfolio?.content_blocks || [],
@@ -322,11 +315,6 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
             title: formData.title,
             slug: formData.slug || generateSlug(formData.title || ""),
             description: formData.description,
-            category: formData.category,
-            event_type: eventTypes.find(et => et.id === formData.event_type_id) ? {
-                id: formData.event_type_id,
-                nombre: eventTypes.find(et => et.id === formData.event_type_id)?.name || ''
-            } : null,
             tags: formData.tags,
             is_featured: formData.is_featured,
             is_published: true, // Siempre true para preview
@@ -334,10 +322,6 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
             view_count: 0,
             media: mappedMedia,
             cover_index: formData.cover_index,
-            cta_enabled: formData.cta_enabled,
-            cta_text: formData.cta_text,
-            cta_action: formData.cta_action,
-            cta_link: formData.cta_link,
             content_blocks: contentBlocks, // Agregar bloques de contenido
         };
 
@@ -345,7 +329,7 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
             ...previewData,
             portfolio: tempPortfolio // Usar 'portfolio' en lugar de 'portfolios' para PortfolioDetailSection
         };
-    }, [previewData, formData, eventTypes, tempCuid, contentBlocks]);
+    }, [previewData, formData, tempCuid, contentBlocks]);
 
     const handleInputChange = (field: keyof PortfolioFormData, value: string | boolean | number | string[] | null | ContentBlock[]) => {
         setFormData(prev => {
@@ -753,9 +737,7 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                             <div className="grid grid-cols-3 gap-4">
                                 {/* Columna 1: Portada */}
                                 <div className="space-y-2">
-                                    <label className="block text-sm font-medium text-zinc-300">
-                                        Portada
-                                    </label>
+
                                     {formData.cover_image_url ? (
                                         <div className="relative group">
                                             <div className="aspect-square relative bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700">
@@ -792,7 +774,7 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                                                 ) : (
                                                     <div className="flex flex-col items-center gap-2 text-zinc-400">
                                                         <Upload className="h-8 w-8" />
-                                                        <span className="text-sm text-center px-2">Haz clic para subir</span>
+                                                        <span className="text-xs text-center px-2">Haz clic para subir o arrastra una imagen de portada</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -828,13 +810,10 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                                 </div>
                             </div>
 
-                            {/* Divisor superior */}
-                            <div className="border-t border-dotted border-zinc-800 my-8" />
-
                             {/* Sistema de Bloques de Contenido */}
                             <div className="space-y-2">
                                 {/* Cabecera informativa única - Siempre visible */}
-                                <div className="mb-6 pb-4 border-b border-zinc-800/50">
+                                <div className="mb-6 pt-6 pb-4 border-t border-zinc-800">
                                     <div className="flex items-center justify-between gap-4">
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-base font-semibold text-zinc-200">
@@ -954,41 +933,8 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                             {/* Divisor inferior */}
                             <div className="border-t border-dotted border-zinc-800 my-8" />
 
-                            {/* Categoría y Tipo de Evento */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-zinc-300 mb-2">
-                                        Categoría
-                                    </label>
-                                    <ZenSelect
-                                        value={formData.category || ""}
-                                        onValueChange={(value: string) => handleInputChange("category", value)}
-                                        options={[
-                                            { value: "portfolio", label: "Portfolio" },
-                                            { value: "blog", label: "Blog" },
-                                            { value: "promo", label: "Promoción" },
-                                        ]}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-zinc-300 mb-2">
-                                        Tipo de Evento
-                                    </label>
-                                    <ZenSelect
-                                        value={formData.event_type_id || ""}
-                                        onValueChange={(value: string) => handleInputChange("event_type_id", value)}
-                                        options={[
-                                            { value: "", label: "Sin especificar" },
-                                            ...eventTypes.map(et => ({ value: et.id, label: et.name }))
-                                        ]}
-                                    />
-                                </div>
-                            </div>
-
-
                             {/* Palabras Clave */}
-                            <div className="space-y-4 p-4 bg-zinc-950/50 rounded-sm">
+                            <div className="space-y-4 p-4 border border-zinc-800 rounded-md">
                                 <div className="flex items-center justify-between mb-3">
                                     <label className="block text-sm font-medium text-zinc-300">
                                         Palabras Clave
@@ -1021,68 +967,13 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                                     </div>
                                 ) : (
                                     <p className="text-sm text-zinc-700 italic mb-4">
-                                        No hay palabras clave agregadas. Haz clic en &quot;Agregar&quot; para añadir algunas.
+                                        - No hay palabras clave agregadas aún.
                                     </p>
                                 )}
 
-                                <p className="text-xs text-zinc-400 mt-2">
+                                <p className="text-xs text-zinc-600 mt-2">
                                     Las palabras clave ayudan a que tu portfolio sea más fácil de encontrar
                                 </p>
-                            </div>
-
-                            {/* CTA */}
-                            <div className="space-y-4">
-                                <ZenSwitch
-                                    checked={formData.cta_enabled}
-                                    onCheckedChange={(checked) => handleInputChange("cta_enabled", checked)}
-                                    label="Habilitar Call-to-Action"
-                                    description="Agrega un botón de acción al final del portfolio"
-                                />
-
-                                {formData.cta_enabled && (
-                                    <div className="space-y-3">
-                                        <ZenInput
-                                            label="Texto del CTA"
-                                            value={formData.cta_text || ""}
-                                            onChange={(e) => handleInputChange("cta_text", e.target.value)}
-                                            placeholder="¡Contáctanos!"
-                                        />
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-zinc-300 mb-2">
-                                                Acción
-                                            </label>
-                                            <ZenSelect
-                                                value={formData.cta_action}
-                                                onValueChange={(value: string) => handleInputChange("cta_action", value)}
-                                                options={[
-                                                    { value: "whatsapp", label: "WhatsApp" },
-                                                    { value: "lead_form", label: "Formulario" },
-                                                    { value: "calendar", label: "Calendario" },
-                                                ]}
-                                            />
-                                        </div>
-
-                                        {formData.cta_action === "lead_form" && (
-                                            <ZenInput
-                                                label="Enlace"
-                                                value={formData.cta_link || ""}
-                                                onChange={(e) => handleInputChange("cta_link", e.target.value)}
-                                                placeholder="https://..."
-                                            />
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Opciones de Publicación */}
-                            <div className="space-y-4">
-                                <ZenSwitch
-                                    checked={formData.is_published}
-                                    onCheckedChange={(checked) => handleInputChange("is_published", checked)}
-                                    label="Publicar Portfolio"
-                                    description="Haz visible este portfolio en tu perfil público"
-                                />
                             </div>
 
                             {/* Botones */}

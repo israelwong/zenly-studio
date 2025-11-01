@@ -31,10 +31,6 @@ interface PortfolioDetail {
     view_count: number;
     media: PortfolioMedia[];
     cover_index: number;
-    cta_enabled: boolean;
-    cta_text: string;
-    cta_action: string;
-    cta_link: string | null;
     content_blocks?: ContentBlock[];
 }
 
@@ -183,22 +179,6 @@ export function PortfolioDetailSection({ portfolio, hideHeader = false }: Portfo
                                     )}
                                 </div>
                             ))}
-                        </div>
-                    </ZenCardContent>
-                </ZenCard>
-            )}
-
-            {/* CTA */}
-            {portfolio.cta_enabled && portfolio.cta_text && (
-                <ZenCard>
-                    <ZenCardContent className="p-4">
-                        <div className="text-center space-y-3">
-                            <p className="text-zinc-300">{portfolio.cta_text}</p>
-                            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                                {portfolio.cta_action === 'whatsapp' && '📱 WhatsApp'}
-                                {portfolio.cta_action === 'lead_form' && '📝 Formulario'}
-                                {portfolio.cta_action === 'calendar' && '📅 Agendar'}
-                            </button>
                         </div>
                     </ZenCardContent>
                 </ZenCard>
