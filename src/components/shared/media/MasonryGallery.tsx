@@ -30,7 +30,7 @@ interface MasonryGalleryProps {
 }
 
 // Componente para mostrar thumbnail de video
-function VideoThumbnail({ videoUrl, thumbnailUrl, alt }: { videoUrl: string; thumbnailUrl?: string; alt: string }) {
+function VideoThumbnail({ videoUrl, thumbnailUrl, alt, limitHeight = false, isPreview = false }: { videoUrl: string; thumbnailUrl?: string; alt: string; limitHeight?: boolean; isPreview?: boolean }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | null>(null);
@@ -46,7 +46,7 @@ function VideoThumbnail({ videoUrl, thumbnailUrl, alt }: { videoUrl: string; thu
         // Si no hay thumbnail, intentar capturar el primer frame
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        
+
         if (!video || !canvas) return;
 
         const captureFrame = () => {
@@ -89,39 +89,55 @@ function VideoThumbnail({ videoUrl, thumbnailUrl, alt }: { videoUrl: string; thu
                 crossOrigin="anonymous"
             />
             <canvas ref={canvasRef} className="hidden" />
-            
+
             {/* Mostrar thumbnail si existe o fue capturado */}
             {hasThumbnail ? (
-                <>
+                <div className={isPreview ? "relative w-full" : "absolute inset-0"}>
                     {thumbnailUrl ? (
-                        <Image
-                            src={thumbnailUrl}
-                            alt={alt}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                            unoptimized
-                        />
+                        isPreview ? (
+                            <img
+                                src={thumbnailUrl}
+                                alt={alt}
+                                className="object-contain w-full h-auto"
+                            />
+                        ) : (
+                            <Image
+                                src={thumbnailUrl}
+                                alt={alt}
+                                fill
+                                className="object-contain"
+                                sizes="(max-width: 768px) 100vw, 50vw"
+                                unoptimized
+                            />
+                        )
                     ) : thumbnailDataUrl ? (
-                        <Image
-                            src={thumbnailDataUrl}
-                            alt={alt}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                            unoptimized
-                        />
+                        isPreview ? (
+                            <img
+                                src={thumbnailDataUrl}
+                                alt={alt}
+                                className="object-contain w-full h-auto"
+                            />
+                        ) : (
+                            <Image
+                                src={thumbnailDataUrl}
+                                alt={alt}
+                                fill
+                                className="object-contain"
+                                sizes="(max-width: 768px) 100vw, 50vw"
+                                unoptimized
+                            />
+                        )
                     ) : null}
                     {/* Indicador de video */}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <div className={isPreview ? "absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none" : "absolute inset-0 flex items-center justify-center bg-black/20"}>
                         <div className="bg-black/60 rounded-full p-2">
                             <Play className="w-6 h-6 text-white fill-white" />
                         </div>
                     </div>
-                </>
+                </div>
             ) : (
                 // Fallback: mostrar fondo con indicador mientras carga
-                <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center">
+                <div className={isPreview ? "relative w-full h-32 bg-zinc-900 flex items-center justify-center" : "absolute inset-0 bg-zinc-900 flex items-center justify-center"}>
                     <div className="bg-black/60 rounded-full p-2">
                         <Play className="w-6 h-6 text-white fill-white" />
                     </div>
@@ -211,6 +227,9 @@ export function MasonryGallery({
     const [photos, setPhotos] = useState<MasonryPhoto[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Detectar si hay múltiples videos para limitar altura
+    const hasMultipleVideos = media.length > 1 && media.some(item => item.file_type === 'video');
+
     // Cargar las dimensiones reales de las imágenes
     useEffect(() => {
         const loadPhotos = async () => {
@@ -248,7 +267,7 @@ export function MasonryGallery({
     const lightboxSlides = media.map((mediaItem, index) => {
         const photo = photos[index];
         if (!photo) return null;
-        
+
         if (mediaItem.file_type === 'video') {
             return {
                 type: 'video' as const,
@@ -263,14 +282,14 @@ export function MasonryGallery({
                 playsInline: true
             };
         }
-        
+
         return {
             src: photo.src,
             alt: photo.alt || 'Imagen de galería',
             width: photo.width,
             height: photo.height
         };
-    }).filter(Boolean);
+    }).filter((slide): slide is Exclude<typeof slide, null> => slide !== null);
 
     // Función para manejar el click en una imagen
     const handleImageClick = (index: number) => {
@@ -295,9 +314,10 @@ export function MasonryGallery({
                 style={{
                     width: "100%",
                     position: "relative",
-                    aspectRatio: `${width} / ${height}`,
+                    ...(showDeleteButtons ? { aspectRatio: `${width} / ${height}` } : { aspectRatio: 'auto', height: 'auto' }),
+                    ...(isVideo && hasMultipleVideos && showDeleteButtons ? { maxHeight: '400px' } : {})
                 }}
-                className={`overflow-hidden ${borderStyle === 'rounded' ? 'rounded-lg' : 'rounded-none'} bg-zinc-800 hover:shadow-xl transition-all duration-300 cursor-pointer group`}
+                className={`overflow-hidden ${borderStyle === 'rounded' ? 'rounded-lg' : 'rounded-none'} ${showDeleteButtons ? 'bg-zinc-800' : ''} hover:shadow-xl transition-all duration-300 cursor-pointer group`}
                 onClick={() => handleImageClick(imageIndex)}
             >
                 {isVideo ? (
@@ -305,8 +325,10 @@ export function MasonryGallery({
                         videoUrl={mediaItem.file_url}
                         thumbnailUrl={mediaItem.thumbnail_url}
                         alt={alt || mediaItem.filename || 'Video de galería'}
+                        limitHeight={hasMultipleVideos && showDeleteButtons}
+                        isPreview={!showDeleteButtons}
                     />
-                ) : (
+                ) : showDeleteButtons ? (
                     <Image
                         fill
                         src={photo.src}
@@ -314,7 +336,14 @@ export function MasonryGallery({
                         title={title}
                         sizes={sizes}
                         className="object-cover hover:scale-105 transition-transform duration-300"
-                        priority={imageIndex < 6} // Priorizar las primeras 6 imágenes
+                        priority={imageIndex < 6}
+                    />
+                ) : (
+                    <img
+                        src={photo.src}
+                        alt={alt || photo.alt || 'Imagen de galería'}
+                        className="w-full h-auto object-contain"
+                        style={{ aspectRatio: 'auto' }}
                     />
                 )}
 
@@ -363,7 +392,7 @@ export function MasonryGallery({
     }
 
     return (
-        <div className={`w-full ${className}`}>
+        <div className={`w-full ${className}`} key={media.map(item => item.id).join('-')}>
             {/* Masonry Layout con react-photo-album */}
             <MasonryPhotoAlbum
                 photos={photos}

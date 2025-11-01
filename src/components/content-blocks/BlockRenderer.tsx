@@ -107,44 +107,7 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                 const mediaGalleryConfig = block.config as Partial<MediaBlockConfig>;
                 const borderStyle = mediaGalleryConfig.borderStyle || 'rounded';
 
-                // Si hay un solo archivo (imagen o video)
-                if (block.media.length === 1) {
-                    const singleMedia = block.media[0];
-
-                    // Si es video, usar VideoSingle
-                    if (singleMedia.file_type === 'video') {
-                        return (
-                            <VideoSingle
-                                src={singleMedia.file_url}
-                                config={{
-                                    autoPlay: false,
-                                    muted: false,
-                                    loop: false,
-                                    poster: singleMedia.thumbnail_url || undefined,
-                                    maxWidth: 'max-w-full'
-                                }}
-                                storageBytes={singleMedia.storage_bytes}
-                                className={className}
-                                showSizeLabel={false}
-                            />
-                        );
-                    }
-
-                    // Si es imagen, usar ImageSingle
-                    return (
-                        <ImageSingle
-                            media={singleMedia}
-                            aspectRatio="auto"
-                            className={className}
-                            showCaption={false}
-                            studioSlug=""
-                            showSizeLabel={false}
-                            showBorder={false}
-                        />
-                    );
-                }
-
-                // Para múltiples archivos (imágenes y/o videos), renderizar según el modo
+                // Siempre renderizar según el modo seleccionado, incluso con 1 archivo
                 switch (mediaGalleryMode) {
                     case 'masonry':
                         return (

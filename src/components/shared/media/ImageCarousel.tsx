@@ -37,6 +37,9 @@ export function ImageCarousel({
     const videoRefsRef = useRef<Map<number, HTMLVideoElement>>(new Map());
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
+    
+    // Detectar si hay múltiples videos para limitar altura
+    const hasMultipleVideos = media.length > 1 && media.some(item => item.file_type === 'video');
 
     // Obtener referencias de videos desde VideoPostCarousel
     const setVideoRef = (index: number) => (video: HTMLVideoElement | null) => {
@@ -172,6 +175,7 @@ export function ImageCarousel({
                                         <VideoPostCarousel
                                             video={item}
                                             onVideoRef={setVideoRef(index)}
+                                            limitHeight={hasMultipleVideos}
                                             onPlay={() => {
                                                 // Pausar otros videos cuando este se reproduce
                                                 videoRefsRef.current.forEach((vid, idx) => {

@@ -1,13 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Grid3X3, RectangleHorizontal, LayoutGrid, Upload, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Grid3X3, RectangleHorizontal, LayoutGrid, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { MediaItem, MediaMode, MediaBlockConfig } from '@/types/content-blocks';
-import { ImageSingle } from './ImageSingle';
 import { ImageGrid } from './ImageGrid';
 import { ImageCarousel } from './ImageCarousel';
 import { MasonryGallery } from './MasonryGallery';
-import { VideoSingle } from '../video/VideoSingle';
 import { ZenButton } from '@/components/ui/zen';
 
 interface MediaGalleryProps {
@@ -96,93 +94,8 @@ export function MediaGallery({
 
     // Renderizar contenido según el modo
     const renderContent = () => {
-        if (media.length === 0) {
-            // Área de drop cuando está vacío
-            return (
-                <div
-                    className="border-2 border-dashed border-zinc-700 rounded-lg text-center hover:border-emerald-500 transition-colors relative"
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                        e.preventDefault();
-                        const files = Array.from(e.dataTransfer.files).filter(f => 
-                            f.type.startsWith('image/') || f.type.startsWith('video/')
-                        );
-                        if (files.length > 0 && onDrop) {
-                            onDrop(files);
-                        }
-                    }}
-                >
-                    <div className="p-6 space-y-2">
-                        {isUploading ? (
-                            <>
-                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto"></div>
-                                <div className="text-sm text-zinc-500">Subiendo archivos...</div>
-                            </>
-                        ) : (
-                            <>
-                                <Upload className="h-8 w-8 text-zinc-500 mx-auto" />
-                                <div className="text-sm text-zinc-500">Arrastra imágenes o videos aquí o</div>
-                                {onUploadClick && (
-                                    <button
-                                        onClick={onUploadClick}
-                                        className="text-sm text-emerald-400 hover:text-emerald-300 underline"
-                                    >
-                                        haz clic para seleccionar
-                                    </button>
-                                )}
-                            </>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        // Si hay solo un archivo (imagen o video)
-        if (media.length === 1) {
-            const singleMedia = media[0];
-            
-            // Si es video, usar VideoSingle
-            if (singleMedia.file_type === 'video') {
-                return (
-                    <div className={`${className} relative`}>
-                        <VideoSingle
-                            src={singleMedia.file_url}
-                            config={{
-                                autoPlay: false,
-                                muted: false,
-                                loop: false,
-                                poster: singleMedia.thumbnail_url || undefined,
-                                maxWidth: 'max-w-full'
-                            }}
-                            storageBytes={singleMedia.storage_bytes}
-                            onDelete={showDeleteButtons && onDelete ? () => onDelete(singleMedia.id) : undefined}
-                            showDeleteButton={showDeleteButtons}
-                            showSizeLabel={true}
-                        />
-                    </div>
-                );
-            }
-            
-            // Si es imagen, usar ImageSingle
-            return (
-                <ImageSingle
-                    media={singleMedia}
-                    className={className}
-                    aspectRatio="auto"
-                    showDeleteButton={showDeleteButtons}
-                    onDelete={onDelete}
-                    onDrop={onDrop}
-                    isUploading={isUploading}
-                    showBorder={false}
-                />
-            );
-        }
-
-        // Si hay múltiples archivos (imágenes y/o videos)
         // En modo edición: siempre mostrar grid para poder arrastrar y ordenar
-        // En modo preview: mostrar según el modo seleccionado
-        if (isEditable && media.length > 1) {
-            // Siempre usar grid en el editor con configuración FIJA (no afectada por ajustes)
+        if (isEditable) {
             return (
                 <ImageGrid
                     media={media}
@@ -278,8 +191,7 @@ export function MediaGallery({
 
     return (
         <div className="space-y-3">
-            {/* Selector de modo de visualización (solo si hay 2+ imágenes) */}
-            {/* Los botones solo guardan el modo, pero en el editor siempre se muestra grid */}
+            {/* Selector de modo de visualización (solo si hay más de 1 elemento) */}
             {media.length > 1 && (
                 <>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -311,8 +223,8 @@ export function MediaGallery({
                             <RectangleHorizontal className="h-4 w-4" />
                             Carousel
                         </ZenButton>
-                        
-                        {/* Botón Configurar */}
+
+                        {/* Botón Ajustes */}
                         <ZenButton
                             variant="outline"
                             size="sm"

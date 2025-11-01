@@ -6,6 +6,7 @@ import { Trash2, GripVertical, ZoomIn, Upload } from 'lucide-react';
 import { MediaItem, MediaBlockConfig } from '@/types/content-blocks';
 import { formatBytes } from '@/lib/utils/storage';
 import Lightbox from "yet-another-react-lightbox";
+import Video from "yet-another-react-lightbox/plugins/video";
 import "yet-another-react-lightbox/styles.css";
 import {
     DndContext,
@@ -27,7 +28,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 // Componente para mostrar thumbnail de video
-function VideoThumbnail({ videoUrl, thumbnailUrl, alt }: { videoUrl: string; thumbnailUrl?: string; alt: string }) {
+function VideoThumbnail({ videoUrl, thumbnailUrl, alt, limitHeight = false, isPreview = false }: { videoUrl: string; thumbnailUrl?: string; alt: string; limitHeight?: boolean; isPreview?: boolean }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | null>(null);
@@ -89,27 +90,43 @@ function VideoThumbnail({ videoUrl, thumbnailUrl, alt }: { videoUrl: string; thu
             
             {/* Mostrar thumbnail si existe o fue capturado */}
             {hasThumbnail ? (
-                <>
+                <div className={isPreview ? "relative w-full" : "absolute inset-0"}>
                     {thumbnailUrl ? (
-                        <Image
-                            src={thumbnailUrl}
-                            alt={alt}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                        />
+                        isPreview ? (
+                            <img
+                                src={thumbnailUrl}
+                                alt={alt}
+                                className="object-contain w-full h-auto"
+                            />
+                        ) : (
+                            <Image
+                                src={thumbnailUrl}
+                                alt={alt}
+                                fill
+                                className="object-contain"
+                                sizes="(max-width: 768px) 100vw, 50vw"
+                            />
+                        )
                     ) : thumbnailDataUrl ? (
-                        <Image
-                            src={thumbnailDataUrl}
-                            alt={alt}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                            unoptimized
-                        />
+                        isPreview ? (
+                            <img
+                                src={thumbnailDataUrl}
+                                alt={alt}
+                                className="object-contain w-full h-auto"
+                            />
+                        ) : (
+                            <Image
+                                src={thumbnailDataUrl}
+                                alt={alt}
+                                fill
+                                className="object-contain"
+                                sizes="(max-width: 768px) 100vw, 50vw"
+                                unoptimized
+                            />
+                        )
                     ) : null}
                     {/* Indicador de video */}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <div className={isPreview ? "absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none" : "absolute inset-0 flex items-center justify-center bg-black/20"}>
                         <div className="bg-black/60 rounded-full p-2">
                             <svg
                                 className="w-6 h-6 text-white"
@@ -120,10 +137,10 @@ function VideoThumbnail({ videoUrl, thumbnailUrl, alt }: { videoUrl: string; thu
                             </svg>
                         </div>
                     </div>
-                </>
+                </div>
             ) : (
                 // Fallback: mostrar fondo con indicador mientras carga
-                <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center">
+                <div className={isPreview ? "relative w-full h-32 bg-zinc-900 flex items-center justify-center" : "absolute inset-0 bg-zinc-900 flex items-center justify-center"}>
                     <div className="bg-black/60 rounded-full p-2">
                         <svg
                             className="w-6 h-6 text-white"
@@ -239,6 +256,9 @@ export function ImageGrid({
 
     const aspectClass = aspectRatioClasses[aspectRatio];
 
+    // Detectar si hay múltiples videos para limitar altura
+    const hasMultipleVideos = media.length > 1 && media.some(item => item.file_type === 'video');
+
     const handleImageClick = (index: number) => {
         if (configLightbox) {
             setLightboxIndex(index);
@@ -316,10 +336,11 @@ export function ImageGrid({
                 }}
             >
                 <div
-                    className={`relative bg-zinc-800 ${borderStyleClass} overflow-hidden ${aspectClass} transition-all duration-200 ease-out ${isEditable
+                    className={`relative ${isEditable ? 'bg-zinc-800' : ''} ${borderStyleClass} overflow-hidden ${isEditable ? 'aspect-square' : (item.file_type === 'video' ? '' : aspectClass)} transition-all duration-200 ease-out ${isEditable
                         ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg'
                         : 'cursor-pointer hover:scale-[1.02] hover:shadow-lg'
                         } ${isDragging ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
+                    style={item.file_type === 'video' && !isEditable ? (hasMultipleVideos ? { maxHeight: '400px', minHeight: '200px' } : {}) : {}}
                     onClick={!isEditable && configLightbox ? () => handleImageClick(index) : undefined}
                 >
                     {item.file_type === 'video' ? (
@@ -327,13 +348,15 @@ export function ImageGrid({
                             videoUrl={item.file_url}
                             thumbnailUrl={item.thumbnail_url}
                             alt={item.filename}
+                            limitHeight={hasMultipleVideos}
+                            isPreview={!isEditable}
                         />
                     ) : (
                         <Image
                             src={item.file_url}
                             alt={item.filename}
                             fill
-                            className="object-cover"
+                            className={isEditable ? "object-contain" : "object-cover"}
                             sizes="(max-width: 768px) 100vw, 50vw"
                         />
                     )}
@@ -459,12 +482,11 @@ export function ImageGrid({
                             ))}
                         </SortableContext>
 
-                        {/* Slot de Upload - Al final, cuando está vacío o subiendo */}
-                        {(!media || media.length === 0 || isUploading) && (
+                        {/* Slot de Upload - Siempre visible en editor */}
+                        {isEditable && (
                             <button
                                 type="button"
-                                className={`relative bg-zinc-800 ${borderStyleClass} text-center hover:bg-zinc-700 transition-colors ${media.length === 0 ? 'col-span-full h-32' : aspectClass
-                                    } cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed`}
+                                className={`relative bg-zinc-800 ${borderStyleClass} text-center hover:bg-zinc-700 transition-colors ${media.length === 0 ? 'col-span-full h-32' : 'aspect-square'} border-2 border-dashed border-zinc-600 hover:border-emerald-500 cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed`}
                                 onClick={() => {
                                     if (onUploadClick && !isUploading) {
                                         onUploadClick();
@@ -478,14 +500,14 @@ export function ImageGrid({
                                             <>
                                                 <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto mb-2"></div>
                                                 <div className="text-sm text-emerald-400">
-                                                    Subiendo imagen...
+                                                    Subiendo archivos...
                                                 </div>
                                             </>
                                         ) : (
                                             <>
                                                 <Upload className="h-8 w-8 text-zinc-500 mx-auto mb-2 group-hover:text-emerald-400" />
                                                 <div className="text-sm text-zinc-500 group-hover:text-emerald-400">
-                                                    Arrastra imágenes o videos aquí
+                                                    {media.length === 0 ? 'Arrastra imágenes o videos aquí' : 'Agregar más'}
                                                 </div>
                                             </>
                                         )}
@@ -496,7 +518,7 @@ export function ImageGrid({
                     </div>
                 </DndContext>
             ) : (
-                <div className={`grid ${columnsClass} ${gapClass}`}>
+                <div className={`grid ${columnsClass} ${gapClass}`} key={media.map(item => item.id).join('-')}>
                     {media.map((item, index) => (
                         <SortableImageItem
                             key={item.id}
@@ -513,10 +535,34 @@ export function ImageGrid({
                 <Lightbox
                     open={lightboxOpen}
                     close={() => setLightboxOpen(false)}
-                    slides={media.map(item => ({
-                        src: item.file_url,
-                        alt: item.filename
-                    }))}
+                    slides={media.map(item => {
+                        if (item.file_type === 'video') {
+                            return {
+                                type: 'video' as const,
+                                sources: [{
+                                    src: item.file_url,
+                                    type: 'video/mp4'
+                                }],
+                                poster: item.thumbnail_url || item.file_url,
+                                autoPlay: true,
+                                muted: false,
+                                controls: true,
+                                playsInline: true
+                            };
+                        }
+                        return {
+                            src: item.file_url,
+                            alt: item.filename
+                        };
+                    })}
+                    plugins={[Video]}
+                    video={{
+                        controls: true,
+                        playsInline: true,
+                        autoPlay: true,
+                        muted: false,
+                        loop: false
+                    }}
                     index={lightboxIndex}
                     on={{
                         view: ({ index }) => setLightboxIndex(index),
@@ -524,6 +570,34 @@ export function ImageGrid({
                     controller={{
                         closeOnPullDown: true,
                         closeOnBackdropClick: true
+                    }}
+                    styles={{
+                        container: {
+                            backgroundColor: "rgba(0, 0, 0, .98)",
+                            padding: 0
+                        },
+                        slide: ({ slide }) => {
+                            if (slide.type === 'video') {
+                                return {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '100vw',
+                                    height: '100vh',
+                                    padding: 0,
+                                    margin: 0
+                                };
+                            }
+                            return {
+                                padding: 0,
+                                margin: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '100vw',
+                                height: '100vh'
+                            };
+                        }
                     }}
                 />
             )}

@@ -9,6 +9,7 @@ interface VideoPostCarouselProps {
     onPlay?: () => void;
     onPause?: () => void;
     onVideoRef?: (video: HTMLVideoElement | null) => void;
+    limitHeight?: boolean;
 }
 
 /**
@@ -26,7 +27,8 @@ export function VideoPostCarousel({
     className = '',
     onPlay,
     onPause,
-    onVideoRef
+    onVideoRef,
+    limitHeight = false
 }: VideoPostCarouselProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const observerRef = useRef<IntersectionObserver | null>(null);
@@ -196,6 +198,7 @@ export function VideoPostCarousel({
                 src={video.file_url}
                 poster={video.thumbnail_url}
                 className={`w-full h-auto object-contain rounded-md ${className}`}
+                style={limitHeight ? { maxHeight: '400px' } : {}}
                 controls={false}
                 playsInline
                 muted
