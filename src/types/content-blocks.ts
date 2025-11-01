@@ -162,6 +162,8 @@ export interface HeroConfig {
     // Degradado para contrastar contenido
     gradientOverlay?: boolean;
     gradientPosition?: 'top' | 'bottom' | 'left' | 'right';
+    // Efecto parallax en el fondo
+    parallax?: boolean;
 }
 
 export interface SeparatorBlockConfig {

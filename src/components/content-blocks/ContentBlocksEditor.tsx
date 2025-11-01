@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Video, Type, Grid3X3, X, LayoutGrid, MessageCircle, Play, FileText, AlignLeft, AlignCenter, AlignRight, Copy } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video, Type, Grid3X3, X, LayoutGrid, MessageCircle, Play, FileText, Copy } from 'lucide-react';
 import {
     DndContext,
     DragOverlay,
@@ -22,24 +22,14 @@ import {
 } from '@dnd-kit/sortable';
 import { ZenButton } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { ContentBlock, ComponentType, MediaMode, MediaType, MediaItem, MediaBlockConfig, HeroConfig } from '@/types/content-blocks';
+import { ContentBlock, ComponentType, MediaMode, MediaType, MediaItem, MediaBlockConfig, HeroConfig, HeroContactConfig, HeroImageConfig, HeroVideoConfig, HeroTextConfig } from '@/types/content-blocks';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
 import { toast } from 'sonner';
 import { VideoSingle } from '@/components/shared/video';
 import { ImageSingle, ImageGrid, MediaGallery } from '@/components/shared/media';
 import { RichTextBlock } from '@/components/shared/text';
-import HeroComponent from '@/components/shared/hero/HeroComponent';
 import HeroEditor from '@/components/shared/hero/HeroEditor';
 import { formatBytes, calculateTotalStorage, getStorageInfo } from '@/lib/utils/storage';
-
-// Importar tipo UploadedFile
-interface UploadedFile {
-    id: string;
-    url: string;
-    fileName: string;
-    size: number;
-    isUploading?: boolean;
-}
 
 // Función para obtener el nombre de visualización del componente
 function getComponentDisplayName(block: ContentBlock): string {
@@ -225,17 +215,17 @@ export function ContentBlocksEditor({
             shouldCancelStart: (event: PointerEvent) => {
                 const target = event.target as HTMLElement;
 
-            console.log('🟠 [SENSOR] shouldCancelStart llamado:', {
-                tagName: target.tagName,
-                isButton: target.tagName === 'BUTTON' || target.closest('button'),
-                isInput: target.tagName === 'INPUT' || target.closest('input'),
-                isTextarea: target.tagName === 'TEXTAREA' || target.closest('textarea'),
-                isDeleteButton: target.closest('[data-delete-button="true"]'),
-                isDuplicateButton: target.closest('[data-duplicate-button="true"]'),
-                isInternalButton: target.closest('[data-internal-button="true"]'),
-                isDragHandle: target.closest('[data-sortable-handle]'),
-                closestHandle: target.closest('[data-sortable-handle]')?.getAttribute('data-sortable-handle')
-            });
+                console.log('🟠 [SENSOR] shouldCancelStart llamado:', {
+                    tagName: target.tagName,
+                    isButton: target.tagName === 'BUTTON' || target.closest('button'),
+                    isInput: target.tagName === 'INPUT' || target.closest('input'),
+                    isTextarea: target.tagName === 'TEXTAREA' || target.closest('textarea'),
+                    isDeleteButton: target.closest('[data-delete-button="true"]'),
+                    isDuplicateButton: target.closest('[data-duplicate-button="true"]'),
+                    isInternalButton: target.closest('[data-internal-button="true"]'),
+                    isDragHandle: target.closest('[data-sortable-handle]'),
+                    closestHandle: target.closest('[data-sortable-handle]')?.getAttribute('data-sortable-handle')
+                });
 
                 // PRIMERO: Si es un botón interno (TextToolbar, etc.), cancelar SIEMPRE
                 const internalButton = target.closest('[data-internal-button="true"]');
@@ -244,13 +234,13 @@ export function ContentBlocksEditor({
                     return true;
                 }
 
-            // Si es un botón de eliminar o duplicar o está dentro de uno, cancelar SIEMPRE
-            const deleteButton = target.closest('[data-delete-button="true"]');
-            const duplicateButton = target.closest('[data-duplicate-button="true"]');
-            if (deleteButton || duplicateButton) {
-                console.log('🟠 [SENSOR] ✅ Cancelando drag - botón de eliminar/duplicar');
-                return true;
-            }
+                // Si es un botón de eliminar o duplicar o está dentro de uno, cancelar SIEMPRE
+                const deleteButton = target.closest('[data-delete-button="true"]');
+                const duplicateButton = target.closest('[data-duplicate-button="true"]');
+                if (deleteButton || duplicateButton) {
+                    console.log('🟠 [SENSOR] ✅ Cancelando drag - botón de eliminar/duplicar');
+                    return true;
+                }
 
                 // Si es un input, textarea o cualquier elemento editable, cancelar SIEMPRE
                 if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' ||
@@ -654,8 +644,7 @@ export function ContentBlocksEditor({
         });
 
         // Componentes de texto que requieren confirmación si tienen contenido
-        const textComponentTypes: ComponentType[] = ['text', 'heading-1', 'heading-3', 'blockquote'];
-        const isTextComponent = textComponentTypes.includes(block.type);
+        const isTextComponent = block.type === 'text';
         const hasTextContent = block.config?.text && String(block.config.text).trim().length > 0;
 
         // Si tiene media asociada o es componente de texto con contenido, mostrar modal de confirmación
@@ -950,11 +939,9 @@ export function ContentBlocksEditor({
                                     onUpdate={handleUpdateBlock}
                                     onDelete={requestDeleteBlock}
                                     onDuplicate={handleDuplicateBlock}
-                                    onMediaUpload={uploadFiles}
                                     studioSlug={studioSlug}
                                     isUploading={uploadingBlocks.has(block.id)}
                                     isDeleting={deletingBlocks.has(block.id)}
-                                    setUploading={setBlockUploading}
                                     onDropFiles={handleDropFiles}
                                 />
                             ))}
@@ -980,15 +967,15 @@ export function ContentBlocksEditor({
                 onClose={cancelDeleteBlock}
                 onConfirm={confirmDeleteBlock}
                 title={
-                    blockToDelete?.type === 'text' ? "Eliminar párrafo" :
-                        blockToDelete?.type === 'heading-1' ? "Eliminar título" :
-                            blockToDelete?.type === 'heading-3' ? "Eliminar subtítulo" :
-                                blockToDelete?.type === 'blockquote' ? "Eliminar cita" :
-                                    "Eliminar componente"
+                    blockToDelete?.type === 'text' ? (
+                        blockToDelete?.config?.textType === 'heading-1' ? "Eliminar título" :
+                            blockToDelete?.config?.textType === 'heading-3' ? "Eliminar subtítulo" :
+                                blockToDelete?.config?.textType === 'blockquote' ? "Eliminar cita" :
+                                    "Eliminar párrafo"
+                    ) : "Eliminar componente"
                 }
                 description={
-                    blockToDelete?.type === 'text' || blockToDelete?.type === 'heading-1' ||
-                        blockToDelete?.type === 'heading-3' || blockToDelete?.type === 'blockquote'
+                    blockToDelete?.type === 'text'
                         ? "¿Estás seguro de que quieres eliminar este componente de texto? El contenido se perderá permanentemente."
                         : "¿Estás seguro de que deseas eliminar este componente? Esta acción no se puede deshacer."
                 }
@@ -1006,22 +993,18 @@ function SortableBlock({
     onUpdate,
     onDelete,
     onDuplicate,
-    onMediaUpload,
     studioSlug,
     isUploading,
     isDeleting,
-    setUploading,
     onDropFiles
 }: {
     block: ContentBlock;
     onUpdate: (blockId: string, updates: Partial<ContentBlock>) => void;
     onDelete: (block: ContentBlock) => void;
     onDuplicate: (block: ContentBlock) => void;
-    onMediaUpload: (files: File[], studioSlug: string, category: string, subcategory?: string) => Promise<UploadedFile[]>;
     studioSlug: string;
     isUploading: boolean;
     isDeleting: boolean;
-    setUploading: (blockId: string, isUploading: boolean) => void;
     onDropFiles: (files: File[], blockId: string) => Promise<void>;
 }) {
     const {
@@ -1268,17 +1251,23 @@ function SortableBlock({
         // Migrar bloques antiguos: si el tipo es heading-1, heading-3, blockquote, convertir a text con textType
         const currentConfig = block.config || {};
         let textType = currentConfig.textType;
-        
-        // Si no tiene textType pero el tipo del bloque es antiguo, migrar
-        if (!textType && (block.type === 'heading-1' || block.type === 'heading-3' || block.type === 'blockquote')) {
-            textType = block.type;
+
+        // Si no tiene textType, usar 'text' por defecto
+        if (!textType || (typeof textType !== 'string')) {
+            textType = 'text';
         }
+
+        // Validar que textType sea uno de los valores permitidos
+        const validTextTypes = ['heading-1', 'heading-3', 'text', 'blockquote'] as const;
+        const validTextType = validTextTypes.includes(textType as typeof validTextTypes[number])
+            ? (textType as typeof validTextTypes[number])
+            : 'text';
 
         return (
             <RichTextBlock
                 config={{
                     ...currentConfig,
-                    textType: textType || 'text',
+                    textType: validTextType,
                 }}
                 onConfigChange={(newConfig) => {
                     onUpdate(block.id, {
@@ -1290,9 +1279,9 @@ function SortableBlock({
                 }}
                 placeholder={
                     textType === 'heading-1' ? 'Escribe tu título principal...' :
-                    textType === 'heading-3' ? 'Escribe tu subtítulo...' :
-                    textType === 'blockquote' ? 'Escribe tu cita destacada...' :
-                    'Escribe tu texto aquí...'
+                        textType === 'heading-3' ? 'Escribe tu subtítulo...' :
+                            textType === 'blockquote' ? 'Escribe tu cita destacada...' :
+                                'Escribe tu texto aquí...'
                 }
             />
         );
@@ -1302,7 +1291,6 @@ function SortableBlock({
         const separatorConfig = block.config as { style?: 'space' | 'solid' | 'dotted'; height?: number; color?: string };
         const style = separatorConfig?.style || 'solid';
         const height = separatorConfig?.height ?? (style === 'space' ? 24 : 0.5);
-        const color = separatorConfig?.color || 'zinc-600';
 
         const getSliderMin = () => style === 'space' ? 8 : 0.5;
         const getSliderMax = () => style === 'space' ? 100 : 8;
@@ -1323,17 +1311,16 @@ function SortableBlock({
                                         height: sepStyle === 'space' ? 24 : 0.5
                                     }
                                 })}
-                                className={`px-2 py-1 text-xs rounded transition-colors ${
-                                    style === sepStyle
+                                className={`px-2 py-1 text-xs rounded transition-colors ${style === sepStyle
                                         ? 'bg-emerald-500/20 text-emerald-400'
                                         : 'text-zinc-500 hover:text-zinc-300'
-                                }`}
+                                    }`}
                             >
                                 {sepStyle === 'space' ? 'Espacio' : sepStyle === 'solid' ? 'Línea' : 'Puntos'}
                             </button>
                         ))}
                     </div>
-                    
+
                     {/* Slider para altura/grosor */}
                     <div className="flex-1 flex items-center gap-2">
                         <span className="text-xs text-zinc-500 min-w-[3rem]">
@@ -1364,8 +1351,8 @@ function SortableBlock({
 
     const renderHeroContent = () => {
         // Convertir configuraciones antiguas a HeroConfig unificado
-        let heroConfig: HeroConfig = {};
-        
+        let heroConfig: HeroConfig & Record<string, unknown> = {};
+
         if (block.type === 'hero-contact') {
             const oldConfig = block.config as HeroContactConfig;
             heroConfig = {
@@ -1422,12 +1409,12 @@ function SortableBlock({
             };
         } else {
             // Caso 'hero' - usar configuración directamente
-            heroConfig = (block.config || {}) as HeroConfig;
+            heroConfig = { ...(block.config || {}) } as HeroConfig & Record<string, unknown>;
         }
 
         const handleConfigChange = (newConfig: HeroConfig) => {
             onUpdate(block.id, {
-                config: newConfig
+                config: newConfig as Record<string, unknown>
             });
         };
 

@@ -1,7 +1,8 @@
 import React from 'react';
+import Image from 'next/image';
 import { PublicPortfolio } from '@/types/public-profile';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
-import { Image, Video, Eye } from 'lucide-react';
+import { Image as ImageIcon, Video, Eye } from 'lucide-react';
 
 interface PortfolioSectionProps {
     portfolios: PublicPortfolio[];
@@ -17,7 +18,7 @@ export function PortfolioSection({ portfolios }: PortfolioSectionProps) {
         return (
             <div className="p-8 text-center">
                 <div className="text-zinc-400 mb-2">
-                    <Image className="h-12 w-12 mx-auto mb-4" />
+                    <ImageIcon className="h-12 w-12 mx-auto mb-4" />
                 </div>
                 <h3 className="text-lg font-medium text-zinc-300 mb-2">
                     Portafolio vacío
@@ -64,16 +65,18 @@ export function PortfolioSection({ portfolios }: PortfolioSectionProps) {
                         <ZenCardContent>
                             {/* Cover Image */}
                             {portfolio.cover_image_url ? (
-                                <div className="aspect-video bg-zinc-800 rounded-lg mb-4 overflow-hidden">
-                                    <img
+                                <div className="aspect-video bg-zinc-800 rounded-lg mb-4 overflow-hidden relative">
+                                    <Image
                                         src={portfolio.cover_image_url}
                                         alt={portfolio.title}
-                                        className="w-full h-full object-cover"
+                                        fill
+                                        className="object-cover"
+                                        sizes="(max-width: 768px) 100vw, 50vw"
                                     />
                                 </div>
                             ) : (
                                 <div className="aspect-video bg-zinc-800 rounded-lg mb-4 flex items-center justify-center">
-                                    <Image className="h-8 w-8 text-zinc-500" />
+                                    <ImageIcon className="h-8 w-8 text-zinc-500" />
                                 </div>
                             )}
 
@@ -91,13 +94,15 @@ export function PortfolioSection({ portfolios }: PortfolioSectionProps) {
 
                                 {/* Items Grid Preview */}
                                 <div className="grid grid-cols-3 gap-2">
-                                    {portfolio.items.slice(0, 3).map((item, index) => (
-                                        <div key={item.id} className="aspect-square bg-zinc-800 rounded overflow-hidden">
+                                    {portfolio.items.slice(0, 3).map((item) => (
+                                        <div key={item.id} className="aspect-square bg-zinc-800 rounded overflow-hidden relative">
                                             {item.image_url ? (
-                                                <img
+                                                <Image
                                                     src={item.image_url}
                                                     alt={item.title}
-                                                    className="w-full h-full object-cover"
+                                                    fill
+                                                    className="object-cover"
+                                                    sizes="(max-width: 768px) 33vw, 16vw"
                                                 />
                                             ) : item.video_url ? (
                                                 <div className="w-full h-full flex items-center justify-center bg-zinc-700">
@@ -105,7 +110,7 @@ export function PortfolioSection({ portfolios }: PortfolioSectionProps) {
                                                 </div>
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center bg-zinc-700">
-                                                    <Image className="h-4 w-4 text-zinc-500" />
+                                                    <ImageIcon className="h-4 w-4 text-zinc-500" />
                                                 </div>
                                             )}
                                         </div>

@@ -24,6 +24,8 @@ export default function HeroComponent({
     const [videoError, setVideoError] = useState(false);
     const [showPlayButton, setShowPlayButton] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
+    const heroRef = useRef<HTMLDivElement>(null);
+    const [parallaxOffset, setParallaxOffset] = useState(0);
 
     const {
         title,
@@ -43,6 +45,7 @@ export default function HeroComponent({
         borderStyle,
         gradientOverlay = false,
         gradientPosition = 'top',
+        parallax = false,
     } = config;
 
     const backgroundMedia = media[0];
@@ -164,8 +167,104 @@ export default function HeroComponent({
     // Padding uniforme: mismo valor para todos los lados (p-3)
     const contentPaddingClass = 'p-3';
 
+    // Efecto parallax mejorado para mobile preview
+    useEffect(() => {
+        if (!parallax || isEditable) return;
+
+        // Buscar contenedor con scroll (para mobile preview)
+        const findScrollContainer = (element: HTMLElement | null): HTMLElement | Window => {
+            if (!element) return window;
+            
+            let parent = element.parentElement;
+            while (parent) {
+                const style = window.getComputedStyle(parent);
+                const overflowY = style.overflowY || style.overflow;
+                const overflowX = style.overflowX || style.overflow;
+                if ((overflowY === 'auto' || overflowY === 'scroll') || 
+                    (overflowX === 'auto' || overflowX === 'scroll')) {
+                    // Verificar que realmente tenga scroll
+                    if (parent.scrollHeight > parent.clientHeight) {
+                        return parent;
+                    }
+                }
+                parent = parent.parentElement;
+            }
+            return window;
+        };
+
+        const scrollContainer = heroRef.current ? findScrollContainer(heroRef.current) : window;
+        let rafId: number | null = null;
+        let ticking = false;
+
+        const calculateParallax = () => {
+            if (!heroRef.current) return;
+
+            const heroRect = heroRef.current.getBoundingClientRect();
+            
+            // Obtener scroll position del contenedor
+            let scrollTop = 0;
+            let containerHeight = window.innerHeight;
+            
+            if (scrollContainer instanceof Window) {
+                scrollTop = window.scrollY || window.pageYOffset || 0;
+                containerHeight = window.innerHeight;
+            } else {
+                scrollTop = scrollContainer.scrollTop || 0;
+                const containerRect = scrollContainer.getBoundingClientRect();
+                containerHeight = containerRect.height;
+            }
+            
+            // Calcular posición del hero en el viewport
+            // heroRect.top: distancia desde el top del viewport hasta el top del hero
+            // Cuando heroRect.top <= 0, el hero ya empezó a salirse del viewport
+            const heroTopInViewport = heroRect.top;
+            const heroVisibleHeight = Math.max(0, Math.min(heroRect.height, containerHeight - heroTopInViewport));
+            const scrollProgress = 1 - (heroVisibleHeight / heroRect.height);
+            
+            // Parallax: el fondo se mueve más lento que el scroll (50% de velocidad)
+            const parallaxFactor = 0.5;
+            
+            // Calcular offset: cuando scrollProgress = 0 (hero completamente visible arriba), offset = 0
+            // Offset inicial centrado: la imagen al 130% necesita estar desplazada 15% hacia abajo para centrarse
+            // Si el hero tiene altura h, necesitamos mover (130% - 100%) / 2 = 15% hacia abajo
+            const heroHeight = heroRect.height;
+            const centeringOffset = parallax ? heroHeight * 0.15 : 0; // 15% de la altura para centrar 130%
+            
+            // Parallax scroll offset: conforme scrolleas, el fondo se mueve más lento
+            const maxOffset = 150; // Máximo desplazamiento en píxeles
+            const scrollOffset = -scrollProgress * maxOffset * parallaxFactor;
+            
+            // Offset total: centrado inicial + movimiento parallax
+            const offset = centeringOffset + scrollOffset;
+            
+            setParallaxOffset(offset);
+            ticking = false;
+        };
+
+        const handleScroll = () => {
+            if (ticking) return;
+            ticking = true;
+            rafId = requestAnimationFrame(calculateParallax);
+        };
+
+        // Agregar listener al contenedor correcto
+        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+        // También escuchar resize para recalcular
+        window.addEventListener('resize', handleScroll, { passive: true });
+        handleScroll(); // Calcular valor inicial
+
+        return () => {
+            scrollContainer.removeEventListener('scroll', handleScroll);
+            window.removeEventListener('resize', handleScroll);
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+            }
+        };
+    }, [parallax, isEditable]);
+
     return (
         <div
+            ref={heroRef}
             className={cn(
                 "relative flex",
                 verticalAlignmentClasses[verticalAlignment],
@@ -184,15 +283,39 @@ export default function HeroComponent({
 
             {/* Background: Image */}
             {imageSrc && !isVideo && (
-                <Image
-                    src={imageSrc}
-                    alt={backgroundMedia?.filename || 'Hero image'}
-                    fill
-                    priority
-                    className="object-cover"
-                    sizes="100vw"
-                    style={{ zIndex: 1 }}
-                />
+                <div
+                    className="absolute inset-0 overflow-hidden"
+                    style={{
+                        zIndex: 1
+                    }}
+                >
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: parallax ? '-15%' : 0,
+                            left: parallax ? '-15%' : 0,
+                            width: parallax ? '130%' : '100%',
+                            height: parallax ? '130%' : '100%',
+                            transform: parallax 
+                                ? `translate3d(0, ${parallaxOffset}px, 0)` 
+                                : undefined,
+                            willChange: parallax ? 'transform' : undefined,
+                            transition: 'none'
+                        }}
+                    >
+                        <Image
+                            src={imageSrc}
+                            alt={backgroundMedia?.filename || 'Hero image'}
+                            fill
+                            priority
+                            className="object-cover"
+                            sizes="100vw"
+                            style={{
+                                transition: 'none'
+                            }}
+                        />
+                    </div>
+                </div>
             )}
 
             {/* Background: Video */}
@@ -223,12 +346,15 @@ export default function HeroComponent({
                         }}
                         style={{
                             position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
+                            top: parallax ? '-15%' : 0,
+                            left: parallax ? '-15%' : 0,
+                            width: parallax ? '130%' : '100%',
+                            height: parallax ? '130%' : '100%',
                             objectFit: 'cover',
-                            zIndex: 1
+                            zIndex: 1,
+                            transform: parallax ? `translate3d(0, ${parallaxOffset}px, 0)` : undefined,
+                            willChange: parallax ? 'transform' : undefined,
+                            transition: parallax ? 'none' : undefined
                         }}
                     >
                         <source src={videoSrc} type="video/mp4" />

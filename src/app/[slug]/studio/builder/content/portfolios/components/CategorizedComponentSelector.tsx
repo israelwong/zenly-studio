@@ -14,62 +14,38 @@ export interface ComponentOption {
     isPremium?: boolean;
 }
 
-interface Category {
-    id: string;
-    label: string;
-    components: ComponentOption[];
-}
-
 interface CategorizedComponentSelectorProps {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (component: ComponentOption) => void;
 }
 
-const COMPONENT_CATEGORIES: Category[] = [
+const COMPONENTS: ComponentOption[] = [
     {
-        id: 'texto',
+        type: 'text',
         label: 'Texto',
-        components: [
-            {
-                type: 'text',
-                label: 'Texto',
-                icon: Type,
-                description: 'Bloque de texto con formato completo',
-            },
-            {
-                type: 'separator',
-                label: 'Separador',
-                icon: Minus,
-                description: 'Espacio o línea divisoria',
-            },
-        ],
+        icon: Type,
+        description: 'Bloque de texto con formato completo',
     },
     {
-        id: 'multimedia',
+        type: 'separator',
+        label: 'Separador',
+        icon: Minus,
+        description: 'Espacio o línea divisoria',
+    },
+    {
+        type: 'media-gallery',
+        mode: 'grid',
+        mediaType: 'images',
         label: 'Multimedia',
-        components: [
-            {
-                type: 'media-gallery',
-                mode: 'grid',
-                mediaType: 'images',
-                label: 'Multimedia',
-                icon: ImageIcon,
-                description: 'Sube una o más fotos y videos y personaliza cómo se ven',
-            },
-        ],
+        icon: ImageIcon,
+        description: 'Sube una o más fotos y videos y personaliza cómo se ven',
     },
     {
-        id: 'heros',
-        label: 'Heros',
-        components: [
-            {
-                type: 'hero',
-                label: 'Hero',
-                icon: Sparkles,
-                description: 'Hero unificado con imagen o video de fondo, título, descripción y botones',
-            },
-        ],
+        type: 'hero',
+        label: 'Hero',
+        icon: Sparkles,
+        description: 'Hero unificado con imagen o video de fondo, título, descripción y botones',
     },
 ];
 
@@ -82,8 +58,7 @@ export function CategorizedComponentSelector({
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-zinc-900 rounded-lg p-6 max-w-5xl w-full mx-4 max-h-[85vh] overflow-y-auto">
-                {/* Header */}
+            <div className="bg-zinc-900 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="text-lg font-semibold text-zinc-300">Seleccionar Componente</h3>
                     <button
@@ -94,39 +69,29 @@ export function CategorizedComponentSelector({
                     </button>
                 </div>
 
-                {/* Todas las categorías y componentes */}
-                <div className="space-y-6">
-                    {COMPONENT_CATEGORIES.map((category) => (
-                        <div key={category.id}>
-                            <h4 className="text-sm font-semibold text-zinc-400 mb-3 uppercase tracking-wide">
-                                {category.label}
-                            </h4>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                {category.components.map((component, index) => (
-                                    <button
-                                        key={`${component.type}-${component.mode}-${component.mediaType}-${index}`}
-                                        onClick={() => {
-                                            onSelect(component);
-                                            onClose();
-                                        }}
-                                        className="p-4 border border-zinc-700 rounded-lg hover:border-emerald-500 hover:bg-emerald-500/10 transition-all text-left group"
-                                    >
-                                        <component.icon className="h-6 w-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
-                                        <div className="font-medium text-zinc-300 text-sm mb-1">
-                                            {component.label}
-                                        </div>
-                                        <div className="text-xs text-zinc-500 leading-tight">
-                                            {component.description}
-                                        </div>
-                                        {component.isPremium && (
-                                            <div className="mt-2">
-                                                <span className="text-xs text-yellow-400 font-medium">Premium</span>
-                                            </div>
-                                        )}
-                                    </button>
-                                ))}
+                <div className="grid grid-cols-2 gap-3">
+                    {COMPONENTS.map((component, index) => (
+                        <button
+                            key={`${component.type}-${component.mode}-${component.mediaType}-${index}`}
+                            onClick={() => {
+                                onSelect(component);
+                                onClose();
+                            }}
+                            className="p-4 border border-zinc-700 rounded-lg hover:border-emerald-500 hover:bg-emerald-500/10 transition-all text-left group"
+                        >
+                            <component.icon className="h-6 w-6 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
+                            <div className="font-medium text-zinc-300 text-sm mb-1">
+                                {component.label}
                             </div>
-                        </div>
+                            <div className="text-xs text-zinc-500 leading-tight">
+                                {component.description}
+                            </div>
+                            {component.isPremium && (
+                                <div className="mt-2">
+                                    <span className="text-xs text-yellow-400 font-medium">Premium</span>
+                                </div>
+                            )}
+                        </button>
                     ))}
                 </div>
             </div>

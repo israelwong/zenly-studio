@@ -983,6 +983,20 @@ export default function HeroEditor({
                                     </>
                                 )}
                             </div>
+
+                            {/* Controles de Parallax */}
+                            <div className="p-3 border border-zinc-700 rounded-lg bg-zinc-800/30">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-medium text-zinc-200">Efecto Parallax</span>
+                                        <span className="text-xs text-zinc-500 mt-0.5">El fondo se mueve más lento que el contenido</span>
+                                    </div>
+                                    <ZenSwitch
+                                        checked={localConfig.parallax || false}
+                                        onCheckedChange={(checked) => updateConfig({ parallax: checked })}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
