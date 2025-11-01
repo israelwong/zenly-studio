@@ -1499,73 +1499,63 @@ function SortableBlock({
     };
 
     const renderSeparatorContent = () => {
-        const separatorConfig = block.config as { style?: 'space' | 'solid'; height?: number; color?: string };
+        const separatorConfig = block.config as { style?: 'space' | 'solid' | 'dotted'; height?: number; color?: string };
         const style = separatorConfig?.style || 'solid';
         const height = separatorConfig?.height ?? (style === 'space' ? 24 : 0.5);
         const color = separatorConfig?.color || 'zinc-600';
 
-        return (
-            <div className="space-y-3">
-                <div className="p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
-                    <div className="space-y-3">
-                        <div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {(['space', 'solid'] as const).map((sepStyle) => (
-                                    <button
-                                        key={sepStyle}
-                                        onClick={() => onUpdate(block.id, {
-                                            config: {
-                                                ...block.config,
-                                                style: sepStyle,
-                                                height: sepStyle === 'space' ? 24 : 0.5
-                                            }
-                                        })}
-                                        className={`px-3 py-2 text-sm rounded border transition-colors ${
-                                            style === sepStyle
-                                                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
-                                                : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-600'
-                                        }`}
-                                    >
-                                        {sepStyle === 'space' ? 'Espacio' : 'Línea'}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+        const getSliderMin = () => style === 'space' ? 8 : 0.5;
+        const getSliderMax = () => style === 'space' ? 100 : 8;
+        const getSliderStep = () => style === 'space' ? 1 : 0.5;
 
-                        <div>
-                            <label className="block text-sm font-medium text-zinc-300 mb-2">
-                                Altura: {height}px
-                            </label>
-                            <input
-                                type="range"
-                                min={style === 'space' ? 8 : 0.5}
-                                max={style === 'space' ? 100 : 8}
-                                value={height}
-                                step={style === 'space' ? 1 : 0.5}
-                                onChange={(e) => onUpdate(block.id, {
+        return (
+            <div className="space-y-2">
+                {/* Controles minimalistas */}
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                        {(['space', 'solid', 'dotted'] as const).map((sepStyle) => (
+                            <button
+                                key={sepStyle}
+                                onClick={() => onUpdate(block.id, {
                                     config: {
                                         ...block.config,
-                                        height: parseFloat(e.target.value)
+                                        style: sepStyle,
+                                        height: sepStyle === 'space' ? 24 : 0.5
                                     }
                                 })}
-                                className="w-full"
-                            />
-                        </div>
-
-                        {/* Preview */}
-                        <div className="pt-3 border-t border-zinc-700">
-                            <label className="block text-xs text-zinc-500 mb-2">Vista previa:</label>
-                            <div className="bg-zinc-900 p-4 rounded">
-                                {style === 'space' ? (
-                                    <div style={{ height: `${height}px` }} className="bg-zinc-800/30 rounded" />
-                                ) : (
-                                    <div
-                                        className={`w-full border-t border-solid ${color === 'zinc-600' ? 'border-zinc-600' : color === 'zinc-500' ? 'border-zinc-500' : color === 'zinc-400' ? 'border-zinc-400' : 'border-zinc-600'}`}
-                                        style={{ borderTopWidth: `${height}px` }}
-                                    />
-                                )}
-                            </div>
-                        </div>
+                                className={`px-2 py-1 text-xs rounded transition-colors ${
+                                    style === sepStyle
+                                        ? 'bg-emerald-500/20 text-emerald-400'
+                                        : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
+                            >
+                                {sepStyle === 'space' ? 'Espacio' : sepStyle === 'solid' ? 'Línea' : 'Puntos'}
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* Slider para altura/grosor */}
+                    <div className="flex-1 flex items-center gap-2">
+                        <span className="text-xs text-zinc-500 min-w-[3rem]">
+                            {height}px
+                        </span>
+                        <input
+                            type="range"
+                            min={getSliderMin()}
+                            max={getSliderMax()}
+                            value={height}
+                            step={getSliderStep()}
+                            onChange={(e) => onUpdate(block.id, {
+                                config: {
+                                    ...block.config,
+                                    height: parseFloat(e.target.value)
+                                }
+                            })}
+                            className="flex-1 h-0.5 rounded-lg appearance-none cursor-pointer bg-zinc-700/50"
+                            style={{
+                                background: `linear-gradient(to right, #22c55e 0%, #22c55e ${((height - getSliderMin()) / (getSliderMax() - getSliderMin())) * 100}%, #3f3f46 ${((height - getSliderMin()) / (getSliderMax() - getSliderMin())) * 100}%, #3f3f46 100%)`
+                            }}
+                        />
                     </div>
                 </div>
             </div>

@@ -11,7 +11,7 @@ import { getStudioPortfoliosBySlug } from "@/lib/actions/studio/builder/portfoli
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
 import { useTempCuid } from "@/hooks/useTempCuid";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, X, Star, Upload } from "lucide-react";
+import { ArrowLeft, Plus, X, Star, Upload, HardDrive } from "lucide-react";
 import { useRouter } from "next/navigation";
 import cuid from "cuid";
 import Image from "next/image";
@@ -79,6 +79,7 @@ function InjectAddButtons({
         });
 
         // Remover todos los botones inyectados cuando se arrastra (solo cuando es 'dragging')
+        // NO remover el botón persistente [data-persistent-add-button]
         if (activeBlockId === 'dragging') {
             console.log('🔵 [InjectAddButtons] Ocultando botones - drag activo');
             document.querySelectorAll('[data-injected-add-button]').forEach(btn => btn.remove());
@@ -140,7 +141,7 @@ function InjectAddButtons({
                 // Crear botón usando React.createElement para mejor integración
                 const button = document.createElement('button');
                 button.setAttribute('data-injected-add-button', block.id);
-                button.className = 'w-full py-2 px-4 text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-md transition-all bg-zinc-900 hover:bg-zinc-400 hover:text-zinc-900 hover:border-zinc-400';
+                button.className = 'w-full py-2 px-4 mb-4 text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-md transition-all bg-zinc-900 hover:bg-zinc-400 hover:text-zinc-900 hover:border-zinc-400';
 
                 // Crear el icono SVG
                 const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -845,8 +846,8 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                                         </div>
                                         {contentBlocks.length > 0 && (
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs text-zinc-500">Almacenamiento:</span>
-                                                <span className="text-xs font-medium text-zinc-300">
+                                                <HardDrive className="w-3 h-3 text-zinc-500" />
+                                                <span className="text-xs font-medium text-emerald-400">
                                                     {formatBytes(totalComponentsSize)}
                                                 </span>
                                             </div>
@@ -859,7 +860,34 @@ export function PortfolioEditor({ studioSlug, eventTypes, mode, portfolio }: Por
                                     )}
                                 </div>
 
-                                <div data-content-blocks-container className="space-y-2">
+                                <div data-content-blocks-container className="space-y-4">
+                                    {/* Botón persistente para agregar componente en posición 0 - Solo si hay componentes */}
+                                    {contentBlocks.length > 0 && (
+                                        <button
+                                            type="button"
+                                            data-persistent-add-button="true"
+                                            onClick={() => {
+                                                setInsertAtIndex(0);
+                                                setShowComponentSelector(true);
+                                            }}
+                                            className="w-full py-2 px-4 text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-md transition-all bg-zinc-900 hover:bg-zinc-400 hover:text-zinc-900 hover:border-zinc-400"
+                                        >
+                                            <svg
+                                                className="w-4 h-4 inline mr-2"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth="2"
+                                                    d="M12 4v16m8-8H4"
+                                                />
+                                            </svg>
+                                            Agregar componente aquí
+                                        </button>
+                                    )}
                                     {/* Usar un solo ContentBlocksEditor con todos los bloques para ordenamiento */}
                                     <ContentBlocksEditor
                                         blocks={contentBlocks}

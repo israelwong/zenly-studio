@@ -200,7 +200,7 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                 return (
                     <div
                         className={`${className} ${block.presentation === 'fullwidth' ? 'w-full' : 'max-w-4xl mx-auto'
-                            } mb-5`}
+                            } mb-5 overflow-hidden`}
                     >
                         {block.title && (
                             <h3 className="text-xl font-semibold text-zinc-300 mb-3">
@@ -208,9 +208,11 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                             </h3>
                         )}
                         <div
-                            className={`text-sm font-light leading-relaxed ${alignmentClasses[textAlignment as keyof typeof alignmentClasses] || alignmentClasses.left}`}
+                            className={`text-sm font-light leading-relaxed break-words overflow-wrap-anywhere ${alignmentClasses[textAlignment as keyof typeof alignmentClasses] || alignmentClasses.left}`}
                             style={{
                                 color: textConfig?.color || '#d4d4d8',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
                             }}
                         >
                             {textContent}
@@ -234,9 +236,11 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                             } mt-5`}
                     >
                         <h1
-                            className={`text-2xl font-bold text-zinc-300 leading-tight ${heading1AlignmentClasses[heading1Alignment as keyof typeof heading1AlignmentClasses] || heading1AlignmentClasses.left}`}
+                            className={`text-2xl font-bold text-zinc-300 leading-tight break-words overflow-wrap-anywhere ${heading1AlignmentClasses[heading1Alignment as keyof typeof heading1AlignmentClasses] || heading1AlignmentClasses.left}`}
                             style={{
                                 color: heading1Config?.color || '#e4e4e7',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
                             }}
                         >
                             {heading1Content}
@@ -260,9 +264,11 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                             }`}
                     >
                         <h3
-                            className={`text-xl font-semibold text-zinc-300 leading-tight ${heading3AlignmentClasses[heading3Alignment as keyof typeof heading3AlignmentClasses] || heading3AlignmentClasses.left}`}
+                            className={`text-xl font-semibold text-zinc-300 leading-tight break-words overflow-wrap-anywhere ${heading3AlignmentClasses[heading3Alignment as keyof typeof heading3AlignmentClasses] || heading3AlignmentClasses.left}`}
                             style={{
                                 color: heading3Config?.color || '#e4e4e7',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
                             }}
                         >
                             {heading3Content}
@@ -286,9 +292,11 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                             }`}
                     >
                         <blockquote
-                            className={`border-l-4 border-zinc-800 pl-4 py-1 text-md  italic text-zinc-400 leading-relaxed ${blockquoteAlignmentClasses[blockquoteAlignment as keyof typeof blockquoteAlignmentClasses] || blockquoteAlignmentClasses.left}`}
+                            className={`border-l-4 border-zinc-800 pl-4 py-1 text-md italic text-zinc-400 leading-relaxed break-words overflow-wrap-anywhere ${blockquoteAlignmentClasses[blockquoteAlignment as keyof typeof blockquoteAlignmentClasses] || blockquoteAlignmentClasses.left}`}
                             style={{
                                 color: blockquoteConfig?.color || '#e4e4e7',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
                             }}
                         >
                             {blockquoteContent}
@@ -338,17 +346,9 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                 const separatorConfig = (block.config || {}) as Partial<SeparatorBlockConfig>;
                 const separatorStyle = separatorConfig.style || 'solid';
                 const separatorHeight = separatorConfig.height ?? (separatorStyle === 'space' ? 24 : 0.5);
-                const colorKey = separatorConfig.color || 'zinc-600';
 
-                // Mapeo de colores de Tailwind
-                const colorClasses: Record<string, string> = {
-                    'zinc-600': 'border-zinc-600',
-                    'zinc-500': 'border-zinc-500',
-                    'zinc-400': 'border-zinc-400',
-                    'zinc-700': 'border-zinc-700',
-                    'zinc-800': 'border-zinc-800',
-                };
-                const borderColorClass = colorClasses[colorKey] || 'border-zinc-600';
+                // En mobile preview siempre usar zinc-600 para líneas
+                const borderColorClass = 'border-zinc-700';
 
                 if (separatorStyle === 'space') {
                     return (
@@ -360,9 +360,19 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
                     );
                 }
 
+                if (separatorStyle === 'dotted') {
+                    return (
+                        <div
+                            className={`${className} w-full border-dotted ${borderColorClass} border-t my-4`}
+                            style={{ borderTopWidth: `${separatorHeight}px` }}
+                            aria-hidden="true"
+                        />
+                    );
+                }
+
                 return (
                     <div
-                        className={`${className} w-full border-solid ${borderColorClass} border-t`}
+                        className={`${className} w-full border-solid ${borderColorClass} border-t my-4`}
                         style={{ borderTopWidth: `${separatorHeight}px` }}
                         aria-hidden="true"
                     />

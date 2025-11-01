@@ -128,7 +128,7 @@ export interface HeroTextConfig {
 }
 
 export interface SeparatorBlockConfig {
-    style: 'space' | 'solid';
+    style: 'space' | 'solid' | 'dotted';
     height?: number; // Altura en píxeles (default: 24 para space, 0.5 para lines)
     color?: string; // Color de la línea (default: zinc-600)
 }
