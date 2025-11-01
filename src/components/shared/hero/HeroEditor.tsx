@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Plus, X, Image as ImageIcon, Video, AlignStartVertical, AlignVerticalDistributeCenter, AlignEndVertical, AlignEndHorizontal, AlignStartHorizontal, Square, RectangleVertical, Maximize2, Shrink, AlignVerticalJustifyCenter } from 'lucide-react';
+import { Plus, X, Image as ImageIcon, Video, AlignStartVertical, AlignVerticalDistributeCenter, AlignEndVertical, AlignEndHorizontal, AlignStartHorizontal, Square, RectangleVertical, Maximize2, Shrink, AlignVerticalJustifyCenter, Copy, ChevronUp, ChevronDown, Layers } from 'lucide-react';
 import { ZenInput, ZenTextarea, ZenSelect, ZenButton, ZenCard, ZenCardContent, ZenSwitch } from '@/components/ui/zen';
 import { HeroConfig, ButtonConfig, MediaItem } from '@/types/content-blocks';
 import { cn } from '@/lib/utils';
@@ -59,6 +59,7 @@ export default function HeroEditor({
     };
 
     const addButton = () => {
+        if (localButtons.length >= 2) return;
         const newButton: ButtonConfig = {
             text: '',
             href: '',
@@ -73,6 +74,32 @@ export default function HeroEditor({
 
     const removeButton = (index: number) => {
         const updatedButtons = localButtons.filter((_, i) => i !== index);
+        setLocalButtons(updatedButtons);
+        updateConfig({ buttons: updatedButtons });
+    };
+
+    const duplicateButton = (index: number) => {
+        if (localButtons.length >= 2) return;
+        const buttonToDuplicate = localButtons[index];
+        const duplicatedButton: ButtonConfig = {
+            ...buttonToDuplicate,
+            text: `${buttonToDuplicate.text} (copia)`
+        };
+        const updatedButtons = [
+            ...localButtons.slice(0, index + 1),
+            duplicatedButton,
+            ...localButtons.slice(index + 1)
+        ];
+        setLocalButtons(updatedButtons);
+        updateConfig({ buttons: updatedButtons });
+    };
+
+    const moveButton = (index: number, direction: 'up' | 'down') => {
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= localButtons.length) return;
+
+        const updatedButtons = [...localButtons];
+        [updatedButtons[index], updatedButtons[newIndex]] = [updatedButtons[newIndex], updatedButtons[index]];
         setLocalButtons(updatedButtons);
         updateConfig({ buttons: updatedButtons });
     };
@@ -179,6 +206,58 @@ export default function HeroEditor({
     const linkTypeOptions = [
         { value: 'internal', label: 'Enlace interno' },
         { value: 'external', label: 'Abre nueva página' }
+    ];
+
+    // Iconos SVG para borderRadius de botones
+    const ButtonBorderNoneIcon = ({ className }: { className?: string }) => (
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+            <rect x="4" y="4" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" />
+        </svg>
+    );
+
+    const ButtonBorderSmIcon = ({ className }: { className?: string }) => (
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2" stroke="currentColor" strokeWidth="2" fill="none" />
+        </svg>
+    );
+
+    const ButtonBorderFullIcon = ({ className }: { className?: string }) => (
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+            <rect x="4" y="4" width="16" height="16" rx="8" ry="8" stroke="currentColor" strokeWidth="2" fill="none" />
+        </svg>
+    );
+
+    const buttonBorderRadiusOptions = [
+        { value: 'normal' as const, label: 'Normal', icon: ButtonBorderNoneIcon },
+        { value: 'sm' as const, label: 'Ligero', icon: ButtonBorderSmIcon },
+        { value: 'full' as const, label: 'Completo', icon: ButtonBorderFullIcon }
+    ];
+
+    // Icono SVG para borde del botón
+    const ButtonBorderIcon = ({ className }: { className?: string }) => (
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" strokeWidth="2" fill="none" />
+            <rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" fill="none" strokeDasharray="2 2" />
+        </svg>
+    );
+
+    // Iconos simplificados para posición de sombra
+    const ShadowFullIcon = ({ className }: { className?: string }) => (
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+            <rect x="6" y="6" width="12" height="12" rx="1" stroke="currentColor" strokeWidth="2" fill="none" />
+        </svg>
+    );
+
+    const ShadowBottomIcon = ({ className }: { className?: string }) => (
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+            <rect x="6" y="6" width="12" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.3" />
+            <line x1="6" y1="18" x2="18" y2="18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+        </svg>
+    );
+
+    const shadowPositionOptions = [
+        { value: 'full' as const, label: 'Completo', icon: ShadowFullIcon },
+        { value: 'bottom' as const, label: 'Solo abajo', icon: ShadowBottomIcon }
     ];
 
 
@@ -513,11 +592,15 @@ export default function HeroEditor({
                     {activeTab === 'botones' && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-zinc-200">Botones del Hero</span>
+                                <div>
+                                    <span className="text-sm font-medium text-zinc-200">Botones del Hero</span>
+                                    <span className="text-xs text-zinc-500 ml-2">(opcional, máximo 2)</span>
+                                </div>
                                 <ZenButton
                                     size="sm"
                                     variant="outline"
                                     onClick={addButton}
+                                    disabled={localButtons.length >= 2}
                                     className="flex items-center gap-2"
                                 >
                                     <Plus className="h-4 w-4" />
@@ -529,21 +612,89 @@ export default function HeroEditor({
                                 <div key={index} className="p-4 border border-zinc-700 rounded-lg space-y-3">
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm font-medium text-zinc-300">Botón {index + 1}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeButton(index)}
-                                            className="text-zinc-500 hover:text-red-400"
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => moveButton(index, 'up')}
+                                                disabled={index === 0}
+                                                className={cn(
+                                                    "p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors",
+                                                    index === 0 && "opacity-40 cursor-not-allowed"
+                                                )}
+                                                title="Mover arriba"
+                                            >
+                                                <ChevronUp className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => moveButton(index, 'down')}
+                                                disabled={index === localButtons.length - 1}
+                                                className={cn(
+                                                    "p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors",
+                                                    index === localButtons.length - 1 && "opacity-40 cursor-not-allowed"
+                                                )}
+                                                title="Mover abajo"
+                                            >
+                                                <ChevronDown className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => duplicateButton(index)}
+                                                disabled={localButtons.length >= 2}
+                                                className={cn(
+                                                    "p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors",
+                                                    localButtons.length >= 2 && "opacity-40 cursor-not-allowed"
+                                                )}
+                                                title="Duplicar"
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeButton(index)}
+                                                className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                title="Eliminar"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    <ZenInput
-                                        label="Texto"
-                                        value={button.text}
-                                        onChange={(e) => updateButton(index, { text: e.target.value })}
-                                        placeholder="Texto del botón"
-                                    />
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between">
+                                            <label className="block text-xs text-zinc-400">Texto</label>
+                                            <span className={cn(
+                                                "text-xs transition-colors",
+                                                button.text.length > 15
+                                                    ? "text-amber-400"
+                                                    : button.text.length > 12
+                                                        ? "text-yellow-500"
+                                                        : "text-zinc-500"
+                                            )}>
+                                                {button.text.length} {button.text.length === 1 ? 'carácter' : 'caracteres'}
+                                                {button.text.length > 15 && (
+                                                    <span className="ml-1 text-amber-400">⚠️</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <ZenInput
+                                            value={button.text}
+                                            onChange={(e) => updateButton(index, { text: e.target.value })}
+                                            placeholder="Ej: Ver más, Contactar"
+                                        />
+                                        {button.text.length > 12 && (
+                                            <p className={cn(
+                                                "text-xs transition-colors",
+                                                button.text.length > 15
+                                                    ? "text-amber-400"
+                                                    : "text-yellow-500"
+                                            )}>
+                                                {button.text.length > 15
+                                                    ? "Texto muy largo. En mobile puede verse cortado."
+                                                    : "Recomendado: máximo 12 caracteres para mejor usabilidad"}
+                                            </p>
+                                        )}
+                                    </div>
 
                                     <ZenInput
                                         label="Enlace"
@@ -577,13 +728,134 @@ export default function HeroEditor({
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center justify-between">
-                                        <label className="block text-xs text-zinc-400">Pulse</label>
-                                        <ZenSwitch
-                                            checked={button.pulse || false}
-                                            onCheckedChange={(checked) => updateButton(index, { pulse: checked })}
-                                        />
+                                    {/* Controles rápidos: Pulse, Borde, Esquinas, Sombra */}
+                                    <div className="p-2 border border-zinc-700 rounded-lg bg-zinc-800/30">
+                                        <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-2">
+                                            {/* Pulse */}
+                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-1 sm:px-2 flex-1 sm:flex-initial">
+                                                <span className="text-xs text-zinc-400 font-medium h-4 flex items-center">Pulse</span>
+                                                <div className="flex items-center justify-center h-8">
+                                                    <ZenSwitch
+                                                        checked={button.pulse || false}
+                                                        onCheckedChange={(checked) => updateButton(index, { pulse: checked })}
+                                                        className="scale-90"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Separador */}
+                                            <div className="hidden sm:block h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
+
+                                            {/* Borde */}
+                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-1 sm:px-2 flex-1 sm:flex-initial">
+                                                <span className="text-xs text-zinc-400 font-medium h-4 flex items-center">Borde</span>
+                                                <div className="flex items-center justify-center h-8">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateButton(index, { withBorder: !button.withBorder })}
+                                                        className={cn(
+                                                            "size-8 p-0 rounded transition-colors flex items-center justify-center",
+                                                            button.withBorder
+                                                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                                : "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 border border-transparent"
+                                                        )}
+                                                        title={button.withBorder ? "Desactivar borde" : "Activar borde"}
+                                                    >
+                                                        <ButtonBorderIcon className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Separador */}
+                                            <div className="hidden sm:block h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
+
+                                            {/* Sombra - Toggle y posición en la misma línea */}
+                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-1 sm:px-2 flex-1 sm:flex-initial">
+                                                <span className="text-xs text-zinc-400 font-medium h-4 flex items-center">Sombra</span>
+                                                <div className="flex items-center justify-center h-8 gap-1">
+                                                    {/* Toggle On/Off */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateButton(index, { shadow: !button.shadow })}
+                                                        className={cn(
+                                                            "size-8 p-0 rounded transition-colors flex items-center justify-center flex-shrink-0",
+                                                            button.shadow
+                                                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                                : "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 border border-transparent"
+                                                        )}
+                                                        title={button.shadow ? "Desactivar sombra" : "Activar sombra"}
+                                                    >
+                                                        <Layers className="h-4 w-4" />
+                                                    </button>
+
+                                                    {/* Borde lateral interno - siempre visible */}
+                                                    <div className="h-6 w-px bg-zinc-700/40 flex-shrink-0"></div>
+
+                                                    {/* Iconos de posición - siempre presentes, deshabilitados si sombra inactiva */}
+                                                    <div className="flex gap-0.5 items-center">
+                                                        {shadowPositionOptions.map((option) => {
+                                                            const Icon = option.icon;
+                                                            const isActive = (button.shadowPosition || 'full') === option.value;
+                                                            const isDisabled = !button.shadow;
+                                                            return (
+                                                                <button
+                                                                    key={option.value}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (!isDisabled) {
+                                                                            updateButton(index, { shadowPosition: option.value });
+                                                                        }
+                                                                    }}
+                                                                    disabled={isDisabled}
+                                                                    className={cn(
+                                                                        "size-8 p-0 rounded transition-colors flex items-center justify-center flex-shrink-0",
+                                                                        isDisabled && "opacity-40 cursor-not-allowed",
+                                                                        !isDisabled && isActive
+                                                                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                                            : !isDisabled && "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 border border-transparent"
+                                                                    )}
+                                                                    title={isDisabled ? "Activa la sombra primero" : option.label}
+                                                                >
+                                                                    <Icon className="h-4 w-4" />
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Separador */}
+                                            <div className="hidden sm:block h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
+
+                                            {/* Esquinas */}
+                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-1 sm:px-2 flex-1 sm:flex-initial">
+                                                <span className="text-xs text-zinc-400 font-medium h-4 flex items-center">Esquinas</span>
+                                                <div className="flex gap-0.5 items-center justify-center h-8">
+                                                    {buttonBorderRadiusOptions.map((option) => {
+                                                        const Icon = option.icon;
+                                                        const isActive = (button.borderRadius || 'normal') === option.value;
+                                                        return (
+                                                            <button
+                                                                key={option.value}
+                                                                type="button"
+                                                                onClick={() => updateButton(index, { borderRadius: option.value })}
+                                                                className={cn(
+                                                                    "size-8 p-0 rounded transition-colors flex items-center justify-center flex-shrink-0",
+                                                                    isActive
+                                                                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                                        : "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 border border-transparent"
+                                                                )}
+                                                                title={option.label}
+                                                            >
+                                                                <Icon className="h-4 w-4" />
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
+
                                 </div>
                             ))}
 

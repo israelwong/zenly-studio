@@ -315,9 +315,32 @@ export default function HeroComponent({
 
                     {/* Buttons */}
                     {buttons.length > 0 && (
-                        <div className={`flex flex-col sm:flex-row gap-2 sm:gap-3 ${textAlignment === 'center' ? 'justify-center' : textAlignment === 'right' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={cn(
+                            "flex flex-col sm:flex-row gap-2 sm:gap-3",
+                            textAlignment === 'center' ? 'justify-center' : textAlignment === 'right' ? 'justify-end' : 'justify-start',
+                            "w-full"
+                        )}>
                             {buttons.slice(0, 2).map((button, index) => {
                                 const buttonEffect = (button.buttonEffect || (button.pulse ? 'pulse' : 'none')) as 'none' | 'pulse' | 'border-spin' | 'radial-glow';
+
+                                // Estilos de borderRadius (sobrescriben el rounded-md default)
+                                const borderRadiusClasses = {
+                                    normal: '',
+                                    sm: '!rounded-sm',
+                                    full: '!rounded-full'
+                                };
+                                const borderRadiusClass = borderRadiusClasses[button.borderRadius || 'normal'];
+
+                                // Estilos de borde adicional
+                                const borderClass = button.withBorder ? 'border-2 border-zinc-400/30' : '';
+
+                                // Estilos de sombra (sutil para separar del fondo)
+                                const shadowPosition = button.shadowPosition || 'full';
+                                const shadowClass = button.shadow
+                                    ? shadowPosition === 'bottom'
+                                        ? 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.2)]'
+                                        : 'shadow-lg shadow-black/20'
+                                    : '';
 
                                 return button.href ? (
                                     <ZenButtonWithEffects
@@ -326,9 +349,22 @@ export default function HeroComponent({
                                         variant={getButtonVariant(button.variant)}
                                         size="md"
                                         effect={buttonEffect}
-                                        className="text-sm sm:text-base"
+                                        className={cn(
+                                            "text-sm sm:text-base",
+                                            "w-full sm:w-auto sm:min-w-0",
+                                            "whitespace-normal break-words",
+                                            "text-center",
+                                            borderRadiusClass,
+                                            borderClass,
+                                            shadowClass
+                                        )}
                                     >
-                                        <Link href={button.href} target={button.target || (button.linkType === 'external' ? '_blank' : '_self')} onClick={button.onClick}>
+                                        <Link
+                                            href={button.href}
+                                            target={button.target || (button.linkType === 'external' ? '_blank' : '_self')}
+                                            onClick={button.onClick}
+                                            className="block w-full"
+                                        >
                                             {button.text}
                                         </Link>
                                     </ZenButtonWithEffects>
@@ -338,7 +374,14 @@ export default function HeroComponent({
                                         variant={getButtonVariant(button.variant)}
                                         size="md"
                                         effect={buttonEffect}
-                                        className="text-sm sm:text-base"
+                                        className={cn(
+                                            "text-sm sm:text-base",
+                                            "w-full sm:w-auto sm:min-w-0",
+                                            "whitespace-normal break-words",
+                                            "text-center",
+                                            borderRadiusClass,
+                                            borderClass
+                                        )}
                                         onClick={button.onClick}
                                     >
                                         {button.text}

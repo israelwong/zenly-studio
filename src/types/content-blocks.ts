@@ -88,6 +88,12 @@ export interface ButtonConfig {
     target?: '_blank' | '_self';
     fullWidth?: boolean;
     withBorder?: boolean;
+    borderRadius?: 'normal' | 'sm' | 'full';
+    shadow?: boolean;
+    shadowPosition?: 'full' | 'bottom';
+    pulse?: boolean; // Deprecated - usar buttonEffect
+    buttonEffect?: 'none' | 'pulse' | 'border-spin' | 'radial-glow';
+    linkType?: 'internal' | 'external';
     className?: string;
 }
 
@@ -143,6 +149,15 @@ export interface HeroConfig {
     autoPlay?: boolean;
     muted?: boolean;
     loop?: boolean;
+    borderRadius?: 'none' | 'md' | 'lg';
+    containerStyle?: 'fullscreen' | 'wrapped';
+    aspectRatio?: 'square' | 'vertical';
+    borderColor?: string;
+    borderWidth?: number;
+    borderStyle?: 'solid' | 'dashed' | 'dotted';
+    // Configuración global de botones
+    buttonSize?: 'sm' | 'md' | 'lg';
+    buttonBorderRadius?: 'normal' | 'sm' | 'full';
 }
 
 export interface SeparatorBlockConfig {
