@@ -342,6 +342,28 @@ export default function HeroComponent({
                                         : 'shadow-lg shadow-black/20'
                                     : '';
 
+                                // Estilos personalizados para color personalizado
+                                const customColorStyle = button.customColor ? (() => {
+                                    const variant = button.variant || 'primary';
+                                    if (variant === 'outline') {
+                                        return {
+                                            borderColor: button.customColor,
+                                            color: button.customColor
+                                        };
+                                    } else if (variant === 'ghost') {
+                                        return {
+                                            color: button.customColor
+                                        };
+                                    } else {
+                                        // primary, secondary, etc.
+                                        return {
+                                            backgroundColor: button.customColor,
+                                            borderColor: button.customColor,
+                                            color: '#ffffff'
+                                        };
+                                    }
+                                })() : undefined;
+
                                 return button.href ? (
                                     <ZenButtonWithEffects
                                         key={index}
@@ -350,7 +372,7 @@ export default function HeroComponent({
                                         size="md"
                                         effect={buttonEffect}
                                         className={cn(
-                                            "text-sm sm:text-base",
+                                            "text-xs sm:text-base",
                                             "w-full sm:w-auto sm:min-w-0",
                                             "whitespace-normal break-words",
                                             "text-center",
@@ -358,6 +380,7 @@ export default function HeroComponent({
                                             borderClass,
                                             shadowClass
                                         )}
+                                        style={customColorStyle}
                                     >
                                         <Link
                                             href={button.href}
@@ -375,13 +398,15 @@ export default function HeroComponent({
                                         size="md"
                                         effect={buttonEffect}
                                         className={cn(
-                                            "text-sm sm:text-base",
+                                            "text-xs sm:text-base",
                                             "w-full sm:w-auto sm:min-w-0",
                                             "whitespace-normal break-words",
                                             "text-center",
                                             borderRadiusClass,
-                                            borderClass
+                                            borderClass,
+                                            shadowClass
                                         )}
+                                        style={customColorStyle}
                                         onClick={button.onClick}
                                     >
                                         {button.text}

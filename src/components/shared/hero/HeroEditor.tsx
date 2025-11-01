@@ -196,8 +196,7 @@ export default function HeroEditor({
 
 
     const buttonVariantOptions = [
-        { value: 'primary', label: 'Primario' },
-        { value: 'secondary', label: 'Secundario' },
+        { value: 'primary', label: 'Sólido' },
         { value: 'outline', label: 'Outline' },
         { value: 'ghost', label: 'Ghost' }
     ];
@@ -703,7 +702,7 @@ export default function HeroEditor({
                                         placeholder="/ruta-o-url"
                                     />
 
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-3 gap-3">
                                         <div>
                                             <label className="block text-xs text-zinc-400 mb-1">Tipo</label>
                                             <ZenSelect
@@ -718,13 +717,36 @@ export default function HeroEditor({
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs text-zinc-400 mb-1">Color</label>
+                                            <label className="block text-xs text-zinc-400 mb-1">Estilo</label>
                                             <ZenSelect
                                                 value={button.variant || 'primary'}
                                                 onValueChange={(value) => updateButton(index, { variant: value as ButtonConfig['variant'] })}
                                                 options={buttonVariantOptions}
                                                 disableSearch
                                             />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs text-zinc-400 mb-1">Color</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="color"
+                                                    value={button.customColor || '#3b82f6'}
+                                                    onChange={(e) => updateButton(index, { customColor: e.target.value })}
+                                                    className="w-full h-9 rounded border border-zinc-700 bg-zinc-800 cursor-pointer"
+                                                    title="Seleccionar color personalizado"
+                                                />
+                                                {button.customColor && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateButton(index, { customColor: undefined })}
+                                                        className="p-1.5 rounded text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                        title="Eliminar color personalizado"
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 

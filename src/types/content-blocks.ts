@@ -91,6 +91,7 @@ export interface ButtonConfig {
     borderRadius?: 'normal' | 'sm' | 'full';
     shadow?: boolean;
     shadowPosition?: 'full' | 'bottom';
+    customColor?: string; // Color personalizado para el botón
     pulse?: boolean; // Deprecated - usar buttonEffect
     buttonEffect?: 'none' | 'pulse' | 'border-spin' | 'radial-glow';
     linkType?: 'internal' | 'external';
