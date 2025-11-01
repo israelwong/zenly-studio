@@ -5,6 +5,7 @@
 // BASE COMPONENTS (DISPONIBLES)
 // =============================================================================
 export { ZenButton, zenButtonVariants } from './base/ZenButton';
+export { ZenButtonWithEffects } from './buttonEffects/ZenButtonWithEffects';
 export { ZenInput } from './base/ZenInput';
 export { ZenCard, ZenCardHeader, ZenCardContent, ZenCardTitle, ZenCardDescription } from './base/ZenCard';
 export { ZenBadge } from './base/ZenBadge';
@@ -86,6 +87,7 @@ export { ZEN_TYPOGRAPHY } from './tokens/typography';
 // TYPES (DISPONIBLES)
 // =============================================================================
 export type { ZenButtonProps } from './base/ZenButton';
+export type { ZenButtonWithEffectsProps } from './buttonEffects/ZenButtonWithEffects';
 export type { ZenInputProps } from './base/ZenInput';
 export type { ZenCardProps, ZenCardHeaderProps, ZenCardContentProps, ZenCardTitleProps, ZenCardDescriptionProps } from './base/ZenCard';
 export type { ZenBadgeProps } from './base/ZenBadge';

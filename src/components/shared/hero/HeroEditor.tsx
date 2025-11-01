@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Plus, X, Image as ImageIcon, Video, AlignStartVertical, AlignVerticalDistributeCenter, AlignEndVertical, AlignEndHorizontal, AlignStartHorizontal, Square, RectangleVertical, Maximize2, Shrink, AlignVerticalJustifyCenter } from 'lucide-react';
-import { ZenInput, ZenTextarea, ZenSelect, ZenButton, ZenCard, ZenCardContent } from '@/components/ui/zen';
+import { ZenInput, ZenTextarea, ZenSelect, ZenButton, ZenCard, ZenCardContent, ZenSwitch } from '@/components/ui/zen';
 import { HeroConfig, ButtonConfig, MediaItem } from '@/types/content-blocks';
 import { cn } from '@/lib/utils';
 
@@ -63,8 +63,6 @@ export default function HeroEditor({
             text: '',
             href: '',
             variant: 'primary',
-            size: 'md',
-            borderRadius: 'normal' as ButtonConfig['borderRadius'],
             linkType: 'internal',
             pulse: false
         };
@@ -169,11 +167,6 @@ export default function HeroEditor({
         { value: 'lg', label: 'Borde amplio', icon: RoundedBorderIcon }
     ];
 
-    const buttonBorderRadiusOptions = [
-        { value: 'normal', label: 'Normal' },
-        { value: 'sm', label: 'Redondeado SM' },
-        { value: 'full', label: 'Redondeado Full' }
-    ];
 
     const buttonVariantOptions = [
         { value: 'primary', label: 'Primario' },
@@ -182,16 +175,12 @@ export default function HeroEditor({
         { value: 'ghost', label: 'Ghost' }
     ];
 
-    const buttonSizeOptions = [
-        { value: 'sm', label: 'Pequeño' },
-        { value: 'md', label: 'Mediano' },
-        { value: 'lg', label: 'Grande' }
-    ];
 
     const linkTypeOptions = [
         { value: 'internal', label: 'Enlace interno' },
         { value: 'external', label: 'Abre nueva página' }
     ];
+
 
     const tabs = [
         { id: 'informacion', label: 'Información' },
@@ -573,6 +562,7 @@ export default function HeroEditor({
                                                     target: value === 'external' ? '_blank' : '_self'
                                                 })}
                                                 options={linkTypeOptions}
+                                                disableSearch
                                             />
                                         </div>
 
@@ -582,39 +572,17 @@ export default function HeroEditor({
                                                 value={button.variant || 'primary'}
                                                 onValueChange={(value) => updateButton(index, { variant: value as ButtonConfig['variant'] })}
                                                 options={buttonVariantOptions}
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-xs text-zinc-400 mb-1">Tamaño</label>
-                                            <ZenSelect
-                                                value={button.size || 'md'}
-                                                onValueChange={(value) => updateButton(index, { size: value as ButtonConfig['size'] })}
-                                                options={buttonSizeOptions}
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-xs text-zinc-400 mb-1">Bordes</label>
-                                            <ZenSelect
-                                                value={button.borderRadius || 'normal'}
-                                                onValueChange={(value) => updateButton(index, { borderRadius: value as ButtonConfig['borderRadius'] })}
-                                                options={buttonBorderRadiusOptions}
+                                                disableSearch
                                             />
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            id={`pulse-${index}`}
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-xs text-zinc-400">Pulse</label>
+                                        <ZenSwitch
                                             checked={button.pulse || false}
-                                            onChange={(e) => updateButton(index, { pulse: e.target.checked })}
-                                            className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
+                                            onCheckedChange={(checked) => updateButton(index, { pulse: checked })}
                                         />
-                                        <label htmlFor={`pulse-${index}`} className="text-sm text-zinc-300">
-                                            Efecto pulse
-                                        </label>
                                     </div>
                                 </div>
                             ))}

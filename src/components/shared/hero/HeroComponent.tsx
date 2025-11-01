@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ZenButton } from '@/components/ui/zen';
+import { ZenButtonWithEffects } from '@/components/ui/zen';
 import { HeroConfig } from '@/types/content-blocks';
 import { cn } from '@/lib/utils';
 
@@ -40,7 +40,7 @@ export default function HeroComponent({
         aspectRatio,
         borderColor,
         borderWidth,
-        borderStyle
+        borderStyle,
     } = config;
 
     const backgroundMedia = media[0];
@@ -146,23 +146,6 @@ export default function HeroComponent({
         }
     };
 
-    const getButtonSize = (size?: string): 'sm' | 'md' | 'lg' => {
-        switch (size) {
-            case 'sm': return 'sm';
-            case 'md': return 'md';
-            case 'lg': return 'lg';
-            case 'xl': return 'lg';
-            default: return 'md';
-        }
-    };
-
-    const getButtonBorderRadius = (borderRadius?: string): string => {
-        switch (borderRadius) {
-            case 'sm': return 'rounded-md';
-            case 'full': return 'rounded-full';
-            default: return 'rounded-md';
-        }
-    };
 
     const borderStyles = borderColor && borderWidth && borderWidth > 0 && borderStyle
         ? {
@@ -334,35 +317,32 @@ export default function HeroComponent({
                     {buttons.length > 0 && (
                         <div className={`flex flex-col sm:flex-row gap-2 sm:gap-3 ${textAlignment === 'center' ? 'justify-center' : textAlignment === 'right' ? 'justify-end' : 'justify-start'}`}>
                             {buttons.slice(0, 2).map((button, index) => {
-                                const buttonClasses = [
-                                    'text-sm sm:text-base',
-                                    getButtonBorderRadius(button.borderRadius),
-                                    button.pulse && 'animate-pulse',
-                                    button.className || ''
-                                ].filter(Boolean).join(' ');
+                                const buttonEffect = (button.buttonEffect || (button.pulse ? 'pulse' : 'none')) as 'none' | 'pulse' | 'border-spin' | 'radial-glow';
 
                                 return button.href ? (
-                                    <ZenButton
+                                    <ZenButtonWithEffects
                                         key={index}
                                         asChild
                                         variant={getButtonVariant(button.variant)}
-                                        size={getButtonSize(button.size)}
-                                        className={buttonClasses}
+                                        size="md"
+                                        effect={buttonEffect}
+                                        className="text-sm sm:text-base"
                                     >
                                         <Link href={button.href} target={button.target || (button.linkType === 'external' ? '_blank' : '_self')} onClick={button.onClick}>
                                             {button.text}
                                         </Link>
-                                    </ZenButton>
+                                    </ZenButtonWithEffects>
                                 ) : (
-                                    <ZenButton
+                                    <ZenButtonWithEffects
                                         key={index}
                                         variant={getButtonVariant(button.variant)}
-                                        size={getButtonSize(button.size)}
-                                        className={buttonClasses}
+                                        size="md"
+                                        effect={buttonEffect}
+                                        className="text-sm sm:text-base"
                                         onClick={button.onClick}
                                     >
                                         {button.text}
-                                    </ZenButton>
+                                    </ZenButtonWithEffects>
                                 );
                             })}
                         </div>
