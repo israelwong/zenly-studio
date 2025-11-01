@@ -121,17 +121,14 @@ export default function HeroEditor({
     const handleDropFilesWrapper = useCallback(async (files: File[]) => {
         if (!onDropFiles || files.length === 0) return;
 
-        // Si ya hay media, eliminarlo primero antes de subir el nuevo
-        if (media.length > 0) {
-            onMediaChange([]);
+        try {
+            // Llamar a onDropFiles para hacer el upload
+            await onDropFiles(files);
+        } catch (error) {
+            // El error ya se maneja en el dropzone
+            console.error('Error en handleDropFilesWrapper:', error);
         }
-
-        // Llamar a onDropFiles para hacer el upload
-        await onDropFiles(files);
-
-        // Nota: onDropFiles internamente actualiza el bloque con el nuevo archivo
-        // pero lo agrega. Usaremos un efecto para asegurar el reemplazo después.
-    }, [onDropFiles, media, onMediaChange]);
+    }, [onDropFiles]);
 
     // Efecto para asegurar que solo haya 1 archivo (el más reciente)
     useEffect(() => {
