@@ -119,9 +119,11 @@ export function MediaGallery({
         }
 
         // En preview: mostrar según el modo seleccionado con configuración actualizada
+        // Si solo hay 1 item, usar 1 columna para mostrarlo en full width
+        const effectiveColumns = media.length === 1 ? 1 : columns;
         const updatedConfig = {
             ...config,
-            columns,
+            columns: effectiveColumns,
             gap,
             borderStyle
         };

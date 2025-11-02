@@ -31,7 +31,7 @@ export function VideoSingle({
         muted = true,
         loop = true,
         poster,
-        maxWidth = 'max-w-screen-md'
+        maxWidth = 'max-w-full'
     } = config;
 
     // No renderizar si no hay src válido
@@ -50,7 +50,7 @@ export function VideoSingle({
             <div className="relative group">
                 <video
                     ref={videoRef}
-                    className="w-full rounded-lg"
+                    className="w-full h-auto rounded-lg"
                     preload="auto"
                     autoPlay={autoPlay}
                     loop={loop}

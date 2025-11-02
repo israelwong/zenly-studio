@@ -338,7 +338,13 @@ export function ImageGrid({
                 }}
             >
                 <div
-                    className={`relative ${isEditable ? 'bg-zinc-800' : ''} ${borderStyleClass} overflow-hidden ${isEditable ? 'aspect-square' : (item.file_type === 'video' ? '' : aspectClass)} transition-all duration-200 ease-out ${isEditable
+                    className={`relative ${isEditable ? 'bg-zinc-800' : ''} ${borderStyleClass} overflow-hidden ${
+                        isEditable 
+                            ? 'aspect-square' 
+                            : configColumns === 1 
+                                ? '' // Si solo hay 1 item, no forzar aspecto - usar h-auto
+                                : (item.file_type === 'video' ? '' : aspectClass)
+                    } transition-all duration-200 ease-out ${isEditable
                         ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg'
                         : 'cursor-pointer hover:scale-[1.02] hover:shadow-lg'
                         } ${isDragging ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
@@ -346,21 +352,41 @@ export function ImageGrid({
                     onClick={!isEditable && configLightbox ? () => handleImageClick(index) : undefined}
                 >
                     {item.file_type === 'video' ? (
-                        <VideoThumbnail
-                            videoUrl={item.file_url}
-                            thumbnailUrl={item.thumbnail_url}
-                            alt={item.filename}
-                            limitHeight={hasMultipleVideos}
-                            isPreview={!isEditable}
-                        />
+                        configColumns === 1 ? (
+                            <video
+                                src={item.file_url}
+                                className="w-full h-auto"
+                                controls
+                                poster={item.thumbnail_url}
+                            />
+                        ) : (
+                            <VideoThumbnail
+                                videoUrl={item.file_url}
+                                thumbnailUrl={item.thumbnail_url}
+                                alt={item.filename}
+                                limitHeight={hasMultipleVideos}
+                                isPreview={!isEditable}
+                            />
+                        )
                     ) : (
-                        <Image
-                            src={item.file_url}
-                            alt={item.filename}
-                            fill
-                            className={isEditable ? "object-contain" : "object-cover"}
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                        />
+                        configColumns === 1 ? (
+                            <Image
+                                src={item.file_url}
+                                alt={item.filename}
+                                width={800}
+                                height={600}
+                                className="w-full h-auto object-contain"
+                                sizes="100vw"
+                            />
+                        ) : (
+                            <Image
+                                src={item.file_url}
+                                alt={item.filename}
+                                fill
+                                className={isEditable ? "object-contain" : "object-cover"}
+                                sizes="(max-width: 768px) 100vw, 50vw"
+                            />
+                        )
                     )}
 
                     {/* Drag Handle */}
@@ -520,15 +546,46 @@ export function ImageGrid({
                     </div>
                 </DndContext>
             ) : (
-                <div className={`grid ${columnsClass} ${gapClass}`} key={media.map(item => item.id).join('-')}>
-                    {media.map((item, index) => (
-                        <SortableImageItem
-                            key={item.id}
-                            item={item}
-                            index={index}
-                        />
-                    ))}
-                </div>
+                // Si solo hay 1 item, no usar grid - renderizar directamente en full width
+                media.length === 1 ? (
+                    <div className="w-full" key={media[0].id}>
+                        {media[0].file_type === 'video' ? (
+                            <div className="relative w-full">
+                                <video
+                                    src={media[0].file_url}
+                                    className="w-full h-auto rounded-lg"
+                                    controls
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                    loop
+                                    poster={media[0].thumbnail_url}
+                                />
+                            </div>
+                        ) : (
+                            <div className="relative w-full">
+                                <Image
+                                    src={media[0].file_url}
+                                    alt={media[0].filename}
+                                    width={800}
+                                    height={600}
+                                    className="w-full h-auto object-contain rounded-lg"
+                                    sizes="100vw"
+                                />
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className={`grid ${columnsClass} ${gapClass}`} key={media.map(item => item.id).join('-')}>
+                        {media.map((item, index) => (
+                            <SortableImageItem
+                                key={item.id}
+                                item={item}
+                                index={index}
+                            />
+                        ))}
+                    </div>
+                )
             )}
 
             {/* Lightbox - Solo en modo no editable */}

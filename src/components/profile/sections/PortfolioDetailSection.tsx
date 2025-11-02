@@ -113,24 +113,51 @@ export function PortfolioDetailSection({ portfolio, hideHeader = false }: Portfo
             {coverMedia && (
                 <div className="relative">
                     <ZenCard className="overflow-hidden">
-                        <div className="aspect-video relative bg-zinc-800">
-                            {coverMedia.file_type === 'image' ? (
-                                <Image
-                                    src={coverMedia.file_url}
-                                    alt={portfolio.title || 'Portfolio image'}
-                                    fill
-                                    className="object-cover"
-                                    sizes="100vw"
-                                />
-                            ) : (
-                                <video
-                                    src={coverMedia.file_url}
-                                    controls
-                                    className="w-full h-full object-cover"
-                                    poster={coverMedia.thumbnail_url}
-                                />
-                            )}
-                        </div>
+                        {/* Si solo hay un item, mostrar en aspecto automático y full width */}
+                        {portfolio.media.length === 1 ? (
+                            <div className="relative bg-zinc-800">
+                                {coverMedia.file_type === 'image' ? (
+                                    <Image
+                                        src={coverMedia.file_url}
+                                        alt={portfolio.title || 'Portfolio image'}
+                                        width={800}
+                                        height={600}
+                                        className="w-full h-auto object-contain"
+                                        sizes="100vw"
+                                    />
+                                ) : (
+                                    <video
+                                        src={coverMedia.file_url}
+                                        controls
+                                        autoPlay
+                                        muted
+                                        playsInline
+                                        loop
+                                        className="w-full h-auto"
+                                        poster={coverMedia.thumbnail_url}
+                                    />
+                                )}
+                            </div>
+                        ) : (
+                            <div className="aspect-video relative bg-zinc-800">
+                                {coverMedia.file_type === 'image' ? (
+                                    <Image
+                                        src={coverMedia.file_url}
+                                        alt={portfolio.title || 'Portfolio image'}
+                                        fill
+                                        className="object-cover"
+                                        sizes="100vw"
+                                    />
+                                ) : (
+                                    <video
+                                        src={coverMedia.file_url}
+                                        controls
+                                        className="w-full h-full object-cover"
+                                        poster={coverMedia.thumbnail_url}
+                                    />
+                                )}
+                            </div>
+                        )}
                     </ZenCard>
                 </div>
             )}
