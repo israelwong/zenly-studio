@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { MediaItem } from "@/lib/actions/schemas/post-schemas";
 import { StudioPost } from "@/types/studio-posts";
+import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 
 interface PostCardProps {
     post: StudioPost;
@@ -32,6 +33,7 @@ interface PostCardProps {
 
 export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
     const router = useRouter();
+    const { triggerRefresh } = useStorageRefresh(studioSlug);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
     const [isTogglingFeatured, setIsTogglingFeatured] = useState(false);
@@ -53,6 +55,8 @@ export function PostCard({ post, studioSlug, onUpdate }: PostCardProps) {
             const result = await deleteStudioPost(localPost.id);
             if (result.success) {
                 toast.success("Post eliminado");
+                // Actualizar almacenamiento
+                triggerRefresh();
                 // Notificar eliminación (null = eliminar)
                 onUpdate(null);
             } else {

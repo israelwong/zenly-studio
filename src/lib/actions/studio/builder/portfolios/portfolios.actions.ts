@@ -674,6 +674,7 @@ export async function deleteStudioPortfolio(portfolioId: string) {
             select: { 
                 studio: { select: { slug: true } },
                 slug: true,
+                is_published: true,
             },
         });
 
@@ -681,12 +682,22 @@ export async function deleteStudioPortfolio(portfolioId: string) {
             return { success: false, error: "Portfolio no encontrado" };
         }
 
+        const studioSlug = portfolio.studio.slug;
+
         await prisma.studio_portfolios.delete({
             where: { id: portfolioId },
         });
 
-        revalidatePath(`/${portfolio.studio.slug}/studio/builder/content/portfolios`);
-        revalidatePath(`/${portfolio.studio.slug}/portfolios/${portfolio.slug}`);
+        // Revalidar lista de portfolios (siempre)
+        revalidatePath(`/${studioSlug}/studio/builder/content/portfolios`);
+        
+        // Revalidar página del editor (por si el usuario está en esa página)
+        revalidatePath(`/${studioSlug}/studio/builder/content/portfolios/${portfolioId}/editar`);
+        
+        // Revalidar página pública solo si estaba publicado
+        if (portfolio.is_published) {
+            revalidatePath(`/${studioSlug}/portfolios/${portfolio.slug}`);
+        }
 
         return { success: true };
     } catch (error) {

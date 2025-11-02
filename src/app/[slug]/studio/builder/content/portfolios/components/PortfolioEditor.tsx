@@ -21,6 +21,7 @@ import cuid from "cuid";
 import Image from "next/image";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { calculateTotalStorage, formatBytes } from "@/lib/utils/storage";
+import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 
 interface PortfolioEditorProps {
     studioSlug: string;
@@ -243,6 +244,7 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
     const [isDragOverCover, setIsDragOverCover] = useState(false);
     const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
     const { uploadFiles } = useMediaUpload();
+    const { triggerRefresh } = useStorageRefresh(studioSlug);
 
     // Manejar cambio de estado de drag desde ContentBlocksEditor
     const handleDragStateChange = useCallback((isDragging: boolean) => {
@@ -490,6 +492,9 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
             }
 
             toast.success(mode === "create" ? "Portfolio creado exitosamente" : "Portfolio actualizado exitosamente");
+
+            // Actualizar almacenamiento
+            triggerRefresh();
 
             // Redirigir a la lista de portfolios
             router.push(`/${studioSlug}/studio/builder/content/portfolios`);

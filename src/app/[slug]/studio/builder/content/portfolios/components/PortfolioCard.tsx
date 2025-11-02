@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { MediaItem } from "@/lib/actions/schemas/post-schemas";
 import { StudioPortfolio } from "@/types/studio-portfolios";
 import { formatBytes } from "@/lib/utils/storage";
+import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 
 interface PortfolioCardProps {
     portfolio: StudioPortfolio;
@@ -47,6 +48,7 @@ function generateSlug(title: string): string {
 
 export function PortfolioCard({ portfolio, studioSlug, onUpdate, onDuplicatingStart }: PortfolioCardProps) {
     const router = useRouter();
+    const { triggerRefresh, triggerLocalUpdate } = useStorageRefresh(studioSlug);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
     const [isTogglingFeatured, setIsTogglingFeatured] = useState(false);
@@ -67,9 +69,22 @@ export function PortfolioCard({ portfolio, studioSlug, onUpdate, onDuplicatingSt
     const handleConfirmDelete = async () => {
         setIsDeleting(true);
         try {
+            // Calcular storage del portfolio antes de eliminarlo
+            const portfolioMedia = localPortfolio.media || [];
+            const portfolioTotalBytes = portfolioMedia.reduce((total, item) => {
+                const bytes = typeof item.storage_bytes === 'bigint'
+                    ? Number(item.storage_bytes)
+                    : (item.storage_bytes || 0);
+                return total + bytes;
+            }, 0);
+
             const result = await deleteStudioPortfolio(localPortfolio.id);
             if (result.success) {
                 toast.success("Portfolio eliminado");
+                // Actualizar almacenamiento localmente (restar bytes)
+                if (portfolioTotalBytes > 0) {
+                    triggerLocalUpdate(-portfolioTotalBytes);
+                }
                 onUpdate(null);
                 setShowDeleteModal(false);
             } else {
@@ -265,6 +280,8 @@ export function PortfolioCard({ portfolio, studioSlug, onUpdate, onDuplicatingSt
             // TypeScript type narrowing: si success es true, data existe
             const successResult = result as { success: true; data: StudioPortfolio };
             toast.success("Portfolio duplicado exitosamente");
+            // Actualizar almacenamiento
+            triggerRefresh();
             // Notificar al componente padre para que actualice la lista
             onUpdate(successResult.data);
         } catch (error) {

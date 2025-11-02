@@ -16,6 +16,7 @@ import { ArrowLeft, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import cuid from "cuid";
 import { calculateTotalStorage, formatBytes } from "@/lib/utils/storage";
+import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 
 interface PostEditorProps {
     studioSlug: string;
@@ -61,6 +62,7 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
     const router = useRouter();
     const tempCuid = useTempCuid();
     const { uploadFiles, isUploading } = useMediaUpload();
+    const { triggerRefresh } = useStorageRefresh(studioSlug);
 
     // Estado del formulario simplificado
     const [formData, setFormData] = useState<{ title: string; caption: string; tags: string[]; media: PostMediaItem[]; is_published: boolean; is_featured: boolean }>({
@@ -335,6 +337,8 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
 
             if (result.success) {
                 toast.success(mode === "create" ? "Post creado exitosamente" : "Post actualizado exitosamente");
+                // Actualizar almacenamiento
+                triggerRefresh();
                 router.push(`/${studioSlug}/studio/builder/content/posts`);
             } else {
                 toast.error(result.error || "Error al guardar el post");
