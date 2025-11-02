@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Package } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
-import { SectionLayout, StorageIndicator } from '../../components';
+import { SectionLayout } from '../../components';
 import { PaquetesWrapper } from './components';
 import { getBuilderProfileData } from '@/lib/actions/studio/builder/builder-profile.actions';
 import type { BuilderProfileData } from '@/types/builder-profile';
@@ -91,9 +91,6 @@ export default function PaquetesPage() {
 
                 <ZenCardContent className="p-6">
                     <div className="space-y-6">
-                        {/* Storage Indicator */}
-                        <StorageIndicator studioSlug={studioSlug} />
-
                         {/* Paquetes Wrapper */}
                         <PaquetesWrapper studioSlug={studioSlug} />
                     </div>

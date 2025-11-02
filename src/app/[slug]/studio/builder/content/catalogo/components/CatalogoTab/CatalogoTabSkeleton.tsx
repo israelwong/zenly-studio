@@ -1,7 +1,7 @@
 /**
- * Skeleton para el catálogo en modo acordeón
+ * Skeleton para el tab del catálogo
  */
-export function CatalogoTabSkeletonContainer() {
+export function CatalogoTabSkeleton() {
     return (
         <div className="space-y-2">
             {[1, 2, 3].map((i) => (

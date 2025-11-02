@@ -5,10 +5,8 @@ import { useParams } from 'next/navigation';
 import { Store, DollarSign } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
-import { SectionLayout, StorageIndicator } from '../../components';
-import { UtilidadTab } from './components';
-import { CatalogoTabSkeletonContainer } from './components';
-import { CatalogoTab } from './components/CatalogoTab/CatalogoTab';
+import { SectionLayout } from '../../components';
+import { UtilidadTab, CatalogoTab, CatalogoTabSkeleton } from './components';
 import { getBuilderProfileData } from '@/lib/actions/studio/builder/builder-profile.actions';
 import { obtenerSeccionesConStats } from '@/lib/actions/studio/builder/catalogo';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/builder/catalogo/utilidad.actions';
@@ -179,9 +177,6 @@ export default function CatalogoPage() {
 
                 <ZenCardContent className="p-6">
                     <div className="space-y-6">
-                        {/* Storage Indicator */}
-                        <StorageIndicator studioSlug={studioSlug} />
-
                         {/* Tabs */}
                         <Tabs value={activeTab} onValueChange={(v) => {
                             setActiveTab(v as TabValue);
@@ -207,7 +202,7 @@ export default function CatalogoPage() {
 
                             <TabsContent value="items">
                                 {!studioConfig ? (
-                                    <CatalogoTabSkeletonContainer />
+                                    <CatalogoTabSkeleton />
                                 ) : (
                                     <CatalogoTab
                                         studioSlug={studioSlug}

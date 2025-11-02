@@ -1,9 +1,5 @@
 export { CatalogoTab } from "./CatalogoTab";
-
-// Storage & UI Components
-
-// Skeletons
-export { CatalogoTabSkeletonContainer } from "./shared";
+export { CatalogoTabSkeleton } from "./CatalogoTabSkeleton";
 
 // Secciones
 export { SeccionEditorModal } from "./secciones";
