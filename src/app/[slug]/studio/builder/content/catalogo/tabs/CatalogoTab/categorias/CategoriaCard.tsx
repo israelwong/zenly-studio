@@ -7,9 +7,7 @@ import { ChevronRight, Tag } from "lucide-react";
 interface CategoriaCardProps {
     id: string;
     name: string;
-    description?: string;
     itemCount: number;
-    mediaCount?: number;
     onClick: () => void;
 }
 
@@ -18,9 +16,7 @@ interface CategoriaCardProps {
  */
 export function CategoriaCard({
     name,
-    description,
     itemCount,
-    mediaCount = 0,
     onClick,
 }: CategoriaCardProps) {
     return (
@@ -37,21 +33,11 @@ export function CategoriaCard({
                     <ChevronRight className="w-5 h-5 text-zinc-500 flex-shrink-0" />
                 </div>
 
-                {description && (
-                    <p className="text-xs text-zinc-400 break-words">{description}</p>
-                )}
-
                 <div className="pt-2 border-t border-zinc-800 space-y-1 text-xs text-zinc-400">
                     <div className="flex justify-between">
                         <span>Items:</span>
                         <span className="font-medium">{itemCount}</span>
                     </div>
-                    {mediaCount > 0 && (
-                        <div className="flex justify-between">
-                            <span>Media:</span>
-                            <span className="font-medium">{mediaCount}</span>
-                        </div>
-                    )}
                 </div>
             </div>
         </ZenCard>

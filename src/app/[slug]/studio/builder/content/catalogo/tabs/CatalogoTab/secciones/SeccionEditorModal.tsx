@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ZenButton, ZenInput, ZenCard, ZenTextarea } from "@/components/ui/zen";
+import { ZenButton, ZenInput, ZenCard } from "@/components/ui/zen";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/shadcn/dialog";
 import { toast } from "sonner";
 
@@ -20,7 +20,6 @@ interface SeccionEditorModalProps {
 export interface SeccionFormData {
     id?: string;
     name: string;
-    description?: string;
 }
 
 /**
@@ -36,7 +35,6 @@ export function SeccionEditorModal({
 }: SeccionEditorModalProps) {
     const [formData, setFormData] = useState<SeccionFormData>({
         name: "",
-        description: "",
     });
     const [isSaving, setIsSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -49,12 +47,10 @@ export function SeccionEditorModal({
             setFormData({
                 id: seccion.id,
                 name: seccion.name,
-                description: seccion.description || "",
             });
         } else {
             setFormData({
                 name: "",
-                description: "",
             });
         }
         setErrors({});
@@ -143,22 +139,6 @@ export function SeccionEditorModal({
                         <p className="text-xs text-zinc-500 mt-1">
                             {formData.name.length}/100 caracteres
                         </p>
-                    </div>
-
-                    {/* Descripción */}
-                    <div>
-                        <ZenTextarea
-                            label="Descripción"
-                            name="description"
-                            value={formData.description}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleChange("description", e.target.value)}
-                            placeholder="Describe esta sección del catálogo..."
-                            minRows={3}
-                            maxLength={500}
-                            disabled={isSaving}
-                            hint="Describe brevemente el propósito de esta sección"
-                            error={errors.description}
-                        />
                     </div>
 
                     {/* Información adicional */}

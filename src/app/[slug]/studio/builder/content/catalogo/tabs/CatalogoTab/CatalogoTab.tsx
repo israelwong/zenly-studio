@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal } from "lucide-react";
-import { ZenButton } from "@/components/ui/zen";
+import { ZenButton, ZenBadge } from "@/components/ui/zen";
 import {
     ZenDropdownMenu,
     ZenDropdownMenuContent,
@@ -531,7 +531,11 @@ export function CatalogoTab({
                                 onClick={() => toggleSeccion(seccion.id)}
                                 className="flex items-center gap-3 flex-1 text-left"
                             >
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                {isSeccionExpandida ? (
+                                    <ChevronDown className="w-4 h-4 text-zinc-400" />
+                                ) : (
+                                    <ChevronRight className="w-4 h-4 text-zinc-400" />
+                                )}
                                 <div>
                                     <h4 className="font-semibold text-white">{seccion.name}</h4>
                                     <div className="flex items-center gap-2 mt-1">
@@ -543,11 +547,6 @@ export function CatalogoTab({
                                         </span>
                                     </div>
                                 </div>
-                                {isSeccionExpandida ? (
-                                    <ChevronDown className="w-4 h-4 text-zinc-400" />
-                                ) : (
-                                    <ChevronRight className="w-4 h-4 text-zinc-400" />
-                                )}
                             </button>
                         </div>
                         <div className="flex items-center gap-1">
@@ -672,7 +671,11 @@ export function CatalogoTab({
                             onClick={() => toggleCategoria(categoria.id)}
                             className="flex items-center gap-3 flex-1 text-left"
                         >
-                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                            {isCategoriaExpandida ? (
+                                <ChevronDown className="w-4 h-4 text-zinc-400" />
+                            ) : (
+                                <ChevronRight className="w-4 h-4 text-zinc-400" />
+                            )}
                             <div>
                                 <h5 className="text-sm font-medium text-zinc-300">{categoria.name}</h5>
                                 <div className="flex items-center gap-2 mt-1">
@@ -681,11 +684,6 @@ export function CatalogoTab({
                                     </span>
                                 </div>
                             </div>
-                            {isCategoriaExpandida ? (
-                                <ChevronDown className="w-4 h-4 text-zinc-400" />
-                            ) : (
-                                <ChevronRight className="w-4 h-4 text-zinc-400" />
-                            )}
                         </button>
                     </div>
                     <div className="flex items-center gap-1">
@@ -732,7 +730,7 @@ export function CatalogoTab({
 
                 {/* Contenido de la categoría */}
                 {isCategoriaExpandida && (
-                    <div className="bg-zinc-800/20 border-l-2 border-zinc-700/30 ml-8">
+                    <div className="bg-zinc-800/20 border-l-2 border-zinc-700/30 ml-12">
                         {items.length === 0 ? (
                             <EmptyCategoryDropZone categoria={categoria} />
                         ) : (
@@ -790,31 +788,43 @@ export function CatalogoTab({
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`flex items-center justify-between p-2 pl-6 ${itemIndex > 0 ? 'border-t border-zinc-700/30' : ''} hover:bg-zinc-700/20 transition-colors`}
+                className={`flex items-center justify-between p-2 pl-6 ${itemIndex > 0 ? 'border-t border-zinc-700/30' : ''} hover:bg-zinc-700/20 transition-colors cursor-pointer`}
+                onClick={() => handleEditItem(item)}
             >
-                <div className="flex items-center gap-3 flex-1 text-left">
+                <div className="flex items-center gap-3 flex-1 text-left py-1">
                     <button
                         {...attributes}
                         {...listeners}
                         className="p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing mr-2"
                         title="Arrastrar para reordenar"
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <GripVertical className="h-4 w-4 text-zinc-500" />
                     </button>
-                    <div className="flex-1">
-                        <div className="text-sm text-white leading-tight">{item.name}</div>
-                        <div className="text-xs text-zinc-500 mt-1">
-                            {item.tipoUtilidad === 'servicio' ? 'Servicio' : 'Producto'}
+                    <div className="flex-1 min-w-0">
+                        <div className="text-sm text-zinc-300 leading-tight break-words font-light">
+                            {item.name}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                            <ZenBadge
+                                variant="outline"
+                                size="sm"
+                                className={`px-1 py-0 text-[10px] font-light rounded-sm ${item.tipoUtilidad === 'servicio'
+                                    ? 'border-blue-600 text-blue-400'
+                                    : 'border-purple-600 text-purple-400'
+                                    }`}
+                            >
+                                {item.tipoUtilidad === 'servicio' ? 'Servicio' : 'Producto'}
+                            </ZenBadge>
+                            <span className="text-xs text-green-400">
+                                ${precios.precio_final.toLocaleString()}
+                            </span>
                         </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="text-right w-20">
-                        <div className="text-sm font-medium text-white">
-                            ${precios.precio_final.toLocaleString()}
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-1">
+
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                         <ZenDropdownMenu>
                             <ZenDropdownMenuTrigger asChild>
                                 <ZenButton
@@ -826,10 +836,6 @@ export function CatalogoTab({
                                 </ZenButton>
                             </ZenDropdownMenuTrigger>
                             <ZenDropdownMenuContent align="end" className="w-48">
-                                <ZenDropdownMenuItem onClick={() => handleEditItem(item)}>
-                                    <Edit2 className="h-4 w-4 mr-2" />
-                                    Editar
-                                </ZenDropdownMenuItem>
                                 <ZenDropdownMenuItem onClick={() => handleDuplicateItem(item)}>
                                     <Copy className="h-4 w-4 mr-2" />
                                     Duplicar
@@ -953,7 +959,7 @@ export function CatalogoTab({
                     const newData = { ...prev };
                     Object.keys(newData).forEach(seccionId => {
                         newData[seccionId] = newData[seccionId].map(cat =>
-                            cat.id === data.id ? { ...cat, name: data.name, description: data.description || undefined } : cat
+                            cat.id === data.id ? { ...cat, name: data.name } : cat
                         );
                     });
                     return newData;
