@@ -19,6 +19,7 @@ export interface StorageStats {
     categoriesGlobalBytes: number;
     itemsGlobalBytes: number;
     postsGlobalBytes: number;
+    portfoliosGlobalBytes: number;
 }
 
 /**
@@ -79,10 +80,14 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
             select: { storage_bytes: true },
         });
 
+        console.log('🔍 calculateStorageCompleto: Portfolios media encontrados:', portfoliosMedia.length);
+
         const totalPortfoliosBytes = portfoliosMedia.reduce(
             (sum: number, m: { storage_bytes: bigint }) => sum + Number(m.storage_bytes),
             0
         );
+
+        console.log('🔍 calculateStorageCompleto: Total portfolios bytes:', totalPortfoliosBytes);
 
         // Agrupar por sección
         const sectionMap = new Map<string, StorageBreakdown>();
@@ -167,7 +172,8 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
                 sections,
                 categoriesGlobalBytes: totalCategoryBytes,
                 itemsGlobalBytes: totalItemBytes,
-                postsGlobalBytes: totalPostsBytes + totalPortfoliosBytes,
+                postsGlobalBytes: totalPostsBytes,
+                portfoliosGlobalBytes: totalPortfoliosBytes,
             },
         };
     } catch (error) {

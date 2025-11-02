@@ -38,6 +38,7 @@ export function StorageIndicator({
             if (result.success && result.data) {
                 setStorageStats(result.data);
                 console.log('🔍 StorageIndicator: Storage stats actualizados:', result.data);
+                console.log('🔍 StorageIndicator: Portfolios bytes:', result.data.portfoliosGlobalBytes);
             } else {
                 console.warn('⚠️ StorageIndicator: Error en el cálculo:', result.error);
             }
@@ -186,9 +187,13 @@ export function StorageIndicator({
                                 <span>Total Items:</span>
                                 <span>{formatBytes(storageStats.itemsGlobalBytes)}</span>
                             </div>
-                            <div className="flex justify-between text-xs text-zinc-300">
+                            <div className="flex justify-between text-xs text-zinc-300 mb-1">
                                 <span>Total Posts:</span>
                                 <span>{formatBytes(storageStats.postsGlobalBytes)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-zinc-300">
+                                <span>Total Portfolios:</span>
+                                <span>{formatBytes(storageStats.portfoliosGlobalBytes ?? 0)}</span>
                             </div>
                         </div>
                     </div>

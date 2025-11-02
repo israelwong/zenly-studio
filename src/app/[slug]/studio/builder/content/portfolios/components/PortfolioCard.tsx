@@ -89,10 +89,13 @@ export function PortfolioCard({ portfolio, studioSlug, onUpdate, onDuplicatingSt
                 const isEditingThisPortfolio = pathname?.includes(editingRoute) &&
                     (pathname.endsWith(editingRoute) || pathname.endsWith(`${editingRoute}/`));
 
-                // Actualizar almacenamiento localmente (restar bytes)
+                // Actualizar almacenamiento: primero actualización local (inmediata) y luego refresh completo
                 if (portfolioTotalBytes > 0) {
                     triggerLocalUpdate(-portfolioTotalBytes);
                 }
+
+                // Actualizar almacenamiento desde servidor para sincronizar todos los componentes
+                triggerRefresh();
 
                 // Notificar eliminación para actualizar lista local
                 onUpdate(null);
