@@ -1,24 +1,20 @@
-// Container principal
-export { CatalogoContainer } from "./CatalogoContainer";
-// CatalogoNavigationWrapper movido a CatalogoWrapper.tsx
-export { CatalogoAcordeonNavigation } from "./CatalogoAcordeonNavigation";
+export { CatalogoTab } from "./CatalogoTab";
 
 // Storage & UI Components
 
-// Skeletons - Orquestador + Individuales
-export { CatalogoTabSkeletonContainer, SeccionSkeleton, CategoriaSkeleton, ItemSkeleton } from "./shared";
+// Skeletons
+export { CatalogoTabSkeletonContainer } from "./shared";
 
-// Navigation Levels - Secciones
-export { SeccionesListView, SeccionEditorModal } from "./secciones";
+// Secciones
+export { SeccionEditorModal } from "./secciones";
 
-// Navigation Levels - Categorias
-export { CategoriasListView, CategoriaCard } from "./categorias";
+// Categorias
+export { CategoriaCard } from "./categorias";
 
-// Navigation Levels - Items
-export { ItemsListView, ItemCard } from "./items";
+// Items
+export { ItemCard } from "./items";
 
 // Types
-export type { CatalogoContainerProps } from "./CatalogoContainer";
-export type { SeccionesListViewProps, SeccionFormData } from "./secciones";
-export type { CategoriasListViewProps, CategoriaCardProps } from "./categorias";
-export type { ItemsListViewProps, ItemCardProps } from "./items";
+export type { SeccionFormData } from "./secciones";
+export type { CategoriaCardProps } from "./categorias";
+export type { ItemCardProps } from "./items";

@@ -15,7 +15,6 @@ interface CategoriaCardProps {
 
 /**
  * Card individual para una categoría
- * Se usa en CategoriasListView
  */
 export function CategoriaCard({
     name,

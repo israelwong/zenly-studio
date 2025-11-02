@@ -1,52 +1,20 @@
-import { SeccionSkeleton } from "./SeccionSkeleton";
-import { CategoriaSkeleton } from "./CategoriaSkeleton";
-import { ItemSkeleton } from "./ItemSkeleton";
-
-type NavigationLevel = 1 | 2 | 3 | 4;
-
-interface CatalogoTabSkeletonContainerProps {
-    /**
-     * Nivel de navegación actual (1-4)
-     * - 1: Listado de Secciones
-     * - 2: Listado de Categorías
-     * - 3: Listado de Items
-     * - 4: Editor de Item (no necesita skeleton)
-     */
-    level?: NavigationLevel;
-}
-
 /**
- * Orquestador de Skeletons para CatalogoTab
- * Selecciona automáticamente el skeleton correcto según el nivel de navegación
- *
- * @param level - Nivel de navegación (por defecto: 1 para Secciones)
- *
- * @example
- * ```tsx
- * // Mostrar skeleton de secciones
- * <CatalogoTabSkeletonContainer level={1} />
- *
- * // Mostrar skeleton de categorías
- * <CatalogoTabSkeletonContainer level={2} />
- *
- * // Mostrar skeleton de items
- * <CatalogoTabSkeletonContainer level={3} />
- * ```
+ * Skeleton para el catálogo en modo acordeón
  */
-export function CatalogoTabSkeletonContainer({
-    level = 1,
-}: CatalogoTabSkeletonContainerProps) {
-    switch (level) {
-        case 1:
-            return <SeccionSkeleton />;
-        case 2:
-            return <CategoriaSkeleton />;
-        case 3:
-            return <ItemSkeleton />;
-        case 4:
-            // Nivel 4 es editor individual, no necesita skeleton
-            return null;
-        default:
-            return <SeccionSkeleton />;
-    }
+export function CatalogoTabSkeletonContainer() {
+    return (
+        <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 animate-pulse">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 bg-zinc-700 rounded"></div>
+                            <div className="h-4 bg-zinc-700 rounded w-32"></div>
+                        </div>
+                        <div className="h-4 bg-zinc-700 rounded w-16"></div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
 }

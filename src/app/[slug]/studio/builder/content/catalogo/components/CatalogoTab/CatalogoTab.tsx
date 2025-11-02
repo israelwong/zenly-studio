@@ -88,15 +88,15 @@ interface Item {
     }>;
 }
 
-interface CatalogoAcordeonNavigationProps {
+interface CatalogoTabProps {
     studioSlug: string;
     secciones: Seccion[];
 }
 
-export function CatalogoAcordeonNavigation({
+export function CatalogoTab({
     studioSlug,
     secciones: initialSecciones,
-}: CatalogoAcordeonNavigationProps) {
+}: CatalogoTabProps) {
     // Estados de expansión
     const [seccionesExpandidas, setSeccionesExpandidas] = useState<Set<string>>(new Set());
     const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());

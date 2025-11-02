@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Store, DollarSign } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
 import { SectionLayout, StorageIndicator } from '../../components';
 import { UtilidadTab } from './components';
-import { CatalogoWrapper, CatalogoTabSkeletonContainer } from './components';
+import { CatalogoTabSkeletonContainer } from './components';
+import { CatalogoTab } from './components/CatalogoTab/CatalogoTab';
 import { getBuilderProfileData } from '@/lib/actions/studio/builder/builder-profile.actions';
 import { obtenerSeccionesConStats } from '@/lib/actions/studio/builder/catalogo';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/builder/catalogo/utilidad.actions';
@@ -28,7 +29,6 @@ interface Seccion {
 
 export default function CatalogoPage() {
     const params = useParams();
-    const searchParams = useSearchParams();
     const studioSlug = params.slug as string;
 
     const [activeTab, setActiveTab] = useState<TabValue>('items');
@@ -209,10 +209,9 @@ export default function CatalogoPage() {
                                 {!studioConfig ? (
                                     <CatalogoTabSkeletonContainer />
                                 ) : (
-                                    <CatalogoWrapper
+                                    <CatalogoTab
                                         studioSlug={studioSlug}
                                         secciones={secciones}
-                                        onNavigateToUtilidad={() => setActiveTab('utilidad')}
                                     />
                                 )}
                             </TabsContent>
