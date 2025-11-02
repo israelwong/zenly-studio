@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenSwitch, ZenBadge, ZenTagModal } from "@/components/ui/zen";
 import { MobilePreviewFull } from "../../../components/MobilePreviewFull";
 import { ContentBlocksEditor } from "@/components/content-blocks";
@@ -74,6 +74,13 @@ function InjectAddButtons({
     activeBlockId: string | null;
     onInsertAt: (index: number) => void;
 }) {
+    // Ref para mantener siempre la versión más actualizada de contentBlocks
+    const contentBlocksRef = useRef(contentBlocks);
+
+    useEffect(() => {
+        contentBlocksRef.current = contentBlocks;
+    }, [contentBlocks]);
+
     useEffect(() => {
         console.log('🔵 [InjectAddButtons] useEffect ejecutado:', {
             contentBlocksLength: contentBlocks.length,
@@ -98,29 +105,14 @@ function InjectAddButtons({
         const timeoutId = setTimeout(() => {
             console.log('🔵 [InjectAddButtons] Agregando botones para', contentBlocks.length, 'bloques');
 
-            // Primero, limpiar botones huérfanos (asociados a componentes que ya no existen)
-            const allButtons = document.querySelectorAll('[data-injected-add-button]');
-            allButtons.forEach(button => {
-                const buttonBlockId = button.getAttribute('data-injected-add-button');
-                const blockExists = contentBlocks.some(block => block.id === buttonBlockId);
-                if (!blockExists) {
-                    console.log('🔵 [InjectAddButtons] Eliminando botón huérfano para bloque:', buttonBlockId);
-                    button.remove();
-                }
-            });
+            // Primero, limpiar TODOS los botones inyectados y recrearlos para asegurar índices correctos
+            document.querySelectorAll('[data-injected-add-button]').forEach(btn => btn.remove());
 
             // Para cada bloque, agregar botón después (entre bloques)
             contentBlocks.forEach((block, index) => {
                 const blockElement = document.getElementById(block.id);
                 if (!blockElement) {
                     console.log('🔵 [InjectAddButtons] No se encontró elemento para bloque:', block.id);
-                    return;
-                }
-
-                // Verificar si ya existe un botón inyectado para este bloque
-                const existingButton = document.querySelector(`[data-injected-add-button="${block.id}"]`);
-                if (existingButton) {
-                    console.log('🔵 [InjectAddButtons] Botón ya existe para bloque:', block.id);
                     return;
                 }
 
@@ -162,7 +154,30 @@ function InjectAddButtons({
                 button.appendChild(svg);
                 button.appendChild(document.createTextNode('Agregar componente aquí'));
 
-                button.onclick = () => onInsertAt(index + 1);
+                // Calcular la posición actual del bloque al hacer click usando la ref actualizada
+                button.onclick = () => {
+                    // Usar la ref para obtener siempre la versión más actualizada de contentBlocks
+                    const currentBlocks = contentBlocksRef.current;
+                    const blockId = block.id;
+
+                    // Buscar el índice actual del bloque en el array actualizado
+                    const currentIndex = currentBlocks.findIndex(b => b.id === blockId);
+
+                    console.log('🔵 [InjectAddButtons] Click en botón:', {
+                        blockId,
+                        currentIndex,
+                        totalBlocks: currentBlocks.length,
+                        blockIds: currentBlocks.map(b => b.id)
+                    });
+
+                    if (currentIndex !== -1) {
+                        // Insertar después del bloque actual (índice + 1)
+                        onInsertAt(currentIndex + 1);
+                    } else {
+                        // Si el bloque no se encuentra (fue eliminado), agregar al final
+                        onInsertAt(currentBlocks.length);
+                    }
+                };
 
                 // Insertar después del contenedor del bloque (entre bloques, no dentro)
                 // Esto lo coloca como elemento hermano del bloque, fuera del componente
