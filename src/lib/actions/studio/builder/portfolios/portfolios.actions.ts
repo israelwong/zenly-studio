@@ -329,7 +329,6 @@ export async function getStudioPortfolioById(portfolioId: string) {
                         id: true,
                         slug: true,
                         studio_name: true,
-                        whatsapp_number: true,
                     },
                 },
                 media: {
@@ -446,6 +445,7 @@ export async function updateStudioPortfolio(
             return { success: false, error: "Portfolio no encontrado" };
         }
 
+        // Aumentar timeout de transacción para portfolios complejos con muchos bloques
         const portfolio = await prisma.$transaction(async (tx) => {
             // Actualizar portfolio base
             const updatedPortfolio = await tx.studio_portfolios.update({
@@ -539,18 +539,29 @@ export async function updateStudioPortfolio(
 
                         // Crear relaciones con media si existen
                         if (block.media && block.media.length > 0) {
+                            // Obtener todos los file_urls únicos de este bloque
+                            const fileUrls = block.media.map(m => m.file_url);
+                            
+                            // Buscar todos los media existentes de una vez
+                            const existingMediaList = await tx.studio_portfolio_media.findMany({
+                                where: {
+                                    portfolio_id: portfolioId,
+                                    file_url: { in: fileUrls },
+                                },
+                            });
+                            
+                            // Crear un mapa para búsquedas rápidas
+                            const existingMediaMap = new Map(
+                                existingMediaList.map(m => [m.file_url, m.id])
+                            );
+                            
                             // Obtener o crear media items
                             const mediaItems = await Promise.all(
                                 block.media.map(async (mediaItem) => {
-                                    const existingMedia = await tx.studio_portfolio_media.findFirst({
-                                        where: {
-                                            portfolio_id: portfolioId,
-                                            file_url: mediaItem.file_url,
-                                        },
-                                    });
-
-                                    if (existingMedia) {
-                                        return existingMedia.id;
+                                    const existingMediaId = existingMediaMap.get(mediaItem.file_url);
+                                    
+                                    if (existingMediaId) {
+                                        return existingMediaId;
                                     }
 
                                     const newMedia = await tx.studio_portfolio_media.create({
@@ -589,6 +600,9 @@ export async function updateStudioPortfolio(
             }
 
             return updatedPortfolio;
+        }, {
+            maxWait: 10000, // 10 segundos para iniciar la transacción
+            timeout: 15000, // 15 segundos para completar la transacción
         });
 
         // Obtener portfolio completo con relaciones actualizadas

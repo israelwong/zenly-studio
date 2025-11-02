@@ -1,40 +1,121 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { PortfolioCard } from "./PortfolioCard";
 import { EmptyState } from "./EmptyState";
 import { getStudioPortfoliosBySlug } from "@/lib/actions/studio/builder/portfolios/portfolios.actions";
-import { ZenSelect } from "@/components/ui/zen";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { ZenButton } from "@/components/ui/zen";
 import { StudioPortfolio } from "@/types/studio-portfolios";
 
 interface PortfoliosListProps {
     studioSlug: string;
+    onPortfoliosChange?: (portfolios: StudioPortfolio[]) => void;
 }
 
-export function PortfoliosList({ studioSlug }: PortfoliosListProps) {
-    const [portfolios, setPortfolios] = useState<StudioPortfolio[]>([]);
+export function PortfoliosList({ studioSlug, onPortfoliosChange }: PortfoliosListProps) {
+    const [allPortfolios, setAllPortfolios] = useState<StudioPortfolio[]>([]); // Todos los portfolios cargados
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<string>("all");
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [error, setError] = useState<string | null>(null);
+    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const previousFilteredPortfoliosRef = useRef<StudioPortfolio[]>([]);
+    const onPortfoliosChangeRef = useRef(onPortfoliosChange);
+    const PORTFOLIOS_PER_PAGE = 5;
+
+    // Actualizar ref cuando cambia onPortfoliosChange
+    useEffect(() => {
+        onPortfoliosChangeRef.current = onPortfoliosChange;
+    }, [onPortfoliosChange]);
+
+    // Filtrar portfolios localmente según el filtro seleccionado
+    const filteredPortfolios = useMemo(() => {
+        return allPortfolios.filter((portfolio) => {
+            if (filter === "all") return true;
+            if (filter === "published") return portfolio.is_published === true;
+            if (filter === "unpublished") return portfolio.is_published === false;
+            if (filter === "featured") return portfolio.is_featured === true;
+            if (filter === "draft") return portfolio.is_published === false && !portfolio.is_featured;
+            return true;
+        });
+    }, [allPortfolios, filter]);
+
+    // Portfolios para la página actual (estos son los que se muestran en la lista y en el preview móvil)
+    const paginatedPortfolios = useMemo(() => {
+        const startIndex = (currentPage - 1) * PORTFOLIOS_PER_PAGE;
+        return filteredPortfolios.slice(startIndex, startIndex + PORTFOLIOS_PER_PAGE);
+    }, [filteredPortfolios, currentPage]);
+
+    // Calcular total de páginas
+    const totalPages = useMemo(() => {
+        return Math.ceil(filteredPortfolios.length / PORTFOLIOS_PER_PAGE);
+    }, [filteredPortfolios.length]);
+
+    // Resetear a página 1 cuando cambia el filtro
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filter]);
+
+    // Notificar cambios de portfolios al componente padre (portfolios de la página actual para preview móvil)
+    useEffect(() => {
+        if (onPortfoliosChangeRef.current) {
+            // Comparar IDs para evitar notificaciones innecesarias
+            const currentIds = paginatedPortfolios.map(p => p.id).sort().join(',');
+            const previousIds = previousFilteredPortfoliosRef.current.map(p => p.id).sort().join(',');
+
+            if (currentIds !== previousIds) {
+                onPortfoliosChangeRef.current(paginatedPortfolios);
+                previousFilteredPortfoliosRef.current = paginatedPortfolios;
+            }
+        }
+    }, [paginatedPortfolios]); // Depender de paginatedPortfolios (página actual)
+
+    // Limpiar timeout al desmontar
+    useEffect(() => {
+        return () => {
+            if (syncTimeoutRef.current) {
+                clearTimeout(syncTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const loadPortfolios = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
-            const filters = filter === "all" ? undefined : {
-                is_published: filter === "published",
-                category: filter !== "all" && filter !== "published" ? filter as "portfolio" | "blog" | "promo" : undefined,
-            };
-
-            const result = await getStudioPortfoliosBySlug(studioSlug, filters);
+            // Siempre cargar todos los portfolios sin filtros del servidor
+            const result = await getStudioPortfoliosBySlug(studioSlug, undefined);
             if (result.success) {
-                setPortfolios(result.data);
+                // Los portfolios ya vienen ordenados de la DB (destacados primero, luego por creación)
+                // Pero asegurémonos de que estén ordenados correctamente
+                const sortedPortfolios = (result.data || []).sort((a, b) => {
+                    // Destacados primero
+                    if (a.is_featured && !b.is_featured) return -1;
+                    if (!a.is_featured && b.is_featured) return 1;
+                    // Luego por fecha de creación (más nueva primero)
+                    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                    return dateB - dateA;
+                });
+                setAllPortfolios(sortedPortfolios);
+            } else {
+                const errorMessage = result.error || "Error al cargar portfolios";
+                setError(errorMessage);
+                toast.error(errorMessage);
+                setAllPortfolios([]);
             }
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Error inesperado al cargar portfolios";
             console.error("Error loading portfolios:", error);
+            setError(errorMessage);
+            toast.error(errorMessage);
+            setAllPortfolios([]);
         } finally {
             setLoading(false);
         }
-    }, [filter, studioSlug]);
+    }, [studioSlug]); // Eliminar filter de las dependencias
 
     useEffect(() => {
         loadPortfolios();
@@ -43,9 +124,9 @@ export function PortfoliosList({ studioSlug }: PortfoliosListProps) {
     const filterOptions = [
         { value: "all", label: "Todos" },
         { value: "published", label: "Publicados" },
-        { value: "portfolio", label: "Portfolio" },
-        { value: "blog", label: "Blog" },
-        { value: "promo", label: "Promoción" },
+        { value: "unpublished", label: "No publicados" },
+        { value: "featured", label: "Destacados" },
+        { value: "draft", label: "Borradores" },
     ];
 
     if (loading) {
@@ -56,37 +137,163 @@ export function PortfoliosList({ studioSlug }: PortfoliosListProps) {
         );
     }
 
-    if (portfolios.length === 0) {
-        return <EmptyState studioSlug={studioSlug} />;
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <p className="text-red-400 text-sm">{error}</p>
+                <button
+                    onClick={() => loadPortfolios()}
+                    className="text-blue-400 hover:text-blue-300 text-sm underline"
+                >
+                    Intentar nuevamente
+                </button>
+            </div>
+        );
     }
 
     return (
         <div className="space-y-6">
-            {/* Filters */}
-            <div className="flex items-center gap-4">
-                <ZenSelect
-                    value={filter}
-                    onValueChange={setFilter}
-                    options={filterOptions}
-                    placeholder="Filtrar portfolios"
-                />
-                <span className="text-sm text-zinc-400">
-                    {portfolios.length} portfolio{portfolios.length !== 1 ? "s" : ""}
+            {/* Filters - Botones en línea con scroll horizontal - Siempre visibles */}
+            <div className="flex items-center gap-2">
+                <div 
+                    className="flex items-center gap-2 overflow-x-auto flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                >
+                    {filterOptions.map((option) => (
+                        <button
+                            key={option.value}
+                            onClick={() => setFilter(option.value)}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap flex-shrink-0 ${filter === option.value
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                                }`}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+                <span className="text-sm text-zinc-400 whitespace-nowrap flex-shrink-0 ml-2">
+                    {filteredPortfolios.length} portfolio{filteredPortfolios.length !== 1 ? "s" : ""}
                 </span>
             </div>
 
-            {/* Portfolios Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {portfolios.map((portfolio) => (
-                    <PortfolioCard
-                        key={portfolio.id}
-                        portfolio={portfolio}
-                        studioSlug={studioSlug}
-                        onUpdate={loadPortfolios}
-                    />
-                ))}
-            </div>
+            {/* Portfolios List - Horizontal Cards */}
+            {filteredPortfolios.length === 0 ? (
+                <EmptyState studioSlug={studioSlug} />
+            ) : (
+                <>
+                    <div className="space-y-3">
+                        {paginatedPortfolios.map((portfolio) => (
+                            <PortfolioCard
+                                key={portfolio.id}
+                                portfolio={portfolio}
+                                studioSlug={studioSlug}
+                                onUpdate={(updatedPortfolio) => {
+                                    if (updatedPortfolio === null) {
+                                        // Eliminación: remover portfolio de la lista local
+                                        setAllPortfolios(prevPortfolios =>
+                                            prevPortfolios.filter(p => p.id !== portfolio.id)
+                                        );
+                                    } else {
+                                        // Actualización optimista local - actualiza y reordena
+                                        setAllPortfolios(prevPortfolios => {
+                                            const updated = prevPortfolios.map(p =>
+                                                p.id === updatedPortfolio.id ? updatedPortfolio : p
+                                            );
+                                            // Reordenar: destacados primero, luego por creación
+                                            return updated.sort((a, b) => {
+                                                if (a.is_featured && !b.is_featured) return -1;
+                                                if (!a.is_featured && b.is_featured) return 1;
+                                                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                                                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                                                return dateB - dateA;
+                                            });
+                                        });
+                                    }
+
+                                    // Sincronización silenciosa en background (sin mostrar loading)
+                                    // Solo sincronizar si NO es solo un cambio de is_featured
+                                    const isOnlyFeaturedChange = updatedPortfolio !== null &&
+                                        updatedPortfolio.id === portfolio.id &&
+                                        updatedPortfolio.is_featured !== portfolio.is_featured &&
+                                        updatedPortfolio.is_published === portfolio.is_published;
+
+                                    if (!isOnlyFeaturedChange) {
+                                        // Cancela sincronización anterior si hay otra actualización
+                                        if (syncTimeoutRef.current) {
+                                            clearTimeout(syncTimeoutRef.current);
+                                        }
+
+                                        syncTimeoutRef.current = setTimeout(async () => {
+                                            try {
+                                                // Recargar todos los portfolios del servidor
+                                                const result = await getStudioPortfoliosBySlug(studioSlug, undefined);
+                                                if (result.success && result.data) {
+                                                    // Actualizar con datos del servidor y asegurar orden correcto
+                                                    const sortedPortfolios = result.data.sort((a, b) => {
+                                                        if (a.is_featured && !b.is_featured) return -1;
+                                                        if (!a.is_featured && b.is_featured) return 1;
+                                                        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                                                        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                                                        return dateB - dateA;
+                                                    });
+                                                    setAllPortfolios(sortedPortfolios);
+                                                }
+                                            } catch (error) {
+                                                // Fallar silenciosamente, la UI ya está actualizada
+                                                console.error("Error sincronizando portfolios:", error);
+                                            }
+                                            syncTimeoutRef.current = null;
+                                        }, 2000);
+                                    }
+                                }}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Paginación */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+                            <div className="text-sm text-zinc-400">
+                                Mostrando {paginatedPortfolios.length} de {filteredPortfolios.length} portfolios
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <ZenButton
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={currentPage === 1}
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </ZenButton>
+
+                                <div className="flex items-center gap-1">
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                        <button
+                                            key={page}
+                                            onClick={() => setCurrentPage(page)}
+                                            className={`px-3 py-1 text-sm rounded-md transition-colors ${currentPage === page
+                                                ? 'bg-emerald-500 text-white'
+                                                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                                                }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <ZenButton
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </ZenButton>
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
         </div>
     );
 }
-

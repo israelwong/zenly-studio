@@ -313,12 +313,28 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
             display_order: item.display_order ?? index,
         }));
 
+        // Calcular cover_image_url desde media si cover_image_url está vacío
+        let coverImageUrl = formData.cover_image_url;
+
+        if (!coverImageUrl && mappedMedia.length > 0) {
+            const coverIndex = Math.min(formData.cover_index || 0, mappedMedia.length - 1);
+            const coverMedia = mappedMedia[coverIndex];
+
+            if (coverMedia) {
+                // Si es video, usar thumbnail_url; si es imagen, usar file_url
+                coverImageUrl = coverMedia.file_type === 'video'
+                    ? (coverMedia.thumbnail_url || coverMedia.file_url)
+                    : coverMedia.file_url;
+            }
+        }
+
         // Crear un portfolio temporal para el preview (siempre marcado como publicado para preview)
         const tempPortfolio = {
             id: tempCuid,
             title: formData.title,
             slug: formData.slug || generateSlug(formData.title || ""),
             description: formData.description,
+            caption: formData.caption,
             tags: formData.tags,
             is_featured: formData.is_featured,
             is_published: true, // Siempre true para preview
@@ -326,6 +342,7 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
             view_count: 0,
             media: mappedMedia,
             cover_index: formData.cover_index,
+            cover_image_url: coverImageUrl,
             content_blocks: contentBlocks, // Agregar bloques de contenido
         };
 

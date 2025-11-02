@@ -323,6 +323,7 @@ export function ImageGrid({
                         : 'scale-100'
                     } transition-all duration-300 ease-out`}
                 {...(isEditable ? { ...attributes, ...listeners } : {})}
+                suppressHydrationWarning
                 onMouseDown={(e) => {
                     // Si el click es en el botón eliminar, no iniciar drag
                     if (e.target instanceof HTMLElement && e.target.closest('button[title="Eliminar imagen"]')) {

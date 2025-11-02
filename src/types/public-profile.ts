@@ -76,6 +76,7 @@ export interface PublicPortfolio {
     description: string | null;
     cover_image_url: string | null;
     category: string | null;
+    tags?: string[];
     order: number;
     items: PublicPortfolioItem[];
 }

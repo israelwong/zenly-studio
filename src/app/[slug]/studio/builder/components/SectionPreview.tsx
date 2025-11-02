@@ -47,7 +47,7 @@ function PortafolioPreview({ data, loading = false }: { data?: Record<string, un
             showNavbar={true}
             showContent={true}
             activeTab="portafolio"
-            contentVariant="posts"
+            contentVariant="portfolio"
         />
     );
 }
@@ -122,6 +122,7 @@ export function SectionPreview({ section, studioSlug, data, loading = false }: S
         case 'contacto':
             return <ContactoPreview data={data} loading={loading} />;
         case 'portafolio':
+        case 'portfolios': // Soporte para ambos nombres
             return <PortafolioPreview data={data} loading={loading} />;
         case 'catalogo':
             return <CatalogoPreview data={data} loading={loading} />;

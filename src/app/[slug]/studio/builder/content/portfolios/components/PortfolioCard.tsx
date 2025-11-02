@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import Link from "next/link";
-import { ZenButton, ZenCard } from "@/components/ui/zen";
+import { useRouter } from "next/navigation";
+import { ZenCard, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from "@/components/ui/zen";
 import {
     Edit,
     Trash2,
@@ -11,11 +11,15 @@ import {
     EyeOff,
     Star,
     Calendar,
-    MoreVertical
+    MoreVertical,
+    ImageIcon,
+    Video,
+    Grid3X3
 } from "lucide-react";
 import {
     deleteStudioPortfolio,
-    toggleStudioPortfolioPublish
+    toggleStudioPortfolioPublish,
+    updateStudioPortfolio
 } from "@/lib/actions/studio/builder/portfolios/portfolios.actions";
 import { toast } from "sonner";
 import { MediaItem } from "@/lib/actions/schemas/post-schemas";
@@ -24,24 +28,34 @@ import { StudioPortfolio } from "@/types/studio-portfolios";
 interface PortfolioCardProps {
     portfolio: StudioPortfolio;
     studioSlug: string;
-    onUpdate: () => void;
+    onUpdate: (updatedPortfolio: StudioPortfolio | null) => void; // null para eliminación
 }
 
 export function PortfolioCard({ portfolio, studioSlug, onUpdate }: PortfolioCardProps) {
+    const router = useRouter();
     const [isDeleting, setIsDeleting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
+    const [isTogglingFeatured, setIsTogglingFeatured] = useState(false);
+    const [localPortfolio, setLocalPortfolio] = useState<StudioPortfolio>(portfolio);
 
-    const handleDelete = async () => {
+    // Sincronizar portfolio local cuando cambia el prop
+    useEffect(() => {
+        setLocalPortfolio(portfolio);
+    }, [portfolio]);
+
+    const handleDelete = async (e: React.MouseEvent) => {
+        e.stopPropagation();
         if (!confirm("¿Estás seguro de que quieres eliminar este portfolio?")) {
             return;
         }
 
         setIsDeleting(true);
         try {
-            const result = await deleteStudioPortfolio(portfolio.id);
+            const result = await deleteStudioPortfolio(localPortfolio.id);
             if (result.success) {
                 toast.success("Portfolio eliminado");
-                onUpdate();
+                // Notificar eliminación (null = eliminar)
+                onUpdate(null);
             } else {
                 toast.error(result.error || "Error al eliminar portfolio");
             }
@@ -52,139 +66,410 @@ export function PortfolioCard({ portfolio, studioSlug, onUpdate }: PortfolioCard
         }
     };
 
-    const handleTogglePublish = async () => {
+    const handleTogglePublish = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        // Actualización optimista
+        const newPublishedState = !localPortfolio.is_published;
+        const optimisticPortfolio: StudioPortfolio = {
+            ...localPortfolio,
+            is_published: newPublishedState,
+            // Si se despublica y está destacado, quitar también el destacado
+            is_featured: newPublishedState ? localPortfolio.is_featured : false
+        };
+        setLocalPortfolio(optimisticPortfolio);
+        onUpdate(optimisticPortfolio);
+
         setIsToggling(true);
         try {
-            const result = await toggleStudioPortfolioPublish(portfolio.id);
+            const result = await toggleStudioPortfolioPublish(localPortfolio.id);
             if (result.success) {
                 toast.success(
-                    portfolio.is_published ? "Portfolio despublicado" : "Portfolio publicado"
+                    newPublishedState ? "Portfolio publicado" : "Portfolio despublicado"
                 );
-                onUpdate();
+                // La actualización optimista ya aplicó el cambio
+                // PortfoliosList recargará desde el servidor en background para sincronización completa
             } else {
+                // Revertir en caso de error
+                setLocalPortfolio(portfolio);
+                onUpdate(portfolio);
                 toast.error(result.error || "Error al cambiar estado");
             }
         } catch (error) {
+            // Revertir en caso de error
+            setLocalPortfolio(portfolio);
+            onUpdate(portfolio);
             toast.error("Error al cambiar estado");
         } finally {
             setIsToggling(false);
         }
     };
 
+    const handleToggleFeatured = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        // Actualización optimista
+        const newFeaturedState = !localPortfolio.is_featured;
+        const optimisticPortfolio: StudioPortfolio = {
+            ...localPortfolio,
+            is_featured: newFeaturedState,
+            // Si se destaca un portfolio no publicado, publicarlo automáticamente
+            // Si se quita el destacado, mantener el estado de publicación actual
+            is_published: newFeaturedState && !localPortfolio.is_published
+                ? true
+                : localPortfolio.is_published,
+            published_at: newFeaturedState && !localPortfolio.is_published
+                ? new Date()
+                : localPortfolio.published_at
+        };
+        setLocalPortfolio(optimisticPortfolio);
+        onUpdate(optimisticPortfolio);
+
+        setIsTogglingFeatured(true);
+        try {
+            const result = await updateStudioPortfolio(localPortfolio.id, {
+                is_featured: newFeaturedState
+            });
+            if (result.success) {
+                // Si se destacó un portfolio no publicado, mencionar que se publicó automáticamente
+                if (newFeaturedState && !localPortfolio.is_published) {
+                    toast.success("Portfolio destacado y publicado automáticamente");
+                } else {
+                    toast.success(
+                        newFeaturedState ? "Portfolio destacado" : "Portfolio desmarcado como destacado"
+                    );
+                }
+                // Actualizar con datos del servidor (que incluyen la publicación automática si aplica)
+                if (result.data) {
+                    setLocalPortfolio(result.data as StudioPortfolio);
+                    onUpdate(result.data as StudioPortfolio);
+                }
+            } else {
+                // Revertir en caso de error
+                setLocalPortfolio(portfolio);
+                onUpdate(portfolio);
+                toast.error(result.error || "Error al cambiar destacado");
+            }
+        } catch (error) {
+            // Revertir en caso de error
+            setLocalPortfolio(portfolio);
+            onUpdate(portfolio);
+            toast.error("Error al cambiar destacado");
+        } finally {
+            setIsTogglingFeatured(false);
+        }
+    };
+
     const getCoverImage = () => {
-        if (!portfolio.media || portfolio.media.length === 0) {
+        if (!localPortfolio.media || localPortfolio.media.length === 0) {
             // Intentar usar cover_image_url si está disponible
-            if (portfolio.cover_image_url) {
-                return { url: portfolio.cover_image_url, thumbnail_url: portfolio.cover_image_url } as MediaItem;
+            if (localPortfolio.cover_image_url) {
+                return { url: localPortfolio.cover_image_url, thumbnail_url: localPortfolio.cover_image_url, file_type: 'image' as const } as MediaItem;
             }
             return null;
         }
-        const media = Array.isArray(portfolio.media) ? portfolio.media : [];
-        const coverIndex = Math.min(portfolio.cover_index || 0, media.length - 1);
+        const media = Array.isArray(localPortfolio.media) ? localPortfolio.media : [];
+        const coverIndex = Math.min(localPortfolio.cover_index || 0, media.length - 1);
         return media[coverIndex];
     };
 
     const coverImage = getCoverImage();
 
-    return (
-        <ZenCard className="overflow-hidden">
-            {/* Cover Image */}
-            <div className="aspect-square relative bg-zinc-800">
-                {coverImage ? (
-                    <Image
-                        src={coverImage.thumbnail_url || coverImage.file_url || coverImage.url || ""}
-                        alt={portfolio.title || "Portfolio"}
-                        fill
-                        className="object-cover"
-                    />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                        <Calendar className="w-12 h-12" />
-                    </div>
-                )}
+    // Para videos, siempre usar thumbnail_url como prioridad (frame 1)
+    // Para imágenes, usar thumbnail_url si existe, sino file_url
+    const imageUrl = coverImage
+        ? (coverImage.file_type === 'video'
+            ? coverImage.thumbnail_url || null
+            : (coverImage.thumbnail_url || coverImage.file_url || (coverImage as { url?: string }).url))
+        : null;
+    const isValidImageUrl = imageUrl && imageUrl.trim() !== "";
 
-                {/* Status Badges */}
-                <div className="absolute top-2 left-2 flex gap-1">
-                    {portfolio.is_featured && (
-                        <div className="px-2 py-1 bg-yellow-500 text-black text-xs font-medium rounded">
-                            <Star className="w-3 h-3 inline mr-1" />
-                            Destacado
-                        </div>
+    // Video ref para capturar frame 1 si no hay thumbnail_url
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null);
+
+    // Capturar frame 1 del video si no hay thumbnail_url
+    useEffect(() => {
+        if (coverImage?.file_type === 'video' && !coverImage.thumbnail_url && (coverImage.file_url || (coverImage as { url?: string }).url)) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+
+            if (!video || !canvas) return;
+
+            const captureFrame = () => {
+                try {
+                    video.currentTime = 0.1; // Ir al primer frame
+                    const onSeeked = () => {
+                        const ctx = canvas.getContext('2d');
+                        if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            setVideoThumbnail(dataUrl);
+                        }
+                    };
+                    video.addEventListener('seeked', onSeeked, { once: true });
+                } catch (error) {
+                    console.error('Error capturing video frame:', error);
+                }
+            };
+
+            video.addEventListener('loadedmetadata', captureFrame, { once: true });
+            video.load();
+
+            return () => {
+                video.removeEventListener('loadedmetadata', captureFrame);
+            };
+        }
+    }, [coverImage?.file_type, coverImage?.file_url, coverImage?.thumbnail_url]);
+
+    // Formatear fecha de publicación
+    const publishedDate = localPortfolio.published_at
+        ? new Date(localPortfolio.published_at).toLocaleDateString('es-ES', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        })
+        : null;
+
+    const handleCardClick = () => {
+        router.push(`/${studioSlug}/studio/builder/content/portfolios/${localPortfolio.id}/editar`);
+    };
+
+    // Mostrar hasta 3 tags, si hay más mostrar +
+    const visibleTags = localPortfolio.tags?.slice(0, 3) || [];
+    const remainingTagsCount = localPortfolio.tags && localPortfolio.tags.length > 3 ? localPortfolio.tags.length - 3 : 0;
+
+    return (
+        <ZenCard
+            className="overflow-hidden hover:bg-zinc-800/50 transition-colors cursor-pointer relative"
+            onClick={handleCardClick}
+        >
+            <div className="flex gap-4 p-4">
+                {/* Columna 1: Portada */}
+                <div className="relative w-32 h-32 flex-shrink-0 bg-zinc-800 rounded-lg overflow-hidden">
+                    {/* Video oculto para capturar frame si no hay thumbnail_url */}
+                    {coverImage?.file_type === 'video' && !coverImage.thumbnail_url && (coverImage.file_url || (coverImage as { url?: string }).url) && (
+                        <>
+                            <video
+                                ref={videoRef}
+                                src={coverImage.file_url || (coverImage as { url?: string }).url}
+                                className="hidden"
+                                preload="metadata"
+                                muted
+                                crossOrigin="anonymous"
+                            />
+                            <canvas ref={canvasRef} className="hidden" />
+                        </>
                     )}
-                    {portfolio.is_published ? (
-                        <div className="px-2 py-1 bg-emerald-500 text-white text-xs font-medium rounded">
-                            <Eye className="w-3 h-3 inline mr-1" />
-                            Publicado
-                        </div>
+
+                    {coverImage?.file_type === 'video' ? (
+                        // Video: usar thumbnail_url o frame capturado
+                        (coverImage.thumbnail_url || videoThumbnail) ? (
+                            <>
+                                <Image
+                                    src={coverImage.thumbnail_url || videoThumbnail!}
+                                    alt={localPortfolio.title || "Portfolio"}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized={!!videoThumbnail}
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                    <Video className="w-6 h-6 text-white" />
+                                </div>
+                            </>
+                        ) : (
+                            // Fallback mientras carga/captura frame
+                            <div className="w-full h-full flex items-center justify-center bg-black/50">
+                                <Video className="w-6 h-6 text-white" />
+                            </div>
+                        )
+                    ) : isValidImageUrl ? (
+                        // Imagen normal
+                        <Image
+                            src={imageUrl!}
+                            alt={localPortfolio.title || "Portfolio"}
+                            fill
+                            className="object-cover"
+                        />
                     ) : (
-                        <div className="px-2 py-1 bg-zinc-600 text-white text-xs font-medium rounded">
-                            <EyeOff className="w-3 h-3 inline mr-1" />
-                            Borrador
+                        <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                            <Grid3X3 className="w-8 h-8" />
                         </div>
                     )}
+
+                    {/* Badge cantidad de media */}
+                    {localPortfolio.media && Array.isArray(localPortfolio.media) && localPortfolio.media.length > 0 && (() => {
+                        const videoCount = localPortfolio.media.filter(m => m.file_type === 'video').length;
+                        const imageCount = localPortfolio.media.filter(m => m.file_type === 'image').length;
+                        const isOnlyVideo = videoCount > 0 && imageCount === 0;
+                        const isOnlyImage = imageCount > 0 && videoCount === 0;
+
+                        let label = '';
+                        if (isOnlyVideo) {
+                            label = localPortfolio.media.length === 1 ? 'video' : 'videos';
+                        } else if (isOnlyImage) {
+                            label = localPortfolio.media.length === 1 ? 'foto' : 'fotos';
+                        } else {
+                            label = localPortfolio.media.length === 1 ? 'archivo' : 'archivos';
+                        }
+
+                        return (
+                            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-xs rounded">
+                                {localPortfolio.media.length} {label}
+                            </div>
+                        );
+                    })()}
                 </div>
 
-                {/* Media Count */}
-                {portfolio.media && Array.isArray(portfolio.media) && portfolio.media.length > 1 && (
-                    <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded">
-                        {portfolio.media.length} fotos
-                    </div>
-                )}
-            </div>
+                {/* Columna 2: Contenido */}
+                <div className="flex-1 min-w-0 flex flex-col gap-2">
+                    {/* Línea 1: Publicado - Fecha [dot] Vistas [menu modal] */}
+                    <div className="flex items-center gap-2">
+                        {/* Estado publicado */}
+                        <span className="text-xs text-zinc-400">
+                            {localPortfolio.is_published ? 'Publicado' : 'No publicado'}
+                        </span>
 
-            {/* Content */}
-            <div className="p-4 space-y-3">
-                {/* Title */}
-                <div>
-                    <h3 className="font-medium text-zinc-100 line-clamp-2">
-                        {portfolio.title || "Sin título"}
+                        {/* Indicador de destacado */}
+                        {localPortfolio.is_featured && (
+                            <span title="Portfolio destacado" className="flex items-center">
+                                <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                            </span>
+                        )}
+
+                        {/* Separador y fecha de publicación - mostrar siempre si existe */}
+                        {publishedDate && (
+                            <>
+                                <span className="text-zinc-600">—</span>
+                                <span className="text-xs text-zinc-500">{publishedDate}</span>
+                            </>
+                        )}
+
+                        {/* Espaciado para dot */}
+                        <span className="w-2" />
+
+                        {/* Dot status de publicación */}
+                        <div
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${localPortfolio.is_published ? 'bg-emerald-500' : 'bg-zinc-500'
+                                }`}
+                            title={localPortfolio.is_published ? 'Publicado' : 'No publicado'}
+                        />
+
+                        {/* Separador */}
+                        <span className="text-zinc-700">—</span>
+
+                        {/* Vistas */}
+                        <span className="text-xs text-zinc-500 whitespace-nowrap">
+                            {localPortfolio.view_count || 0} {localPortfolio.view_count === 1 ? 'vista' : 'vistas'}
+                        </span>
+
+                        {/* Menú de acciones - Alineado a la derecha */}
+                        <div className="ml-auto">
+                            <ZenDropdownMenu>
+                                <ZenDropdownMenuTrigger
+                                    asChild
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <button
+                                        className="p-1 hover:bg-zinc-700/50 rounded transition-colors ml-auto"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <MoreVertical className="w-4 h-4 text-zinc-400" />
+                                    </button>
+                                </ZenDropdownMenuTrigger>
+                                <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                    <ZenDropdownMenuItem
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCardClick();
+                                        }}
+                                    >
+                                        <Edit className="w-4 h-4 mr-2" />
+                                        Editar
+                                    </ZenDropdownMenuItem>
+
+                                    <ZenDropdownMenuItem
+                                        onClick={handleTogglePublish}
+                                        disabled={isToggling}
+                                    >
+                                        {localPortfolio.is_published ? (
+                                            <>
+                                                <EyeOff className="w-4 h-4 mr-2" />
+                                                No publicar
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Eye className="w-4 h-4 mr-2" />
+                                                Publicar
+                                            </>
+                                        )}
+                                    </ZenDropdownMenuItem>
+
+                                    <ZenDropdownMenuItem
+                                        onClick={handleToggleFeatured}
+                                        disabled={isTogglingFeatured}
+                                    >
+                                        <Star className={`w-4 h-4 mr-2 ${localPortfolio.is_featured ? 'text-amber-400' : ''}`} />
+                                        {localPortfolio.is_featured ? 'Quitar destacado' : 'Destacar'}
+                                    </ZenDropdownMenuItem>
+
+                                    <ZenDropdownMenuSeparator />
+
+                                    <ZenDropdownMenuItem
+                                        onClick={handleDelete}
+                                        disabled={isDeleting}
+                                        className="text-red-400 focus:text-red-300"
+                                    >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Eliminar
+                                    </ZenDropdownMenuItem>
+                                </ZenDropdownMenuContent>
+                            </ZenDropdownMenu>
+                        </div>
+                    </div>
+
+                    {/* Línea 2: Título */}
+                    <h3 className="font-medium text-zinc-100 line-clamp-1">
+                        {localPortfolio.title || "Sin título"}
                     </h3>
-                    {(portfolio.caption || portfolio.description) && (
-                        <p className="text-sm text-zinc-400 line-clamp-2 mt-1">
-                            {portfolio.caption || portfolio.description}
+
+                    {/* Línea 3: Descripción */}
+                    {(localPortfolio.description || localPortfolio.caption) && (
+                        <p className="text-sm text-zinc-400 line-clamp-2">
+                            {localPortfolio.description || localPortfolio.caption}
                         </p>
                     )}
-                </div>
 
-                {/* Meta Info */}
-                <div className="flex items-center justify-between text-xs text-zinc-500">
-                    <span className="capitalize">{portfolio.category || "portfolio"}</span>
-                    <span>{new Date(portfolio.created_at).toLocaleDateString()}</span>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                    <Link href={`/${studioSlug}/studio/builder/content/portfolios/${portfolio.id}/editar`}>
-                        <ZenButton size="sm" variant="secondary" className="flex-1">
-                            <Edit className="w-4 h-4 mr-2" />
-                            Editar
-                        </ZenButton>
-                    </Link>
-
-                    <ZenButton
-                        size="sm"
-                        variant="secondary"
-                        onClick={handleTogglePublish}
-                        disabled={isToggling}
-                    >
-                        {portfolio.is_published ? (
-                            <EyeOff className="w-4 h-4" />
-                        ) : (
-                            <Eye className="w-4 h-4" />
+                    {/* Línea 4: Categoría y Tags */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {localPortfolio.category && (
+                            <span className="text-xs text-zinc-500 capitalize">
+                                {localPortfolio.category}
+                            </span>
                         )}
-                    </ZenButton>
-
-                    <ZenButton
-                        size="sm"
-                        variant="destructive"
-                        onClick={handleDelete}
-                        disabled={isDeleting}
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </ZenButton>
+                        {visibleTags.length > 0 && (
+                            <>
+                                {localPortfolio.category && <span className="text-zinc-600">—</span>}
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    {visibleTags.map((tag, index) => (
+                                        <span key={index} className="text-xs text-zinc-500">
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                    {remainingTagsCount > 0 && (
+                                        <span className="text-xs text-zinc-500 font-medium">
+                                            +{remainingTagsCount}
+                                        </span>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         </ZenCard>
     );
 }
-

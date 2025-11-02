@@ -9,11 +9,11 @@ export const mediaItemSchema = z.object({
     filename: z.string(),
     storage_bytes: z.number().optional(),
     mime_type: z.string().optional(),
-    dimensions: z.object({ width: z.number(), height: z.number() }).optional(),
+    dimensions: z.object({ width: z.number(), height: z.number() }).optional().nullable(),
     duration_seconds: z.number().optional(),
     display_order: z.number().optional(),
     alt_text: z.string().optional(),
-    thumbnail_url: z.string().url().optional(),
+    thumbnail_url: z.string().url().optional().nullable(),
     storage_path: z.string(),
     // Propiedades adicionales para compatibilidad
     url: z.string().url().optional(), // Alias para file_url
