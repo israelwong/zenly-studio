@@ -37,9 +37,9 @@ export function PortfoliosList({ studioSlug, onPortfoliosChange }: PortfoliosLis
         return allPortfolios.filter((portfolio) => {
             if (filter === "all") return true;
             if (filter === "published") return portfolio.is_published === true;
-            if (filter === "unpublished") return portfolio.is_published === false;
+            if (filter === "unpublished") return portfolio.is_published === false && portfolio.published_at !== null;
             if (filter === "featured") return portfolio.is_featured === true;
-            if (filter === "draft") return portfolio.is_published === false && !portfolio.is_featured;
+            if (filter === "draft") return portfolio.is_published === false && portfolio.published_at === null;
             return true;
         });
     }, [allPortfolios, filter]);
@@ -163,7 +163,14 @@ export function PortfoliosList({ studioSlug, onPortfoliosChange }: PortfoliosLis
                     {filterOptions.map((option) => (
                         <button
                             key={option.value}
-                            onClick={() => setFilter(option.value)}
+                            onClick={() => {
+                                // Toggle: si el filtro ya está activo, volver a "all"
+                                if (filter === option.value) {
+                                    setFilter("all");
+                                } else {
+                                    setFilter(option.value);
+                                }
+                            }}
                             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap flex-shrink-0 ${filter === option.value
                                 ? 'bg-emerald-500 text-white'
                                 : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'

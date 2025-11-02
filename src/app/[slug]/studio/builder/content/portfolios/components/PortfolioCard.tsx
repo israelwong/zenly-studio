@@ -273,6 +273,7 @@ export function PortfolioCard({ portfolio, studioSlug, onUpdate, onDuplicatingSt
             const duplicatedSlug = generateSlug(duplicatedTitle);
 
             // Crear el portfolio duplicado
+            // Asegurar que sea borrador: is_published = false y published_at = null
             const duplicateData = {
                 title: duplicatedTitle,
                 slug: duplicatedSlug,
@@ -285,7 +286,7 @@ export function PortfolioCard({ portfolio, studioSlug, onUpdate, onDuplicatingSt
                 event_type_id: sourcePortfolio.event_type_id || null,
                 tags: sourcePortfolio.tags || [],
                 is_featured: false, // La copia no está destacada
-                is_published: false, // La copia no está publicada
+                is_published: false, // La copia siempre será borrador (no publicada)
                 content_blocks: duplicatedContentBlocks,
                 order: 0,
             };
@@ -500,10 +501,26 @@ export function PortfolioCard({ portfolio, studioSlug, onUpdate, onDuplicatingSt
                 <div className="flex-1 min-w-0 flex flex-col gap-2">
                     {/* Línea 1: Publicado - Fecha [dot] Vistas [menu modal] */}
                     <div className="flex items-center gap-2">
+                        {/* Indicador de borrador */}
+                        {!localPortfolio.is_published && !localPortfolio.published_at && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-700/50 text-zinc-300 border border-zinc-600">
+                                Borrador
+                            </span>
+                        )}
+                        
                         {/* Estado publicado */}
-                        <span className="text-xs text-zinc-400">
-                            {localPortfolio.is_published ? 'Publicado' : 'No publicado'}
-                        </span>
+                        {localPortfolio.is_published && (
+                            <span className="text-xs text-zinc-400">
+                                Publicado
+                            </span>
+                        )}
+                        
+                        {/* Estado despublicado (tenía published_at pero ahora is_published es false) */}
+                        {!localPortfolio.is_published && localPortfolio.published_at && (
+                            <span className="text-xs text-zinc-400">
+                                Despublicado
+                            </span>
+                        )}
 
                         {/* Indicador de destacado */}
                         {localPortfolio.is_featured && (

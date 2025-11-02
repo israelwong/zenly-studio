@@ -61,6 +61,7 @@ function convertDatabasePortfolioToFormData(dbPortfolio: DatabasePortfolio): Por
         is_published: dbPortfolio.is_published,
         content_blocks: contentBlocks,
         order: dbPortfolio.order,
+        published_at: dbPortfolio.published_at, // Incluir published_at para determinar estado
     };
 }
 

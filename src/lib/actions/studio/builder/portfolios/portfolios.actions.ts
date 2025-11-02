@@ -24,8 +24,38 @@ function generateSlug(title: string): string {
         .replace(/(^-|-$)/g, "");
 }
 
+// Validar si un slug existe en el studio (excluyendo un portfolio específico si se proporciona)
+export async function checkPortfolioSlugExists(studioSlug: string, slug: string, excludePortfolioId?: string): Promise<boolean> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
+        });
+
+        if (!studio) {
+            return false;
+        }
+
+        const existing = await prisma.studio_portfolios.findUnique({
+            where: {
+                studio_id_slug: {
+                    studio_id: studio.id,
+                    slug: slug,
+                },
+            },
+            select: { id: true },
+        });
+
+        // Si no existe, o si existe pero es el mismo portfolio que estamos editando, no hay conflicto
+        return !!(existing && (!excludePortfolioId || existing.id !== excludePortfolioId));
+    } catch (error) {
+        console.error('Error checking portfolio slug:', error);
+        return false;
+    }
+}
+
 // Helper para generar slug único verificando en BD
-async function generateUniqueSlug(studioId: string, baseSlug: string): Promise<string> {
+async function generateUniqueSlug(studioId: string, baseSlug: string, excludePortfolioId?: string): Promise<string> {
     let slug = baseSlug;
     let counter = 1;
     
@@ -40,11 +70,12 @@ async function generateUniqueSlug(studioId: string, baseSlug: string): Promise<s
             select: { id: true },
         });
         
-        if (!existing) {
+        // Si no existe, o si existe pero es el mismo portfolio que estamos editando, es válido
+        if (!existing || (excludePortfolioId && existing.id === excludePortfolioId)) {
             return slug;
         }
         
-        // Si existe, agregar número al final
+        // Si existe otro portfolio con ese slug, agregar número al final
         slug = `${baseSlug}-${counter}`;
         counter++;
         
@@ -524,24 +555,65 @@ export async function updateStudioPortfolio(
             return { success: false, error: "Portfolio no encontrado" };
         }
 
-        // Obtener studio_id del portfolio existente
+        // Obtener studio_id y published_at del portfolio existente
         const portfolioWithStudio = await prisma.studio_portfolios.findUnique({
             where: { id: portfolioId },
-            select: { studio_id: true },
+            select: { 
+                studio_id: true,
+                published_at: true,
+            },
         });
 
         if (!portfolioWithStudio) {
             return { success: false, error: "Portfolio no encontrado" };
         }
 
+        // Si se actualiza el slug, validar que sea único (excluyendo el portfolio actual)
+        let finalSlug = validatedData.slug;
+        if (validatedData.slug) {
+            finalSlug = await generateUniqueSlug(portfolioWithStudio.studio_id, validatedData.slug, portfolioId);
+        }
+
         // Aumentar timeout de transacción para portfolios complejos con muchos bloques
         const portfolio = await prisma.$transaction(async (tx) => {
+            // Verificar slug único dentro de la transacción (evita race conditions)
+            let transactionSlug = finalSlug;
+            if (finalSlug) {
+                let counter = 1;
+                while (true) {
+                    const existing = await tx.studio_portfolios.findUnique({
+                        where: {
+                            studio_id_slug: {
+                                studio_id: portfolioWithStudio.studio_id,
+                                slug: transactionSlug,
+                            },
+                        },
+                        select: { id: true },
+                    });
+                    
+                    // Si no existe, o si existe pero es el mismo portfolio que estamos editando, es válido
+                    if (!existing || existing.id === portfolioId) {
+                        break;
+                    }
+                    
+                    // Si existe otro portfolio, agregar número al final
+                    const baseSlug = validatedData.slug || "";
+                    transactionSlug = `${baseSlug}-${counter}`;
+                    counter++;
+                    
+                    if (counter > 1000) {
+                        transactionSlug = `${baseSlug}-${Date.now()}`;
+                        break;
+                    }
+                }
+            }
+
             // Actualizar portfolio base
             const updatedPortfolio = await tx.studio_portfolios.update({
                 where: { id: portfolioId },
                 data: {
                     title: validatedData.title,
-                    slug: validatedData.slug || undefined,
+                    slug: transactionSlug || undefined,
                     description: validatedData.description ?? undefined,
                     caption: validatedData.caption ?? undefined,
                     cover_image_url: validatedData.cover_image_url ?? undefined,
@@ -551,7 +623,11 @@ export async function updateStudioPortfolio(
                     tags: validatedData.tags,
                     is_featured: validatedData.is_featured,
                     is_published: validatedData.is_published,
-                    published_at: validatedData.is_published ? new Date() : undefined,
+                    published_at: validatedData.is_published 
+                        ? new Date() 
+                        : validatedData.is_published === false 
+                            ? portfolioWithStudio.published_at ?? null // Preservar fecha histórica al despublicar
+                            : undefined,
                     order: validatedData.order,
                     updated_at: new Date(),
                 },

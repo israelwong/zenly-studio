@@ -10,12 +10,13 @@ import { obtenerIdentidadStudio } from "@/lib/actions/studio/builder/identidad.a
 import {
     getStudioPortfoliosBySlug,
     createStudioPortfolioFromSlug,
-    updateStudioPortfolioFromSlug
+    updateStudioPortfolioFromSlug,
+    checkPortfolioSlugExists
 } from "@/lib/actions/studio/builder/portfolios/portfolios.actions";
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
 import { useTempCuid } from "@/hooks/useTempCuid";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, X, Star, Upload, HardDrive } from "lucide-react";
+import { ArrowLeft, Plus, X, Star, Upload, HardDrive, Loader2, Copy, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import cuid from "cuid";
 import Image from "next/image";
@@ -23,10 +24,15 @@ import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { calculateTotalStorage, formatBytes } from "@/lib/utils/storage";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 
+// Tipo extendido que incluye published_at para determinar estado
+type PortfolioWithStatus = PortfolioFormData & {
+    published_at?: Date | null;
+};
+
 interface PortfolioEditorProps {
     studioSlug: string;
     mode: "create" | "edit";
-    portfolio?: PortfolioFormData;
+    portfolio?: PortfolioWithStatus;
 }
 
 interface PortfolioItem {
@@ -63,6 +69,13 @@ function generateSlug(title: string): string {
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
+}
+
+// Helper para determinar estado del portfolio
+function getPortfolioStatus(portfolio: { is_published: boolean; published_at: Date | null }): "draft" | "published" | "unpublished" {
+    if (portfolio.is_published && portfolio.published_at) return "published";
+    if (!portfolio.is_published && portfolio.published_at) return "unpublished";
+    return "draft"; // !is_published && !published_at
 }
 
 // Componente para inyectar botones entre cada bloque renderizado por ContentBlocksEditor
@@ -212,7 +225,7 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
         cover_index: portfolio?.cover_index || 0,
         tags: portfolio?.tags || [],
         is_featured: portfolio?.is_featured || false,
-        is_published: portfolio?.is_published ?? true,
+        is_published: portfolio?.is_published ?? false,
         content_blocks: portfolio?.content_blocks || [],
         order: portfolio?.order || 0,
     });
@@ -230,6 +243,27 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
         normalizeBlocks(portfolio?.content_blocks || [])
     );
 
+    // Estado del portfolio (draft/published/unpublished)
+    const portfolioStatus = useMemo(() => {
+        if (!portfolio) return "draft" as const;
+        const publishedAt: Date | null = portfolio.published_at ?? null;
+        return getPortfolioStatus({
+            is_published: portfolio.is_published,
+            published_at: publishedAt
+        });
+    }, [portfolio]);
+
+    const isDraft = portfolioStatus === "draft";
+    const isPublished = portfolioStatus === "published";
+
+    // Inicializar slugHint con slug existente si hay portfolio
+    useEffect(() => {
+        if (portfolio?.slug && mode === "edit") {
+            // Solo inicializar si no hay un hint ya establecido (para evitar sobrescribir validación)
+            setSlugHint(prev => prev || `Slug: ${portfolio.slug}`);
+        }
+    }, [portfolio?.slug, mode]);
+
     // Estado para preview
     const [previewData, setPreviewData] = useState<PreviewData | null>(null);
     const [isLoadingPreview, setIsLoadingPreview] = useState(true);
@@ -243,6 +277,10 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
     const [isUploadingCover, setIsUploadingCover] = useState(false);
     const [isDragOverCover, setIsDragOverCover] = useState(false);
     const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+    const [titleError, setTitleError] = useState<string | null>(null);
+    const [isValidatingSlug, setIsValidatingSlug] = useState(false);
+    const [slugHint, setSlugHint] = useState<string | null>(null);
+    const [linkCopied, setLinkCopied] = useState(false);
     const { uploadFiles } = useMediaUpload();
     const { triggerRefresh } = useStorageRefresh(studioSlug);
 
@@ -258,18 +296,77 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
         }
     }, []);
 
-    // Generar slug automáticamente cuando cambia el título
+    // Generar slug automáticamente cuando cambia el título (en ambos modos)
     useEffect(() => {
-        if (mode === "create" && formData.title && (!formData.slug || formData.slug === generateSlug(formData.title))) {
-            const newSlug = generateSlug(formData.title);
-            if (newSlug !== formData.slug) {
-                setFormData(prev => ({
-                    ...prev,
-                    slug: newSlug
-                }));
+        if (formData.title) {
+            const expectedSlug = generateSlug(formData.title);
+            // Actualizar slug si está vacío o si coincide con el generado desde el título actual
+            // (esto permite que se actualice cuando el título cambia)
+            if (!formData.slug || formData.slug === expectedSlug || formData.slug === generateSlug(portfolio?.title || "")) {
+                if (expectedSlug !== formData.slug) {
+                    setFormData(prev => ({
+                        ...prev,
+                        slug: expectedSlug
+                    }));
+                }
             }
         }
-    }, [formData.title, formData.slug, mode]);
+    }, [formData.title, formData.slug, mode, portfolio?.title]);
+
+    // Validar slug único cuando cambia el título o slug
+    useEffect(() => {
+        const validateSlug = async () => {
+            if (!formData.slug || !formData.slug.trim()) {
+                setTitleError(null);
+                setSlugHint(null);
+                setIsValidatingSlug(false);
+                return;
+            }
+
+            // Solo validar si el slug es diferente al original (o si es creación)
+            const currentSlug = portfolio?.slug || "";
+            if (mode === "edit" && formData.slug === currentSlug) {
+                setTitleError(null);
+                // Mostrar slug actual si es el mismo (ya inicializado)
+                setSlugHint(`Slug: ${formData.slug}`);
+                setIsValidatingSlug(false);
+                return;
+            }
+
+            setIsValidatingSlug(true);
+            setTitleError(null);
+            setSlugHint(null);
+
+            try {
+                const slugExists = await checkPortfolioSlugExists(
+                    studioSlug,
+                    formData.slug,
+                    mode === "edit" ? portfolio?.id : undefined
+                );
+
+                if (slugExists) {
+                    setTitleError("Los nombres de los portfolios deben ser únicos");
+                    setSlugHint(null);
+                } else {
+                    setTitleError(null);
+                    setSlugHint(`Slug: ${formData.slug}`);
+                }
+            } catch (error) {
+                console.error("Error validating slug:", error);
+                setTitleError(null);
+                setSlugHint(null);
+            } finally {
+                setIsValidatingSlug(false);
+            }
+        };
+
+        // Debounce para evitar demasiadas llamadas
+        const timeoutId = setTimeout(() => {
+            validateSlug();
+        }, 500);
+
+        return () => clearTimeout(timeoutId);
+    }, [formData.slug, formData.title, studioSlug, mode, portfolio?.slug, portfolio?.id]);
 
     // Cargar datos del estudio para preview
     useEffect(() => {
@@ -371,8 +468,8 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
 
     const handleInputChange = (field: keyof PortfolioFormData, value: string | boolean | number | string[] | null | ContentBlock[]) => {
         setFormData(prev => {
-            // Si cambia el título y estamos creando, actualizar slug automáticamente
-            if (field === "title" && mode === "create" && typeof value === "string") {
+            // Si cambia el título, actualizar slug automáticamente (tanto en create como edit)
+            if (field === "title" && typeof value === "string") {
                 return { ...prev, [field]: value, slug: generateSlug(value) };
             }
             return { ...prev, [field]: value };
@@ -427,7 +524,7 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
         }
     };
 
-    const handleSave = async () => {
+    const handleSave = async (shouldPublish: boolean) => {
         try {
             setIsSaving(true);
 
@@ -442,7 +539,13 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                 return;
             }
 
-            // Validación 2: Al menos un componente
+            // Validación 2: Slug único
+            if (titleError) {
+                toast.error("Los nombres de los portfolios deben ser únicos");
+                return;
+            }
+
+            // Validación 3: Al menos un componente
             if (!contentBlocks || contentBlocks.length === 0) {
                 toast.error("Agrega al menos un componente de contenido");
                 return;
@@ -458,6 +561,7 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
             // Preparar datos para guardar con ordenamiento preservado
             const portfolioData = {
                 ...formData,
+                is_published: shouldPublish,
                 // Asegurar que el cover_index esté dentro del rango válido
                 cover_index: formData.media && formData.media.length > 0
                     ? Math.min(formData.cover_index, formData.media.length - 1)
@@ -491,7 +595,21 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                 return;
             }
 
-            toast.success(mode === "create" ? "Portfolio creado exitosamente" : "Portfolio actualizado exitosamente");
+            let actionMessage: string;
+            if (shouldPublish) {
+                actionMessage = mode === "create"
+                    ? "Portfolio publicado exitosamente"
+                    : "Portfolio actualizado y publicado exitosamente";
+            } else {
+                // Solo mostrar mensaje de borrador si realmente es un borrador
+                actionMessage = mode === "create"
+                    ? "Borrador guardado exitosamente"
+                    : isDraft
+                        ? "Borrador actualizado exitosamente"
+                        : "Portfolio actualizado exitosamente";
+            }
+
+            toast.success(actionMessage);
 
             // Actualizar almacenamiento
             triggerRefresh();
@@ -762,12 +880,15 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                                 </ZenCardTitle>
 
                                 <div className="flex items-center gap-4">
-                                    {/* Switch de Publicado */}
-                                    <ZenSwitch
-                                        checked={formData.is_published}
-                                        onCheckedChange={(checked) => handleInputChange("is_published", checked)}
-                                        label="Publicado"
-                                    />
+                                    {/* Badge de Estado - Solo si NO está publicado */}
+                                    {!isPublished && (
+                                        <ZenBadge
+                                            variant={isDraft ? "secondary" : "success"}
+                                            className="capitalize"
+                                        >
+                                            {isDraft ? "Borrador" : "Despublicado"}
+                                        </ZenBadge>
+                                    )}
 
                                     {/* Botón de Destacar */}
                                     <ZenButton
@@ -847,21 +968,72 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                                 {/* Columnas 2-3: Título y Slug */}
                                 <div className="col-span-2 space-y-4">
                                     {/* Título */}
-                                    <ZenInput
-                                        label="Título"
-                                        value={formData.title || ""}
-                                        onChange={(e) => handleInputChange("title", e.target.value)}
-                                        placeholder="Título del portfolio"
-                                    />
+                                    <div>
+                                        <ZenInput
+                                            label="Título"
+                                            value={formData.title || ""}
+                                            onChange={(e) => handleInputChange("title", e.target.value)}
+                                            placeholder="Título del portfolio"
+                                            error={titleError ?? undefined}
+                                        />
+                                        {/* Indicador de validación y hint */}
+                                        {isValidatingSlug && !titleError && (
+                                            <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
+                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                Validando disponibilidad...
+                                            </p>
+                                        )}
+                                        {slugHint && !isValidatingSlug && !titleError && (
+                                            <p className="text-xs text-emerald-400 mt-1">
+                                                {slugHint}
+                                            </p>
+                                        )}
+                                    </div>
 
-                                    {/* Slug */}
-                                    <ZenInput
-                                        label="Slug (URL)"
-                                        value={formData.slug || ""}
-                                        placeholder="slug-del-portfolio"
-                                        hint="Se genera automáticamente desde el título. Solo lectura."
-                                        readOnly
-                                    />
+                                    {/* Controles de publicación y link */}
+                                    <div className="flex items-center justify-between gap-4 p-4 border border-zinc-800 rounded-md bg-zinc-900/50">
+                                        {/* Switch Publicado */}
+                                        <div className="flex items-center gap-3">
+                                            <ZenSwitch
+                                                checked={formData.is_published}
+                                                onCheckedChange={(checked) => handleInputChange("is_published", checked)}
+                                                label="Publicado"
+                                            />
+                                        </div>
+
+                                        {/* Botón Copiar Link */}
+                                        {formData.slug && (
+                                            <ZenButton
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={async () => {
+                                                    const portfolioUrl = `${window.location.origin}/${studioSlug}/portfolios/${formData.slug}`;
+                                                    try {
+                                                        await navigator.clipboard.writeText(portfolioUrl);
+                                                        setLinkCopied(true);
+                                                        toast.success("Link copiado al portapapeles");
+                                                        setTimeout(() => setLinkCopied(false), 2000);
+                                                    } catch {
+                                                        toast.error("Error al copiar el link");
+                                                    }
+                                                }}
+                                                className="gap-2"
+                                            >
+                                                {linkCopied ? (
+                                                    <>
+                                                        <Check className="h-4 w-4" />
+                                                        Copiado
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Copy className="h-4 w-4" />
+                                                        Copiar link
+                                                    </>
+                                                )}
+                                            </ZenButton>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -1032,23 +1204,80 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                             </div>
 
                             {/* Botones */}
-                            <div className="flex gap-3 pt-4">
-                                <ZenButton
-                                    onClick={handleSave}
-                                    className="flex-1"
-                                    loading={isSaving}
-                                    disabled={isSaving}
-                                >
-                                    {mode === "create" ? "Crear Portfolio" : "Actualizar Portfolio"}
-                                </ZenButton>
-                                <ZenButton
-                                    variant="outline"
-                                    onClick={handleCancel}
-                                    disabled={isSaving}
-                                >
-                                    Cancelar
-                                </ZenButton>
-                            </div>
+                            {mode === "create" ? (
+                                // Modo CREAR
+                                <div className="flex gap-3 pt-4">
+                                    <ZenButton
+                                        onClick={() => handleSave(true)}
+                                        className="flex-1"
+                                        loading={isSaving}
+                                        disabled={isSaving}
+                                    >
+                                        Publicar ahora
+                                    </ZenButton>
+                                    <ZenButton
+                                        variant="outline"
+                                        onClick={() => handleSave(false)}
+                                        loading={isSaving}
+                                        disabled={isSaving}
+                                    >
+                                        Guardar como borrador
+                                    </ZenButton>
+                                    <ZenButton
+                                        variant="outline"
+                                        onClick={handleCancel}
+                                        disabled={isSaving}
+                                    >
+                                        Cancelar
+                                    </ZenButton>
+                                </div>
+                            ) : isDraft ? (
+                                // Modo EDITAR - Borrador
+                                <div className="flex gap-3 pt-4">
+                                    <ZenButton
+                                        onClick={() => handleSave(true)}
+                                        className="flex-1"
+                                        loading={isSaving}
+                                        disabled={isSaving}
+                                    >
+                                        Publicar ahora
+                                    </ZenButton>
+                                    <ZenButton
+                                        variant="outline"
+                                        onClick={() => handleSave(false)}
+                                        loading={isSaving}
+                                        disabled={isSaving}
+                                    >
+                                        Actualizar borrador
+                                    </ZenButton>
+                                    <ZenButton
+                                        variant="outline"
+                                        onClick={handleCancel}
+                                        disabled={isSaving}
+                                    >
+                                        Cancelar
+                                    </ZenButton>
+                                </div>
+                            ) : (
+                                // Modo EDITAR - Publicado/Despublicado
+                                <div className="flex gap-3 pt-4">
+                                    <ZenButton
+                                        onClick={() => handleSave(formData.is_published)}
+                                        className="flex-1"
+                                        loading={isSaving}
+                                        disabled={isSaving}
+                                    >
+                                        Actualizar Portfolio
+                                    </ZenButton>
+                                    <ZenButton
+                                        variant="outline"
+                                        onClick={handleCancel}
+                                        disabled={isSaving}
+                                    >
+                                        Cancelar
+                                    </ZenButton>
+                                </div>
+                            )}
                         </ZenCardContent>
                     </ZenCard>
                 </div>
