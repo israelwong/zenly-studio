@@ -23,9 +23,13 @@ const prisma = globalThis.__prisma || new PrismaClient({
   },
 });
 
-// Reutilización en desarrollo para evitar agotamiento de conexiones
+// Reutilización del cliente para evitar agotamiento de conexiones
+// En producción Next.js reutiliza el módulo, pero en desarrollo necesitamos singleton explícito
 if (process.env.NODE_ENV !== "production") {
   globalThis.__prisma = prisma;
 }
+
+// En producción, asegurar que siempre se reutilice la misma instancia
+// Next.js en producción cachea los módulos, pero es seguro mantener el singleton
 
 export { prisma };

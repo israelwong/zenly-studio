@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { withRetry } from "@/lib/database/retry-helper";
 import type { PaqueteFromDB } from "@/lib/actions/schemas/paquete-schemas";
 
 /**
@@ -456,7 +457,7 @@ export async function eliminarPaquete(
 }
 
 /**
- * Obtiene un paquete por ID
+ * Obtiene un paquete por ID con retry y optimización de query
  */
 export async function obtenerPaquetePorId(
     paqueteId: string
@@ -466,28 +467,39 @@ export async function obtenerPaquetePorId(
     error?: string;
 }> {
     try {
-        const paquete = await prisma.studio_paquetes.findUnique({
-            where: { id: paqueteId },
-            include: {
-                event_types: {
-                    select: {
-                        id: true,
-                        name: true,
-                    },
-                },
-                paquete_items: {
+        // Usar withRetry para manejar timeouts del pool de conexiones
+        const paquete = await withRetry(
+            async () => {
+                return await prisma.studio_paquetes.findUnique({
+                    where: { id: paqueteId },
                     include: {
-                        items: {
-                            select: { name: true }
+                        event_types: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
                         },
-                        service_categories: {
-                            select: { name: true }
-                        }
+                        paquete_items: {
+                            include: {
+                                items: {
+                                    select: { name: true }
+                                },
+                                service_categories: {
+                                    select: { name: true }
+                                }
+                            },
+                            orderBy: { order: 'asc' }
+                        },
                     },
-                    orderBy: { order: 'asc' }
-                },
+                });
             },
-        });
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                maxDelay: 5000,
+                jitter: true
+            }
+        );
 
         if (!paquete) {
             return {
@@ -500,8 +512,21 @@ export async function obtenerPaquetePorId(
             success: true,
             data: paquete as unknown as PaqueteFromDB,
         };
-    } catch (error) {
+    } catch (error: unknown) {
         console.error("[obtenerPaquetePorId] Error:", error);
+        
+        // Manejar específicamente errores de pool de conexiones
+        if (error && typeof error === 'object' && 'code' in error) {
+            const errorCode = error.code as string;
+            if (errorCode === 'P1001' || errorCode === 'P1017' || errorCode === 'P1008') {
+                // Pool timeout, conexión cerrada o timeout de conexión
+                return {
+                    success: false,
+                    error: "Error de conexión con la base de datos. Por favor, intenta nuevamente en unos momentos.",
+                };
+            }
+        }
+
         return {
             success: false,
             error: "Error al obtener paquete",

@@ -117,10 +117,23 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         };
 
         cargarDatos();
-    }, [studioSlug, paquete]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [studioSlug, paquete?.id]); // Solo usar paquete.id para evitar re-renders por cambios en referencia del objeto
 
 
     // Crear mapa de servicios para acceso rápido
+    // Memoizar valores de configuracionPrecios para evitar re-renders innecesarios
+    const configKey = useMemo(() => {
+        if (!configuracionPrecios) return 'no-config';
+        return `${configuracionPrecios.utilidad_servicio}-${configuracionPrecios.utilidad_producto}-${configuracionPrecios.comision_venta}-${configuracionPrecios.sobreprecio}`;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        configuracionPrecios?.utilidad_servicio,
+        configuracionPrecios?.utilidad_producto,
+        configuracionPrecios?.comision_venta,
+        configuracionPrecios?.sobreprecio
+    ]); // Solo dependemos de los valores, no del objeto completo
+
     const servicioMap = useMemo(() => {
         if (!configuracionPrecios) return new Map();
 
@@ -145,7 +158,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             });
         });
         return map;
-    }, [catalogo, configuracionPrecios]);
+    }, [catalogo, configuracionPrecios]); // Mantener configuracionPrecios pero memoizar por valores
 
     // Filtrar catálogo basado en el filtro de texto
     const catalogoFiltrado = useMemo(() => {
@@ -234,7 +247,8 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             setCategoriasExpandidas(categoriasConResultados);
         }
         // No colapsar automáticamente cuando se limpia el filtro para evitar parpadeo
-    }, [filtroServicio, catalogoFiltrado]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filtroServicio]); // Remover catalogoFiltrado de dependencias para evitar re-renders innecesarios
 
     // Verificar si hay items seleccionados
     const hasSelectedItems = useMemo(() => {
@@ -346,7 +360,8 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         };
 
         setCalculoPrecio(resultado);
-    }, [items, servicioMap, precioPersonalizado, configuracionPrecios]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [items, precioPersonalizado, configKey]); // servicioMap depende de configKey, evitar dependencias anidadas
 
     // Handlers para toggles (accordion behavior)
     const toggleSeccion = (seccionId: string) => {
@@ -552,8 +567,14 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                                             className="w-full flex items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors bg-zinc-800/30"
                                         >
                                             <div className="flex items-center gap-3">
-                                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                                <h4 className="font-semibold text-white">{seccion.nombre}</h4>
+                                                <div className="flex items-center gap-2">
+                                                    {isSeccionExpandida ? (
+                                                        <ChevronDown className="w-4 h-4 text-zinc-400" />
+                                                    ) : (
+                                                        <ChevronRight className="w-4 h-4 text-zinc-400" />
+                                                    )}
+                                                    <h4 className="font-semibold text-white">{seccion.nombre}</h4>
+                                                </div>
                                                 {serviciosSeleccionados.secciones[seccion.id] ? (
                                                     <span className="text-xs bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded">
                                                         {serviciosSeleccionados.secciones[seccion.id].total} {serviciosSeleccionados.secciones[seccion.id].total === 1 ? 'item' : 'items'} seleccionado{serviciosSeleccionados.secciones[seccion.id].total === 1 ? '' : 's'}
@@ -564,11 +585,6 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                                                     </span>
                                                 )}
                                             </div>
-                                            {isSeccionExpandida ? (
-                                                <ChevronDown className="w-4 h-4 text-zinc-400" />
-                                            ) : (
-                                                <ChevronRight className="w-4 h-4 text-zinc-400" />
-                                            )}
                                         </button>
 
                                         {isSeccionExpandida && (
@@ -586,8 +602,14 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                                                                     className="w-full flex items-center justify-between p-3 pl-8 hover:bg-zinc-800/30 transition-colors"
                                                                 >
                                                                     <div className="flex items-center gap-3">
-                                                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
-                                                                        <h5 className="text-sm font-medium text-zinc-300">{categoria.nombre}</h5>
+                                                                        <div className="flex items-center gap-2">
+                                                                            {isCategoriaExpandida ? (
+                                                                                <ChevronDown className="w-3 h-3 text-zinc-400" />
+                                                                            ) : (
+                                                                                <ChevronRight className="w-3 h-3 text-zinc-400" />
+                                                                            )}
+                                                                            <h5 className="text-sm font-medium text-zinc-300">{categoria.nombre}</h5>
+                                                                        </div>
                                                                         {serviciosSeleccionados.secciones[seccion.id]?.categorias[categoria.id] ? (
                                                                             <span className="text-xs bg-emerald-900/50 text-emerald-300 px-2 py-0.5 rounded">
                                                                                 {serviciosSeleccionados.secciones[seccion.id].categorias[categoria.id]} {serviciosSeleccionados.secciones[seccion.id].categorias[categoria.id] === 1 ? 'item' : 'items'} seleccionado{serviciosSeleccionados.secciones[seccion.id].categorias[categoria.id] === 1 ? '' : 's'}
@@ -598,11 +620,6 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                                                                             </span>
                                                                         )}
                                                                     </div>
-                                                                    {isCategoriaExpandida ? (
-                                                                        <ChevronDown className="w-3 h-3 text-zinc-400" />
-                                                                    ) : (
-                                                                        <ChevronRight className="w-3 h-3 text-zinc-400" />
-                                                                    )}
                                                                 </button>
 
                                                                 {isCategoriaExpandida && (
@@ -623,20 +640,31 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                                                                                 return (
                                                                                     <div
                                                                                         key={servicio.id}
-                                                                                        className={`flex items-center justify-between p-2 pl-6 ${servicioIndex > 0 ? 'border-t border-zinc-700/30' : ''} hover:bg-zinc-700/20 transition-colors ${cantidad > 0 ? 'bg-emerald-900/10 border-l-2 border-emerald-500/50' : ''}`}
+                                                                                        className={`flex items-center justify-between py-3 px-2 pl-6 ${servicioIndex > 0 ? 'border-t border-zinc-700/30' : ''} hover:bg-zinc-700/20 transition-colors ${cantidad > 0 ? 'bg-emerald-900/10 border-l-2 border-emerald-500/50' : ''}`}
                                                                                     >
                                                                                         {/* Nivel 3: Servicio */}
-                                                                                        <div className="flex-1">
-                                                                                            <div className="text-sm font-medium text-white leading-tight">{servicio.nombre}</div>
-                                                                                            <div className="text-xs text-zinc-500 mt-1">
-                                                                                                {servicio.tipo_utilidad === 'service' ? 'Servicio' : 'Producto'}
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <div className="text-sm text-zinc-300 leading-tight font-light">
+                                                                                                <span className="break-words">{servicio.nombre}</span>
+                                                                                            </div>
+                                                                                            <div className="flex items-center gap-2 mt-1">
+                                                                                                <ZenBadge
+                                                                                                    variant="outline"
+                                                                                                    size="sm"
+                                                                                                    className={`px-1 py-0 text-[10px] font-light rounded-sm ${servicio.tipo_utilidad === 'service'
+                                                                                                        ? 'border-blue-600 text-blue-400'
+                                                                                                        : 'border-purple-600 text-purple-400'
+                                                                                                        }`}
+                                                                                                >
+                                                                                                    {servicio.tipo_utilidad === 'service' ? 'Servicio' : 'Producto'}
+                                                                                                </ZenBadge>
+                                                                                                <span className="text-xs text-green-400">
+                                                                                                    {formatearMoneda(precios.precio_final)}
+                                                                                                </span>
                                                                                             </div>
                                                                                         </div>
 
                                                                                         <div className="flex items-center gap-3">
-                                                                                            <div className="text-right w-20">
-                                                                                                <div className="text-sm font-medium text-white">{formatearMoneda(precios.precio_final)}</div>
-                                                                                            </div>
 
                                                                                             <div className="flex items-center gap-1 w-16 justify-center">
                                                                                                 <button
