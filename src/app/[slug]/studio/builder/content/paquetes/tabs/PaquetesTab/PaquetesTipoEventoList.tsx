@@ -975,7 +975,6 @@ export function PaquetesTipoEventoList({
         const coverUrl = paquete.cover_url;
         const hasCover = !!coverUrl && typeof coverUrl === 'string' && coverUrl.trim() !== '';
         const videoRef = useRef<HTMLVideoElement>(null);
-        const [videoReady, setVideoReady] = useState(false);
 
         // Función robusta para detectar si es video (incluso con query strings)
         const isVideo = hasCover && (() => {
@@ -985,46 +984,35 @@ export function PaquetesTipoEventoList({
             const urlPath = urlLower.split('?')[0].split('#')[0];
             // Verificar extensión de video
             const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.mkv'];
-            const isVideoFile = videoExtensions.some(ext => urlPath.endsWith(ext));
-
-            return isVideoFile;
+            return videoExtensions.some(ext => urlPath.endsWith(ext));
         })();
 
-        // Efecto para manejar el video y mostrar primer frame
+        // Efecto para posicionar el video en el primer frame
         useEffect(() => {
-            if (!isVideo || !videoRef.current) {
-                setVideoReady(false);
-                return;
-            }
+            if (!isVideo || !videoRef.current) return;
 
             const video = videoRef.current;
 
             const handleLoadedMetadata = () => {
                 try {
-                    video.currentTime = 0.1;
-                    setVideoReady(true);
+                    // Posicionar en el primer frame
+                    if (video.readyState >= 2) {
+                        video.currentTime = 0.1;
+                    }
                 } catch (error) {
                     console.error('Error setting video currentTime:', error);
                 }
             };
 
-            const handleSeeked = () => {
-                setVideoReady(true);
-            };
-
-            const handleError = () => {
-                console.error('Error loading video:', coverUrl);
-                setVideoReady(false);
-            };
-
-            video.addEventListener('loadedmetadata', handleLoadedMetadata);
-            video.addEventListener('seeked', handleSeeked);
-            video.addEventListener('error', handleError);
+            // Si ya está cargado, establecer el frame directamente
+            if (video.readyState >= 2) {
+                video.currentTime = 0.1;
+            } else {
+                video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+            }
 
             return () => {
                 video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-                video.removeEventListener('seeked', handleSeeked);
-                video.removeEventListener('error', handleError);
             };
         }, [isVideo, coverUrl]);
 
@@ -1069,26 +1057,18 @@ export function PaquetesTipoEventoList({
                         <GripVertical className="h-4 w-4 text-zinc-500" />
                     </button>
                     {/* Thumbnail del paquete */}
-                    <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-800 border border-dashed border-zinc-600 relative">
+                    <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-800 border border-dashed border-zinc-600 relative">
                         {hasCover ? (
                             isVideo ? (
-                                <>
-                                    <video
-                                        ref={videoRef}
-                                        src={coverUrl || undefined}
-                                        className="w-full h-full object-cover"
-                                        muted
-                                        playsInline
-                                        preload="metadata"
-                                        crossOrigin="anonymous"
-                                        style={{ display: videoReady ? 'block' : 'none' }}
-                                    />
-                                    {!videoReady && (
-                                        <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-                                            <div className="w-6 h-6 bg-zinc-700/50 rounded animate-pulse" />
-                                        </div>
-                                    )}
-                                </>
+                                <video
+                                    ref={videoRef}
+                                    src={coverUrl || undefined}
+                                    className="w-full h-full object-cover"
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                    crossOrigin="anonymous"
+                                />
                             ) : (
                                 <Image
                                     src={coverUrl}
@@ -1113,29 +1093,28 @@ export function PaquetesTipoEventoList({
                         className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer"
                     >
                         <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                                <div className="text-sm text-white leading-tight">{paquete.name}</div>
+                            <div className="flex items-center gap-1.5">
                                 {/* Indicadores de estado */}
                                 {paquete.status === 'active' && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-600/30">
-                                        <CheckCircle className="h-3 w-3" />
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-600/30">
+                                        <CheckCircle className="h-2.5 w-2.5" />
                                         Publicado
                                     </span>
                                 )}
                                 {paquete.status !== 'active' && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-600/20 text-zinc-400 border border-zinc-600/30">
-                                        <XCircle className="h-3 w-3" />
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-600/20 text-zinc-400 border border-zinc-600/30">
+                                        <XCircle className="h-2.5 w-2.5" />
                                         No publicado
                                     </span>
                                 )}
                                 {paquete.is_featured && (
-                                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-amber-600/20 border border-amber-600/30">
-                                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                    <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-amber-600/20 border border-amber-600/30">
+                                        <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
                                     </span>
                                 )}
                             </div>
-                            <div className="text-xs text-zinc-500 mt-1">
-                                Paquete
+                            <div className="text-sm text-white leading-tight mt-1">
+                                {paquete.name}
                             </div>
                         </div>
                     </button>

@@ -22,11 +22,20 @@ export function PaqueteCard({ paquete }: PaqueteCardProps) {
         return null;
     }
 
-    // cover_url está definido en PublicPaquete (línea 55 de public-profile.ts)
-    // El error del linter es un falso positivo por caché del servidor de lenguajes
-    const coverUrl = (paquete as PublicPaquete & { cover_url?: string }).cover_url;
+    const coverUrl = paquete.cover_url;
     const hasCover = !!coverUrl && typeof coverUrl === 'string' && coverUrl.trim() !== '';
-    const isVideo = hasCover && coverUrl?.toLowerCase().match(/\.(mp4|mov|webm|avi)$/);
+
+    // Función robusta para detectar si es video (incluso con query strings)
+    const isVideo = hasCover && (() => {
+        if (!coverUrl) return false;
+        const urlLower = coverUrl.toLowerCase();
+        // Remover query string y fragmentos para validar extensión
+        const urlPath = urlLower.split('?')[0].split('#')[0];
+        // Verificar extensión de video
+        const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.mkv'];
+        return videoExtensions.some(ext => urlPath.endsWith(ext));
+    })();
+
     const isFeatured = paquete.is_featured === true;
 
     return (
@@ -35,12 +44,14 @@ export function PaqueteCard({ paquete }: PaqueteCardProps) {
             {hasCover ? (
                 isVideo ? (
                     <video
-                        src={coverUrl}
+                        src={coverUrl || undefined}
                         className="absolute inset-0 w-full h-full object-cover z-0"
+                        autoPlay
                         muted
                         playsInline
                         loop
-                        autoPlay
+                        preload="auto"
+                        style={{ pointerEvents: 'none' }}
                     />
                 ) : (
                     <div className="absolute inset-0 z-0">
