@@ -394,6 +394,14 @@ export async function eliminarItem(
     itemId: string
 ): Promise<ActionResponse<boolean>> {
     try {
+        // Validar itemId
+        if (!itemId || typeof itemId !== 'string' || itemId.trim() === '') {
+            return {
+                success: false,
+                error: "ID de item inválido",
+            };
+        }
+
         // Verificar que existe
         const item = await prisma.studio_items.findUnique({
             where: { id: itemId },
@@ -419,6 +427,36 @@ export async function eliminarItem(
         };
     } catch (error) {
         console.error("[ITEMS] Error eliminando item:", error);
+
+        // Manejar errores de conexión específicos
+        if (
+            error instanceof Error && (
+                error.message.includes("Can't reach database server") ||
+                error.message.includes("P1001") ||
+                error.message.includes("connection") ||
+                error.message.includes("PrismaClientInitializationError") ||
+                (typeof error === 'object' && error !== null && 'code' in error && (error as { code: string }).code === 'P1001')
+            )
+        ) {
+            return {
+                success: false,
+                error: "Error de conexión con la base de datos. Verifica tu conexión a internet e intenta nuevamente.",
+            };
+        }
+
+        // Manejar otros errores de Prisma
+        if (typeof error === 'object' && error !== null && 'code' in error) {
+            const prismaError = error as { code: string };
+            
+            // Error de registro no encontrado
+            if (prismaError.code === "P2025") {
+                return {
+                    success: false,
+                    error: "Item no encontrado",
+                };
+            }
+        }
+
         return {
             success: false,
             error: error instanceof Error ? error.message : "Error al eliminar item",

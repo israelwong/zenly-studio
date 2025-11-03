@@ -428,7 +428,12 @@ export function CatalogoTab({
                     }
 
                     // Actualizar estado local inmediatamente (optimistic update)
-                    const newItem = { ...activeItem, order: newIndex };
+                    // Actualizar categoriaId cuando se mueve a otra categoría
+                    const newItem = {
+                        ...activeItem,
+                        order: newIndex,
+                        categoriaId: targetCategoriaId // Actualizar categoriaId al mover entre categorías
+                    };
 
                     // Remover de categoría origen
                     setItemsData(prev => ({
