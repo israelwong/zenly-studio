@@ -1,2 +1,3 @@
 export { ItemCard } from "./ItemCard";
-export { ItemEditorModal, type ItemFormData } from "./ItemEditorModal";
+export { ItemEditorModal } from "./ItemEditorModal";
+export type { ItemFormData } from "./ItemEditorModal";

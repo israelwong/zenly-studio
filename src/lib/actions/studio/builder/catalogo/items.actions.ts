@@ -296,7 +296,8 @@ export async function actualizarItem(
             data: {
                 name: validated.name,
                 cost: validated.cost,
-                ...(validated.tipoUtilidad && {
+                // Actualizar tipo de utilidad si se proporciona, si no mantener el valor actual
+                ...(validated.tipoUtilidad !== undefined && {
                     utility_type: validated.tipoUtilidad === 'servicio' ? 'service' : 'product'
                 }),
                 // Actualizar gastos si se proporcionan
@@ -334,11 +335,16 @@ export async function actualizarItem(
             0
         );
 
+        // Mapear utility_type de BD a tipoUtilidad
+        const tipoUtilidad: 'servicio' | 'producto' = 
+            item.utility_type === 'service' ? 'servicio' : 'producto';
+
         const itemData: ItemData = {
             id: item.id,
             name: item.name,
             cost: item.cost,
             description: null,
+            tipoUtilidad,
             order: item.order,
             status: item.status,
             createdAt: item.created_at,

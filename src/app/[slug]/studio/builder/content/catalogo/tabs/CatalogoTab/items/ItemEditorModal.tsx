@@ -56,7 +56,7 @@ interface Gasto {
     costo: number;
 }
 
-interface ItemFormData {
+export interface ItemFormData {
     id?: string;
     name: string;
     cost: number;

@@ -196,11 +196,18 @@ export function CatalogoTab({
                         seccion.categorias.forEach(cat => {
                             newItemsData[cat.id] = cat.servicios.map(servicio => {
                                 const itemMedia = mediaMap[servicio.id] || { hasPhotos: false, hasVideos: false };
+                                // Mapear utility_type de BD: 'service' -> 'servicio', 'product' -> 'producto'
+                                const tipoUtilidad: 'servicio' | 'producto' =
+                                    servicio.tipo_utilidad === 'service'
+                                        ? 'servicio'
+                                        : servicio.tipo_utilidad === 'product'
+                                            ? 'producto'
+                                            : 'servicio'; // default a servicio si no se reconoce
                                 return {
                                     id: servicio.id,
                                     name: servicio.nombre,
                                     cost: servicio.costo,
-                                    tipoUtilidad: servicio.tipo_utilidad === 'service' ? 'servicio' as const : 'producto' as const,
+                                    tipoUtilidad,
                                     order: servicio.orden,
                                     isNew: false,
                                     isFeatured: false,
@@ -830,12 +837,12 @@ export function CatalogoTab({
                             <ZenBadge
                                 variant="outline"
                                 size="sm"
-                                className={`px-1 py-0 text-[10px] font-light rounded-sm ${item.tipoUtilidad === 'servicio'
+                                className={`px-1 py-0 text-[10px] font-light rounded-sm ${(item.tipoUtilidad || 'servicio') === 'servicio'
                                     ? 'border-blue-600 text-blue-400'
                                     : 'border-purple-600 text-purple-400'
                                     }`}
                             >
-                                {item.tipoUtilidad === 'servicio' ? 'Servicio' : 'Producto'}
+                                {(item.tipoUtilidad || 'servicio') === 'servicio' ? 'Servicio' : 'Producto'}
                             </ZenBadge>
                             <span className="text-xs text-green-400">
                                 ${precios.precio_final.toLocaleString()}
@@ -1156,7 +1163,7 @@ export function CatalogoTab({
                     hasVideos = mediaResponse.data.some(m => m.file_type === 'VIDEO');
                 }
 
-                // Actualizar en el estado local con información de media
+                // Actualizar en el estado local con información de media y tipo de utilidad
                 setItemsData(prev => {
                     const newData = { ...prev };
                     Object.keys(newData).forEach(categoriaId => {
@@ -1165,6 +1172,7 @@ export function CatalogoTab({
                                 ...item,
                                 name: data.name,
                                 cost: data.cost,
+                                tipoUtilidad: data.tipoUtilidad || item.tipoUtilidad || 'servicio',
                                 hasPhotos,
                                 hasVideos,
                             } : item
