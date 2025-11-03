@@ -1,5 +1,6 @@
 export {
     obtenerPaquetes,
+    obtenerPaquetePorId,
     crearPaquete,
     actualizarPaquete,
     eliminarPaquete,

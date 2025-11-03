@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Package, Settings } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
-import { ConfiguracionTab } from './ConfiguracionTab';
-import { PaquetesAcordeonNavigation } from './PaquetesTab/PaquetesAcordeonNavigation';
+import { ConfiguracionTab, PaquetesTipoEventoList } from '../tabs';
 import { obtenerTiposEvento } from '@/lib/actions/studio/negocio/tipos-evento.actions';
 import { obtenerPaquetes } from '@/lib/actions/studio/builder/paquetes/paquetes.actions';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
@@ -72,30 +71,74 @@ export function PaquetesWrapper({ studioSlug }: PaquetesWrapperProps) {
 
     if (loading) {
         return (
-            <div className="space-y-6">
-                {/* Tabs skeleton */}
-                <div className="grid w-full grid-cols-2 bg-zinc-800/50 p-1 rounded-lg">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
+                <TabsList className="grid w-full grid-cols-2 mb-6 bg-zinc-800/50 p-1 rounded-lg">
                     <div className="h-10 bg-zinc-700 rounded animate-pulse"></div>
                     <div className="h-10 bg-zinc-700 rounded animate-pulse"></div>
-                </div>
+                </TabsList>
 
-                {/* Content skeleton */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                        <div key={i} className="animate-pulse">
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-4">
-                                <div className="h-5 bg-zinc-700 rounded w-3/4"></div>
-                                <div className="h-8 bg-zinc-700 rounded w-1/2"></div>
-                                <div className="flex gap-2 pt-2">
-                                    <div className="h-8 bg-zinc-700 rounded flex-1"></div>
-                                    <div className="h-8 bg-zinc-700 rounded w-8"></div>
-                                    <div className="h-8 bg-zinc-700 rounded w-8"></div>
+                <TabsContent value="paquetes">
+                    <div className="space-y-2">
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className="border border-zinc-700 rounded-lg overflow-hidden animate-pulse">
+                                {/* Header del tipo de evento skeleton */}
+                                <div className="flex items-center justify-between p-4 bg-zinc-800/30">
+                                    <div className="flex items-center gap-3 flex-1">
+                                        {/* GripVertical skeleton */}
+                                        <div className="w-4 h-4 bg-zinc-700 rounded mr-2"></div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                {/* Chevron skeleton */}
+                                                <div className="w-4 h-4 bg-zinc-700 rounded"></div>
+                                                {/* Nombre skeleton */}
+                                                <div className="h-5 bg-zinc-700 rounded w-40"></div>
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                {/* Badge skeleton */}
+                                                <div className="h-5 bg-zinc-700 rounded w-20"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        {/* Botones de acción skeleton */}
+                                        <div className="w-8 h-8 bg-zinc-700 rounded"></div>
+                                        <div className="w-8 h-8 bg-zinc-700 rounded"></div>
+                                    </div>
                                 </div>
+                                {/* Contenido expandido skeleton (opcional) */}
+                                {i === 1 && (
+                                    <div className="bg-zinc-900/50 p-2 space-y-1">
+                                        {[1, 2].map((j) => (
+                                            <div key={j} className="flex items-center justify-between p-2 pl-6 border-t border-zinc-700/30">
+                                                <div className="flex items-center gap-3 flex-1">
+                                                    <div className="w-4 h-4 bg-zinc-700 rounded mr-2"></div>
+                                                    <div className="flex-1">
+                                                        <div className="h-4 bg-zinc-700 rounded w-32 mb-1"></div>
+                                                        <div className="h-3 bg-zinc-700 rounded w-16"></div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-4 bg-zinc-700 rounded w-16"></div>
+                                                    <div className="w-8 h-8 bg-zinc-700 rounded"></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
+                        ))}
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="configuracion">
+                    <div className="space-y-4 animate-pulse">
+                        <div className="bg-zinc-800/30 border border-zinc-700 rounded-lg p-6 space-y-4">
+                            <div className="h-5 bg-zinc-700 rounded w-48"></div>
+                            <div className="h-20 bg-zinc-700 rounded"></div>
                         </div>
-                    ))}
-                </div>
-            </div>
+                    </div>
+                </TabsContent>
+            </Tabs>
         );
     }
 
@@ -119,7 +162,7 @@ export function PaquetesWrapper({ studioSlug }: PaquetesWrapperProps) {
             </TabsList>
 
             <TabsContent value="paquetes">
-                <PaquetesAcordeonNavigation
+                <PaquetesTipoEventoList
                     studioSlug={studioSlug}
                     tiposEvento={tiposEvento}
                     paquetes={paquetes}

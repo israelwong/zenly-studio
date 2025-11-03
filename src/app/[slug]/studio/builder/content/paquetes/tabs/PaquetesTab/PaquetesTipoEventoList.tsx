@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List } from "lucide-react";
 import {
     DndContext,
     closestCenter,
@@ -34,13 +35,11 @@ import {
 } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import { TipoEventoForm } from "@/app/[slug]/studio/configuracion/operacion/tipos/components/TipoEventoFormSimple";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/shadcn/dialog";
-import { PaqueteFormularioAvanzado } from "./PaqueteFormularioAvanzado";
 import { reorderPaquetes } from "@/lib/actions/studio/builder/paquetes/paquetes.actions";
 import type { TipoEventoData } from "@/lib/actions/schemas/tipos-evento-schemas";
 import type { PaqueteFromDB } from "@/lib/actions/schemas/paquete-schemas";
 
-interface PaquetesAcordeonNavigationProps {
+interface PaquetesTipoEventoListProps {
     studioSlug: string;
     tiposEvento: TipoEventoData[];
     paquetes: PaqueteFromDB[];
@@ -48,13 +47,15 @@ interface PaquetesAcordeonNavigationProps {
     onPaquetesChange: (newPaquetes: PaqueteFromDB[]) => void;
 }
 
-export function PaquetesAcordeonNavigation({
+export function PaquetesTipoEventoList({
     studioSlug,
     tiposEvento: initialTiposEvento,
     paquetes: initialPaquetes,
     onTiposEventoChange,
     onPaquetesChange,
-}: PaquetesAcordeonNavigationProps) {
+}: PaquetesTipoEventoListProps) {
+    const router = useRouter();
+
     // Estados de expansión
     const [tiposEventoExpandidos, setTiposEventoExpandidos] = useState<Set<string>>(new Set());
 
@@ -70,9 +71,6 @@ export function PaquetesAcordeonNavigation({
     const [activeId, setActiveId] = useState<string | null>(null);
     const [isDraggingTipoEvento, setIsDraggingTipoEvento] = useState(false);
 
-    // Estados para modal de edición de paquetes
-    const [showForm, setShowForm] = useState(false);
-    const [editingPaquete, setEditingPaquete] = useState<PaqueteFromDB | null>(null);
 
     // Configuración de sensores para drag & drop
     const sensors = useSensors(
@@ -518,63 +516,13 @@ export function PaquetesAcordeonNavigation({
         }
     };
 
-    // Handlers para paquetes - usar las mismas funciones que PaquetesPorTipo
+    // Handlers para paquetes - usar navegación en lugar de modal
     const handleEditPaquete = (paquete: PaqueteFromDB) => {
-        setEditingPaquete(paquete);
-        setShowForm(true);
+        router.push(`/${studioSlug}/studio/builder/content/paquetes/${paquete.id}/editar`);
     };
 
     const handleCrearPaquete = () => {
-        setEditingPaquete(null);
-        setShowForm(true);
-    };
-
-    const handleSavePaquete = (savedPaquete: PaqueteFromDB) => {
-        if (editingPaquete) {
-            // Actualizar paquete existente
-            const newPaquetes = initialPaquetes.map((p) =>
-                p.id === editingPaquete.id ? savedPaquete : p
-            );
-            onPaquetesChange(newPaquetes);
-
-            // Actualizar también el estado local paquetesData
-            setPaquetesData(prev => {
-                const newData = { ...prev };
-                // Buscar y actualizar en el tipo de evento correspondiente
-                Object.keys(newData).forEach(tipoEventoId => {
-                    const paquetesDelTipo = newData[tipoEventoId];
-                    const index = paquetesDelTipo.findIndex(p => p.id === editingPaquete.id);
-                    if (index !== -1) {
-                        newData[tipoEventoId] = paquetesDelTipo.map(p =>
-                            p.id === editingPaquete.id ? savedPaquete : p
-                        );
-                    }
-                });
-                return newData;
-            });
-        } else {
-            // Crear nuevo paquete
-            const newPaquetes = [...initialPaquetes, savedPaquete];
-            onPaquetesChange(newPaquetes);
-
-            // Agregar también al estado local paquetesData
-            setPaquetesData(prev => {
-                const newData = { ...prev };
-                const tipoEventoId = savedPaquete.event_type_id || 'sin-tipo';
-                if (!newData[tipoEventoId]) {
-                    newData[tipoEventoId] = [];
-                }
-                newData[tipoEventoId] = [...newData[tipoEventoId], savedPaquete];
-                return newData;
-            });
-        }
-        setShowForm(false);
-        setEditingPaquete(null);
-    };
-
-    const handleCancelPaquete = () => {
-        setShowForm(false);
-        setEditingPaquete(null);
+        router.push(`/${studioSlug}/studio/builder/content/paquetes/nuevo`);
     };
 
     const handleDuplicatePaquete = async (paquete: PaqueteFromDB) => {
@@ -675,17 +623,17 @@ export function PaquetesAcordeonNavigation({
         return (
             <div
                 ref={setNodeRef}
-                className={`text-center py-8 min-h-[100px] flex items-center justify-center border-2 border-dashed rounded-lg m-4 transition-colors ${isOver && !isDraggingTipoEvento
-                    ? 'border-purple-500 bg-purple-500/10'
-                    : 'border-zinc-700 bg-zinc-800/30'
+                className={`text-center py-8 min-h-[100px] flex items-center justify-center m-4 transition-colors ${isOver && !isDraggingTipoEvento
+                    ? 'bg-purple-500/10'
+                    : ''
                     }`}
             >
                 <div className="text-center">
-                    <div className="text-zinc-500 mb-2">
-                        <Plus className="h-8 w-8 mx-auto" />
+                    <div className="text-zinc-500 mb-3">
+                        <List className="h-8 w-8 mx-auto" />
                     </div>
                     <p className="text-sm text-zinc-400">
-                        {isOver && !isDraggingTipoEvento ? 'Suelta aquí para agregar a este tipo de evento' : 'Arrastra paquetes aquí para agregarlos a este tipo de evento'}
+                        {isOver && !isDraggingTipoEvento ? 'Suelta aquí para agregar a este tipo de evento' : 'Este tipo de evento no tiene paquetes asociados'}
                     </p>
                 </div>
             </div>
@@ -731,20 +679,21 @@ export function PaquetesAcordeonNavigation({
                                     onClick={() => toggleTipoEvento(tipoEvento.id)}
                                     className="flex items-center gap-3 flex-1 text-left"
                                 >
-                                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                                     <div>
-                                        <h4 className="font-semibold text-white">{tipoEvento.nombre}</h4>
+                                        <div className="flex items-center gap-2">
+                                            {isTipoEventoExpandido ? (
+                                                <ChevronDown className="w-4 h-4 text-zinc-400" />
+                                            ) : (
+                                                <ChevronRight className="w-4 h-4 text-zinc-400" />
+                                            )}
+                                            <h4 className="font-semibold text-white">{tipoEvento.nombre}</h4>
+                                        </div>
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-1 rounded">
                                                 {paquetesDelTipo.length} {paquetesDelTipo.length === 1 ? 'paquete' : 'paquetes'}
                                             </span>
                                         </div>
                                     </div>
-                                    {isTipoEventoExpandido ? (
-                                        <ChevronDown className="w-4 h-4 text-zinc-400" />
-                                    ) : (
-                                        <ChevronRight className="w-4 h-4 text-zinc-400" />
-                                    )}
                                 </button>
                             </div>
                             <div className="flex items-center gap-1">
@@ -836,23 +785,29 @@ export function PaquetesAcordeonNavigation({
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`flex items-center justify-between p-2 pl-6 ${paqueteIndex > 0 ? 'border-t border-zinc-700/30' : ''} hover:bg-zinc-700/20 transition-colors`}
+                className={`flex items-center justify-between py-3 px-2 pl-6 ${paqueteIndex > 0 ? 'border-t border-zinc-700/30' : ''} hover:bg-zinc-700/20 transition-colors`}
             >
-                <div className="flex items-center gap-3 flex-1 text-left">
+                <div className="flex items-center gap-3 flex-1">
                     <button
                         {...attributes}
                         {...listeners}
                         className="p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing mr-2"
                         title="Arrastrar para reordenar"
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <GripVertical className="h-4 w-4 text-zinc-500" />
                     </button>
-                    <div className="flex-1">
-                        <div className="text-sm text-white leading-tight">{paquete.name}</div>
-                        <div className="text-xs text-zinc-500 mt-1">
-                            Paquete
+                    <button
+                        onClick={() => handleEditPaquete(paquete)}
+                        className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer"
+                    >
+                        <div className="flex-1">
+                            <div className="text-sm text-white leading-tight">{paquete.name}</div>
+                            <div className="text-xs text-zinc-500 mt-1">
+                                Paquete
+                            </div>
                         </div>
-                    </div>
+                    </button>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="text-right w-20">
@@ -867,15 +822,12 @@ export function PaquetesAcordeonNavigation({
                                     variant="ghost"
                                     size="sm"
                                     className="h-8 w-8 p-0"
+                                    onClick={(e) => e.stopPropagation()}
                                 >
                                     <MoreHorizontal className="h-4 w-4" />
                                 </ZenButton>
                             </ZenDropdownMenuTrigger>
                             <ZenDropdownMenuContent align="end" className="w-48">
-                                <ZenDropdownMenuItem onClick={() => handleEditPaquete(paquete)}>
-                                    <Edit2 className="h-4 w-4 mr-2" />
-                                    Editar paquete
-                                </ZenDropdownMenuItem>
                                 <ZenDropdownMenuItem onClick={() => handleDuplicatePaquete(paquete)}>
                                     <Copy className="h-4 w-4 mr-2" />
                                     Duplicar paquete
@@ -900,14 +852,51 @@ export function PaquetesAcordeonNavigation({
     const AcordeonSkeleton = () => (
         <div className="space-y-2">
             {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 animate-pulse">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-4 h-4 bg-zinc-700 rounded"></div>
-                            <div className="h-4 bg-zinc-700 rounded w-32"></div>
+                <div key={i} className="border border-zinc-700 rounded-lg overflow-hidden animate-pulse">
+                    {/* Header del tipo de evento skeleton */}
+                    <div className="flex items-center justify-between p-4 bg-zinc-800/30">
+                        <div className="flex items-center gap-3 flex-1">
+                            {/* GripVertical skeleton */}
+                            <div className="w-4 h-4 bg-zinc-700 rounded mr-2"></div>
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                    {/* Chevron skeleton */}
+                                    <div className="w-4 h-4 bg-zinc-700 rounded"></div>
+                                    {/* Nombre skeleton */}
+                                    <div className="h-5 bg-zinc-700 rounded w-40"></div>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                    {/* Badge skeleton */}
+                                    <div className="h-5 bg-zinc-700 rounded w-20"></div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="h-4 bg-zinc-700 rounded w-16"></div>
+                        <div className="flex items-center gap-1">
+                            {/* Botones de acción skeleton */}
+                            <div className="w-8 h-8 bg-zinc-700 rounded"></div>
+                            <div className="w-8 h-8 bg-zinc-700 rounded"></div>
+                        </div>
                     </div>
+                    {/* Contenido expandido skeleton (opcional) */}
+                    {i === 1 && (
+                        <div className="bg-zinc-900/50 p-2 space-y-1">
+                            {[1, 2].map((j) => (
+                                <div key={j} className="flex items-center justify-between p-2 pl-6 border-t border-zinc-700/30">
+                                    <div className="flex items-center gap-3 flex-1">
+                                        <div className="w-4 h-4 bg-zinc-700 rounded mr-2"></div>
+                                        <div className="flex-1">
+                                            <div className="h-4 bg-zinc-700 rounded w-32 mb-1"></div>
+                                            <div className="h-3 bg-zinc-700 rounded w-16"></div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-4 bg-zinc-700 rounded w-16"></div>
+                                        <div className="w-8 h-8 bg-zinc-700 rounded"></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             ))}
         </div>
@@ -1033,25 +1022,6 @@ export function PaquetesAcordeonNavigation({
                 tipoEvento={editingTipoEvento}
             />
 
-            {/* Modal para crear/editar paquete */}
-            <Dialog open={showForm} onOpenChange={setShowForm}>
-                <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-700">
-                    <DialogHeader>
-                        <DialogTitle className="text-white">
-                            {editingPaquete ? 'Editar Paquete' : 'Nuevo Paquete'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {editingPaquete ? 'Edita los detalles de tu paquete.' : 'Crea un nuevo paquete para tu estudio.'}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <PaqueteFormularioAvanzado
-                        studioSlug={studioSlug}
-                        paquete={editingPaquete}
-                        onSave={handleSavePaquete}
-                        onCancel={handleCancelPaquete}
-                    />
-                </DialogContent>
-            </Dialog>
         </DndContext>
     );
 }

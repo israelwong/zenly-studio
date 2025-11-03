@@ -1,19 +1,106 @@
 'use client';
 
-import { useState } from 'react';
-import { Eye, EyeOff, UserCheck, UserX, List, Grid } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Eye, UserCheck, UserX, List, Grid } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
 import { Switch } from '@/components/ui/shadcn/switch';
+import { obtenerConfiguracionPaquetes, actualizarConfiguracionPaquetes } from '@/lib/actions/studio/builder/catalogo/configuracion.actions';
+import { toast } from 'sonner';
 
-interface PaquetesConfiguracionProps {
+interface ConfiguracionPaquetes {
+    visibleEnMenu: boolean;
+    requiereRegistro: boolean;
+    vistaEnPantalla: 'lista' | 'reticula';
+}
+
+interface ConfiguracionTabProps {
     studioSlug: string;
 }
 
-export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps) {
-    // Estados hardcodeados para presentación
-    const [visibleEnMenu, setVisibleEnMenu] = useState(true);
-    const [requiereRegistro, setRequiereRegistro] = useState(false);
-    const [vistaEnPantalla, setVistaEnPantalla] = useState<'lista' | 'reticula'>('lista');
+export function ConfiguracionTab({ studioSlug }: ConfiguracionTabProps) {
+    // Estados para la configuración
+    const [configuracion, setConfiguracion] = useState<ConfiguracionPaquetes>({
+        visibleEnMenu: true,
+        requiereRegistro: false,
+        vistaEnPantalla: 'lista'
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    // Cargar configuración inicial
+    useEffect(() => {
+        const cargarConfiguracion = async () => {
+            try {
+                setLoading(true);
+                const result = await obtenerConfiguracionPaquetes(studioSlug);
+
+                if (result.success && result.data) {
+                    setConfiguracion(result.data);
+                } else {
+                    console.error('Error cargando configuración:', result.error);
+                    toast.error('Error al cargar configuración');
+                }
+            } catch (error) {
+                console.error('Error en cargarConfiguracion:', error);
+                toast.error('Error al cargar configuración');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        cargarConfiguracion();
+    }, [studioSlug]);
+
+    // Función para actualizar configuración
+    const actualizarConfiguracion = async (nuevaConfiguracion: Partial<ConfiguracionPaquetes>) => {
+        try {
+            setSaving(true);
+            const configuracionActualizada = { ...configuracion, ...nuevaConfiguracion };
+
+            const result = await actualizarConfiguracionPaquetes(studioSlug, configuracionActualizada);
+
+            if (result.success) {
+                setConfiguracion(configuracionActualizada);
+                toast.success('Configuración actualizada');
+            } else {
+                toast.error(result.error || 'Error al actualizar configuración');
+            }
+        } catch (error) {
+            console.error('Error actualizando configuración:', error);
+            toast.error('Error al actualizar configuración');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Handlers para cambios
+    const handleVisibleEnMenuChange = (checked: boolean) => {
+        actualizarConfiguracion({ visibleEnMenu: checked });
+    };
+
+    const handleRequiereRegistroChange = (checked: boolean) => {
+        actualizarConfiguracion({ requiereRegistro: checked });
+    };
+
+    const handleVistaEnPantallaChange = (vista: 'lista' | 'reticula') => {
+        actualizarConfiguracion({ vistaEnPantalla: vista });
+    };
+
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="animate-pulse">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
+                            <div className="h-6 bg-zinc-700 rounded w-1/3"></div>
+                            <div className="h-4 bg-zinc-700 rounded w-2/3"></div>
+                            <div className="h-10 bg-zinc-700 rounded w-full"></div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -37,8 +124,9 @@ export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps
                             </p>
                         </div>
                         <Switch
-                            checked={visibleEnMenu}
-                            onCheckedChange={setVisibleEnMenu}
+                            checked={configuracion.visibleEnMenu}
+                            onCheckedChange={handleVisibleEnMenuChange}
+                            disabled={saving}
                         />
                     </div>
                 </ZenCardContent>
@@ -48,7 +136,7 @@ export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps
             <ZenCard>
                 <ZenCardHeader>
                     <ZenCardTitle className="flex items-center gap-2">
-                        {requiereRegistro ? (
+                        {configuracion.requiereRegistro ? (
                             <UserCheck className="h-5 w-5 text-green-400" />
                         ) : (
                             <UserX className="h-5 w-5 text-zinc-400" />
@@ -68,8 +156,9 @@ export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps
                             </p>
                         </div>
                         <Switch
-                            checked={requiereRegistro}
-                            onCheckedChange={setRequiereRegistro}
+                            checked={configuracion.requiereRegistro}
+                            onCheckedChange={handleRequiereRegistroChange}
+                            disabled={saving}
                         />
                     </div>
                 </ZenCardContent>
@@ -79,7 +168,7 @@ export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps
             <ZenCard>
                 <ZenCardHeader>
                     <ZenCardTitle className="flex items-center gap-2">
-                        {vistaEnPantalla === 'lista' ? (
+                        {configuracion.vistaEnPantalla === 'lista' ? (
                             <List className="h-5 w-5 text-blue-400" />
                         ) : (
                             <Grid className="h-5 w-5 text-blue-400" />
@@ -100,11 +189,12 @@ export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps
                                 </p>
                             </div>
                             <Switch
-                                checked={vistaEnPantalla === 'lista'}
-                                onCheckedChange={(checked) => checked && setVistaEnPantalla('lista')}
+                                checked={configuracion.vistaEnPantalla === 'lista'}
+                                onCheckedChange={(checked) => checked && handleVistaEnPantallaChange('lista')}
+                                disabled={saving}
                             />
                         </div>
-                        
+
                         <div className="flex items-center justify-between">
                             <div className="space-y-1">
                                 <p className="text-sm font-medium text-white">Vista en retícula</p>
@@ -113,8 +203,9 @@ export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps
                                 </p>
                             </div>
                             <Switch
-                                checked={vistaEnPantalla === 'reticula'}
-                                onCheckedChange={(checked) => checked && setVistaEnPantalla('reticula')}
+                                checked={configuracion.vistaEnPantalla === 'reticula'}
+                                onCheckedChange={(checked) => checked && handleVistaEnPantallaChange('reticula')}
+                                disabled={saving}
                             />
                         </div>
                     </div>
@@ -122,7 +213,7 @@ export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps
             </ZenCard>
 
             {/* Información Adicional */}
-            <ZenCard variant="outline">
+            <ZenCard variant="outlined">
                 <ZenCardContent className="pt-6">
                     <div className="flex items-start gap-3">
                         <div className="p-2 bg-blue-600/20 rounded-lg">
@@ -131,7 +222,7 @@ export function PaquetesConfiguracion({ studioSlug }: PaquetesConfiguracionProps
                         <div className="space-y-2">
                             <h4 className="text-sm font-medium text-white">Configuración de Presentación</h4>
                             <p className="text-xs text-zinc-400">
-                                Esta configuración afecta cómo se muestran los paquetes en el sitio web público. 
+                                Esta configuración afecta cómo se muestran los paquetes en el sitio web público.
                                 Los cambios se aplicarán inmediatamente.
                             </p>
                         </div>

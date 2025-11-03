@@ -171,7 +171,7 @@ export async function crearPaquete(
             },
         });
 
-        revalidatePath(`/[slug]/studio/builder/catalogo`);
+        revalidatePath(`/[slug]/studio/builder/content/paquetes`);
 
         return {
             success: true,
@@ -386,7 +386,7 @@ export async function actualizarPaquete(
             },
         });
 
-        revalidatePath(`/[slug]/studio/builder/catalogo`);
+        revalidatePath(`/[slug]/studio/builder/content/paquetes`);
 
         return {
             success: true,
@@ -443,7 +443,7 @@ export async function eliminarPaquete(
             where: { id: paqueteId },
         });
 
-        revalidatePath(`/[slug]/studio/builder/catalogo`);
+        revalidatePath(`/[slug]/studio/builder/content/paquetes`);
 
         return { success: true };
     } catch (error) {
@@ -451,6 +451,60 @@ export async function eliminarPaquete(
         return {
             success: false,
             error: "Error al eliminar paquete",
+        };
+    }
+}
+
+/**
+ * Obtiene un paquete por ID
+ */
+export async function obtenerPaquetePorId(
+    paqueteId: string
+): Promise<{
+    success: boolean;
+    data?: PaqueteFromDB;
+    error?: string;
+}> {
+    try {
+        const paquete = await prisma.studio_paquetes.findUnique({
+            where: { id: paqueteId },
+            include: {
+                event_types: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                paquete_items: {
+                    include: {
+                        items: {
+                            select: { name: true }
+                        },
+                        service_categories: {
+                            select: { name: true }
+                        }
+                    },
+                    orderBy: { order: 'asc' }
+                },
+            },
+        });
+
+        if (!paquete) {
+            return {
+                success: false,
+                error: "Paquete no encontrado",
+            };
+        }
+
+        return {
+            success: true,
+            data: paquete as unknown as PaqueteFromDB,
+        };
+    } catch (error) {
+        console.error("[obtenerPaquetePorId] Error:", error);
+        return {
+            success: false,
+            error: "Error al obtener paquete",
         };
     }
 }
@@ -535,7 +589,7 @@ export async function duplicarPaquete(
             },
         });
 
-        revalidatePath(`/[slug]/studio/builder/catalogo`);
+        revalidatePath(`/[slug]/studio/builder/content/paquetes`);
 
         return {
             success: true,
