@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { toast } from 'sonner';
 import { X, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import { ZenButton, ZenInput, ZenTextarea, ZenBadge } from '@/components/ui/zen';
@@ -9,6 +9,8 @@ import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/li
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/builder/catalogo/utilidad.actions';
 import { crearPaquete, actualizarPaquete } from '@/lib/actions/studio/builder/paquetes/paquetes.actions';
+import { useMediaUpload } from '@/hooks/useMediaUpload';
+import { PaqueteCoverDropzone } from './PaqueteCoverDropzone';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 
@@ -44,6 +46,10 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const summaryRef = useRef<HTMLDivElement>(null);
 
+    // Estado para cover image
+    const [coverMedia, setCoverMedia] = useState<Array<{ file_url: string; file_type: string; filename: string; thumbnail_url?: string }>>([]);
+    const { uploadFiles, isUploading: isUploadingCover } = useMediaUpload();
+
     // Cargar catálogo, configuración y datos del paquete en un solo useEffect
     useEffect(() => {
         const cargarDatos = async () => {
@@ -73,6 +79,10 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                         setNombre(paquete.name || '');
                         setDescripcion(''); // No hay descripcion en PaqueteFromDB
                         setPrecioPersonalizado(paquete.precio || '');
+
+                        // Cargar cover image si existe (cuando se agregue al schema)
+                        // Por ahora dejamos vacío hasta que se agregue cover_image_url al schema
+                        setCoverMedia([]);
 
                         // Cargar items del paquete si existen
                         if (paquete.paquete_items && paquete.paquete_items.length > 0) {
@@ -397,6 +407,32 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     };
 
     // Handlers
+    // Handlers para cover image
+    const handleDropCoverFiles = useCallback(async (files: File[]) => {
+        if (files.length === 0) return;
+
+        try {
+            const uploadedFiles = await uploadFiles(files, studioSlug, 'paquetes', 'cover');
+
+            if (uploadedFiles.length > 0) {
+                const uploadedFile = uploadedFiles[0];
+                setCoverMedia([{
+                    file_url: uploadedFile.url,
+                    file_type: uploadedFile.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 'image' : 'video',
+                    filename: uploadedFile.fileName,
+                    thumbnail_url: undefined
+                }]);
+            }
+        } catch (error) {
+            console.error('Error uploading cover:', error);
+            toast.error('Error al subir la carátula');
+        }
+    }, [studioSlug, uploadFiles]);
+
+    const handleRemoveCoverMedia = useCallback(() => {
+        setCoverMedia([]);
+    }, []);
+
     const updateQuantity = (servicioId: string, cantidad: number) => {
         const servicio = servicioMap.get(servicioId);
         const prevCantidad = items[servicioId] || 0;
@@ -729,6 +765,19 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                             value={descripcion}
                             onChange={(e) => setDescripcion(e.target.value)}
                             placeholder="Describe los servicios incluidos..."
+                        />
+                    </div>
+
+                    {/* Dropzone para carátula */}
+                    <div>
+                        <label className="block text-sm font-medium text-zinc-300 mb-2">
+                            Carátula (opcional)
+                        </label>
+                        <PaqueteCoverDropzone
+                            media={coverMedia}
+                            onDropFiles={handleDropCoverFiles}
+                            onRemoveMedia={handleRemoveCoverMedia}
+                            isUploading={isUploadingCover}
                         />
                     </div>
 
