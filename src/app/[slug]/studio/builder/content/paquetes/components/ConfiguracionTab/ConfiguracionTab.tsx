@@ -33,7 +33,7 @@ export function ConfiguracionTab({ studioSlug }: ConfiguracionTabProps) {
             try {
                 setLoading(true);
                 const result = await obtenerConfiguracionPaquetes(studioSlug);
-                
+
                 if (result.success && result.data) {
                     setConfiguracion(result.data);
                 } else {
@@ -56,9 +56,9 @@ export function ConfiguracionTab({ studioSlug }: ConfiguracionTabProps) {
         try {
             setSaving(true);
             const configuracionActualizada = { ...configuracion, ...nuevaConfiguracion };
-            
+
             const result = await actualizarConfiguracionPaquetes(studioSlug, configuracionActualizada);
-            
+
             if (result.success) {
                 setConfiguracion(configuracionActualizada);
                 toast.success('Configuración actualizada');
@@ -194,7 +194,7 @@ export function ConfiguracionTab({ studioSlug }: ConfiguracionTabProps) {
                                 disabled={saving}
                             />
                         </div>
-                        
+
                         <div className="flex items-center justify-between">
                             <div className="space-y-1">
                                 <p className="text-sm font-medium text-white">Vista en retícula</p>
@@ -213,7 +213,7 @@ export function ConfiguracionTab({ studioSlug }: ConfiguracionTabProps) {
             </ZenCard>
 
             {/* Información Adicional */}
-            <ZenCard variant="outline">
+            <ZenCard variant="outlined">
                 <ZenCardContent className="pt-6">
                     <div className="flex items-start gap-3">
                         <div className="p-2 bg-blue-600/20 rounded-lg">
@@ -222,7 +222,7 @@ export function ConfiguracionTab({ studioSlug }: ConfiguracionTabProps) {
                         <div className="space-y-2">
                             <h4 className="text-sm font-medium text-white">Configuración de Presentación</h4>
                             <p className="text-xs text-zinc-400">
-                                Esta configuración afecta cómo se muestran los paquetes en el sitio web público. 
+                                Esta configuración afecta cómo se muestran los paquetes en el sitio web público.
                                 Los cambios se aplicarán inmediatamente.
                             </p>
                         </div>
