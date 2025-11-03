@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List, Star, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react";
 import {
     DndContext,
     closestCenter,
@@ -66,6 +66,9 @@ export function PaquetesTipoEventoList({
     // Estados de carga
     const [isLoading, setIsLoading] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+    // Estado para trackear paquetes que se están duplicando (placeholder temporal)
+    const [duplicatingPaquetes, setDuplicatingPaquetes] = useState<Map<string, { eventTypeId: string; nombre: string }>>(new Map());
 
     // Estados para drag & drop
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -528,30 +531,204 @@ export function PaquetesTipoEventoList({
     };
 
     const handleDuplicatePaquete = async (paquete: PaqueteFromDB) => {
+        // Generar ID temporal para el placeholder
+        const tempId = `duplicating-${Date.now()}-${Math.random()}`;
+
+        // Agregar placeholder inmediatamente
+        setDuplicatingPaquetes(prev => new Map(prev).set(tempId, {
+            eventTypeId: paquete.event_type_id,
+            nombre: paquete.name
+        }));
+
+        // Crear placeholder temporal en la lista
+        const placeholderPaquete: PaqueteFromDB = {
+            id: tempId,
+            studio_id: paquete.studio_id,
+            event_type_id: paquete.event_type_id,
+            name: paquete.name,
+            description: null,
+            cover_url: null,
+            is_featured: false,
+            cost: paquete.cost,
+            expense: paquete.expense,
+            utilidad: paquete.utilidad,
+            precio: paquete.precio,
+            status: 'active',
+            position: (paquetesData[paquete.event_type_id]?.length || 0),
+            created_at: new Date(),
+            updated_at: new Date(),
+            event_types: paquete.event_types,
+        };
+
+        // Agregar placeholder al estado local inmediatamente
+        setPaquetesData(prev => ({
+            ...prev,
+            [paquete.event_type_id]: [...(prev[paquete.event_type_id] || []), placeholderPaquete]
+        }));
+
         try {
-            setIsLoading(true);
             // Importar la función de duplicación existente
             const { duplicarPaquete } = await import('@/lib/actions/studio/builder/paquetes/paquetes.actions');
 
             const result = await duplicarPaquete(studioSlug, paquete.id);
 
             if (result.success && result.data) {
-                // Actualizar el estado local
                 const paqueteDuplicado = result.data;
+
+                // Remover placeholder de duplicating
+                setDuplicatingPaquetes(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(tempId);
+                    return newMap;
+                });
+
+                // Reemplazar placeholder con el paquete real
                 setPaquetesData(prev => ({
                     ...prev,
-                    [paquete.event_type_id]: [...(prev[paquete.event_type_id] || []), paqueteDuplicado]
+                    [paquete.event_type_id]: (prev[paquete.event_type_id] || []).map(p =>
+                        p.id === tempId ? paqueteDuplicado : p
+                    )
                 }));
 
                 // Actualizar el estado global (esto ya actualiza el preview localmente)
-                onPaquetesChange([...initialPaquetes, paqueteDuplicado]);
+                onPaquetesChange([...initialPaquetes.filter(p => p.id !== tempId), paqueteDuplicado]);
                 toast.success("Paquete duplicado correctamente");
             } else {
+                // Remover placeholder en caso de error
+                setDuplicatingPaquetes(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(tempId);
+                    return newMap;
+                });
+                setPaquetesData(prev => ({
+                    ...prev,
+                    [paquete.event_type_id]: (prev[paquete.event_type_id] || []).filter(p => p.id !== tempId)
+                }));
                 toast.error(result.error || "Error al duplicar paquete");
             }
         } catch (error) {
+            // Remover placeholder en caso de error
+            setDuplicatingPaquetes(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(tempId);
+                return newMap;
+            });
+            setPaquetesData(prev => ({
+                ...prev,
+                [paquete.event_type_id]: (prev[paquete.event_type_id] || []).filter(p => p.id !== tempId)
+            }));
             console.error("Error duplicando paquete:", error);
             toast.error("Error al duplicar paquete");
+        }
+    };
+
+    const handleToggleFeatured = async (paquete: PaqueteFromDB) => {
+        const newFeaturedValue = !paquete.is_featured;
+
+        try {
+            setIsLoading(true);
+            const { actualizarPaquete } = await import('@/lib/actions/studio/builder/paquetes/paquetes.actions');
+
+            // Si se va a destacar y no está publicado, publicarlo también
+            const updateData: { is_featured: boolean; status?: string } = {
+                is_featured: newFeaturedValue
+            };
+            if (newFeaturedValue && paquete.status !== 'active') {
+                updateData.status = 'active';
+            }
+
+            const result = await actualizarPaquete(studioSlug, paquete.id, updateData);
+
+            if (result.success && result.data) {
+                const updatedPaquete = result.data;
+
+                // Si se destacó, quitar destacado de otros paquetes del mismo tipo en el estado local
+                if (newFeaturedValue) {
+                    setPaquetesData(prev => ({
+                        ...prev,
+                        [paquete.event_type_id]: (prev[paquete.event_type_id] || []).map(p =>
+                            p.id === paquete.id ? updatedPaquete :
+                                (p.is_featured ? { ...p, is_featured: false } : p)
+                        )
+                    }));
+                } else {
+                    // Si se quitó el destacado, solo actualizar este paquete
+                    setPaquetesData(prev => ({
+                        ...prev,
+                        [paquete.event_type_id]: (prev[paquete.event_type_id] || []).map(p =>
+                            p.id === paquete.id ? updatedPaquete : p
+                        )
+                    }));
+                }
+
+                // Actualizar estado global
+                const updatedPaquetes = initialPaquetes.map(p =>
+                    p.id === paquete.id ? updatedPaquete :
+                        (p.event_type_id === paquete.event_type_id && p.is_featured && newFeaturedValue)
+                            ? { ...p, is_featured: false }
+                            : p
+                );
+                onPaquetesChange(updatedPaquetes);
+
+                const message = newFeaturedValue
+                    ? (paquete.status !== 'active' ? "Paquete destacado y publicado" : "Paquete destacado")
+                    : "Destacado removido";
+                toast.success(message);
+            } else {
+                toast.error(result.error || "Error al actualizar destacado");
+            }
+        } catch (error) {
+            console.error("Error actualizando destacado:", error);
+            toast.error("Error al actualizar destacado");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleToggleStatus = async (paquete: PaqueteFromDB) => {
+        const newStatus = paquete.status === 'active' ? 'inactive' : 'active';
+
+        try {
+            setIsLoading(true);
+            const { actualizarPaquete } = await import('@/lib/actions/studio/builder/paquetes/paquetes.actions');
+
+            // Si se va a despublicar y está destacado, quitar destacado también
+            const updateData: { status: string; is_featured?: boolean } = {
+                status: newStatus
+            };
+            if (newStatus === 'inactive' && paquete.is_featured) {
+                updateData.is_featured = false;
+            }
+
+            const result = await actualizarPaquete(studioSlug, paquete.id, updateData);
+
+            if (result.success && result.data) {
+                const updatedPaquete = result.data;
+
+                // Actualizar estado local
+                setPaquetesData(prev => ({
+                    ...prev,
+                    [paquete.event_type_id]: (prev[paquete.event_type_id] || []).map(p =>
+                        p.id === paquete.id ? updatedPaquete : p
+                    )
+                }));
+
+                // Actualizar estado global
+                const updatedPaquetes = initialPaquetes.map(p =>
+                    p.id === paquete.id ? updatedPaquete : p
+                );
+                onPaquetesChange(updatedPaquetes);
+
+                const message = newStatus === 'active'
+                    ? "Paquete publicado"
+                    : (paquete.is_featured ? "Paquete despublicado y destacado removido" : "Paquete despublicado");
+                toast.success(message);
+            } else {
+                toast.error(result.error || "Error al actualizar estado");
+            }
+        } catch (error) {
+            console.error("Error actualizando estado:", error);
+            toast.error("Error al actualizar estado");
         } finally {
             setIsLoading(false);
         }
@@ -776,6 +953,9 @@ export function PaquetesTipoEventoList({
 
     // Componente sortable para paquetes
     const SortablePaquete = ({ paquete, paqueteIndex }: { paquete: PaqueteFromDB; paqueteIndex: number }) => {
+        const isDuplicating = duplicatingPaquetes.has(paquete.id);
+
+        // Siempre llamar useSortable (regla de hooks)
         const {
             attributes,
             listeners,
@@ -783,13 +963,37 @@ export function PaquetesTipoEventoList({
             transform,
             transition,
             isDragging,
-        } = useSortable({ id: paquete.id });
+        } = useSortable({ id: paquete.id, disabled: isDuplicating });
 
         const style = {
             transform: CSS.Transform.toString(transform),
             transition,
             opacity: isDragging ? 0.5 : 1,
         };
+
+        // Si está duplicando, mostrar placeholder
+        if (isDuplicating) {
+            const duplicatingInfo = duplicatingPaquetes.get(paquete.id);
+            return (
+                <div
+                    className={`flex items-center justify-between py-3 px-2 pl-10 ${paqueteIndex > 0 ? 'border-t border-zinc-700/30' : ''} bg-zinc-800/50`}
+                >
+                    <div className="flex items-center gap-3 flex-1">
+                        <div className="p-1 mr-2">
+                            <Loader2 className="h-4 w-4 text-purple-400 animate-spin" />
+                        </div>
+                        <div className="flex-1">
+                            <div className="text-sm text-zinc-400 leading-tight">
+                                Duplicando &ldquo;{duplicatingInfo?.nombre || paquete.name}&rdquo;...
+                            </div>
+                            <div className="text-xs text-zinc-600 mt-1">
+                                Creando copia del paquete
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
 
         return (
             <div
@@ -812,7 +1016,27 @@ export function PaquetesTipoEventoList({
                         className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer"
                     >
                         <div className="flex-1">
-                            <div className="text-sm text-white leading-tight">{paquete.name}</div>
+                            <div className="flex items-center gap-2">
+                                <div className="text-sm text-white leading-tight">{paquete.name}</div>
+                                {/* Indicadores de estado */}
+                                {paquete.status === 'active' && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-600/30">
+                                        <CheckCircle className="h-3 w-3" />
+                                        Publicado
+                                    </span>
+                                )}
+                                {paquete.status !== 'active' && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-600/20 text-zinc-400 border border-zinc-600/30">
+                                        <XCircle className="h-3 w-3" />
+                                        No publicado
+                                    </span>
+                                )}
+                                {paquete.is_featured && (
+                                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-amber-600/20 border border-amber-600/30">
+                                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                    </span>
+                                )}
+                            </div>
                             <div className="text-xs text-zinc-500 mt-1">
                                 Paquete
                             </div>
@@ -841,6 +1065,39 @@ export function PaquetesTipoEventoList({
                                 <ZenDropdownMenuItem onClick={() => handleDuplicatePaquete(paquete)}>
                                     <Copy className="h-4 w-4 mr-2" />
                                     Duplicar paquete
+                                </ZenDropdownMenuItem>
+                                <ZenDropdownMenuSeparator />
+                                <ZenDropdownMenuItem
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleToggleFeatured(paquete);
+                                    }}
+                                    className={paquete.is_featured ? "text-amber-400 focus:text-amber-300" : ""}
+                                >
+                                    <Star className={`h-4 w-4 mr-2 ${paquete.is_featured ? 'fill-amber-400 text-amber-400' : ''}`} />
+                                    {paquete.is_featured ? 'Quitar destacado' : 'Destacar paquete'}
+                                </ZenDropdownMenuItem>
+                                <ZenDropdownMenuSeparator />
+                                <ZenDropdownMenuItem
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleToggleStatus(paquete);
+                                    }}
+                                    className={paquete.status === 'active' ? "text-emerald-400 focus:text-emerald-300" : ""}
+                                >
+                                    {paquete.status === 'active' ? (
+                                        <>
+                                            <EyeOff className="h-4 w-4 mr-2" />
+                                            No publicar
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            Publicar
+                                        </>
+                                    )}
                                 </ZenDropdownMenuItem>
                                 <ZenDropdownMenuSeparator />
                                 <ZenDropdownMenuItem

@@ -42,19 +42,22 @@ export default function PaquetesPage() {
             if (!prev) return prev;
             
             // Convertir PaqueteFromDB a BuilderPaquete (que es compatible con PublicPaquete)
-            const builderPaquetes = paquetes.map(paquete => ({
-                id: paquete.id,
-                nombre: paquete.name,
-                descripcion: paquete.description ? paquete.description : undefined,
-                precio: paquete.precio || paquete.cost || 0,
-                tipo_evento: paquete.event_types?.name || undefined,
-                cover_url: paquete.cover_url ? paquete.cover_url : undefined,
-                duracion_horas: undefined,
-                incluye: undefined,
-                no_incluye: undefined,
-                condiciones: undefined,
-                order: paquete.position || 0,
-            }));
+            const builderPaquetes = paquetes
+                .filter(p => !p.id.startsWith('duplicating-')) // Excluir placeholders temporales
+                .map(paquete => ({
+                    id: paquete.id,
+                    nombre: paquete.name,
+                    descripcion: paquete.description ? paquete.description : undefined,
+                    precio: paquete.precio || paquete.cost || 0,
+                    tipo_evento: paquete.event_types?.name || undefined,
+                    cover_url: paquete.cover_url ? paquete.cover_url : undefined,
+                    is_featured: paquete.is_featured ?? false,
+                    duracion_horas: undefined,
+                    incluye: undefined,
+                    no_incluye: undefined,
+                    condiciones: undefined,
+                    order: paquete.position || 0,
+                }));
 
             return {
                 ...prev,

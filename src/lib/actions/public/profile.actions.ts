@@ -257,13 +257,14 @@ export async function getStudioProfileBySlug(
                     precio: true,
                     cover_url: true,
                     order: true,
+                    is_featured: true,
                     event_types: {
                         select: {
                             name: true,
                         },
                     },
                 },
-                orderBy: { order: "asc" },
+                orderBy: [{ is_featured: "desc" }, { order: "asc" }],
             });
 
             // Debug: Verificar cover_url en la consulta
@@ -296,6 +297,7 @@ export async function getStudioProfileBySlug(
                     precio: paquete.precio ?? 0,
                     tipo_evento: paquete.event_types?.name ? paquete.event_types.name : undefined,
                     cover_url: paquete.cover_url ? paquete.cover_url : undefined,
+                    is_featured: paquete.is_featured ?? false,
                     order: paquete.order,
                 };
             });
