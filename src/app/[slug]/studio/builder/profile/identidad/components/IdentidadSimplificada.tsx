@@ -107,68 +107,59 @@ export function IdentidadSimplificada({
         <div className="space-y-6">
             {/* Información Básica con Logo */}
             <ZenCard variant="default" padding="none">
-                <ZenCardContent className="p-6 space-y-6">
-                    {/* Fila 1: Logo pequeño + Nombre del Estudio */}
-                    <div className="flex flex-col lg:flex-row gap-6 items-start">
-                        {/* Columna 1: Logo - Izquierda (más pequeño) */}
-                        <div className="flex justify-center lg:justify-start flex-shrink-0 w-full lg:w-auto">
-                            <div className="flex flex-col items-center gap-3">
-                                <AvatarManager
-                                    url={data.logo_url}
-                                    onUpdate={async (url: string) => {
-                                        await onLogoUpdate(url);
-                                    }}
-                                    onLocalUpdate={(url: string | null) => {
-                                        onLogoLocalUpdate(url);
-                                    }}
-                                    studioSlug={studioSlug}
-                                    category="identidad"
-                                    subcategory="logos"
-                                    size="md"
-                                    variant="default"
-                                    loading={loading}
-                                    cropTitle="Ajustar logo del estudio"
-                                    cropDescription="Arrastra y redimensiona el área circular para ajustar tu logo."
-                                    cropInstructions={[
-                                        "• Arrastra para mover el área de recorte",
-                                        "• Usa las esquinas para redimensionar",
-                                        "• El área circular será tu logo del estudio"
-                                    ]}
-                                    successMessage="Logo actualizado exitosamente"
-                                    deleteMessage="Logo eliminado"
-                                    showAdjustButton={true}
-                                />
-                                <p className="text-xs text-zinc-400 text-center max-w-[150px]">
-                                    PNG, SVG, JPG
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Columna 2: Nombre del Estudio - Derecha (ocupa más espacio) */}
-                        <div className="flex-1 w-full">
-                            <ZenInput
-                                label="Nombre del Estudio"
-                                required
-                                value={data.studio_name || ''}
-                                onChange={(e) => handleInputChange('studio_name', e.target.value)}
-                                placeholder="Ej: Studio Fotografía María"
-                                disabled={loading}
-                                hint="Este nombre aparecerá en tu perfil público"
+                <ZenCardContent className="p-6">
+                    {/* Logo centrado arriba */}
+                    <div className="flex justify-center mb-8">
+                        <div className="flex flex-col items-center gap-2">
+                            <AvatarManager
+                                url={data.logo_url}
+                                onUpdate={async (url: string) => {
+                                    await onLogoUpdate(url);
+                                }}
+                                onLocalUpdate={(url: string | null) => {
+                                    onLogoLocalUpdate(url);
+                                }}
+                                studioSlug={studioSlug}
+                                category="identidad"
+                                subcategory="logos"
+                                size="md"
+                                variant="compact"
+                                loading={loading}
+                                cropTitle="Ajustar logo del estudio"
+                                cropDescription="Arrastra y redimensiona el área circular para ajustar tu logo."
+                                cropInstructions={[
+                                    "• Arrastra para mover el área de recorte",
+                                    "• Usa las esquinas para redimensionar",
+                                    "• El área circular será tu logo del estudio"
+                                ]}
+                                successMessage="Logo actualizado exitosamente"
+                                deleteMessage="Logo eliminado"
+                                showAdjustButton={true}
                             />
+                            <p className="text-xs text-zinc-500">PNG, SVG, JPG</p>
                         </div>
                     </div>
 
-                    {/* Fila 2: Slogan y Página Web */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Contenido limpio en columna única */}
+                    <div className="space-y-4">
+                        {/* Nombre del estudio */}
+                        <ZenInput
+                            label="Nombre del Estudio"
+                            required
+                            value={data.studio_name || ''}
+                            onChange={(e) => handleInputChange('studio_name', e.target.value)}
+                            placeholder="Ej: Studio Fotografía María"
+                            disabled={loading}
+                        />
+
                         {/* Slogan */}
                         <ZenTextarea
                             label="Slogan"
                             value={data.slogan || ''}
                             onChange={(e) => handleInputChange('slogan', e.target.value)}
-                            placeholder="Ej: Capturando momentos únicos"
+                            placeholder="Ej: Capturando momentos inolvidables"
                             disabled={loading}
                             maxLength={100}
-                            hint="Frase corta que describe tu estudio (máximo 100 caracteres)"
                             rows={2}
                         />
 
@@ -179,7 +170,6 @@ export function IdentidadSimplificada({
                             onChange={(e) => handleInputChange('pagina_web', e.target.value)}
                             placeholder="https://tuestudio.com"
                             disabled={loading}
-                            hint="Tu sitio web principal"
                         />
                     </div>
                 </ZenCardContent>
