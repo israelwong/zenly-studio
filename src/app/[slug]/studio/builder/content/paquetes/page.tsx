@@ -41,6 +41,14 @@ export default function PaquetesPage() {
         setBuilderData(prev => {
             if (!prev) return prev;
             
+            // Debug: verificar order de tipos de evento antes del mapeo
+            console.log('🔍 [updatePreviewPaquetes] Paquetes recibidos:', paquetes.map(p => ({
+                nombre: p.name,
+                tipo_evento: p.event_types?.name,
+                tipo_evento_order: p.event_types?.order,
+                tipo_evento_id: p.event_types?.id,
+            })));
+            
             // Convertir PaqueteFromDB a BuilderPaquete (que es compatible con PublicPaquete)
             // Filtrar solo paquetes activos y sin placeholders temporales
             const builderPaquetes = paquetes
@@ -54,6 +62,7 @@ export default function PaquetesPage() {
                     descripcion: paquete.description ? paquete.description : undefined,
                     precio: paquete.precio || paquete.cost || 0,
                     tipo_evento: paquete.event_types?.name || undefined,
+                    tipo_evento_order: paquete.event_types?.order ?? undefined,
                     cover_url: paquete.cover_url ? paquete.cover_url : undefined,
                     is_featured: paquete.is_featured ?? false,
                     duracion_horas: undefined,
@@ -63,6 +72,13 @@ export default function PaquetesPage() {
                     // Usar order del schema (que viene del backend) o position como fallback
                     order: (paquete as { order?: number }).order ?? (paquete.position || 0),
                 }));
+            
+            // Debug: verificar order de tipos de evento después del mapeo
+            console.log('🔍 [updatePreviewPaquetes] BuilderPaquetes mapeados:', builderPaquetes.map(p => ({
+                nombre: p.nombre,
+                tipo_evento: p.tipo_evento,
+                tipo_evento_order: p.tipo_evento_order,
+            })));
 
             return {
                 ...prev,

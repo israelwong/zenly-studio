@@ -44,6 +44,7 @@ export async function getPublicPaquetes(
                 event_types: {
                     select: {
                         name: true,
+                        order: true,
                     },
                 },
             },
@@ -57,6 +58,7 @@ export async function getPublicPaquetes(
             descripcion: paquete.description ? paquete.description : undefined,
             precio: paquete.precio ?? 0,
             tipo_evento: paquete.event_types?.name ? paquete.event_types.name : undefined,
+            tipo_evento_order: paquete.event_types?.order ?? undefined,
             cover_url: paquete.cover_url ? paquete.cover_url : undefined,
             is_featured: paquete.is_featured ?? false,
             status: paquete.status,

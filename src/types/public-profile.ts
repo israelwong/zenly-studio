@@ -52,6 +52,7 @@ export interface PublicPaquete {
     descripcion?: string;
     precio: number;
     tipo_evento?: string;
+    tipo_evento_order?: number;
     cover_url?: string;
     is_featured?: boolean;
     status?: string;

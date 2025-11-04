@@ -35,20 +35,25 @@ export function TipoEventoForm({
         status: 'active' as 'active' | 'inactive',
     });
 
-    // Cargar datos del tipo de evento si está editando
+    // Cargar datos del tipo de evento si está editando, o resetear cuando se cierra/abre
     useEffect(() => {
-        if (tipoEvento) {
-            setFormData({
-                nombre: tipoEvento.nombre,
-                status: tipoEvento.status as 'active' | 'inactive',
-            });
-        } else {
-            setFormData({
-                nombre: '',
-                status: 'active',
-            });
+        if (isOpen) {
+            if (tipoEvento) {
+                setFormData({
+                    nombre: tipoEvento.nombre,
+                    status: tipoEvento.status as 'active' | 'inactive',
+                });
+            } else {
+                // Resetear formulario cuando se abre para crear nuevo
+                setFormData({
+                    nombre: '',
+                    status: 'active',
+                });
+            }
         }
-    }, [tipoEvento]);
+        // No resetear cuando se cierra para evitar parpadeos
+        // El reset se hará cuando se abra de nuevo
+    }, [tipoEvento, isOpen]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -74,13 +79,9 @@ export function TipoEventoForm({
             }
 
             if (result.success && result.data) {
-                toast.success(
-                    tipoEvento
-                        ? 'Tipo de evento actualizado correctamente'
-                        : 'Tipo de evento creado correctamente'
-                );
+                // Solo mostrar toast y cerrar, el padre manejará el éxito
                 onSuccess(result.data);
-                onClose();
+                // El padre cerrará el modal, no llamar onClose aquí para evitar conflictos
             } else {
                 toast.error(result.error || 'Error al procesar la solicitud');
             }
@@ -93,7 +94,12 @@ export function TipoEventoForm({
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog open={isOpen} onOpenChange={(open) => {
+            // Solo cerrar si se está cerrando (no cuando se abre)
+            if (!open) {
+                onClose();
+            }
+        }}>
             <DialogContent className="sm:max-w-[500px] bg-zinc-900 text-white border-zinc-700">
                 <DialogHeader>
                     <DialogTitle className="text-xl font-bold text-white">

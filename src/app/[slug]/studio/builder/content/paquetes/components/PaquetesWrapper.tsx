@@ -69,9 +69,14 @@ export function PaquetesWrapper({ studioSlug, onPreviewRefresh, onPreviewPaquete
         onPreviewPaquetesUpdate?.(newPaquetes);
     };
 
-    const handleTipoEventoChange = (newTiposEvento: TipoEventoData[]) => {
+    const handleTipoEventoChange = useCallback(async (newTiposEvento: TipoEventoData[]) => {
         setTiposEvento(newTiposEvento);
-    };
+        // Solo recargar paquetes si el orden cambió (para obtener el nuevo order de tipos)
+        // Nota: Cuando se reordenan tipos de evento, ya se recargan los paquetes en PaquetesTipoEventoList
+        // así que esto solo se ejecuta para otros casos (crear/editar) donde no se recargan los paquetes
+        // pero tampoco necesitamos recargar porque el order no cambia en esos casos
+        // Por ahora, dejamos que PaquetesTipoEventoList maneje la recarga cuando reordena
+    }, []);
 
     if (loading) {
         return (

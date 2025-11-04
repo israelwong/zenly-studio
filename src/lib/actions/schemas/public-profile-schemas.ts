@@ -71,6 +71,7 @@ export const PublicPaqueteSchema = z.object({
     descripcion: z.string().nullable().optional(),
     precio: z.number(),
     tipo_evento: z.string().nullable().optional(),
+    tipo_evento_order: z.number().nullable().optional(),
     cover_url: z.string().nullable().optional(),
     duracion_horas: z.number().nullable().optional(),
     incluye: z.array(z.string()).nullable().optional(),

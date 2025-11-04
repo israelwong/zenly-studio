@@ -262,6 +262,7 @@ export async function getStudioProfileBySlug(
                     event_types: {
                         select: {
                             name: true,
+                            order: true,
                         },
                     },
                 },
@@ -278,6 +279,8 @@ export async function getStudioProfileBySlug(
                 hasCoverUrl: !!p.cover_url,
                 description_type: typeof p.description,
                 cover_url_type: typeof p.cover_url,
+                event_type_name: p.event_types?.name,
+                event_type_order: p.event_types?.order,
             })));
 
             const publicPaquetes = paquetes.map(paquete => {
@@ -288,6 +291,9 @@ export async function getStudioProfileBySlug(
                     description_raw: paquete.description,
                     cover_url_raw: paquete.cover_url,
                     cover_url_type: typeof paquete.cover_url,
+                    event_type_name: paquete.event_types?.name,
+                    event_type_order: paquete.event_types?.order,
+                    tipo_evento_order_final: paquete.event_types?.order ?? undefined,
                 });
 
                 // Preservar cover_url y descripcion tal cual vienen de la DB (null se convierte a undefined para Zod)
@@ -297,12 +303,20 @@ export async function getStudioProfileBySlug(
                     descripcion: paquete.description ? paquete.description : undefined,
                     precio: paquete.precio ?? 0,
                     tipo_evento: paquete.event_types?.name ? paquete.event_types.name : undefined,
+                    tipo_evento_order: paquete.event_types?.order ?? undefined,
                     cover_url: paquete.cover_url ? paquete.cover_url : undefined,
                     is_featured: paquete.is_featured ?? false,
                     status: paquete.status,
                     order: paquete.order,
                 };
             });
+
+            // Debug: Verificar tipo_evento_order después del mapeo
+            console.log('🔍 [getStudioProfileBySlug] PublicPaquetes con tipo_evento_order:', publicPaquetes.map(p => ({
+                nombre: p.nombre,
+                tipo_evento: p.tipo_evento,
+                tipo_evento_order: p.tipo_evento_order,
+            })));
 
             // Debug: Verificar cover_url después del mapeo
             console.log('🔍 [getStudioProfileBySlug] PublicPaquetes mapped:', publicPaquetes.map(p => ({

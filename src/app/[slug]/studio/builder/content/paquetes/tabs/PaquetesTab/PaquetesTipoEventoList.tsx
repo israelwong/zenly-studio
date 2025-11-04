@@ -61,7 +61,10 @@ export function PaquetesTipoEventoList({
     const [tiposEventoExpandidos, setTiposEventoExpandidos] = useState<Set<string>>(new Set());
 
     // Datos
-    const [tiposEvento, setTiposEvento] = useState<TipoEventoData[]>(initialTiposEvento);
+    const [tiposEvento, setTiposEvento] = useState<TipoEventoData[]>(() => {
+        // Ordenar por 'order' al inicializar
+        return [...initialTiposEvento].sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    });
     const [paquetesData, setPaquetesData] = useState<Record<string, PaqueteFromDB[]>>({});
 
     // Estados de carga
@@ -113,9 +116,18 @@ export function PaquetesTipoEventoList({
                     paquetesPorTipo[tipoEventoId].push(paquete);
                 });
 
+                // Ordenar paquetes dentro de cada tipo por 'order'
+                Object.keys(paquetesPorTipo).forEach(tipoEventoId => {
+                    paquetesPorTipo[tipoEventoId].sort((a, b) => {
+                        const orderA = (a as { order?: number }).order ?? 0;
+                        const orderB = (b as { order?: number }).order ?? 0;
+                        return orderA - orderB;
+                    });
+                });
+
                 setPaquetesData(paquetesPorTipo);
 
-                // Expandir todos los tipos de evento por defecto
+                // Expandir todos los tipos de evento por defecto solo en la carga inicial
                 const allTipoEventoIds = new Set(initialTiposEvento.map(t => t.id));
                 setTiposEventoExpandidos(allTipoEventoIds);
 
@@ -129,7 +141,8 @@ export function PaquetesTipoEventoList({
         };
 
         loadInitialData();
-    }, [initialTiposEvento, initialPaquetes]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Solo ejecutar una vez al montar el componente
 
     const toggleTipoEvento = (tipoEventoId: string) => {
         const isExpanded = tiposEventoExpandidos.has(tipoEventoId);
@@ -252,6 +265,32 @@ export function PaquetesTipoEventoList({
                     });
 
                     if (result.success) {
+                        // Recargar paquetes para obtener el nuevo order de los tipos de evento
+                        const paquetesResult = await obtenerPaquetes(studioSlug);
+                        if (paquetesResult.success && paquetesResult.data) {
+                            const paquetesActualizados = paquetesResult.data;
+                            const paquetesPorTipo: Record<string, PaqueteFromDB[]> = {};
+                            paquetesActualizados.forEach(paquete => {
+                                const tipoEventoId = paquete.event_type_id || 'sin-tipo';
+                                if (!paquetesPorTipo[tipoEventoId]) {
+                                    paquetesPorTipo[tipoEventoId] = [];
+                                }
+                                paquetesPorTipo[tipoEventoId].push(paquete);
+                            });
+
+                            // Ordenar paquetes dentro de cada tipo por 'order'
+                            Object.keys(paquetesPorTipo).forEach(tipoEventoId => {
+                                paquetesPorTipo[tipoEventoId].sort((a, b) => {
+                                    const orderA = (a as { order?: number }).order ?? 0;
+                                    const orderB = (b as { order?: number }).order ?? 0;
+                                    return orderA - orderB;
+                                });
+                            });
+
+                            setPaquetesData(paquetesPorTipo);
+                            // Actualizar preview con datos completos del backend (incluye nuevo order de tipos)
+                            onPaquetesChange(paquetesActualizados);
+                        }
                         toast.success("Orden de tipos de evento actualizado");
                     } else {
                         toast.error(result.error || "Error al actualizar el orden");
@@ -317,25 +356,27 @@ export function PaquetesTipoEventoList({
 
                 if (activeIndex === -1 || overIndex === -1) return;
 
+                // Actualización optimista inmediata (como en CatalogoTab)
                 const newPaquetes = arrayMove(paquetes, activeIndex, overIndex);
                 const paquetesConOrder = newPaquetes.map((paquete, index) => ({
                     ...paquete,
-                    position: index
+                    order: index
                 }));
 
+                // Actualizar estado local inmediatamente para feedback visual instantáneo
                 setPaquetesData(prev => ({
                     ...prev,
                     [activeTipoEventoId]: paquetesConOrder
                 }));
 
-                // Actualizar el estado global de paquetes
+                // Actualizar el estado global de paquetes inmediatamente
                 const paquetesGlobalesActualizados = initialPaquetes.map(paquete => {
                     const paqueteActualizado = paquetesConOrder.find(p => p.id === paquete.id);
-                    return paqueteActualizado ? { ...paquete, position: paqueteActualizado.position } : paquete;
+                    return paqueteActualizado ? { ...paquete, order: paqueteActualizado.order } : paquete;
                 });
                 onPaquetesChange(paquetesGlobalesActualizados);
 
-                // Actualizar en el backend
+                // Actualizar en el backend en segundo plano
                 try {
                     const result = await reorderPaquetes(studioSlug, paquetesConOrder.map(p => p.id));
                     if (result.success) {
@@ -352,6 +393,16 @@ export function PaquetesTipoEventoList({
                                 }
                                 paquetesPorTipo[tipoEventoId].push(paquete);
                             });
+
+                            // Ordenar paquetes dentro de cada tipo por 'order'
+                            Object.keys(paquetesPorTipo).forEach(tipoEventoId => {
+                                paquetesPorTipo[tipoEventoId].sort((a, b) => {
+                                    const orderA = (a as { order?: number }).order ?? 0;
+                                    const orderB = (b as { order?: number }).order ?? 0;
+                                    return orderA - orderB;
+                                });
+                            });
+
                             setPaquetesData(paquetesPorTipo);
                             // Actualizar preview con datos completos del backend
                             onPaquetesChange(paquetesActualizados);
@@ -388,11 +439,12 @@ export function PaquetesTipoEventoList({
                 const paqueteActualizadoOptimistic = {
                     ...paqueteAMover,
                     event_type_id: overTipoEventoId,
-                    position: paquetesDestino.length,
+                    order: paquetesDestino.length,
                     // Actualizar event_types si está disponible
                     event_types: tiposEvento.find(t => t.id === overTipoEventoId) ? {
                         id: overTipoEventoId,
-                        name: tiposEvento.find(t => t.id === overTipoEventoId)!.nombre
+                        name: tiposEvento.find(t => t.id === overTipoEventoId)!.nombre,
+                        order: tiposEvento.find(t => t.id === overTipoEventoId)!.orden || 0
                     } : paqueteAMover.event_types
                 };
 
@@ -419,30 +471,36 @@ export function PaquetesTipoEventoList({
                     const { actualizarPaquete } = await import('@/lib/actions/studio/builder/paquetes/paquetes.actions');
                     const result = await actualizarPaquete(studioSlug, activeId, {
                         event_type_id: overTipoEventoId,
-                        position: paquetesDestino.length
+                        order: paquetesDestino.length
                     });
 
                     if (result.success && result.data) {
-                        const updatedPaquete = result.data;
+                        // Recargar todos los paquetes para asegurar orden correcto
+                        const paquetesResult = await obtenerPaquetes(studioSlug);
+                        if (paquetesResult.success && paquetesResult.data) {
+                            const paquetesActualizados = paquetesResult.data;
+                            const paquetesPorTipo: Record<string, PaqueteFromDB[]> = {};
+                            paquetesActualizados.forEach(paquete => {
+                                const tipoEventoId = paquete.event_type_id || 'sin-tipo';
+                                if (!paquetesPorTipo[tipoEventoId]) {
+                                    paquetesPorTipo[tipoEventoId] = [];
+                                }
+                                paquetesPorTipo[tipoEventoId].push(paquete);
+                            });
 
-                        // Actualizar con datos completos del backend (sincronización)
-                        setPaquetesData(prev => {
-                            const nuevosOrigen = (prev[activeTipoEventoId] || []).filter(p => p.id !== activeId);
-                            const nuevosDestino = (prev[overTipoEventoId] || []).map(p =>
-                                p.id === activeId ? updatedPaquete : p
-                            );
-                            return {
-                                ...prev,
-                                [activeTipoEventoId]: nuevosOrigen,
-                                [overTipoEventoId]: nuevosDestino
-                            };
-                        });
+                            // Ordenar paquetes dentro de cada tipo por 'order'
+                            Object.keys(paquetesPorTipo).forEach(tipoEventoId => {
+                                paquetesPorTipo[tipoEventoId].sort((a, b) => {
+                                    const orderA = (a as { order?: number }).order ?? 0;
+                                    const orderB = (b as { order?: number }).order ?? 0;
+                                    return orderA - orderB;
+                                });
+                            });
 
-                        // Actualizar estado global con datos del backend
-                        const paquetesActualizados = initialPaquetes.map(paquete =>
-                            paquete.id === activeId ? updatedPaquete : paquete
-                        );
-                        onPaquetesChange(paquetesActualizados);
+                            setPaquetesData(paquetesPorTipo);
+                            // Actualizar preview con datos completos del backend
+                            onPaquetesChange(paquetesActualizados);
+                        }
 
                         toast.success(`Paquete movido a ${tiposEvento.find(t => t.id === overTipoEventoId)?.nombre}`);
                     } else {
@@ -479,7 +537,14 @@ export function PaquetesTipoEventoList({
         setIsCreateTipoEventoModalOpen(true);
     };
 
-    const handleTipoEventoCreated = (newTipoEvento: TipoEventoData) => {
+    const handleCloseCreateModal = useCallback(() => {
+        setIsCreateTipoEventoModalOpen(false);
+    }, []);
+
+    const handleTipoEventoCreated = useCallback((newTipoEvento: TipoEventoData) => {
+        // Cerrar modal primero para evitar parpadeos
+        setIsCreateTipoEventoModalOpen(false);
+
         // Actualizar el estado local del componente
         setTiposEvento(prev => [...prev, newTipoEvento]);
 
@@ -493,9 +558,44 @@ export function PaquetesTipoEventoList({
             [newTipoEvento.id]: []
         }));
 
-        setIsCreateTipoEventoModalOpen(false);
         toast.success("Tipo de evento creado correctamente");
-    };
+    }, [tiposEvento, onTiposEventoChange]);
+
+    // Sincronizar tiposEvento cuando cambian desde el padre, pero no si estamos en medio de una operación
+    useEffect(() => {
+        // Solo sincronizar si los IDs son diferentes (evitar sincronización innecesaria)
+        const currentIds = tiposEvento.map(t => t.id).sort().join(',');
+        const newIds = initialTiposEvento.map(t => t.id).sort().join(',');
+
+        if (currentIds !== newIds && !isCreateTipoEventoModalOpen && !isEditTipoEventoModalOpen) {
+            // Ordenar por 'order' antes de establecer
+            const tiposOrdenados = [...initialTiposEvento].sort((a, b) => (a.orden || 0) - (b.orden || 0));
+            setTiposEvento(tiposOrdenados);
+        }
+    }, [initialTiposEvento, isCreateTipoEventoModalOpen, isEditTipoEventoModalOpen, tiposEvento]);
+
+    // Sincronizar paquetes cuando cambian desde el padre
+    useEffect(() => {
+        const paquetesPorTipo: Record<string, PaqueteFromDB[]> = {};
+        initialPaquetes.forEach(paquete => {
+            const tipoEventoId = paquete.event_type_id || 'sin-tipo';
+            if (!paquetesPorTipo[tipoEventoId]) {
+                paquetesPorTipo[tipoEventoId] = [];
+            }
+            paquetesPorTipo[tipoEventoId].push(paquete);
+        });
+
+        // Ordenar paquetes dentro de cada tipo por 'order'
+        Object.keys(paquetesPorTipo).forEach(tipoEventoId => {
+            paquetesPorTipo[tipoEventoId].sort((a, b) => {
+                const orderA = (a as { order?: number }).order ?? 0;
+                const orderB = (b as { order?: number }).order ?? 0;
+                return orderA - orderB;
+            });
+        });
+
+        setPaquetesData(paquetesPorTipo);
+    }, [initialPaquetes]);
 
     const handleEditTipoEvento = (tipoEvento: TipoEventoData) => {
         setEditingTipoEvento(tipoEvento);
@@ -503,6 +603,10 @@ export function PaquetesTipoEventoList({
     };
 
     const handleTipoEventoUpdated = (updatedTipoEvento: TipoEventoData) => {
+        // Cerrar modal primero para evitar parpadeos
+        setIsEditTipoEventoModalOpen(false);
+        setEditingTipoEvento(null);
+
         // Actualizar el estado local del componente
         setTiposEvento(prev => prev.map(tipo =>
             tipo.id === updatedTipoEvento.id ? updatedTipoEvento : tipo
@@ -514,8 +618,6 @@ export function PaquetesTipoEventoList({
         );
         onTiposEventoChange(updatedTiposEvento);
 
-        setIsEditTipoEventoModalOpen(false);
-        setEditingTipoEvento(null);
         toast.success("Tipo de evento actualizado correctamente");
     };
 
@@ -527,30 +629,34 @@ export function PaquetesTipoEventoList({
     const handleConfirmDeleteTipoEvento = async () => {
         if (!tipoEventoToDelete) return;
 
+        // Cerrar modal primero para evitar parpadeos
+        setIsDeleteTipoEventoModalOpen(false);
+        const tipoEventoIdToDelete = tipoEventoToDelete.id;
+
         try {
             setIsLoading(true);
             // Importar la función de eliminación existente
             const { eliminarTipoEvento } = await import('@/lib/actions/studio/negocio/tipos-evento.actions');
 
-            const result = await eliminarTipoEvento(tipoEventoToDelete.id);
+            const result = await eliminarTipoEvento(tipoEventoIdToDelete);
 
             if (result.success) {
                 // Actualizar el estado local del componente
-                setTiposEvento(prev => prev.filter(t => t.id !== tipoEventoToDelete.id));
+                setTiposEvento(prev => prev.filter(t => t.id !== tipoEventoIdToDelete));
 
                 // Actualizar el estado global (para sincronizar con otros componentes)
-                const updatedTiposEvento = tiposEvento.filter(t => t.id !== tipoEventoToDelete.id);
+                const updatedTiposEvento = tiposEvento.filter(t => t.id !== tipoEventoIdToDelete);
                 onTiposEventoChange(updatedTiposEvento);
 
                 // También eliminar los paquetes asociados del estado local
                 setPaquetesData(prev => {
                     const newData = { ...prev };
-                    delete newData[tipoEventoToDelete.id];
+                    delete newData[tipoEventoIdToDelete];
                     return newData;
                 });
 
                 // Actualizar paquetes globales (eliminar los que pertenecen a este tipo)
-                const updatedPaquetes = initialPaquetes.filter(p => p.event_type_id !== tipoEventoToDelete.id);
+                const updatedPaquetes = initialPaquetes.filter(p => p.event_type_id !== tipoEventoIdToDelete);
                 onPaquetesChange(updatedPaquetes);
 
                 toast.success("Tipo de evento eliminado correctamente");
@@ -562,7 +668,6 @@ export function PaquetesTipoEventoList({
             toast.error("Error al eliminar tipo de evento");
         } finally {
             setIsLoading(false);
-            setIsDeleteTipoEventoModalOpen(false);
             setTipoEventoToDelete(null);
         }
     };
@@ -984,22 +1089,27 @@ export function PaquetesTipoEventoList({
                                 {paquetesDelTipo.length === 0 ? (
                                     <EmptyTipoEventoDropZone tipoEvento={tipoEvento} />
                                 ) : (
-                                    <div className="space-y-1">
-                                        {paquetesDelTipo
-                                            .sort((a, b) => {
-                                                // Usar order del schema (que viene del backend) o position como fallback
-                                                const orderA = (a as { order?: number }).order ?? (a.position || 0);
-                                                const orderB = (b as { order?: number }).order ?? (b.position || 0);
-                                                return orderA - orderB;
-                                            })
-                                            .map((paquete, paqueteIndex) => (
-                                                <SortablePaquete
-                                                    key={paquete.id}
-                                                    paquete={paquete}
-                                                    paqueteIndex={paqueteIndex}
-                                                />
-                                            ))}
-                                    </div>
+                                    <SortableContext
+                                        items={paquetesDelTipo.map(p => p.id)}
+                                        strategy={verticalListSortingStrategy}
+                                    >
+                                        <div className="space-y-1">
+                                            {paquetesDelTipo
+                                                .sort((a, b) => {
+                                                    // Usar order del schema (que viene del backend) o position como fallback
+                                                    const orderA = (a as { order?: number }).order ?? (a.position || 0);
+                                                    const orderB = (b as { order?: number }).order ?? (b.position || 0);
+                                                    return orderA - orderB;
+                                                })
+                                                .map((paquete, paqueteIndex) => (
+                                                    <SortablePaquete
+                                                        key={paquete.id}
+                                                        paquete={paquete}
+                                                        paqueteIndex={paqueteIndex}
+                                                    />
+                                                ))}
+                                        </div>
+                                    </SortableContext>
                                 )}
                             </div>
                         )}
@@ -1025,8 +1135,8 @@ export function PaquetesTipoEventoList({
 
         const style = {
             transform: CSS.Transform.toString(transform),
-            transition: isDragging ? 'none' : transition, // Sin transición mientras se arrastra para mejor feedback
-            opacity: isDragging ? 0.4 : 1,
+            transition,
+            opacity: isDragging ? 0.5 : 1,
         };
 
         const coverUrl = paquete.cover_url;
@@ -1177,8 +1287,7 @@ export function PaquetesTipoEventoList({
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`flex items-center justify-between py-3 px-2 pl-10 ${paqueteIndex > 0 ? 'border-t border-zinc-700/30' : ''} hover:bg-zinc-700/20 transition-all duration-200 ${isDragging ? 'bg-purple-500/10 border-l-2 border-purple-500' : ''
-                    }`}
+                className={`flex items-center justify-between py-3 px-2 pl-10 ${paqueteIndex > 0 ? 'border-t border-zinc-700/30' : ''} ${isDragging ? 'bg-purple-500/10 border-l-2 border-purple-500' : 'hover:bg-zinc-700/20'} transition-colors`}
             >
                 <div className="flex items-center gap-3 flex-1">
                     <button
@@ -1458,14 +1567,24 @@ export function PaquetesTipoEventoList({
                         const activeTipoEvento = tiposEvento.find(t => t.id === activeId);
 
                         if (activePaquete) {
-                            // Overlay para paquete
+                            // Overlay minimalista que mantiene consistencia visual sin cargar recursos pesados
+                            // Usar solo texto y estructura básica para mejor performance
                             return (
-                                <div className="bg-zinc-800/95 border-2 border-purple-500 rounded-lg p-3 shadow-xl shadow-purple-500/20 backdrop-blur-sm">
-                                    <div className="flex items-center gap-3">
-                                        <GripVertical className="h-4 w-4 text-purple-400" />
-                                        <span className="font-medium text-white">
-                                            {activePaquete.name}
-                                        </span>
+                                <div className="flex items-center justify-between py-3 px-2 pl-10 bg-zinc-800/95 border-2 border-purple-500 rounded-lg shadow-xl shadow-purple-500/20 backdrop-blur-sm min-w-[300px] opacity-95">
+                                    <div className="flex items-center gap-3 flex-1">
+                                        <GripVertical className="h-4 w-4 text-purple-400 flex-shrink-0" />
+                                        {/* Placeholder simple sin carga de imagen para mejor performance */}
+                                        <div className="w-16 h-16 rounded-lg flex-shrink-0 bg-zinc-700 border border-zinc-600" />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm text-zinc-300 leading-tight font-light truncate">
+                                                {activePaquete.name}
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs text-zinc-400">
+                                                    ${(activePaquete.precio || activePaquete.cost || 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -1524,24 +1643,30 @@ export function PaquetesTipoEventoList({
             )}
 
             {/* Modal para crear tipo de evento */}
-            <TipoEventoForm
-                isOpen={isCreateTipoEventoModalOpen}
-                onClose={() => setIsCreateTipoEventoModalOpen(false)}
-                onSuccess={handleTipoEventoCreated}
-                studioSlug={studioSlug}
-            />
+            {isCreateTipoEventoModalOpen && (
+                <TipoEventoForm
+                    key="create-tipo-evento-modal"
+                    isOpen={isCreateTipoEventoModalOpen}
+                    onClose={handleCloseCreateModal}
+                    onSuccess={handleTipoEventoCreated}
+                    studioSlug={studioSlug}
+                />
+            )}
 
             {/* Modal para editar tipo de evento */}
-            <TipoEventoForm
-                isOpen={isEditTipoEventoModalOpen}
-                onClose={() => {
-                    setIsEditTipoEventoModalOpen(false);
-                    setEditingTipoEvento(null);
-                }}
-                onSuccess={handleTipoEventoUpdated}
-                studioSlug={studioSlug}
-                tipoEvento={editingTipoEvento}
-            />
+            {isEditTipoEventoModalOpen && editingTipoEvento && (
+                <TipoEventoForm
+                    key={`edit-tipo-evento-modal-${editingTipoEvento.id}`}
+                    isOpen={isEditTipoEventoModalOpen}
+                    onClose={() => {
+                        setIsEditTipoEventoModalOpen(false);
+                        setEditingTipoEvento(null);
+                    }}
+                    onSuccess={handleTipoEventoUpdated}
+                    studioSlug={studioSlug}
+                    tipoEvento={editingTipoEvento}
+                />
+            )}
 
         </DndContext>
     );
