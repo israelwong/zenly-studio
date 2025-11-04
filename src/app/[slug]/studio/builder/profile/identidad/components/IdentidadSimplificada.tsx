@@ -105,19 +105,13 @@ export function IdentidadSimplificada({
 
     return (
         <div className="space-y-6">
-            {/* Logo */}
+            {/* Información Básica con Logo */}
             <ZenCard variant="default" padding="none">
                 <ZenCardContent className="p-6">
                     <div className="flex flex-col lg:flex-row gap-8 items-start">
                         {/* Columna 1: Logo - Izquierda */}
                         <div className="flex justify-center lg:justify-start flex-shrink-0 w-full lg:w-auto">
                             <div className="flex flex-col items-center gap-4">
-                                <div className="space-y-2">
-                                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                        Logo Principal
-                                    </h3>
-                                </div>
                                 <AvatarManager
                                     url={data.logo_url}
                                     onUpdate={async (url: string) => {
@@ -148,45 +142,43 @@ export function IdentidadSimplificada({
                                 </p>
                             </div>
                         </div>
+
+                        {/* Columna 2: Información Básica - Derecha */}
+                        <div className="flex-1 w-full space-y-4">
+                            {/* Nombre del estudio */}
+                            <ZenInput
+                                label="Nombre del Estudio"
+                                required
+                                value={data.studio_name || ''}
+                                onChange={(e) => handleInputChange('studio_name', e.target.value)}
+                                placeholder="Ej: Studio Fotografía María"
+                                disabled={loading}
+                                hint="Este nombre aparecerá en tu perfil público"
+                            />
+
+                            {/* Slogan */}
+                            <ZenTextarea
+                                label="Slogan"
+                                value={data.slogan || ''}
+                                onChange={(e) => handleInputChange('slogan', e.target.value)}
+                                placeholder="Ej: Capturando momentos únicos"
+                                disabled={loading}
+                                maxLength={100}
+                                hint="Frase corta que describe tu estudio (máximo 100 caracteres)"
+                                rows={2}
+                            />
+
+                            {/* Website */}
+                            <ZenInput
+                                label="Página Web (Opcional)"
+                                value={data.pagina_web || ''}
+                                onChange={(e) => handleInputChange('pagina_web', e.target.value)}
+                                placeholder="https://tuestudio.com"
+                                disabled={loading}
+                                hint="Tu sitio web principal"
+                            />
+                        </div>
                     </div>
-                </ZenCardContent>
-            </ZenCard>
-
-            {/* Información Básica */}
-            <ZenCard variant="default" padding="none">
-                <ZenCardContent className="p-6 space-y-4">
-                    {/* Nombre del estudio */}
-                    <ZenInput
-                        label="Nombre del Estudio"
-                        required
-                        value={data.studio_name || ''}
-                        onChange={(e) => handleInputChange('studio_name', e.target.value)}
-                        placeholder="Ej: Studio Fotografía María"
-                        disabled={loading}
-                        hint="Este nombre aparecerá en tu perfil público"
-                    />
-
-                    {/* Slogan */}
-                    <ZenTextarea
-                        label="Slogan"
-                        value={data.slogan || ''}
-                        onChange={(e) => handleInputChange('slogan', e.target.value)}
-                        placeholder="Ej: Capturando momentos únicos"
-                        disabled={loading}
-                        maxLength={100}
-                        hint="Frase corta que describe tu estudio (máximo 100 caracteres)"
-                        rows={2}
-                    />
-
-                    {/* Website */}
-                    <ZenInput
-                        label="Página Web (Opcional)"
-                        value={data.pagina_web || ''}
-                        onChange={(e) => handleInputChange('pagina_web', e.target.value)}
-                        placeholder="https://tuestudio.com"
-                        disabled={loading}
-                        hint="Tu sitio web principal"
-                    />
                 </ZenCardContent>
             </ZenCard>
 
