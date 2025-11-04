@@ -383,7 +383,7 @@ export function ImageGrid({
                                 src={item.file_url}
                                 alt={item.filename}
                                 fill
-                                className={isEditable ? "object-contain" : "object-cover"}
+                                className="object-cover"
                                 sizes="(max-width: 768px) 100vw, 50vw"
                             />
                         )
@@ -431,7 +431,7 @@ export function ImageGrid({
                             onMouseDown={(e) => {
                                 e.stopPropagation();
                             }}
-                            className="absolute bottom-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 z-30"
+                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 z-30"
                             title="Eliminar imagen"
                             style={{
                                 pointerEvents: 'auto',
@@ -514,7 +514,7 @@ export function ImageGrid({
                         {isEditable && (
                             <button
                                 type="button"
-                                className={`relative bg-zinc-800 ${borderStyleClass} text-center hover:bg-zinc-700 transition-colors ${media.length === 0 ? 'col-span-full h-32' : 'aspect-square'} border-2 border-dashed border-zinc-600 hover:border-emerald-500 cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed`}
+                                className={`relative bg-zinc-800 ${borderStyleClass} text-center hover:bg-zinc-700 transition-colors ${media.length === 0 ? 'col-span-full h-32' : 'w-24 h-24'} border-2 border-dashed border-zinc-600 hover:border-emerald-500 cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed`}
                                 onClick={() => {
                                     if (onUploadClick && !isUploading) {
                                         onUploadClick();
@@ -526,16 +526,16 @@ export function ImageGrid({
                                     <div className="text-center">
                                         {isUploading ? (
                                             <>
-                                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent mx-auto mb-2"></div>
-                                                <div className="text-sm text-emerald-400">
-                                                    Subiendo archivos...
+                                                <div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-400 border-t-transparent mx-auto mb-1"></div>
+                                                <div className="text-xs text-emerald-400">
+                                                    Subiendo...
                                                 </div>
                                             </>
                                         ) : (
                                             <>
-                                                <Upload className="h-8 w-8 text-zinc-500 mx-auto mb-2 group-hover:text-emerald-400" />
-                                                <div className="text-sm text-zinc-500 group-hover:text-emerald-400">
-                                                    {media.length === 0 ? 'Arrastra imágenes o videos aquí' : 'Agregar más'}
+                                                <Upload className="h-5 w-5 text-zinc-500 mx-auto mb-1 group-hover:text-emerald-400" />
+                                                <div className="text-xs text-zinc-500 group-hover:text-emerald-400">
+                                                    {media.length === 0 ? 'Arrastra aquí' : 'Agregar'}
                                                 </div>
                                             </>
                                         )}

@@ -1,16 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import Image from "next/image";
 import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSelect, ZenSwitch } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/shadcn/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/shadcn/tabs";
-import Lightbox from "yet-another-react-lightbox";
-import Video from "yet-another-react-lightbox/plugins/video";
-import "yet-another-react-lightbox/styles.css";
 import { toast } from "sonner";
-import { Trash2, Upload, Loader2, GripVertical, Play, Save, Plus, Minus, Calculator, Image as ImageIcon } from "lucide-react";
+import { Loader2, Save, Plus, Minus, Calculator } from "lucide-react";
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from "@/lib/actions/studio/builder/catalogo/calcular-precio";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/builder/catalogo/utilidad.actions";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
@@ -28,29 +24,8 @@ import {
     reordenarMediaItem
 } from "@/lib/actions/studio/builder/catalogo/media-items.actions";
 import { deleteFileStorage } from "@/lib/actions/shared/media.actions";
-import {
-    DndContext,
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent,
-} from "@dnd-kit/core";
-import {
-    SortableContext,
-    verticalListSortingStrategy,
-    useSortable,
-    sortableKeyboardCoordinates,
-} from "@dnd-kit/sortable";
-import { arrayMove } from "@dnd-kit/sortable";
-
-interface MediaItem {
-    id: string;
-    url: string;
-    fileName: string;
-    isUploading?: boolean;
-}
+import { ImageGrid } from "@/components/shared/media/ImageGrid";
+import { MediaItem } from "@/types/content-blocks";
 
 interface Gasto {
     nombre: string;
@@ -82,7 +57,7 @@ interface ItemEditorModalProps {
 
 /**
  * Modal para crear/editar items con gestión completa de multimedia
- * Incluye tabs para datos, fotos y videos con drag & drop
+ * Incluye tabs para datos y multimedia con drag & drop
  */
 export function ItemEditorModal({
     isOpen,
@@ -118,36 +93,19 @@ export function ItemEditorModal({
         { value: "producto", label: "Producto" }
     ];
 
-    // Estados de multimedia
-    const [fotos, setFotos] = useState<MediaItem[]>([]);
-    const [videos, setVideos] = useState<MediaItem[]>([]);
-    const [isDraggingFotos, setIsDraggingFotos] = useState(false);
-    const [isDraggingVideos, setIsDraggingVideos] = useState(false);
+    // Estados de multimedia unificado
+    const [media, setMedia] = useState<MediaItem[]>([]);
+    const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+    const loadedItemIdRef = useRef<string | null>(null);
 
-    // Lightbox states - completamente independiente del Sheet
-    const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false);
-    const [isVideoLightboxOpen, setIsVideoLightboxOpen] = useState(false);
-    const [imageSlides, setImageSlides] = useState<Array<{ src: string; alt: string }>>([]);
-    const [videoSlides, setVideoSlides] = useState<Array<{
-        type: 'video';
-        width: number;
-        height: number;
-        poster: string;
-        sources: Array<{ src: string; type: string }>;
-    }>>([]);
-    const [lightboxIndex, setLightboxIndex] = useState(0);
-
-    // File inputs refs
-    const fotosInputRef = useRef<HTMLInputElement>(null);
-    const videosInputRef = useRef<HTMLInputElement>(null);
+    // File input ref
+    const mediaInputRef = useRef<HTMLInputElement>(null);
 
     // Estados de UI
     const [isSaving, setIsSaving] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [isDeleteFotoModalOpen, setIsDeleteFotoModalOpen] = useState(false);
-    const [isDeleteVideoModalOpen, setIsDeleteVideoModalOpen] = useState(false);
-    const [fotoToDelete, setFotoToDelete] = useState<string | null>(null);
-    const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
+    const [isDeleteMediaModalOpen, setIsDeleteMediaModalOpen] = useState(false);
+    const [mediaToDelete, setMediaToDelete] = useState<string | null>(null);
     const [isDeletingMedia, setIsDeletingMedia] = useState(false);
 
     // Hooks
@@ -227,32 +185,29 @@ export function ItemEditorModal({
 
     // Cargar media existente desde BD
     const cargarMediaExistente = async (itemId: string) => {
+        setIsLoadingMedia(true);
         try {
             const result = await obtenerMediaItem(itemId);
             if (result.success && result.data) {
-                const fotosExistentes = result.data
-                    .filter((m) => m.file_type === 'IMAGE')
-                    .map((m) => ({
-                        id: m.id,
-                        url: m.file_url,
-                        fileName: m.filename,
-                        size: Number(m.storage_bytes),
-                    }));
+                const mediaItems: MediaItem[] = result.data.map((m) => ({
+                    id: m.id,
+                    file_url: m.file_url,
+                    file_type: m.file_type === 'IMAGE' ? 'image' : 'video',
+                    filename: m.filename,
+                    storage_path: '', // No disponible en BD actual
+                    storage_bytes: Number(m.storage_bytes),
+                    display_order: m.display_order,
+                }));
 
-                const videosExistentes = result.data
-                    .filter((m) => m.file_type === 'VIDEO')
-                    .map((m) => ({
-                        id: m.id,
-                        url: m.file_url,
-                        fileName: m.filename,
-                        size: Number(m.storage_bytes),
-                    }));
-
-                setFotos(fotosExistentes);
-                setVideos(videosExistentes);
+                setMedia(mediaItems);
+            } else {
+                setMedia([]);
             }
         } catch (error) {
             console.error("Error cargando media existente:", error);
+            setMedia([]);
+        } finally {
+            setIsLoadingMedia(false);
         }
     };
 
@@ -271,8 +226,9 @@ export function ItemEditorModal({
                     status: item.status || "active",
                 });
                 setGastos(item.gastos?.map((g) => ({ nombre: g.nombre, costo: g.costo })) || []);
-                // Cargar media existente si es edición
-                if (item.id) {
+                // Cargar media existente solo si el item.id cambió o es diferente al cargado
+                if (item.id && item.id !== loadedItemIdRef.current) {
+                    loadedItemIdRef.current = item.id;
                     cargarMediaExistente(item.id);
                 }
             } else {
@@ -286,19 +242,12 @@ export function ItemEditorModal({
                     status: "active",
                 });
                 setGastos([]);
-                setFotos([]);
-                setVideos([]);
+                setMedia([]);
+                setIsLoadingMedia(false);
+                loadedItemIdRef.current = null;
             }
         }
-    }, [isOpen, item, categoriaId]); // item.status también está incluido en item
-
-    // Reset lightbox when sheet opens to prevent auto-opening
-    useEffect(() => {
-        if (isOpen) {
-            setIsImageLightboxOpen(false);
-            setIsVideoLightboxOpen(false);
-        }
-    }, [isOpen]);
+    }, [isOpen, item, categoriaId]);
 
     const handleInputChange = (field: keyof ItemFormData, value: string | number) => {
         setFormData(prev => ({
@@ -443,175 +392,100 @@ export function ItemEditorModal({
     };
 
     // Helper para notificar cambios de media al padre
-    const notifyMediaChange = (newFotos?: MediaItem[], newVideos?: MediaItem[]) => {
+    const notifyMediaChange = (newMedia?: MediaItem[]) => {
         if (onMediaChange && formData.id) {
-            const currentFotos = newFotos !== undefined ? newFotos : fotos;
-            const currentVideos = newVideos !== undefined ? newVideos : videos;
-            const hasPhotos = currentFotos.length > 0;
-            const hasVideos = currentVideos.length > 0;
+            const currentMedia = newMedia !== undefined ? newMedia : media;
+            const hasPhotos = currentMedia.some(m => m.file_type === 'image');
+            const hasVideos = currentMedia.some(m => m.file_type === 'video');
             onMediaChange(formData.id, hasPhotos, hasVideos);
         }
     };
 
-    // File upload handlers
-    const handleFotosUpload = async (files: FileList) => {
+    // File upload handler unificado
+    const handleMediaUpload = async (files: File[]) => {
         if (!files.length) return;
         if (!formData.id) {
-            toast.error("Guarda el item primero antes de subir fotos");
+            toast.error("Guarda el item primero antes de subir archivos");
             return;
         }
 
         setIsUploading(true);
         try {
-            const fileArray = Array.from(files);
-            const uploadedFiles = await uploadFiles(fileArray, studioSlug, `items/${formData.id}/fotos`);
+            const uploadedFiles = await uploadFiles(files, studioSlug, `items/${formData.id}/multimedia`);
 
             // Persistir en BD
-            for (const foto of uploadedFiles) {
+            for (const file of uploadedFiles) {
+                const fileType = file.fileName.match(/\.(mp4|mov|avi|webm)$/i) ? 'video' : 'image';
                 const result = await crearMediaItem({
                     itemId: formData.id,
-                    url: foto.url,
-                    fileName: foto.fileName,
-                    fileType: 'image',
-                    size: foto.size,
-                    order: fotos.length,
+                    url: file.url,
+                    fileName: file.fileName,
+                    fileType,
+                    size: file.size,
+                    order: media.length,
                     studioId: studioSlug,
                 });
 
                 if (!result.success) {
-                    toast.error(`Error guardando ${foto.fileName}: ${result.error}`);
+                    toast.error(`Error guardando ${file.fileName}: ${result.error}`);
                 }
             }
 
-            const mediaItems = uploadedFiles.map(file => ({
-                id: file.id,
-                url: file.url,
-                fileName: file.fileName,
-            }));
+            const newMediaItems: MediaItem[] = uploadedFiles.map(file => {
+                const fileType = file.fileName.match(/\.(mp4|mov|avi|webm)$/i) ? 'video' : 'image';
+                return {
+                    id: file.id,
+                    file_url: file.url,
+                    file_type: fileType,
+                    filename: file.fileName,
+                    storage_path: '', // No disponible en uploadFiles
+                    storage_bytes: file.size,
+                    display_order: media.length,
+                };
+            });
 
-            const updatedFotos = [...fotos, ...mediaItems];
-            setFotos(updatedFotos);
-            toast.success(`${uploadedFiles.length} foto(s) subida(s)`);
+            const updatedMedia = [...media, ...newMediaItems];
+            setMedia(updatedMedia);
+            toast.success(`${uploadedFiles.length} archivo(s) subido(s)`);
 
             // Actualizar storage tracking
             await refreshStorageUsage();
             triggerRefresh();
 
             // Notificar cambio de media al padre
-            notifyMediaChange(updatedFotos, videos);
+            notifyMediaChange(updatedMedia);
         } catch (error) {
-            console.error("Error uploading photos:", error);
-            toast.error("Error al subir las fotos");
+            console.error("Error uploading media:", error);
+            toast.error("Error al subir los archivos");
         } finally {
             setIsUploading(false);
         }
     };
 
-    const handleVideosUpload = async (files: FileList) => {
-        if (!files.length) return;
-        if (!formData.id) {
-            toast.error("Guarda el item primero antes de subir videos");
+    // Drag & Drop handler unificado
+    const handleMediaDrop = (files: File[]) => {
+        if (files.length > 0) {
+            handleMediaUpload(files);
+        }
+    };
+
+    // Delete handler unificado
+    const handleDeleteMedia = (id: string) => {
+        setMediaToDelete(id);
+        setIsDeleteMediaModalOpen(true);
+    };
+
+    const handleConfirmDeleteMedia = async () => {
+        if (!mediaToDelete || !formData.id) {
+            setIsDeleteMediaModalOpen(false);
+            setMediaToDelete(null);
             return;
         }
 
-        setIsUploading(true);
-        try {
-            const fileArray = Array.from(files);
-            const uploadedFiles = await uploadFiles(fileArray, studioSlug, `items/${formData.id}/videos`);
-
-            // Persistir en BD
-            for (const video of uploadedFiles) {
-                const result = await crearMediaItem({
-                    itemId: formData.id,
-                    url: video.url,
-                    fileName: video.fileName,
-                    fileType: 'video',
-                    size: video.size,
-                    order: videos.length,
-                    studioId: studioSlug,
-                });
-
-                if (!result.success) {
-                    toast.error(`Error guardando ${video.fileName}: ${result.error}`);
-                }
-            }
-
-            const mediaItems = uploadedFiles.map(file => ({
-                id: file.id,
-                url: file.url,
-                fileName: file.fileName,
-            }));
-
-            const updatedVideos = [...videos, ...mediaItems];
-            setVideos(updatedVideos);
-            toast.success(`${uploadedFiles.length} video(s) subido(s)`);
-
-            // Actualizar storage tracking
-            await refreshStorageUsage();
-            triggerRefresh();
-
-            // Notificar cambio de media al padre
-            notifyMediaChange(fotos, updatedVideos);
-        } catch (error) {
-            console.error("Error uploading videos:", error);
-            toast.error("Error al subir los videos");
-        } finally {
-            setIsUploading(false);
-        }
-    };
-
-    // Drag & Drop handlers
-    const handleFotosDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDraggingFotos(false);
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            // Filtrar solo archivos de imagen
-            const imageFiles = Array.from(files).filter(file =>
-                file.type.startsWith('image/')
-            );
-            if (imageFiles.length > 0) {
-                handleFotosUpload(imageFiles as unknown as FileList);
-            } else {
-                toast.error("Solo se permiten archivos de imagen en la pestaña de fotos");
-            }
-        }
-    };
-
-    const handleVideosDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDraggingVideos(false);
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            // Filtrar solo archivos de video
-            const videoFiles = Array.from(files).filter(file =>
-                file.type.startsWith('video/')
-            );
-            if (videoFiles.length > 0) {
-                handleVideosUpload(videoFiles as unknown as FileList);
-            } else {
-                toast.error("Solo se permiten archivos de video en la pestaña de videos");
-            }
-        }
-    };
-
-    // Delete handlers
-    const handleDeleteFoto = (id: string) => {
-        setFotoToDelete(id);
-        setIsDeleteFotoModalOpen(true);
-    };
-
-    const handleConfirmDeleteFoto = async () => {
-        if (!fotoToDelete || !formData.id) {
-            setIsDeleteFotoModalOpen(false);
-            setFotoToDelete(null);
-            return;
-        }
-
-        const foto = fotos.find(f => f.id === fotoToDelete);
-        if (!foto) {
-            setIsDeleteFotoModalOpen(false);
-            setFotoToDelete(null);
+        const mediaItem = media.find(m => m.id === mediaToDelete);
+        if (!mediaItem) {
+            setIsDeleteMediaModalOpen(false);
+            setMediaToDelete(null);
             return;
         }
 
@@ -620,402 +494,80 @@ export function ItemEditorModal({
 
             // Eliminar de Supabase
             const success = await deleteFileStorage({
-                publicUrl: foto.url,
+                publicUrl: mediaItem.file_url,
                 studioSlug: studioSlug,
             });
 
             if (success.success) {
                 // Eliminar de BD
                 const dbResult = await eliminarMediaItem({
-                    id: foto.id,
+                    id: mediaItem.id,
                     itemId: formData.id,
                 });
 
                 if (dbResult.success) {
-                    // Ocultar solo después de éxito (no optimistic update)
-                    const updatedFotos = fotos.filter(f => f.id !== fotoToDelete);
-                    setFotos(updatedFotos);
+                    const updatedMedia = media.filter(m => m.id !== mediaToDelete);
+                    setMedia(updatedMedia);
 
-                    toast.success("Foto eliminada");
+                    toast.success("Archivo eliminado");
 
                     // Actualizar storage tracking
                     await refreshStorageUsage();
                     triggerRefresh();
 
                     // Notificar cambio de media al padre
-                    notifyMediaChange(updatedFotos, videos);
+                    notifyMediaChange(updatedMedia);
 
-                    // Cerrar modal solo después de completar la eliminación
-                    setIsDeleteFotoModalOpen(false);
-                    setFotoToDelete(null);
+                    setIsDeleteMediaModalOpen(false);
+                    setMediaToDelete(null);
                 } else {
-                    toast.error(`Error eliminando foto: ${dbResult.error}`);
-                    setIsDeleteFotoModalOpen(false);
-                    setFotoToDelete(null);
+                    toast.error(`Error eliminando archivo: ${dbResult.error}`);
+                    setIsDeleteMediaModalOpen(false);
+                    setMediaToDelete(null);
                 }
             } else {
                 toast.error("Error eliminando archivo de almacenamiento");
-                setIsDeleteFotoModalOpen(false);
-                setFotoToDelete(null);
+                setIsDeleteMediaModalOpen(false);
+                setMediaToDelete(null);
             }
         } catch (error) {
-            console.error("Error eliminando foto:", error);
-            toast.error("Error al eliminar la foto");
-            setIsDeleteFotoModalOpen(false);
-            setFotoToDelete(null);
+            console.error("Error eliminando archivo:", error);
+            toast.error("Error al eliminar el archivo");
+            setIsDeleteMediaModalOpen(false);
+            setMediaToDelete(null);
         } finally {
             setIsDeletingMedia(false);
         }
     };
 
-    const handleDeleteVideo = (id: string) => {
-        setVideoToDelete(id);
-        setIsDeleteVideoModalOpen(true);
-    };
-
-    const handleConfirmDeleteVideo = async () => {
-        if (!videoToDelete || !formData.id) {
-            setIsDeleteVideoModalOpen(false);
-            setVideoToDelete(null);
-            return;
-        }
-
-        const video = videos.find(v => v.id === videoToDelete);
-        if (!video) {
-            setIsDeleteVideoModalOpen(false);
-            setVideoToDelete(null);
-            return;
-        }
-
-        try {
-            setIsDeletingMedia(true);
-
-            // Eliminar de Supabase
-            const success = await deleteFileStorage({
-                publicUrl: video.url,
-                studioSlug: studioSlug,
-            });
-
-            if (success.success) {
-                // Eliminar de BD
-                const dbResult = await eliminarMediaItem({
-                    id: video.id,
-                    itemId: formData.id,
-                });
-
-                if (dbResult.success) {
-                    // Ocultar solo después de éxito (no optimistic update)
-                    const updatedVideos = videos.filter(v => v.id !== videoToDelete);
-                    setVideos(updatedVideos);
-
-                    toast.success("Video eliminado");
-
-                    // Actualizar storage tracking
-                    await refreshStorageUsage();
-                    triggerRefresh();
-
-                    // Notificar cambio de media al padre
-                    notifyMediaChange(fotos, updatedVideos);
-
-                    // Cerrar modal solo después de completar la eliminación
-                    setIsDeleteVideoModalOpen(false);
-                    setVideoToDelete(null);
-                } else {
-                    toast.error(`Error eliminando video: ${dbResult.error}`);
-                    setIsDeleteVideoModalOpen(false);
-                    setVideoToDelete(null);
-                }
-            } else {
-                toast.error("Error eliminando archivo de almacenamiento");
-                setIsDeleteVideoModalOpen(false);
-                setVideoToDelete(null);
-            }
-        } catch (error) {
-            console.error("Error eliminando video:", error);
-            toast.error("Error al eliminar el video");
-            setIsDeleteVideoModalOpen(false);
-            setVideoToDelete(null);
-        } finally {
-            setIsDeletingMedia(false);
-        }
-    };
-
-    // Reorder handlers
-    const handleReorderFotos = async (newFotos: MediaItem[]) => {
-        setFotos(newFotos);
+    // Reorder handler unificado
+    const handleReorderMedia = async (reorderedMedia: MediaItem[]) => {
+        // Actualizar estado local primero (optimistic update)
+        setMedia(reorderedMedia);
 
         // Persistir nuevo orden en BD
         if (formData.id) {
-            const mediaIds = newFotos.map(f => f.id);
+            const mediaIds = reorderedMedia.map(m => m.id);
             const result = await reordenarMediaItem(formData.id, mediaIds);
 
             if (!result.success) {
-                toast.error(`Error reordenando fotos: ${result.error}`);
-                // Revertir cambios locales
+                toast.error(`Error reordenando archivos: ${result.error}`);
+                // Revertir cambios locales solo si hay error
                 await cargarMediaExistente(formData.id);
             } else {
-                toast.success('Fotos reordenadas correctamente');
+                toast.success('Archivos reordenados correctamente');
+                // No recargar, el estado local ya está actualizado
             }
         }
     };
 
-    const handleReorderVideos = async (newVideos: MediaItem[]) => {
-        setVideos(newVideos);
-
-        // Persistir nuevo orden en BD
-        if (formData.id) {
-            const mediaIds = newVideos.map(v => v.id);
-            const result = await reordenarMediaItem(formData.id, mediaIds);
-
-            if (!result.success) {
-                toast.error(`Error reordenando videos: ${result.error}`);
-                // Revertir cambios locales
-                await cargarMediaExistente(formData.id);
-            } else {
-                toast.success('Videos reordenados correctamente');
-            }
-        }
-    };
-
-    // Sortable Media Item Component
-    const SortableMediaItem = ({ item, type, onDelete }: {
-        item: MediaItem;
-        type: 'foto' | 'video';
-        onDelete: (id: string) => void;
-    }) => {
-        const {
-            attributes,
-            listeners,
-            setNodeRef,
-            transform,
-            transition,
-            isDragging,
-        } = useSortable({ id: item.id });
-
-        const style = {
-            transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${isDragging ? 1.08 : 1})` : undefined,
-            transition: isDragging ? undefined : (transition || 'transform 250ms cubic-bezier(0.2, 0, 0, 1)'),
-            opacity: isDragging ? 0.7 : 1,
-            zIndex: isDragging ? 50 : 1,
-        };
-
-        const handleOpenLightbox = () => {
-            if (type === 'foto') {
-                // Lightbox para imágenes
-                const slides = fotos.map(f => ({
-                    src: f.url,
-                    alt: f.fileName
-                }));
-                const index = fotos.findIndex(f => f.id === item.id);
-
-                setImageSlides(slides);
-                setLightboxIndex(Math.max(0, index));
-                setIsImageLightboxOpen(true);
-            } else {
-                // Lightbox para videos
-                const slides = videos.map(v => ({
-                    type: 'video' as const,
-                    width: 800,
-                    height: 450,
-                    poster: v.url, // Usar el video como poster temporal
-                    sources: [
-                        {
-                            src: v.url,
-                            type: 'video/mp4'
-                        }
-                    ]
-                }));
-                const index = videos.findIndex(v => v.id === item.id);
-
-                setVideoSlides(slides);
-                setLightboxIndex(Math.max(0, index));
-                setIsVideoLightboxOpen(true);
-            }
-        };
-
-        return (
-            <div
-                ref={setNodeRef}
-                style={style}
-                className={`aspect-square bg-zinc-900 border rounded-lg overflow-hidden group relative cursor-pointer ${isDragging
-                    ? 'border-purple-500 shadow-2xl shadow-purple-500/50 ring-2 ring-purple-500/30'
-                    : 'border-zinc-700 hover:border-zinc-600 hover:shadow-lg'
-                    } transition-all duration-200 ease-out`}
-                onClick={handleOpenLightbox}
-            >
-                {/* Drag handle */}
-                <div
-                    {...attributes}
-                    {...listeners}
-                    className="absolute top-1 left-1 bg-zinc-800/90 hover:bg-zinc-700/90 p-1.5 rounded-md cursor-grab active:cursor-grabbing z-10 backdrop-blur-sm transition-all duration-200 hover:scale-110"
-                >
-                    <GripVertical className="w-4 h-4 text-zinc-400" />
-                </div>
-
-                {/* Preview - Show actual image */}
-                {type === 'foto' ? (
-                    <Image
-                        src={item.url}
-                        alt={item.fileName}
-                        layout="fill"
-                        objectFit="cover"
-                    />
-                ) : (
-                    <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
-                        <video
-                            src={item.url}
-                            className="w-full h-full object-cover"
-                            muted
-                            preload="metadata"
-                            onError={(e) => {
-                                // Si el video no se puede cargar, mostrar fallback
-                                const target = e.target as HTMLVideoElement;
-                                target.style.display = 'none';
-                                const fallback = target.nextElementSibling as HTMLElement;
-                                if (fallback) fallback.style.display = 'flex';
-                            }}
-                        />
-                        <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center" style={{ display: 'none' }}>
-                            <span className="text-xs text-zinc-500">🎬 {item.fileName}</span>
-                        </div>
-                        {/* Play icon overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                                <Play className="w-4 h-4 text-white ml-0.5" />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Uploading indicator */}
-                {item.isUploading && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
-                    </div>
-                )}
-
-                {/* Delete button */}
-                {!item.isUploading && (
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            onDelete(item.id);
-                        }}
-                        disabled={isUploading}
-                        className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-600 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed z-20"
-                        title="Eliminar"
-                    >
-                        <Trash2 className="w-3 h-3 text-white" />
-                    </button>
-                )}
-            </div>
-        );
-    };
-
-    // Media Grid Component
-    const MediaGrid = ({
-        items,
-        onDelete,
-        isDragging,
-        setIsDragging,
-        type,
-        onUploadClick,
-        onDrop,
-        onReorder,
-    }: {
-        items: MediaItem[];
-        onDelete: (id: string) => void;
-        isDragging: boolean;
-        setIsDragging: (value: boolean) => void;
-        type: 'foto' | 'video';
-        onUploadClick: () => void;
-        onDrop: (e: React.DragEvent) => void;
-        onReorder: (newItems: MediaItem[]) => void;
-    }) => {
-        const sensors = useSensors(
-            useSensor(PointerSensor, {
-                activationConstraint: {
-                    distance: 8, // 8px de movimiento antes de activar
-                },
-            }),
-            useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-        );
-
-        const handleDragEnd = (event: DragEndEvent) => {
-            const { active, over } = event;
-
-            if (over && active.id !== over.id) {
-                const oldIndex = items.findIndex(item => item.id === active.id);
-                const newIndex = items.findIndex(item => item.id === over.id);
-
-                if (oldIndex !== -1 && newIndex !== -1) {
-                    const newItems = arrayMove(items, oldIndex, newIndex);
-                    onReorder(newItems);
-                }
-            }
-        };
-
-        return (
-            <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-            >
-                <div
-                    className={`grid grid-cols-3 gap-3 p-4 rounded-lg border-2 border-dashed transition-all duration-300 ${isDragging
-                        ? "border-purple-500 bg-purple-500/5 border-solid"
-                        : "border-zinc-700 bg-zinc-800/30"
-                        }`}
-                    onDragEnter={() => setIsDragging(true)}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={onDrop}
-                >
-                    {/* Slot: Subir */}
-                    <button
-                        type="button"
-                        onClick={onUploadClick}
-                        disabled={isUploading}
-                        className="aspect-square bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-lg flex items-center justify-center cursor-pointer hover:bg-zinc-700 hover:border-zinc-600 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <div className="flex flex-col items-center gap-2">
-                            {isUploading ? (
-                                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
-                            ) : (
-                                <Upload className="w-6 h-6 text-zinc-400 group-hover:text-zinc-200" />
-                            )}
-                            <span className="text-xs text-zinc-500 group-hover:text-zinc-300 text-center">
-                                {type === 'foto' ? 'Subir Fotos' : 'Subir Videos'}
-                            </span>
-                        </div>
-                    </button>
-
-                    {/* Sortable Thumbnails */}
-                    <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                        {items.map((item) => (
-                            <SortableMediaItem
-                                key={item.id}
-                                item={item}
-                                type={type}
-                                onDelete={onDelete}
-                            />
-                        ))}
-                    </SortableContext>
-                </div>
-            </DndContext>
-        );
-    };
 
     return (
         <>
             <Sheet
                 open={isOpen}
                 onOpenChange={(open) => {
-                    // Only handle close (when open = false), let parent handle open
-                    // Don't close Sheet if lightbox is open
-                    if (!open && !isImageLightboxOpen && !isVideoLightboxOpen) {
+                    if (!open) {
                         onClose();
                     }
                 }}
@@ -1030,7 +582,7 @@ export function ItemEditorModal({
 
                     <Tabs defaultValue="datos" className="w-full px-6">
                         {/* Tab Navigation */}
-                        <TabsList className="grid w-full grid-cols-3 bg-zinc-800/50">
+                        <TabsList className="grid w-full grid-cols-2 bg-zinc-800/50">
                             <TabsTrigger
                                 value="datos"
                                 className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"
@@ -1038,16 +590,10 @@ export function ItemEditorModal({
                                 Datos
                             </TabsTrigger>
                             <TabsTrigger
-                                value="fotos"
+                                value="multimedia"
                                 className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"
                             >
-                                Fotos
-                            </TabsTrigger>
-                            <TabsTrigger
-                                value="videos"
-                                className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"
-                            >
-                                Videos
+                                Multimedia
                             </TabsTrigger>
                         </TabsList>
 
@@ -1296,97 +842,50 @@ export function ItemEditorModal({
                             </form>
                         </TabsContent>
 
-                        {/* Tab 2: Fotos */}
-                        <TabsContent value="fotos" className="space-y-6 mt-6 pb-6">
+                        {/* Tab 2: Multimedia */}
+                        <TabsContent value="multimedia" className="space-y-6 mt-6 pb-6">
                             <div className="space-y-4">
-                                {/* Galería de Fotos */}
+                                {/* Galería Multimedia */}
                                 <div>
                                     <label className="block text-sm font-medium text-zinc-200 mb-3">
-                                        Galería de Fotos
+                                        Galería Multimedia
                                     </label>
-                                    <MediaGrid
-                                        items={fotos}
-                                        onDelete={handleDeleteFoto}
-                                        isDragging={isDraggingFotos}
-                                        setIsDragging={setIsDraggingFotos}
-                                        type="foto"
-                                        onUploadClick={() => fotosInputRef.current?.click()}
-                                        onDrop={handleFotosDrop}
-                                        onReorder={handleReorderFotos}
-                                    />
+                                    {isLoadingMedia ? (
+                                        <div className="grid grid-cols-3 gap-4 p-4 rounded-lg border-2 border-dashed border-zinc-700 bg-zinc-800/30">
+                                            <div className="aspect-square bg-zinc-800 rounded-lg flex items-center justify-center">
+                                                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <ImageGrid
+                                            media={media}
+                                            onDelete={handleDeleteMedia}
+                                            onReorder={handleReorderMedia}
+                                            showDeleteButtons={true}
+                                            isEditable={true}
+                                            lightbox={false}
+                                            columns={3}
+                                            gap={4}
+                                            aspectRatio="square"
+                                            onDrop={handleMediaDrop}
+                                            onUploadClick={() => mediaInputRef.current?.click()}
+                                            isUploading={isUploading}
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Info */}
-                                <ZenCard className="p-3 bg-blue-500/10 border-blue-500/30 space-y-2">
-                                    <p className="text-xs text-blue-300">
-                                        📸 Soportados: JPG, PNG, GIF (máx. 5MB cada una)
+                                <ZenCard className="p-3 bg-emerald-500/10 border-emerald-500/30 space-y-2">
+                                    <p className="text-xs text-emerald-300">
+                                        📸🎬 Soportados: JPG, PNG, GIF, MP4, MOV, AVI
                                     </p>
-                                    <div className="pt-2 border-t border-blue-500/20">
-                                        <p className="text-xs text-blue-300 mb-2">
-                                            Las fotos se mostrarán en el nombre del item con un icono interactivo. Al hacer click en el icono se abrirá el lightbox.
+                                    <div className="pt-2 border-t border-emerald-500/20">
+                                        <p className="text-xs text-emerald-300 mb-2">
+                                            Los archivos multimedia se mostrarán en el nombre del item con iconos interactivos. El prospecto podrá ver una galería con lightbox al hacer click.
                                         </p>
-                                        <p className="text-xs text-blue-300/80 mb-2">
-                                            ⚠️ Cada imagen asociada ocupará espacio en tu cuota de almacenamiento.
+                                        <p className="text-xs text-emerald-300/80 mb-2">
+                                            ⚠️ Cada archivo asociado ocupará espacio en tu cuota de almacenamiento.
                                         </p>
-                                        <div className="flex items-center gap-2 text-sm text-zinc-300 bg-zinc-800/50 px-3 py-2 rounded border border-zinc-700">
-                                            <span>Nombre del item</span>
-                                            <ImageIcon className="h-3.5 w-3.5 text-zinc-500 cursor-pointer hover:text-blue-400 transition-colors" aria-label="Icono de foto" />
-                                        </div>
-                                    </div>
-                                </ZenCard>
-
-                                {/* Botones de acción */}
-                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-                                    <SheetClose asChild>
-                                        <ZenButton
-                                            type="button"
-                                            variant="secondary"
-                                            onClick={handleClose}
-                                            disabled={isSaving || isUploading}
-                                        >
-                                            Cerrar
-                                        </ZenButton>
-                                    </SheetClose>
-                                </div>
-                            </div>
-                        </TabsContent>
-
-                        {/* Tab 3: Videos */}
-                        <TabsContent value="videos" className="space-y-6 mt-6 pb-6">
-                            <div className="space-y-4">
-                                {/* Galería de Videos */}
-                                <div>
-                                    <label className="block text-sm font-medium text-zinc-200 mb-3">
-                                        Galería de Videos
-                                    </label>
-                                    <MediaGrid
-                                        items={videos}
-                                        onDelete={handleDeleteVideo}
-                                        isDragging={isDraggingVideos}
-                                        setIsDragging={setIsDraggingVideos}
-                                        type="video"
-                                        onUploadClick={() => videosInputRef.current?.click()}
-                                        onDrop={handleVideosDrop}
-                                        onReorder={handleReorderVideos}
-                                    />
-                                </div>
-
-                                {/* Info */}
-                                <ZenCard className="p-3 bg-purple-500/10 border-purple-500/30 space-y-2">
-                                    <p className="text-xs text-purple-300">
-                                        🎬 Soportados: MP4, MOV, AVI (máx. 100MB cada uno)
-                                    </p>
-                                    <div className="pt-2 border-t border-purple-500/20">
-                                        <p className="text-xs text-purple-300 mb-2">
-                                            Los videos se mostrarán en el nombre del item con un icono interactivo. Al hacer click en el icono se abrirá el lightbox.
-                                        </p>
-                                        <p className="text-xs text-purple-300/80 mb-2">
-                                            ⚠️ Cada video asociado ocupará espacio en tu cuota de almacenamiento.
-                                        </p>
-                                        <div className="flex items-center gap-2 text-sm text-zinc-300 bg-zinc-800/50 px-3 py-2 rounded border border-zinc-700">
-                                            <span>Nombre del item</span>
-                                            <Play className="h-3.5 w-3.5 text-zinc-500 cursor-pointer hover:text-purple-400 transition-colors" aria-label="Icono de video" />
-                                        </div>
                                     </div>
                                 </ZenCard>
 
@@ -1409,18 +908,18 @@ export function ItemEditorModal({
                 </SheetContent>
             </Sheet>
 
-            {/* Modales de confirmación para eliminar media */}
+            {/* Modal de confirmación para eliminar media */}
             <ZenConfirmModal
-                isOpen={isDeleteFotoModalOpen}
+                isOpen={isDeleteMediaModalOpen}
                 onClose={() => {
                     if (!isDeletingMedia) {
-                        setIsDeleteFotoModalOpen(false);
-                        setFotoToDelete(null);
+                        setIsDeleteMediaModalOpen(false);
+                        setMediaToDelete(null);
                     }
                 }}
-                onConfirm={handleConfirmDeleteFoto}
-                title="Eliminar foto"
-                description="¿Estás seguro de que deseas eliminar esta foto? Esta acción no se puede deshacer."
+                onConfirm={handleConfirmDeleteMedia}
+                title="Eliminar archivo"
+                description="¿Estás seguro de que deseas eliminar este archivo? Esta acción no se puede deshacer."
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="destructive"
@@ -1428,76 +927,14 @@ export function ItemEditorModal({
                 disabled={isDeletingMedia}
             />
 
-            <ZenConfirmModal
-                isOpen={isDeleteVideoModalOpen}
-                onClose={() => {
-                    if (!isDeletingMedia) {
-                        setIsDeleteVideoModalOpen(false);
-                        setVideoToDelete(null);
-                    }
-                }}
-                onConfirm={handleConfirmDeleteVideo}
-                title="Eliminar video"
-                description="¿Estás seguro de que deseas eliminar este video? Esta acción no se puede deshacer."
-                confirmText="Eliminar"
-                cancelText="Cancelar"
-                variant="destructive"
-                loading={isDeletingMedia}
-                disabled={isDeletingMedia}
-            />
-
-            {/* Inputs ocultos para file upload */}
+            {/* Input oculto para file upload */}
             <input
-                ref={fotosInputRef}
+                ref={mediaInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp"
+                accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime"
                 multiple
-                onChange={(e) => e.target.files && handleFotosUpload(e.target.files)}
+                onChange={(e) => e.target.files && handleMediaUpload(Array.from(e.target.files))}
                 className="hidden"
-            />
-            <input
-                ref={videosInputRef}
-                type="file"
-                accept="video/mp4,video/webm,video/quicktime"
-                multiple
-                onChange={(e) => e.target.files && handleVideosUpload(e.target.files)}
-                className="hidden"
-            />
-
-            {/* Lightbox para imágenes */}
-            <Lightbox
-                open={isImageLightboxOpen}
-                close={() => setIsImageLightboxOpen(false)}
-                slides={imageSlides}
-                index={lightboxIndex}
-                on={{
-                    view: ({ index }) => setLightboxIndex(index),
-                }}
-            />
-
-            {/* Lightbox para videos */}
-            <Lightbox
-                open={isVideoLightboxOpen}
-                close={() => setIsVideoLightboxOpen(false)}
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                slides={videoSlides as any}
-                index={lightboxIndex}
-                plugins={[Video]}
-                video={{
-                    controls: true,
-                    playsInline: true,
-                    autoPlay: true,
-                    loop: false,
-                    muted: false,
-                    disablePictureInPicture: false,
-                    disableRemotePlayback: false,
-                    controlsList: "nodownload nofullscreen noremoteplayback",
-                    crossOrigin: "anonymous",
-                    preload: "metadata",
-                }}
-                on={{
-                    view: ({ index }) => setLightboxIndex(index),
-                }}
             />
         </>
     );
