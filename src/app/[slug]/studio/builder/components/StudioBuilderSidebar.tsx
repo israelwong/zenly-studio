@@ -11,8 +11,8 @@ import { LogoutButton } from '@/components/auth/logout-button';
 import {
     Star, Phone, Camera, X, CreditCard, File, User, Grid3X3, Store, Package, Calendar,
     Newspaper, Briefcase, Users, Sparkles, BarChart3, Mail, ImageIcon, FileText, UserCheck,
-    ChevronDown, ChevronRight, Share2, HelpCircle, MapPin, Settings, Shield, ClipboardList,
-    FileSignature, UserCog, DollarSign, Target, ShoppingCart
+    ChevronDown, ChevronRight, Share2, HelpCircle, MapPin, Shield, ClipboardList,
+    FileSignature, UserCog, DollarSign, ShoppingCart
 } from 'lucide-react';
 
 interface StudioBuilderSidebarProps {
@@ -91,7 +91,6 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
                 { id: 'scheduling', name: 'Agendamiento*', href: `/agendamiento`, icon: Calendar },
                 { id: 'cotizaciones', name: 'Cotizaciones*', href: `/cotizaciones`, icon: File },
                 { id: 'leadform', name: 'Lead Form', href: `/business/leadform`, icon: ClipboardList },
-                { id: 'crm', name: 'CRM', href: `/business/crm`, icon: Target },
                 { id: 'condiciones-comerciales', name: 'Condiciones Comerciales', href: `/business/condiciones-comerciales`, icon: FileSignature },
                 { id: 'email', name: 'Email Marketing', href: `/business/email`, icon: Mail },
             ],
@@ -111,8 +110,6 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
                 { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
             ],
         },
-
-
 
         // 6. CLIENTS (Pago - Monetización)
         {
