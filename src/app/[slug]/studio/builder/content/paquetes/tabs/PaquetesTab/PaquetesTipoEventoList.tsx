@@ -175,18 +175,28 @@ export function PaquetesTipoEventoList({
     // Función para manejar drag over - expandir tipos de evento automáticamente
     const handleDragOver = useCallback(async (event: DragOverEvent) => {
         const { over, active } = event;
-        if (!over) return;
+
+        const activeIdValue = String(active.id);
+
+        // Actualizar activeId para que los componentes sortable puedan detectar el drag
+        setActiveId(activeIdValue);
+
+        if (!over) {
+            return;
+        }
 
         const overId = String(over.id);
-        const activeId = String(active.id);
 
         // Si se está arrastrando un tipo de evento, contraer todos los tipos de evento
-        const isDraggingTipoEvento = tiposEvento.some(tipo => tipo.id === activeId);
+        const isDraggingTipoEvento = tiposEvento.some(tipo => tipo.id === activeIdValue);
         if (isDraggingTipoEvento) {
             console.log("📁 Arrastrando tipo de evento - contrayendo todos los tipos de evento");
             setTiposEventoExpandidos(new Set());
+            setIsDraggingTipoEvento(true);
             return;
         }
+
+        setIsDraggingTipoEvento(false);
 
         // Buscar si el overId corresponde a un tipo de evento
         let tipoEventoId = null;
@@ -322,7 +332,11 @@ export function PaquetesTipoEventoList({
                 }
             }
 
-            if (!activePaquete || !activeTipoEventoId) return;
+            if (!activePaquete || !activeTipoEventoId) {
+                setActiveId(null);
+                setIsDraggingTipoEvento(false);
+                return;
+            }
 
             // Buscar el paquete sobre el que se está soltando o si es un tipo de evento
             let overPaquete = null;
@@ -1131,11 +1145,45 @@ export function PaquetesTipoEventoList({
             transform,
             transition,
             isDragging,
-        } = useSortable({ id: paquete.id, disabled: isDuplicating });
+            isOver,
+        } = useSortable({
+            id: paquete.id,
+            disabled: isDuplicating,
+        });
+
+        // Determinar si otro elemento está siendo arrastrado sobre este
+        const isOverItem = isOver && activeId && activeId !== paquete.id;
+
+        // Determinar dirección del empuje (basado en si el elemento activo está arriba o abajo)
+        const getDragDirection = () => {
+            if (!activeId || !isOverItem) return null;
+
+            // Buscar el índice del elemento activo en el mismo tipo de evento
+            const tipoEventoId = paquete.event_type_id;
+            const paquetesDelTipo = paquetesData[tipoEventoId] || [];
+
+            // Ordenar por order para obtener índices correctos
+            const paquetesOrdenados = [...paquetesDelTipo].sort((a, b) => {
+                const orderA = (a as { order?: number }).order ?? 0;
+                const orderB = (b as { order?: number }).order ?? 0;
+                return orderA - orderB;
+            });
+
+            const activeIndex = paquetesOrdenados.findIndex(p => p.id === activeId);
+            const currentIndex = paquetesOrdenados.findIndex(p => p.id === paquete.id);
+
+            if (activeIndex === -1 || currentIndex === -1) return null;
+
+            // Si el elemento activo está arriba del actual, empuja hacia abajo
+            // Si está abajo, empuja hacia arriba
+            return activeIndex < currentIndex ? 'down' : 'up';
+        };
+
+        const dragDirection = getDragDirection();
 
         const style = {
             transform: CSS.Transform.toString(transform),
-            transition,
+            transition: isDragging ? 'none' : transition, // Sin transición mientras se arrastra para feedback inmediato
             opacity: isDragging ? 0.5 : 1,
         };
 
@@ -1299,7 +1347,15 @@ export function PaquetesTipoEventoList({
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`flex items-center justify-between py-3 px-2 pl-10 ${paqueteIndex > 0 ? 'border-t border-zinc-700/30' : ''} ${isDragging ? 'bg-purple-500/10 border-l-2 border-purple-500' : 'hover:bg-zinc-700/20'} transition-colors`}
+                className={`flex items-center justify-between py-3 px-2 pl-10 transition-all duration-200 ${paqueteIndex > 0 ? 'border-t border-zinc-700/30' : ''
+                    } ${isDragging
+                        ? 'bg-purple-500/10 border-l-2 border-purple-500 shadow-lg z-50'
+                        : isOverItem
+                            ? dragDirection === 'down'
+                                ? 'border-t-2 border-purple-500 bg-purple-500/10 pt-4'
+                                : 'border-b-2 border-purple-500 bg-purple-500/10 pb-4'
+                            : 'hover:bg-zinc-700/20'
+                    }`}
             >
                 <div className="flex items-center gap-3 flex-1">
                     <button
