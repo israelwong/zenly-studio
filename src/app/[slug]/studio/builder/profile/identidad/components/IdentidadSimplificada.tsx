@@ -107,11 +107,12 @@ export function IdentidadSimplificada({
         <div className="space-y-6">
             {/* Información Básica con Logo */}
             <ZenCard variant="default" padding="none">
-                <ZenCardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row gap-8 items-start">
-                        {/* Columna 1: Logo - Izquierda */}
+                <ZenCardContent className="p-6 space-y-6">
+                    {/* Fila 1: Logo pequeño + Nombre del Estudio */}
+                    <div className="flex flex-col lg:flex-row gap-6 items-start">
+                        {/* Columna 1: Logo - Izquierda (más pequeño) */}
                         <div className="flex justify-center lg:justify-start flex-shrink-0 w-full lg:w-auto">
-                            <div className="flex flex-col items-center gap-4">
+                            <div className="flex flex-col items-center gap-3">
                                 <AvatarManager
                                     url={data.logo_url}
                                     onUpdate={async (url: string) => {
@@ -123,7 +124,7 @@ export function IdentidadSimplificada({
                                     studioSlug={studioSlug}
                                     category="identidad"
                                     subcategory="logos"
-                                    size="lg"
+                                    size="md"
                                     variant="default"
                                     loading={loading}
                                     cropTitle="Ajustar logo del estudio"
@@ -137,15 +138,14 @@ export function IdentidadSimplificada({
                                     deleteMessage="Logo eliminado"
                                     showAdjustButton={true}
                                 />
-                                <p className="text-xs text-zinc-400 text-center max-w-[250px]">
-                                    PNG, SVG, JPG (máximo 5MB)
+                                <p className="text-xs text-zinc-400 text-center max-w-[150px]">
+                                    PNG, SVG, JPG
                                 </p>
                             </div>
                         </div>
 
-                        {/* Columna 2: Información Básica - Derecha */}
-                        <div className="flex-1 w-full space-y-4">
-                            {/* Nombre del estudio */}
+                        {/* Columna 2: Nombre del Estudio - Derecha (ocupa más espacio) */}
+                        <div className="flex-1 w-full">
                             <ZenInput
                                 label="Nombre del Estudio"
                                 required
@@ -155,29 +155,32 @@ export function IdentidadSimplificada({
                                 disabled={loading}
                                 hint="Este nombre aparecerá en tu perfil público"
                             />
-
-                            {/* Slogan */}
-                            <ZenTextarea
-                                label="Slogan"
-                                value={data.slogan || ''}
-                                onChange={(e) => handleInputChange('slogan', e.target.value)}
-                                placeholder="Ej: Capturando momentos únicos"
-                                disabled={loading}
-                                maxLength={100}
-                                hint="Frase corta que describe tu estudio (máximo 100 caracteres)"
-                                rows={2}
-                            />
-
-                            {/* Website */}
-                            <ZenInput
-                                label="Página Web (Opcional)"
-                                value={data.pagina_web || ''}
-                                onChange={(e) => handleInputChange('pagina_web', e.target.value)}
-                                placeholder="https://tuestudio.com"
-                                disabled={loading}
-                                hint="Tu sitio web principal"
-                            />
                         </div>
+                    </div>
+
+                    {/* Fila 2: Slogan y Página Web */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Slogan */}
+                        <ZenTextarea
+                            label="Slogan"
+                            value={data.slogan || ''}
+                            onChange={(e) => handleInputChange('slogan', e.target.value)}
+                            placeholder="Ej: Capturando momentos únicos"
+                            disabled={loading}
+                            maxLength={100}
+                            hint="Frase corta que describe tu estudio (máximo 100 caracteres)"
+                            rows={2}
+                        />
+
+                        {/* Website */}
+                        <ZenInput
+                            label="Página Web (Opcional)"
+                            value={data.pagina_web || ''}
+                            onChange={(e) => handleInputChange('pagina_web', e.target.value)}
+                            placeholder="https://tuestudio.com"
+                            disabled={loading}
+                            hint="Tu sitio web principal"
+                        />
                     </div>
                 </ZenCardContent>
             </ZenCard>
