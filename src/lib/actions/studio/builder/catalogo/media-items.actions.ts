@@ -104,8 +104,8 @@ export async function crearMediaItem(data: CreateMediaItemForm) {
       success: false,
       error: error instanceof z.ZodError
         ? `Validación fallida: ${error.errors?.[0]?.message || error.message || 'Error de validación'}`
-        : error instanceof Error 
-          ? error.message 
+        : error instanceof Error
+          ? error.message
           : "Error al crear archivo multimedia",
     };
   }
@@ -192,8 +192,8 @@ export async function eliminarMediaItem(data: DeleteMediaItemForm) {
       success: false,
       error: error instanceof z.ZodError
         ? `Validación fallida: ${error.errors?.[0]?.message || error.message || 'Error de validación'}`
-        : error instanceof Error 
-          ? error.message 
+        : error instanceof Error
+          ? error.message
           : "Error al eliminar archivo",
     };
   }
@@ -246,26 +246,54 @@ export async function obtenerMediaItemsMap(
       };
     }
 
-    // Obtener todos los media de items del studio
+    // Obtener todos los media de items del studio con información adicional
     const media = await prisma.studio_item_media.findMany({
       where: { studio_id: studio.id },
       select: {
         item_id: true,
         file_type: true,
+        file_url: true,
+        storage_bytes: true,
+        display_order: true,
       },
+      orderBy: { display_order: 'asc' },
     });
 
-    // Crear mapa: item_id -> { hasPhotos, hasVideos }
-    const mediaMap: Record<string, { hasPhotos: boolean; hasVideos: boolean }> = {};
+    // Crear mapa: item_id -> { hasPhotos, hasVideos, thumbnailUrl, totalSize }
+    const mediaMap: Record<string, {
+      hasPhotos: boolean;
+      hasVideos: boolean;
+      thumbnailUrl?: string;
+      totalSize?: number;
+    }> = {};
 
     media.forEach((m) => {
       if (!mediaMap[m.item_id]) {
-        mediaMap[m.item_id] = { hasPhotos: false, hasVideos: false };
+        mediaMap[m.item_id] = {
+          hasPhotos: false,
+          hasVideos: false,
+        };
       }
+
+      // Acumular tamaño total solo si hay bytes
+      const bytes = Number(m.storage_bytes || 0);
+      if (bytes > 0) {
+        mediaMap[m.item_id].totalSize = (mediaMap[m.item_id].totalSize || 0) + bytes;
+      }
+
+      // Marcar tipos de media
       if (m.file_type === 'IMAGE') {
         mediaMap[m.item_id].hasPhotos = true;
+        // Si no hay thumbnail aún y es imagen, usar esta como thumbnail
+        if (!mediaMap[m.item_id].thumbnailUrl) {
+          mediaMap[m.item_id].thumbnailUrl = m.file_url;
+        }
       } else if (m.file_type === 'VIDEO') {
         mediaMap[m.item_id].hasVideos = true;
+        // Si no hay thumbnail aún y es video, usar esta como thumbnail
+        if (!mediaMap[m.item_id].thumbnailUrl) {
+          mediaMap[m.item_id].thumbnailUrl = m.file_url;
+        }
       }
     });
 

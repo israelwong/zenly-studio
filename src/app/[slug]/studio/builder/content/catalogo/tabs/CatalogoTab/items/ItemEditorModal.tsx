@@ -19,8 +19,8 @@ import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import {
     crearItem,
     actualizarItem,
-    toggleItemPublish
-} from "@/lib/actions/studio/builder/catalogo/items.actions";
+} from "@/lib/actions/studio/builder/catalogo";
+import { toggleItemPublish } from "@/lib/actions/studio/builder/catalogo/items.actions";
 import {
     obtenerMediaItem,
     crearMediaItem,
@@ -420,15 +420,15 @@ export function ItemEditorModal({
                     ...prev,
                     status: newStatus
                 }));
-                
+
                 // Notificar cambio de estado al padre
                 if (onStatusChange && formData.id) {
                     onStatusChange(formData.id, newStatus);
                 }
-                
+
                 toast.success(
-                    newStatus === "active" 
-                        ? "Item activado exitosamente" 
+                    newStatus === "active"
+                        ? "Item activado exitosamente"
                         : "Item desactivado exitosamente"
                 );
             } else {

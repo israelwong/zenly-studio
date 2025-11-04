@@ -249,7 +249,7 @@ export async function crearItem(
         if (error instanceof z.ZodError) {
             return {
                 success: false,
-                error: error.errors?.[0]?.message || error.message || 'Error de validación',
+                error: error.issues[0]?.message || error.message || 'Error de validación',
             };
         }
 
@@ -341,7 +341,7 @@ export async function actualizarItem(
         );
 
         // Mapear utility_type de BD a tipoUtilidad
-        const tipoUtilidad: 'servicio' | 'producto' = 
+        const tipoUtilidad: 'servicio' | 'producto' =
             item.utility_type === 'service' ? 'servicio' : 'producto';
 
         const itemData: ItemData = {
@@ -375,10 +375,10 @@ export async function actualizarItem(
         console.error("[ITEMS] Error actualizando item:", error);
 
         if (error instanceof z.ZodError) {
-            console.error("[ITEMS] Error de validación Zod:", error.errors);
+            console.error("[ITEMS] Error de validación Zod:", error.issues);
             return {
                 success: false,
-                error: error.errors?.[0]?.message || error.message || 'Error de validación',
+                error: error.issues[0]?.message || error.message || 'Error de validación',
             };
         }
 
@@ -452,7 +452,7 @@ export async function eliminarItem(
         // Manejar otros errores de Prisma
         if (typeof error === 'object' && error !== null && 'code' in error) {
             const prismaError = error as { code: string };
-            
+
             // Error de registro no encontrado
             if (prismaError.code === "P2025") {
                 return {
@@ -654,7 +654,7 @@ export async function toggleItemPublish(
             0
         );
 
-        const tipoUtilidad: 'servicio' | 'producto' = 
+        const tipoUtilidad: 'servicio' | 'producto' =
             updatedItem.utility_type === 'service' ? 'servicio' : 'producto';
 
         const itemData: ItemData = {

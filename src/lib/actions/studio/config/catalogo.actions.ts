@@ -47,7 +47,7 @@ function revalidateCatalogo(slug: string) {
  */
 export async function obtenerCatalogo(
     studioSlug: string,
-    onlyActive: boolean = true
+    onlyActive?: boolean
 ): Promise<ActionResponse<SeccionData[]>> {
     try {
         const studio_id = await getstudio_idFromSlug(studioSlug);
@@ -64,7 +64,7 @@ export async function obtenerCatalogo(
                                 items: {
                                     where: {
                                         studio_id,
-                                        ...(onlyActive ? { status: 'active' } : {}),
+                                        ...(onlyActive !== false ? { status: 'active' } : {}),
                                     },
                                     include: {
                                         item_expenses: true,
@@ -588,6 +588,7 @@ export async function obtenerServicios(
             costo: s.cost,
             gasto: s.expense,
             tipo_utilidad: s.utility_type,
+            type: s.type,
             orden: s.order,
             status: s.status,
             createdAt: s.created_at,
@@ -682,6 +683,7 @@ export async function crearServicio(
                 costo: servicio.cost,
                 gasto: servicio.expense,
                 tipo_utilidad: servicio.utility_type,
+                type: servicio.type,
                 orden: servicio.order,
                 status: servicio.status,
                 createdAt: servicio.created_at,
@@ -749,6 +751,7 @@ export async function actualizarServicio(
                 costo: servicio.cost,
                 gasto: servicio.expense,
                 tipo_utilidad: servicio.utility_type,
+                type: servicio.type,
                 orden: servicio.order,
                 status: servicio.status,
                 createdAt: servicio.created_at,
@@ -862,6 +865,7 @@ export async function duplicarServicio(
                 //  utilidad: servicioNuevo.utilidad,
                 // precio_publico: servicioNuevo.precio_publico,
                 tipo_utilidad: servicioNuevo.utility_type,
+                type: servicioNuevo.type,
                 orden: servicioNuevo.order,
                 status: servicioNuevo.status,
                 createdAt: servicioNuevo.created_at,

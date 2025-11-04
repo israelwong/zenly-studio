@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Image, Play, Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, HardDrive } from "lucide-react";
+import Image from "next/image";
 import { ZenButton, ZenBadge } from "@/components/ui/zen";
 import {
     ZenDropdownMenu,
@@ -85,6 +86,8 @@ interface Item {
     categoriaId?: string;
     hasPhotos?: boolean;
     hasVideos?: boolean;
+    thumbnailUrl?: string;
+    totalMediaSize?: number;
     status?: string;
     gastos?: Array<{
         nombre: string;
@@ -196,7 +199,11 @@ export function CatalogoTab({
                         // Pre-popular items para cada categoría (todo cargado de una vez)
                         seccion.categorias.forEach(cat => {
                             newItemsData[cat.id] = cat.servicios.map(servicio => {
-                                const itemMedia = mediaMap[servicio.id] || { hasPhotos: false, hasVideos: false };
+                                const itemMedia = mediaMap[servicio.id] || {
+                                    hasPhotos: false,
+                                    hasVideos: false,
+                                    thumbnailUrl: undefined,
+                                };
                                 // Mapear utility_type de BD: 'service' -> 'servicio', 'product' -> 'producto'
                                 const tipoUtilidad: 'servicio' | 'producto' =
                                     servicio.tipo_utilidad === 'service'
@@ -217,6 +224,8 @@ export function CatalogoTab({
                                     categoriaId: cat.id,
                                     hasPhotos: itemMedia.hasPhotos,
                                     hasVideos: itemMedia.hasVideos,
+                                    thumbnailUrl: itemMedia.thumbnailUrl,
+                                    totalMediaSize: itemMedia.totalSize && itemMedia.totalSize > 0 ? itemMedia.totalSize : undefined,
                                     gastos: servicio.gastos?.map(g => ({
                                         nombre: g.nombre,
                                         costo: g.costo,
@@ -781,6 +790,24 @@ export function CatalogoTab({
         );
     };
 
+    // Función para formatear bytes
+    const formatBytes = (bytes: number): string => {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    };
+
+    // Función para detectar si es video
+    const isVideoUrl = (url: string): boolean => {
+        if (!url) return false;
+        const urlLower = url.toLowerCase();
+        const urlPath = urlLower.split('?')[0].split('#')[0];
+        const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.mkv'];
+        return videoExtensions.some(ext => urlPath.endsWith(ext));
+    };
+
     const SortableItem = ({
         item,
         itemIndex
@@ -811,6 +838,9 @@ export function CatalogoTab({
         ) : { precio_final: 0 };
 
         const isInactive = item.status !== "active";
+        const hasThumbnail = !!item.thumbnailUrl;
+        const thumbnailUrl = item.thumbnailUrl;
+        const isVideo = thumbnailUrl ? isVideoUrl(thumbnailUrl) : false;
 
         return (
             <div
@@ -822,27 +852,64 @@ export function CatalogoTab({
                     } transition-colors cursor-pointer`}
                 onClick={() => handleEditItem(item)}
             >
-                <div className="flex items-center gap-3 flex-1 text-left py-1">
+                <div className="flex items-center gap-2 flex-1 text-left py-1">
                     <button
                         {...attributes}
                         {...listeners}
-                        className={`p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing mr-2 ${isInactive ? 'opacity-50' : ''}`}
+                        className={`p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing ${isInactive ? 'opacity-50' : ''}`}
                         title="Arrastrar para reordenar"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <GripVertical className={`h-4 w-4 ${isInactive ? 'text-zinc-500' : 'text-zinc-500'}`} />
                     </button>
+
+                    {/* Thumbnail */}
+                    <div className={`relative w-12 h-12 rounded overflow-hidden flex-shrink-0 ${hasThumbnail ? 'bg-zinc-800/50' : 'bg-zinc-800/30 border border-dashed border-zinc-600'}`}>
+                        {hasThumbnail && thumbnailUrl ? (
+                            isVideo ? (
+                                <video
+                                    src={thumbnailUrl}
+                                    className="w-full h-full object-cover"
+                                    muted
+                                    playsInline
+                                    onLoadedData={(e) => {
+                                        const video = e.currentTarget;
+                                        video.pause();
+                                        if (video.readyState >= 2) {
+                                            video.currentTime = 1;
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <Image
+                                    src={thumbnailUrl as string}
+                                    alt={item.name}
+                                    fill
+                                    className="object-cover"
+                                    sizes="48px"
+                                    unoptimized
+                                />
+                            )
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                                <div className="w-6 h-6 bg-zinc-700/50 rounded" />
+                            </div>
+                        )}
+                    </div>
+
                     <div className="flex-1 min-w-0">
-                        <div className={`text-sm leading-tight font-light ${isInactive ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                        <div className={`text-sm font-light leading-tight ${isInactive ? 'text-zinc-500' : 'text-zinc-300'}`}>
                             <span className="break-words">{item.name}</span>
-                            {item.hasPhotos && (
-                                <Image className={`h-3.5 w-3.5 inline-flex align-middle ml-1.5 ${isInactive ? 'text-zinc-500' : 'text-zinc-500'}`} aria-label="Tiene fotos" />
-                            )}
-                            {item.hasVideos && (
-                                <Play className={`h-3.5 w-3.5 inline-flex align-middle ml-1.5 ${isInactive ? 'text-zinc-500' : 'text-zinc-500'}`} aria-label="Tiene videos" />
-                            )}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
+                            {item.totalMediaSize && item.totalMediaSize > 0 && (
+                                <div className="flex items-center gap-1">
+                                    <HardDrive className={`h-3 w-3 ${isInactive ? 'text-zinc-500' : 'text-zinc-400'}`} />
+                                    <span className={`text-xs ${isInactive ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                        {formatBytes(item.totalMediaSize)}
+                                    </span>
+                                </div>
+                            )}
                             <ZenBadge
                                 variant="outline"
                                 size="sm"
@@ -1495,21 +1562,65 @@ export function CatalogoTab({
                     setSelectedCategoriaForItem(null);
                 }}
                 onSave={handleSaveItem}
-                onMediaChange={(itemId, hasPhotos, hasVideos) => {
-                    // Actualizar iconos de media en el estado local
-                    setItemsData(prev => {
-                        const newData = { ...prev };
-                        Object.keys(newData).forEach(categoriaId => {
-                            newData[categoriaId] = newData[categoriaId].map(item =>
-                                item.id === itemId ? {
-                                    ...item,
-                                    hasPhotos,
-                                    hasVideos,
-                                } : item
-                            );
+                onMediaChange={async (itemId, hasPhotos, hasVideos) => {
+                    // Recargar información completa de media para este item
+                    try {
+                        const mediaResponse = await obtenerMediaItemsMap(studioSlug);
+                        if (mediaResponse.success && mediaResponse.data) {
+                            const itemMedia = mediaResponse.data[itemId];
+                            // Actualizar estado local con información completa de media
+                            setItemsData(prev => {
+                                const newData = { ...prev };
+                                Object.keys(newData).forEach(categoriaId => {
+                                    newData[categoriaId] = newData[categoriaId].map(item =>
+                                        item.id === itemId ? {
+                                            ...item,
+                                            hasPhotos: itemMedia?.hasPhotos || false,
+                                            hasVideos: itemMedia?.hasVideos || false,
+                                            thumbnailUrl: itemMedia?.thumbnailUrl,
+                                            totalMediaSize: itemMedia?.totalSize && itemMedia.totalSize > 0 ? itemMedia.totalSize : undefined,
+                                        } : item
+                                    );
+                                });
+                                return newData;
+                            });
+                        } else {
+                            // Fallback: solo actualizar hasPhotos y hasVideos si falla la recarga
+                            setItemsData(prev => {
+                                const newData = { ...prev };
+                                Object.keys(newData).forEach(categoriaId => {
+                                    newData[categoriaId] = newData[categoriaId].map(item =>
+                                        item.id === itemId ? {
+                                            ...item,
+                                            hasPhotos,
+                                            hasVideos,
+                                            thumbnailUrl: undefined,
+                                            totalMediaSize: undefined,
+                                        } : item
+                                    );
+                                });
+                                return newData;
+                            });
+                        }
+                    } catch (error) {
+                        console.error("Error recargando media:", error);
+                        // Fallback: solo actualizar hasPhotos y hasVideos
+                        setItemsData(prev => {
+                            const newData = { ...prev };
+                            Object.keys(newData).forEach(categoriaId => {
+                                newData[categoriaId] = newData[categoriaId].map(item =>
+                                    item.id === itemId ? {
+                                        ...item,
+                                        hasPhotos,
+                                        hasVideos,
+                                        thumbnailUrl: undefined,
+                                        totalMediaSize: undefined,
+                                    } : item
+                                );
+                            });
+                            return newData;
                         });
-                        return newData;
-                    });
+                    }
                 }}
                 onStatusChange={(itemId: string, status: string) => {
                     // Actualizar status en el estado local
