@@ -14,7 +14,7 @@ interface MobilePreviewContainerProps {
     showContent?: boolean;
     showNavbar?: boolean;
     // Configuración de contenido
-    contentVariant?: 'skeleton' | 'posts' | 'shop' | 'info' | 'paquetes';
+    contentVariant?: 'skeleton' | 'posts' | 'info' | 'paquetes';
     activeTab?: string;
 }
 

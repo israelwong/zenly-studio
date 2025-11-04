@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Home, Grid3X3, Store, Phone, Package } from 'lucide-react';
+import { Home, Grid3X3, Phone, Package } from 'lucide-react';
 
 interface ProfileNavTabsProps {
     activeTab: string;
@@ -26,11 +26,6 @@ export function ProfileNavTabs({ activeTab, onTabChange }: ProfileNavTabsProps) 
             id: 'portafolio',
             label: 'Portafolio',
             icon: Grid3X3,
-        },
-        {
-            id: 'catalogo',
-            label: 'Catálogo',
-            icon: Store,
         },
         {
             id: 'paquetes',

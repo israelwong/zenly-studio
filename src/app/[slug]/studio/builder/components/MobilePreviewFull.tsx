@@ -11,7 +11,7 @@ interface MobilePreviewFullProps {
     data?: Record<string, unknown>;
     loading?: boolean;
     // Configuración de contenido
-    contentVariant?: 'skeleton' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'shop' | 'info' | 'paquetes';
+    contentVariant?: 'skeleton' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'info' | 'paquetes';
     activeTab?: string;
     // Callbacks
     onClose?: () => void;

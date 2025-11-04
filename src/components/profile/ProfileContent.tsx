@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { MainSection, PortfolioSection, PortfolioDetailSection, PostSection, PostDetailSection, CatalogSection, ContactSection, PaquetesSection } from './sections';
-import { PublicPortfolio, PublicCatalogItem, PublicStudioProfile, PublicContactInfo, PublicPaquete } from '@/types/public-profile';
+import { MainSection, PortfolioSection, PortfolioDetailSection, PostSection, PostDetailSection, ContactSection, PaquetesSection } from './sections';
+import { PublicPortfolio, PublicStudioProfile, PublicContactInfo, PublicPaquete } from '@/types/public-profile';
 
 interface ProfileContentProps {
-    variant?: 'skeleton' | 'inicio' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'shop' | 'info' | 'paquetes';
+    variant?: 'skeleton' | 'inicio' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'info' | 'paquetes';
     data?: Record<string, unknown>;
     loading?: boolean;
     hidePortfolioHeader?: boolean; // Ocultar título y categoría en portfolio-detail cuando está en modo preview del editor
@@ -131,12 +131,6 @@ export function ProfileContent({
         }
         // Los datos vienen dinámicamente desde el editor
         return <PortfolioDetailSection portfolio={portfolio as unknown as Parameters<typeof PortfolioDetailSection>[0]['portfolio']} hideHeader={hidePortfolioHeader} />;
-    }
-
-    // Shop/Catalog content
-    if (variant === 'shop') {
-        const items = data?.items as PublicCatalogItem[] || [];
-        return <CatalogSection items={items} />;
     }
 
     // Paquetes content

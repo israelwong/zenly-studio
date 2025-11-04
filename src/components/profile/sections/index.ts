@@ -3,7 +3,6 @@
  * 
  * Secciones principales (visibles en menú):
  * - Inicio/Portafolio: MainSection
- * - Catálogo: CatalogSection  
  * - Paquetes: PaquetesSection
  * - Contacto: ContactSection
  * 
@@ -21,9 +20,7 @@ export { PostDetailSection } from './PostDetailSection';
 export { PostFeedCard } from './PostFeedCard';
 export { PostCarouselContent } from './PostCarouselContent';
 export { PaquetesSection } from './PaquetesSection';
-export { CatalogSection } from './CatalogSection';
 export { ContactSection } from './ContactSection';
-export { ProductCard } from './ProductCard';
 
 // Secciones adicionales
 export { PaymentsSection } from './PaymentsSection';

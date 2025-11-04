@@ -42,14 +42,6 @@ export function ProfileContentView({ activeTab, profileData }: ProfileContentVie
                 />
             );
 
-        case 'catalogo':
-            return (
-                <ProfileContent
-                    variant="shop"
-                    data={{ items }}
-                />
-            );
-
         case 'contacto':
             return (
                 <ProfileContent

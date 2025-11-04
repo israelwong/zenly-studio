@@ -28,9 +28,7 @@ export { ProfileAIChat } from './ProfileAIChat';
 export {
     MainSection,
     PortfolioSection,
-    CatalogSection,
     ContactSection,
-    ProductCard,
     PaymentsSection,
     ClientsSection
 } from './sections';

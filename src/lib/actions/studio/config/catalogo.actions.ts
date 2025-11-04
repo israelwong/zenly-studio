@@ -43,9 +43,11 @@ function revalidateCatalogo(slug: string) {
 
 /**
  * Obtener todas las secciones con categorías y servicios
+ * @param onlyActive - Si es true, solo trae items activos. Si es false, trae todos los items. Default: true (para compatibilidad con paquetes)
  */
 export async function obtenerCatalogo(
-    studioSlug: string
+    studioSlug: string,
+    onlyActive: boolean = true
 ): Promise<ActionResponse<SeccionData[]>> {
     try {
         const studio_id = await getstudio_idFromSlug(studioSlug);
@@ -62,7 +64,7 @@ export async function obtenerCatalogo(
                                 items: {
                                     where: {
                                         studio_id,
-                                        status: 'active',
+                                        ...(onlyActive ? { status: 'active' } : {}),
                                     },
                                     include: {
                                         item_expenses: true,

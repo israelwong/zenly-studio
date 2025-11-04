@@ -42,6 +42,7 @@ const CreateItemSchema = z.object({
     categoriaeId: z.string(),
     studioSlug: z.string(),
     gastos: z.array(GastoSchema).optional().default([]),
+    status: z.enum(['active', 'inactive']).optional().default('active'),
 });
 
 const UpdateItemSchema = z.object({
@@ -51,6 +52,7 @@ const UpdateItemSchema = z.object({
     description: z.string().optional(),
     tipoUtilidad: z.enum(['servicio', 'producto']).optional(),
     gastos: z.array(GastoSchema).optional(),
+    status: z.enum(['active', 'inactive']).optional(),
 });
 
 /**
@@ -63,11 +65,10 @@ export async function obtenerItemsConStats(
     categoriaeId: string
 ): Promise<ActionResponse<ItemData[]>> {
     try {
-        // Obtener items de la categoría
+        // Obtener items de la categoría (todos los status)
         const items = await prisma.studio_items.findMany({
             where: {
                 service_category_id: categoriaeId,
-                status: "active",
             },
             select: {
                 id: true,
@@ -188,7 +189,7 @@ export async function crearItem(
                 cost: validated.cost,
                 service_category_id: validated.categoriaeId,
                 order: itemCount,
-                status: "active",
+                status: validated.status || "active",
                 studio_id: studio.id,
                 item_expenses: {
                     create: validated.gastos?.map(gasto => ({
@@ -299,6 +300,10 @@ export async function actualizarItem(
                 // Actualizar tipo de utilidad si se proporciona, si no mantener el valor actual
                 ...(validated.tipoUtilidad !== undefined && {
                     utility_type: validated.tipoUtilidad === 'servicio' ? 'service' : 'product'
+                }),
+                // Actualizar status si se proporciona
+                ...(validated.status !== undefined && {
+                    status: validated.status
                 }),
                 // Actualizar gastos si se proporcionan
                 ...(validated.gastos !== undefined && {
@@ -590,6 +595,97 @@ export async function moverItemACategoria(
         return {
             success: false,
             error: "Error al mover item",
+        };
+    }
+}
+
+/**
+ * Alterna el estado publicado/no publicado de un item
+ *
+ * @param itemId - ID del item
+ * @returns Item actualizado
+ */
+export async function toggleItemPublish(
+    itemId: string
+): Promise<ActionResponse<ItemData>> {
+    try {
+        const item = await prisma.studio_items.findUnique({
+            where: { id: itemId },
+            select: {
+                id: true,
+                status: true,
+                studio: { select: { slug: true } },
+            },
+        });
+
+        if (!item) {
+            return {
+                success: false,
+                error: "Item no encontrado",
+            };
+        }
+
+        const newStatus = item.status === "active" ? "inactive" : "active";
+
+        const updatedItem = await prisma.studio_items.update({
+            where: { id: itemId },
+            data: {
+                status: newStatus,
+            },
+            include: {
+                item_media: {
+                    select: {
+                        id: true,
+                        storage_bytes: true,
+                    },
+                },
+                item_expenses: {
+                    select: {
+                        id: true,
+                        name: true,
+                        cost: true,
+                    },
+                },
+            },
+        });
+
+        const mediaSize = updatedItem.item_media.reduce(
+            (acc, media) => acc + Number(media.storage_bytes),
+            0
+        );
+
+        const tipoUtilidad: 'servicio' | 'producto' = 
+            updatedItem.utility_type === 'service' ? 'servicio' : 'producto';
+
+        const itemData: ItemData = {
+            id: updatedItem.id,
+            name: updatedItem.name,
+            cost: updatedItem.cost,
+            description: null,
+            tipoUtilidad,
+            order: updatedItem.order,
+            status: updatedItem.status,
+            createdAt: updatedItem.created_at,
+            updatedAt: updatedItem.updated_at,
+            mediaCount: updatedItem.item_media.length,
+            mediaSize,
+            gastos: updatedItem.item_expenses.map(expense => ({
+                nombre: expense.name,
+                costo: expense.cost,
+            })),
+        };
+
+        revalidatePath(`/${item.studio.slug}/studio/builder/catalogo`);
+
+        return {
+            success: true,
+            data: itemData,
+        };
+    } catch (error) {
+        console.error("[ITEMS] Error toggling publish:", error);
+        return {
+            success: false,
+            error: "Error al cambiar estado",
         };
     }
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Home, Grid3X3, Store, Phone } from 'lucide-react';
+import { Home, Grid3X3, Phone } from 'lucide-react';
 
 interface ProfileHeaderProps {
     data?: {
@@ -102,7 +102,6 @@ export function ProfileHeader({
     const navItems = [
         { id: 'inicio', label: 'Inicio', icon: Home },
         { id: 'portafolio', label: 'Portafolio', icon: Grid3X3 },
-        { id: 'catalogo', label: 'Catálogo', icon: Store },
         { id: 'contacto', label: 'Contacto', icon: Phone }
     ];
 

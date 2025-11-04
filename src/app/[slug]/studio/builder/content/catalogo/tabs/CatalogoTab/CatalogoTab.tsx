@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Image, Play } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Image, Play, Eye, EyeOff } from "lucide-react";
 import { ZenButton, ZenBadge } from "@/components/ui/zen";
 import {
     ZenDropdownMenu,
@@ -28,7 +28,7 @@ import {
     eliminarItem,
 } from "@/lib/actions/studio/builder/catalogo";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/builder/catalogo/utilidad.actions";
-import { reordenarItems, moverItemACategoria } from "@/lib/actions/studio/builder/catalogo/items.actions";
+import { reordenarItems, moverItemACategoria, toggleItemPublish } from "@/lib/actions/studio/builder/catalogo";
 import { obtenerCatalogo } from "@/lib/actions/studio/config/catalogo.actions";
 import { obtenerMediaItemsMap, obtenerMediaItem } from "@/lib/actions/studio/builder/catalogo/media-items.actions";
 import {
@@ -85,6 +85,7 @@ interface Item {
     categoriaId?: string;
     hasPhotos?: boolean;
     hasVideos?: boolean;
+    status?: string;
     gastos?: Array<{
         nombre: string;
         costo: number;
@@ -171,7 +172,7 @@ export function CatalogoTab({
 
                 // Cargar todo el catálogo completo y media en paralelo
                 const [catalogoResponse, mediaResponse] = await Promise.all([
-                    obtenerCatalogo(studioSlug),
+                    obtenerCatalogo(studioSlug, false), // false = traer todos los items (activos e inactivos)
                     obtenerMediaItemsMap(studioSlug),
                 ]);
 
@@ -209,6 +210,7 @@ export function CatalogoTab({
                                     cost: servicio.costo,
                                     tipoUtilidad,
                                     order: servicio.orden,
+                                    status: servicio.status || "active",
                                     isNew: false,
                                     isFeatured: false,
                                     mediaSize: 0,
@@ -808,6 +810,8 @@ export function CatalogoTab({
             preciosConfig
         ) : { precio_final: 0 };
 
+        const isInactive = item.status !== "active";
+
         return (
             <div
                 ref={setNodeRef}
@@ -822,36 +826,47 @@ export function CatalogoTab({
                     <button
                         {...attributes}
                         {...listeners}
-                        className="p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing mr-2"
+                        className={`p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing mr-2 ${isInactive ? 'opacity-50' : ''}`}
                         title="Arrastrar para reordenar"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <GripVertical className="h-4 w-4 text-zinc-500" />
+                        <GripVertical className={`h-4 w-4 ${isInactive ? 'text-zinc-500' : 'text-zinc-500'}`} />
                     </button>
                     <div className="flex-1 min-w-0">
-                        <div className="text-sm text-zinc-300 leading-tight font-light">
+                        <div className={`text-sm leading-tight font-light ${isInactive ? 'text-zinc-500' : 'text-zinc-300'}`}>
                             <span className="break-words">{item.name}</span>
                             {item.hasPhotos && (
-                                <Image className="h-3.5 w-3.5 text-zinc-500 inline-flex align-middle ml-1.5" aria-label="Tiene fotos" />
+                                <Image className={`h-3.5 w-3.5 inline-flex align-middle ml-1.5 ${isInactive ? 'text-zinc-500' : 'text-zinc-500'}`} aria-label="Tiene fotos" />
                             )}
                             {item.hasVideos && (
-                                <Play className="h-3.5 w-3.5 text-zinc-500 inline-flex align-middle ml-1.5" aria-label="Tiene videos" />
+                                <Play className={`h-3.5 w-3.5 inline-flex align-middle ml-1.5 ${isInactive ? 'text-zinc-500' : 'text-zinc-500'}`} aria-label="Tiene videos" />
                             )}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                             <ZenBadge
                                 variant="outline"
                                 size="sm"
-                                className={`px-1 py-0 text-[10px] font-light rounded-sm ${(item.tipoUtilidad || 'servicio') === 'servicio'
-                                    ? 'border-blue-600 text-blue-400'
-                                    : 'border-purple-600 text-purple-400'
+                                className={`px-1 py-0 text-[10px] font-light rounded-sm ${isInactive
+                                    ? 'border-zinc-500 text-zinc-500'
+                                    : (item.tipoUtilidad || 'servicio') === 'servicio'
+                                        ? 'border-blue-600 text-blue-400'
+                                        : 'border-purple-600 text-purple-400'
                                     }`}
                             >
                                 {(item.tipoUtilidad || 'servicio') === 'servicio' ? 'Servicio' : 'Producto'}
                             </ZenBadge>
-                            <span className="text-xs text-green-400">
+                            <span className={`text-xs ${isInactive ? 'text-zinc-500' : 'text-green-400'}`}>
                                 ${precios.precio_final.toLocaleString()}
                             </span>
+                            {isInactive && (
+                                <ZenBadge
+                                    variant="outline"
+                                    size="sm"
+                                    className="px-1 py-0 text-[10px] font-light rounded-full border-zinc-600 text-zinc-500 bg-zinc-800/50"
+                                >
+                                    Inactivo
+                                </ZenBadge>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -863,12 +878,26 @@ export function CatalogoTab({
                                 <ZenButton
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 w-8 p-0"
+                                    className={`h-8 w-8 p-0 ${isInactive ? 'text-zinc-500 hover:text-zinc-400' : ''}`}
                                 >
-                                    <MoreHorizontal className="h-4 w-4" />
+                                    <MoreHorizontal className={`h-4 w-4 ${isInactive ? 'text-zinc-500' : ''}`} />
                                 </ZenButton>
                             </ZenDropdownMenuTrigger>
                             <ZenDropdownMenuContent align="end" className="w-48">
+                                <ZenDropdownMenuItem onClick={() => handleTogglePublish(item)}>
+                                    {item.status === "active" ? (
+                                        <>
+                                            <EyeOff className="h-4 w-4 mr-2" />
+                                            Desactivar
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            Activar
+                                        </>
+                                    )}
+                                </ZenDropdownMenuItem>
+                                <ZenDropdownMenuSeparator />
                                 <ZenDropdownMenuItem onClick={() => handleDuplicateItem(item)}>
                                     <Copy className="h-4 w-4 mr-2" />
                                     Duplicar
@@ -1110,6 +1139,7 @@ export function CatalogoTab({
                     cost: response.data.cost,
                     tipoUtilidad: response.data.tipoUtilidad,
                     order: response.data.order,
+                    status: response.data.status,
                     isNew: false,
                     isFeatured: false,
                     mediaSize: response.data.mediaSize,
@@ -1150,6 +1180,45 @@ export function CatalogoTab({
         }
     };
 
+    const handleTogglePublish = async (item: Item) => {
+        try {
+            setIsLoading(true);
+            const response = await toggleItemPublish(item.id);
+
+            if (response.success && response.data) {
+                // Actualizar estado local
+                setItemsData(prev => {
+                    const newData = { ...prev };
+                    Object.keys(newData).forEach(categoriaId => {
+                        newData[categoriaId] = newData[categoriaId].map(i =>
+                            i.id === item.id ? { ...i, status: response.data?.status || "active" } : i
+                        );
+                    });
+                    return newData;
+                });
+
+                // Actualizar también itemToEdit para que el modal refleje los cambios
+                setItemToEdit(prev => prev && prev.id === item.id ? {
+                    ...prev,
+                    status: response.data?.status || "active"
+                } : prev);
+
+                toast.success(
+                    response.data.status === "active"
+                        ? "Item activado exitosamente"
+                        : "Item desactivado exitosamente"
+                );
+            } else {
+                throw new Error(response.error || "Error al cambiar estado");
+            }
+        } catch (error) {
+            console.error("Error toggling publish:", error);
+            toast.error("Error al cambiar estado del item");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
 
 
     const handleSaveItem = async (data: ItemFormData) => {
@@ -1178,6 +1247,7 @@ export function CatalogoTab({
                                 name: data.name,
                                 cost: data.cost,
                                 tipoUtilidad: data.tipoUtilidad || item.tipoUtilidad || 'servicio',
+                                status: (data as unknown as { status?: string }).status || item.status || 'active',
                                 hasPhotos,
                                 hasVideos,
                             } : item
@@ -1185,11 +1255,21 @@ export function CatalogoTab({
                     });
                     return newData;
                 });
+
+                // Actualizar también itemToEdit para que el modal refleje los cambios
+                setItemToEdit(prev => prev ? {
+                    ...prev,
+                    name: data.name,
+                    cost: data.cost,
+                    tipoUtilidad: data.tipoUtilidad || prev.tipoUtilidad || 'servicio',
+                    status: (data as unknown as { status?: string }).status || prev.status || 'active',
+                } : null);
                 toast.success("Item actualizado");
             } else {
                 const response = await crearItem({
                     ...data,
-                    categoriaId: selectedCategoriaForItem!,
+                    categoriaeId: selectedCategoriaForItem!,
+                    studioSlug: studioSlug,
                 });
                 if (!response.success) throw new Error(response.error);
 
@@ -1200,6 +1280,7 @@ export function CatalogoTab({
                         cost: response.data.cost,
                         tipoUtilidad: response.data.tipoUtilidad as 'servicio' | 'producto',
                         order: response.data.order,
+                        status: response.data.status || 'active',
                         isNew: false,
                         isFeatured: false,
                         mediaSize: response.data.mediaSize,
@@ -1430,14 +1511,36 @@ export function CatalogoTab({
                         return newData;
                     });
                 }}
+                onStatusChange={(itemId: string, status: string) => {
+                    // Actualizar status en el estado local
+                    setItemsData(prev => {
+                        const newData = { ...prev };
+                        Object.keys(newData).forEach(categoriaId => {
+                            newData[categoriaId] = newData[categoriaId].map(item =>
+                                item.id === itemId ? {
+                                    ...item,
+                                    status: status
+                                } : item
+                            );
+                        });
+                        return newData;
+                    });
+
+                    // Actualizar también itemToEdit para que el modal refleje los cambios
+                    setItemToEdit(prev => prev && prev.id === itemId ? {
+                        ...prev,
+                        status: status
+                    } : prev);
+                }}
                 item={itemToEdit ? {
                     id: itemToEdit.id,
                     name: itemToEdit.name,
                     cost: itemToEdit.cost,
                     tipoUtilidad: itemToEdit.tipoUtilidad || 'servicio',
                     description: '',
-                    gastos: itemToEdit.gastos || []
-                } : undefined}
+                    gastos: itemToEdit.gastos || [],
+                    status: itemToEdit.status || 'active'
+                } as ItemFormData : undefined}
                 categoriaId={selectedCategoriaForItem || ''}
                 studioSlug={studioSlug}
             />

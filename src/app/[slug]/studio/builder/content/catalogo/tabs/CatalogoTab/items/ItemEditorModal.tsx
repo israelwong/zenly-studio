@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
-import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSelect } from "@/components/ui/zen";
+import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSelect, ZenSwitch } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/shadcn/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/shadcn/tabs";
@@ -18,7 +18,8 @@ import { useStorageTracking } from "@/hooks/useStorageTracking";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import {
     crearItem,
-    actualizarItem
+    actualizarItem,
+    toggleItemPublish
 } from "@/lib/actions/studio/builder/catalogo/items.actions";
 import {
     obtenerMediaItem,
@@ -64,6 +65,7 @@ export interface ItemFormData {
     categoriaeId?: string;
     tipoUtilidad?: 'servicio' | 'producto';
     gastos?: Gasto[];
+    status?: string;
 }
 
 interface ItemEditorModalProps {
@@ -71,6 +73,7 @@ interface ItemEditorModalProps {
     onClose: () => void;
     onSave?: (data: ItemFormData) => Promise<void>;
     onMediaChange?: (itemId: string, hasPhotos: boolean, hasVideos: boolean) => void;
+    onStatusChange?: (itemId: string, status: string) => void;
     item?: ItemFormData;
     studioSlug: string;
     categoriaId: string;
@@ -86,6 +89,7 @@ export function ItemEditorModal({
     onClose,
     onSave,
     onMediaChange,
+    onStatusChange,
     item,
     studioSlug,
     categoriaId,
@@ -252,7 +256,7 @@ export function ItemEditorModal({
         }
     };
 
-    // Reset form when modal opens/closes
+    // Reset form when modal opens/closes or item changes
     useEffect(() => {
         if (isOpen) {
             if (item) {
@@ -264,6 +268,7 @@ export function ItemEditorModal({
                     categoriaeId: categoriaId,
                     tipoUtilidad: item.tipoUtilidad || "servicio",
                     gastos: item.gastos || [],
+                    status: item.status || "active",
                 });
                 setGastos(item.gastos?.map((g) => ({ nombre: g.nombre, costo: g.costo })) || []);
                 // Cargar media existente si es edición
@@ -278,13 +283,14 @@ export function ItemEditorModal({
                     categoriaeId: categoriaId,
                     tipoUtilidad: "servicio",
                     gastos: [],
+                    status: "active",
                 });
                 setGastos([]);
                 setFotos([]);
                 setVideos([]);
             }
         }
-    }, [isOpen, item, categoriaId]);
+    }, [isOpen, item, categoriaId]); // item.status también está incluido en item
 
     // Reset lightbox when sheet opens to prevent auto-opening
     useEffect(() => {
@@ -356,6 +362,7 @@ export function ItemEditorModal({
                         cost: formData.cost,
                         tipoUtilidad: formData.tipoUtilidad,
                         gastos: formData.gastos || [],
+                        status: formData.status,
                     });
 
                     if (!result.success) {
@@ -370,6 +377,7 @@ export function ItemEditorModal({
                         name: formData.name,
                         cost: formData.cost,
                         gastos: formData.gastos || [],
+                        status: formData.status || 'active',
                     });
 
                     if (!result.success) {
@@ -394,6 +402,44 @@ export function ItemEditorModal({
     const handleClose = () => {
         if (isSaving) return;
         onClose();
+    };
+
+    const handleTogglePublish = async () => {
+        if (!formData.id) {
+            toast.error("Primero debes guardar el item");
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            const response = await toggleItemPublish(formData.id);
+
+            if (response.success && response.data) {
+                const newStatus = response.data.status || "active";
+                setFormData(prev => ({
+                    ...prev,
+                    status: newStatus
+                }));
+                
+                // Notificar cambio de estado al padre
+                if (onStatusChange && formData.id) {
+                    onStatusChange(formData.id, newStatus);
+                }
+                
+                toast.success(
+                    newStatus === "active" 
+                        ? "Item activado exitosamente" 
+                        : "Item desactivado exitosamente"
+                );
+            } else {
+                throw new Error(response.error || "Error al cambiar estado");
+            }
+        } catch (error) {
+            console.error("Error toggling publish:", error);
+            toast.error("Error al cambiar estado del item");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     // Helper para notificar cambios de media al padre
@@ -1208,29 +1254,44 @@ export function ItemEditorModal({
 
 
                                 {/* Botones de acción */}
-                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-                                    <SheetClose asChild>
+                                <div className="space-y-4 pt-4 border-t border-zinc-800">
+                                    {/* Switch Activo */}
+                                    {formData.id && (
+                                        <div className="flex items-center justify-between">
+                                            <ZenSwitch
+                                                checked={formData.status === "active"}
+                                                onCheckedChange={() => handleTogglePublish()}
+                                                disabled={isSaving || isUploading}
+                                                label="Activo"
+                                            />
+                                        </div>
+                                    )}
+                                    {/* Botones */}
+                                    <div className="flex items-center gap-3 w-full">
+                                        <SheetClose asChild>
+                                            <ZenButton
+                                                type="button"
+                                                variant="secondary"
+                                                onClick={handleClose}
+                                                disabled={isSaving || isUploading}
+                                                className="flex-1"
+                                            >
+                                                Cerrar
+                                            </ZenButton>
+                                        </SheetClose>
                                         <ZenButton
-                                            type="button"
-                                            variant="secondary"
-                                            onClick={handleClose}
-                                            disabled={isSaving || isUploading}
+                                            onClick={handleSave}
+                                            disabled={isSaving || isUploading || !formData.name.trim()}
+                                            className="gap-2 flex-1"
                                         >
-                                            Cerrar
+                                            {isSaving ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <Save className="w-4 h-4" />
+                                            )}
+                                            {item ? "Actualizar" : "Crear"} Item
                                         </ZenButton>
-                                    </SheetClose>
-                                    <ZenButton
-                                        onClick={handleSave}
-                                        disabled={isSaving || isUploading || !formData.name.trim()}
-                                        className="gap-2"
-                                    >
-                                        {isSaving ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <Save className="w-4 h-4" />
-                                        )}
-                                        {item ? "Actualizar" : "Crear"} Item
-                                    </ZenButton>
+                                    </div>
                                 </div>
                             </form>
                         </TabsContent>

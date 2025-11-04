@@ -52,20 +52,6 @@ function PortafolioPreview({ data, loading = false }: { data?: Record<string, un
     );
 }
 
-// Componente CatalogoPreview integrado
-function CatalogoPreview({ data, loading = false }: { data?: Record<string, unknown>; loading?: boolean }) {
-    return (
-        <MobilePreviewContainer
-            data={data}
-            loading={loading}
-            showNavbar={true}
-            showContent={true}
-            activeTab="catalogo"
-            contentVariant="shop"
-        />
-    );
-}
-
 // Componente PaquetesPreview integrado
 function PaquetesPreview({ data, loading = false }: { data?: Record<string, unknown>; loading?: boolean }) {
     return (
@@ -124,8 +110,6 @@ export function SectionPreview({ section, studioSlug, data, loading = false }: S
         case 'portafolio':
         case 'portfolios': // Soporte para ambos nombres
             return <PortafolioPreview data={data} loading={loading} />;
-        case 'catalogo':
-            return <CatalogoPreview data={data} loading={loading} />;
         case 'paquetes':
             return <PaquetesPreview data={data} loading={loading} />;
         default:
