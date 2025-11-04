@@ -57,12 +57,7 @@ export function HeaderSection({
                     {/* Columna 1: Logo - Izquierda */}
                     <div className="flex justify-center lg:justify-start flex-shrink-0 w-full lg:w-auto">
                         <div className="flex flex-col items-center gap-4">
-                            <div className="space-y-2">
-                                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                    Logo Principal
-                                </h3>
-                            </div>
+
                             <AvatarManager
                                 url={data.logo_url}
                                 onUpdate={async (url: string) => {

@@ -16,7 +16,6 @@ export interface IdentidadData {
     google_maps_url?: string;
     palabras_clave: string[];
     logo_url: string | null;
-    isotipo_url?: string | null;
     pagina_web?: string | null;
     faq?: FAQItem[];
 }

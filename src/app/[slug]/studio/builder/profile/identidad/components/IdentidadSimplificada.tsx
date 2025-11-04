@@ -5,7 +5,7 @@ import { ZenButton, ZenInput, ZenTextarea } from '@/components/ui/zen';
 import { ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Save, Check, Plus, X } from 'lucide-react';
 import { IdentidadData } from '../types';
-import { LogoManagerZen } from './LogoManagerZen';
+import { AvatarManager } from '@/components/shared/avatar';
 import { actualizarIdentidadCompleta } from '@/lib/actions/studio/builder/identidad';
 import { actualizarContacto } from '@/lib/actions/studio/builder/contacto';
 import { toast } from 'sonner';
@@ -108,22 +108,46 @@ export function IdentidadSimplificada({
             {/* Logo */}
             <ZenCard variant="default" padding="none">
                 <ZenCardContent className="p-6">
-                    <div className="space-y-3">
-                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            Logo Principal
-                        </h3>
-                        <LogoManagerZen
-                            tipo="logo"
-                            url={data.logo_url}
-                            onUpdate={async (url: string) => {
-                                await onLogoUpdate(url);
-                            }}
-                            onLocalUpdate={(url: string | null) => {
-                                onLogoLocalUpdate(url);
-                            }}
-                            studioSlug={studioSlug}
-                        />
+                    <div className="flex flex-col lg:flex-row gap-8 items-start">
+                        {/* Columna 1: Logo - Izquierda */}
+                        <div className="flex justify-center lg:justify-start flex-shrink-0 w-full lg:w-auto">
+                            <div className="flex flex-col items-center gap-4">
+                                <div className="space-y-2">
+                                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                        Logo Principal
+                                    </h3>
+                                </div>
+                                <AvatarManager
+                                    url={data.logo_url}
+                                    onUpdate={async (url: string) => {
+                                        await onLogoUpdate(url);
+                                    }}
+                                    onLocalUpdate={(url: string | null) => {
+                                        onLogoLocalUpdate(url);
+                                    }}
+                                    studioSlug={studioSlug}
+                                    category="identidad"
+                                    subcategory="logos"
+                                    size="lg"
+                                    variant="default"
+                                    loading={loading}
+                                    cropTitle="Ajustar logo del estudio"
+                                    cropDescription="Arrastra y redimensiona el área circular para ajustar tu logo."
+                                    cropInstructions={[
+                                        "• Arrastra para mover el área de recorte",
+                                        "• Usa las esquinas para redimensionar",
+                                        "• El área circular será tu logo del estudio"
+                                    ]}
+                                    successMessage="Logo actualizado exitosamente"
+                                    deleteMessage="Logo eliminado"
+                                    showAdjustButton={true}
+                                />
+                                <p className="text-xs text-zinc-400 text-center max-w-[250px]">
+                                    PNG, SVG, JPG (máximo 5MB)
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </ZenCardContent>
             </ZenCard>
