@@ -312,6 +312,7 @@ model platform_acquisition_channels {
   is_visible     Boolean          @default(true)
   updated_at     DateTime         @updatedAt
   platform_leads platform_leads[]
+  studio_contacts studio_contacts[]
 
   @@index([is_active])
   @@index([is_visible])
@@ -734,6 +735,7 @@ model studios {
   category_media             studio_category_media[]          @relation("category_media")
   client_portal_access       studio_client_portal_access[]
   clientes                   studio_clientes[]
+  contacts                   studio_contacts[]
   condiciones_comerciales    studio_condiciones_comerciales[]
   configuraciones            studio_configuraciones[]
   cotizaciones               studio_cotizaciones[]
@@ -1206,6 +1208,35 @@ model studio_clientes {
   @@index([platform_user_id])
 }
 
+model studio_contacts {
+  id                    String                        @id @default(cuid())
+  studio_id             String
+  name                  String
+  phone                 String
+  email                 String
+  address               String?
+  avatar_url            String?
+  status                String                         @default("active")
+  acquisition_channel_id String?
+  referrer_contact_id   String?
+  referrer_name         String?
+  notes                 String?
+  created_at            DateTime                      @default(now())
+  updated_at            DateTime                      @updatedAt
+  studio                studios                       @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  acquisition_channel   platform_acquisition_channels? @relation(fields: [acquisition_channel_id], references: [id])
+  referrer_contact      studio_contacts?             @relation("ContactReferrer", fields: [referrer_contact_id], references: [id])
+  referred_contacts     studio_contacts[]            @relation("ContactReferrer")
+  cotizaciones          studio_cotizaciones[]
+
+  @@index([studio_id, email])
+  @@index([studio_id, phone])
+  @@index([studio_id, status])
+  @@index([acquisition_channel_id])
+  @@index([referrer_contact_id])
+  @@unique([studio_id, phone])
+}
+
 model studio_eventos {
   id               String                    @id @default(cuid())
   studio_id        String
@@ -1353,6 +1384,7 @@ model studio_cotizaciones {
   status                                 String                                       @default("pendiente")
   condiciones_comerciales_id             String?
   condiciones_comerciales_metodo_pago_id String?
+  contact_id                             String?
   created_at                             DateTime                                     @default(now())
   evento_id                              String
   expires_at                             DateTime?                                    @default(dbgenerated("(now() + '10 days'::interval)"))
@@ -1371,12 +1403,14 @@ model studio_cotizaciones {
   event_types                            studio_event_types                           @relation(fields: [event_type_id], references: [id])
   eventos                                studio_eventos                               @relation(fields: [evento_id], references: [id])
   studio                                 studios                                      @relation(fields: [studio_id], references: [id])
+  contact                                studio_contacts?                             @relation(fields: [contact_id], references: [id])
   pagos                                  studio_pagos[]
   condiciones_comerciales_metodo_pago    studio_condiciones_comerciales_metodo_pago[] @relation("CondicionesComercialesMetodoPagoToCotizacion")
 
   @@index([evento_id])
   @@index([studio_id, status])
   @@index([expires_at])
+  @@index([contact_id])
 }
 
 model studio_cotizacion_items {

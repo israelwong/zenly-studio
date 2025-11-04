@@ -10,9 +10,9 @@ import { ActiveLink } from '../../components/ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
 import {
     Star, Phone, Camera, X, CreditCard, File, User, Grid3X3, Store, Package, Calendar,
-    Newspaper, Briefcase, Users, Sparkles, BarChart3, Mail, ImageIcon, FileText, UserCheck,
-    ChevronDown, ChevronRight, Share2, HelpCircle, MapPin, Shield, ClipboardList,
-    FileSignature, UserCog, DollarSign, ShoppingCart
+    Newspaper, Briefcase, Users, Sparkles, Mail, ImageIcon, FileText, UserCheck,
+    ChevronDown, ChevronRight, Share2, HelpCircle, MapPin, Shield,
+    FileSignature, UserCog, DollarSign, ShoppingCart, ContactRound
 } from 'lucide-react';
 
 interface StudioBuilderSidebarProps {
@@ -84,15 +84,15 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
         // 5. COMERCIAL (Pago - Plan Pro+)
         {
             id: 'comercial',
-            title: 'Comercial',
+            title: 'Commercial',
             icon: ShoppingCart,
             items: [
-                { id: 'marketing', name: 'Marketing', href: `/marketing`, icon: BarChart3 },
-                { id: 'scheduling', name: 'Agendamiento*', href: `/agendamiento`, icon: Calendar },
-                { id: 'cotizaciones', name: 'Cotizaciones*', href: `/cotizaciones`, icon: File },
-                { id: 'leadform', name: 'Lead Form', href: `/business/leadform`, icon: ClipboardList },
-                { id: 'condiciones-comerciales', name: 'Condiciones Comerciales', href: `/business/condiciones-comerciales`, icon: FileSignature },
+                { id: 'marketing', name: 'Marketing', href: `/marketing`, icon: Users },
                 { id: 'email', name: 'Email Marketing', href: `/business/email`, icon: Mail },
+                { id: 'cotizaciones', name: 'Prospects', href: `/cotizaciones`, icon: File },
+                { id: 'contactos', name: 'Contacts', href: `/contactos`, icon: ContactRound },
+                { id: 'scheduling', name: 'Scheduling', href: `/agendamientos`, icon: Calendar },
+                { id: 'condiciones-comerciales', name: 'Terms', href: `/business/condiciones-comerciales`, icon: FileSignature },
             ],
         },
 
@@ -102,12 +102,11 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             title: 'Business',
             icon: Briefcase,
             items: [
-                { id: 'projects', name: 'Proyectos', href: `/projects`, icon: FileText },
-                { id: 'payments', name: 'Pagos*', href: `/pagos`, icon: CreditCard },
-                { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
-                { id: 'contratos', name: 'Contratos', href: `/business/contratos`, icon: FileText },
-                { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
+                { id: 'manager', name: 'Manager', href: `/manager`, icon: FileText },
+                { id: 'payments', name: 'Pagos', href: `/pagos`, icon: CreditCard },
                 { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
+                { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
+                { id: 'contratos', name: 'Contratos', href: `/business/contratos`, icon: FileText },
             ],
         },
 
@@ -117,6 +116,8 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             title: 'Clients',
             icon: Users,
             items: [
+                { id: 'planning', name: 'Planning', href: `/business/planning`, icon: FileText },
+                { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
                 { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
                 { id: 'portal', name: 'Portal Cliente*', href: `/portal-cliente`, icon: UserCheck },
             ],
