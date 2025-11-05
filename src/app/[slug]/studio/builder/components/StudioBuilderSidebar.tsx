@@ -12,7 +12,7 @@ import {
     Star, Phone, Camera, X, CreditCard, File, User, Grid3X3, Store, Package, Calendar,
     Newspaper, Briefcase, Users, Sparkles, Mail, ImageIcon, FileText, UserCheck,
     ChevronDown, ChevronRight, Share2, HelpCircle, MapPin, Shield,
-    FileSignature, UserCog, DollarSign, ShoppingCart, ContactRound, Navigation
+    FileSignature, UserCog, DollarSign, ShoppingCart, ContactRound, Navigation, Layout
 } from 'lucide-react';
 
 interface StudioBuilderSidebarProps {
@@ -74,6 +74,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             title: 'Content',
             icon: Camera,
             items: [
+                { id: 'profile-design', name: 'Layout', href: `/content/profile-design`, icon: Layout },
                 { id: 'posts', name: 'Posts', href: `/content/posts`, icon: Newspaper },
                 { id: 'portfolios', name: 'Portafolios', href: `/content/portfolios`, icon: Grid3X3 },
                 { id: 'catalogo', name: 'Catalog', href: `/content/catalogo`, icon: Store },
@@ -88,8 +89,8 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             title: 'Commercial',
             icon: ShoppingCart,
             items: [
-                { id: 'marketing', name: 'Marketing', href: `/marketing`, icon: Users },
-                { id: 'email', name: 'Email Marketing', href: `/commercial/email`, icon: Mail },
+                // { id: 'marketing', name: 'Marketing', href: `/marketing`, icon: Users },
+                // { id: 'email', name: 'Email Marketing', href: `/commercial/email`, icon: Mail },
                 { id: 'cotizaciones', name: 'Prospects', href: `/cotizaciones`, icon: File },
                 { id: 'contactos', name: 'Contacts', href: `/commercial/contacts`, icon: ContactRound },
                 { id: 'scheduling', name: 'Scheduling', href: `/commercial/agendamiento`, icon: Calendar },
