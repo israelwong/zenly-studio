@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Star } from 'lucide-react';
 import type { PublicPaquete } from '@/types/public-profile';
@@ -10,6 +10,9 @@ interface PaqueteCardProps {
 }
 
 export function PaqueteCard({ paquete }: PaqueteCardProps) {
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const forceMutedIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
     const formatPrice = (price: number) => {
         return new Intl.NumberFormat('es-MX', {
             style: 'currency',
@@ -38,12 +41,101 @@ export function PaqueteCard({ paquete }: PaqueteCardProps) {
 
     const isFeatured = paquete.is_featured === true;
 
+    // Función agresiva para forzar muted
+    const forceMuted = React.useCallback(() => {
+        const videoElement = videoRef.current;
+        if (!videoElement) return;
+
+        // Múltiples intentos de silenciar
+        try {
+            videoElement.muted = true;
+            videoElement.volume = 0;
+            
+            // Forzar muted también desde el atributo HTML
+            videoElement.setAttribute('muted', '');
+            
+            // Override temporal de volume para prevenir cambios
+            if (!videoElement.dataset.volumeOverridden) {
+                const originalVolume = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(videoElement), 'volume');
+                if (originalVolume) {
+                    Object.defineProperty(videoElement, 'volume', {
+                        get: () => 0,
+                        set: () => {},
+                        configurable: true
+                    });
+                    videoElement.dataset.volumeOverridden = 'true';
+                }
+            }
+        } catch (e) {
+            // Silenciar errores
+        }
+    }, []);
+
+    // Forzar muted en el video cuando se actualiza el componente
+    useEffect(() => {
+        const videoElement = videoRef.current;
+        if (!videoElement) return;
+
+        // Forzar inmediatamente
+        forceMuted();
+
+        // Verificar cada 50ms (más frecuente)
+        forceMutedIntervalRef.current = setInterval(forceMuted, 50);
+
+        // Handlers para todos los eventos posibles
+        const handleVolumeChange = (e: Event) => {
+            e.preventDefault();
+            e.stopPropagation();
+            forceMuted();
+        };
+
+        const handlePlay = (e: Event) => {
+            e.preventDefault();
+            forceMuted();
+        };
+
+        const handleLoadedMetadata = () => {
+            forceMuted();
+        };
+
+        const handleCanPlay = () => {
+            forceMuted();
+        };
+
+        const handleTimeUpdate = () => {
+            // Verificar en cada frame de actualización
+            if (!videoElement.muted || videoElement.volume > 0) {
+                forceMuted();
+            }
+        };
+
+        // Agregar todos los listeners con capture para interceptar antes
+        videoElement.addEventListener('volumechange', handleVolumeChange, { capture: true });
+        videoElement.addEventListener('play', handlePlay, { capture: true });
+        videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+        videoElement.addEventListener('canplay', handleCanPlay);
+        videoElement.addEventListener('timeupdate', handleTimeUpdate);
+
+        return () => {
+            if (forceMutedIntervalRef.current) {
+                clearInterval(forceMutedIntervalRef.current);
+            }
+            videoElement.removeEventListener('volumechange', handleVolumeChange, { capture: true });
+            videoElement.removeEventListener('play', handlePlay, { capture: true });
+            videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            videoElement.removeEventListener('canplay', handleCanPlay);
+            videoElement.removeEventListener('timeupdate', handleTimeUpdate);
+        };
+    }, [coverUrl, isVideo, forceMuted]);
+
     return (
         <div className="relative w-full aspect-[4/5] rounded-lg overflow-hidden group cursor-pointer bg-zinc-900">
             {/* Imagen o video de fondo */}
             {hasCover ? (
                 isVideo ? (
                     <video
+                        key={`${paquete.id}-${coverUrl}`}
+                        ref={videoRef}
                         src={coverUrl || undefined}
                         className="absolute inset-0 w-full h-full object-cover z-0"
                         autoPlay
@@ -52,6 +144,21 @@ export function PaqueteCard({ paquete }: PaqueteCardProps) {
                         loop
                         preload="auto"
                         style={{ pointerEvents: 'none' }}
+                        onLoadedMetadata={(e) => {
+                            const video = e.currentTarget;
+                            video.muted = true;
+                            video.volume = 0;
+                        }}
+                        onCanPlay={(e) => {
+                            const video = e.currentTarget;
+                            video.muted = true;
+                            video.volume = 0;
+                        }}
+                        onPlay={(e) => {
+                            const video = e.currentTarget;
+                            video.muted = true;
+                            video.volume = 0;
+                        }}
                     />
                 ) : (
                     <div className="absolute inset-0 z-0">

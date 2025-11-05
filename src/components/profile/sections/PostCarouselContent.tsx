@@ -66,7 +66,7 @@ export function PostCarouselContent({ media }: PostCarouselContentProps) {
                 }],
                 poster: item.thumbnail_url || item.file_url,
                 autoPlay: true,
-                muted: false,
+                muted: true,
                 controls: true,
                 playsInline: true
             };
@@ -215,7 +215,7 @@ export function PostCarouselContent({ media }: PostCarouselContentProps) {
                     controls: true,
                     playsInline: true,
                     autoPlay: true,
-                    muted: false,
+                    muted: true,
                     loop: false
                 }}
                 controller={{

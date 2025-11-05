@@ -92,7 +92,9 @@ export type PaqueteFromDB = {
         };
     }>;
     event_types?: {
+        id: string;
         name: string;
+        order: number;
     };
 };
 

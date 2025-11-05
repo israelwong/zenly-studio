@@ -9,7 +9,6 @@ import { PaquetesWrapper } from './components';
 import { getBuilderData } from '@/lib/actions/studio/builder/builder-data.actions';
 import type { BuilderProfileData } from '@/types/builder-profile';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
-import { toast } from 'sonner';
 
 export default function PaquetesPage() {
     const params = useParams();
@@ -40,7 +39,7 @@ export default function PaquetesPage() {
     const updatePreviewPaquetes = useCallback((paquetes: PaqueteFromDB[]) => {
         setBuilderData(prev => {
             if (!prev) return prev;
-            
+
             // Debug: verificar order de tipos de evento antes del mapeo
             console.log('🔍 [updatePreviewPaquetes] Paquetes recibidos:', paquetes.map(p => ({
                 nombre: p.name,
@@ -48,11 +47,11 @@ export default function PaquetesPage() {
                 tipo_evento_order: p.event_types?.order,
                 tipo_evento_id: p.event_types?.id,
             })));
-            
+
             // Convertir PaqueteFromDB a BuilderPaquete (que es compatible con PublicPaquete)
             // Filtrar solo paquetes activos y sin placeholders temporales
             const builderPaquetes = paquetes
-                .filter(p => 
+                .filter(p =>
                     !p.id.startsWith('duplicating-') && // Excluir placeholders temporales
                     p.status === 'active' // Solo paquetes activos para el preview público
                 )
@@ -72,7 +71,7 @@ export default function PaquetesPage() {
                     // Usar order del schema (que viene del backend) o position como fallback
                     order: (paquete as { order?: number }).order ?? (paquete.position || 0),
                 }));
-            
+
             // Debug: verificar order de tipos de evento después del mapeo
             console.log('🔍 [updatePreviewPaquetes] BuilderPaquetes mapeados:', builderPaquetes.map(p => ({
                 nombre: p.nombre,
@@ -145,8 +144,8 @@ export default function PaquetesPage() {
                 <ZenCardContent className="p-6">
                     <div className="space-y-6">
                         {/* Paquetes Wrapper */}
-                        <PaquetesWrapper 
-                            studioSlug={studioSlug} 
+                        <PaquetesWrapper
+                            studioSlug={studioSlug}
                             onPreviewRefresh={refreshPreviewData}
                             onPreviewPaquetesUpdate={updatePreviewPaquetes}
                         />

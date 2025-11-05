@@ -63,7 +63,7 @@ export function ImageCarousel({
                 poster: item.thumbnail_url || item.file_url,
                 // No especificar width/height para que use tamaño natural del video
                 autoPlay: true,
-                muted: false,
+                muted: true,
                 controls: true,
                 playsInline: true
             };
@@ -217,7 +217,7 @@ export function ImageCarousel({
                         controls: true,
                         playsInline: true,
                         autoPlay: true,
-                        muted: false,
+                        muted: true,
                         loop: false
                     }}
                     on={{
