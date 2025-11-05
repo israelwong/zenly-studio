@@ -5,7 +5,7 @@ import { FAQSection } from './components/FAQSection';
 import { SectionLayout } from '../../components';
 import { useParams } from 'next/navigation';
 import { getBuilderData } from '@/lib/actions/studio/builder/builder-data.actions';
-import { IdentidadData } from '../identidad/types';
+import { IdentidadData } from '../../profile/identidad/types';
 import { BuilderProfileData } from '@/types/builder-profile';
 
 export default function FAQPage() {
