@@ -117,6 +117,20 @@ export function IdentidadForm({
                                 url={data.logo_url}
                                 onUpdate={async (url: string) => {
                                     await onLogoUpdate(url);
+                                    // Guardar datos de identidad automáticamente cuando se actualiza el logo
+                                    try {
+                                        const identidadData = {
+                                            nombre: data.studio_name || '',
+                                            slogan: data.slogan || undefined,
+                                            logo_url: url,
+                                            pagina_web: data.pagina_web || undefined,
+                                            palabras_clave: Array.isArray(data.palabras_clave) ? data.palabras_clave.join(', ') : data.palabras_clave || '',
+                                            descripcion: data.descripcion || undefined
+                                        };
+                                        await actualizarIdentidadCompleta(studioSlug, identidadData);
+                                    } catch (error) {
+                                        console.error('Error saving identidad after logo update:', error);
+                                    }
                                     // Disparar evento para actualizar logo en otros componentes
                                     triggerRefresh();
                                 }}
