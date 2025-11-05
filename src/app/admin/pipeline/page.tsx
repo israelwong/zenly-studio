@@ -49,12 +49,12 @@ async function getPipelineStagesGrouped(): Promise<PipelineType[]> {
                             }
                         },
                         orderBy: {
-                            orden: 'asc'
+                            order: 'asc'
                         }
                     }
                 },
                 orderBy: {
-                    orden: 'asc'
+                    order: 'asc'
                 }
             });
         });

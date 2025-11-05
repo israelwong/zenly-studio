@@ -23,7 +23,7 @@ async function getPlans(): Promise<Plan[]> {
             },
             orderBy: [
                 { active: 'desc' },
-                { orden: 'asc' },
+                { order: 'asc' },
                 { name: 'asc' }
             ]
         });
