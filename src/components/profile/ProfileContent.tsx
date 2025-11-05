@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { MainSection, PortfolioSection, PortfolioDetailSection, PostSection, PostDetailSection, ContactSection, PaquetesSection } from './sections';
+import { MainSection, PortfolioSection, PortfolioDetailSection, PostSection, PostDetailSection, ContactSection, PaquetesSection, FaqSection } from './sections';
 import { PublicPortfolio, PublicStudioProfile, PublicContactInfo, PublicPaquete } from '@/types/public-profile';
 
 interface ProfileContentProps {
-    variant?: 'skeleton' | 'inicio' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'info' | 'paquetes';
+    variant?: 'skeleton' | 'inicio' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'info' | 'paquetes' | 'faq';
     data?: Record<string, unknown>;
     loading?: boolean;
     hidePortfolioHeader?: boolean; // Ocultar título y categoría en portfolio-detail cuando está en modo preview del editor
@@ -137,6 +137,18 @@ export function ProfileContent({
     if (variant === 'paquetes') {
         const paquetes = data?.paquetes as PublicPaquete[] || [];
         return <PaquetesSection paquetes={paquetes} />;
+    }
+
+    // FAQ content
+    if (variant === 'faq') {
+        const faq = data?.faq as Array<{
+            id: string;
+            pregunta: string;
+            respuesta: string;
+            orden: number;
+            is_active: boolean;
+        }> || [];
+        return <FaqSection faq={faq} loading={loading} />;
     }
 
     // Info/Contact content

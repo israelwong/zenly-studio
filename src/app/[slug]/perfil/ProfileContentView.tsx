@@ -42,6 +42,22 @@ export function ProfileContentView({ activeTab, profileData }: ProfileContentVie
                 />
             );
 
+        case 'paquetes':
+            return (
+                <ProfileContent
+                    variant="paquetes"
+                    data={{ paquetes: profileData.paquetes || [] }}
+                />
+            );
+
+        case 'faq':
+            return (
+                <ProfileContent
+                    variant="faq"
+                    data={{ faq: profileData.studio.faq || [] }}
+                />
+            );
+
         case 'contacto':
             return (
                 <ProfileContent

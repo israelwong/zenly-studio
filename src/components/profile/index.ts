@@ -9,13 +9,13 @@
  */
 
 // Core Profile Components
-export { ProfileIdentity } from './ProfileIdentity';
-export { ProfileNavigation } from './ProfileNavigation';
 export { ProfileHeader } from './ProfileHeader';
+export { ProfileNavigation } from './ProfileNavigation';
 export { ProfileNavTabs } from './ProfileNavTabs';
 export { ProfileContent } from './ProfileContent';
 export { ProfileFooter } from './ProfileFooter';
-export { ProfileFAQ } from './ProfileFAQ';
+// ProfileFAQ deprecated - usar FaqSection desde sections
+export { FaqSection as ProfileFAQ } from './sections';
 
 // Container Components
 // MobilePreviewContainer moved to builder components
@@ -29,6 +29,8 @@ export {
     MainSection,
     PortfolioSection,
     ContactSection,
+    PaquetesSection,
+    FaqSection,
     PaymentsSection,
     ClientsSection
 } from './sections';

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { PublicProfileData } from '@/types/public-profile';
-import { ProfileIdentity, ProfileNavTabs, ProfileCTA, ProfileAIChat, ProfileFooter, ProfileFAQ } from '@/components/profile';
+import { ProfileHeader, ProfileNavTabs, ProfileCTA, ProfileAIChat, ProfileFooter, FaqSection } from '@/components/profile';
 import { ProfileContentView } from './ProfileContentView';
 import { isProPlan } from '@/lib/utils/profile-utils';
 
@@ -21,6 +21,9 @@ export function ProfilePageClient({ profileData }: ProfilePageClientProps) {
     const { studio } = profileData;
     const isPro = isProPlan(studio.plan?.slug);
 
+    // FAQ data (puede venir en studio.faq aunque no esté en el tipo)
+    const faqData = (studio as unknown as { faq?: Array<{ id: string; pregunta: string; respuesta: string; orden: number; is_active: boolean }> }).faq;
+
     // Debug: Verificar datos en ProfilePageClient
     console.log('🔍 ProfilePageClient Debug:');
     console.log('  - profileData:', profileData);
@@ -34,7 +37,7 @@ export function ProfilePageClient({ profileData }: ProfilePageClientProps) {
             {/* Mobile Layout (default) */}
             <div className="lg:hidden">
                 {/* Profile Header */}
-                <ProfileIdentity
+                <ProfileHeader
                     data={{
                         studio_name: studio.studio_name,
                         slogan: studio.slogan,
@@ -55,10 +58,10 @@ export function ProfilePageClient({ profileData }: ProfilePageClientProps) {
                 />
 
                 {/* FAQ Section - Persistente antes del footer */}
-                {profileData.studio.faq && Array.isArray(profileData.studio.faq) && profileData.studio.faq.length > 0 && (
+                {faqData && Array.isArray(faqData) && faqData.length > 0 && (
                     <div className="mt-6">
-                        <ProfileFAQ
-                            data={{ faq: profileData.studio.faq }}
+                        <FaqSection
+                            faq={faqData}
                             loading={false}
                         />
                     </div>
@@ -90,7 +93,7 @@ export function ProfilePageClient({ profileData }: ProfilePageClientProps) {
                 {/* Column 1: Profile Content */}
                 <div className="space-y-6">
                     {/* Profile Header */}
-                    <ProfileIdentity
+                    <ProfileHeader
                         data={{
                             studio_name: studio.studio_name,
                             slogan: studio.slogan,
@@ -111,10 +114,10 @@ export function ProfilePageClient({ profileData }: ProfilePageClientProps) {
                     />
 
                     {/* FAQ Section - Persistente antes del footer */}
-                    {profileData.studio.faq && Array.isArray(profileData.studio.faq) && profileData.studio.faq.length > 0 && (
+                    {faqData && Array.isArray(faqData) && faqData.length > 0 && (
                         <div className="mt-6">
-                            <ProfileFAQ
-                                data={{ faq: profileData.studio.faq }}
+                            <FaqSection
+                                faq={faqData}
                                 loading={false}
                             />
                         </div>

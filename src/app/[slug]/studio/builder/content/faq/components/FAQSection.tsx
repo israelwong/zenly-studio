@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { ZenButton, ZenInput, ZenTextarea } from '@/components/ui/zen';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
-import { Plus, Edit, Trash2, GripVertical, HelpCircle } from 'lucide-react';
+import { ZenCard, ZenCardContent } from '@/components/ui/zen';
+import { Edit, Trash2, GripVertical, HelpCircle } from 'lucide-react';
 import { IdentidadData, FAQItem } from '../../../profile/identidad/types';
 import {
     obtenerFAQ,
@@ -38,11 +38,15 @@ interface FAQSectionProps {
     studioSlug: string;
 }
 
-export function FAQSection({
+export interface FAQSectionRef {
+    openModal: () => void;
+}
+
+export const FAQSection = forwardRef<FAQSectionRef, FAQSectionProps>(({
     onLocalUpdate,
     loading = false,
     studioSlug
-}: FAQSectionProps) {
+}, ref) => {
     const [showFAQModal, setShowFAQModal] = useState(false);
     const [editingFAQ, setEditingFAQ] = useState<FAQItem | null>(null);
     const [nuevaPregunta, setNuevaPregunta] = useState('');
@@ -272,6 +276,11 @@ export function FAQSection({
         setNuevaRespuesta('');
     };
 
+    // Exponer método para abrir modal desde el padre
+    useImperativeHandle(ref, () => ({
+        openModal: () => setShowFAQModal(true)
+    }));
+
     // Componente sortable para cada FAQ item
     function SortableFAQItem({ faq, index }: { faq: FAQItem; index: number }) {
         const {
@@ -368,25 +377,8 @@ export function FAQSection({
     }
 
     return (
-        <ZenCard variant="default" padding="none">
-            <ZenCardHeader className="border-b border-zinc-800">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <HelpCircle className="h-5 w-5 text-purple-400" />
-                        <ZenCardTitle>Preguntas Frecuentes</ZenCardTitle>
-                    </div>
-                    <ZenButton
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowFAQModal(true)}
-                        disabled={loading}
-                    >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Agregar FAQ
-                    </ZenButton>
-                </div>
-            </ZenCardHeader>
-            <ZenCardContent className="p-6">
+        <>
+            <div>
                 {loading || loadingFAQ ? (
                     <div className="space-y-3">
                         {[...Array(3)].map((_, i) => (
@@ -456,7 +448,7 @@ export function FAQSection({
                         </div>
                     </div>
                 )}
-            </ZenCardContent>
+            </div>
 
             {/* Modal para agregar/editar FAQ */}
             {showFAQModal && (
@@ -563,7 +555,8 @@ export function FAQSection({
                     </div>
                 </div>
             )}
-        </ZenCard>
+        </>
     );
-}
+});
 
+FAQSection.displayName = 'FAQSection';

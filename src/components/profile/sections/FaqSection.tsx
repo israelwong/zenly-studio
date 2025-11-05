@@ -11,7 +11,8 @@ interface FAQItem {
     is_active: boolean;
 }
 
-interface ProfileFAQProps {
+interface FaqSectionProps {
+    faq?: FAQItem[];
     data?: {
         faq?: FAQItem[];
     };
@@ -19,17 +20,19 @@ interface ProfileFAQProps {
 }
 
 /**
- * ProfileFAQ - Componente para mostrar FAQ en el perfil público
- * Se renderiza antes del footer para máxima visibilidad
+ * FaqSection - Display for studio FAQ section
+ * Shows FAQ items in an accordion format
  * 
  * Usado en:
- * - Perfil público (sección FAQ persistente)
- * - Builder preview (preview de FAQ)
+ * - ProfileContent variant="faq" (sección principal)
+ * - MobilePreviewContainer (persistente antes del footer)
+ * - ProfilePageClient (persistente antes del footer)
  */
-export function ProfileFAQ({ data, loading = false }: ProfileFAQProps) {
+export function FaqSection({ faq, data, loading = false }: FaqSectionProps) {
     const [openItems, setOpenItems] = useState<Set<string>>(new Set());
     
-    const faqData = data?.faq || [];
+    // Soporte para ambos formatos de props
+    const faqData = faq || data?.faq || [];
     const activeFAQ = faqData.filter(faq => faq.is_active);
 
     const toggleItem = (id: string) => {
@@ -64,7 +67,19 @@ export function ProfileFAQ({ data, loading = false }: ProfileFAQProps) {
     }
 
     if (!activeFAQ.length) {
-        return null;
+        return (
+            <div className="p-8 text-center">
+                <div className="text-zinc-400 mb-2">
+                    <HelpCircle className="h-12 w-12 mx-auto mb-4" />
+                </div>
+                <h3 className="text-lg font-medium text-zinc-300 mb-2">
+                    Sin preguntas frecuentes
+                </h3>
+                <p className="text-sm text-zinc-500">
+                    Este estudio aún no tiene preguntas frecuentes configuradas
+                </p>
+            </div>
+        );
     }
 
     return (

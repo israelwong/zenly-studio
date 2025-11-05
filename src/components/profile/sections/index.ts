@@ -21,6 +21,7 @@ export { PostFeedCard } from './PostFeedCard';
 export { PostCarouselContent } from './PostCarouselContent';
 export { PaquetesSection } from './PaquetesSection';
 export { ContactSection } from './ContactSection';
+export { FaqSection } from './FaqSection';
 
 // Secciones adicionales
 export { PaymentsSection } from './PaymentsSection';

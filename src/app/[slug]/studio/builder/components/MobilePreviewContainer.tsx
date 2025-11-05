@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { ProfileIdentity, ProfileContent, ProfileFooter, ProfileNavigation, ProfileFAQ } from '@/components/profile';
+import { ProfileHeader, ProfileContent, ProfileFooter, ProfileNavigation, FaqSection } from '@/components/profile';
 
 interface MobilePreviewContainerProps {
     children?: React.ReactNode;
@@ -14,7 +14,7 @@ interface MobilePreviewContainerProps {
     showContent?: boolean;
     showNavbar?: boolean;
     // Configuración de contenido
-    contentVariant?: 'skeleton' | 'posts' | 'info' | 'paquetes';
+    contentVariant?: 'skeleton' | 'posts' | 'info' | 'paquetes' | 'faq';
     activeTab?: string;
 }
 
@@ -52,7 +52,7 @@ export function MobilePreviewContainer({
                 {/* Header de identidad - fijo con bordes redondeados */}
                 {showHeader && (
                     <div className="flex-shrink-0 rounded-t-3xl overflow-hidden">
-                        <ProfileIdentity
+                        <ProfileHeader
                             data={data}
                             loading={loading}
                         />
@@ -88,10 +88,10 @@ export function MobilePreviewContainer({
 
                         {children}
 
-                        {/* FAQ Section - Persistente antes del footer */}
-                        {data?.faq && Array.isArray(data.faq) && data.faq.length > 0 ? (
+                        {/* FAQ Section - Persistente antes del footer (solo si no está en el contenido principal) */}
+                        {contentVariant !== 'faq' && data?.faq && Array.isArray(data.faq) && data.faq.length > 0 ? (
                             <div className="mt-6">
-                                <ProfileFAQ
+                                <FaqSection
                                     data={data}
                                     loading={loading}
                                 />
