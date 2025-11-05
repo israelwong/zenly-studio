@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { TelefonosSection } from '../components/TelefonosSection';
+import { TelefonosSection } from './components/TelefonosSection';
 import { SectionLayout } from '../../components';
 import { useParams } from 'next/navigation';
 import { getBuilderProfileData } from '@/lib/actions/studio/builder/builder-profile.actions';

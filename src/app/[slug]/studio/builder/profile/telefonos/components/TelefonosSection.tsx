@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ZenButton, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { Phone, Plus, GripVertical, Edit3, Trash2 } from 'lucide-react';
-import { Telefono } from '../types';
+import { Telefono } from '../../types';
 import { TelefonoModal } from './TelefonoModal';
 import { toast } from 'sonner';
 import { crearTelefono, actualizarTelefono, eliminarTelefono } from '@/lib/actions/studio/builder/contacto';

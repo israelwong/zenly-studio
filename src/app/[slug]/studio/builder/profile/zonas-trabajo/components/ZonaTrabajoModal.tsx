@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ZonaTrabajo } from '../types';
+import { ZonaTrabajo } from '../../types';
 import { ZenButton, ZenInput } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { MapPin } from 'lucide-react';

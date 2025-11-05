@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Horario } from '../types';
-import { ZenButton, ZenInput } from '@/components/ui/zen';
+import { Horario } from '../../types';
+import { ZenButton } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { Clock } from 'lucide-react';
 
@@ -26,24 +26,24 @@ const DIAS_SEMANA = [
 export function HorarioModal({ isOpen, onClose, onSave, horario }: HorarioModalProps) {
     const [formData, setFormData] = useState({
         day_of_week: '',
-        start_time: '09:00',
-        end_time: '18:00',
+        start_time: '',
+        end_time: '',
         is_active: true
     });
 
     useEffect(() => {
         if (horario) {
             setFormData({
-                day_of_week: horario.dia,
-                start_time: horario.apertura,
-                end_time: horario.cierre,
+                day_of_week: horario.dia || '',
+                start_time: horario?.apertura ?? '',
+                end_time: horario?.cierre ?? '',
                 is_active: !horario.cerrado
             });
         } else {
             setFormData({
                 day_of_week: '',
-                start_time: '09:00',
-                end_time: '18:00',
+                start_time: '',
+                end_time: '',
                 is_active: true
             });
         }
@@ -56,8 +56,8 @@ export function HorarioModal({ isOpen, onClose, onSave, horario }: HorarioModalP
         const horarioData: Horario = {
             id: horario?.id,
             dia: formData.day_of_week as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday',
-            apertura: formData.is_active ? formData.start_time : '',
-            cierre: formData.is_active ? formData.end_time : '',
+            ...(formData.is_active && formData.start_time && { apertura: formData.start_time }),
+            ...(formData.is_active && formData.end_time && { cierre: formData.end_time }),
             cerrado: !formData.is_active
         };
 

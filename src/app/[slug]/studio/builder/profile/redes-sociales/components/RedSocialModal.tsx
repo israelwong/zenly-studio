@@ -14,7 +14,7 @@ import {
     DialogTitle,
 } from '@/components/ui/shadcn/dialog';
 import { Plus, Edit, CheckCircle, ExternalLink } from 'lucide-react';
-import { Plataforma, RedSocial } from '../types/redes-sociales';
+import { Plataforma, RedSocial } from '../types';
 
 interface RedSocialModalProps {
     isOpen: boolean;

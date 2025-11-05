@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ZenButton, ZenInput, ZenTextarea } from '@/components/ui/zen';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { Plus, Edit, Trash2, GripVertical, HelpCircle } from 'lucide-react';
-import { IdentidadData, FAQItem } from '../types';
+import { IdentidadData, FAQItem } from '../../identidad/types';
 import {
     obtenerFAQ,
     crearFAQ,

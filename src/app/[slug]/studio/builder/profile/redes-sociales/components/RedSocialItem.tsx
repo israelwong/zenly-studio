@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/shadcn/switch';
 import { Edit, Trash2, ExternalLink, GripVertical } from 'lucide-react';
 import { RedSocialIcon } from '@/components/ui/icons/RedSocialIcon';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { Plataforma, RedSocial } from '../types/redes-sociales';
+import { Plataforma, RedSocial } from '../types';
 import {
     useSortable,
 } from '@dnd-kit/sortable';

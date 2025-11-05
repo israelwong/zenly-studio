@@ -1,9 +1,9 @@
-export { IdentidadEditorZen } from './IdentidadEditorZen';
 export { IdentidadForm } from './IdentidadForm';
-export { LogoManagerZen } from './LogoManagerZen';
-export { SocialSection } from './SocialSection';
-export { RedSocialItem } from './RedSocialItem';
-export { RedSocialModal } from './RedSocialModal';
 export { HeaderSection } from './HeaderSection';
 export { FooterSection } from './FooterSection';
-export { FAQSection } from './FAQSection';
+
+// Re-exportar componentes compartidos desde profile/components
+export { FAQSection } from '../../faq/components/FAQSection';
+export { SocialSection } from '../../redes-sociales/components/SocialSection';
+export { RedSocialItem } from '../../redes-sociales/components/RedSocialItem';
+export { RedSocialModal } from '../../redes-sociales/components/RedSocialModal';

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ZenButton, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { MapPin, Plus, GripVertical, Edit3, Trash2 } from 'lucide-react';
-import { ZonaTrabajo } from '../types';
+import { ZonaTrabajo } from '../../types';
 import { ZonaTrabajoModal } from './ZonaTrabajoModal';
 import { crearZonaTrabajo, actualizarZonaTrabajo, eliminarZonaTrabajo, reordenarZonasTrabajo } from '@/lib/actions/studio/builder/contacto';
 import { toast } from 'sonner';

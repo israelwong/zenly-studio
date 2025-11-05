@@ -6,8 +6,8 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/componen
 import { Plus, Share2, GripVertical } from 'lucide-react';
 import { RedSocialItem } from './RedSocialItem';
 import { RedSocialModal } from './RedSocialModal';
-import { Plataforma, RedSocial } from '../types/redes-sociales';
-import { IdentidadData } from '../types';
+import { Plataforma, RedSocial } from '../types';
+import { IdentidadData } from '../../identidad/types';
 import { toast } from 'sonner';
 import {
     obtenerRedesSocialesStudio,

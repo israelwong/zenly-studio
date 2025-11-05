@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { SocialSection } from '../identidad/components/';
+import { SocialSection } from './components/SocialSection';
 import { SectionLayout } from '../../components';
 import { useParams } from 'next/navigation';
 import { getBuilderProfileData } from '@/lib/actions/studio/builder/builder-profile.actions';

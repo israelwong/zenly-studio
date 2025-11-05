@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { Clock } from 'lucide-react';
-import { Horario } from '../types';
+import { Horario } from '../../types';
 import { toggleHorarioEstado, actualizarHorario, inicializarHorariosPorDefecto } from '@/lib/actions/studio/builder/contacto';
 import { toast } from 'sonner';
 
