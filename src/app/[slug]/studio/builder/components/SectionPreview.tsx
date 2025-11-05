@@ -9,6 +9,7 @@ interface SectionPreviewProps {
     studioSlug: string;
     data?: Record<string, unknown>;
     loading?: boolean;
+    faqViewMode?: 'compact' | 'expanded';
 }
 
 // Componente IdentidadPreview integrado
@@ -95,7 +96,7 @@ function PostsPreview({ data, loading = false }: { data?: Record<string, unknown
 }
 
 // Componente FAQPreview integrado
-function FAQPreview({ data, loading = false }: { data?: Record<string, unknown>; loading?: boolean }) {
+function FAQPreview({ data, loading = false, faqViewMode = 'expanded' }: { data?: Record<string, unknown>; loading?: boolean; faqViewMode?: 'compact' | 'expanded' }) {
     return (
         <MobilePreviewContainer
             data={data}
@@ -104,11 +105,12 @@ function FAQPreview({ data, loading = false }: { data?: Record<string, unknown>;
             showContent={true}
             activeTab="faq"
             contentVariant="faq"
+            faqViewMode={faqViewMode}
         />
     );
 }
 
-export function SectionPreview({ section, studioSlug, data, loading = false }: SectionPreviewProps) {
+export function SectionPreview({ section, studioSlug, data, loading = false, faqViewMode }: SectionPreviewProps) {
     // studioSlug is available for future use if needed
     console.log('SectionPreview for studio:', studioSlug);
 
@@ -127,7 +129,7 @@ export function SectionPreview({ section, studioSlug, data, loading = false }: S
         case 'paquetes':
             return <PaquetesPreview data={data} loading={loading} />;
         case 'faq':
-            return <FAQPreview data={data} loading={loading} />;
+            return <FAQPreview data={data} loading={loading} faqViewMode={faqViewMode} />;
         default:
             return <div className="w-full max-w-sm mx-auto p-4 text-center text-zinc-500">
                 <p>Preview no disponible para la sección: {section}</p>

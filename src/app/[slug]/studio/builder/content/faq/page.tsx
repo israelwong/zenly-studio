@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { HelpCircle, Plus, SquareStack, LayoutList } from 'lucide-react';
+import { HelpCircle, Plus } from 'lucide-react';
 import { FAQSection, type FAQSectionRef } from './components/FAQSection';
 import { SectionLayout } from '../../components';
 import { useParams } from 'next/navigation';
@@ -17,7 +17,8 @@ export default function FAQPage() {
     const studioSlug = params.slug as string;
     const [builderData, setBuilderData] = useState<BuilderProfileData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [faqViewMode, setFaqViewMode] = useState<FAQViewMode>('compact');
+    // TODO: Próxima iteración - Reactivar setFaqViewMode cuando se implementen opciones de visualización
+    const [faqViewMode] = useState<FAQViewMode>('expanded');
     const faqSectionRef = useRef<FAQSectionRef>(null);
 
     // Función para actualizar solo los FAQ en el preview (sin recargar todo)
@@ -129,7 +130,7 @@ export default function FAQPage() {
 
                 <ZenCardContent className="p-6">
                     <div className="space-y-6">
-                        {/* Opciones de visualización */}
+                        {/* TODO: Próxima iteración - Opciones de visualización
                         <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
                             <span className="text-sm text-zinc-400">Estilo de visualización</span>
                             <div className="flex items-center gap-1 p-1 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
@@ -153,6 +154,7 @@ export default function FAQPage() {
                                 </ZenButton>
                             </div>
                         </div>
+                        */}
                         <FAQSection
                             ref={faqSectionRef}
                             studioSlug={studioSlug}
