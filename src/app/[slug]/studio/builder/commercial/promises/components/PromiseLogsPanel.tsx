@@ -12,12 +12,14 @@ interface PromiseLogsPanelProps {
   studioSlug: string;
   promiseId: string | null;
   contactId?: string | null;
+  isSaved: boolean;
 }
 
 export function PromiseLogsPanel({
   studioSlug,
   promiseId,
   contactId,
+  isSaved,
 }: PromiseLogsPanelProps) {
   const [logs, setLogs] = useState<PromiseLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,7 +112,7 @@ export function PromiseLogsPanel({
     );
   }
 
-  if (!promiseId) {
+  if (!isSaved || !promiseId) {
     return (
       <div className="flex flex-col h-[600px] bg-zinc-900/50 rounded-lg border border-zinc-800">
         <div className="p-3 border-b border-zinc-800" />

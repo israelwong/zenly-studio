@@ -70,6 +70,74 @@ export async function getPromiseIdByContactId(
 }
 
 /**
+ * Obtener promesa completa por promiseId con datos del contacto
+ */
+export async function getPromiseById(
+  promiseId: string
+): Promise<ActionResponse<{
+  promise_id: string;
+  contact_id: string;
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string | null;
+  event_type_id: string | null;
+  interested_dates: string[] | null;
+  acquisition_channel_id: string | null;
+  social_network_id: string | null;
+  referrer_contact_id: string | null;
+  referrer_name: string | null;
+}>> {
+  try {
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      include: {
+        contact: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            acquisition_channel_id: true,
+            social_network_id: true,
+            referrer_contact_id: true,
+            referrer_name: true,
+          },
+        },
+      },
+    });
+
+    if (!promise) {
+      return { success: false, error: 'Promesa no encontrada' };
+    }
+
+    return {
+      success: true,
+      data: {
+        promise_id: promise.id,
+        contact_id: promise.contact.id,
+        contact_name: promise.contact.name,
+        contact_phone: promise.contact.phone,
+        contact_email: promise.contact.email,
+        event_type_id: promise.event_type_id,
+        interested_dates: promise.tentative_dates
+          ? (promise.tentative_dates as string[])
+          : null,
+        acquisition_channel_id: promise.contact.acquisition_channel_id,
+        social_network_id: promise.contact.social_network_id,
+        referrer_contact_id: promise.contact.referrer_contact_id,
+        referrer_name: promise.contact.referrer_name,
+      },
+    };
+  } catch (error) {
+    console.error('[PROMISE_LOGS] Error obteniendo promesa por ID:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+/**
  * Obtener logs de una promesa
  */
 export async function getPromiseLogs(

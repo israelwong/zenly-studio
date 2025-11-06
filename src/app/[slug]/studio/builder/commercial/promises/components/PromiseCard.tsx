@@ -3,14 +3,14 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Calendar, MessageSquare } from 'lucide-react';
-import type { Prospect } from '@/lib/actions/schemas/prospects-schemas';
+import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 
 interface PromiseCardProps {
-    prospect: Prospect;
-    onClick?: () => void;
+    promise: PromiseWithContact;
+    onClick?: (promise: PromiseWithContact) => void;
 }
 
-export function PromiseCard({ prospect, onClick }: PromiseCardProps) {
+export function PromiseCard({ promise, onClick }: PromiseCardProps) {
     const {
         attributes,
         listeners,
@@ -18,7 +18,7 @@ export function PromiseCard({ prospect, onClick }: PromiseCardProps) {
         transform,
         transition,
         isDragging,
-    } = useSortable({ id: prospect.id });
+    } = useSortable({ id: promise.id });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -44,26 +44,26 @@ export function PromiseCard({ prospect, onClick }: PromiseCardProps) {
             style={style}
             {...attributes}
             {...listeners}
-            onClick={onClick}
+            onClick={() => onClick?.(promise)}
             className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700 hover:border-zinc-600 cursor-pointer transition-colors"
         >
             <div className="space-y-3">
                 <div>
-                    <h3 className="font-medium text-white text-sm">{prospect.name}</h3>
-                    {prospect.event_type && (
-                        <p className="text-xs text-zinc-400 mt-1">{prospect.event_type.name}</p>
+                    <h3 className="font-medium text-white text-sm">{promise.name}</h3>
+                    {promise.event_type && (
+                        <p className="text-xs text-zinc-400 mt-1">{promise.event_type.name}</p>
                     )}
                 </div>
 
                 <div className="flex items-center gap-2 text-xs text-zinc-400">
                     <Calendar className="h-3 w-3" />
-                    <span>{formatInterestedDates(prospect.interested_dates)}</span>
+                    <span>{formatInterestedDates(promise.interested_dates)}</span>
                 </div>
 
-                {prospect.last_log && (
+                {promise.last_log && (
                     <div className="flex items-start gap-2 text-xs text-zinc-500">
                         <MessageSquare className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                        <p className="line-clamp-2">{prospect.last_log.content}</p>
+                        <p className="line-clamp-2">{promise.last_log.content}</p>
                     </div>
                 )}
             </div>

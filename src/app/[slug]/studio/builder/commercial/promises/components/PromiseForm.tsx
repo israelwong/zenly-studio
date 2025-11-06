@@ -10,22 +10,12 @@ import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { es } from 'date-fns/locale';
 import { CalendarIcon } from 'lucide-react';
-import { createProspect, updateProspect, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/builder/commercial/prospects';
+import { createPromise, updatePromise, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/builder/commercial/prospects';
 import { getContacts, getAcquisitionChannels, getSocialNetworks } from '@/lib/actions/studio/builder/commercial/contacts';
 import { PromiseLogsPanel } from './PromiseLogsPanel';
 import { PromiseQuotesPanel } from './PromiseQuotesPanel';
 import { PromiseQuickActions } from './PromiseQuickActions';
-import type { CreateProspectData, UpdateProspectData } from '@/lib/actions/schemas/prospects-schemas';
-
-type TempQuote = {
-  id: string;
-  name: string;
-  price: number;
-  description?: string;
-  type: 'package' | 'custom';
-  packageId?: string;
-  createdAt: Date;
-};
+import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 
 interface PromiseFormProps {
   studioSlug: string;
@@ -43,8 +33,6 @@ interface PromiseFormProps {
     promiseId?: string | null;
   };
   onSuccess?: () => void;
-  redirectOnSuccess?: string;
-  showButtons?: boolean;
   onLoadingChange?: (loading: boolean) => void;
 }
 
@@ -59,16 +47,14 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
   studioSlug,
   initialData,
   onSuccess,
-  redirectOnSuccess,
-  showButtons = true,
   onLoadingChange,
 }, ref) => {
   const router = useRouter();
-  const isEditMode = !!initialData?.id;
+  const [isEditMode, setIsEditMode] = useState(!!initialData?.id);
   const [loading, setLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formData, setFormData] = useState<CreateProspectData>({
+  const [formData, setFormData] = useState<CreatePromiseData>({
     name: initialData?.name || '',
     phone: initialData?.phone || '',
     email: initialData?.email || '',
@@ -101,10 +87,13 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
   const [selectedContactIndex, setSelectedContactIndex] = useState(-1);
   const [selectedReferrerIndex, setSelectedReferrerIndex] = useState(-1);
   const [promiseId, setPromiseId] = useState<string | null>(initialData?.promiseId || null);
-  const [tempQuotes, setTempQuotes] = useState<TempQuote[]>([]);
+  const [currentContactId, setCurrentContactId] = useState<string | null>(initialData?.id || null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const [isFormDirty, setIsFormDirty] = useState(false);
+  
+  // Estado para saber si la promesa está guardada
+  const isSaved = promiseId !== null;
 
   const loadEventTypes = async () => {
     try {
@@ -332,37 +321,44 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
     try {
       let result;
       if (isEditMode && initialData?.id) {
-        const updateData: UpdateProspectData = {
+        const updateData: UpdatePromiseData = {
           id: initialData.id,
           ...formData,
         };
-        result = await updateProspect(studioSlug, updateData);
+        result = await updatePromise(studioSlug, updateData);
       } else {
-        result = await createProspect(studioSlug, formData);
+        result = await createPromise(studioSlug, formData);
       }
 
       if (result.success && result.data) {
+        const contactId = result.data.id;
+        
         // Obtener promiseId después de crear/actualizar
-        if (result.data.id) {
-          const promiseResult = await getPromiseIdByContactId(result.data.id);
+        if (contactId) {
+          const promiseResult = await getPromiseIdByContactId(contactId);
           if (promiseResult.success && promiseResult.data) {
             setPromiseId(promiseResult.data.promise_id);
-            // TODO: Aquí asociar cotizaciones temporales con promiseId real
-            if (tempQuotes.length > 0) {
-              toast.info(`${tempQuotes.length} cotización(es) pendiente(s) de asociar`);
-            }
+          }
+          
+          // Actualizar contactId actual
+          setCurrentContactId(contactId);
+          
+          // Si es creación (no estaba en modo edición), actualizar URL sin recargar
+          if (!isEditMode && promiseResult.success && promiseResult.data) {
+            // Actualizar URL sin recargar la página usando promiseId
+            router.replace(`/${studioSlug}/studio/builder/commercial/promises/${promiseResult.data.promise_id}`);
+            
+            // Actualizar estado interno para modo edición
+            setIsEditMode(true);
           }
         }
+        
         toast.success(isEditMode ? 'Promesa actualizada exitosamente' : 'Promesa registrada exitosamente');
         // Marcar formulario como limpio después de guardar
         setIsFormDirty(false);
+        
         if (onSuccess) {
           onSuccess();
-        }
-        if (redirectOnSuccess) {
-          router.push(redirectOnSuccess);
-        } else if (!onSuccess) {
-          router.push(`/${studioSlug}/studio/builder/commercial/promises`);
         }
       } else {
         toast.error(result.error || `Error al ${isEditMode ? 'actualizar' : 'registrar'} promesa`);
@@ -373,7 +369,7 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
     } finally {
       setLoading(false);
     }
-  }, [studioSlug, isEditMode, initialData, formData, tempQuotes, onSuccess, redirectOnSuccess, router]);
+  }, [studioSlug, isEditMode, initialData, formData, onSuccess, router]);
 
   useEffect(() => {
     if (onLoadingChange) {
@@ -383,14 +379,8 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
 
   // Detectar cambios en el formulario
   useEffect(() => {
-    // Verificar si hay cotizaciones temporales
-    if (tempQuotes.length > 0) {
-      setIsFormDirty(true);
-      return;
-    }
-
     // Comparar datos del formulario con los iniciales
-    const initialFormData: CreateProspectData = {
+    const initialFormData: CreatePromiseData = {
       name: initialData?.name || '',
       phone: initialData?.phone || '',
       email: initialData?.email || '',
@@ -444,7 +434,7 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
     }
 
     setIsFormDirty(hasChanges);
-  }, [formData, selectedDates, tempQuotes, initialData]);
+  }, [formData, selectedDates, initialData]);
 
   // Interceptar beforeunload del navegador
   useEffect(() => {
@@ -901,22 +891,20 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
               </ZenCardContent>
             </ZenCard>
 
-            {/* Botones de acción (solo si showButtons es true) */}
-            {showButtons && (
-              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
-                <ZenButton
-                  type="button"
-                  variant="ghost"
-                  onClick={() => handleNavigation(() => router.back())}
-                  disabled={loading}
-                >
-                  Cancelar
-                </ZenButton>
-                <ZenButton type="submit" loading={loading}>
-                  {isEditMode ? 'Actualizar' : 'Registrar'} Promesa
-                </ZenButton>
-              </div>
-            )}
+            {/* Botones de acción - siempre visibles en el form */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+              <ZenButton
+                type="button"
+                variant="ghost"
+                onClick={() => handleNavigation(() => router.back())}
+                disabled={loading}
+              >
+                Cancelar
+              </ZenButton>
+              <ZenButton type="submit" loading={loading}>
+                {isEditMode ? 'Actualizar' : 'Registrar'} Promesa
+              </ZenButton>
+            </div>
           </form>
         </div>
 
@@ -926,19 +914,18 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
             studioSlug={studioSlug}
             promiseId={promiseId}
             eventTypeId={formData.event_type_id || null}
-            tempQuotes={tempQuotes}
-            onTempQuotesChange={setTempQuotes}
+            isSaved={isSaved}
           />
         </div>
 
         {/* Columna 3: Quick Actions y Bitácora */}
         <div className="lg:col-span-1 space-y-6">
           {/* Quick Actions (solo si está guardado) */}
-          {isEditMode && promiseId && initialData?.id && (
+          {isSaved && currentContactId && (
             <div>
               <PromiseQuickActions
                 studioSlug={studioSlug}
-                contactId={initialData.id}
+                contactId={currentContactId}
                 contactName={formData.name}
                 phone={formData.phone}
                 email={formData.email}
@@ -951,7 +938,8 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
             <PromiseLogsPanel
               studioSlug={studioSlug}
               promiseId={promiseId}
-              contactId={initialData?.id || null}
+              contactId={currentContactId}
+              isSaved={isSaved}
             />
           </div>
         </div>

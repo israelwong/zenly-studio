@@ -42,7 +42,7 @@ export default function NuevaCotizacionPage() {
             studioSlug={studioSlug}
             promiseId={promiseId}
             packageId={packageId}
-            redirectOnSuccess={`/${studioSlug}/studio/builder/commercial/promises${promiseId ? `/${promiseId}` : ''}`}
+            redirectOnSuccess={promiseId ? `/${studioSlug}/studio/builder/commercial/promises/${promiseId}` : undefined}
           />
         </ZenCardContent>
       </ZenCard>

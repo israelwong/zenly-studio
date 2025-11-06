@@ -18,37 +18,20 @@ export default function NuevaPromesaPage() {
     <div className="w-full max-w-7xl mx-auto">
       <ZenCard variant="default" padding="none">
         <ZenCardHeader className="border-b border-zinc-800">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-3">
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => formRef.current?.cancel()}
-                className="p-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </ZenButton>
-              <div>
-                <ZenCardTitle>Nueva Promesa</ZenCardTitle>
-                <ZenCardDescription>
-                  Registra una nueva promesa de evento
-                </ZenCardDescription>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <ZenButton
-                variant="ghost"
-                onClick={() => formRef.current?.cancel()}
-                disabled={isLoading}
-              >
-                Cancelar
-              </ZenButton>
-              <ZenButton
-                onClick={() => formRef.current?.submit()}
-                loading={isLoading}
-              >
-                Registrar Promesa
-              </ZenButton>
+          <div className="flex items-center gap-3">
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => formRef.current?.cancel()}
+              className="p-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </ZenButton>
+            <div>
+              <ZenCardTitle>Nueva Promesa</ZenCardTitle>
+              <ZenCardDescription>
+                Registra una nueva promesa de evento
+              </ZenCardDescription>
             </div>
           </div>
         </ZenCardHeader>
@@ -56,8 +39,6 @@ export default function NuevaPromesaPage() {
           <PromiseForm
             ref={formRef}
             studioSlug={studioSlug}
-            redirectOnSuccess={`/${studioSlug}/studio/builder/commercial/promises`}
-            showButtons={false}
             onLoadingChange={setIsLoading}
           />
         </ZenCardContent>

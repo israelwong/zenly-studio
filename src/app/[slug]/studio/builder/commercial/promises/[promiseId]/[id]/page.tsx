@@ -4,10 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
-import { PromiseForm, type PromiseFormRef } from '../../components/PromiseForm';
+import { PromiseForm, type PromiseFormRef } from '../components/PromiseForm';
 import { getProspects, getPromiseIdByContactId } from '@/lib/actions/studio/builder/commercial/prospects';
 import { toast } from 'sonner';
-import { PromisesSkeleton } from '../../components';
+import { PromisesSkeleton } from '../components';
 
 export default function EditarPromesaPage() {
   const params = useParams();
@@ -97,37 +97,20 @@ export default function EditarPromesaPage() {
     <div className="w-full max-w-7xl mx-auto">
       <ZenCard variant="default" padding="none">
         <ZenCardHeader className="border-b border-zinc-800">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-3">
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => formRef.current?.cancel()}
-                className="p-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </ZenButton>
-              <div>
-                <ZenCardTitle>Editar Promesa</ZenCardTitle>
-                <ZenCardDescription>
-                  Actualiza la información de la promesa
-                </ZenCardDescription>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <ZenButton
-                variant="ghost"
-                onClick={() => formRef.current?.cancel()}
-                disabled={isFormLoading}
-              >
-                Cancelar
-              </ZenButton>
-              <ZenButton
-                onClick={() => formRef.current?.submit()}
-                loading={isFormLoading}
-              >
-                Actualizar Promesa
-              </ZenButton>
+          <div className="flex items-center gap-3">
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => formRef.current?.cancel()}
+              className="p-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </ZenButton>
+            <div>
+              <ZenCardTitle>Editar Promesa</ZenCardTitle>
+              <ZenCardDescription>
+                Actualiza la información de la promesa
+              </ZenCardDescription>
             </div>
           </div>
         </ZenCardHeader>
@@ -136,8 +119,6 @@ export default function EditarPromesaPage() {
             ref={formRef}
             studioSlug={studioSlug}
             initialData={initialData}
-            redirectOnSuccess={`/${studioSlug}/studio/builder/commercial/promises`}
-            showButtons={false}
             onLoadingChange={setIsFormLoading}
           />
         </ZenCardContent>

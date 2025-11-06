@@ -23,31 +23,31 @@ import {
 import { ZenButton, ZenInput } from '@/components/ui/zen';
 import { PromiseCard } from './PromiseCard';
 import { PipelineConfigModal } from './PipelineConfigModal';
-import { moveProspect } from '@/lib/actions/studio/builder/commercial/prospects';
+import { movePromise } from '@/lib/actions/studio/builder/commercial/prospects';
 import { toast } from 'sonner';
-import type { Prospect, PipelineStage } from '@/lib/actions/schemas/prospects-schemas';
+import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 
 interface PromisesKanbanProps {
   studioSlug: string;
-  prospects: Prospect[];
+  promises: PromiseWithContact[];
   pipelineStages: PipelineStage[];
   search: string;
   onSearchChange: (search: string) => void;
-  onProspectCreated: () => void;
-  onProspectUpdated: () => void;
-  onProspectMoved: () => void;
+  onPromiseCreated: () => void;
+  onPromiseUpdated: () => void;
+  onPromiseMoved: () => void;
   onPipelineStagesUpdated: () => void;
 }
 
 export function PromisesKanban({
   studioSlug,
-  prospects,
+  promises,
   pipelineStages,
   search,
   onSearchChange,
-  onProspectCreated,
-  onProspectUpdated,
-  onProspectMoved,
+  onPromiseCreated,
+  onPromiseUpdated,
+  onPromiseMoved,
   onPipelineStagesUpdated,
 }: PromisesKanbanProps) {
   const router = useRouter();
@@ -61,13 +61,13 @@ export function PromisesKanban({
     })
   );
 
-  // Agrupar prospects por stage
-  const prospectsByStage = pipelineStages.reduce((acc: Record<string, Prospect[]>, stage: PipelineStage) => {
-    acc[stage.id] = prospects.filter(
-      (p: Prospect) => p.prospect_pipeline_stage_id === stage.id
+  // Agrupar promises por stage
+  const promisesByStage = pipelineStages.reduce((acc: Record<string, PromiseWithContact[]>, stage: PipelineStage) => {
+    acc[stage.id] = promises.filter(
+      (p: PromiseWithContact) => p.promise_pipeline_stage_id === stage.id
     );
     return acc;
-  }, {} as Record<string, Prospect[]>);
+  }, {} as Record<string, PromiseWithContact[]>);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -75,22 +75,29 @@ export function PromisesKanban({
 
     if (!over || active.id === over.id) return;
 
-    const prospectId = active.id as string;
+    const promiseId = active.id as string;
     const newStageId = over.id as string;
 
     // Verificar que es un stage válido
     const stage = pipelineStages.find((s: PipelineStage) => s.id === newStageId);
     if (!stage) return;
 
+    // Buscar la promesa para obtener su promise_id
+    const promise = promises.find((p: PromiseWithContact) => p.id === promiseId);
+    if (!promise || !promise.promise_id) {
+      toast.error('No se pudo encontrar la promesa');
+      return;
+    }
+
     try {
-      const result = await moveProspect(studioSlug, {
-        prospect_id: prospectId,
+      const result = await movePromise(studioSlug, {
+        promise_id: promise.promise_id,
         new_stage_id: newStageId,
       });
 
       if (result.success) {
         toast.success('Promesa movida exitosamente');
-        onProspectMoved();
+        onPromiseMoved();
       } else {
         toast.error(result.error || 'Error al mover promesa');
       }
@@ -104,12 +111,14 @@ export function PromisesKanban({
     setActiveId(event.active.id as string);
   };
 
-  const handleProspectClick = (prospectId: string) => {
-    router.push(`/${studioSlug}/studio/builder/commercial/promises/${prospectId}`);
+  const handlePromiseClick = (promise: PromiseWithContact) => {
+    // Usar promiseId si está disponible, de lo contrario usar contactId como fallback
+    const routeId = promise.promise_id || promise.id;
+    router.push(`/${studioSlug}/studio/builder/commercial/promises/${routeId}`);
   };
 
-  const activeProspect = activeId
-    ? prospects.find((p: Prospect) => p.id === activeId)
+  const activePromise = activeId
+    ? promises.find((p: PromiseWithContact) => p.id === activeId)
     : null;
 
   return (
@@ -155,16 +164,16 @@ export function PromisesKanban({
             <KanbanColumn
               key={stage.id}
               stage={stage}
-              prospects={prospectsByStage[stage.id] || []}
-              onProspectClick={handleProspectClick}
+              promises={promisesByStage[stage.id] || []}
+              onPromiseClick={handlePromiseClick}
             />
           ))}
         </div>
 
         <DragOverlay>
-          {activeProspect ? (
+          {activePromise ? (
             <div className="opacity-50">
-              <PromiseCard prospect={activeProspect} />
+              <PromiseCard promise={activePromise} />
             </div>
           ) : null}
         </DragOverlay>
@@ -185,12 +194,12 @@ export function PromisesKanban({
 // Componente para cada columna del Kanban
 function KanbanColumn({
   stage,
-  prospects,
-  onProspectClick,
+  promises,
+  onPromiseClick,
 }: {
   stage: PipelineStage;
-  prospects: Prospect[];
-  onProspectClick: (id: string) => void;
+  promises: PromiseWithContact[];
+  onPromiseClick: (promise: PromiseWithContact) => void;
 }) {
   const { setNodeRef } = useDroppable({
     id: stage.id,
@@ -214,26 +223,26 @@ function KanbanColumn({
           <h3 className="font-medium text-white text-sm">{stage.name}</h3>
         </div>
         <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
-          {prospects.length}
+          {promises.length}
         </span>
       </div>
 
-      {/* Lista de prospects */}
+      {/* Lista de promises */}
       <div className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-300px)]">
         <SortableContext
-          items={prospects.map((p) => p.id)}
+          items={promises.map((p) => p.id)}
           strategy={verticalListSortingStrategy}
         >
-          {prospects.map((prospect) => (
+          {promises.map((promise) => (
             <PromiseCard
-              key={prospect.id}
-              prospect={prospect}
-              onClick={() => onProspectClick(prospect.id)}
+              key={promise.id}
+              promise={promise}
+              onClick={onPromiseClick}
             />
           ))}
         </SortableContext>
 
-        {prospects.length === 0 && (
+        {promises.length === 0 && (
           <div className="text-center py-8 text-zinc-500 text-sm">
             Sin promesas
           </div>

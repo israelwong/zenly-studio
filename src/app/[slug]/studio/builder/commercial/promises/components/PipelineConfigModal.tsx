@@ -8,7 +8,7 @@ import {
   updatePipelineStage,
   reorderPipelineStages,
 } from '@/lib/actions/studio/builder/commercial/prospects';
-import type { PipelineStage } from '@/lib/actions/schemas/prospects-schemas';
+import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 
 interface PipelineConfigModalProps {
   isOpen: boolean;

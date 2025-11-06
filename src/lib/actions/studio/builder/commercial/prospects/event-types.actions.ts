@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import type { ActionResponse } from '@/lib/actions/schemas/prospects-schemas';
+import type { ActionResponse } from '@/lib/actions/schemas/promises-schemas';
 
 interface EventType {
   id: string;

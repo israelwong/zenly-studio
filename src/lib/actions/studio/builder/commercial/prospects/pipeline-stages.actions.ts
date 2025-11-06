@@ -12,7 +12,7 @@ import {
   type PipelineStagesResponse,
   type PipelineStage,
   type ActionResponse,
-} from '@/lib/actions/schemas/prospects-schemas';
+} from '@/lib/actions/schemas/promises-schemas';
 
 /**
  * Obtener pipeline stages del studio

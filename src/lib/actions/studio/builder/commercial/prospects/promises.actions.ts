@@ -3,28 +3,28 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import {
-  createProspectSchema,
-  updateProspectSchema,
-  getProspectsSchema,
-  moveProspectSchema,
-  type CreateProspectData,
-  type UpdateProspectData,
-  type GetProspectsParams,
-  type MoveProspectData,
-  type ProspectsListResponse,
-  type ProspectResponse,
-  type Prospect,
-} from '@/lib/actions/schemas/prospects-schemas';
+  createPromiseSchema,
+  updatePromiseSchema,
+  getPromisesSchema,
+  movePromiseSchema,
+  type CreatePromiseData,
+  type UpdatePromiseData,
+  type GetPromisesParams,
+  type MovePromiseData,
+  type PromisesListResponse,
+  type PromiseResponse,
+  type PromiseWithContact,
+} from '@/lib/actions/schemas/promises-schemas';
 
 /**
- * Obtener prospects con pipeline stages
+ * Obtener promises con pipeline stages
  */
-export async function getProspects(
+export async function getPromises(
   studioSlug: string,
-  params: GetProspectsParams
-): Promise<ProspectsListResponse> {
+  params: GetPromisesParams
+): Promise<PromisesListResponse> {
   try {
-    const validatedParams = getProspectsSchema.parse(params);
+    const validatedParams = getPromisesSchema.parse(params);
     const { page, limit, search, pipeline_stage_id } = validatedParams;
 
     const studio = await prisma.studios.findUnique({
@@ -109,10 +109,11 @@ export async function getProspects(
       take: limit,
     });
 
-    const prospects: Prospect[] = contacts.map((contact) => {
+    const promises: PromiseWithContact[] = contacts.map((contact) => {
       const latestPromise = contact.promises[0];
       return {
         id: contact.id,
+        promise_id: latestPromise?.id || null,
         studio_id: contact.studio_id,
         name: contact.name,
         phone: contact.phone,
@@ -122,11 +123,11 @@ export async function getProspects(
         interested_dates: latestPromise?.tentative_dates
           ? (latestPromise.tentative_dates as string[])
           : null,
-        prospect_pipeline_stage_id: latestPromise?.pipeline_stage_id || null,
+        promise_pipeline_stage_id: latestPromise?.pipeline_stage_id || null,
         created_at: contact.created_at,
         updated_at: contact.updated_at,
         event_type: latestPromise?.event_type || null,
-        prospect_pipeline_stage: latestPromise?.pipeline_stage || null,
+        promise_pipeline_stage: latestPromise?.pipeline_stage || null,
         last_log: contact.contact_logs[0] || null,
       };
     });
@@ -134,14 +135,14 @@ export async function getProspects(
     return {
       success: true,
       data: {
-        prospects,
+        promises,
         total,
         page,
         totalPages: Math.ceil(total / limit),
       },
     };
   } catch (error) {
-    console.error('[PROSPECTS] Error obteniendo prospects:', error);
+    console.error('[PROMISES] Error obteniendo promises:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido',
@@ -150,14 +151,14 @@ export async function getProspects(
 }
 
 /**
- * Crear nuevo prospect
+ * Crear nueva promise
  */
-export async function createProspect(
+export async function createPromise(
   studioSlug: string,
-  data: CreateProspectData
-): Promise<ProspectResponse> {
+  data: CreatePromiseData
+): Promise<PromiseResponse> {
   try {
-    const validatedData = createProspectSchema.parse(data);
+    const validatedData = createPromiseSchema.parse(data);
 
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -169,7 +170,7 @@ export async function createProspect(
     }
 
     // Obtener etapa "nuevo" por defecto si no se especifica
-    let stageId = validatedData.prospect_pipeline_stage_id;
+    let stageId = validatedData.promise_pipeline_stage_id;
     if (!stageId) {
       const nuevoStage = await prisma.studio_promise_pipeline_stages.findFirst({
         where: {
@@ -235,8 +236,9 @@ export async function createProspect(
       },
     });
 
-    const prospect: Prospect = {
+    const promiseWithContact: PromiseWithContact = {
       id: contact.id,
+      promise_id: promise.id,
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
@@ -246,11 +248,11 @@ export async function createProspect(
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
-      prospect_pipeline_stage_id: promise.pipeline_stage_id,
+      promise_pipeline_stage_id: promise.pipeline_stage_id,
       created_at: contact.created_at,
       updated_at: contact.updated_at,
       event_type: promise.event_type,
-      prospect_pipeline_stage: promise.pipeline_stage,
+      promise_pipeline_stage: promise.pipeline_stage,
       last_log: null,
     };
 
@@ -258,26 +260,26 @@ export async function createProspect(
 
     return {
       success: true,
-      data: prospect,
+      data: promiseWithContact,
     };
   } catch (error) {
-    console.error('[PROSPECTS] Error creando prospect:', error);
+    console.error('[PROMISES] Error creando promise:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al crear prospect',
+      error: error instanceof Error ? error.message : 'Error al crear promise',
     };
   }
 }
 
 /**
- * Actualizar prospect
+ * Actualizar promise
  */
-export async function updateProspect(
+export async function updatePromise(
   studioSlug: string,
-  data: UpdateProspectData
-): Promise<ProspectResponse> {
+  data: UpdatePromiseData
+): Promise<PromiseResponse> {
   try {
-    const validatedData = updateProspectSchema.parse(data);
+    const validatedData = updatePromiseSchema.parse(data);
 
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -328,7 +330,7 @@ export async function updateProspect(
         where: { id: latestPromise.id },
         data: {
           event_type_id: validatedData.event_type_id || null,
-          pipeline_stage_id: validatedData.prospect_pipeline_stage_id || null,
+          pipeline_stage_id: validatedData.promise_pipeline_stage_id || null,
           tentative_dates: validatedData.interested_dates
             ? (validatedData.interested_dates as unknown)
             : null,
@@ -353,7 +355,7 @@ export async function updateProspect(
       });
     } else {
       // Crear nueva promesa si no existe
-      const stageId = validatedData.prospect_pipeline_stage_id ||
+      const stageId = validatedData.promise_pipeline_stage_id ||
         (await prisma.studio_promise_pipeline_stages.findFirst({
           where: {
             studio_id: contact.studio_id,
@@ -394,8 +396,9 @@ export async function updateProspect(
       });
     }
 
-    const prospect: Prospect = {
+    const promiseWithContact: PromiseWithContact = {
       id: contact.id,
+      promise_id: promise.id,
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
@@ -405,11 +408,11 @@ export async function updateProspect(
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
-      prospect_pipeline_stage_id: promise.pipeline_stage_id,
+      promise_pipeline_stage_id: promise.pipeline_stage_id,
       created_at: contact.created_at,
       updated_at: contact.updated_at,
       event_type: promise.event_type,
-      prospect_pipeline_stage: promise.pipeline_stage,
+      promise_pipeline_stage: promise.pipeline_stage,
       last_log: null,
     };
 
@@ -417,26 +420,26 @@ export async function updateProspect(
 
     return {
       success: true,
-      data: prospect,
+      data: promiseWithContact,
     };
   } catch (error) {
-    console.error('[PROSPECTS] Error actualizando prospect:', error);
+    console.error('[PROMISES] Error actualizando promise:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al actualizar prospect',
+      error: error instanceof Error ? error.message : 'Error al actualizar promise',
     };
   }
 }
 
 /**
- * Mover prospect entre etapas del pipeline
+ * Mover promise entre etapas del pipeline
  */
-export async function moveProspect(
+export async function movePromise(
   studioSlug: string,
-  data: MoveProspectData
-): Promise<ProspectResponse> {
+  data: MovePromiseData
+): Promise<PromiseResponse> {
   try {
-    const validatedData = moveProspectSchema.parse(data);
+    const validatedData = movePromiseSchema.parse(data);
 
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -457,19 +460,9 @@ export async function moveProspect(
       return { success: false, error: 'Etapa no encontrada' };
     }
 
-    // Obtener contacto
-    const contact = await prisma.studio_contacts.findUnique({
-      where: { id: validatedData.prospect_id },
-    });
-
-    if (!contact) {
-      return { success: false, error: 'Prospect no encontrado' };
-    }
-
-    // Obtener promesa más reciente o crear una nueva
-    let promise = await prisma.studio_promises.findFirst({
-      where: { contact_id: validatedData.prospect_id },
-      orderBy: { created_at: 'desc' },
+    // Obtener promesa
+    let promise = await prisma.studio_promises.findUnique({
+      where: { id: validatedData.promise_id },
       include: {
         event_type: {
           select: {
@@ -489,62 +482,47 @@ export async function moveProspect(
       },
     });
 
-    if (promise) {
-      // Actualizar promesa existente
-      promise = await prisma.studio_promises.update({
-        where: { id: promise.id },
-        data: {
-          pipeline_stage_id: validatedData.new_stage_id,
-        },
-        include: {
-          event_type: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          pipeline_stage: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              color: true,
-              order: true,
-            },
-          },
-        },
-      });
-    } else {
-      // Crear nueva promesa si no existe
-      promise = await prisma.studio_promises.create({
-        data: {
-          studio_id: contact.studio_id,
-          contact_id: contact.id,
-          pipeline_stage_id: validatedData.new_stage_id,
-          status: 'pending',
-        },
-        include: {
-          event_type: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          pipeline_stage: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              color: true,
-              order: true,
-            },
-          },
-        },
-      });
+    if (!promise) {
+      return { success: false, error: 'Promise no encontrada' };
     }
 
-    const prospect: Prospect = {
+    // Actualizar promesa
+    promise = await prisma.studio_promises.update({
+      where: { id: promise.id },
+      data: {
+        pipeline_stage_id: validatedData.new_stage_id,
+      },
+      include: {
+        event_type: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        pipeline_stage: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
+            order: true,
+          },
+        },
+      },
+    });
+
+    // Obtener contacto asociado
+    const contact = await prisma.studio_contacts.findUnique({
+      where: { id: promise.contact_id },
+    });
+
+    if (!contact) {
+      return { success: false, error: 'Contacto no encontrado' };
+    }
+
+    const promiseWithContact: PromiseWithContact = {
       id: contact.id,
+      promise_id: promise.id,
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
@@ -554,11 +532,11 @@ export async function moveProspect(
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
-      prospect_pipeline_stage_id: promise.pipeline_stage_id,
+      promise_pipeline_stage_id: promise.pipeline_stage_id,
       created_at: contact.created_at,
       updated_at: contact.updated_at,
       event_type: promise.event_type,
-      prospect_pipeline_stage: promise.pipeline_stage,
+      promise_pipeline_stage: promise.pipeline_stage,
       last_log: null,
     };
 
@@ -566,13 +544,13 @@ export async function moveProspect(
 
     return {
       success: true,
-      data: prospect,
+      data: promiseWithContact,
     };
   } catch (error) {
-    console.error('[PROSPECTS] Error moviendo prospect:', error);
+    console.error('[PROMISES] Error moviendo promise:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al mover prospect',
+      error: error instanceof Error ? error.message : 'Error al mover promise',
     };
   }
 }

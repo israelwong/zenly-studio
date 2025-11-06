@@ -1,9 +1,9 @@
 export {
-  getProspects,
-  createProspect,
-  updateProspect,
-  moveProspect,
-} from './prospects.actions';
+  getPromises,
+  createPromise,
+  updatePromise,
+  movePromise,
+} from './promises.actions';
 
 export {
   getPipelineStages,
@@ -13,14 +13,10 @@ export {
 } from './pipeline-stages.actions';
 
 export {
-  getContactLogs,
-  createContactLog,
-} from './contact-logs.actions';
-
-export {
   getPromiseLogs,
   createPromiseLog,
   getPromiseIdByContactId,
+  getPromiseById,
 } from './promise-logs.actions';
 
 export {

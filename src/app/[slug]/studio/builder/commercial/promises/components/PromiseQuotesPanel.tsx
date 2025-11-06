@@ -15,34 +15,21 @@ import {
   ZenDropdownMenuItem,
   ZenDropdownMenuSeparator,
 } from '@/components/ui/zen';
-import { PromiseCotizacionCard } from './PromiseCotizacionCard';
 import { obtenerPaquetes } from '@/lib/actions/studio/builder/paquetes/paquetes.actions';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
-
-interface TempQuote {
-  id: string; // cuid temporal
-  name: string;
-  price: number;
-  description?: string;
-  type: 'package' | 'custom';
-  packageId?: string;
-  createdAt: Date;
-}
 
 interface PromiseQuotesPanelProps {
   studioSlug: string;
   promiseId: string | null;
   eventTypeId: string | null;
-  tempQuotes: TempQuote[];
-  onTempQuotesChange: (quotes: TempQuote[]) => void;
+  isSaved: boolean;
 }
 
 export function PromiseQuotesPanel({
   studioSlug,
   promiseId,
   eventTypeId,
-  tempQuotes,
-  onTempQuotesChange,
+  isSaved,
 }: PromiseQuotesPanelProps) {
   const router = useRouter();
   const [packages, setPackages] = useState<Array<{ id: string; name: string; precio: number | null }>>([]);
@@ -111,11 +98,7 @@ export function PromiseQuotesPanel({
     router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
   };
 
-  const handleDeleteQuote = (quoteId: string) => {
-    onTempQuotesChange(tempQuotes.filter((q) => q.id !== quoteId));
-  };
-
-  const isMenuDisabled = !eventTypeId;
+  const isMenuDisabled = !eventTypeId || !isSaved;
 
   return (
     <ZenCard variant="outlined" className="min-h-[300px] h-full flex flex-col">
@@ -172,40 +155,25 @@ export function PromiseQuotesPanel({
         </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4 flex-1 flex flex-col min-h-0">
-        {!eventTypeId ? (
+        {!isSaved ? (
+          <div className="flex flex-col items-center justify-center flex-1 min-h-[200px]">
+            <p className="text-xs text-zinc-500 text-center px-4">
+              Guarda la promesa para agregar cotizaciones
+            </p>
+          </div>
+        ) : !eventTypeId ? (
           <div className="flex flex-col items-center justify-center flex-1 min-h-[200px]">
             <p className="text-xs text-zinc-500 text-center px-4">
               Selecciona un tipo de evento para crear cotizaciones
             </p>
           </div>
-        ) : tempQuotes.length === 0 ? (
+        ) : (
           <div className="flex flex-col items-center justify-center flex-1 min-h-[200px]">
             <p className="text-xs text-zinc-500 text-center px-4">
               No hay cotizaciones asociadas a esta promesa
             </p>
-          </div>
-        ) : (
-          <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
-            {tempQuotes.map((quote) => (
-              <PromiseCotizacionCard
-                key={quote.id}
-                id={quote.id}
-                name={quote.name}
-                price={quote.price}
-                description={quote.description}
-                type={quote.type}
-                packageId={quote.packageId}
-                createdAt={quote.createdAt}
-                onDelete={handleDeleteQuote}
-              />
-            ))}
-          </div>
-        )}
-
-        {!promiseId && tempQuotes.length > 0 && (
-          <div className="mt-4 p-3 bg-blue-600/20 border border-blue-600/30 rounded-lg flex-shrink-0">
-            <p className="text-xs text-blue-300">
-              💡 Las cotizaciones se guardarán cuando guardes la promesa
+            <p className="text-xs text-zinc-400 text-center px-4 mt-2">
+              Usa el botón + para crear una nueva cotización
             </p>
           </div>
         )}
