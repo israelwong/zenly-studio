@@ -30,7 +30,7 @@ export async function getPipelineStages(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    const stages = await prisma.studio_prospect_pipeline_stages.findMany({
+    const stages = await prisma.studio_promise_pipeline_stages.findMany({
       where: {
         studio_id: studio.id,
         is_active: true,
@@ -84,7 +84,7 @@ export async function createPipelineStage(
     }
 
     // Verificar que el slug no exista
-    const existing = await prisma.studio_prospect_pipeline_stages.findUnique({
+    const existing = await prisma.studio_promise_pipeline_stages.findUnique({
       where: {
         studio_id_slug: {
           studio_id: studio.id,
@@ -97,7 +97,7 @@ export async function createPipelineStage(
       return { success: false, error: 'Ya existe una etapa con ese slug' };
     }
 
-    const stage = await prisma.studio_prospect_pipeline_stages.create({
+    const stage = await prisma.studio_promise_pipeline_stages.create({
       data: {
         studio_id: studio.id,
         name: validatedData.name,
@@ -122,7 +122,7 @@ export async function createPipelineStage(
       updated_at: stage.updated_at,
     };
 
-    revalidatePath(`/${studioSlug}/studio/builder/commercial/prospects`);
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
     return {
       success: true,
@@ -157,7 +157,7 @@ export async function updatePipelineStage(
     }
 
     // Verificar que la etapa existe y pertenece al studio
-    const existing = await prisma.studio_prospect_pipeline_stages.findUnique({
+    const existing = await prisma.studio_promise_pipeline_stages.findUnique({
       where: { id: validatedData.id },
       select: { studio_id: true, is_system: true },
     });
@@ -173,7 +173,7 @@ export async function updatePipelineStage(
     if (validatedData.order !== undefined) updateData.order = validatedData.order;
     // slug e is_system no se pueden cambiar
 
-    const stage = await prisma.studio_prospect_pipeline_stages.update({
+    const stage = await prisma.studio_promise_pipeline_stages.update({
       where: { id: validatedData.id },
       data: updateData,
     });
@@ -191,7 +191,7 @@ export async function updatePipelineStage(
       updated_at: stage.updated_at,
     };
 
-    revalidatePath(`/${studioSlug}/studio/builder/commercial/prospects`);
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
     return {
       success: true,
@@ -228,14 +228,14 @@ export async function reorderPipelineStages(
     // Actualizar orden de cada etapa
     await prisma.$transaction(
       validatedData.stage_ids.map((id, index) =>
-        prisma.studio_prospect_pipeline_stages.update({
+        prisma.studio_promise_pipeline_stages.update({
           where: { id },
           data: { order: index },
         })
       )
     );
 
-    revalidatePath(`/${studioSlug}/studio/builder/commercial/prospects`);
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
     return {
       success: true,

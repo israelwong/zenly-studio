@@ -18,6 +18,12 @@ export {
 } from './contact-logs.actions';
 
 export {
+  getPromiseLogs,
+  createPromiseLog,
+  getPromiseIdByContactId,
+} from './promise-logs.actions';
+
+export {
   getEventTypes,
 } from './event-types.actions';
 

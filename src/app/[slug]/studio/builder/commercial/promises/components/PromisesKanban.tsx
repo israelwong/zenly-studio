@@ -11,6 +11,7 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  DragStartEvent,
   DragOverlay,
   useDroppable,
 } from '@dnd-kit/core';
@@ -20,14 +21,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { ZenButton, ZenInput } from '@/components/ui/zen';
-import { ProspectCard } from './ProspectCard';
-import { ProspectModal } from './ProspectModal';
+import { PromiseCard } from './PromiseCard';
 import { PipelineConfigModal } from './PipelineConfigModal';
 import { moveProspect } from '@/lib/actions/studio/builder/commercial/prospects';
 import { toast } from 'sonner';
 import type { Prospect, PipelineStage } from '@/lib/actions/schemas/prospects-schemas';
 
-interface ProspectsKanbanProps {
+interface PromisesKanbanProps {
   studioSlug: string;
   prospects: Prospect[];
   pipelineStages: PipelineStage[];
@@ -39,7 +39,7 @@ interface ProspectsKanbanProps {
   onPipelineStagesUpdated: () => void;
 }
 
-export function ProspectsKanban({
+export function PromisesKanban({
   studioSlug,
   prospects,
   pipelineStages,
@@ -49,9 +49,8 @@ export function ProspectsKanban({
   onProspectUpdated,
   onProspectMoved,
   onPipelineStagesUpdated,
-}: ProspectsKanbanProps) {
+}: PromisesKanbanProps) {
   const router = useRouter();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -63,17 +62,12 @@ export function ProspectsKanban({
   );
 
   // Agrupar prospects por stage
-  const prospectsByStage = pipelineStages.reduce((acc, stage) => {
+  const prospectsByStage = pipelineStages.reduce((acc: Record<string, Prospect[]>, stage: PipelineStage) => {
     acc[stage.id] = prospects.filter(
-      (p) => p.prospect_pipeline_stage_id === stage.id
+      (p: Prospect) => p.prospect_pipeline_stage_id === stage.id
     );
     return acc;
   }, {} as Record<string, Prospect[]>);
-
-  // Prospects sin stage (deberían estar en "nuevo" por defecto)
-  const prospectsWithoutStage = prospects.filter(
-    (p) => !p.prospect_pipeline_stage_id
-  );
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -85,7 +79,7 @@ export function ProspectsKanban({
     const newStageId = over.id as string;
 
     // Verificar que es un stage válido
-    const stage = pipelineStages.find((s) => s.id === newStageId);
+    const stage = pipelineStages.find((s: PipelineStage) => s.id === newStageId);
     if (!stage) return;
 
     try {
@@ -95,27 +89,27 @@ export function ProspectsKanban({
       });
 
       if (result.success) {
-        toast.success('Prospect movido exitosamente');
+        toast.success('Promesa movida exitosamente');
         onProspectMoved();
       } else {
-        toast.error(result.error || 'Error al mover prospect');
+        toast.error(result.error || 'Error al mover promesa');
       }
     } catch (error) {
-      console.error('Error moviendo prospect:', error);
-      toast.error('Error al mover prospect');
+      console.error('Error moviendo promesa:', error);
+      toast.error('Error al mover promesa');
     }
   };
 
-  const handleDragStart = (event: any) => {
+  const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
 
   const handleProspectClick = (prospectId: string) => {
-    router.push(`/${studioSlug}/studio/builder/commercial/prospects/${prospectId}`);
+    router.push(`/${studioSlug}/studio/builder/commercial/promises/${prospectId}`);
   };
 
   const activeProspect = activeId
-    ? prospects.find((p) => p.id === activeId)
+    ? prospects.find((p: Prospect) => p.id === activeId)
     : null;
 
   return (
@@ -125,7 +119,7 @@ export function ProspectsKanban({
         <div className="flex-1 w-full">
           <ZenInput
             id="search"
-            placeholder="Buscar prospectos..."
+            placeholder="Buscar promesas..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             icon={Search}
@@ -142,9 +136,9 @@ export function ProspectsKanban({
             <Settings className="h-4 w-4 mr-2" />
             Configurar
           </ZenButton>
-          <ZenButton onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
+          <ZenButton onClick={() => router.push(`/${studioSlug}/studio/builder/commercial/promises/nueva`)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
-            Registrar Prospecto
+            Registrar Promesa
           </ZenButton>
         </div>
       </div>
@@ -157,7 +151,7 @@ export function ProspectsKanban({
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {pipelineStages.map((stage) => (
+          {pipelineStages.map((stage: PipelineStage) => (
             <KanbanColumn
               key={stage.id}
               stage={stage}
@@ -170,20 +164,13 @@ export function ProspectsKanban({
         <DragOverlay>
           {activeProspect ? (
             <div className="opacity-50">
-              <ProspectCard prospect={activeProspect} />
+              <PromiseCard prospect={activeProspect} />
             </div>
           ) : null}
         </DragOverlay>
       </DndContext>
 
       {/* Modales */}
-      <ProspectModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        studioSlug={studioSlug}
-        onSuccess={onProspectCreated}
-      />
-
       <PipelineConfigModal
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}
@@ -238,7 +225,7 @@ function KanbanColumn({
           strategy={verticalListSortingStrategy}
         >
           {prospects.map((prospect) => (
-            <ProspectCard
+            <PromiseCard
               key={prospect.id}
               prospect={prospect}
               onClick={() => onProspectClick(prospect.id)}
@@ -248,7 +235,7 @@ function KanbanColumn({
 
         {prospects.length === 0 && (
           <div className="text-center py-8 text-zinc-500 text-sm">
-            Sin prospectos
+            Sin promesas
           </div>
         )}
       </div>

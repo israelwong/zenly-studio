@@ -1,6 +1,6 @@
 'use client';
 
-export function ProspectsSkeleton() {
+export function PromisesSkeleton() {
   return (
     <div className="space-y-4">
       <div className="h-10 bg-zinc-800 rounded-lg animate-pulse" />

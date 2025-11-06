@@ -91,7 +91,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             items: [
                 // { id: 'marketing', name: 'Marketing', href: `/marketing`, icon: Users },
                 // { id: 'email', name: 'Email Marketing', href: `/commercial/email`, icon: Mail },
-                { id: 'prospects', name: 'Prospects', href: `/commercial/prospects`, icon: File },
+                { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
                 { id: 'contactos', name: 'Contacts', href: `/commercial/contacts`, icon: ContactRound },
                 { id: 'scheduling', name: 'Scheduling', href: `/commercial/agendamiento`, icon: Calendar },
                 { id: 'condiciones-comerciales', name: 'Terms', href: `/commercial/condiciones-comerciales`, icon: FileSignature },

@@ -4,9 +4,9 @@ import React from 'react';
 import { useParams } from 'next/navigation';
 import { UserSearch } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
-import { ProspectsWrapper } from './components';
+import { PromisesWrapper } from './components';
 
-export default function ProspectsPage() {
+export default function PromisesPage() {
   const params = useParams();
   const studioSlug = params.slug as string;
 
@@ -19,15 +19,15 @@ export default function ProspectsPage() {
               <UserSearch className="h-5 w-5 text-purple-400" />
             </div>
             <div>
-              <ZenCardTitle>Prospects</ZenCardTitle>
+              <ZenCardTitle>Promesas</ZenCardTitle>
               <ZenCardDescription>
-                Gestiona tus prospectos
+                Gestiona tus promesas de eventos
               </ZenCardDescription>
             </div>
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          <ProspectsWrapper studioSlug={studioSlug} />
+          <PromisesWrapper studioSlug={studioSlug} />
         </ZenCardContent>
       </ZenCard>
     </div>

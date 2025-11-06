@@ -40,9 +40,9 @@ export async function getContactLogs(
       created_at: log.created_at,
       user: log.user
         ? {
-            id: log.user.id,
-            full_name: log.user.full_name,
-          }
+          id: log.user.id,
+          full_name: log.user.full_name,
+        }
         : null,
     }));
 
@@ -107,13 +107,13 @@ export async function createContactLog(
       created_at: log.created_at,
       user: log.user
         ? {
-            id: log.user.id,
-            full_name: log.user.full_name,
-          }
+          id: log.user.id,
+          full_name: log.user.full_name,
+        }
         : null,
     };
 
-    revalidatePath(`/${studioSlug}/studio/builder/commercial/prospects`);
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
     return {
       success: true,

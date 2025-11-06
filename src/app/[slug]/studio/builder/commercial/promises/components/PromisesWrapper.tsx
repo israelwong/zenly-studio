@@ -2,15 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { ProspectsKanban, ProspectsSkeleton } from './';
+import { PromisesKanban, PromisesSkeleton } from './';
 import { getProspects, getPipelineStages } from '@/lib/actions/studio/builder/commercial/prospects';
 import type { Prospect, PipelineStage } from '@/lib/actions/schemas/prospects-schemas';
 
-interface ProspectsWrapperProps {
+interface PromisesWrapperProps {
   studioSlug: string;
 }
 
-export function ProspectsWrapper({ studioSlug }: ProspectsWrapperProps) {
+export function PromisesWrapper({ studioSlug }: PromisesWrapperProps) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +31,7 @@ export function ProspectsWrapper({ studioSlug }: ProspectsWrapperProps) {
       if (prospectsResult.success && prospectsResult.data) {
         setProspects(prospectsResult.data.prospects);
       } else {
-        toast.error(prospectsResult.error || 'Error al cargar prospects');
+        toast.error(prospectsResult.error || 'Error al cargar promesas');
       }
 
       if (stagesResult.success && stagesResult.data) {
@@ -72,11 +72,11 @@ export function ProspectsWrapper({ studioSlug }: ProspectsWrapperProps) {
   }, [loadData]);
 
   if (loading) {
-    return <ProspectsSkeleton />;
+    return <PromisesSkeleton />;
   }
 
   return (
-    <ProspectsKanban
+    <PromisesKanban
       studioSlug={studioSlug}
       prospects={prospects}
       pipelineStages={pipelineStages}

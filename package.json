@@ -14,7 +14,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed-users": "tsx prisma/seed-with-users.ts",
     "db:seed-demo-users": "tsx prisma/seed-demo-users.ts",
-    "db:seed-prospect-pipeline": "tsx prisma/seed-prospect-pipeline.ts",
+    "db:seed-promise-pipeline": "tsx prisma/seed-promise-pipeline.ts",
     "db:create-profiles": "tsx prisma/create-user-profiles.ts",
     "db:seed-plans": "tsx prisma/seed-plans.ts",
     "db:seed-agents": "tsx prisma/seed-agents.ts",

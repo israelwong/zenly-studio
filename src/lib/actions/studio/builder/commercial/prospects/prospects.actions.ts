@@ -42,7 +42,22 @@ export async function getProspects(
     };
 
     if (pipeline_stage_id) {
-      where.prospect_pipeline_stage_id = pipeline_stage_id;
+      // Filtrar contactos que tienen promesas con el pipeline_stage_id especificado
+      const contactsWithStage = await prisma.studio_promises.findMany({
+        where: {
+          studio_id: studio.id,
+          pipeline_stage_id: pipeline_stage_id,
+        },
+        select: { contact_id: true },
+        distinct: ['contact_id'],
+      });
+      const contactIds = contactsWithStage.map((p) => p.contact_id);
+      if (contactIds.length > 0) {
+        where.id = { in: contactIds };
+      } else {
+        // Si no hay contactos con ese stage, retornar vacío
+        where.id = { in: [] };
+      }
     }
 
     if (search) {
@@ -58,20 +73,26 @@ export async function getProspects(
     const contacts = await prisma.studio_contacts.findMany({
       where,
       include: {
-        event_type: {
-          select: {
-            id: true,
-            name: true,
+        promises: {
+          include: {
+            pipeline_stage: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                color: true,
+                order: true,
+              },
+            },
+            event_type: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
-        },
-        prospect_pipeline_stage: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            color: true,
-            order: true,
-          },
+          orderBy: { created_at: 'desc' },
+          take: 1,
         },
         contact_logs: {
           orderBy: { created_at: 'desc' },
@@ -88,24 +109,27 @@ export async function getProspects(
       take: limit,
     });
 
-    const prospects: Prospect[] = contacts.map((contact) => ({
-      id: contact.id,
-      studio_id: contact.studio_id,
-      name: contact.name,
-      phone: contact.phone,
-      email: contact.email,
-      status: contact.status,
-      event_type_id: contact.event_type_id,
-      interested_dates: contact.interested_dates
-        ? (contact.interested_dates as string[])
-        : null,
-      prospect_pipeline_stage_id: contact.prospect_pipeline_stage_id,
-      created_at: contact.created_at,
-      updated_at: contact.updated_at,
-      event_type: contact.event_type,
-      prospect_pipeline_stage: contact.prospect_pipeline_stage,
-      last_log: contact.contact_logs[0] || null,
-    }));
+    const prospects: Prospect[] = contacts.map((contact) => {
+      const latestPromise = contact.promises[0];
+      return {
+        id: contact.id,
+        studio_id: contact.studio_id,
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+        status: contact.status,
+        event_type_id: latestPromise?.event_type_id || null,
+        interested_dates: latestPromise?.tentative_dates
+          ? (latestPromise.tentative_dates as string[])
+          : null,
+        prospect_pipeline_stage_id: latestPromise?.pipeline_stage_id || null,
+        created_at: contact.created_at,
+        updated_at: contact.updated_at,
+        event_type: latestPromise?.event_type || null,
+        prospect_pipeline_stage: latestPromise?.pipeline_stage || null,
+        last_log: contact.contact_logs[0] || null,
+      };
+    });
 
     return {
       success: true,
@@ -147,10 +171,10 @@ export async function createProspect(
     // Obtener etapa "nuevo" por defecto si no se especifica
     let stageId = validatedData.prospect_pipeline_stage_id;
     if (!stageId) {
-      const nuevoStage = await prisma.studio_prospect_pipeline_stages.findFirst({
+      const nuevoStage = await prisma.studio_promise_pipeline_stages.findFirst({
         where: {
           studio_id: studio.id,
-          slug: 'nuevo',
+          slug: 'pending',
           is_active: true,
         },
         select: { id: true },
@@ -158,18 +182,39 @@ export async function createProspect(
       stageId = nuevoStage?.id || null;
     }
 
-    const contact = await prisma.studio_contacts.create({
-      data: {
+    // Crear o encontrar contacto
+    const contact = await prisma.studio_contacts.upsert({
+      where: {
+        studio_id_phone: {
+          studio_id: studio.id,
+          phone: validatedData.phone,
+        },
+      },
+      update: {
+        name: validatedData.name,
+        email: validatedData.email || null,
+        status: 'prospecto',
+      },
+      create: {
         studio_id: studio.id,
         name: validatedData.name,
         phone: validatedData.phone,
         email: validatedData.email || null,
         status: 'prospecto',
+      },
+    });
+
+    // Crear promesa asociada
+    const promise = await prisma.studio_promises.create({
+      data: {
+        studio_id: studio.id,
+        contact_id: contact.id,
         event_type_id: validatedData.event_type_id || null,
-        interested_dates: validatedData.interested_dates
+        pipeline_stage_id: stageId,
+        status: 'pending',
+        tentative_dates: validatedData.interested_dates
           ? (validatedData.interested_dates as unknown)
           : null,
-        prospect_pipeline_stage_id: stageId,
       },
       include: {
         event_type: {
@@ -178,7 +223,7 @@ export async function createProspect(
             name: true,
           },
         },
-        prospect_pipeline_stage: {
+        pipeline_stage: {
           select: {
             id: true,
             name: true,
@@ -197,19 +242,19 @@ export async function createProspect(
       phone: contact.phone,
       email: contact.email,
       status: contact.status,
-      event_type_id: contact.event_type_id,
-      interested_dates: contact.interested_dates
-        ? (contact.interested_dates as string[])
+      event_type_id: promise.event_type_id,
+      interested_dates: promise.tentative_dates
+        ? (promise.tentative_dates as string[])
         : null,
-      prospect_pipeline_stage_id: contact.prospect_pipeline_stage_id,
+      prospect_pipeline_stage_id: promise.pipeline_stage_id,
       created_at: contact.created_at,
       updated_at: contact.updated_at,
-      event_type: contact.event_type,
-      prospect_pipeline_stage: contact.prospect_pipeline_stage,
+      event_type: promise.event_type,
+      prospect_pipeline_stage: promise.pipeline_stage,
       last_log: null,
     };
 
-    revalidatePath(`/${studioSlug}/studio/builder/commercial/prospects`);
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
     return {
       success: true,
@@ -243,18 +288,20 @@ export async function updateProspect(
       return { success: false, error: 'Studio no encontrado' };
     }
 
+    // Actualizar contacto
     const contact = await prisma.studio_contacts.update({
       where: { id: validatedData.id },
       data: {
         name: validatedData.name,
         phone: validatedData.phone,
         email: validatedData.email,
-        event_type_id: validatedData.event_type_id,
-        interested_dates: validatedData.interested_dates
-          ? (validatedData.interested_dates as unknown)
-          : undefined,
-        prospect_pipeline_stage_id: validatedData.prospect_pipeline_stage_id,
       },
+    });
+
+    // Obtener o crear promesa más reciente
+    const latestPromise = await prisma.studio_promises.findFirst({
+      where: { contact_id: validatedData.id },
+      orderBy: { created_at: 'desc' },
       include: {
         event_type: {
           select: {
@@ -262,7 +309,7 @@ export async function updateProspect(
             name: true,
           },
         },
-        prospect_pipeline_stage: {
+        pipeline_stage: {
           select: {
             id: true,
             name: true,
@@ -274,6 +321,79 @@ export async function updateProspect(
       },
     });
 
+    // Actualizar o crear promesa
+    let promise;
+    if (latestPromise) {
+      promise = await prisma.studio_promises.update({
+        where: { id: latestPromise.id },
+        data: {
+          event_type_id: validatedData.event_type_id || null,
+          pipeline_stage_id: validatedData.prospect_pipeline_stage_id || null,
+          tentative_dates: validatedData.interested_dates
+            ? (validatedData.interested_dates as unknown)
+            : null,
+        },
+        include: {
+          event_type: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          pipeline_stage: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              color: true,
+              order: true,
+            },
+          },
+        },
+      });
+    } else {
+      // Crear nueva promesa si no existe
+      const stageId = validatedData.prospect_pipeline_stage_id ||
+        (await prisma.studio_promise_pipeline_stages.findFirst({
+          where: {
+            studio_id: contact.studio_id,
+            slug: 'pending',
+            is_active: true,
+          },
+          select: { id: true },
+        }))?.id || null;
+
+      promise = await prisma.studio_promises.create({
+        data: {
+          studio_id: contact.studio_id,
+          contact_id: contact.id,
+          event_type_id: validatedData.event_type_id || null,
+          pipeline_stage_id: stageId,
+          status: 'pending',
+          tentative_dates: validatedData.interested_dates
+            ? (validatedData.interested_dates as unknown)
+            : null,
+        },
+        include: {
+          event_type: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          pipeline_stage: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              color: true,
+              order: true,
+            },
+          },
+        },
+      });
+    }
+
     const prospect: Prospect = {
       id: contact.id,
       studio_id: contact.studio_id,
@@ -281,19 +401,19 @@ export async function updateProspect(
       phone: contact.phone,
       email: contact.email,
       status: contact.status,
-      event_type_id: contact.event_type_id,
-      interested_dates: contact.interested_dates
-        ? (contact.interested_dates as string[])
+      event_type_id: promise.event_type_id,
+      interested_dates: promise.tentative_dates
+        ? (promise.tentative_dates as string[])
         : null,
-      prospect_pipeline_stage_id: contact.prospect_pipeline_stage_id,
+      prospect_pipeline_stage_id: promise.pipeline_stage_id,
       created_at: contact.created_at,
       updated_at: contact.updated_at,
-      event_type: contact.event_type,
-      prospect_pipeline_stage: contact.prospect_pipeline_stage,
+      event_type: promise.event_type,
+      prospect_pipeline_stage: promise.pipeline_stage,
       last_log: null,
     };
 
-    revalidatePath(`/${studioSlug}/studio/builder/commercial/prospects`);
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
     return {
       success: true,
@@ -328,7 +448,7 @@ export async function moveProspect(
     }
 
     // Verificar que la etapa existe
-    const stage = await prisma.studio_prospect_pipeline_stages.findUnique({
+    const stage = await prisma.studio_promise_pipeline_stages.findUnique({
       where: { id: validatedData.new_stage_id },
       select: { studio_id: true },
     });
@@ -337,11 +457,19 @@ export async function moveProspect(
       return { success: false, error: 'Etapa no encontrada' };
     }
 
-    const contact = await prisma.studio_contacts.update({
+    // Obtener contacto
+    const contact = await prisma.studio_contacts.findUnique({
       where: { id: validatedData.prospect_id },
-      data: {
-        prospect_pipeline_stage_id: validatedData.new_stage_id,
-      },
+    });
+
+    if (!contact) {
+      return { success: false, error: 'Prospect no encontrado' };
+    }
+
+    // Obtener promesa más reciente o crear una nueva
+    let promise = await prisma.studio_promises.findFirst({
+      where: { contact_id: validatedData.prospect_id },
+      orderBy: { created_at: 'desc' },
       include: {
         event_type: {
           select: {
@@ -349,7 +477,7 @@ export async function moveProspect(
             name: true,
           },
         },
-        prospect_pipeline_stage: {
+        pipeline_stage: {
           select: {
             id: true,
             name: true,
@@ -361,6 +489,60 @@ export async function moveProspect(
       },
     });
 
+    if (promise) {
+      // Actualizar promesa existente
+      promise = await prisma.studio_promises.update({
+        where: { id: promise.id },
+        data: {
+          pipeline_stage_id: validatedData.new_stage_id,
+        },
+        include: {
+          event_type: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          pipeline_stage: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              color: true,
+              order: true,
+            },
+          },
+        },
+      });
+    } else {
+      // Crear nueva promesa si no existe
+      promise = await prisma.studio_promises.create({
+        data: {
+          studio_id: contact.studio_id,
+          contact_id: contact.id,
+          pipeline_stage_id: validatedData.new_stage_id,
+          status: 'pending',
+        },
+        include: {
+          event_type: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          pipeline_stage: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              color: true,
+              order: true,
+            },
+          },
+        },
+      });
+    }
+
     const prospect: Prospect = {
       id: contact.id,
       studio_id: contact.studio_id,
@@ -368,19 +550,19 @@ export async function moveProspect(
       phone: contact.phone,
       email: contact.email,
       status: contact.status,
-      event_type_id: contact.event_type_id,
-      interested_dates: contact.interested_dates
-        ? (contact.interested_dates as string[])
+      event_type_id: promise.event_type_id,
+      interested_dates: promise.tentative_dates
+        ? (promise.tentative_dates as string[])
         : null,
-      prospect_pipeline_stage_id: contact.prospect_pipeline_stage_id,
+      prospect_pipeline_stage_id: promise.pipeline_stage_id,
       created_at: contact.created_at,
       updated_at: contact.updated_at,
-      event_type: contact.event_type,
-      prospect_pipeline_stage: contact.prospect_pipeline_stage,
+      event_type: promise.event_type,
+      prospect_pipeline_stage: promise.pipeline_stage,
       last_log: null,
     };
 
-    revalidatePath(`/${studioSlug}/studio/builder/commercial/prospects`);
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
     return {
       success: true,

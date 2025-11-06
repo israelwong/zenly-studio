@@ -1,55 +1,55 @@
-// prisma/seed-prospect-pipeline.ts
+// prisma/seed-promise-pipeline.ts
 /**
- * SEED PROSPECT PIPELINE
+ * SEED PROMISE PIPELINE
  * 
- * Pobla el pipeline inicial de prospects para un studio
- * Crea las 4 etapas por defecto: Nuevo, Seguimiento, Ganado, Perdido
+ * Pobla el pipeline inicial de promises para un studio
+ * Crea las 4 etapas por defecto: Pendiente, En Negociación, Aprobado, Archivado
  * 
  * Uso: 
- *   npm run db:seed-prospect-pipeline <studio-slug>
- *   npm run db:seed-prospect-pipeline demo-studio
- *   npm run db:seed-prospect-pipeline (sin argumentos pobla todos los studios activos)
+ *   npm run db:seed-promise-pipeline <studio-slug>
+ *   npm run db:seed-promise-pipeline demo-studio
+ *   npm run db:seed-promise-pipeline (sin argumentos pobla todos los studios activos)
  */
 
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-async function seedProspectPipeline(studioId: string, studioName: string) {
+async function seedPromisePipeline(studioId: string, studioName: string) {
     // Etapas iniciales del pipeline
-    const prospectStages = [
+    const promiseStages = [
         { 
-            slug: 'nuevo', 
-            name: 'Nuevo', 
+            slug: 'pending', 
+            name: 'Pendiente', 
             color: '#3B82F6', 
             order: 0, 
             is_system: true 
         },
         { 
-            slug: 'seguimiento', 
-            name: 'Seguimiento', 
+            slug: 'negotiation', 
+            name: 'En Negociación', 
             color: '#8B5CF6', 
             order: 1, 
             is_system: false 
         },
         { 
-            slug: 'ganado', 
-            name: 'Ganado', 
+            slug: 'approved', 
+            name: 'Aprobado', 
             color: '#10B981', 
             order: 2, 
             is_system: true 
         },
         { 
-            slug: 'perdido', 
-            name: 'Perdido', 
+            slug: 'archived', 
+            name: 'Archivado', 
             color: '#6B7280', 
             order: 3, 
             is_system: true 
         },
     ];
 
-    for (const stage of prospectStages) {
-        await prisma.studio_prospect_pipeline_stages.upsert({
+    for (const stage of promiseStages) {
+        await prisma.studio_promise_pipeline_stages.upsert({
             where: {
                 studio_id_slug: {
                     studio_id: studioId,
@@ -74,13 +74,13 @@ async function seedProspectPipeline(studioId: string, studioName: string) {
         console.log(`  ✅ ${stage.name} (${stage.slug})`);
     }
 
-    return prospectStages.length;
+    return promiseStages.length;
 }
 
 async function main() {
     const studioSlug = process.argv[2];
 
-    console.log('🌱 Poblando pipeline de prospects...\n');
+    console.log('🌱 Poblando pipeline de promises...\n');
 
     if (studioSlug) {
         // Poblar solo el studio especificado
@@ -95,7 +95,7 @@ async function main() {
         }
 
         console.log(`📌 Studio: ${studio.studio_name} (${studio.id})\n`);
-        const count = await seedProspectPipeline(studio.id, studio.studio_name);
+        const count = await seedPromisePipeline(studio.id, studio.studio_name);
         console.log(`\n✅ Pipeline creado: ${count} etapas para ${studio.studio_name}`);
     } else {
         // Poblar todos los studios activos
@@ -113,11 +113,11 @@ async function main() {
 
         for (const studio of studios) {
             console.log(`📊 ${studio.studio_name} (${studio.slug})`);
-            const count = await seedProspectPipeline(studio.id, studio.studio_name);
+            const count = await seedPromisePipeline(studio.id, studio.studio_name);
             console.log(`   ✅ ${count} etapas creadas\n`);
         }
 
-        console.log(`✅ Pipeline de prospects creado para ${studios.length} studio(s)`);
+        console.log(`✅ Pipeline de promises creado para ${studios.length} studio(s)`);
     }
 }
 
@@ -129,3 +129,4 @@ main()
     .finally(async () => {
         await prisma.$disconnect();
     });
+
