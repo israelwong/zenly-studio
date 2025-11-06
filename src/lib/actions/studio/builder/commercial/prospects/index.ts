@@ -10,7 +10,7 @@ export {
   createPipelineStage,
   updatePipelineStage,
   reorderPipelineStages,
-} from './pipeline-stages.actions';
+} from './promise-pipeline-stages.actions';
 
 export {
   getPromiseLogs,
