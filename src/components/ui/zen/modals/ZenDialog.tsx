@@ -16,7 +16,7 @@ export interface ZenDialogProps {
   saveLabel?: string;
   cancelLabel?: string;
   isLoading?: boolean;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '5xl' | '6xl' | '7xl';
   showCloseButton?: boolean;
 }
 
@@ -25,7 +25,11 @@ const maxWidthClasses = {
   md: 'max-w-md',
   lg: 'max-w-lg',
   xl: 'max-w-xl',
-  '2xl': 'max-w-2xl'
+  '2xl': 'max-w-2xl',
+  '4xl': 'max-w-4xl',
+  '5xl': 'max-w-5xl',
+  '6xl': 'max-w-6xl',
+  '7xl': 'max-w-7xl'
 };
 
 export function ZenDialog({
@@ -55,7 +59,7 @@ export function ZenDialog({
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className={cn(
-        'bg-zinc-900 rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden',
+        'bg-zinc-900 rounded-lg shadow-xl w-full overflow-visible',
         maxWidthClasses[maxWidth]
       )}>
         {/* Header */}
@@ -83,7 +87,7 @@ export function ZenDialog({
         </ZenCardHeader>
 
         {/* Content */}
-        <ZenCardContent className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+        <ZenCardContent className="p-6 overflow-visible">
           {children}
         </ZenCardContent>
 

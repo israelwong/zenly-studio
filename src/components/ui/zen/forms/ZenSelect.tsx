@@ -19,6 +19,7 @@ export interface ZenSelectProps {
     disabled?: boolean;
     disableSearch?: boolean;
     className?: string;
+    required?: boolean;
 }
 
 export function ZenSelect({
@@ -30,7 +31,8 @@ export function ZenSelect({
     error,
     disabled = false,
     disableSearch = false,
-    className
+    className,
+    required = false
 }: ZenSelectProps) {
     const [isOpen, setIsOpen] = React.useState(false);
     const [searchTerm, setSearchTerm] = React.useState('');
@@ -71,8 +73,11 @@ export function ZenSelect({
     return (
         <div className="relative space-y-2" ref={containerRef}>
             {label && (
-                <label className="text-sm font-medium text-zinc-300 block">
+                <label className="text-sm font-medium text-zinc-300 block flex items-center gap-1">
                     {label}
+                    {required && (
+                        <span className="text-red-400">*</span>
+                    )}
                 </label>
             )}
             <button
@@ -95,7 +100,7 @@ export function ZenSelect({
             </button>
 
             {isOpen && (
-                <div className="absolute z-50 mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg">
+                <div className="absolute z-[9999] mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg">
                     {!disableSearch && (
                         <div className="p-2">
                             <input

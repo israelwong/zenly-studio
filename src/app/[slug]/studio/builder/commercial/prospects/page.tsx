@@ -4,6 +4,7 @@ import React from 'react';
 import { useParams } from 'next/navigation';
 import { UserSearch } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
+import { ProspectsWrapper } from './components';
 
 export default function ProspectsPage() {
   const params = useParams();
@@ -26,7 +27,7 @@ export default function ProspectsPage() {
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          {/* Content will go here */}
+          <ProspectsWrapper studioSlug={studioSlug} />
         </ZenCardContent>
       </ZenCard>
     </div>

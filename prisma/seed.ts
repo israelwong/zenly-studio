@@ -479,7 +479,7 @@ async function seedPipelines() {
     ];
 
     for (const stage of managerStages) {
-        await prisma.manager_pipeline_stages.upsert({
+        await prisma.studio_manager_pipeline_stages.upsert({
             where: {
                 studio_id_slug: {
                     studio_id: DEMO_STUDIO_ID,
@@ -498,6 +498,34 @@ async function seedPipelines() {
         });
     }
     console.log(`  ✅ Manager Pipeline (${managerStages.length} stages)`);
+
+    // PROSPECT PIPELINE
+    const prospectStages = [
+        { slug: 'nuevo', name: 'Nuevo', color: '#3B82F6', order: 0, is_system: true },
+        { slug: 'seguimiento', name: 'Seguimiento', color: '#8B5CF6', order: 1, is_system: false },
+        { slug: 'ganado', name: 'Ganado', color: '#10B981', order: 2, is_system: true },
+        { slug: 'perdido', name: 'Perdido', color: '#6B7280', order: 3, is_system: true },
+    ];
+
+    for (const stage of prospectStages) {
+        await prisma.studio_prospect_pipeline_stages.upsert({
+            where: {
+                studio_id_slug: {
+                    studio_id: DEMO_STUDIO_ID,
+                    slug: stage.slug,
+                },
+            },
+            update: {},
+            create: {
+                studio_id: DEMO_STUDIO_ID,
+                ...stage,
+                is_active: true,
+                created_at: new Date(),
+                updated_at: new Date(),
+            },
+        });
+    }
+    console.log(`  ✅ Prospect Pipeline (${prospectStages.length} stages)`);
 }
 
 // ============================================
