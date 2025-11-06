@@ -1,9 +1,24 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FileText, Plus, Package, Sparkles } from 'lucide-react';
-import { ZenButton, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
+import React, { useState, useEffect } from 'react';
+import { Plus, Package, Sparkles, Loader2 } from 'lucide-react';
+import {
+  ZenButton,
+  ZenCard,
+  ZenCardContent,
+  ZenCardHeader,
+  ZenCardTitle,
+  ZenDropdownMenu,
+  ZenDropdownMenuTrigger,
+  ZenDropdownMenuContent,
+  ZenDropdownMenuItem,
+  ZenDropdownMenuSeparator,
+} from '@/components/ui/zen';
 import { toast } from 'sonner';
+import { PromiseCotizacionCard } from './PromiseCotizacionCard';
+import { obtenerPaquetes } from '@/lib/actions/studio/builder/paquetes/paquetes.actions';
+import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
+
 // Función simple para generar IDs temporales
 const generateTempId = () => `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -32,11 +47,58 @@ export function PromiseQuotesPanel({
   tempQuotes,
   onTempQuotesChange,
 }: PromiseQuotesPanelProps) {
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [packages, setPackages] = useState<Array<{ id: string; name: string; precio: number | null }>>([]);
+  const [loadingPackages, setLoadingPackages] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const handleCreateFromPackage = () => {
-    // TODO: Abrir modal de selección de paquetes
-    toast.info('Selección de paquetes próximamente');
+  useEffect(() => {
+    const loadPackages = async () => {
+      if (!eventTypeId) {
+        setPackages([]);
+        setLoadingPackages(false);
+        return;
+      }
+      setLoadingPackages(true);
+      try {
+        const result = await obtenerPaquetes(studioSlug);
+        if (result.success && result.data) {
+          // Filtrar paquetes por tipo de evento si está disponible
+          const filteredPackages = result.data
+            .filter((pkg: PaqueteFromDB) => {
+              // Si el paquete tiene event_types, filtrar por eventTypeId
+              if (pkg.event_types) {
+                return pkg.event_types.id === eventTypeId;
+              }
+              return true; // Si no tiene tipo de evento, incluir todos
+            })
+            .map((pkg: PaqueteFromDB) => ({
+              id: pkg.id,
+              name: pkg.name,
+              precio: pkg.precio || null,
+            }));
+          setPackages(filteredPackages);
+        }
+      } catch (error) {
+        console.error('Error loading packages:', error);
+      } finally {
+        setLoadingPackages(false);
+      }
+    };
+
+    loadPackages();
+  }, [studioSlug, eventTypeId]);
+
+  const handleCreateFromPackage = (packageId: string, packageName: string, packagePrice: number | null) => {
+    const newQuote: TempQuote = {
+      id: generateTempId(),
+      name: packageName,
+      price: packagePrice || 0,
+      type: 'package',
+      packageId: packageId,
+      createdAt: new Date(),
+    };
+    onTempQuotesChange([...tempQuotes, newQuote]);
+    toast.success('Cotización creada desde paquete');
   };
 
   const handleCreateCustom = () => {
@@ -48,7 +110,7 @@ export function PromiseQuotesPanel({
       createdAt: new Date(),
     };
     onTempQuotesChange([...tempQuotes, newQuote]);
-    toast.success('Cotización creada');
+    toast.success('Cotización personalizada creada');
   };
 
   const handleDeleteQuote = (quoteId: string) => {
@@ -56,105 +118,102 @@ export function PromiseQuotesPanel({
     toast.success('Cotización eliminada');
   };
 
-  if (!eventTypeId) {
-    return (
-      <div className="flex flex-col h-[600px] bg-zinc-900/50 rounded-lg border border-zinc-800">
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-xs text-zinc-500 text-center px-4">
-            Selecciona un tipo de evento para crear cotizaciones
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const isMenuDisabled = !eventTypeId;
 
   return (
-    <div className="space-y-4">
-      {/* Header con acciones */}
-      <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
-        <div className="flex gap-2">
-          <ZenButton
-            variant="outline"
-            size="sm"
-            onClick={handleCreateFromPackage}
-            className="flex items-center gap-2"
-          >
-            <Package className="h-4 w-4" />
-            Desde Paquete
-          </ZenButton>
-          <ZenButton
-            size="sm"
-            onClick={handleCreateCustom}
-            className="flex items-center gap-2"
-          >
-            <Sparkles className="h-4 w-4" />
-            Personalizada
-          </ZenButton>
-        </div>
-      </div>
-
-      {/* Lista de cotizaciones */}
-      {tempQuotes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-[500px] bg-zinc-900/50 rounded-lg border border-zinc-800">
-          <FileText className="h-10 w-10 text-zinc-600 mb-3" />
-          <p className="text-xs text-zinc-500 text-center px-4">
-            No hay cotizaciones aún. Crea una desde un paquete o personalizada.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2 max-h-[550px] overflow-y-auto">
-          {tempQuotes.map((quote) => (
-            <ZenCard key={quote.id} variant="outline">
-              <ZenCardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <ZenCardTitle className="text-sm">{quote.name}</ZenCardTitle>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">
-                      {quote.type === 'package' ? (
-                        <Package className="h-3 w-3 inline" />
-                      ) : (
-                        <Sparkles className="h-3 w-3 inline" />
-                      )}
-                    </span>
-                    <ZenButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteQuote(quote.id)}
-                      className="text-red-400 hover:text-red-300"
+    <ZenCard variant="outlined" className="min-h-[300px] h-full flex flex-col">
+      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <ZenCardTitle className="text-sm font-medium flex items-center pt-1">Cotizaciones</ZenCardTitle>
+          <ZenDropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <ZenDropdownMenuTrigger asChild>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                disabled={isMenuDisabled}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </ZenButton>
+            </ZenDropdownMenuTrigger>
+            <ZenDropdownMenuContent align="end" className="min-w-[200px]">
+              {loadingPackages ? (
+                <div className="px-2 py-3 flex items-center gap-2 text-sm text-zinc-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Cargando paquetes...</span>
+                </div>
+              ) : packages.length > 0 ? (
+                <>
+                  {packages.map((pkg) => (
+                    <ZenDropdownMenuItem
+                      key={pkg.id}
+                      onClick={() => handleCreateFromPackage(pkg.id, pkg.name, pkg.precio)}
                     >
-                      Eliminar
-                    </ZenButton>
-                  </div>
-                </div>
-              </ZenCardHeader>
-              <ZenCardContent>
-                <div className="space-y-2">
-                  {quote.description && (
-                    <p className="text-xs text-zinc-400">{quote.description}</p>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-zinc-300">
-                      ${quote.price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-xs text-zinc-500">
-                      {quote.type === 'package' ? 'Desde paquete' : 'Personalizada'}
-                    </span>
-                  </div>
-                </div>
-              </ZenCardContent>
-            </ZenCard>
-          ))}
+                      <Package className="h-4 w-4 mr-2" />
+                      <span className="flex-1">{pkg.name}</span>
+                      {pkg.precio !== null && (
+                        <span className="text-xs text-zinc-400 ml-2">
+                          ${pkg.precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
+                    </ZenDropdownMenuItem>
+                  ))}
+                  <ZenDropdownMenuSeparator />
+                  <ZenDropdownMenuItem onClick={handleCreateCustom}>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Personalizada
+                  </ZenDropdownMenuItem>
+                </>
+              ) : (
+                <ZenDropdownMenuItem onClick={handleCreateCustom}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Personalizada
+                </ZenDropdownMenuItem>
+              )}
+            </ZenDropdownMenuContent>
+          </ZenDropdownMenu>
         </div>
-      )}
+      </ZenCardHeader>
+      <ZenCardContent className="p-4 flex-1 flex flex-col min-h-0">
+        {!eventTypeId ? (
+          <div className="flex flex-col items-center justify-center flex-1 min-h-[200px]">
+            <p className="text-xs text-zinc-500 text-center px-4">
+              Selecciona un tipo de evento para crear cotizaciones
+            </p>
+          </div>
+        ) : tempQuotes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center flex-1 min-h-[200px]">
+            <p className="text-xs text-zinc-500 text-center px-4">
+              No hay cotizaciones asociadas a esta promesa
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
+            {tempQuotes.map((quote) => (
+              <PromiseCotizacionCard
+                key={quote.id}
+                id={quote.id}
+                name={quote.name}
+                price={quote.price}
+                description={quote.description}
+                type={quote.type}
+                packageId={quote.packageId}
+                createdAt={quote.createdAt}
+                onDelete={handleDeleteQuote}
+              />
+            ))}
+          </div>
+        )}
 
-      {!promiseId && tempQuotes.length > 0 && (
-        <div className="p-3 bg-blue-600/20 border border-blue-600/30 rounded-lg">
-          <p className="text-xs text-blue-300">
-            💡 Las cotizaciones se guardarán cuando guardes la promesa
-          </p>
-        </div>
-      )}
-    </div>
+        {!promiseId && tempQuotes.length > 0 && (
+          <div className="mt-4 p-3 bg-blue-600/20 border border-blue-600/30 rounded-lg flex-shrink-0">
+            <p className="text-xs text-blue-300">
+              💡 Las cotizaciones se guardarán cuando guardes la promesa
+            </p>
+          </div>
+        )}
+      </ZenCardContent>
+    </ZenCard>
   );
 }
 

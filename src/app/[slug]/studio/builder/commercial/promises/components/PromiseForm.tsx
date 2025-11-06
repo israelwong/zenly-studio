@@ -15,7 +15,6 @@ import { getContacts, getAcquisitionChannels, getSocialNetworks } from '@/lib/ac
 import { PromiseLogsPanel } from './PromiseLogsPanel';
 import { PromiseQuotesPanel } from './PromiseQuotesPanel';
 import { PromiseQuickActions } from './PromiseQuickActions';
-import type { ZenSelectOption } from '@/components/ui/zen';
 import type { CreateProspectData, UpdateProspectData } from '@/lib/actions/schemas/prospects-schemas';
 
 type TempQuote = {
@@ -499,12 +498,6 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
     isEditMode,
   }), [loading, isEditMode, handleNavigation, handleSubmit, router]);
 
-  const acquisitionChannelOptions: ZenSelectOption[] = [
-    { value: 'none', label: 'Seleccionar canal' },
-    ...acquisitionChannels.map((c) => ({ value: c.id, label: c.name })),
-    { value: 'otro', label: 'Otro' },
-  ];
-
   useEffect(() => {
     if (selectedDates.length > 0) {
       const dateStrings = selectedDates.map((d) => {
@@ -559,27 +552,10 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
 
   return (
     <div className="space-y-6">
-      {/* Acciones rápidas (solo si está guardado) */}
-      {isEditMode && promiseId && initialData?.id && (
-        <PromiseQuickActions
-          studioSlug={studioSlug}
-          contactId={initialData.id}
-          contactName={formData.name}
-          phone={formData.phone}
-          email={formData.email}
-        />
-      )}
-
       {/* Layout de 3 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Columna 1: Información */}
         <div className="lg:col-span-1 space-y-4">
-          <div>
-            <h3 className="text-sm font-medium text-zinc-300 flex items-center gap-2 mb-4">
-              <User className="h-4 w-4" />
-              Información
-            </h3>
-          </div>
           <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-4">
             {/* Ficha 1: Nombre, Teléfono, Email */}
             <ZenCard variant="outlined">
@@ -657,10 +633,13 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
             <ZenCard variant="outlined">
               <ZenCardContent className="p-4 space-y-4">
                 <div>
-                  <ZenSelect
-                    label="Canal de Adquisición"
+                  <label className="text-sm font-medium text-zinc-300 block mb-2">
+                    Canal de Adquisición <span className="text-red-500">*</span>
+                  </label>
+                  <select
                     value={formData.acquisition_channel_id || 'none'}
-                    onValueChange={(value) => {
+                    onChange={(e) => {
+                      const value = e.target.value;
                       setFormData((prev) => ({
                         ...prev,
                         acquisition_channel_id: value === 'none' ? '' : value,
@@ -677,33 +656,48 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
                         setShowReferrerSuggestions(false);
                       }
                     }}
-                    options={acquisitionChannelOptions}
-                    placeholder="Seleccionar canal"
-                    disableSearch
                     required
-                    error={errors.acquisition_channel_id}
-                  />
+                    className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors ${errors.acquisition_channel_id
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-zinc-700 hover:border-zinc-600'
+                      }`}
+                  >
+                    <option value="none">Seleccionar canal</option>
+                    {acquisitionChannels.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                    <option value="otro">Otro</option>
+                  </select>
+                  {errors.acquisition_channel_id && (
+                    <p className="mt-1 text-xs text-red-500">{errors.acquisition_channel_id}</p>
+                  )}
                 </div>
 
                 {/* Selector de Red Social */}
                 {formData.acquisition_channel_id === getRedesSocialesChannelId() && (
                   <div>
-                    <ZenSelect
-                      label="Red Social"
+                    <label className="text-sm font-medium text-zinc-300 block mb-2">
+                      Red Social
+                    </label>
+                    <select
                       value={formData.social_network_id || 'none'}
-                      onValueChange={(value) => {
+                      onChange={(e) => {
                         setFormData((prev) => ({
                           ...prev,
-                          social_network_id: value === 'none' ? undefined : value,
+                          social_network_id: e.target.value === 'none' ? undefined : e.target.value,
                         }));
                       }}
-                      options={[
-                        { value: 'none', label: 'Seleccionar red social' },
-                        ...socialNetworks.map((n) => ({ value: n.id, label: n.name })),
-                      ]}
-                      placeholder="Seleccionar red social"
-                      disableSearch
-                    />
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent hover:border-zinc-600 transition-colors"
+                    >
+                      <option value="none">Seleccionar red social</option>
+                      {socialNetworks.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
@@ -797,27 +791,37 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
               <ZenCardContent className="p-4 space-y-4">
                 {/* Tipo de Evento */}
                 <div>
-                  <ZenSelect
-                    label="Tipo de Evento"
+                  <label className="text-sm font-medium text-zinc-300 block mb-2">
+                    Tipo de Evento <span className="text-red-500">*</span>
+                  </label>
+                  <select
                     value={formData.event_type_id || 'none'}
-                    onValueChange={(value) => {
+                    onChange={(e) => {
                       setFormData((prev) => ({
                         ...prev,
-                        event_type_id: value === 'none' ? '' : value,
+                        event_type_id: e.target.value === 'none' ? '' : e.target.value,
                       }));
                       if (errors.event_type_id) {
                         setErrors((prev) => ({ ...prev, event_type_id: '' }));
                       }
                     }}
-                    options={[
-                      { value: 'none', label: 'Seleccionar tipo de evento' },
-                      ...eventTypes.map((et) => ({ value: et.id, label: et.name })),
-                      { value: 'otro', label: 'Otro' },
-                    ]}
-                    placeholder="Buscar tipo de evento..."
                     required
-                    error={errors.event_type_id}
-                  />
+                    className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors ${errors.event_type_id
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-zinc-700 hover:border-zinc-600'
+                      }`}
+                  >
+                    <option value="none">Seleccionar tipo de evento</option>
+                    {eventTypes.map((et) => (
+                      <option key={et.id} value={et.id}>
+                        {et.name}
+                      </option>
+                    ))}
+                    <option value="otro">Otro</option>
+                  </select>
+                  {errors.event_type_id && (
+                    <p className="mt-1 text-xs text-red-500">{errors.event_type_id}</p>
+                  )}
                 </div>
 
                 {/* Fecha de Interés */}
@@ -918,12 +922,6 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
 
         {/* Columna 2: Cotizaciones */}
         <div className="lg:col-span-1">
-          <div className="mb-4">
-            <h3 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Cotizaciones
-            </h3>
-          </div>
           <PromiseQuotesPanel
             studioSlug={studioSlug}
             promiseId={promiseId}
@@ -933,19 +931,29 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
           />
         </div>
 
-        {/* Columna 3: Bitácora */}
-        <div className="lg:col-span-1">
-          <div className="mb-4">
-            <h3 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Bitácora
-            </h3>
+        {/* Columna 3: Quick Actions y Bitácora */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Quick Actions (solo si está guardado) */}
+          {isEditMode && promiseId && initialData?.id && (
+            <div>
+              <PromiseQuickActions
+                studioSlug={studioSlug}
+                contactId={initialData.id}
+                contactName={formData.name}
+                phone={formData.phone}
+                email={formData.email}
+              />
+            </div>
+          )}
+
+          {/* Bitácora */}
+          <div>
+            <PromiseLogsPanel
+              studioSlug={studioSlug}
+              promiseId={promiseId}
+              contactId={initialData?.id || null}
+            />
           </div>
-          <PromiseLogsPanel
-            studioSlug={studioSlug}
-            promiseId={promiseId}
-            contactId={initialData?.id || null}
-          />
         </div>
       </div>
 
