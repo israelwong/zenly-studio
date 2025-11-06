@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Package, Sparkles, Loader2 } from 'lucide-react';
 import {
   ZenButton,
@@ -14,13 +15,9 @@ import {
   ZenDropdownMenuItem,
   ZenDropdownMenuSeparator,
 } from '@/components/ui/zen';
-import { toast } from 'sonner';
 import { PromiseCotizacionCard } from './PromiseCotizacionCard';
 import { obtenerPaquetes } from '@/lib/actions/studio/builder/paquetes/paquetes.actions';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
-
-// Función simple para generar IDs temporales
-const generateTempId = () => `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 interface TempQuote {
   id: string; // cuid temporal
@@ -47,6 +44,7 @@ export function PromiseQuotesPanel({
   tempQuotes,
   onTempQuotesChange,
 }: PromiseQuotesPanelProps) {
+  const router = useRouter();
   const [packages, setPackages] = useState<Array<{ id: string; name: string; precio: number | null }>>([]);
   const [loadingPackages, setLoadingPackages] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -88,34 +86,33 @@ export function PromiseQuotesPanel({
     loadPackages();
   }, [studioSlug, eventTypeId]);
 
-  const handleCreateFromPackage = (packageId: string, packageName: string, packagePrice: number | null) => {
-    const newQuote: TempQuote = {
-      id: generateTempId(),
-      name: packageName,
-      price: packagePrice || 0,
-      type: 'package',
-      packageId: packageId,
-      createdAt: new Date(),
-    };
-    onTempQuotesChange([...tempQuotes, newQuote]);
-    toast.success('Cotización creada desde paquete');
+  const handleCreateFromPackage = (packageId: string) => {
+    // Navegar a la ruta de nueva cotización con el paqueteId como parámetro
+    const basePath = `/${studioSlug}/studio/builder/commercial/promises/cotizacion/nueva`;
+    const params = new URLSearchParams();
+    if (packageId) {
+      params.set('paqueteId', packageId);
+    }
+    if (promiseId) {
+      params.set('promiseId', promiseId);
+    }
+    const queryString = params.toString();
+    router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
   };
 
   const handleCreateCustom = () => {
-    const newQuote: TempQuote = {
-      id: generateTempId(),
-      name: `Cotización ${tempQuotes.length + 1}`,
-      price: 0,
-      type: 'custom',
-      createdAt: new Date(),
-    };
-    onTempQuotesChange([...tempQuotes, newQuote]);
-    toast.success('Cotización personalizada creada');
+    // Navegar a la ruta de nueva cotización sin paqueteId (personalizada)
+    const basePath = `/${studioSlug}/studio/builder/commercial/promises/cotizacion/nueva`;
+    const params = new URLSearchParams();
+    if (promiseId) {
+      params.set('promiseId', promiseId);
+    }
+    const queryString = params.toString();
+    router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
   };
 
   const handleDeleteQuote = (quoteId: string) => {
     onTempQuotesChange(tempQuotes.filter((q) => q.id !== quoteId));
-    toast.success('Cotización eliminada');
   };
 
   const isMenuDisabled = !eventTypeId;
@@ -147,7 +144,7 @@ export function PromiseQuotesPanel({
                   {packages.map((pkg) => (
                     <ZenDropdownMenuItem
                       key={pkg.id}
-                      onClick={() => handleCreateFromPackage(pkg.id, pkg.name, pkg.precio)}
+                      onClick={() => handleCreateFromPackage(pkg.id)}
                     >
                       <Package className="h-4 w-4 mr-2" />
                       <span className="flex-1">{pkg.name}</span>

@@ -9,4 +9,5 @@ export { PromiseQuickActions } from './PromiseQuickActions';
 export { PromiseCotizacionCard } from './PromiseCotizacionCard';
 export { PipelineConfigModal } from './PipelineConfigModal';
 export { PromisesSkeleton } from './PromisesSkeleton';
+export { CotizacionForm } from './CotizacionForm';
 
