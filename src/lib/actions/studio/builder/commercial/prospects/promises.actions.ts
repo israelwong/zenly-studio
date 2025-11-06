@@ -132,9 +132,10 @@ export async function getPromises(
         interested_dates: latestPromise?.tentative_dates
           ? (latestPromise.tentative_dates as string[])
           : null,
+        defined_date: latestPromise?.defined_date || null,
         promise_pipeline_stage_id: latestPromise?.pipeline_stage_id || null,
         created_at: contact.created_at,
-        updated_at: contact.updated_at,
+        updated_at: latestPromise?.updated_at || contact.updated_at,
         event_type: latestPromise?.event_type || null,
         promise_pipeline_stage: latestPromise?.pipeline_stage || null,
         last_log: contact.contact_logs[0] || null,

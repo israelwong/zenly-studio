@@ -75,6 +75,7 @@ export interface PromiseWithContact {
   status: string; // "prospecto" | "cliente" - estado del contacto
   event_type_id: string | null;
   interested_dates: string[] | null;
+  defined_date: Date | null; // Fecha definida del evento
   promise_pipeline_stage_id: string | null;
   created_at: Date;
   updated_at: Date;
