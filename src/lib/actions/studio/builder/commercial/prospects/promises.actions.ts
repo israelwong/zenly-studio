@@ -36,7 +36,16 @@ export async function getPromises(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    const where: any = {
+    const where: {
+      studio_id: string;
+      status: string;
+      id?: { in: string[] };
+      OR?: Array<{
+        name?: { contains: string; mode: 'insensitive' };
+        email?: { contains: string; mode: 'insensitive' };
+        phone?: { contains: string; mode: 'insensitive' };
+      }>;
+    } = {
       studio_id: studio.id,
       status: 'prospecto',
     };

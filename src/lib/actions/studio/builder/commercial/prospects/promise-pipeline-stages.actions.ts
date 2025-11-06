@@ -167,7 +167,11 @@ export async function updatePipelineStage(
     }
 
     // No permitir editar campos críticos de etapas del sistema
-    const updateData: any = {};
+    const updateData: {
+      name?: string;
+      color?: string;
+      order?: number;
+    } = {};
     if (validatedData.name !== undefined) updateData.name = validatedData.name;
     if (validatedData.color !== undefined) updateData.color = validatedData.color;
     if (validatedData.order !== undefined) updateData.order = validatedData.order;
