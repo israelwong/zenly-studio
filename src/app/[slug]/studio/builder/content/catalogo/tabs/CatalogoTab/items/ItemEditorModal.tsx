@@ -229,13 +229,13 @@ export function ItemEditorModal({
             setShowDesglosePrecios(false);
 
             if (item) {
-                const initialData = {
+                const initialData: ItemFormData = {
                     id: item.id,
                     name: item.name,
                     cost: item.cost,
                     description: item.description || "",
                     categoriaeId: categoriaId,
-                    tipoUtilidad: item.tipoUtilidad || "servicio",
+                    tipoUtilidad: (item.tipoUtilidad || "servicio") as 'servicio' | 'producto',
                     gastos: item.gastos || [],
                     status: item.status || "active",
                 };
@@ -257,10 +257,10 @@ export function ItemEditorModal({
                     cost: 0,
                     description: "",
                     categoriaeId: categoriaId,
-                    tipoUtilidad: "servicio",
-                    gastos: [],
+                    tipoUtilidad: "servicio" as const,
+                    gastos: [] as Gasto[],
                     status: "active",
-                };
+                } satisfies ItemFormData;
 
                 setFormData(initialData);
                 setGastos([]);
