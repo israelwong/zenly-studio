@@ -26,6 +26,7 @@ interface PaqueteFormularioAvanzadoProps {
     onFeaturedChange?: (featured: boolean) => void;
     onSave: (paquete: PaqueteFromDB) => void;
     onCancel: () => void;
+    initialEventTypeId?: string;
 }
 
 export interface PaqueteFormularioRef {
@@ -40,7 +41,8 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     isFeatured: isFeaturedProp,
     onFeaturedChange,
     onSave,
-    onCancel
+    onCancel,
+    initialEventTypeId
 }, ref) => {
     // Estado del formulario
     const [nombre, setNombre] = useState(paquete?.name || '');
@@ -584,7 +586,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 description: descripcion,
                 cover_url: coverMedia[0]?.file_url || null,
                 cover_storage_bytes: coverMedia[0]?.file_size ? BigInt(coverMedia[0].file_size) : null,
-                event_type_id: 'temp', // Se manejará automáticamente en la acción
+                event_type_id: initialEventTypeId || paquete?.event_type_id || 'temp', // Usar initialEventTypeId si está disponible
                 precio: calculoPrecio.total,
                 status: isPublished ? 'active' : 'inactive',
                 is_featured: isFeatured,

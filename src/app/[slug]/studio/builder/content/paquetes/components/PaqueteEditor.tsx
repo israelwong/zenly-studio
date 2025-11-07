@@ -11,9 +11,10 @@ interface PaqueteEditorProps {
     studioSlug: string;
     mode: 'create' | 'edit';
     paquete?: PaqueteFromDB | null;
+    initialEventTypeId?: string;
 }
 
-export function PaqueteEditor({ studioSlug, mode, paquete }: PaqueteEditorProps) {
+export function PaqueteEditor({ studioSlug, mode, paquete, initialEventTypeId }: PaqueteEditorProps) {
     const router = useRouter();
     const [isPublished, setIsPublished] = useState(paquete?.status === 'active' || false);
     const [isFeatured, setIsFeatured] = useState((paquete as { is_featured?: boolean })?.is_featured || false);
@@ -118,6 +119,7 @@ export function PaqueteEditor({ studioSlug, mode, paquete }: PaqueteEditorProps)
                         onFeaturedChange={setIsFeatured}
                         onSave={handleSave}
                         onCancel={handleCancel}
+                        initialEventTypeId={initialEventTypeId}
                     />
                 </ZenCardContent>
             </ZenCard>

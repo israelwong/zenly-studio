@@ -691,8 +691,11 @@ export function PaquetesTipoEventoList({
         router.push(`/${studioSlug}/studio/builder/content/paquetes/${paquete.id}/editar`);
     };
 
-    const handleCrearPaquete = () => {
-        router.push(`/${studioSlug}/studio/builder/content/paquetes/nuevo`);
+    const handleCrearPaquete = (eventTypeId?: string) => {
+        const url = eventTypeId
+            ? `/${studioSlug}/studio/builder/content/paquetes/nuevo?eventTypeId=${eventTypeId}`
+            : `/${studioSlug}/studio/builder/content/paquetes/nuevo`;
+        router.push(url);
     };
 
     const handleDuplicatePaquete = async (paquete: PaqueteFromDB) => {
@@ -1059,7 +1062,7 @@ export function PaquetesTipoEventoList({
                                 <ZenButton
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        handleCrearPaquete();
+                                        handleCrearPaquete(tipoEvento.id);
                                     }}
                                     variant="ghost"
                                     size="sm"
@@ -1607,18 +1610,43 @@ export function PaquetesTipoEventoList({
             onDragEnd={handleDragEnd}
         >
             <div className="space-y-4">
-                {/* Header con botón de crear tipo de evento */}
+                {/* Header con botón de crear */}
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-white">Paquetes</h3>
-                    <ZenButton
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-2"
-                        onClick={handleCreateTipoEvento}
-                    >
-                        <Plus className="w-4 h-4" />
-                        Nuevo Tipo de Evento
-                    </ZenButton>
+                    <ZenDropdownMenu>
+                        <ZenDropdownMenuTrigger asChild>
+                            <ZenButton
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-2"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Crear
+                            </ZenButton>
+                        </ZenDropdownMenuTrigger>
+                        <ZenDropdownMenuContent align="end" className="w-56">
+                            <ZenDropdownMenuItem onClick={handleCreateTipoEvento}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Nuevo tipo de evento
+                            </ZenDropdownMenuItem>
+                            {tiposEvento.length > 0 && (
+                                <>
+                                    <ZenDropdownMenuSeparator />
+                                    {tiposEvento
+                                        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+                                        .map((tipo) => (
+                                            <ZenDropdownMenuItem
+                                                key={tipo.id}
+                                                onClick={() => handleCrearPaquete(tipo.id)}
+                                            >
+                                                <Plus className="h-4 w-4 mr-2" />
+                                                Nuevo paquete de {tipo.nombre}
+                                            </ZenDropdownMenuItem>
+                                        ))}
+                                </>
+                            )}
+                        </ZenDropdownMenuContent>
+                    </ZenDropdownMenu>
                 </div>
 
                 {/* Lista de tipos de evento con drag & drop */}
