@@ -487,10 +487,124 @@ export function CotizacionForm({
 
   if (cargandoCatalogo) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto mb-4"></div>
-          <p className="text-zinc-400">Cargando catálogo...</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6">
+        {/* Columna 1: Servicios Disponibles - Skeleton */}
+        <div className="lg:col-span-2">
+          <div className="mb-4">
+            {/* Header skeleton */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-6 w-48 bg-zinc-800 rounded animate-pulse" />
+              <div className="h-5 w-16 bg-zinc-800 rounded-full animate-pulse" />
+            </div>
+            {/* Input skeleton */}
+            <div className="h-10 w-full bg-zinc-800 rounded-lg animate-pulse" />
+          </div>
+
+          {/* Secciones skeleton */}
+          <div className="space-y-2">
+            {[...Array(3)].map((_, seccionIndex) => (
+              <div key={`skeleton-seccion-${seccionIndex}`} className="border border-zinc-700 rounded-lg overflow-hidden">
+                {/* Sección header skeleton */}
+                <div className="p-4 bg-zinc-800/30">
+                  <div className="flex items-center gap-3">
+                    <div className="h-4 w-4 bg-zinc-700 rounded animate-pulse" />
+                    <div className="h-5 w-32 bg-zinc-700 rounded animate-pulse" />
+                    <div className="h-5 w-24 bg-zinc-700 rounded-full animate-pulse ml-auto" />
+                  </div>
+                </div>
+                {/* Categorías skeleton */}
+                <div className="bg-zinc-900/50">
+                  {[...Array(2)].map((_, categoriaIndex) => (
+                    <div key={`skeleton-categoria-${categoriaIndex}`} className={categoriaIndex > 0 ? 'border-t border-zinc-700/50' : ''}>
+                      <div className="p-3 pl-8">
+                        <div className="flex items-center gap-3">
+                          <div className="h-3 w-3 bg-zinc-700 rounded animate-pulse" />
+                          <div className="h-4 w-28 bg-zinc-700 rounded animate-pulse" />
+                          <div className="h-4 w-20 bg-zinc-700 rounded-full animate-pulse ml-auto" />
+                        </div>
+                      </div>
+                      {/* Servicios skeleton */}
+                      <div className="bg-zinc-800/20 border-l-2 border-zinc-700/30 ml-8">
+                        {[...Array(2)].map((_, servicioIndex) => (
+                          <div
+                            key={`skeleton-servicio-${servicioIndex}`}
+                            className={`flex items-center justify-between py-3 px-2 pl-6 ${servicioIndex > 0 ? 'border-t border-zinc-700/30' : ''}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="h-4 w-40 bg-zinc-700 rounded animate-pulse mb-2" />
+                              <div className="flex items-center gap-2">
+                                <div className="h-4 w-16 bg-zinc-700 rounded animate-pulse" />
+                                <div className="h-4 w-20 bg-zinc-700 rounded animate-pulse" />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1">
+                                <div className="h-5 w-5 bg-zinc-700 rounded animate-pulse" />
+                                <div className="h-5 w-6 bg-zinc-700 rounded animate-pulse" />
+                                <div className="h-5 w-5 bg-zinc-700 rounded animate-pulse" />
+                              </div>
+                              <div className="h-5 w-20 bg-zinc-700 rounded animate-pulse" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Columna 2: Configuración - Skeleton */}
+        <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2">
+          <div className="space-y-4">
+            <div>
+              <div className="h-6 w-32 bg-zinc-800 rounded animate-pulse mb-4" />
+              {/* Inputs skeleton */}
+              <div className="space-y-4">
+                <div>
+                  <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse mb-2" />
+                  <div className="h-10 w-full bg-zinc-800 rounded-lg animate-pulse" />
+                </div>
+                <div>
+                  <div className="h-4 w-28 bg-zinc-800 rounded animate-pulse mb-2" />
+                  <div className="h-20 w-full bg-zinc-800 rounded-lg animate-pulse" />
+                </div>
+              </div>
+            </div>
+
+            {/* Resumen financiero skeleton */}
+            <div>
+              <div className="h-6 w-40 bg-zinc-800 rounded animate-pulse mb-4" />
+              <div className="bg-zinc-800/50 rounded-lg p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="h-3 w-20 bg-zinc-700 rounded animate-pulse mb-2" />
+                    <div className="h-10 w-full bg-zinc-700 rounded animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="h-3 w-24 bg-zinc-700 rounded animate-pulse mb-2" />
+                    <div className="h-10 w-full bg-zinc-700 rounded animate-pulse" />
+                  </div>
+                </div>
+                <div>
+                  <div className="h-4 w-24 bg-zinc-700 rounded animate-pulse mb-2" />
+                  <div className="h-8 w-32 bg-zinc-700 rounded animate-pulse" />
+                </div>
+                <div className="border-t border-zinc-700 pt-3">
+                  <div className="h-4 w-32 bg-zinc-700 rounded animate-pulse mb-3" />
+                  <div className="h-4 w-24 bg-zinc-700 rounded animate-pulse" />
+                </div>
+                <div className="border-t border-zinc-700 pt-3">
+                  <div className="flex gap-2">
+                    <div className="h-10 flex-1 bg-zinc-700 rounded animate-pulse" />
+                    <div className="h-10 flex-1 bg-zinc-700 rounded animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
