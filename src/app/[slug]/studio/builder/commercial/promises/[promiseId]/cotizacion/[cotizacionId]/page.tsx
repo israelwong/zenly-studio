@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
-import { CotizacionForm } from '../../components/CotizacionForm';
+import { CotizacionForm } from '../../../components/CotizacionForm';
 import { archiveCotizacion, deleteCotizacion } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
 
@@ -13,10 +13,9 @@ export default function EditarCotizacionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studioSlug = params.slug as string;
-  const cotizacionId = params.id as string;
-  const promiseId = searchParams.get('promiseId');
+  const promiseId = params.promiseId as string;
+  const cotizacionId = params.cotizacionId as string;
   const contactId = searchParams.get('contactId');
-  const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isFormLoading, setIsFormLoading] = useState(true);
@@ -47,7 +46,7 @@ export default function EditarCotizacionPage() {
               <ZenButton
                 variant="primary"
                 size="md"
-                onClick={() => setShowAuthorizeModal(true)}
+                onClick={() => router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}/cotizacion/${cotizacionId}/autorizar`)}
                 disabled={isFormLoading || isActionLoading}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -90,28 +89,13 @@ export default function EditarCotizacionPage() {
           <CotizacionForm
             studioSlug={studioSlug}
             cotizacionId={cotizacionId}
-            promiseId={promiseId || null}
+            promiseId={promiseId}
             contactId={contactId || null}
-            redirectOnSuccess={promiseId ? `/${studioSlug}/studio/builder/commercial/promises/${promiseId}` : `/${studioSlug}/studio/builder/commercial/promises`}
+            redirectOnSuccess={`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`}
             onLoadingChange={setIsFormLoading}
           />
         </ZenCardContent>
       </ZenCard>
-
-      <ZenConfirmModal
-        isOpen={showAuthorizeModal}
-        onClose={() => setShowAuthorizeModal(false)}
-        onConfirm={() => {
-          setShowAuthorizeModal(false);
-          alert('pendiente por implementar');
-        }}
-        title="Autorizar Cotización"
-        description="¿Estás seguro de autorizar esta cotización?"
-        confirmText="Autorizar"
-        cancelText="Cancelar"
-        variant="default"
-        loading={isActionLoading}
-      />
 
       <ZenConfirmModal
         isOpen={showArchiveModal}
@@ -123,12 +107,7 @@ export default function EditarCotizacionPage() {
             if (result.success) {
               toast.success('Cotización archivada exitosamente');
               setShowArchiveModal(false);
-              // Redirigir después de archivar
-              if (promiseId) {
-                router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
-              } else {
-                router.push(`/${studioSlug}/studio/builder/commercial/promises`);
-              }
+              router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
             } else {
               toast.error(result.error || 'Error al archivar cotización');
             }
@@ -155,13 +134,8 @@ export default function EditarCotizacionPage() {
             const result = await deleteCotizacion(cotizacionId, studioSlug);
             if (result.success) {
               toast.success('Cotización eliminada exitosamente');
-              setShowDeleteModal(false);
-              // Redirigir después de eliminar
-              if (promiseId) {
-                router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
-              } else {
-                router.push(`/${studioSlug}/studio/builder/commercial/promises`);
-              }
+              setShowArchiveModal(false);
+              router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
             } else {
               toast.error(result.error || 'Error al eliminar cotización');
             }

@@ -134,7 +134,7 @@ export function PromiseQuotesPanel({
           setCotizaciones([]);
         }
       } catch (error) {
-        console.error('Error loading cotizaciones:', error);
+        console.error('[PromiseQuotesPanel] Error loading cotizaciones:', error);
         setCotizaciones([]);
       } finally {
         // Ocultar skeleton inmediatamente después de recibir respuesta
@@ -146,14 +146,15 @@ export function PromiseQuotesPanel({
   }, [promiseId, isSaved]);
 
   const handleCreateFromPackage = (packageId: string) => {
+    if (!promiseId) {
+      toast.error('Se requiere una promesa para crear una cotización');
+      return;
+    }
     // Navegar a la ruta de nueva cotización con el paqueteId como parámetro
-    const basePath = `/${studioSlug}/studio/builder/commercial/promises/cotizacion/nueva`;
+    const basePath = `/${studioSlug}/studio/builder/commercial/promises/${promiseId}/cotizacion/nueva`;
     const params = new URLSearchParams();
     if (packageId) {
       params.set('paqueteId', packageId);
-    }
-    if (promiseId) {
-      params.set('promiseId', promiseId);
     }
     if (contactId) {
       params.set('contactId', contactId);
@@ -163,12 +164,12 @@ export function PromiseQuotesPanel({
   };
 
   const handleCreateCustom = () => {
-    // Navegar a la ruta de nueva cotización sin paqueteId (personalizada)
-    const basePath = `/${studioSlug}/studio/builder/commercial/promises/cotizacion/nueva`;
-    const params = new URLSearchParams();
-    if (promiseId) {
-      params.set('promiseId', promiseId);
+    if (!promiseId) {
+      return;
     }
+    // Navegar a la ruta de nueva cotización sin paqueteId (personalizada)
+    const basePath = `/${studioSlug}/studio/builder/commercial/promises/${promiseId}/cotizacion/nueva`;
+    const params = new URLSearchParams();
     if (contactId) {
       params.set('contactId', contactId);
     }
@@ -288,12 +289,6 @@ export function PromiseQuotesPanel({
                 Guarda la promesa para agregar cotizaciones
               </p>
             </div>
-          ) : !eventTypeId ? (
-            <div className="flex flex-col items-center justify-center min-h-[200px]">
-              <p className="text-xs text-zinc-500 text-center px-4">
-                Selecciona un tipo de evento para crear cotizaciones
-              </p>
-            </div>
           ) : loadingCotizaciones ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, index) => (
@@ -319,12 +314,20 @@ export function PromiseQuotesPanel({
             </div>
           ) : cotizaciones.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[200px]">
-              <p className="text-xs text-zinc-500 text-center px-4">
-                No hay cotizaciones asociadas a esta promesa
-              </p>
-              <p className="text-xs text-zinc-400 text-center px-4 mt-2">
-                Usa el botón + para crear una nueva cotización
-              </p>
+              {!eventTypeId ? (
+                <p className="text-xs text-zinc-500 text-center px-4">
+                  Selecciona un tipo de evento para crear cotizaciones
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-zinc-500 text-center px-4">
+                    No hay cotizaciones asociadas a esta promesa
+                  </p>
+                  <p className="text-xs text-zinc-400 text-center px-4 mt-2">
+                    Usa el botón + para crear una nueva cotización
+                  </p>
+                </>
+              )}
             </div>
           ) : !isHydrated ? (
             <div className="space-y-2">

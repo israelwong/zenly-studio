@@ -4,14 +4,14 @@ import React from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
-import { CotizacionForm } from '../../components/CotizacionForm';
+import { CotizacionForm } from '../../../components/CotizacionForm';
 
 export default function NuevaCotizacionPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
   const studioSlug = params.slug as string;
-  const promiseId = searchParams.get('promiseId') || null;
+  const promiseId = params.promiseId as string;
   const packageId = searchParams.get('paqueteId') || null;
   const contactId = searchParams.get('contactId') || null;
 
@@ -42,7 +42,7 @@ export default function NuevaCotizacionPage() {
             promiseId={promiseId}
             packageId={packageId}
             contactId={contactId}
-            redirectOnSuccess={promiseId ? `/${studioSlug}/studio/builder/commercial/promises/${promiseId}` : undefined}
+            redirectOnSuccess={`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`}
           />
         </ZenCardContent>
       </ZenCard>

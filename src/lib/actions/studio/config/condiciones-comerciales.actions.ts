@@ -20,7 +20,7 @@ export async function obtenerCondicionesComerciales(studioSlug: string) {
 
         const condiciones = await prisma.studio_condiciones_comerciales.findMany({
             where: { studio_id: studio.id },
-            orderBy: { orden: 'asc' },
+            orderBy: { order: 'asc' },
         });
 
         return {
@@ -100,7 +100,7 @@ export async function crearCondicionComercial(studioSlug: string, data: Condicio
             porcentaje_descuento: validationResult.data.porcentaje_descuento ? parseFloat(validationResult.data.porcentaje_descuento) : null,
             porcentaje_anticipo: validationResult.data.porcentaje_anticipo ? parseFloat(validationResult.data.porcentaje_anticipo) : null,
             status: validationResult.data.status,
-            orden: validationResult.data.orden || 0,
+            order: validationResult.data.orden || 0,
             updated_at: new Date(),
         };
 
@@ -150,7 +150,7 @@ export async function actualizarCondicionComercial(studioSlug: string, condicion
             porcentaje_descuento: validationResult.data.porcentaje_descuento ? parseFloat(validationResult.data.porcentaje_descuento) : null,
             porcentaje_anticipo: validationResult.data.porcentaje_anticipo ? parseFloat(validationResult.data.porcentaje_anticipo) : null,
             status: validationResult.data.status,
-            orden: validationResult.data.orden || 0,
+            order: validationResult.data.orden || 0,
             updated_at: new Date(),
         };
 
@@ -221,7 +221,7 @@ export async function actualizarOrdenCondicionesComerciales(studioSlug: string, 
             condiciones.map(condicion =>
                 prisma.studio_condiciones_comerciales.update({
                     where: { id: condicion.id },
-                    data: { orden: condicion.orden, updated_at: new Date() },
+                    data: { order: condicion.orden, updated_at: new Date() },
                 })
             )
         );

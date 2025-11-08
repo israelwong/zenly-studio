@@ -63,7 +63,6 @@ export function PromiseQuotesPanelCard({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
-  const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState(cotizacion.name);
@@ -127,15 +126,16 @@ export function PromiseQuotesPanelCard({
     if (isEditingName) {
       return;
     }
-    const params = new URLSearchParams();
-    if (promiseId) {
-      params.set('promiseId', promiseId);
+    if (!promiseId) {
+      toast.error('No se puede editar la cotización sin una promesa asociada');
+      return;
     }
+    const params = new URLSearchParams();
     if (contactId) {
       params.set('contactId', contactId);
     }
     const queryString = params.toString();
-    router.push(`/${studioSlug}/studio/builder/commercial/promises/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+    router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
   };
 
   const handleDuplicate = async (e: React.MouseEvent) => {
@@ -271,18 +271,12 @@ export function PromiseQuotesPanelCard({
     setIsEditingName(false);
   };
 
-  const handleAuthorize = async () => {
-    setLoading(true);
-    try {
-      // TODO: Implementar lógica de autorización
-      toast.success('Cotización autorizada exitosamente');
-      setShowAuthorizeModal(false);
-      onUpdate?.();
-    } catch {
-      toast.error('Error al autorizar cotización');
-    } finally {
-      setLoading(false);
+  const handleAuthorize = () => {
+    if (!promiseId) {
+      toast.error('No se puede autorizar sin una promesa asociada');
+      return;
     }
+    router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/autorizar`);
   };
 
   return (
@@ -458,9 +452,9 @@ export function PromiseQuotesPanelCard({
                     <ZenDropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
-                        setShowAuthorizeModal(true);
+                        handleAuthorize();
                       }}
-                      disabled={loading || isDuplicating || isEditingName}
+                      disabled={loading || isDuplicating || isEditingName || !promiseId}
                       className="text-emerald-400 focus:text-emerald-300"
                     >
                       <CheckCircle className="h-4 w-4 mr-2" />
@@ -532,18 +526,6 @@ export function PromiseQuotesPanelCard({
         title="Desarchivar Cotización"
         description="¿Estás seguro de desarchivar esta cotización?"
         confirmText="Desarchivar"
-        cancelText="Cancelar"
-        variant="default"
-        loading={loading}
-      />
-
-      <ZenConfirmModal
-        isOpen={showAuthorizeModal}
-        onClose={() => setShowAuthorizeModal(false)}
-        onConfirm={handleAuthorize}
-        title="Autorizar Cotización"
-        description="¿Estás seguro de autorizar esta cotización?"
-        confirmText="Autorizar"
         cancelText="Cancelar"
         variant="default"
         loading={loading}

@@ -25,8 +25,29 @@ export function BreadcrumbHeader({ className, studioSlug }: BreadcrumbHeaderProp
         const segments = pathname.split('/').filter(Boolean);
         const breadcrumb: BreadcrumbItem[] = [];
 
+        // Función para detectar si un segmento es un ID (CUID típicamente ~25 caracteres alfanuméricos)
+        const isId = (segment: string): boolean => {
+            // CUIDs típicamente tienen 25 caracteres, alfanuméricos
+            // También detectamos UUIDs (36 caracteres con guiones)
+            const cuidPattern = /^[a-z0-9]{20,30}$/i; // 20-30 caracteres alfanuméricos
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            
+            return cuidPattern.test(segment) || uuidPattern.test(segment);
+        };
+
+        // Función para truncar IDs
+        const truncateId = (id: string, maxLength: number = 5): string => {
+            if (id.length <= maxLength) return id;
+            return `${id.substring(0, maxLength)}...`;
+        };
+
         // Función para formatear segmentos automáticamente
         const formatSegment = (segment: string): string => {
+            // Si es un ID, truncarlo
+            if (isId(segment)) {
+                return truncateId(segment);
+            }
+
             // Palabras que deben permanecer en minúsculas (excepto la primera)
             const lowercaseWords = ['de', 'y', 'en', 'con', 'para', 'por', 'del', 'la', 'el', 'los', 'las'];
 
