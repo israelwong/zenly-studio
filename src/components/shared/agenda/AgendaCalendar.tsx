@@ -232,6 +232,13 @@ export function AgendaCalendar({
     return events.map(agendaItemToEvent);
   }, [events]);
 
+  // Calcular estadísticas
+  const stats = useMemo(() => {
+    const promises = events.filter((item) => item.contexto === 'promise').length;
+    const eventos = events.filter((item) => item.contexto === 'evento').length;
+    return { promises, eventos };
+  }, [events]);
+
   // Configurar inicio de semana (lunes) y formatos en español
   const culture = 'es';
   const formats = {
@@ -283,8 +290,9 @@ export function AgendaCalendar({
   };
 
   return (
-    <div className={`h-[600px] bg-zinc-900 overflow-hidden ${className}`}>
-      <style jsx global>{`
+    <div className={`bg-zinc-900 overflow-hidden ${className}`}>
+      <div className="h-[600px]">
+        <style jsx global>{`
         .rbc-calendar {
           background: rgb(24 24 27);
           color: rgb(228 228 231);
@@ -512,56 +520,73 @@ export function AgendaCalendar({
         }
       `}</style>
 
-      <Calendar
-        localizer={localizer}
-        events={calendarEvents}
-        startAccessor="start"
-        endAccessor="end"
-        style={{ height: '100%' }}
-        defaultDate={defaultDate}
-        defaultView={defaultView}
-        view={view}
-        onView={onViewChange}
-        onSelectEvent={onSelectEvent ? (event) => onSelectEvent(event.resource) : undefined}
-        onSelectSlot={onSelectSlot}
-        selectable={!!onSelectSlot}
-        eventPropGetter={zenEventStyleGetter}
-        formats={formats}
-        culture={culture}
-        components={{
-          event: (props: { event: { resource?: AgendaItem; title?: string } }) => (
-            <AgendaEventComponent
-              event={props.event}
-              onViewPromise={onViewPromise}
-              onViewEvento={onViewEvento}
-            />
-          ),
-          toolbar: (props: {
-            view: string;
-            onView: (view: string) => void;
-            label: string;
-          }) => (
-            <CustomToolbar
-              view={props.view}
-              onView={props.onView}
-              label={props.label}
-            />
-          ),
-        }}
-        messages={{
-          next: 'Siguiente',
-          previous: 'Anterior',
-          today: 'Hoy',
-          month: 'Mes',
-          week: 'Semana',
-          day: 'Día',
-          agenda: 'Agenda',
-          date: 'Fecha',
-          time: 'Hora',
-          event: 'Evento',
-          noEventsInRange: 'No hay agendamientos en este rango',
-        }}
-      />
+        <Calendar
+          localizer={localizer}
+          events={calendarEvents}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: '100%' }}
+          defaultDate={defaultDate}
+          defaultView={defaultView}
+          view={view}
+          onView={onViewChange}
+          onSelectEvent={onSelectEvent ? (event) => onSelectEvent(event.resource) : undefined}
+          onSelectSlot={onSelectSlot}
+          selectable={!!onSelectSlot}
+          eventPropGetter={zenEventStyleGetter}
+          formats={formats}
+          culture={culture}
+          components={{
+            event: (props: { event: { resource?: AgendaItem; title?: string } }) => (
+              <AgendaEventComponent
+                event={props.event}
+                onViewPromise={onViewPromise}
+                onViewEvento={onViewEvento}
+              />
+            ),
+            toolbar: (props: {
+              view: string;
+              onView: (view: string) => void;
+              label: string;
+            }) => (
+              <CustomToolbar
+                view={props.view}
+                onView={props.onView}
+                label={props.label}
+              />
+            ),
+          }}
+          messages={{
+            next: 'Siguiente',
+            previous: 'Anterior',
+            today: 'Hoy',
+            month: 'Mes',
+            week: 'Semana',
+            day: 'Día',
+            agenda: 'Agenda',
+            date: 'Fecha',
+            time: 'Hora',
+            event: 'Evento',
+            noEventsInRange: 'No hay agendamientos en este rango',
+          }}
+        />
+      </div>
+
+      {/* Footer con estadísticas */}
+      <div className="border-t border-zinc-800 px-4 py-3 flex items-center justify-center gap-6 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+          <span className="text-zinc-300">
+            <span className="font-semibold text-white">{stats.promises}</span> promesa{stats.promises !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
+          <span className="text-zinc-300">
+            <span className="font-semibold text-white">{stats.eventos}</span> evento{stats.eventos !== 1 ? 's' : ''}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
