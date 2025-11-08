@@ -590,8 +590,8 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
     return `${selectedDates.length} fechas seleccionadas`;
   };
 
-  // Solo mostrar skeleton si no hay initialData (nueva promesa)
-  // Si hay initialData, la página ya maneja el loading state
+  // Mostrar skeleton completo solo si no hay initialData (nueva promesa)
+  // Si hay initialData, mostramos el formulario pero con skeletons en los selects
   if (isInitialLoading && !initialData) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -697,42 +697,48 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
                   <label className="text-sm font-medium text-zinc-300 block mb-2">
                     Canal de Adquisición <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={formData.acquisition_channel_id || 'none'}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setFormData((prev) => ({
-                        ...prev,
-                        acquisition_channel_id: value === 'none' ? '' : value,
-                      }));
-                      if (errors.acquisition_channel_id) {
-                        setErrors((prev) => ({ ...prev, acquisition_channel_id: '' }));
-                      }
-                      const redesChannelId = getRedesSocialesChannelId();
-                      const referidosChannelId = getReferidosChannelId();
-                      if (value !== redesChannelId) {
-                        setFormData((prev) => ({ ...prev, social_network_id: undefined }));
-                      }
-                      if (value !== referidosChannelId) {
-                        setFormData((prev) => ({ ...prev, referrer_contact_id: undefined, referrer_name: undefined }));
-                        setReferrerInputValue('');
-                        setShowReferrerSuggestions(false);
-                      }
-                    }}
-                    required
-                    disabled={acquisitionChannels.length === 0}
-                    className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
-                      ? 'border-red-500 focus:ring-red-500'
-                      : 'border-zinc-700 hover:border-zinc-600'
-                      }`}
-                  >
-                    <option value="none">Seleccionar canal</option>
-                    {acquisitionChannels.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
+                  {isInitialLoading && acquisitionChannels.length === 0 ? (
+                    <div className="h-10 w-full bg-zinc-800 rounded-lg animate-pulse" />
+                  ) : (
+                    <select
+                      value={formData.acquisition_channel_id || 'none'}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          acquisition_channel_id: value === 'none' ? '' : value,
+                        }));
+                        if (errors.acquisition_channel_id) {
+                          setErrors((prev) => ({ ...prev, acquisition_channel_id: '' }));
+                        }
+                        const redesChannelId = getRedesSocialesChannelId();
+                        const referidosChannelId = getReferidosChannelId();
+                        if (value !== redesChannelId) {
+                          setFormData((prev) => ({ ...prev, social_network_id: undefined }));
+                        }
+                        if (value !== referidosChannelId) {
+                          setFormData((prev) => ({ ...prev, referrer_contact_id: undefined, referrer_name: undefined }));
+                          setReferrerInputValue('');
+                          setShowReferrerSuggestions(false);
+                        }
+                      }}
+                      required
+                      disabled={acquisitionChannels.length === 0}
+                      className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-zinc-700 hover:border-zinc-600'
+                        }`}
+                    >
+                      <option value="none">
+                        {acquisitionChannels.length === 0 ? 'Cargando canales...' : 'Seleccionar canal'}
                       </option>
-                    ))}
-                  </select>
+                      {acquisitionChannels.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {errors.acquisition_channel_id && (
                     <p className="mt-1 text-xs text-red-500">{errors.acquisition_channel_id}</p>
                   )}
@@ -744,23 +750,30 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
                     <label className="text-sm font-medium text-zinc-300 block mb-2">
                       Red Social
                     </label>
-                    <select
-                      value={formData.social_network_id || 'none'}
-                      onChange={(e) => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          social_network_id: e.target.value === 'none' ? undefined : e.target.value,
-                        }));
-                      }}
-                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent hover:border-zinc-600 transition-colors"
-                    >
-                      <option value="none">Seleccionar red social</option>
-                      {socialNetworks.map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {n.name}
+                    {isInitialLoading && socialNetworks.length === 0 ? (
+                      <div className="h-10 w-full bg-zinc-800 rounded-lg animate-pulse" />
+                    ) : (
+                      <select
+                        value={formData.social_network_id || 'none'}
+                        onChange={(e) => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            social_network_id: e.target.value === 'none' ? undefined : e.target.value,
+                          }));
+                        }}
+                        disabled={socialNetworks.length === 0}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent hover:border-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="none">
+                          {socialNetworks.length === 0 ? 'Cargando redes sociales...' : 'Seleccionar red social'}
                         </option>
-                      ))}
-                    </select>
+                        {socialNetworks.map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 )}
 
@@ -857,31 +870,37 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
                   <label className="text-sm font-medium text-zinc-300 block mb-2">
                     Tipo de Evento <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={formData.event_type_id || 'none'}
-                    onChange={(e) => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        event_type_id: e.target.value === 'none' ? '' : e.target.value,
-                      }));
-                      if (errors.event_type_id) {
-                        setErrors((prev) => ({ ...prev, event_type_id: '' }));
-                      }
-                    }}
-                    required
-                    className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors ${errors.event_type_id
-                      ? 'border-red-500 focus:ring-red-500'
-                      : 'border-zinc-700 hover:border-zinc-600'
-                      }`}
-                  >
-                    <option value="none">Seleccionar tipo de evento</option>
-                    {eventTypes.map((et) => (
-                      <option key={et.id} value={et.id}>
-                        {et.name}
+                  {isInitialLoading && eventTypes.length === 0 ? (
+                    <div className="h-10 w-full bg-zinc-800 rounded-lg animate-pulse" />
+                  ) : (
+                    <select
+                      value={formData.event_type_id || 'none'}
+                      onChange={(e) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          event_type_id: e.target.value === 'none' ? '' : e.target.value,
+                        }));
+                        if (errors.event_type_id) {
+                          setErrors((prev) => ({ ...prev, event_type_id: '' }));
+                        }
+                      }}
+                      required
+                      disabled={eventTypes.length === 0}
+                      className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.event_type_id
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-zinc-700 hover:border-zinc-600'
+                        }`}
+                    >
+                      <option value="none">
+                        {eventTypes.length === 0 ? 'Cargando tipos de evento...' : 'Seleccionar tipo de evento'}
                       </option>
-                    ))}
-                    <option value="otro">Otro</option>
-                  </select>
+                      {eventTypes.map((et) => (
+                        <option key={et.id} value={et.id}>
+                          {et.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {errors.event_type_id && (
                     <p className="mt-1 text-xs text-red-500">{errors.event_type_id}</p>
                   )}

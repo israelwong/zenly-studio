@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
-import { PromiseForm, type PromiseFormRef } from '../components/PromiseForm';
+import { PromiseView } from '../components/PromiseView';
+import { PromiseFormModal } from '../components/PromiseFormModal';
 import { PromiseQuickActions } from '../components/PromiseQuickActions';
 import { getPromiseById, archivePromise, unarchivePromise, deletePromise, getPipelineStages, movePromise } from '@/lib/actions/studio/builder/commercial/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -16,53 +17,40 @@ export default function EditarPromesaPage() {
   const router = useRouter();
   const studioSlug = params.slug as string;
   const promiseId = params.promiseId as string;
-  const formRef = useRef<PromiseFormRef>(null);
   const [loading, setLoading] = useState(true);
-  const [isFormLoading, setIsFormLoading] = useState(false);
-  const [contactData, setContactData] = useState<{
-    contactId: string;
-    contactName: string;
-    phone: string;
-    email: string | null;
-    promiseId: string;
-  } | null>(null);
   const [isArchived, setIsArchived] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isUnarchiving, setIsUnarchiving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
   const [currentPipelineStageId, setCurrentPipelineStageId] = useState<string | null>(null);
   const [isChangingStage, setIsChangingStage] = useState(false);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (formRef.current?.contactData) {
-        setContactData(formRef.current.contactData as {
-          contactId: string;
-          contactName: string;
-          phone: string;
-          email: string | null;
-          promiseId: string;
-        });
-      }
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, []);
-  const [initialData, setInitialData] = useState<{
+  const [promiseData, setPromiseData] = useState<{
     id: string;
     name: string;
     phone: string;
     email: string | null;
     event_type_id: string | null;
+    event_type_name: string | null;
     interested_dates: string[] | null;
-    acquisition_channel_id?: string;
-    social_network_id?: string;
-    referrer_contact_id?: string;
-    referrer_name?: string;
+    acquisition_channel_id?: string | null;
+    acquisition_channel_name?: string | null;
+    social_network_id?: string | null;
+    social_network_name?: string | null;
+    referrer_contact_id?: string | null;
+    referrer_name?: string | null;
+    referrer_contact_name?: string | null;
     promiseId?: string | null;
+  } | null>(null);
+  const [contactData, setContactData] = useState<{
+    contactId: string;
+    contactName: string;
+    phone: string;
+    email: string | null;
+    promiseId: string;
   } | null>(null);
 
   useEffect(() => {
@@ -73,17 +61,28 @@ export default function EditarPromesaPage() {
         const result = await getPromiseById(promiseId);
 
         if (result.success && result.data) {
-          setInitialData({
+          setPromiseData({
             id: result.data.contact_id,
             name: result.data.contact_name,
             phone: result.data.contact_phone,
             email: result.data.contact_email,
             event_type_id: result.data.event_type_id || null,
+            event_type_name: result.data.event_type_name || null,
             interested_dates: result.data.interested_dates,
-            acquisition_channel_id: result.data.acquisition_channel_id || undefined,
-            social_network_id: result.data.social_network_id || undefined,
-            referrer_contact_id: result.data.referrer_contact_id || undefined,
-            referrer_name: result.data.referrer_name || undefined,
+            acquisition_channel_id: result.data.acquisition_channel_id ?? null,
+            acquisition_channel_name: result.data.acquisition_channel_name ?? null,
+            social_network_id: result.data.social_network_id ?? null,
+            social_network_name: result.data.social_network_name ?? null,
+          referrer_contact_id: result.data.referrer_contact_id ?? null,
+          referrer_name: result.data.referrer_name ?? null,
+          referrer_contact_name: result.data.referrer_contact_name ?? null,
+          promiseId: result.data.promise_id,
+          });
+          setContactData({
+            contactId: result.data.contact_id,
+            contactName: result.data.contact_name,
+            phone: result.data.contact_phone,
+            email: result.data.contact_email,
             promiseId: result.data.promise_id,
           });
           // Verificar si está archivada y guardar pipeline stage id
@@ -283,7 +282,42 @@ export default function EditarPromesaPage() {
     );
   }
 
-  if (!initialData) {
+  const handleEditSuccess = async () => {
+    // Recargar datos después de editar
+    try {
+      const result = await getPromiseById(promiseId);
+      if (result.success && result.data) {
+        setPromiseData({
+          id: result.data.contact_id,
+          name: result.data.contact_name,
+          phone: result.data.contact_phone,
+          email: result.data.contact_email,
+          event_type_id: result.data.event_type_id || null,
+          event_type_name: result.data.event_type_name || null,
+          interested_dates: result.data.interested_dates,
+          acquisition_channel_id: result.data.acquisition_channel_id ?? null,
+          acquisition_channel_name: result.data.acquisition_channel_name ?? null,
+          social_network_id: result.data.social_network_id ?? null,
+          social_network_name: result.data.social_network_name ?? null,
+          referrer_contact_id: result.data.referrer_contact_id ?? null,
+          referrer_name: result.data.referrer_name ?? null,
+          referrer_contact_name: result.data.referrer_contact_name ?? null,
+          promiseId: result.data.promise_id,
+        });
+        setContactData({
+          contactId: result.data.contact_id,
+          contactName: result.data.contact_name,
+          phone: result.data.contact_phone,
+          email: result.data.contact_email,
+          promiseId: result.data.promise_id,
+        });
+      }
+    } catch (error) {
+      console.error('Error reloading promise:', error);
+    }
+  };
+
+  if (!promiseData) {
     return null;
   }
 
@@ -299,15 +333,15 @@ export default function EditarPromesaPage() {
               <ZenButton
                 variant="ghost"
                 size="sm"
-                onClick={() => formRef.current?.cancel()}
+                onClick={() => router.back()}
                 className="p-2"
               >
                 <ArrowLeft className="h-4 w-4" />
               </ZenButton>
               <div>
-                <ZenCardTitle>Editar Promesa</ZenCardTitle>
+                <ZenCardTitle>Promesa</ZenCardTitle>
                 <ZenCardDescription>
-                  Actualiza la información de la promesa
+                  Información de la promesa de evento
                 </ZenCardDescription>
               </div>
             </div>
@@ -363,6 +397,7 @@ export default function EditarPromesaPage() {
                   contactName={contactData.contactName}
                   phone={contactData.phone}
                   email={contactData.email}
+                  promiseId={promiseId}
                 />
               )}
               <ZenDropdownMenu>
@@ -410,14 +445,51 @@ export default function EditarPromesaPage() {
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          <PromiseForm
-            ref={formRef}
+          <PromiseView
             studioSlug={studioSlug}
-            initialData={initialData}
-            onLoadingChange={setIsFormLoading}
+            promiseId={promiseId}
+            contactId={promiseData.id}
+            data={{
+              name: promiseData.name,
+              phone: promiseData.phone,
+              email: promiseData.email,
+              event_type_id: promiseData.event_type_id,
+              event_type_name: promiseData.event_type_name || undefined,
+              interested_dates: promiseData.interested_dates,
+              acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
+              acquisition_channel_name: promiseData.acquisition_channel_name || undefined,
+              social_network_id: promiseData.social_network_id || undefined,
+              social_network_name: promiseData.social_network_name || undefined,
+              referrer_contact_id: promiseData.referrer_contact_id || undefined,
+              referrer_name: promiseData.referrer_name || undefined,
+              referrer_contact_name: promiseData.referrer_contact_name || undefined,
+            }}
+            onEdit={() => setShowEditModal(true)}
+            isSaved={true}
           />
         </ZenCardContent>
       </ZenCard>
+
+      {/* Modal de edición */}
+      <PromiseFormModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        studioSlug={studioSlug}
+        initialData={{
+          id: promiseData.id,
+          name: promiseData.name,
+          phone: promiseData.phone,
+          email: promiseData.email,
+          event_type_id: promiseData.event_type_id || undefined,
+          interested_dates: promiseData.interested_dates || undefined,
+          acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
+          social_network_id: promiseData.social_network_id || undefined,
+          referrer_contact_id: promiseData.referrer_contact_id || undefined,
+          referrer_name: promiseData.referrer_name || undefined,
+          referrer_contact_name: promiseData.referrer_contact_name || undefined,
+        }}
+        onSuccess={handleEditSuccess}
+      />
 
       {/* Modales de confirmación */}
       <ZenConfirmModal

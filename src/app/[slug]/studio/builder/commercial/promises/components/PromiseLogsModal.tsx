@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send } from 'lucide-react';
-import { ZenDialog } from '@/components/ui/zen';
-import { ZenInput, ZenButton } from '@/components/ui/zen';
+import { Send, Trash2 } from 'lucide-react';
+import { ZenDialog, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenInput } from '@/components/ui/zen';
 import { toast } from 'sonner';
-import { getPromiseLogs, createPromiseLog } from '@/lib/actions/studio/builder/commercial/promises';
+import { createPromiseLog, deletePromiseLog } from '@/lib/actions/studio/builder/commercial/promises';
 import { formatDateTime } from '@/lib/actions/utils/formatting';
+import { usePromiseLogs } from '@/hooks/usePromiseLogs';
 import type { PromiseLog } from '@/lib/actions/studio/builder/commercial/promises/promise-logs.actions';
 
 interface PromiseLogsModalProps {
@@ -15,7 +16,8 @@ interface PromiseLogsModalProps {
   studioSlug: string;
   promiseId: string | null;
   contactId?: string | null;
-  onLogAdded?: () => void;
+  onLogAdded?: (newLog?: PromiseLog) => void;
+  onLogDeleted?: (logId: string) => void;
 }
 
 export function PromiseLogsModal({
@@ -25,53 +27,35 @@ export function PromiseLogsModal({
   promiseId,
   contactId,
   onLogAdded,
+  onLogDeleted,
 }: PromiseLogsModalProps) {
-  const [logs, setLogs] = useState<PromiseLog[]>([]);
-  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { logsOldestFirst, loading, addLog, removeLog, refetch } = usePromiseLogs({
+    promiseId: isOpen && promiseId ? promiseId : null,
+    enabled: isOpen,
+  });
+
+  // Para el modal, usamos logsOldestFirst (más vieja a más nueva) para trazabilidad
+  const logs = logsOldestFirst;
+  const isInitialLoading = loading && logs.length === 0;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const loadLogs = async () => {
-    if (!promiseId) {
-      setIsInitialLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const result = await getPromiseLogs(promiseId);
-      if (result.success && result.data) {
-        setLogs(result.data);
-      } else {
-        toast.error(result.error || 'Error al cargar bitácora');
-      }
-    } catch (error) {
-      console.error('Error loading logs:', error);
-      toast.error('Error al cargar bitácora');
-    } finally {
-      setLoading(false);
-      setIsInitialLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (isOpen && promiseId) {
-      setIsInitialLoading(true);
-      loadLogs();
+    if (isOpen && logs.length > 0) {
+      // Pequeño delay para asegurar que el DOM esté actualizado
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     }
-  }, [isOpen, promiseId]);
-
-  useEffect(() => {
-    if (isOpen) {
-      scrollToBottom();
-    }
-  }, [logs, isOpen]);
+  }, [isOpen, logs.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,9 +73,11 @@ export function PromiseLogsModal({
       });
 
       if (result.success && result.data) {
-        setLogs((prev) => [result.data!, ...prev]);
+        // Actualización optimista: agregar inmediatamente
+        addLog(result.data);
         toast.success('Nota agregada');
-        onLogAdded?.();
+        // Notificar al componente padre para actualizar el preview
+        onLogAdded?.(result.data);
       } else {
         toast.error(result.error || 'Error al agregar nota');
         setMessage(messageToSend);
@@ -103,6 +89,32 @@ export function PromiseLogsModal({
     } finally {
       setSending(false);
     }
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    setDeletingLogId(logId);
+    try {
+      const result = await deletePromiseLog(studioSlug, logId);
+      if (result.success) {
+        // Actualización optimista: remover inmediatamente
+        removeLog(logId);
+        toast.success('Nota eliminada');
+        // Notificar al componente padre para actualizar el preview
+        onLogDeleted?.(logId);
+      } else {
+        toast.error(result.error || 'Error al eliminar nota');
+      }
+    } catch (error) {
+      console.error('Error deleting log:', error);
+      toast.error('Error al eliminar nota');
+    } finally {
+      setDeletingLogId(null);
+      setShowDeleteModal(false);
+    }
+  };
+
+  const isUserNote = (log: PromiseLog): boolean => {
+    return log.log_type === 'note' && log.user_id !== null;
   };
 
   return (
@@ -133,18 +145,40 @@ export function PromiseLogsModal({
             </div>
           ) : (
             <>
-              {logs.map((log) => (
-                <div key={log.id} className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span>{log.user?.full_name || 'Sistema'}</span>
-                    <span>•</span>
-                    <span>{formatDateTime(log.created_at)}</span>
+              {logs.map((log) => {
+                const canDelete = isUserNote(log);
+                const authorLabel = canDelete ? 'Usuario' : 'Sistema';
+                
+                return (
+                  <div key={log.id} className="space-y-1 group">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        <span>{authorLabel}</span>
+                        <span>•</span>
+                        <span>{formatDateTime(log.created_at)}</span>
+                      </div>
+                      {canDelete && (
+                        <ZenButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingLogId(log.id);
+                            setShowDeleteModal(true);
+                          }}
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-red-400"
+                          disabled={deletingLogId === log.id}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </ZenButton>
+                      )}
+                    </div>
+                    <div className="bg-zinc-800/50 rounded-lg p-3 text-sm text-zinc-200">
+                      {log.content}
+                    </div>
                   </div>
-                  <div className="bg-zinc-800/50 rounded-lg p-3 text-sm text-zinc-200">
-                    {log.content}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={messagesEndRef} />
             </>
           )}
@@ -171,6 +205,25 @@ export function PromiseLogsModal({
           </div>
         </form>
       </div>
+
+      <ZenConfirmModal
+        isOpen={showDeleteModal && deletingLogId !== null}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setDeletingLogId(null);
+        }}
+        onConfirm={() => {
+          if (deletingLogId) {
+            handleDeleteLog(deletingLogId);
+          }
+        }}
+        title="Eliminar Nota"
+        description="¿Estás seguro de eliminar esta nota? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={deletingLogId !== null}
+      />
     </ZenDialog>
   );
 }

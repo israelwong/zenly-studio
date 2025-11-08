@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, MessageSquare } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { ZenInput, ZenButton } from '@/components/ui/zen';
 import { toast } from 'sonner';
 import { getPromiseLogs, createPromiseLog } from '@/lib/actions/studio/builder/commercial/promises';
@@ -57,6 +57,7 @@ export function PromiseLogsPanel({
 
   useEffect(() => {
     loadLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [promiseId]);
 
   useEffect(() => {
@@ -137,18 +138,23 @@ export function PromiseLogsPanel({
           </div>
         ) : (
           <>
-            {logs.map((log) => (
-              <div key={log.id} className="space-y-1">
-                <div className="flex items-center gap-2 text-xs text-zinc-500">
-                  <span>{log.user?.full_name || 'Sistema'}</span>
-                  <span>•</span>
-                  <span>{formatDateTime(log.created_at)}</span>
+            {logs.map((log) => {
+              const isUserNote = log.log_type === 'note' && log.user_id !== null;
+              const authorLabel = isUserNote ? 'Usuario' : 'Sistema';
+
+              return (
+                <div key={log.id} className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                    <span>{authorLabel}</span>
+                    <span>•</span>
+                    <span>{formatDateTime(log.created_at)}</span>
+                  </div>
+                  <div className="bg-zinc-800/50 rounded-lg p-3 text-sm text-zinc-200">
+                    {log.content}
+                  </div>
                 </div>
-                <div className="bg-zinc-800/50 rounded-lg p-3 text-sm text-zinc-200">
-                  {log.content}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={messagesEndRef} />
           </>
         )}

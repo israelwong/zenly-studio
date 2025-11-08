@@ -3,6 +3,12 @@
 import React from 'react';
 import { Share2, MessageCircle, Phone, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  logWhatsAppSent,
+  logCallMade,
+  logProfileShared,
+  logEmailSent,
+} from '@/lib/actions/studio/builder/commercial/promises';
 
 interface PromiseQuickActionsProps {
   studioSlug: string;
@@ -10,6 +16,7 @@ interface PromiseQuickActionsProps {
   contactName: string;
   phone: string;
   email?: string | null;
+  promiseId?: string | null;
 }
 
 export function PromiseQuickActions({
@@ -18,18 +25,43 @@ export function PromiseQuickActions({
   contactName,
   phone,
   email,
+  promiseId,
 }: PromiseQuickActionsProps) {
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
     const message = encodeURIComponent(`Hola ${contactName}, te contacto desde ZEN`);
-    window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
+    const whatsappUrl = `https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`;
+    
+    // Registrar log si hay promiseId
+    if (promiseId) {
+      logWhatsAppSent(studioSlug, promiseId, contactName, phone).catch((error) => {
+        console.error('Error registrando WhatsApp:', error);
+      });
+    }
+    
+    window.open(whatsappUrl, '_blank');
   };
 
-  const handleCall = () => {
+  const handleCall = async () => {
+    // Registrar log si hay promiseId
+    if (promiseId) {
+      logCallMade(studioSlug, promiseId, contactName, phone).catch((error) => {
+        console.error('Error registrando llamada:', error);
+      });
+    }
+    
     window.open(`tel:${phone}`, '_self');
   };
 
   const handleShareProfile = async () => {
     const profileUrl = `${window.location.origin}/${studioSlug}/cliente/profile/${contactId}`;
+    
+    // Registrar log si hay promiseId
+    if (promiseId) {
+      logProfileShared(studioSlug, promiseId, contactName, profileUrl).catch((error) => {
+        console.error('Error registrando perfil compartido:', error);
+      });
+    }
+    
     if (navigator.share) {
       try {
         await navigator.share({
@@ -46,7 +78,14 @@ export function PromiseQuickActions({
     }
   };
 
-  const handleEmail = () => {
+  const handleEmail = async () => {
+    // Registrar log si hay promiseId
+    if (promiseId && email) {
+      logEmailSent(studioSlug, promiseId, contactName, email).catch((error) => {
+        console.error('Error registrando email:', error);
+      });
+    }
+    
     window.open(`mailto:${email}`, '_self');
   };
 

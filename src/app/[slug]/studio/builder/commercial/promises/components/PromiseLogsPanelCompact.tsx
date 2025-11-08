@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { MessageSquare, ChevronRight } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
-import { getPromiseLogs } from '@/lib/actions/studio/builder/commercial/promises';
 import { formatDateTime } from '@/lib/actions/utils/formatting';
-import type { PromiseLog } from '@/lib/actions/studio/builder/commercial/promises/promise-logs.actions';
+import { usePromiseLogs } from '@/hooks/usePromiseLogs';
 import { PromiseLogsModal } from './PromiseLogsModal';
 
 interface PromiseLogsPanelCompactProps {
@@ -21,41 +20,19 @@ export function PromiseLogsPanelCompact({
   contactId,
   isSaved,
 }: PromiseLogsPanelCompactProps) {
-  const [logs, setLogs] = useState<PromiseLog[]>([]);
-  const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const loadLogs = async () => {
-    if (!promiseId) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const result = await getPromiseLogs(promiseId);
-      if (result.success && result.data) {
-        setLogs(result.data);
-      }
-    } catch (error) {
-      console.error('Error loading logs:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isSaved && promiseId) {
-      loadLogs();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promiseId, isSaved]);
+  const { logsRecentFirst, loading, addLog, removeLog, refetch } = usePromiseLogs({
+    promiseId: isSaved && promiseId ? promiseId : null,
+    enabled: isSaved,
+  });
 
   if (!isSaved || !promiseId) {
     return null;
   }
 
-  const lastTwoLogs = logs.slice(0, 2);
-  const hasMoreLogs = logs.length > 2;
+  // Mostrar las 2 notas más recientes (ya están ordenadas de más reciente a más vieja)
+  const lastTwoLogs = logsRecentFirst.slice(0, 2);
+  const hasMoreLogs = logsRecentFirst.length > 2;
 
   return (
     <>
@@ -65,7 +42,7 @@ export function PromiseLogsPanelCompact({
             <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
               Notas
             </ZenCardTitle>
-            {logs.length > 0 && (
+            {logsRecentFirst.length > 0 && (
               <ZenButton
                 variant="ghost"
                 size="sm"
@@ -104,20 +81,27 @@ export function PromiseLogsPanelCompact({
             </div>
           ) : (
             <div className="space-y-3">
-              {lastTwoLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="space-y-1 cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => setIsModalOpen(true)}
-                >
-                  <div className="text-xs text-zinc-500">
-                    <span>{formatDateTime(log.created_at)}</span>
+              {lastTwoLogs.map((log) => {
+                const isUserNote = log.log_type === 'note' && log.user_id !== null;
+                const authorLabel = isUserNote ? 'Usuario' : 'Sistema';
+                
+                return (
+                  <div
+                    key={log.id}
+                    className="space-y-1 cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => setIsModalOpen(true)}
+                  >
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <span>{authorLabel}</span>
+                      <span>•</span>
+                      <span>{formatDateTime(log.created_at)}</span>
+                    </div>
+                    <div className="bg-zinc-800/50 rounded-lg p-2.5 text-xs text-zinc-200 line-clamp-2">
+                      {log.content}
+                    </div>
                   </div>
-                  <div className="bg-zinc-800/50 rounded-lg p-2.5 text-xs text-zinc-200 line-clamp-2">
-                    {log.content}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {hasMoreLogs && (
                 <ZenButton
                   variant="ghost"
@@ -125,7 +109,7 @@ export function PromiseLogsPanelCompact({
                   onClick={() => setIsModalOpen(true)}
                   className="w-full text-xs text-zinc-400 hover:text-zinc-300"
                 >
-                  Ver {logs.length - 2} nota(s) más
+                  Ver {logsRecentFirst.length - 2} nota(s) más
                   <ChevronRight className="h-3.5 w-3.5 ml-1" />
                 </ZenButton>
               )}
@@ -140,8 +124,15 @@ export function PromiseLogsPanelCompact({
         studioSlug={studioSlug}
         promiseId={promiseId}
         contactId={contactId}
-        onLogAdded={() => {
-          loadLogs();
+        onLogAdded={(newLog) => {
+          if (newLog) {
+            addLog(newLog);
+          } else {
+            refetch();
+          }
+        }}
+        onLogDeleted={(logId) => {
+          removeLog(logId);
         }}
       />
     </>

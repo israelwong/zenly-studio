@@ -1,0 +1,369 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Edit, ExternalLink, Loader2 } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, SeparadorZen } from '@/components/ui/zen';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/shadcn/popover';
+import { formatDate } from '@/lib/actions/utils/formatting';
+import { getContactById } from '@/lib/actions/studio/builder/commercial/contacts/contacts.actions';
+import { PromiseLogsPanelCompact } from './PromiseLogsPanelCompact';
+import { PromiseQuotesPanel } from './PromiseQuotesPanel';
+import { PromiseTags } from './PromiseTags';
+import { PromiseAgendamiento } from './PromiseAgendamiento';
+
+interface PromiseViewProps {
+  studioSlug: string;
+  promiseId: string | null;
+  contactId: string | null;
+  data: {
+    name: string;
+    phone: string;
+    email: string | null;
+    event_type_id: string | null;
+    event_type_name?: string | null;
+    interested_dates: string[] | null;
+    acquisition_channel_id?: string | null;
+    acquisition_channel_name?: string | null;
+    social_network_id?: string | null;
+    social_network_name?: string | null;
+    referrer_contact_id?: string | null;
+    referrer_name?: string | null;
+    referrer_contact_name?: string | null;
+  };
+  onEdit: () => void;
+  isSaved: boolean;
+}
+
+function ReferrerHoverCard({
+  studioSlug,
+  referrerContactId,
+  referrerName,
+}: {
+  studioSlug: string;
+  referrerContactId: string | null | undefined;
+  referrerName: string | null | undefined;
+}) {
+  const router = useRouter();
+  const [contactData, setContactData] = useState<{
+    name: string;
+    phone: string;
+    email: string | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (open && referrerContactId && !contactData && !loading) {
+      setLoading(true);
+      getContactById(studioSlug, referrerContactId)
+        .then((result) => {
+          if (result.success && result.data) {
+            setContactData({
+              name: result.data.name,
+              phone: result.data.phone,
+              email: result.data.email,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('Error loading referrer contact:', error);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [open, referrerContactId, contactData, loading, studioSlug]);
+
+  const handleViewContact = () => {
+    if (referrerContactId) {
+      router.push(`/${studioSlug}/studio/builder/commercial/contacts?contactId=${referrerContactId}`);
+      setOpen(false);
+    }
+  };
+
+  const displayName = referrerName || contactData?.name || 'Contacto referido';
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-sm text-zinc-200 hover:text-emerald-400 transition-colors underline decoration-dotted underline-offset-2 cursor-pointer"
+        >
+          {displayName}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-80 bg-zinc-900 border-zinc-700 p-0"
+        align="start"
+        side="right"
+      >
+        {loading ? (
+          <div className="p-4 flex items-center justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+          </div>
+        ) : contactData || referrerName ? (
+          <div className="p-4 space-y-3">
+            <div>
+              <h4 className="text-sm font-semibold text-zinc-200 mb-3">
+                Información del Referido
+              </h4>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 block mb-1">
+                    Nombre
+                  </label>
+                  <p className="text-sm text-zinc-200">
+                    {contactData?.name || referrerName}
+                  </p>
+                </div>
+                {contactData?.phone && (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Teléfono
+                    </label>
+                    <p className="text-sm text-zinc-200">{contactData.phone}</p>
+                  </div>
+                )}
+                {contactData?.email && (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Email
+                    </label>
+                    <p className="text-sm text-zinc-200">{contactData.email}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            {referrerContactId && (
+              <div className="pt-3 border-t border-zinc-700">
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  onClick={handleViewContact}
+                  className="w-full"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  Ver Contacto
+                </ZenButton>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4 text-sm text-zinc-400">
+            No se pudo cargar la información del referido
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function PromiseView({
+  studioSlug,
+  promiseId,
+  contactId,
+  data,
+  onEdit,
+  isSaved,
+}: PromiseViewProps) {
+  return (
+    <div className="space-y-6">
+      {/* Layout de 3 columnas */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Columna 1: Información */}
+        <div className="lg:col-span-1">
+          <ZenCard>
+            <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
+                  Información
+                </ZenCardTitle>
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={onEdit}
+                  className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-300"
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                </ZenButton>
+              </div>
+            </ZenCardHeader>
+            <ZenCardContent className="p-4 space-y-4">
+              {/* Datos del Contacto */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wide">
+                  Datos del Contacto
+                </h3>
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 block mb-1">
+                    Nombre
+                  </label>
+                  <p className="text-sm text-zinc-200">{data.name}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 block mb-1">
+                    Teléfono
+                  </label>
+                  <p className="text-sm text-zinc-200">{data.phone}</p>
+                </div>
+                {data.email && (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Email
+                    </label>
+                    <p className="text-sm text-zinc-200">{data.email}</p>
+                  </div>
+                )}
+              </div>
+
+              <SeparadorZen spacing="md" variant="subtle" />
+
+              {/* Datos del Evento */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wide">
+                  Datos del Evento
+                </h3>
+                {data.event_type_name ? (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Tipo de Evento
+                    </label>
+                    <p className="text-sm text-zinc-200">{data.event_type_name}</p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Tipo de Evento
+                    </label>
+                    <p className="text-sm text-zinc-400 italic">No especificado</p>
+                  </div>
+                )}
+                {data.interested_dates && data.interested_dates.length > 0 ? (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Fecha(s) de Interés
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {data.interested_dates.map((date, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center px-2 py-1 rounded text-xs bg-emerald-600/20 text-emerald-300 border border-emerald-600/30"
+                        >
+                          {formatDate(new Date(date))}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Fecha(s) de Interés
+                    </label>
+                    <p className="text-sm text-zinc-400 italic">Sin fechas seleccionadas</p>
+                  </div>
+                )}
+              </div>
+
+              <SeparadorZen spacing="md" variant="subtle" />
+
+              {/* Canal de Adquisición */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wide">
+                  Canal de Adquisición
+                </h3>
+                {data.acquisition_channel_name ? (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Canal
+                    </label>
+                    <p className="text-sm text-zinc-200">{data.acquisition_channel_name}</p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Canal
+                    </label>
+                    <p className="text-sm text-zinc-400 italic">No especificado</p>
+                  </div>
+                )}
+                {data.social_network_name && (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Red Social
+                    </label>
+                    <p className="text-sm text-zinc-200">{data.social_network_name}</p>
+                  </div>
+                )}
+                {(data.referrer_name || data.referrer_contact_id) && (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Referido por
+                    </label>
+                    <div>
+                      <ReferrerHoverCard
+                        studioSlug={studioSlug}
+                        referrerContactId={data.referrer_contact_id}
+                        referrerName={data.referrer_name || data.referrer_contact_name || undefined}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ZenCardContent>
+          </ZenCard>
+        </div>
+
+        {/* Columna 2: Cotizaciones y Etiquetas */}
+        <div className="lg:col-span-1 space-y-6">
+          <PromiseQuotesPanel
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+            eventTypeId={data.event_type_id || null}
+            isSaved={isSaved}
+            contactId={contactId}
+          />
+
+          {/* Etiquetas (solo si está guardado) */}
+          {isSaved && promiseId && (
+            <div>
+              <PromiseTags
+                studioSlug={studioSlug}
+                promiseId={promiseId}
+                isSaved={isSaved}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Columna 3: Agendamiento y Notas */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Agendamiento (solo si está guardado) */}
+          {isSaved && promiseId && (
+            <div>
+              <PromiseAgendamiento
+                studioSlug={studioSlug}
+                promiseId={promiseId}
+                isSaved={isSaved}
+              />
+            </div>
+          )}
+
+          {/* Bitácora */}
+          {isSaved && promiseId && (
+            <div>
+              <PromiseLogsPanelCompact
+                studioSlug={studioSlug}
+                promiseId={promiseId}
+                contactId={contactId}
+                isSaved={isSaved}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+

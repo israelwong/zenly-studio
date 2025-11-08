@@ -18,9 +18,20 @@ export {
 export {
   getPromiseLogs,
   createPromiseLog,
+  deletePromiseLog,
   getPromiseIdByContactId,
   getPromiseById,
+  logPromiseAction,
 } from './promise-logs.actions';
+
+export type { PromiseLogAction } from './promise-logs.actions';
+
+export {
+  logWhatsAppSent,
+  logCallMade,
+  logProfileShared,
+  logEmailSent,
+} from './promise-quick-actions.actions';
 
 export {
   getEventTypes,

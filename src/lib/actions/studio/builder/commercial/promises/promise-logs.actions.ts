@@ -13,6 +13,70 @@ const createPromiseLogSchema = z.object({
 
 export type CreatePromiseLogData = z.infer<typeof createPromiseLogSchema>;
 
+/**
+ * Tipos de acciones que pueden generar logs automáticos
+ */
+export type PromiseLogAction =
+  | 'stage_change'
+  | 'whatsapp_sent'
+  | 'call_made'
+  | 'profile_shared'
+  | 'archived'
+  | 'unarchived'
+  | 'email_sent'
+  | 'quotation_created'
+  | 'quotation_updated'
+  | 'contact_updated';
+
+/**
+ * Diccionario de acciones con sus descripciones
+ */
+const LOG_ACTIONS: Record<
+  PromiseLogAction,
+  (metadata?: Record<string, unknown>) => string
+> = {
+  stage_change: (meta) => {
+    const from = (meta?.from as string) || 'desconocida';
+    const to = (meta?.to as string) || 'desconocida';
+    return `Cambio de etapa: ${from} → ${to}`;
+  },
+  whatsapp_sent: (meta) => {
+    const contactName = (meta?.contactName as string) || 'contacto';
+    return `WhatsApp enviado a ${contactName}`;
+  },
+  call_made: (meta) => {
+    const contactName = (meta?.contactName as string) || 'contacto';
+    return `Llamada realizada a ${contactName}`;
+  },
+  profile_shared: (meta) => {
+    const contactName = (meta?.contactName as string) || 'contacto';
+    return `Perfil compartido: ${contactName}`;
+  },
+  archived: () => 'Promesa archivada',
+  unarchived: () => 'Promesa desarchivada',
+  email_sent: (meta) => {
+    const contactName = (meta?.contactName as string) || 'contacto';
+    return `Email enviado a ${contactName}`;
+  },
+  quotation_created: (meta) => {
+    const quotationName = (meta?.quotationName as string) || 'cotización';
+    const price = meta?.price as number;
+    const priceFormatted = price ? `$${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '';
+    return `Cotización creada: ${quotationName}${priceFormatted ? ` (${priceFormatted})` : ''}`;
+  },
+  quotation_updated: (meta) => {
+    const quotationName = (meta?.quotationName as string) || 'cotización';
+    return `Cotización actualizada: ${quotationName}`;
+  },
+  contact_updated: (meta) => {
+    const changes = meta?.changes as string[] || [];
+    if (changes.length === 0) {
+      return 'Datos de contacto actualizados';
+    }
+    return `Datos de contacto actualizados: ${changes.join(', ')}`;
+  },
+};
+
 export interface PromiseLog {
   id: string;
   promise_id: string;
@@ -81,11 +145,15 @@ export async function getPromiseById(
   contact_phone: string;
   contact_email: string | null;
   event_type_id: string | null;
+  event_type_name: string | null;
   interested_dates: string[] | null;
   acquisition_channel_id: string | null;
+  acquisition_channel_name: string | null;
   social_network_id: string | null;
+  social_network_name: string | null;
   referrer_contact_id: string | null;
   referrer_name: string | null;
+  referrer_contact_name: string | null;
   pipeline_stage_slug: string | null;
   pipeline_stage_id: string | null;
 }>> {
@@ -103,6 +171,28 @@ export async function getPromiseById(
             social_network_id: true,
             referrer_contact_id: true,
             referrer_name: true,
+            acquisition_channel: {
+              select: {
+                name: true,
+              },
+            },
+            social_network: {
+              select: {
+                name: true,
+              },
+            },
+            referrer_contact: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        event_type: {
+          select: {
+            id: true,
+            name: true,
           },
         },
         pipeline_stage: {
@@ -127,13 +217,17 @@ export async function getPromiseById(
         contact_phone: promise.contact.phone,
         contact_email: promise.contact.email,
         event_type_id: promise.event_type_id,
+        event_type_name: promise.event_type?.name || null,
         interested_dates: promise.tentative_dates
           ? (promise.tentative_dates as string[])
           : null,
         acquisition_channel_id: promise.contact.acquisition_channel_id,
+        acquisition_channel_name: promise.contact.acquisition_channel?.name || null,
         social_network_id: promise.contact.social_network_id,
+        social_network_name: promise.contact.social_network?.name || null,
         referrer_contact_id: promise.contact.referrer_contact_id,
         referrer_name: promise.contact.referrer_name,
+        referrer_contact_name: promise.contact.referrer_contact?.name || null,
         pipeline_stage_slug: promise.pipeline_stage?.slug || null,
         pipeline_stage_id: promise.pipeline_stage_id || null,
       },
@@ -261,6 +355,140 @@ export async function createPromiseLog(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al crear log',
+    };
+  }
+}
+
+/**
+ * Función helper centralizada para registrar acciones automáticas
+ * Genera el contenido del log basado en el tipo de acción y metadata
+ */
+export async function logPromiseAction(
+  studioSlug: string,
+  promiseId: string,
+  action: PromiseLogAction,
+  source: 'user' | 'system' = 'system',
+  userId?: string | null,
+  metadata?: Record<string, unknown>
+): Promise<ActionResponse<PromiseLog>> {
+  try {
+    // Verificar que la promesa existe
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      select: { studio_id: true },
+    });
+
+    if (!promise) {
+      return { success: false, error: 'Promesa no encontrada' };
+    }
+
+    // Generar contenido basado en la acción
+    const contentGenerator = LOG_ACTIONS[action];
+    if (!contentGenerator) {
+      return { success: false, error: `Acción desconocida: ${action}` };
+    }
+
+    const content = contentGenerator(metadata);
+
+    // Determinar user_id según el source
+    const finalUserId = source === 'user' ? userId || null : null;
+
+    const log = await prisma.studio_promise_logs.create({
+      data: {
+        promise_id: promiseId,
+        user_id: finalUserId,
+        content,
+        log_type: action,
+        metadata: metadata || null,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            full_name: true,
+          },
+        },
+      },
+    });
+
+    const promiseLog: PromiseLog = {
+      id: log.id,
+      promise_id: log.promise_id,
+      user_id: log.user_id,
+      content: log.content,
+      log_type: log.log_type,
+      metadata: log.metadata as Record<string, unknown> | null,
+      created_at: log.created_at,
+      user: log.user
+        ? {
+          id: log.user.id,
+          full_name: log.user.full_name,
+        }
+        : null,
+    };
+
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
+
+    return {
+      success: true,
+      data: promiseLog,
+    };
+  } catch (error) {
+    console.error('[PROMISE_LOGS] Error registrando acción:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al registrar acción',
+    };
+  }
+}
+
+/**
+ * Eliminar log de promesa (solo notas de usuario)
+ */
+export async function deletePromiseLog(
+  studioSlug: string,
+  logId: string
+): Promise<ActionResponse<{ id: string }>> {
+  try {
+    // Verificar que el log existe y es una nota de usuario (eliminable)
+    const log = await prisma.studio_promise_logs.findUnique({
+      where: { id: logId },
+      select: {
+        id: true,
+        log_type: true,
+        user_id: true,
+        promise: {
+          select: {
+            studio_id: true,
+          },
+        },
+      },
+    });
+
+    if (!log) {
+      return { success: false, error: 'Log no encontrado' };
+    }
+
+    // Solo se pueden eliminar notas de usuario (log_type === 'note' y user_id !== null)
+    if (log.log_type !== 'note' || !log.user_id) {
+      return { success: false, error: 'No se pueden eliminar logs del sistema' };
+    }
+
+    await prisma.studio_promise_logs.delete({
+      where: { id: logId },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
+
+    return {
+      success: true,
+      data: { id: logId },
+    };
+  } catch (error) {
+    console.error('[PROMISE_LOGS] Error eliminando log:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al eliminar log',
     };
   }
 }

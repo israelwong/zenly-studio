@@ -23,6 +23,7 @@ import {
 import { ZenButton, ZenInput } from '@/components/ui/zen';
 import { PromiseCard } from './PromiseCard';
 import { PipelineConfigModal } from './PipelineConfigModal';
+import { PromiseFormModal } from './PromiseFormModal';
 import { movePromise } from '@/lib/actions/studio/builder/commercial/promises';
 import { toast } from 'sonner';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -53,6 +54,7 @@ export function PromisesKanban({
 }: PromisesKanbanProps) {
   const router = useRouter();
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isPromiseFormModalOpen, setIsPromiseFormModalOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localPromises, setLocalPromises] = useState<PromiseWithContact[]>(promises);
   const prevPromisesRef = useRef<PromiseWithContact[]>(promises);
@@ -293,7 +295,7 @@ export function PromisesKanban({
             <Settings className="h-4 w-4 mr-2" />
             Configurar
           </ZenButton>
-          <ZenButton onClick={() => router.push(`/${studioSlug}/studio/builder/commercial/promises/nueva`)} className="w-full sm:w-auto">
+          <ZenButton onClick={() => setIsPromiseFormModalOpen(true)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Registrar Promesa
           </ZenButton>
@@ -334,6 +336,11 @@ export function PromisesKanban({
         studioSlug={studioSlug}
         pipelineStages={pipelineStages}
         onSuccess={onPipelineStagesUpdated}
+      />
+      <PromiseFormModal
+        isOpen={isPromiseFormModalOpen}
+        onClose={() => setIsPromiseFormModalOpen(false)}
+        studioSlug={studioSlug}
       />
     </div>
   );

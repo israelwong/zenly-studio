@@ -120,15 +120,24 @@ export function PromiseQuotesPanel({
         setLoadingCotizaciones(false);
         return;
       }
+
+      // Solo mostrar skeleton si realmente vamos a cargar datos
       setLoadingCotizaciones(true);
+
       try {
         const result = await getCotizacionesByPromiseId(promiseId);
-        if (result.success && result.data) {
-          setCotizaciones(result.data);
+        // result.data siempre es un array (puede estar vacío)
+        // Si success es true, usar el array (vacío o con datos)
+        if (result.success) {
+          setCotizaciones(result.data || []);
+        } else {
+          setCotizaciones([]);
         }
       } catch (error) {
         console.error('Error loading cotizaciones:', error);
+        setCotizaciones([]);
       } finally {
+        // Ocultar skeleton inmediatamente después de recibir respuesta
         setLoadingCotizaciones(false);
       }
     };
@@ -265,7 +274,7 @@ export function PromiseQuotesPanel({
         </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4 flex flex-col">
-        <div 
+        <div
           className="relative overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-600 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500"
           style={{
             maxHeight: cotizaciones.length > 3 ? '450px' : 'none',

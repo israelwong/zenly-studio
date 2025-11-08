@@ -161,6 +161,25 @@ export async function createCotizacion(
       });
     }
 
+    // Registrar log si hay promise_id
+    if (validatedData.promise_id) {
+      const { logPromiseAction } = await import('./promise-logs.actions');
+      await logPromiseAction(
+        validatedData.studio_slug,
+        validatedData.promise_id,
+        'quotation_created',
+        'user', // Asumimos que es acción de usuario
+        null, // TODO: Obtener userId del contexto
+        {
+          quotationName: cotizacion.name,
+          price: cotizacion.price,
+        }
+      ).catch((error) => {
+        // No fallar si el log falla, solo registrar error
+        console.error('[COTIZACIONES] Error registrando log de cotización creada:', error);
+      });
+    }
+
     revalidatePath(`/${validatedData.studio_slug}/studio/builder/commercial/promises`);
 
     return {
