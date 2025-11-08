@@ -261,7 +261,7 @@ export function PromiseView({
                       isReferrer={false}
                     />
                   ) : (
-                    <p className="text-sm text-zinc-200">{data.name}</p>
+                  <p className="text-sm text-zinc-200">{data.name}</p>
                   )}
                 </div>
                 <div>

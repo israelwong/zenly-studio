@@ -16,6 +16,7 @@ export interface ZenDialogProps {
   saveLabel?: string;
   cancelLabel?: string;
   isLoading?: boolean;
+  saveVariant?: 'primary' | 'destructive' | 'outline' | 'ghost';
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '5xl' | '6xl' | '7xl';
   showCloseButton?: boolean;
 }
@@ -43,6 +44,7 @@ export function ZenDialog({
   saveLabel = 'Guardar',
   cancelLabel = 'Cancelar',
   isLoading = false,
+  saveVariant = 'primary',
   maxWidth = '2xl',
   showCloseButton = true
 }: ZenDialogProps) {
@@ -107,6 +109,7 @@ export function ZenDialog({
               <ZenButton
                 onClick={onSave}
                 loading={isLoading}
+                variant={saveVariant}
               >
                 {saveLabel}
               </ZenButton>

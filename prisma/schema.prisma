@@ -1397,7 +1397,7 @@ model studio_promise_logs {
   promise_id  String
   user_id     String?
   content     String
-  log_type    String            @default("note")
+  log_type    String            @default("system")
   metadata    Json?
   created_at  DateTime          @default(now())
   promise     studio_promises   @relation(fields: [promise_id], references: [id], onDelete: Cascade)
@@ -1512,14 +1512,15 @@ model studio_agenda {
   promise_id      String?
   contexto        String?
   metadata        Json?
-  google_maps_url String?
+  link_meeting_url String?
+  type_scheduling String?
   updated_at      DateTime        @updatedAt
-  user_id         String?
-  address         String?
-  concept         String?
-  date            DateTime?
-  description     String?
-  time            String?
+  user_id        String?
+  address        String?
+  concept        String?
+  date           DateTime?
+  description    String?
+  time           String?
   eventos         studio_eventos? @relation(fields: [evento_id], references: [id])
   promise         studio_promises? @relation(fields: [promise_id], references: [id])
   studio          studios         @relation(fields: [studio_id], references: [id])

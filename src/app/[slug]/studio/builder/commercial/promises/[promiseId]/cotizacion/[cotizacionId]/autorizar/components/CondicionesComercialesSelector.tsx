@@ -89,7 +89,7 @@ export function CondicionesComercialesSelector({
 
   return (
     <>
-      <ZenCard variant="outline">
+      <ZenCard variant="outlined">
         <ZenCardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

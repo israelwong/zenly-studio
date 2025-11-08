@@ -6,6 +6,7 @@ import { ArrowLeft, MoreVertical, Archive, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../components/CotizacionForm';
 import { archiveCotizacion, deleteCotizacion } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
+import { getPromiseById } from '@/lib/actions/studio/builder/commercial/promises/promise-logs.actions';
 import { toast } from 'sonner';
 
 export default function EditarCotizacionPage() {
@@ -20,6 +21,36 @@ export default function EditarCotizacionPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isFormLoading, setIsFormLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [isValidatingDate, setIsValidatingDate] = useState(false);
+
+  const handleAutorizar = async () => {
+    // Validar que exista al menos una fecha definida
+    try {
+      setIsValidatingDate(true);
+      const result = await getPromiseById(promiseId);
+
+      if (result.success && result.data) {
+        const hasDate = result.data.defined_date || 
+          (result.data.interested_dates && result.data.interested_dates.length > 0);
+
+        if (!hasDate) {
+          toast.error('Debe existir al menos una fecha definida para autorizar la cotización');
+          setIsValidatingDate(false);
+          return;
+        }
+
+        // Si hay fecha, redirigir
+        router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}/cotizacion/${cotizacionId}/autorizar`);
+      } else {
+        toast.error('Error al validar la promesa');
+      }
+    } catch (error) {
+      console.error('Error validating promise:', error);
+      toast.error('Error al validar la promesa');
+    } finally {
+      setIsValidatingDate(false);
+    }
+  };
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -46,8 +77,9 @@ export default function EditarCotizacionPage() {
               <ZenButton
                 variant="primary"
                 size="md"
-                onClick={() => router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}/cotizacion/${cotizacionId}/autorizar`)}
-                disabled={isFormLoading || isActionLoading}
+                onClick={handleAutorizar}
+                disabled={isFormLoading || isActionLoading || isValidatingDate}
+                loading={isValidatingDate}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Autorizar ahora

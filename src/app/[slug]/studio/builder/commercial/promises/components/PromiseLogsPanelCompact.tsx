@@ -49,7 +49,7 @@ export function PromiseLogsPanelCompact({
                 onClick={() => setIsModalOpen(true)}
                 className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-300"
               >
-                Ver todas
+                Gestionar
               </ZenButton>
             )}
           </div>
@@ -82,7 +82,7 @@ export function PromiseLogsPanelCompact({
           ) : (
             <div className="space-y-3">
               {lastTwoLogs.map((log) => {
-                const isUserNote = log.log_type === 'note' && log.user_id !== null;
+                const isUserNote = log.log_type === 'user_note';
                 const authorLabel = isUserNote ? 'Usuario' : 'Sistema';
                 
                 return (

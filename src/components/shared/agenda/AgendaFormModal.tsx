@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar } from 'lucide-react';
 import { ZenDialog } from '@/components/ui/zen';
 import { AgendaForm } from './AgendaForm';
 import { toast } from 'sonner';
@@ -40,7 +39,8 @@ export function AgendaFormModal({
     address?: string;
     concept?: string;
     description?: string;
-    google_maps_url?: string;
+    link_meeting_url?: string;
+    type_scheduling?: 'presencial' | 'virtual';
     agenda_tipo?: string;
   }) => {
     setLoading(true);
@@ -58,7 +58,8 @@ export function AgendaFormModal({
           address: data.address,
           concept: data.concept,
           description: data.description,
-          google_maps_url: data.google_maps_url,
+          link_meeting_url: data.link_meeting_url,
+          type_scheduling: data.type_scheduling,
           agenda_tipo: data.agenda_tipo,
         });
 
@@ -80,7 +81,8 @@ export function AgendaFormModal({
           address: data.address,
           concept: data.concept,
           description: data.description,
-          google_maps_url: data.google_maps_url,
+          link_meeting_url: data.link_meeting_url,
+          type_scheduling: data.type_scheduling,
           agenda_tipo: data.agenda_tipo,
         });
 
@@ -113,16 +115,6 @@ export function AgendaFormModal({
       description={description}
       maxWidth="md"
     >
-      <div className="flex items-center gap-2 mb-4">
-        <div className="p-2 bg-blue-600/20 rounded-lg">
-          <Calendar className="h-5 w-5 text-blue-400" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-white">{title}</h3>
-          <p className="text-sm text-zinc-400">{description}</p>
-        </div>
-      </div>
-
       <AgendaForm
         studioSlug={studioSlug}
         initialData={initialData || undefined}

@@ -32,6 +32,7 @@ export function PromiseLogsModal({
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -92,7 +93,7 @@ export function PromiseLogsModal({
   };
 
   const handleDeleteLog = async (logId: string) => {
-    setDeletingLogId(logId);
+    setIsDeleting(true);
     try {
       const result = await deletePromiseLog(studioSlug, logId);
       if (result.success) {
@@ -108,13 +109,14 @@ export function PromiseLogsModal({
       console.error('Error deleting log:', error);
       toast.error('Error al eliminar nota');
     } finally {
+      setIsDeleting(false);
       setDeletingLogId(null);
       setShowDeleteModal(false);
     }
   };
 
   const isUserNote = (log: PromiseLog): boolean => {
-    return log.log_type === 'note' && log.user_id !== null;
+    return log.log_type === 'user_note';
   };
 
   return (
@@ -123,7 +125,7 @@ export function PromiseLogsModal({
       onClose={onClose}
       title="Bitácora de Notas"
       description="Gestiona todas las notas de esta promesa"
-      maxWidth="2xl"
+      maxWidth="xl"
     >
       <div className="flex flex-col" style={{ height: '600px' }}>
         {/* Messages */}
@@ -148,7 +150,7 @@ export function PromiseLogsModal({
               {logs.map((log) => {
                 const canDelete = isUserNote(log);
                 const authorLabel = canDelete ? 'Usuario' : 'Sistema';
-                
+
                 return (
                   <div key={log.id} className="space-y-1 group">
                     <div className="flex items-center justify-between">
@@ -186,19 +188,21 @@ export function PromiseLogsModal({
 
         {/* Input */}
         <form onSubmit={handleSubmit} className="pt-4 border-t border-zinc-800 mt-auto">
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full">
             <ZenInput
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Escribe una nota..."
               disabled={sending || !promiseId}
-              className="flex-1"
+              size="sm"
+              className="flex-1 w-full h-8"
             />
             <ZenButton
               type="submit"
               disabled={!message.trim() || sending || !promiseId}
               loading={sending}
               size="sm"
+              className="flex-shrink-0 h-8"
             >
               <Send className="h-4 w-4" />
             </ZenButton>
@@ -209,11 +213,13 @@ export function PromiseLogsModal({
       <ZenConfirmModal
         isOpen={showDeleteModal && deletingLogId !== null}
         onClose={() => {
-          setShowDeleteModal(false);
-          setDeletingLogId(null);
+          if (!isDeleting) {
+            setShowDeleteModal(false);
+            setDeletingLogId(null);
+          }
         }}
         onConfirm={() => {
-          if (deletingLogId) {
+          if (deletingLogId && !isDeleting) {
             handleDeleteLog(deletingLogId);
           }
         }}
@@ -222,7 +228,7 @@ export function PromiseLogsModal({
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="destructive"
-        loading={deletingLogId !== null}
+        loading={isDeleting}
       />
     </ZenDialog>
   );

@@ -271,11 +271,35 @@ export function PromiseQuotesPanelCard({
     setIsEditingName(false);
   };
 
-  const handleAuthorize = () => {
+  const handleAuthorize = async () => {
     if (!promiseId) {
       toast.error('No se puede autorizar sin una promesa asociada');
       return;
     }
+
+    // Validar que exista al menos una fecha definida
+    try {
+      const { getPromiseById } = await import('@/lib/actions/studio/builder/commercial/promises/promise-logs.actions');
+      const result = await getPromiseById(promiseId);
+
+      if (result.success && result.data) {
+        const hasDate = result.data.defined_date || 
+          (result.data.interested_dates && result.data.interested_dates.length > 0);
+
+        if (!hasDate) {
+          toast.error('Debe existir al menos una fecha definida para autorizar la cotización');
+          return;
+        }
+      } else {
+        toast.error('Error al validar la promesa');
+        return;
+      }
+    } catch (error) {
+      console.error('Error validating promise:', error);
+      toast.error('Error al validar la promesa');
+      return;
+    }
+
     router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/autorizar`);
   };
 

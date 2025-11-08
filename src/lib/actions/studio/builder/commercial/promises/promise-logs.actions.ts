@@ -3,11 +3,12 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { createClient } from '@/lib/supabase/server';
 
 const createPromiseLogSchema = z.object({
   promise_id: z.string(),
   content: z.string().min(1, 'El contenido es requerido'),
-  log_type: z.string().default('note'),
+  log_type: z.string().default('user_note'),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -27,7 +28,10 @@ export type PromiseLogAction =
   | 'quotation_created'
   | 'quotation_updated'
   | 'quotation_deleted'
-  | 'contact_updated';
+  | 'contact_updated'
+  | 'agenda_created'
+  | 'agenda_updated'
+  | 'agenda_cancelled';
 
 /**
  * Diccionario de acciones con sus descripciones
@@ -79,6 +83,46 @@ const LOG_ACTIONS: Record<
       return 'Datos de contacto actualizados';
     }
     return `Datos de contacto actualizados: ${changes.join(', ')}`;
+  },
+  agenda_created: (meta) => {
+    const date = meta?.date as string;
+    const time = meta?.time as string;
+    const concept = meta?.concept as string;
+    const dateFormatted = date ? new Date(date).toLocaleDateString('es-MX', { 
+      weekday: 'long', 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric' 
+    }) : 'fecha no especificada';
+    const timeFormatted = time || '';
+    const conceptText = concept ? `: ${concept}` : '';
+    return `Cita agendada para ${dateFormatted}${timeFormatted ? ` a las ${timeFormatted}` : ''}${conceptText}`;
+  },
+  agenda_updated: (meta) => {
+    const date = meta?.date as string;
+    const time = meta?.time as string;
+    const concept = meta?.concept as string;
+    const dateFormatted = date ? new Date(date).toLocaleDateString('es-MX', { 
+      weekday: 'long', 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric' 
+    }) : 'fecha no especificada';
+    const timeFormatted = time || '';
+    const conceptText = concept ? `: ${concept}` : '';
+    return `Cita actualizada para ${dateFormatted}${timeFormatted ? ` a las ${timeFormatted}` : ''}${conceptText}`;
+  },
+  agenda_cancelled: (meta) => {
+    const date = meta?.date as string;
+    const concept = meta?.concept as string;
+    const dateFormatted = date ? new Date(date).toLocaleDateString('es-MX', { 
+      weekday: 'long', 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric' 
+    }) : 'fecha no especificada';
+    const conceptText = concept ? `: ${concept}` : '';
+    return `Cita cancelada para ${dateFormatted}${conceptText}`;
   },
 };
 
@@ -152,6 +196,7 @@ export async function getPromiseById(
   event_type_id: string | null;
   event_type_name: string | null;
   interested_dates: string[] | null;
+  defined_date: Date | null;
   acquisition_channel_id: string | null;
   acquisition_channel_name: string | null;
   social_network_id: string | null;
@@ -228,6 +273,7 @@ export async function getPromiseById(
         interested_dates: promise.tentative_dates
           ? (promise.tentative_dates as string[])
           : null,
+        defined_date: promise.defined_date,
         acquisition_channel_id: promise.contact.acquisition_channel_id,
         acquisition_channel_name: promise.contact.acquisition_channel?.name || null,
         social_network_id: promise.contact.social_network_id,
@@ -318,12 +364,57 @@ export async function createPromiseLog(
       return { success: false, error: 'Promesa no encontrada' };
     }
 
+    // Obtener usuario actual (studio_user)
+    let userId: string | null = null;
+    try {
+      const supabase = await createClient();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (!userError && user) {
+        // Buscar el usuario en la base de datos usando supabase_id
+        const dbUser = await prisma.users.findUnique({
+          where: { supabase_id: user.id },
+          select: { id: true },
+        });
+        
+        if (dbUser) {
+          // Buscar el platform_user_profile relacionado
+          const platformProfile = await prisma.platform_user_profiles.findUnique({
+            where: { user_id: dbUser.id },
+            select: { id: true },
+          });
+          
+          if (platformProfile) {
+            // Buscar el studio_user del studio actual que tenga este platform_user_id
+            const studioUser = await prisma.studio_users.findFirst({
+              where: {
+                studio_id: promise.studio_id,
+                platform_user_id: platformProfile.id,
+                is_active: true,
+              },
+              select: { id: true },
+            });
+            
+            if (studioUser) {
+              userId = studioUser.id;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[PROMISE_LOGS] Error obteniendo usuario:', error);
+      // Continuar sin user_id si hay error
+    }
+
+    // Si es una nota manual, usar 'user_note' para distinguir de notas del sistema
+    const finalLogType = validatedData.log_type === 'note' ? 'user_note' : validatedData.log_type;
+
     const log = await prisma.studio_promise_logs.create({
       data: {
         promise_id: validatedData.promise_id,
-        user_id: null, // TODO: Obtener del contexto de autenticación
+        user_id: userId,
         content: validatedData.content,
-        log_type: validatedData.log_type,
+        log_type: finalLogType,
         metadata: validatedData.metadata || null,
       },
       include: {
@@ -477,8 +568,8 @@ export async function deletePromiseLog(
       return { success: false, error: 'Log no encontrado' };
     }
 
-    // Solo se pueden eliminar notas de usuario (log_type === 'note' y user_id !== null)
-    if (log.log_type !== 'note' || !log.user_id) {
+    // Solo se pueden eliminar notas de usuario (log_type === 'user_note')
+    if (log.log_type !== 'user_note') {
       return { success: false, error: 'No se pueden eliminar logs del sistema' };
     }
 

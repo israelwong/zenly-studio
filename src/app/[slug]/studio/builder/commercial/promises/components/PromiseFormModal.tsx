@@ -1,16 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ZenDialog, ZenInput } from '@/components/ui/zen';
+import { ZenDialog, ZenInput, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { es } from 'date-fns/locale';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, AlertCircle, X } from 'lucide-react';
 import { createPromise, updatePromise, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/builder/commercial/promises';
 import { getContacts, getAcquisitionChannels, getSocialNetworks } from '@/lib/actions/studio/builder/commercial/contacts';
+import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 
 interface PromiseFormModalProps {
@@ -78,6 +79,8 @@ export function PromiseFormModal({
     const [filteredReferrerContacts, setFilteredReferrerContacts] = useState<Array<{ id: string; name: string; phone: string }>>([]);
     const [selectedContactIndex, setSelectedContactIndex] = useState(-1);
     const [selectedReferrerIndex, setSelectedReferrerIndex] = useState(-1);
+    const [conflictosPorFecha, setConflictosPorFecha] = useState<Map<string, AgendaItem[]>>(new Map());
+    const referrerSyncedRef = useRef(false);
 
     const loadEventTypes = async () => {
         try {
@@ -149,17 +152,7 @@ export function PromiseFormModal({
 
     useEffect(() => {
         if (isOpen) {
-            setIsInitialLoading(true);
-            Promise.all([
-                loadEventTypes(),
-                loadAcquisitionChannels(),
-                loadSocialNetworks(),
-                loadAllContacts(),
-            ]).finally(() => {
-                setIsInitialLoading(false);
-            });
-
-            // Sincronizar datos iniciales cuando se abre el modal
+            // Sincronizar datos iniciales inmediatamente si existen
             if (initialData) {
                 setFormData({
                     name: initialData.name || '',
@@ -182,8 +175,33 @@ export function PromiseFormModal({
                         : undefined
                 );
                 // Inicializar referrerInputValue: si hay referrer_name, usarlo; si no, se sincronizará cuando se carguen los contactos
-                setReferrerInputValue(initialData.referrer_name || '');
+                if (initialData.referrer_name) {
+                    setReferrerInputValue(initialData.referrer_name);
+                    referrerSyncedRef.current = true;
+                } else if (initialData.referrer_contact_id) {
+                    // Si hay referrer_contact_id pero no referrer_name, inicializar vacío y se sincronizará después
+                    setReferrerInputValue('');
+                    referrerSyncedRef.current = false;
+                } else {
+                    setReferrerInputValue('');
+                    referrerSyncedRef.current = true;
+                }
+            } else {
+                // Resetear al cerrar
+                referrerSyncedRef.current = false;
+                setReferrerInputValue('');
             }
+
+            // Cargar catálogos en segundo plano
+            setIsInitialLoading(true);
+            Promise.all([
+                loadEventTypes(),
+                loadAcquisitionChannels(),
+                loadSocialNetworks(),
+                loadAllContacts(),
+            ]).finally(() => {
+                setIsInitialLoading(false);
+            });
         } else {
             // Resetear formulario al cerrar solo si no es modo edición
             if (!isEditMode) {
@@ -203,6 +221,7 @@ export function PromiseFormModal({
                 setReferrerInputValue('');
             }
             setErrors({});
+            setIsInitialLoading(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, initialData, isEditMode]);
@@ -226,30 +245,73 @@ export function PromiseFormModal({
         }
     }, [selectedDates]);
 
+    // Verificar disponibilidad cuando cambian las fechas seleccionadas
+    useEffect(() => {
+        const verificarDisponibilidad = async () => {
+            if (selectedDates.length === 0) {
+                setConflictosPorFecha(new Map());
+                return;
+            }
+
+            const nuevosConflictos = new Map<string, AgendaItem[]>();
+
+            try {
+                await Promise.all(
+                    selectedDates.map(async (date) => {
+                        const dateKey = date.toISOString().split('T')[0];
+                        const result = await verificarDisponibilidadFecha(
+                            studioSlug,
+                            date,
+                            undefined,
+                            initialData?.id || undefined,
+                            undefined
+                        );
+
+                        if (result.success && result.data && result.data.length > 0) {
+                            nuevosConflictos.set(dateKey, result.data);
+                        }
+                    })
+                );
+
+                setConflictosPorFecha(nuevosConflictos);
+            } catch (error) {
+                console.error('Error verificando disponibilidad:', error);
+            }
+        };
+
+        verificarDisponibilidad();
+    }, [selectedDates, studioSlug, initialData?.id]);
+
     // Sincronizar referrerInputValue cuando hay referrer_contact_id pero no referrer_name
     useEffect(() => {
         // Solo sincronizar si:
-        // 1. Hay referrer_contact_id en formData
-        // 2. No hay referrer_name (o está vacío)
-        // 3. Los contactos ya se cargaron
+        // 1. El modal está abierto
+        // 2. Hay referrer_contact_id en formData
+        // 3. No hay referrer_name (o está vacío)
+        // 4. Los contactos ya se cargaron
+        // 5. Aún no se ha sincronizado (evitar parpadeos)
         if (
+            isOpen &&
             formData.referrer_contact_id &&
             !formData.referrer_name &&
-            allContacts.length > 0
+            allContacts.length > 0 &&
+            !referrerSyncedRef.current
         ) {
             const referrerContact = allContacts.find((c) => c.id === formData.referrer_contact_id);
             if (referrerContact) {
-                // Solo actualizar si el valor actual no coincide con el nombre del contacto
                 const expectedValue = `@${referrerContact.name}`;
+                // Solo actualizar si el valor actual está vacío
                 setReferrerInputValue((current) => {
-                    if (current !== expectedValue) {
+                    if (!current || current === '') {
+                        referrerSyncedRef.current = true;
                         return expectedValue;
                     }
                     return current;
                 });
             }
         }
-    }, [formData.referrer_contact_id, formData.referrer_name, allContacts]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, formData.referrer_contact_id, formData.referrer_name, allContacts.length]);
 
     const handleNameChange = (value: string) => {
         setNameInput(value);
@@ -442,14 +504,14 @@ export function PromiseFormModal({
             onClose={onClose}
             title={isEditMode ? 'Editar Promesa' : 'Nueva Promesa'}
             description={isEditMode ? 'Actualiza la información de la promesa' : 'Registra una nueva promesa de evento'}
-            maxWidth="2xl"
+            maxWidth="xl"
             onSave={handleSubmit}
             onCancel={onClose}
             saveLabel={isEditMode ? 'Actualizar' : 'Crear Promesa'}
             cancelLabel="Cancelar"
             isLoading={loading}
         >
-            {isInitialLoading ? (
+            {isInitialLoading && !initialData ? (
                 <div className="space-y-4">
                     {[1, 2, 3, 4, 5].map((i) => (
                         <div key={i} className="space-y-2">
@@ -544,12 +606,15 @@ export function PromiseFormModal({
                                 }
                             }}
                             required
-                            className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors ${errors.event_type_id
+                            disabled={isInitialLoading && eventTypes.length === 0}
+                            className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.event_type_id
                                 ? 'border-red-500 focus:ring-red-500'
                                 : 'border-zinc-700 hover:border-zinc-600'
                                 }`}
                         >
-                            <option value="none">Seleccionar tipo de evento</option>
+                            <option value="none">
+                                {isInitialLoading && eventTypes.length === 0 ? 'Cargando...' : 'Seleccionar tipo de evento'}
+                            </option>
                             {eventTypes.map((et) => (
                                 <option key={et.id} value={et.id}>
                                     {et.name}
@@ -589,13 +654,15 @@ export function PromiseFormModal({
                                 }
                             }}
                             required
-                            disabled={acquisitionChannels.length === 0}
+                            disabled={isInitialLoading && acquisitionChannels.length === 0}
                             className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
                                 ? 'border-red-500 focus:ring-red-500'
                                 : 'border-zinc-700 hover:border-zinc-600'
                                 }`}
                         >
-                            <option value="none">Seleccionar canal</option>
+                            <option value="none">
+                                {isInitialLoading && acquisitionChannels.length === 0 ? 'Cargando...' : 'Seleccionar canal'}
+                            </option>
                             {acquisitionChannels.map((c) => (
                                 <option key={c.id} value={c.id}>
                                     {c.name}
@@ -717,7 +784,7 @@ export function PromiseFormModal({
                     )}
 
                     {/* Fecha de Interés */}
-                    <div>
+                    <div className="space-y-2">
                         <label className="text-sm font-medium text-zinc-300 block mb-2">
                             Fecha(s) de Interés
                         </label>
@@ -733,7 +800,11 @@ export function PromiseFormModal({
                                     <CalendarIcon className="h-4 w-4 text-zinc-400" />
                                 </button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-700" align="start">
+                            <PopoverContent
+                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-[100]"
+                                align="start"
+                                sideOffset={4}
+                            >
                                 <Calendar
                                     mode="multiple"
                                     selected={selectedDates}
@@ -758,6 +829,122 @@ export function PromiseFormModal({
                                 />
                             </PopoverContent>
                         </Popover>
+                        {selectedDates.some(date => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const selectedDate = new Date(date);
+                            selectedDate.setHours(0, 0, 0, 0);
+                            return selectedDate < today;
+                        }) && (
+                                <ZenCard variant="outlined" className="bg-orange-900/20 border-orange-700/50 mt-2">
+                                    <ZenCardContent className="p-3">
+                                        <div className="flex items-start gap-2">
+                                            <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                                            <div className="space-y-1.5 flex-1">
+                                                <p className="text-xs font-medium text-orange-300">
+                                                    Has seleccionado una fecha que ya ha pasado:
+                                                </p>
+                                                <div className="space-y-1">
+                                                    {selectedDates
+                                                        .filter(date => {
+                                                            const today = new Date();
+                                                            today.setHours(0, 0, 0, 0);
+                                                            const selectedDate = new Date(date);
+                                                            selectedDate.setHours(0, 0, 0, 0);
+                                                            return selectedDate < today;
+                                                        })
+                                                        .map((date) => (
+                                                            <p key={date.toISOString()} className="text-xs text-orange-200/80">
+                                                                • {formatDate(date)}
+                                                            </p>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </ZenCardContent>
+                                </ZenCard>
+                            )}
+                        {selectedDates.length > 1 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                {selectedDates
+                                    .sort((a, b) => a.getTime() - b.getTime())
+                                    .map((date) => {
+                                        const dateKey = date.toISOString().split('T')[0];
+                                        const hasConflict = conflictosPorFecha.has(dateKey);
+                                        return (
+                                            <div
+                                                key={dateKey}
+                                                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border ${hasConflict
+                                                    ? 'bg-amber-900/20 text-amber-300 border-amber-700/50'
+                                                    : 'bg-emerald-900/20 text-emerald-300 border-emerald-700/50'
+                                                    }`}
+                                            >
+                                                <span>{formatDate(date)}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setSelectedDates(selectedDates.filter(d => d.toISOString().split('T')[0] !== dateKey));
+                                                    }}
+                                                    className="hover:bg-zinc-800/50 rounded p-0.5 transition-colors"
+                                                    title="Eliminar fecha"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        )}
+                        {Array.from(conflictosPorFecha.entries()).map(([dateKey, conflictos]) => {
+                            const fecha = selectedDates.find(d => d.toISOString().split('T')[0] === dateKey);
+                            if (!fecha) return null;
+
+                            return (
+                                <ZenCard key={dateKey} variant="outlined" className="bg-amber-900/20 border-amber-700/50 mt-2">
+                                    <ZenCardContent className="p-3">
+                                        <div className="flex items-start gap-2">
+                                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                            <div className="space-y-1.5 flex-1">
+                                                <p className="text-xs font-medium text-amber-300">
+                                                    {formatDate(fecha)} ya está programada:
+                                                </p>
+                                                {conflictos.map((conflicto) => (
+                                                    <div key={conflicto.id} className="text-xs text-amber-200/80 space-y-0.5">
+                                                        {conflicto.contexto === 'promise' ? (
+                                                            <>
+                                                                <p className="font-medium">
+                                                                    Promesa: {conflicto.contact_name || 'Sin nombre'}
+                                                                </p>
+                                                                {conflicto.time && (
+                                                                    <p className="text-amber-300/70">Hora: {conflicto.time}</p>
+                                                                )}
+                                                                {conflicto.concept && (
+                                                                    <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <p className="font-medium">
+                                                                    Evento: {conflicto.event_name || 'Sin nombre'}
+                                                                </p>
+                                                                {conflicto.time && (
+                                                                    <p className="text-amber-300/70">Hora: {conflicto.time}</p>
+                                                                )}
+                                                                {conflicto.concept && (
+                                                                    <p className="text-amber-300/70">Concepto: {conflicto.concept}</p>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </ZenCardContent>
+                                </ZenCard>
+                            );
+                        })}
                     </div>
                 </form>
             )}

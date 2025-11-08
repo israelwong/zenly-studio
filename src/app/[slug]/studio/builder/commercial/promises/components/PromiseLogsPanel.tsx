@@ -139,7 +139,7 @@ export function PromiseLogsPanel({
         ) : (
           <>
             {logs.map((log) => {
-              const isUserNote = log.log_type === 'note' && log.user_id !== null;
+              const isUserNote = log.log_type === 'user_note';
               const authorLabel = isUserNote ? 'Usuario' : 'Sistema';
 
               return (

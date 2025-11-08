@@ -305,6 +305,7 @@ export function ZenSidebarMenuButton({
         !isActive && "text-zinc-400",
         className
       )}
+      suppressHydrationWarning
       {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
     >
       {children}
@@ -366,6 +367,7 @@ export function ZenSidebarMenuSubButton({
         !isActive && "text-zinc-400",
         className
       )}
+      suppressHydrationWarning
       {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
     >
       {children}

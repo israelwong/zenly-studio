@@ -70,7 +70,7 @@ export function MetodoPagoSelector({
   };
 
   return (
-    <ZenCard variant="outline">
+    <ZenCard variant="outlined">
       <ZenCardHeader>
         <div className="flex items-center gap-3">
           <div className="p-2 bg-green-600/20 rounded-lg">

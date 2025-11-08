@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { logPromiseAction } from '@/lib/actions/studio/builder/commercial/promises/promise-logs.actions';
 
 // =============================================================================
 // SCHEMAS
@@ -18,7 +19,8 @@ const createAgendaSchema = z.object({
     address: z.string().optional(),
     concept: z.string().optional(),
     description: z.string().optional(),
-    google_maps_url: z.string().optional(),
+    link_meeting_url: z.string().optional(),
+    type_scheduling: z.enum(['presencial', 'virtual']).optional(),
     agenda_tipo: z.string().optional(),
     user_id: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
@@ -26,6 +28,7 @@ const createAgendaSchema = z.object({
 
 const updateAgendaSchema = createAgendaSchema.partial().extend({
     id: z.string(),
+    status: z.enum(['pendiente', 'confirmado', 'cancelado', 'completado']).optional(),
 });
 
 const getAgendaUnifiedSchema = z.object({
@@ -49,7 +52,8 @@ export interface AgendaItem {
     address?: string | null;
     concept?: string | null;
     description?: string | null;
-    google_maps_url?: string | null;
+    link_meeting_url?: string | null;
+    type_scheduling?: 'presencial' | 'virtual' | null;
     status: string;
     contexto: 'promise' | 'evento' | null;
     promise_id?: string | null;
@@ -168,7 +172,8 @@ export async function obtenerAgendaUnificada(
             address: agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            google_maps_url: agenda.google_maps_url,
+            link_meeting_url: agenda.link_meeting_url,
+            type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
             promise_id: agenda.promise_id,
@@ -255,7 +260,8 @@ export async function obtenerAgendamientoPorId(
             address: agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            google_maps_url: agenda.google_maps_url,
+            link_meeting_url: agenda.link_meeting_url,
+            type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
             promise_id: agenda.promise_id,
@@ -340,7 +346,8 @@ export async function obtenerAgendamientoPorPromise(
             address: agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            google_maps_url: agenda.google_maps_url,
+            link_meeting_url: agenda.link_meeting_url,
+            type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: 'promise',
             promise_id: agenda.promise_id,
@@ -429,7 +436,8 @@ export async function crearAgendamiento(
                 address: validatedData.address || null,
                 concept: validatedData.concept || null,
                 description: validatedData.description || null,
-                google_maps_url: validatedData.google_maps_url || null,
+                link_meeting_url: validatedData.link_meeting_url || null,
+                type_scheduling: validatedData.type_scheduling || null,
                 agenda_tipo: validatedData.agenda_tipo || null,
                 user_id: validatedData.user_id || null,
                 metadata: validatedData.metadata ? (validatedData.metadata as Prisma.InputJsonValue) : undefined,
@@ -464,7 +472,8 @@ export async function crearAgendamiento(
             address: agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            google_maps_url: agenda.google_maps_url,
+            link_meeting_url: agenda.link_meeting_url,
+            type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
             promise_id: agenda.promise_id,
@@ -487,6 +496,25 @@ export async function crearAgendamiento(
 
         revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
         revalidatePath(`/${studioSlug}/studio/builder/commercial/agendamiento`);
+
+        // Log si está asociado a una promesa
+        if (agenda.promise_id) {
+            await logPromiseAction(
+                studioSlug,
+                agenda.promise_id,
+                'agenda_created',
+                'user',
+                validatedData.user_id || null,
+                {
+                    date: agenda.date.toISOString(),
+                    time: agenda.time,
+                    concept: agenda.concept,
+                    type_scheduling: agenda.type_scheduling,
+                }
+            ).catch((error) => {
+                console.error('[AGENDA_UNIFIED] Error creando log:', error);
+            });
+        }
 
         return {
             success: true,
@@ -564,7 +592,8 @@ export async function actualizarAgendamiento(
         if (updateData.address !== undefined) updatePayload.address = updateData.address || null;
         if (updateData.concept !== undefined) updatePayload.concept = updateData.concept || null;
         if (updateData.description !== undefined) updatePayload.description = updateData.description || null;
-        if (updateData.google_maps_url !== undefined) updatePayload.google_maps_url = updateData.google_maps_url || null;
+        if (updateData.link_meeting_url !== undefined) updatePayload.link_meeting_url = updateData.link_meeting_url || null;
+        if (updateData.type_scheduling !== undefined) updatePayload.type_scheduling = updateData.type_scheduling || null;
         if (updateData.agenda_tipo !== undefined) updatePayload.agenda_tipo = updateData.agenda_tipo || null;
         if (updateData.user_id !== undefined) updatePayload.user_id = updateData.user_id || null;
         if (updateData.metadata !== undefined) {
@@ -573,6 +602,7 @@ export async function actualizarAgendamiento(
         if (updateData.contexto) updatePayload.contexto = updateData.contexto;
         if (updateData.promise_id !== undefined) updatePayload.promise_id = updateData.promise_id || null;
         if (updateData.evento_id !== undefined) updatePayload.evento_id = updateData.evento_id || null;
+        if (updateData.status !== undefined) updatePayload.status = updateData.status;
 
         const agenda = await prisma.studio_agenda.update({
             where: { id },
@@ -606,7 +636,8 @@ export async function actualizarAgendamiento(
             address: agenda.address,
             concept: agenda.concept,
             description: agenda.description,
-            google_maps_url: agenda.google_maps_url,
+            link_meeting_url: agenda.link_meeting_url,
+            type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
             status: agenda.status,
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
             promise_id: agenda.promise_id,
@@ -630,6 +661,28 @@ export async function actualizarAgendamiento(
         revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
         revalidatePath(`/${studioSlug}/studio/builder/commercial/agendamiento`);
 
+        // Log si está asociado a una promesa
+        if (agenda.promise_id) {
+            const wasCancelled = updateData.status === 'cancelado';
+            const action: 'agenda_updated' | 'agenda_cancelled' = wasCancelled ? 'agenda_cancelled' : 'agenda_updated';
+            
+            await logPromiseAction(
+                studioSlug,
+                agenda.promise_id,
+                action,
+                'user',
+                updateData.user_id || null,
+                {
+                    date: agenda.date.toISOString(),
+                    time: agenda.time,
+                    concept: agenda.concept,
+                    type_scheduling: agenda.type_scheduling,
+                }
+            ).catch((error) => {
+                console.error('[AGENDA_UNIFIED] Error creando log:', error);
+            });
+        }
+
         return {
             success: true,
             data: item,
@@ -639,6 +692,125 @@ export async function actualizarAgendamiento(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al actualizar agendamiento',
+        };
+    }
+}
+
+/**
+ * Verificar disponibilidad de fecha
+ */
+export async function verificarDisponibilidadFecha(
+    studioSlug: string,
+    fecha: Date,
+    excludeAgendaId?: string,
+    excludePromiseId?: string,
+    excludeEventoId?: string
+): Promise<ActionResponse<AgendaItem[]>> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+
+        if (!studio) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        // Normalizar fecha (solo día, sin hora)
+        const fechaInicio = new Date(fecha);
+        fechaInicio.setHours(0, 0, 0, 0);
+
+        const fechaFin = new Date(fecha);
+        fechaFin.setHours(23, 59, 59, 999);
+
+        const where: Prisma.studio_agendaWhereInput = {
+            studio_id: studio.id,
+            date: {
+                gte: fechaInicio,
+                lte: fechaFin,
+            },
+            status: {
+                not: 'cancelado',
+            },
+        };
+
+        // Excluir agendamiento actual si se está editando
+        if (excludeAgendaId) {
+            where.id = { not: excludeAgendaId };
+        }
+
+        // Excluir promise_id o evento_id si se está creando/actualizando
+        if (excludePromiseId) {
+            where.promise_id = { not: excludePromiseId };
+        }
+        if (excludeEventoId) {
+            where.evento_id = { not: excludeEventoId };
+        }
+
+        const agendas = await prisma.studio_agenda.findMany({
+            where,
+            include: {
+                promise: {
+                    include: {
+                        contact: {
+                            select: {
+                                name: true,
+                                phone: true,
+                                email: true,
+                                avatar_url: true,
+                            },
+                        },
+                    },
+                },
+                eventos: {
+                    select: {
+                        name: true,
+                        status: true,
+                    },
+                },
+            },
+            orderBy: {
+                date: 'asc',
+            },
+        });
+
+        const items: AgendaItem[] = agendas.map((agenda) => ({
+            id: agenda.id,
+            date: agenda.date || new Date(),
+            time: agenda.time,
+            address: agenda.address,
+            concept: agenda.concept,
+            description: agenda.description,
+            link_meeting_url: agenda.link_meeting_url,
+            type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
+            status: agenda.status,
+            contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
+            promise_id: agenda.promise_id,
+            evento_id: agenda.evento_id,
+            metadata: agenda.metadata as Record<string, unknown> | null,
+            created_at: agenda.created_at || null,
+            updated_at: agenda.updated_at || null,
+            contact_name: agenda.promise?.contact?.name || null,
+            contact_phone: agenda.promise?.contact?.phone || null,
+            // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
+            contact_email: agenda.promise?.contact?.email || null,
+            // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
+            contact_avatar_url: agenda.promise?.contact?.avatar_url || null,
+            event_name: agenda.eventos?.name || null,
+            promise_status: agenda.promise_id ? 'pending' : null,
+            // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
+            evento_status: agenda.eventos?.status || null,
+        }));
+
+        return {
+            success: true,
+            data: items,
+        };
+    } catch (error) {
+        console.error('[AGENDA_UNIFIED] Error verificando disponibilidad:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al verificar disponibilidad',
         };
     }
 }
@@ -665,6 +837,13 @@ export async function eliminarAgendamiento(
                 id: agendaId,
                 studio_id: studio.id,
             },
+            select: {
+                promise_id: true,
+                date: true,
+                time: true,
+                concept: true,
+                type_scheduling: true,
+            },
         });
 
         if (!existing) {
@@ -674,6 +853,25 @@ export async function eliminarAgendamiento(
         await prisma.studio_agenda.delete({
             where: { id: agendaId },
         });
+
+        // Log si está asociado a una promesa
+        if (existing.promise_id) {
+            await logPromiseAction(
+                studioSlug,
+                existing.promise_id,
+                'agenda_cancelled',
+                'user',
+                null,
+                {
+                    date: existing.date?.toISOString(),
+                    time: existing.time,
+                    concept: existing.concept,
+                    type_scheduling: existing.type_scheduling,
+                }
+            ).catch((error) => {
+                console.error('[AGENDA_UNIFIED] Error creando log:', error);
+            });
+        }
 
         revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
         revalidatePath(`/${studioSlug}/studio/builder/commercial/agendamiento`);
