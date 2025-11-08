@@ -10,6 +10,7 @@ import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/li
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/builder/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/builder/paquetes/paquetes.actions';
+import { createCotizacion, getCotizacionById } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -19,7 +20,9 @@ interface CotizacionFormProps {
   promiseId?: string | null;
   packageId?: string | null;
   cotizacionId?: string;
+  contactId?: string | null;
   redirectOnSuccess?: string;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 export function CotizacionForm({
@@ -27,7 +30,9 @@ export function CotizacionForm({
   promiseId,
   packageId,
   cotizacionId,
+  contactId,
   redirectOnSuccess,
+  onLoadingChange,
 }: CotizacionFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -51,10 +56,41 @@ export function CotizacionForm({
     const cargarDatos = async () => {
       try {
         setCargandoCatalogo(true);
-        const [catalogoResult, configResult] = await Promise.all([
+
+        // Si está en modo edición, cargar y validar la cotización en paralelo con catálogo
+        const [catalogoResult, configResult, cotizacionResult] = await Promise.all([
           obtenerCatalogo(studioSlug),
-          obtenerConfiguracionPrecios(studioSlug)
+          obtenerConfiguracionPrecios(studioSlug),
+          cotizacionId ? getCotizacionById(cotizacionId, studioSlug) : Promise.resolve({ success: true as const, data: null })
         ]);
+
+        // Validar cotización si está en modo edición
+        let cotizacionData: { name: string; description: string | null; price: number; promise_id: string | null; contact_id: string | null; items: Array<{ item_id: string; quantity: number }> } | null = null;
+
+        if (cotizacionId) {
+          if (!cotizacionResult.success || !cotizacionResult.data) {
+            toast.error('error' in cotizacionResult ? cotizacionResult.error : 'Cotización no encontrada');
+            if (promiseId) {
+              router.replace(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
+            } else {
+              router.replace(`/${studioSlug}/studio/builder/commercial/promises`);
+            }
+            return;
+          }
+
+          cotizacionData = cotizacionResult.data;
+
+          // Validar que tiene promiseId o contactId
+          if (!cotizacionData.promise_id && !contactId) {
+            toast.error('La cotización no tiene los datos necesarios para editar');
+            if (promiseId) {
+              router.replace(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
+            } else {
+              router.replace(`/${studioSlug}/studio/builder/commercial/promises`);
+            }
+            return;
+          }
+        }
 
         if (catalogoResult.success && catalogoResult.data) {
           setCatalogo(catalogoResult.data);
@@ -99,10 +135,21 @@ export function CotizacionForm({
               toast.error('Error al cargar el paquete');
               setItems(initialItems);
             }
-          } else if (cotizacionId) {
-            // TODO: Cargar datos de la cotización existente
-            // Por ahora, dejar vacío
-            setItems(initialItems);
+          } else if (cotizacionId && cotizacionData) {
+            // Cargar datos de la cotización existente (ya validada y cargada arriba)
+            setNombre(cotizacionData.name);
+            setDescripcion(cotizacionData.description || '');
+            setPrecioPersonalizado(cotizacionData.price);
+
+            // Cargar items de la cotización
+            const cotizacionItems: { [id: string]: number } = {};
+            cotizacionData.items.forEach((item: { item_id: string; quantity: number }) => {
+              cotizacionItems[item.item_id] = item.quantity;
+            });
+
+            // Combinar con initialItems para asegurar que todos los servicios estén inicializados
+            const combinedItems = { ...initialItems, ...cotizacionItems };
+            setItems(combinedItems);
           } else {
             // Nueva cotización personalizada - campos vacíos
             setItems(initialItems);
@@ -129,7 +176,14 @@ export function CotizacionForm({
     };
 
     cargarDatos();
-  }, [studioSlug, packageId, cotizacionId]);
+  }, [studioSlug, packageId, cotizacionId, promiseId, contactId, router]);
+
+  // Notificar cambios en el estado de carga
+  useEffect(() => {
+    if (onLoadingChange) {
+      onLoadingChange(cargandoCatalogo);
+    }
+  }, [cargandoCatalogo, onLoadingChange]);
 
   // Crear mapa de servicios para acceso rápido
   const configKey = useMemo(() => {
@@ -442,20 +496,56 @@ export function CotizacionForm({
       return;
     }
 
-    if (Object.keys(items).filter(key => items[key] > 0).length === 0) {
+    const itemsSeleccionados = Object.entries(items).filter(([, cantidad]) => cantidad > 0);
+    if (itemsSeleccionados.length === 0) {
       toast.error('Agrega al menos un servicio');
+      return;
+    }
+
+    // Validar que haya promiseId para crear la cotización
+    if (!promiseId && !isEditMode) {
+      toast.error('Se requiere una promise para crear la cotización');
       return;
     }
 
     setLoading(true);
     try {
-      // TODO: Implementar lógica de creación/actualización de cotización
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Calcular precio final (usar precio personalizado si existe, sino el calculado)
+      const precioFinal = precioPersonalizado === '' || precioPersonalizado === 0
+        ? calculoPrecio.total
+        : Number(precioPersonalizado);
 
-      toast.success(isEditMode ? 'Cotización actualizada exitosamente' : 'Cotización creada exitosamente');
+      if (isEditMode) {
+        // TODO: Implementar actualización de cotización
+        toast.error('La edición de cotizaciones aún no está implementada');
+        setLoading(false);
+        return;
+      }
+
+      // Crear cotización
+      const result = await createCotizacion({
+        studio_slug: studioSlug,
+        promise_id: promiseId || null,
+        contact_id: contactId || null,
+        nombre: nombre.trim(),
+        descripcion: descripcion.trim() || undefined,
+        precio: precioFinal,
+        items: Object.fromEntries(
+          itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
+        ),
+      });
+
+      if (!result.success) {
+        toast.error(result.error || 'Error al crear cotización');
+        return;
+      }
+
+      toast.success('Cotización creada exitosamente');
 
       if (redirectOnSuccess) {
         router.push(redirectOnSuccess);
+      } else if (promiseId) {
+        router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
       } else {
         router.back();
       }
@@ -858,6 +948,7 @@ export function CotizacionForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

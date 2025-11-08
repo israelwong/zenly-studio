@@ -1,16 +1,26 @@
 'use client';
 
-import React from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
+import React, { useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, MoreVertical, Archive, Trash2 } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { CotizacionForm } from '../../components/CotizacionForm';
+import { archiveCotizacion, deleteCotizacion } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
+import { toast } from 'sonner';
 
 export default function EditarCotizacionPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const studioSlug = params.slug as string;
   const cotizacionId = params.id as string;
+  const promiseId = searchParams.get('promiseId');
+  const contactId = searchParams.get('contactId');
+  const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -33,16 +43,141 @@ export default function EditarCotizacionPage() {
                 </ZenCardDescription>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <ZenButton
+                variant="primary"
+                size="md"
+                onClick={() => setShowAuthorizeModal(true)}
+                disabled={isFormLoading || isActionLoading}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Autorizar ahora
+              </ZenButton>
+              <ZenDropdownMenu>
+                <ZenDropdownMenuTrigger asChild>
+                  <ZenButton
+                    variant="ghost"
+                    size="md"
+                    disabled={isFormLoading || isActionLoading}
+                    className="h-9 w-9 p-0"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </ZenButton>
+                </ZenDropdownMenuTrigger>
+                <ZenDropdownMenuContent align="end">
+                  <ZenDropdownMenuItem
+                    onClick={() => setShowArchiveModal(true)}
+                    disabled={isActionLoading}
+                  >
+                    <Archive className="h-4 w-4 mr-2" />
+                    Archivar
+                  </ZenDropdownMenuItem>
+                  <ZenDropdownMenuSeparator />
+                  <ZenDropdownMenuItem
+                    onClick={() => setShowDeleteModal(true)}
+                    disabled={isActionLoading}
+                    className="text-red-400 focus:text-red-300"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Eliminar
+                  </ZenDropdownMenuItem>
+                </ZenDropdownMenuContent>
+              </ZenDropdownMenu>
+            </div>
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
           <CotizacionForm
             studioSlug={studioSlug}
             cotizacionId={cotizacionId}
-            redirectOnSuccess={`/${studioSlug}/studio/builder/commercial/promises`}
+            promiseId={promiseId || null}
+            contactId={contactId || null}
+            redirectOnSuccess={promiseId ? `/${studioSlug}/studio/builder/commercial/promises/${promiseId}` : `/${studioSlug}/studio/builder/commercial/promises`}
+            onLoadingChange={setIsFormLoading}
           />
         </ZenCardContent>
       </ZenCard>
+
+      <ZenConfirmModal
+        isOpen={showAuthorizeModal}
+        onClose={() => setShowAuthorizeModal(false)}
+        onConfirm={() => {
+          setShowAuthorizeModal(false);
+          alert('pendiente por implementar');
+        }}
+        title="Autorizar Cotización"
+        description="¿Estás seguro de autorizar esta cotización?"
+        confirmText="Autorizar"
+        cancelText="Cancelar"
+        variant="default"
+        loading={isActionLoading}
+      />
+
+      <ZenConfirmModal
+        isOpen={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onConfirm={async () => {
+          setIsActionLoading(true);
+          try {
+            const result = await archiveCotizacion(cotizacionId, studioSlug);
+            if (result.success) {
+              toast.success('Cotización archivada exitosamente');
+              setShowArchiveModal(false);
+              // Redirigir después de archivar
+              if (promiseId) {
+                router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
+              } else {
+                router.push(`/${studioSlug}/studio/builder/commercial/promises`);
+              }
+            } else {
+              toast.error(result.error || 'Error al archivar cotización');
+            }
+          } catch (error) {
+            toast.error('Error al archivar cotización');
+          } finally {
+            setIsActionLoading(false);
+          }
+        }}
+        title="Archivar Cotización"
+        description="¿Estás seguro de archivar esta cotización? Podrás desarchivarla más tarde."
+        confirmText="Archivar"
+        cancelText="Cancelar"
+        variant="default"
+        loading={isActionLoading}
+      />
+
+      <ZenConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={async () => {
+          setIsActionLoading(true);
+          try {
+            const result = await deleteCotizacion(cotizacionId, studioSlug);
+            if (result.success) {
+              toast.success('Cotización eliminada exitosamente');
+              setShowDeleteModal(false);
+              // Redirigir después de eliminar
+              if (promiseId) {
+                router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
+              } else {
+                router.push(`/${studioSlug}/studio/builder/commercial/promises`);
+              }
+            } else {
+              toast.error(result.error || 'Error al eliminar cotización');
+            }
+          } catch (error) {
+            toast.error('Error al eliminar cotización');
+          } finally {
+            setIsActionLoading(false);
+          }
+        }}
+        title="Eliminar Cotización"
+        description="¿Estás seguro de eliminar esta cotización? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={isActionLoading}
+      />
     </div>
   );
 }

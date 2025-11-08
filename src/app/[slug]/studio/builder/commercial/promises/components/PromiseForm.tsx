@@ -932,6 +932,7 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
             promiseId={promiseId}
             eventTypeId={formData.event_type_id || null}
             isSaved={isSaved}
+            contactId={currentContactId}
           />
         </div>
 

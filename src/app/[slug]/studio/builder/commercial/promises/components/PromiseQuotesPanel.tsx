@@ -15,14 +15,37 @@ import {
   ZenDropdownMenuItem,
   ZenDropdownMenuSeparator,
 } from '@/components/ui/zen';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { obtenerPaquetes } from '@/lib/actions/studio/builder/paquetes/paquetes.actions';
+import {
+  getCotizacionesByPromiseId,
+  reorderCotizaciones,
+} from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
+import { PromiseQuotesPanelCard } from './PromiseQuotesPanelCard';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
+import type { CotizacionListItem } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
+import { toast } from 'sonner';
 
 interface PromiseQuotesPanelProps {
   studioSlug: string;
   promiseId: string | null;
   eventTypeId: string | null;
   isSaved: boolean;
+  contactId?: string | null;
 }
 
 export function PromiseQuotesPanel({
@@ -30,11 +53,28 @@ export function PromiseQuotesPanel({
   promiseId,
   eventTypeId,
   isSaved,
+  contactId,
 }: PromiseQuotesPanelProps) {
   const router = useRouter();
   const [packages, setPackages] = useState<Array<{ id: string; name: string; precio: number | null }>>([]);
   const [loadingPackages, setLoadingPackages] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cotizaciones, setCotizaciones] = useState<CotizacionListItem[]>([]);
+  const [loadingCotizaciones, setLoadingCotizaciones] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
     const loadPackages = async () => {
@@ -73,6 +113,29 @@ export function PromiseQuotesPanel({
     loadPackages();
   }, [studioSlug, eventTypeId]);
 
+  useEffect(() => {
+    const loadCotizaciones = async () => {
+      if (!promiseId || !isSaved) {
+        setCotizaciones([]);
+        setLoadingCotizaciones(false);
+        return;
+      }
+      setLoadingCotizaciones(true);
+      try {
+        const result = await getCotizacionesByPromiseId(promiseId);
+        if (result.success && result.data) {
+          setCotizaciones(result.data);
+        }
+      } catch (error) {
+        console.error('Error loading cotizaciones:', error);
+      } finally {
+        setLoadingCotizaciones(false);
+      }
+    };
+
+    loadCotizaciones();
+  }, [promiseId, isSaved]);
+
   const handleCreateFromPackage = (packageId: string) => {
     // Navegar a la ruta de nueva cotización con el paqueteId como parámetro
     const basePath = `/${studioSlug}/studio/builder/commercial/promises/cotizacion/nueva`;
@@ -82,6 +145,9 @@ export function PromiseQuotesPanel({
     }
     if (promiseId) {
       params.set('promiseId', promiseId);
+    }
+    if (contactId) {
+      params.set('contactId', contactId);
     }
     const queryString = params.toString();
     router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
@@ -94,8 +160,52 @@ export function PromiseQuotesPanel({
     if (promiseId) {
       params.set('promiseId', promiseId);
     }
+    if (contactId) {
+      params.set('contactId', contactId);
+    }
     const queryString = params.toString();
     router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (isReordering || !over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = cotizaciones.findIndex((c) => c.id === active.id);
+    const newIndex = cotizaciones.findIndex((c) => c.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    const newCotizaciones = arrayMove(cotizaciones, oldIndex, newIndex);
+
+    try {
+      setIsReordering(true);
+
+      // Actualización optimista
+      setCotizaciones(newCotizaciones);
+
+      // Actualizar en el servidor
+      const cotizacionIds = newCotizaciones.map((c) => c.id);
+      const result = await reorderCotizaciones(studioSlug, cotizacionIds);
+
+      if (!result.success) {
+        toast.error(result.error || 'Error al reordenar cotizaciones');
+        // Revertir cambio local
+        setCotizaciones(cotizaciones);
+      }
+    } catch (error) {
+      console.error('Error reordering cotizaciones:', error);
+      toast.error('Error al reordenar cotizaciones');
+      // Revertir cambio local
+      setCotizaciones(cotizaciones);
+    } finally {
+      setIsReordering(false);
+    }
   };
 
   const isMenuDisabled = !eventTypeId || !isSaved;
@@ -154,7 +264,7 @@ export function PromiseQuotesPanel({
           </ZenDropdownMenu>
         </div>
       </ZenCardHeader>
-      <ZenCardContent className="p-4 flex-1 flex flex-col min-h-0">
+      <ZenCardContent className="p-4 flex-1 flex flex-col min-h-0 overflow-y-auto">
         {!isSaved ? (
           <div className="flex flex-col items-center justify-center flex-1 min-h-[200px]">
             <p className="text-xs text-zinc-500 text-center px-4">
@@ -167,7 +277,30 @@ export function PromiseQuotesPanel({
               Selecciona un tipo de evento para crear cotizaciones
             </p>
           </div>
-        ) : (
+        ) : loadingCotizaciones ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, index) => (
+              <div
+                key={index}
+                className="p-3 border rounded-lg bg-zinc-800/50 border-zinc-700 animate-pulse"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-4 h-4 bg-zinc-700 rounded mt-1" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-4 bg-zinc-700 rounded w-3/4" />
+                    <div className="h-3 bg-zinc-700 rounded w-1/2" />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="h-4 bg-zinc-700 rounded w-20" />
+                      <div className="h-5 bg-zinc-700 rounded-full w-16" />
+                    </div>
+                    <div className="h-3 bg-zinc-700 rounded w-32" />
+                  </div>
+                  <div className="w-6 h-6 bg-zinc-700 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : cotizaciones.length === 0 ? (
           <div className="flex flex-col items-center justify-center flex-1 min-h-[200px]">
             <p className="text-xs text-zinc-500 text-center px-4">
               No hay cotizaciones asociadas a esta promesa
@@ -176,6 +309,99 @@ export function PromiseQuotesPanel({
               Usa el botón + para crear una nueva cotización
             </p>
           </div>
+        ) : !isHydrated ? (
+          <div className="space-y-2">
+            {cotizaciones.map((cotizacion) => (
+              <PromiseQuotesPanelCard
+                key={cotizacion.id}
+                cotizacion={cotizacion}
+                studioSlug={studioSlug}
+                promiseId={promiseId}
+                contactId={contactId}
+                isDuplicating={duplicatingId === cotizacion.id}
+                onDuplicateStart={(id) => setDuplicatingId(id)}
+                onDuplicateComplete={(newCotizacion) => {
+                  setDuplicatingId(null);
+                  setCotizaciones((prev) => [...prev, newCotizacion]);
+                }}
+                onDuplicateError={() => {
+                  setDuplicatingId(null);
+                }}
+                onDelete={(id) => {
+                  setCotizaciones((prev) => prev.filter((c) => c.id !== id));
+                }}
+                onArchive={(id) => {
+                  // Actualización local: marcar como archivada
+                  setCotizaciones((prev) =>
+                    prev.map((c) => (c.id === id ? { ...c, archived: true } : c))
+                  );
+                }}
+                onUnarchive={(id) => {
+                  // Actualización local: marcar como desarchivada
+                  setCotizaciones((prev) =>
+                    prev.map((c) => (c.id === id ? { ...c, archived: false } : c))
+                  );
+                }}
+                onNameUpdate={(id, newName) => {
+                  setCotizaciones((prev) =>
+                    prev.map((c) => (c.id === id ? { ...c, name: newName } : c))
+                  );
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={cotizaciones.map((c) => c.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className={`space-y-2 ${isReordering ? 'pointer-events-none opacity-50' : ''}`}>
+                {cotizaciones.map((cotizacion) => (
+                  <PromiseQuotesPanelCard
+                    key={cotizacion.id}
+                    cotizacion={cotizacion}
+                    studioSlug={studioSlug}
+                    promiseId={promiseId}
+                    contactId={contactId}
+                    isDuplicating={duplicatingId === cotizacion.id}
+                    onDuplicateStart={(id) => setDuplicatingId(id)}
+                    onDuplicateComplete={(newCotizacion) => {
+                      setDuplicatingId(null);
+                      setCotizaciones((prev) => [...prev, newCotizacion]);
+                    }}
+                    onDuplicateError={() => {
+                      setDuplicatingId(null);
+                    }}
+                    onDelete={(id) => {
+                      setCotizaciones((prev) => prev.filter((c) => c.id !== id));
+                    }}
+                    onArchive={(id) => {
+                      // Actualización local: marcar como archivada
+                      setCotizaciones((prev) =>
+                        prev.map((c) => (c.id === id ? { ...c, archived: true } : c))
+                      );
+                    }}
+                    onUnarchive={(id) => {
+                      // Actualización local: marcar como desarchivada
+                      setCotizaciones((prev) =>
+                        prev.map((c) => (c.id === id ? { ...c, archived: false } : c))
+                      );
+                    }}
+                    onNameUpdate={(id, newName) => {
+                      setCotizaciones((prev) =>
+                        prev.map((c) => (c.id === id ? { ...c, name: newName } : c))
+                      );
+                    }}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </ZenCardContent>
     </ZenCard>

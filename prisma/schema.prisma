@@ -1611,6 +1611,7 @@ model studio_cotizaciones {
   name                                   String
   price                                  Float
   visible_to_client                      Boolean?                                     @default(true)
+  order                                  Int?                                         @default(0)
   cotizacion_costos                      studio_cotizacion_costos[]
   cotizacion_items                       studio_cotizacion_items[]
   cotizacion_visitas                     studio_cotizacion_visitas[]

@@ -13,27 +13,26 @@ export default function NuevaCotizacionPage() {
   const studioSlug = params.slug as string;
   const promiseId = searchParams.get('promiseId') || null;
   const packageId = searchParams.get('paqueteId') || null;
+  const contactId = searchParams.get('contactId') || null;
 
   return (
     <div className="w-full max-w-7xl mx-auto">
       <ZenCard variant="default" padding="none">
         <ZenCardHeader className="border-b border-zinc-800">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-3">
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="p-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </ZenButton>
-              <div>
-                <ZenCardTitle>Nueva Cotización</ZenCardTitle>
-                <ZenCardDescription>
-                  {packageId ? 'Crear cotización desde paquete' : 'Crear cotización personalizada'}
-                </ZenCardDescription>
-              </div>
+          <div className="flex items-center gap-3">
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => router.back()}
+              className="p-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </ZenButton>
+            <div>
+              <ZenCardTitle>Nueva Cotización</ZenCardTitle>
+              <ZenCardDescription>
+                {packageId ? 'Crear cotización desde paquete' : 'Crear cotización personalizada'}
+              </ZenCardDescription>
             </div>
           </div>
         </ZenCardHeader>
@@ -42,6 +41,7 @@ export default function NuevaCotizacionPage() {
             studioSlug={studioSlug}
             promiseId={promiseId}
             packageId={packageId}
+            contactId={contactId}
             redirectOnSuccess={promiseId ? `/${studioSlug}/studio/builder/commercial/promises/${promiseId}` : undefined}
           />
         </ZenCardContent>
