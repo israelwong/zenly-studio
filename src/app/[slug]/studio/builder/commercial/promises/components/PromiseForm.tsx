@@ -67,7 +67,7 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
     email: initialData?.email || '',
     event_type_id: initialData?.event_type_id || '',
     interested_dates: initialData?.interested_dates,
-    acquisition_channel_id: initialData?.acquisition_channel_id || '',
+    acquisition_channel_id: initialData?.acquisition_channel_id ?? '',
     social_network_id: initialData?.social_network_id,
     referrer_contact_id: initialData?.referrer_contact_id,
     referrer_name: initialData?.referrer_name,
@@ -150,9 +150,10 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
           email: c.email || null,
         }));
         setAllContacts(contacts);
-        // Si hay referrer_contact_id, actualizar el input
-        if (initialData?.referrer_contact_id) {
-          const referrer = contacts.find(c => c.id === initialData.referrer_contact_id);
+        // Si hay referrer_contact_id en initialData o formData, actualizar el input
+        const referrerId = initialData?.referrer_contact_id || formData.referrer_contact_id;
+        if (referrerId) {
+          const referrer = contacts.find(c => c.id === referrerId);
           if (referrer) {
             setReferrerInputValue(`@${referrer.name}`);
           }
@@ -177,6 +178,47 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
     return referidosChannel?.id;
   };
 
+  // Sincronizar formData cuando initialData cambie
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        name: initialData.name || '',
+        phone: initialData.phone || '',
+        email: initialData.email || '',
+        event_type_id: initialData.event_type_id || '',
+        interested_dates: initialData.interested_dates,
+        acquisition_channel_id: initialData.acquisition_channel_id ?? '',
+        social_network_id: initialData.social_network_id,
+        referrer_contact_id: initialData.referrer_contact_id,
+        referrer_name: initialData.referrer_name,
+      });
+      setNameInput(initialData.name || '');
+      setSelectedDates(
+        initialData.interested_dates ? initialData.interested_dates.map(d => new Date(d)) : []
+      );
+      setMonth(
+        initialData.interested_dates && initialData.interested_dates.length > 0
+          ? new Date(initialData.interested_dates[0])
+          : undefined
+      );
+      // Si hay referrer_name, inicializar el input
+      if (initialData.referrer_name) {
+        setReferrerInputValue(initialData.referrer_name);
+      } else if (initialData.referrer_contact_id) {
+        // Si hay referrer_contact_id pero no referrer_name, buscar el contacto
+        const referrer = allContacts.find(c => c.id === initialData.referrer_contact_id);
+        if (referrer) {
+          setReferrerInputValue(`@${referrer.name}`);
+        }
+      } else {
+        setReferrerInputValue('');
+      }
+      setPromiseId(initialData.promiseId || null);
+      setCurrentContactId(initialData.id || null);
+      setIsEditMode(!!initialData.id);
+    }
+  }, [initialData, allContacts]);
+
   useEffect(() => {
     setIsInitialLoading(true);
     Promise.all([
@@ -189,6 +231,17 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studioSlug]);
+
+  // Verificar que el acquisition_channel_id esté en la lista cuando se carguen los canales
+  useEffect(() => {
+    if (acquisitionChannels.length > 0 && formData.acquisition_channel_id) {
+      const channelExists = acquisitionChannels.some(c => c.id === formData.acquisition_channel_id);
+      if (!channelExists) {
+        // Si el canal no existe en la lista, limpiar el valor
+        setFormData((prev) => ({ ...prev, acquisition_channel_id: '' }));
+      }
+    }
+  }, [acquisitionChannels, formData.acquisition_channel_id]);
 
   const handleNameChange = (value: string) => {
     setNameInput(value);
@@ -655,17 +708,20 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
                       if (errors.acquisition_channel_id) {
                         setErrors((prev) => ({ ...prev, acquisition_channel_id: '' }));
                       }
-                      if (value !== getRedesSocialesChannelId()) {
+                      const redesChannelId = getRedesSocialesChannelId();
+                      const referidosChannelId = getReferidosChannelId();
+                      if (value !== redesChannelId) {
                         setFormData((prev) => ({ ...prev, social_network_id: undefined }));
                       }
-                      if (value !== getReferidosChannelId()) {
+                      if (value !== referidosChannelId) {
                         setFormData((prev) => ({ ...prev, referrer_contact_id: undefined, referrer_name: undefined }));
                         setReferrerInputValue('');
                         setShowReferrerSuggestions(false);
                       }
                     }}
                     required
-                    className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors ${errors.acquisition_channel_id
+                    disabled={acquisitionChannels.length === 0}
+                    className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
                       ? 'border-red-500 focus:ring-red-500'
                       : 'border-zinc-700 hover:border-zinc-600'
                       }`}
@@ -676,7 +732,6 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
                         {c.name}
                       </option>
                     ))}
-                    <option value="otro">Otro</option>
                   </select>
                   {errors.acquisition_channel_id && (
                     <p className="mt-1 text-xs text-red-500">{errors.acquisition_channel_id}</p>

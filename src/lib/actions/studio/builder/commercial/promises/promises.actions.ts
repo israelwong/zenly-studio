@@ -179,6 +179,28 @@ export async function createPromise(
       return { success: false, error: 'Studio no encontrado' };
     }
 
+    // Validaciones condicionales para canal de adquisición
+    if (validatedData.acquisition_channel_id) {
+      const channel = await prisma.platform_acquisition_channels.findUnique({
+        where: { id: validatedData.acquisition_channel_id },
+        select: { name: true },
+      });
+
+      if (channel) {
+        const channelNameLower = channel.name.toLowerCase();
+        const isRedSocial = channelNameLower.includes('red') || channelNameLower.includes('social');
+        const isReferido = channelNameLower.includes('referido') || channelNameLower.includes('referral');
+
+        if (isRedSocial && !validatedData.social_network_id) {
+          return { success: false, error: 'Debes seleccionar una red social cuando el canal es "Redes Sociales"' };
+        }
+
+        if (isReferido && !validatedData.referrer_contact_id && !validatedData.referrer_name) {
+          return { success: false, error: 'Debes especificar el referido cuando el canal es "Referidos"' };
+        }
+      }
+    }
+
     // Obtener etapa "nuevo" por defecto si no se especifica
     let stageId = validatedData.promise_pipeline_stage_id;
     if (!stageId) {
@@ -205,6 +227,10 @@ export async function createPromise(
         name: validatedData.name,
         email: validatedData.email || null,
         status: 'prospecto',
+        acquisition_channel_id: validatedData.acquisition_channel_id || null,
+        social_network_id: validatedData.social_network_id || null,
+        referrer_contact_id: validatedData.referrer_contact_id || null,
+        referrer_name: validatedData.referrer_name || null,
       },
       create: {
         studio_id: studio.id,
@@ -212,6 +238,10 @@ export async function createPromise(
         phone: validatedData.phone,
         email: validatedData.email || null,
         status: 'prospecto',
+        acquisition_channel_id: validatedData.acquisition_channel_id || null,
+        social_network_id: validatedData.social_network_id || null,
+        referrer_contact_id: validatedData.referrer_contact_id || null,
+        referrer_name: validatedData.referrer_name || null,
       },
     });
 
@@ -300,6 +330,69 @@ export async function updatePromise(
       return { success: false, error: 'Studio no encontrado' };
     }
 
+    // Obtener datos anteriores del contacto para comparar cambios y validaciones
+    const oldContact = await prisma.studio_contacts.findUnique({
+      where: { id: validatedData.id },
+      select: {
+        name: true,
+        phone: true,
+        email: true,
+        acquisition_channel_id: true,
+        social_network_id: true,
+        referrer_contact_id: true,
+        referrer_name: true,
+      },
+    });
+
+    if (!oldContact) {
+      return { success: false, error: 'Contacto no encontrado' };
+    }
+
+    // Validaciones condicionales para canal de adquisición
+    // Solo validar si se está cambiando el canal o si el canal actual requiere campos adicionales
+    const acquisitionChannelId = validatedData.acquisition_channel_id ?? oldContact.acquisition_channel_id;
+    if (acquisitionChannelId) {
+      const channel = await prisma.platform_acquisition_channels.findUnique({
+        where: { id: acquisitionChannelId },
+        select: { name: true },
+      });
+
+      if (channel) {
+        const channelNameLower = channel.name.toLowerCase();
+        const isRedSocial = channelNameLower.includes('red') || channelNameLower.includes('social');
+        const isReferido = channelNameLower.includes('referido') || channelNameLower.includes('referral');
+
+        // Para red social: validar solo si se está cambiando el canal o si no hay red social guardada
+        if (isRedSocial) {
+          const socialNetworkId = validatedData.social_network_id ?? oldContact.social_network_id;
+          if (!socialNetworkId) {
+            return { success: false, error: 'Debes seleccionar una red social cuando el canal es "Redes Sociales"' };
+          }
+        }
+
+        // Para referido: validar solo si se está cambiando el canal o si no hay referido guardado
+        if (isReferido) {
+          const referrerContactId = validatedData.referrer_contact_id ?? oldContact.referrer_contact_id;
+          const referrerName = validatedData.referrer_name ?? oldContact.referrer_name;
+          if (!referrerContactId && !referrerName) {
+            return { success: false, error: 'Debes especificar el referido cuando el canal es "Referidos"' };
+          }
+        }
+      }
+    }
+
+    // Detectar cambios
+    const changes: string[] = [];
+    if (oldContact.name !== validatedData.name) {
+      changes.push(`nombre: "${oldContact.name}" → "${validatedData.name}"`);
+    }
+    if (oldContact.phone !== validatedData.phone) {
+      changes.push(`teléfono: "${oldContact.phone}" → "${validatedData.phone}"`);
+    }
+    if (oldContact.email !== validatedData.email) {
+      changes.push(`email: "${oldContact.email || '(sin email)'}" → "${validatedData.email || '(sin email)'}"`);
+    }
+
     // Actualizar contacto
     const contact = await prisma.studio_contacts.update({
       where: { id: validatedData.id },
@@ -307,6 +400,10 @@ export async function updatePromise(
         name: validatedData.name,
         phone: validatedData.phone,
         email: validatedData.email,
+        acquisition_channel_id: validatedData.acquisition_channel_id || null,
+        social_network_id: validatedData.social_network_id || null,
+        referrer_contact_id: validatedData.referrer_contact_id || null,
+        referrer_name: validatedData.referrer_name || null,
       },
     });
 
@@ -406,6 +503,24 @@ export async function updatePromise(
       });
     }
 
+    // Registrar log si hubo cambios en los datos del contacto
+    if (changes.length > 0) {
+      const { logPromiseAction } = await import('./promise-logs.actions');
+      await logPromiseAction(
+        studioSlug,
+        promise.id,
+        'contact_updated',
+        'user', // Asumimos que es acción de usuario
+        null, // TODO: Obtener userId del contexto
+        {
+          changes,
+        }
+      ).catch((error) => {
+        // No fallar si el log falla, solo registrar error
+        console.error('[PROMISES] Error registrando log de actualización de contacto:', error);
+      });
+    }
+
     const promiseWithContact: PromiseWithContact = {
       id: contact.id,
       promise_id: promise.id,
@@ -470,7 +585,7 @@ export async function movePromise(
       return { success: false, error: 'Etapa no encontrada' };
     }
 
-    // Obtener promesa
+    // Obtener promesa con etapa actual
     let promise = await prisma.studio_promises.findUnique({
       where: { id: validatedData.promise_id },
       include: {
@@ -495,6 +610,16 @@ export async function movePromise(
     if (!promise) {
       return { success: false, error: 'Promise no encontrada' };
     }
+
+    // Guardar nombre de etapa anterior para el log
+    const oldStageName = promise.pipeline_stage?.name || 'desconocida';
+
+    // Obtener nombre de nueva etapa
+    const newStage = await prisma.studio_promise_pipeline_stages.findUnique({
+      where: { id: validatedData.new_stage_id },
+      select: { name: true },
+    });
+    const newStageName = newStage?.name || 'desconocida';
 
     // Actualizar promesa
     promise = await prisma.studio_promises.update({
@@ -529,6 +654,23 @@ export async function movePromise(
     if (!contact) {
       return { success: false, error: 'Contacto no encontrado' };
     }
+
+    // Registrar cambio de etapa en el log
+    const { logPromiseAction } = await import('./promise-logs.actions');
+    await logPromiseAction(
+      studioSlug,
+      promise.id,
+      'stage_change',
+      'user', // Asumimos que es acción de usuario
+      null, // TODO: Obtener userId del contexto
+      {
+        from: oldStageName,
+        to: newStageName,
+      }
+    ).catch((error) => {
+      // No fallar si el log falla, solo registrar error
+      console.error('[PROMISES] Error registrando log de cambio de etapa:', error);
+    });
 
     const promiseWithContact: PromiseWithContact = {
       id: contact.id,
@@ -652,6 +794,19 @@ export async function archivePromise(
       return { success: false, error: 'Contacto no encontrado' };
     }
 
+    // Registrar archivo en el log
+    const { logPromiseAction } = await import('./promise-logs.actions');
+    await logPromiseAction(
+      studioSlug,
+      promiseId,
+      'archived',
+      'user', // Asumimos que es acción de usuario
+      null, // TODO: Obtener userId del contexto
+    ).catch((error) => {
+      // No fallar si el log falla, solo registrar error
+      console.error('[PROMISES] Error registrando log de archivo:', error);
+    });
+
     const promiseWithContact: PromiseWithContact = {
       id: contact.id,
       promise_id: updatedPromise.id,
@@ -768,6 +923,19 @@ export async function unarchivePromise(
     if (!contact) {
       return { success: false, error: 'Contacto no encontrado' };
     }
+
+    // Registrar desarchivo en el log
+    const { logPromiseAction } = await import('./promise-logs.actions');
+    await logPromiseAction(
+      studioSlug,
+      promiseId,
+      'unarchived',
+      'user', // Asumimos que es acción de usuario
+      null, // TODO: Obtener userId del contexto
+    ).catch((error) => {
+      // No fallar si el log falla, solo registrar error
+      console.error('[PROMISES] Error registrando log de desarchivo:', error);
+    });
 
     const promiseWithContact: PromiseWithContact = {
       id: contact.id,
