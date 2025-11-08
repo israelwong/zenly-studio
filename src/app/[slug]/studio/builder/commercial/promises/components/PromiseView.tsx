@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit, ExternalLink, Loader2 } from 'lucide-react';
+import { Edit, ExternalLink, Loader2, ContactRound } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, SeparadorZen } from '@/components/ui/zen';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/shadcn/popover';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/shadcn/hover-card';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/shadcn/avatar';
+import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { getContactById } from '@/lib/actions/studio/builder/commercial/contacts/contacts.actions';
 import { PromiseLogsPanelCompact } from './PromiseLogsPanelCompact';
@@ -30,6 +32,7 @@ interface PromiseViewProps {
     referrer_contact_id?: string | null;
     referrer_name?: string | null;
     referrer_contact_name?: string | null;
+    referrer_contact_email?: string | null;
   };
   onEdit: () => void;
   isSaved: boolean;
@@ -39,16 +42,21 @@ function ReferrerHoverCard({
   studioSlug,
   referrerContactId,
   referrerName,
+  referrerEmail,
+  contactName,
 }: {
   studioSlug: string;
   referrerContactId: string | null | undefined;
   referrerName: string | null | undefined;
+  referrerEmail?: string | null | undefined;
+  contactName: string;
 }) {
   const router = useRouter();
   const [contactData, setContactData] = useState<{
     name: string;
     phone: string;
     email: string | null;
+    avatar_url: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -63,6 +71,7 @@ function ReferrerHoverCard({
               name: result.data.name,
               phone: result.data.phone,
               email: result.data.email,
+              avatar_url: result.data.avatar_url,
             });
           }
         })
@@ -82,81 +91,112 @@ function ReferrerHoverCard({
     }
   };
 
+  const handleWhatsApp = (phone: string) => {
+    // Extraer primer nombre del referido y capitalizar primera letra
+    const referrerFirstNameRaw = (contactData?.name || referrerName || '').split(' ')[0];
+    const referrerFirstName = referrerFirstNameRaw
+      ? referrerFirstNameRaw.charAt(0).toUpperCase() + referrerFirstNameRaw.slice(1).toLowerCase()
+      : '';
+
+    // Capitalizar primera letra del nombre del contacto
+    const contactNameCapitalized = contactName
+      ? contactName.charAt(0).toUpperCase() + contactName.slice(1).toLowerCase()
+      : contactName;
+
+    // Mensaje personalizado
+    const message = `¡Hola ${referrerFirstName}! ${contactNameCapitalized} nos contacto, muchas gracias por tu recomendación, realmente lo apreciamos,`;
+    const encodedMessage = encodeURIComponent(message);
+    const cleanPhone = phone.replace(/\D/g, '');
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
+
+    window.open(whatsappUrl, '_blank');
+  };
+
   const displayName = referrerName || contactData?.name || 'Contacto referido';
+  const referrerDisplayName = contactData?.name || referrerName || 'Contacto referido';
+  const initials = referrerDisplayName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <HoverCard openDelay={200} closeDelay={100} onOpenChange={setOpen}>
+      <HoverCardTrigger asChild>
         <button
           type="button"
           className="text-sm text-zinc-200 hover:text-emerald-400 transition-colors underline decoration-dotted underline-offset-2 cursor-pointer"
         >
           {displayName}
         </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-80 bg-zinc-900 border-zinc-700 p-0"
+      </HoverCardTrigger>
+      <HoverCardContent
+        className="w-80 bg-zinc-900 border-zinc-700 p-4 relative"
         align="start"
         side="right"
       >
         {loading ? (
-          <div className="p-4 flex items-center justify-center">
+          <div className="flex items-center justify-center py-4">
             <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
           </div>
         ) : contactData || referrerName ? (
-          <div className="p-4 space-y-3">
-            <div>
-              <h4 className="text-sm font-semibold text-zinc-200 mb-3">
-                Información del Referido
-              </h4>
-              <div className="space-y-2">
-                <div>
-                  <label className="text-xs font-medium text-zinc-400 block mb-1">
-                    Nombre
-                  </label>
-                  <p className="text-sm text-zinc-200">
-                    {contactData?.name || referrerName}
-                  </p>
-                </div>
+          <div className="space-y-3">
+            {referrerContactId && (
+              <button
+                type="button"
+                onClick={handleViewContact}
+                className="absolute top-3 right-3 p-1.5 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded transition-colors"
+                title="Ver contacto"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <div className="flex justify-between gap-4">
+              <Avatar className="h-16 w-16 flex-shrink-0">
+                <AvatarImage
+                  src={contactData?.avatar_url || undefined}
+                  alt={referrerDisplayName}
+                />
+                <AvatarFallback className="bg-emerald-600/20 text-emerald-400 border border-emerald-600/30">
+                  {initials || <ContactRound className="h-8 w-8" />}
+                </AvatarFallback>
+              </Avatar>
+              <div className="space-y-1 flex-1 min-w-0 pr-8">
+                <h4 className="text-sm font-semibold text-zinc-200 truncate">
+                  {referrerDisplayName}
+                </h4>
                 {contactData?.phone && (
-                  <div>
-                    <label className="text-xs font-medium text-zinc-400 block mb-1">
-                      Teléfono
-                    </label>
-                    <p className="text-sm text-zinc-200">{contactData.phone}</p>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleWhatsApp(contactData.phone)}
+                      className="text-xs text-zinc-400 hover:text-emerald-400 transition-colors flex items-center gap-1.5 group cursor-pointer"
+                      title="Abrir WhatsApp"
+                    >
+                      <WhatsAppIcon
+                        className="h-3 w-3 text-emerald-500 group-hover:text-emerald-400 transition-colors"
+                        size={12}
+                      />
+                      <span>{contactData.phone}</span>
+                    </button>
                   </div>
                 )}
-                {contactData?.email && (
-                  <div>
-                    <label className="text-xs font-medium text-zinc-400 block mb-1">
-                      Email
-                    </label>
-                    <p className="text-sm text-zinc-200">{contactData.email}</p>
-                  </div>
+                {(contactData?.email || referrerEmail) && (
+                  <p className="text-xs text-zinc-400 truncate">
+                    {contactData?.email || referrerEmail}
+                  </p>
                 )}
               </div>
             </div>
-            {referrerContactId && (
-              <div className="pt-3 border-t border-zinc-700">
-                <ZenButton
-                  variant="outline"
-                  size="sm"
-                  onClick={handleViewContact}
-                  className="w-full"
-                >
-                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                  Ver Contacto
-                </ZenButton>
-              </div>
-            )}
           </div>
         ) : (
-          <div className="p-4 text-sm text-zinc-400">
+          <div className="text-sm text-zinc-400">
             No se pudo cargar la información del referido
           </div>
         )}
-      </PopoverContent>
-    </Popover>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 
@@ -306,6 +346,8 @@ export function PromiseView({
                         studioSlug={studioSlug}
                         referrerContactId={data.referrer_contact_id}
                         referrerName={data.referrer_name || data.referrer_contact_name || undefined}
+                        referrerEmail={data.referrer_contact_email}
+                        contactName={data.name}
                       />
                     </div>
                   </div>

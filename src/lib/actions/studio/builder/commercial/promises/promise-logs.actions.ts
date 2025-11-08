@@ -26,6 +26,7 @@ export type PromiseLogAction =
   | 'email_sent'
   | 'quotation_created'
   | 'quotation_updated'
+  | 'quotation_deleted'
   | 'contact_updated';
 
 /**
@@ -67,6 +68,10 @@ const LOG_ACTIONS: Record<
   quotation_updated: (meta) => {
     const quotationName = (meta?.quotationName as string) || 'cotización';
     return `Cotización actualizada: ${quotationName}`;
+  },
+  quotation_deleted: (meta) => {
+    const quotationName = (meta?.quotationName as string) || 'cotización';
+    return `Cotización eliminada: ${quotationName}`;
   },
   contact_updated: (meta) => {
     const changes = meta?.changes as string[] || [];
@@ -154,6 +159,7 @@ export async function getPromiseById(
   referrer_contact_id: string | null;
   referrer_name: string | null;
   referrer_contact_name: string | null;
+  referrer_contact_email: string | null;
   pipeline_stage_slug: string | null;
   pipeline_stage_id: string | null;
 }>> {
@@ -185,6 +191,7 @@ export async function getPromiseById(
               select: {
                 id: true,
                 name: true,
+                email: true,
               },
             },
           },
@@ -228,6 +235,7 @@ export async function getPromiseById(
         referrer_contact_id: promise.contact.referrer_contact_id,
         referrer_name: promise.contact.referrer_name,
         referrer_contact_name: promise.contact.referrer_contact?.name || null,
+        referrer_contact_email: promise.contact.referrer_contact?.email || null,
         pipeline_stage_slug: promise.pipeline_stage?.slug || null,
         pipeline_stage_id: promise.pipeline_stage_id || null,
       },

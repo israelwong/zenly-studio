@@ -43,6 +43,7 @@ export default function EditarPromesaPage() {
     referrer_contact_id?: string | null;
     referrer_name?: string | null;
     referrer_contact_name?: string | null;
+    referrer_contact_email?: string | null;
     promiseId?: string | null;
   } | null>(null);
   const [contactData, setContactData] = useState<{
@@ -76,6 +77,7 @@ export default function EditarPromesaPage() {
           referrer_contact_id: result.data.referrer_contact_id ?? null,
           referrer_name: result.data.referrer_name ?? null,
           referrer_contact_name: result.data.referrer_contact_name ?? null,
+          referrer_contact_email: result.data.referrer_contact_email ?? null,
           promiseId: result.data.promise_id,
           });
           setContactData({
@@ -302,6 +304,7 @@ export default function EditarPromesaPage() {
           referrer_contact_id: result.data.referrer_contact_id ?? null,
           referrer_name: result.data.referrer_name ?? null,
           referrer_contact_name: result.data.referrer_contact_name ?? null,
+          referrer_contact_email: result.data.referrer_contact_email ?? null,
           promiseId: result.data.promise_id,
         });
         setContactData({
@@ -487,6 +490,7 @@ export default function EditarPromesaPage() {
           referrer_contact_id: promiseData.referrer_contact_id || undefined,
           referrer_name: promiseData.referrer_name || undefined,
           referrer_contact_name: promiseData.referrer_contact_name || undefined,
+          referrer_contact_email: promiseData.referrer_contact_email || undefined,
         }}
         onSuccess={handleEditSuccess}
       />

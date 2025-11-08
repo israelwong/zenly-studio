@@ -361,6 +361,24 @@ export async function deleteCotizacion(
       where: { id: cotizacionId },
     });
 
+    // Registrar log si hay promise_id
+    if (cotizacion.promise_id) {
+      const { logPromiseAction } = await import('./promise-logs.actions');
+      await logPromiseAction(
+        studioSlug,
+        cotizacion.promise_id,
+        'quotation_deleted',
+        'user', // Asumimos que es acción de usuario
+        null, // TODO: Obtener userId del contexto
+        {
+          quotationName: cotizacion.name,
+        }
+      ).catch((error) => {
+        // No fallar si el log falla, solo registrar error
+        console.error('[COTIZACIONES] Error registrando log de cotización eliminada:', error);
+      });
+    }
+
     revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
     return {
@@ -749,6 +767,24 @@ export async function updateCotizacionName(
       where: { id: cotizacionId },
       data: { name: newName.trim() },
     });
+
+    // Registrar log si hay promise_id
+    if (cotizacion.promise_id) {
+      const { logPromiseAction } = await import('./promise-logs.actions');
+      await logPromiseAction(
+        studioSlug,
+        cotizacion.promise_id,
+        'quotation_updated',
+        'user', // Asumimos que es acción de usuario
+        null, // TODO: Obtener userId del contexto
+        {
+          quotationName: updated.name,
+        }
+      ).catch((error) => {
+        // No fallar si el log falla, solo registrar error
+        console.error('[COTIZACIONES] Error registrando log de cotización actualizada:', error);
+      });
+    }
 
     revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
 
