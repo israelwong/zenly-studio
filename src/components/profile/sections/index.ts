@@ -26,3 +26,4 @@ export { FaqSection } from './FaqSection';
 // Secciones adicionales
 export { PaymentsSection } from './PaymentsSection';
 export { ClientsSection } from './ClientsSection';
+export { PromisePreviewSection } from './PromisePreviewSection';

@@ -78,6 +78,23 @@ export function PromiseQuickActions({
     }
   };
 
+  const handleSharePromise = () => {
+    if (!promiseId) {
+      toast.error('La promesa debe estar guardada para compartir');
+      return;
+    }
+
+    const previewUrl = `${window.location.origin}/${studioSlug}/preview/${promiseId}`;
+    
+    // Registrar log
+    logProfileShared(studioSlug, promiseId, contactName, previewUrl).catch((error) => {
+      console.error('Error registrando promesa compartida:', error);
+    });
+    
+    // Abrir en nueva ventana
+    window.open(previewUrl, '_blank');
+  };
+
   const handleEmail = async () => {
     // Registrar log si hay promiseId
     if (promiseId && email) {
@@ -121,10 +138,11 @@ export function PromiseQuickActions({
         </button>
       )}
       <button
-        onClick={handleShareProfile}
+        onClick={handleSharePromise}
         className="px-3 py-2 rounded-lg bg-zinc-600/10 hover:bg-zinc-600/20 text-zinc-400 hover:text-zinc-300 transition-colors flex items-center gap-2 text-sm"
-        title="Compartir perfil"
-        aria-label="Compartir perfil"
+        title="Compartir promesa"
+        aria-label="Compartir promesa"
+        disabled={!promiseId}
       >
         <Share2 className="h-4 w-4" />
         <span>Compartir</span>

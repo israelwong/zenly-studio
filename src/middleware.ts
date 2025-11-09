@@ -177,7 +177,8 @@ export async function middleware(request: NextRequest) {
     // - /[slug] (página pública del studio)
     // - /[slug]/studio (panel privado del studio)  
     // - /[slug]/cliente (portal de clientes)
-    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/cliente')) {
+    // - /[slug]/preview (preview de promesas - pública)
+    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/cliente') || subPath.startsWith('/preview')) {
       return NextResponse.next();
     }
 
