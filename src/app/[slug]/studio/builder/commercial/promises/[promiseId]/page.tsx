@@ -336,7 +336,7 @@ export default function EditarPromesaPage() {
               <ZenButton
                 variant="ghost"
                 size="sm"
-                onClick={() => router.back()}
+                onClick={() => router.push(`/${studioSlug}/studio/builder/commercial/promises`)}
                 className="p-2"
               >
                 <ArrowLeft className="h-4 w-4" />

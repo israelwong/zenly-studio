@@ -30,14 +30,23 @@ export function PromisesWrapper({ studioSlug, onOpenPromiseFormRef }: PromisesWr
       ]);
 
       if (promisesResult.success && promisesResult.data) {
-        setPromises(promisesResult.data.promises);
+        // Filtrar solo promesas que tengan promise_id (excluir contactos sin promesas)
+        const promisesWithId = promisesResult.data.promises.filter((p) => p.promise_id !== null);
+        console.log('[PromisesWrapper] Promesas cargadas:', promisesResult.data.promises.length);
+        console.log('[PromisesWrapper] Promesas con promise_id:', promisesWithId.length);
+        console.log('[PromisesWrapper] Promesas:', promisesWithId);
+        setPromises(promisesWithId);
       } else {
+        console.error('[PromisesWrapper] Error cargando promesas:', promisesResult.error);
         toast.error(promisesResult.error || 'Error al cargar promesas');
       }
 
       if (stagesResult.success && stagesResult.data) {
+        console.log('[PromisesWrapper] Stages cargados:', stagesResult.data.length);
+        console.log('[PromisesWrapper] Stages:', stagesResult.data);
         setPipelineStages(stagesResult.data);
       } else {
+        console.error('[PromisesWrapper] Error cargando stages:', stagesResult.error);
         toast.error(stagesResult.error || 'Error al cargar etapas del pipeline');
       }
     } catch (error) {
@@ -87,7 +96,7 @@ export function PromisesWrapper({ studioSlug, onOpenPromiseFormRef }: PromisesWr
         promises={promises}
         pipelineStages={pipelineStages}
         search=""
-        onSearchChange={() => {}}
+        onSearchChange={() => { }}
         onPromiseCreated={handlePromiseCreated}
         onPromiseUpdated={handlePromiseUpdated}
         onPromiseMoved={handlePromiseMoved}

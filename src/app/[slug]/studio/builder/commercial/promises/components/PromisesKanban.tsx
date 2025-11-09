@@ -69,6 +69,13 @@ export function PromisesKanban({
   const [localSearch, setLocalSearch] = useState(externalSearch || '');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Debug: Log cuando cambian las promesas
+  useEffect(() => {
+    console.log('[PromisesKanban] Promesas recibidas:', promises.length);
+    console.log('[PromisesKanban] Promesas:', promises);
+    console.log('[PromisesKanban] Pipeline stages:', pipelineStages.length);
+  }, [promises, pipelineStages]);
+
   // Sincronizar estado local cuando cambian las promesas desde el padre
   // Evitar sincronización durante drag and drop para prevenir parpadeos
   useEffect(() => {
@@ -130,11 +137,15 @@ export function PromisesKanban({
   }, []);
 
   // Filtrar promesas por búsqueda local
+  // También filtrar solo promesas con promise_id
   const filteredPromises = useMemo(() => {
-    if (!localSearch.trim()) return localPromises;
+    // Primero filtrar solo promesas con promise_id
+    const promisesWithId = localPromises.filter((p) => p.promise_id !== null);
+    
+    if (!localSearch.trim()) return promisesWithId;
 
     const searchLower = localSearch.toLowerCase();
-    return localPromises.filter((p) => {
+    return promisesWithId.filter((p) => {
       const nameMatch = p.name.toLowerCase().includes(searchLower);
       const emailMatch = p.email?.toLowerCase().includes(searchLower);
       const phoneMatch = p.phone.includes(localSearch);
@@ -264,11 +275,21 @@ export function PromisesKanban({
   }, [pipelineStages, showArchived]);
 
   // Agrupar promises por stage (ya ordenadas)
+  // Si una promesa no tiene stage_id, se asigna a la primera etapa disponible (no archivada)
   const promisesByStage = useMemo(() => {
+    // Obtener la primera etapa no archivada para promesas sin stage
+    const defaultStage = visibleStages
+      .filter((s) => s.slug !== 'archived')
+      .sort((a, b) => a.order - b.order)[0];
+
     return visibleStages.reduce((acc: Record<string, PromiseWithContact[]>, stage: PipelineStage) => {
-      acc[stage.id] = sortedPromises.filter(
-        (p: PromiseWithContact) => p.promise_pipeline_stage_id === stage.id
-      );
+      acc[stage.id] = sortedPromises.filter((p: PromiseWithContact) => {
+        // Si la promesa no tiene stage_id, asignarla a la primera etapa disponible
+        if (!p.promise_pipeline_stage_id && defaultStage && stage.id === defaultStage.id) {
+          return true;
+        }
+        return p.promise_pipeline_stage_id === stage.id;
+      });
       return acc;
     }, {} as Record<string, PromiseWithContact[]>);
   }, [sortedPromises, visibleStages]);
@@ -293,6 +314,9 @@ export function PromisesKanban({
       toast.error('No se pudo encontrar la promesa');
       return;
     }
+
+    // Guardar el stage original para revertir en caso de error
+    const originalStage = promise.promise_pipeline_stage;
 
     // Verificar si es etapa "aprobado" para lanzar confeti de forma optimista
     const isApprovedStage = stage.slug === 'approved' || stage.name.toLowerCase().includes('aprobado');
@@ -338,11 +362,21 @@ export function PromisesKanban({
       });
     }
 
-    // Actualización optimista local
+    // Actualización optimista local - actualizar tanto el ID como el objeto completo del stage
     setLocalPromises((prev) =>
       prev.map((p) =>
         p.id === promiseId
-          ? { ...p, promise_pipeline_stage_id: newStageId }
+          ? {
+              ...p,
+              promise_pipeline_stage_id: newStageId,
+              promise_pipeline_stage: {
+                id: stage.id,
+                name: stage.name,
+                slug: stage.slug,
+                color: stage.color,
+                order: stage.order,
+              },
+            }
           : p
       )
     );
@@ -359,12 +393,32 @@ export function PromisesKanban({
         // La actualización optimista ya actualizó el estado local
       } else {
         // Revertir actualización optimista en caso de error
-        setLocalPromises(prevPromisesRef.current);
+        setLocalPromises((prev) =>
+          prev.map((p) =>
+            p.id === promiseId
+              ? {
+                  ...p,
+                  promise_pipeline_stage_id: promise.promise_pipeline_stage_id,
+                  promise_pipeline_stage: originalStage,
+                }
+              : p
+          )
+        );
         toast.error(result.error || 'Error al mover promesa');
       }
     } catch (error) {
       // Revertir actualización optimista en caso de error
-      setLocalPromises(prevPromisesRef.current);
+      setLocalPromises((prev) =>
+        prev.map((p) =>
+          p.id === promiseId
+            ? {
+                ...p,
+                promise_pipeline_stage_id: promise.promise_pipeline_stage_id,
+                promise_pipeline_stage: originalStage,
+              }
+            : p
+        )
+      );
       console.error('Error moviendo promesa:', error);
       toast.error('Error al mover promesa');
     }
@@ -379,6 +433,81 @@ export function PromisesKanban({
     // Usar promiseId si está disponible, de lo contrario usar contactId como fallback
     const routeId = promise.promise_id || promise.id;
     router.push(`/${studioSlug}/studio/builder/commercial/promises/${routeId}`);
+  };
+
+  // Manejar archivar promesa con actualización local
+  const handlePromiseArchived = async (promiseId: string) => {
+    if (!studioSlug) return;
+
+    // Marcar que estamos en proceso de archivar para evitar sincronización
+    isDraggingRef.current = true;
+
+    // Buscar la promesa
+    const promise = localPromises.find((p) => p.promise_id === promiseId);
+    if (!promise || !promise.promise_id) {
+      isDraggingRef.current = false;
+      toast.error('No se pudo encontrar la promesa');
+      return;
+    }
+
+    // Buscar el stage "archived"
+    const archivedStage = pipelineStages.find((s) => s.slug === 'archived');
+    if (!archivedStage) {
+      isDraggingRef.current = false;
+      toast.error('No se encontró la etapa "Archivado"');
+      return;
+    }
+
+    // Actualización optimista local
+    const originalStageId = promise.promise_pipeline_stage_id;
+    setLocalPromises((prev) =>
+      prev.map((p) =>
+        p.promise_id === promiseId
+          ? {
+              ...p,
+              promise_pipeline_stage_id: archivedStage.id,
+              promise_pipeline_stage: archivedStage,
+            }
+          : p
+      )
+    );
+
+    try {
+      const result = await movePromise(studioSlug, {
+        promise_id: promiseId,
+        new_stage_id: archivedStage.id,
+      });
+
+      if (!result.success) {
+        toast.error(result.error || 'Error al archivar promesa');
+        // Revertir si falla
+        setLocalPromises((prev) =>
+          prev.map((p) =>
+            p.promise_id === promiseId
+              ? { ...p, promise_pipeline_stage_id: originalStageId }
+              : p
+          )
+        );
+      } else {
+        toast.success('Promesa archivada exitosamente');
+      }
+    } catch (error) {
+      console.error('Error archiving promise:', error);
+      toast.error('Error al archivar promesa');
+      // Revertir si falla
+      setLocalPromises((prev) =>
+        prev.map((p) =>
+          p.promise_id === promiseId
+            ? { ...p, promise_pipeline_stage_id: originalStageId }
+            : p
+        )
+      );
+    } finally {
+      // Permitir sincronización después de un breve delay
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 100);
+    }
   };
 
   const activePromise = activeId
@@ -453,7 +582,7 @@ export function PromisesKanban({
                 onPromiseClick={handlePromiseClick}
                 studioSlug={studioSlug}
                 isFlexible={false}
-                onPromiseArchived={onPromiseUpdated}
+                onPromiseArchived={handlePromiseArchived}
               />
             ))
           ) : (
@@ -467,7 +596,7 @@ export function PromisesKanban({
                   onPromiseClick={handlePromiseClick}
                   studioSlug={studioSlug}
                   isFlexible={true}
-                  onPromiseArchived={onPromiseUpdated}
+                  onPromiseArchived={handlePromiseArchived}
                 />
               ))}
             </div>
@@ -477,7 +606,11 @@ export function PromisesKanban({
         <DragOverlay style={{ cursor: 'grabbing' }}>
           {activePromise ? (
             <div className="opacity-90 rotate-2 shadow-2xl">
-              <PromiseKanbanCard promise={activePromise} studioSlug={studioSlug} onArchived={onPromiseUpdated} />
+              <PromiseKanbanCard 
+                promise={activePromise} 
+                studioSlug={studioSlug} 
+                onArchived={() => activePromise.promise_id && handlePromiseArchived(activePromise.promise_id)} 
+              />
             </div>
           ) : null}
         </DragOverlay>
@@ -518,7 +651,7 @@ function KanbanColumn({
   onPromiseClick: (promise: PromiseWithContact) => void;
   studioSlug: string;
   isFlexible?: boolean;
-  onPromiseArchived?: () => void;
+              onPromiseArchived?: (promiseId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -573,7 +706,7 @@ function KanbanColumn({
               promise={promise}
               onClick={onPromiseClick}
               studioSlug={studioSlug}
-              onArchived={onPromiseArchived}
+              onArchived={() => promise.promise_id && onPromiseArchived?.(promise.promise_id)}
             />
           ))}
         </SortableContext>
