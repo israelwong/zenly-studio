@@ -219,15 +219,16 @@ export default function EditarPromesaPage() {
       if (result.success) {
         toast.success('Promesa eliminada correctamente');
         setShowDeleteModal(false);
+        // Navegar solo después de que la eliminación sea exitosa
         router.push(`/${studioSlug}/studio/builder/commercial/promises`);
       } else {
         toast.error(result.error || 'Error al eliminar promesa');
+        setIsDeleting(false); // Permitir cerrar el modal si hay error
       }
     } catch (error) {
       console.error('Error eliminando promesa:', error);
       toast.error('Error al eliminar promesa');
-    } finally {
-      setIsDeleting(false);
+      setIsDeleting(false); // Permitir cerrar el modal si hay error
     }
   };
 
@@ -510,14 +511,15 @@ export default function EditarPromesaPage() {
 
       <ZenConfirmModal
         isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
+        onClose={() => !isDeleting && setShowDeleteModal(false)}
         onConfirm={handleDelete}
         title="¿Eliminar esta promesa?"
         description="Esta acción no se puede deshacer. La promesa y todos sus datos asociados serán eliminados permanentemente."
-        confirmText="Sí, eliminar"
+        confirmText={isDeleting ? "Eliminando..." : "Sí, eliminar"}
         cancelText="Cancelar"
         variant="destructive"
         loading={isDeleting}
+        disabled={isDeleting}
       />
     </div>
   );
