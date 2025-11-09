@@ -16,9 +16,27 @@ import {
   ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
+import { MediaItem } from "@/lib/actions/schemas/post-schemas";
 
 interface PostRendererProps {
-  post: any;
+  post: {
+    id: string;
+    title: string | null;
+    caption: string | null;
+    media?: MediaItem[];
+    published_at: Date | null;
+    created_at: Date;
+    view_count: number;
+    tags: string[];
+    event_type: { id: string; name: string } | null;
+    cta_enabled: boolean;
+    cta_action: string;
+    cta_text: string;
+    studio: {
+      studio_name: string;
+      whatsapp_number: string | null;
+    };
+  };
   studioSlug: string;
 }
 

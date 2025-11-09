@@ -53,7 +53,6 @@ export function AgendaForm({
     );
     const [time, setTime] = useState(initialData?.time || '');
     const [address, setAddress] = useState(initialData?.address || '');
-    const [concept, setConcept] = useState(initialData?.concept || '');
     const [description, setDescription] = useState(initialData?.description || '');
     const [linkMeetingUrl, setLinkMeetingUrl] = useState(
         initialData?.type_scheduling === 'presencial' ? initialData?.link_meeting_url || '' : ''
@@ -112,6 +111,9 @@ export function AgendaForm({
         if (!date) {
             newErrors.date = 'La fecha es requerida';
         }
+        if (!eventType) {
+            newErrors.eventType = 'El tipo de cita es requerido';
+        }
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
@@ -120,12 +122,15 @@ export function AgendaForm({
 
         setErrors({});
 
+        // Generar concepto automáticamente basado en el tipo de cita
+        const conceptoGenerado = eventType === 'presencial' ? 'Cita presencial' : 'Cita virtual';
+
         try {
             await onSubmit({
                 date: date!,
                 time: time || undefined,
                 address: eventType === 'presencial' ? address || undefined : undefined,
-                concept: concept || undefined,
+                concept: conceptoGenerado,
                 description: description || undefined,
                 link_meeting_url: eventType === 'presencial' ? linkMeetingUrl || undefined : eventType === 'virtual' ? virtualLink || undefined : undefined,
                 type_scheduling: eventType || undefined,
@@ -266,7 +271,7 @@ export function AgendaForm({
 
             {/* Tipo de cita */}
             <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300">Tipo de cita</label>
+                <label className="text-sm font-medium text-zinc-300">Tipo de cita *</label>
                 <div className="flex gap-2">
                     <ZenButton
                         type="button"
@@ -291,6 +296,9 @@ export function AgendaForm({
                         Virtual
                     </ZenButton>
                 </div>
+                {errors.eventType && (
+                    <p className="text-xs text-red-400">{errors.eventType}</p>
+                )}
             </div>
 
             {/* Campos condicionales según tipo */}
@@ -305,7 +313,7 @@ export function AgendaForm({
                             value={address}
                             onChange={(e) => setAddress(e.target.value)}
                             placeholder="Dirección del evento"
-                            className="w-full min-h-[80px] px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                            className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
                         />
                     </div>
                     <div className="space-y-2">
@@ -338,16 +346,6 @@ export function AgendaForm({
                 </div>
             )}
 
-            {/* Concepto */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300">Concepto</label>
-                <ZenInput
-                    value={concept}
-                    onChange={(e) => setConcept(e.target.value)}
-                    placeholder="Ej: Sesión de fotos, Reunión, etc."
-                />
-            </div>
-
             {/* Descripción */}
             <div className="space-y-2">
                 <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
@@ -358,7 +356,7 @@ export function AgendaForm({
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Notas adicionales sobre el agendamiento"
-                    className="w-full min-h-[80px] px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+                    className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
                 />
             </div>
 
@@ -388,7 +386,7 @@ export function AgendaForm({
                     </ZenButton>
                     <ZenButton
                         type="submit"
-                        disabled={loading || !date}
+                        disabled={loading || !date || !eventType}
                         loading={loading}
                         className={initialData && onCancelCita ? 'flex-1' : 'flex-1'}
                     >
