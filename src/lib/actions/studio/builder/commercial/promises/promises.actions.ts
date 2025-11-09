@@ -99,18 +99,54 @@ export async function getPromises(
                 name: true,
               },
             },
+            logs: {
+              orderBy: { created_at: 'desc' },
+              take: 1,
+              select: {
+                id: true,
+                content: true,
+                created_at: true,
+              },
+            },
+            tags: {
+              include: {
+                tag: {
+                  select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    color: true,
+                    description: true,
+                    order: true,
+                    is_active: true,
+                    created_at: true,
+                    updated_at: true,
+                  },
+                },
+              },
+              orderBy: { created_at: 'asc' },
+            },
+            quotes: {
+              select: {
+                id: true,
+              },
+            },
+            agenda: {
+              select: {
+                id: true,
+                type_scheduling: true,
+                date: true,
+                time: true,
+                address: true,
+                link_meeting_url: true,
+                concept: true,
+              },
+              orderBy: { date: 'desc' },
+              take: 1,
+            },
           },
           orderBy: { created_at: 'desc' },
           take: 1,
-        },
-        contact_logs: {
-          orderBy: { created_at: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            content: true,
-            created_at: true,
-          },
         },
       },
       orderBy: { created_at: 'desc' },
@@ -120,6 +156,22 @@ export async function getPromises(
 
     const promises: PromiseWithContact[] = contacts.map((contact) => {
       const latestPromise = contact.promises[0];
+      
+      // Mapear tags activos
+      const tags = latestPromise?.tags
+        ?.filter((pt) => pt.tag.is_active)
+        .map((pt) => ({
+          id: pt.tag.id,
+          name: pt.tag.name,
+          slug: pt.tag.slug,
+          color: pt.tag.color,
+          description: pt.tag.description,
+          order: pt.tag.order,
+          is_active: pt.tag.is_active,
+          created_at: pt.tag.created_at,
+          updated_at: pt.tag.updated_at,
+        })) || [];
+
       return {
         id: contact.id,
         promise_id: latestPromise?.id || null,
@@ -127,6 +179,7 @@ export async function getPromises(
         name: contact.name,
         phone: contact.phone,
         email: contact.email,
+        avatar_url: contact.avatar_url,
         status: contact.status,
         event_type_id: latestPromise?.event_type_id || null,
         interested_dates: latestPromise?.tentative_dates
@@ -138,7 +191,10 @@ export async function getPromises(
         updated_at: latestPromise?.updated_at || contact.updated_at,
         event_type: latestPromise?.event_type || null,
         promise_pipeline_stage: latestPromise?.pipeline_stage || null,
-        last_log: contact.contact_logs[0] || null,
+        last_log: latestPromise?.logs?.[0] || null,
+        tags: tags.length > 0 ? tags : undefined,
+        cotizaciones_count: latestPromise?.quotes?.length || 0,
+        agenda: latestPromise?.agenda?.[0] || null,
       };
     });
 
@@ -282,8 +338,9 @@ export async function createPromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-      email: contact.email,
-      status: contact.status,
+        email: contact.email,
+        avatar_url: contact.avatar_url,
+        status: contact.status,
       event_type_id: promise.event_type_id,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
@@ -527,8 +584,9 @@ export async function updatePromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-      email: contact.email,
-      status: contact.status,
+        email: contact.email,
+        avatar_url: contact.avatar_url,
+        status: contact.status,
       event_type_id: promise.event_type_id,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
@@ -678,8 +736,9 @@ export async function movePromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-      email: contact.email,
-      status: contact.status,
+        email: contact.email,
+        avatar_url: contact.avatar_url,
+        status: contact.status,
       event_type_id: promise.event_type_id,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
@@ -813,8 +872,9 @@ export async function archivePromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-      email: contact.email,
-      status: contact.status,
+        email: contact.email,
+        avatar_url: contact.avatar_url,
+        status: contact.status,
       event_type_id: updatedPromise.event_type_id,
       interested_dates: updatedPromise.tentative_dates
         ? (updatedPromise.tentative_dates as string[])
@@ -943,8 +1003,9 @@ export async function unarchivePromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-      email: contact.email,
-      status: contact.status,
+        email: contact.email,
+        avatar_url: contact.avatar_url,
+        status: contact.status,
       event_type_id: updatedPromise.event_type_id,
       interested_dates: updatedPromise.tentative_dates
         ? (updatedPromise.tentative_dates as string[])

@@ -544,7 +544,7 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
       handleSubmit();
     },
     cancel: () => {
-      handleNavigation(() => router.back());
+      handleNavigation(() => router.push(`/${studioSlug}/studio/builder/commercial/promises`));
     },
     loading,
     isEditMode,
@@ -555,7 +555,7 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
       email: formData.email || null,
       promiseId: promiseId,
     } : null,
-  }), [loading, isEditMode, handleNavigation, handleSubmit, router, isSaved, currentContactId, formData.name, formData.phone, formData.email, promiseId]);
+  }), [loading, isEditMode, handleNavigation, handleSubmit, router, isSaved, currentContactId, formData.name, formData.phone, formData.email, promiseId, studioSlug]);
 
   useEffect(() => {
     if (selectedDates.length > 0) {
@@ -988,7 +988,7 @@ export const PromiseForm = forwardRef<PromiseFormRef, PromiseFormProps>(({
               <ZenButton
                 type="button"
                 variant="ghost"
-                onClick={() => handleNavigation(() => router.back())}
+                onClick={() => handleNavigation(() => router.push(`/${studioSlug}/studio/builder/commercial/promises`))}
                 disabled={loading}
               >
                 Cancelar

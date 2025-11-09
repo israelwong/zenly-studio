@@ -150,13 +150,20 @@ export function PromiseFormModal({
         return referidosChannel?.id;
     };
 
+    const normalizePhone = (value: string): string => {
+        // Quitar todos los caracteres no numéricos
+        const digitsOnly = value.replace(/\D/g, '');
+        // Tomar los últimos 10 dígitos
+        return digitsOnly.slice(-10);
+    };
+
     useEffect(() => {
         if (isOpen) {
             // Sincronizar datos iniciales inmediatamente si existen
             if (initialData) {
                 setFormData({
                     name: initialData.name || '',
-                    phone: initialData.phone || '',
+                    phone: normalizePhone(initialData.phone || ''),
                     email: initialData.email || '',
                     event_type_id: initialData.event_type_id || '',
                     interested_dates: initialData.interested_dates,
@@ -344,7 +351,7 @@ export function PromiseFormModal({
         setFormData((prev) => ({
             ...prev,
             name: contact.name,
-            phone: contact.phone || '',
+            phone: normalizePhone(contact.phone || ''),
             email: contact.email || undefined,
         }));
         setShowContactSuggestions(false);
@@ -418,8 +425,11 @@ export function PromiseFormModal({
             newErrors.name = 'El nombre es requerido';
         }
 
-        if (!formData.phone || formData.phone.trim() === '') {
-            newErrors.phone = 'El teléfono es requerido';
+        const normalizedPhone = normalizePhone(formData.phone || '');
+        if (!normalizedPhone || normalizedPhone.length !== 10) {
+            newErrors.phone = normalizedPhone.length === 0
+                ? 'El teléfono es requerido'
+                : 'El teléfono debe tener exactamente 10 dígitos';
         }
 
         if (!formData.event_type_id || formData.event_type_id === '' || formData.event_type_id === 'none') {
@@ -446,15 +456,21 @@ export function PromiseFormModal({
         setLoading(true);
 
         try {
+            // Normalizar teléfono antes de enviar
+            const formDataToSubmit = {
+                ...formData,
+                phone: normalizedPhone,
+            };
+
             let result;
             if (isEditMode && initialData?.id) {
                 const updateData: UpdatePromiseData = {
                     id: initialData.id,
-                    ...formData,
+                    ...formDataToSubmit,
                 };
                 result = await updatePromise(studioSlug, updateData);
             } else {
-                result = await createPromise(studioSlug, formData);
+                result = await createPromise(studioSlug, formDataToSubmit);
             }
 
             if (result.success && result.data) {
@@ -568,13 +584,15 @@ export function PromiseFormModal({
                         label="Teléfono"
                         value={formData.phone || ''}
                         onChange={(e) => {
-                            setFormData((prev) => ({ ...prev, phone: e.target.value }));
+                            const normalized = normalizePhone(e.target.value);
+                            setFormData((prev) => ({ ...prev, phone: normalized }));
                             if (errors.phone) {
                                 setErrors((prev) => ({ ...prev, phone: '' }));
                             }
                         }}
                         required
                         error={errors.phone}
+                        placeholder="10 dígitos"
                     />
                     <ZenInput
                         label="Email"
@@ -829,6 +847,9 @@ export function PromiseFormModal({
                                 />
                             </PopoverContent>
                         </Popover>
+                        <p className="text-xs text-zinc-400 mt-1">
+                            Puedes elegir una o más fechas de interés asociadas a una sola promesa
+                        </p>
                         {selectedDates.some(date => {
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);

@@ -72,6 +72,7 @@ export interface PromiseWithContact {
   name: string;
   phone: string;
   email: string | null;
+  avatar_url: string | null;
   status: string; // "prospecto" | "cliente" - estado del contacto
   event_type_id: string | null;
   interested_dates: string[] | null;
@@ -94,6 +95,27 @@ export interface PromiseWithContact {
     id: string;
     content: string;
     created_at: Date;
+  } | null;
+  tags?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    color: string;
+    description: string | null;
+    order: number;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
+  }>;
+  cotizaciones_count?: number;
+  agenda?: {
+    id: string;
+    type_scheduling: string | null;
+    date: Date | null;
+    time: string | null;
+    address: string | null;
+    link_meeting_url: string | null;
+    concept: string | null;
   } | null;
 }
 

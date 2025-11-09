@@ -8,13 +8,14 @@ import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/pr
 
 interface PromisesWrapperProps {
   studioSlug: string;
+  onOpenPromiseFormRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-export function PromisesWrapper({ studioSlug }: PromisesWrapperProps) {
+export function PromisesWrapper({ studioSlug, onOpenPromiseFormRef }: PromisesWrapperProps) {
   const [promises, setPromises] = useState<PromiseWithContact[]>([]);
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [isPromiseFormModalOpen, setIsPromiseFormModalOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -23,7 +24,7 @@ export function PromisesWrapper({ studioSlug }: PromisesWrapperProps) {
         getPromises(studioSlug, {
           page: 1,
           limit: 1000, // Cargar todos para el kanban
-          search: search || undefined,
+          // Búsqueda ahora es local, no se envía al servidor
         }),
         getPipelineStages(studioSlug),
       ]);
@@ -45,15 +46,12 @@ export function PromisesWrapper({ studioSlug }: PromisesWrapperProps) {
     } finally {
       setLoading(false);
     }
-  }, [studioSlug, search]);
+  }, [studioSlug]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-  };
 
   const handlePromiseCreated = useCallback(() => {
     loadData();
@@ -71,22 +69,33 @@ export function PromisesWrapper({ studioSlug }: PromisesWrapperProps) {
     loadData();
   }, [loadData]);
 
+  // Exponer función para abrir modal desde el header
+  useEffect(() => {
+    if (onOpenPromiseFormRef) {
+      onOpenPromiseFormRef.current = () => setIsPromiseFormModalOpen(true);
+    }
+  }, [onOpenPromiseFormRef]);
+
   if (loading) {
     return <PromisesSkeleton />;
   }
 
   return (
-    <PromisesKanban
-      studioSlug={studioSlug}
-      promises={promises}
-      pipelineStages={pipelineStages}
-      search={search}
-      onSearchChange={handleSearchChange}
-      onPromiseCreated={handlePromiseCreated}
-      onPromiseUpdated={handlePromiseUpdated}
-      onPromiseMoved={handlePromiseMoved}
-      onPipelineStagesUpdated={handlePipelineStagesUpdated}
-    />
+    <div className="h-full flex flex-col">
+      <PromisesKanban
+        studioSlug={studioSlug}
+        promises={promises}
+        pipelineStages={pipelineStages}
+        search=""
+        onSearchChange={() => {}}
+        onPromiseCreated={handlePromiseCreated}
+        onPromiseUpdated={handlePromiseUpdated}
+        onPromiseMoved={handlePromiseMoved}
+        onPipelineStagesUpdated={handlePipelineStagesUpdated}
+        isPromiseFormModalOpen={isPromiseFormModalOpen}
+        setIsPromiseFormModalOpen={setIsPromiseFormModalOpen}
+      />
+    </div>
   );
 }
 

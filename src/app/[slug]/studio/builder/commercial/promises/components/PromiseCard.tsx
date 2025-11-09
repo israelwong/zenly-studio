@@ -5,12 +5,12 @@ import { CSS } from '@dnd-kit/utilities';
 import { Calendar, MessageSquare } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 
-interface PromiseCardProps {
+interface PromiseKanbanCardProps {
     promise: PromiseWithContact;
     onClick?: (promise: PromiseWithContact) => void;
 }
 
-export function PromiseCard({ promise, onClick }: PromiseCardProps) {
+export function PromiseKanbanCard({ promise, onClick }: PromiseKanbanCardProps) {
     const {
         attributes,
         listeners,
@@ -96,14 +96,14 @@ export function PromiseCard({ promise, onClick }: PromiseCardProps) {
                 <div className={`flex items-center gap-2 text-xs ${isExpired ? 'text-red-400' : 'text-zinc-400'}`}>
                     <Calendar className="h-3 w-3" />
                     <span>
-                        {eventDate 
+                        {eventDate
                             ? formatDate(eventDate)
                             : formatInterestedDates(promise.interested_dates)
                         }
                     </span>
                     {daysRemaining !== null && (
                         <span className={`ml-1 ${isExpired ? 'text-red-400 font-medium' : 'text-zinc-500'}`}>
-                            {isExpired 
+                            {isExpired
                                 ? `(${Math.abs(daysRemaining)} días vencidos)`
                                 : `(${daysRemaining} días)`
                             }
@@ -111,11 +111,11 @@ export function PromiseCard({ promise, onClick }: PromiseCardProps) {
                     )}
                 </div>
 
-                {/* Último comentario del log */}
+                {/* Último log asociado */}
                 {promise.last_log && (
-                    <div className="flex items-start gap-2 text-xs text-zinc-500">
+                    <div className="flex items-start gap-1.5 text-xs text-zinc-500 pt-1 border-t border-zinc-700/50">
                         <MessageSquare className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                        <p className="line-clamp-2">{promise.last_log.content}</p>
+                        <p className="line-clamp-2 flex-1">{promise.last_log.content}</p>
                     </div>
                 )}
             </div>

@@ -142,7 +142,7 @@ export function ContactModal({
             if (result.success && result.data) {
                 setFormData({
                     name: result.data.name,
-                    phone: result.data.phone,
+                    phone: normalizePhone(result.data.phone),
                     email: result.data.email ? result.data.email : '',
                     address: result.data.address ? result.data.address : '',
                     avatar_url: result.data.avatar_url ? result.data.avatar_url : '',
@@ -228,9 +228,11 @@ export function ContactModal({
             newErrors.name = 'El nombre es requerido';
         }
 
-        const phoneDigits = formData.phone.replace(/\D/g, '');
-        if (!phoneDigits || phoneDigits.length < 10) {
-            newErrors.phone = 'Teléfono debe tener al menos 10 dígitos';
+        const normalizedPhone = normalizePhone(formData.phone || '');
+        if (!normalizedPhone || normalizedPhone.length !== 10) {
+            newErrors.phone = normalizedPhone.length === 0
+                ? 'El teléfono es requerido'
+                : 'El teléfono debe tener exactamente 10 dígitos';
         }
 
         // Validar email solo si está presente
@@ -249,12 +251,12 @@ export function ContactModal({
         try {
             setLoading(true);
 
-            // Preparar datos con teléfono solo dígitos
+            // Preparar datos con teléfono normalizado
             // Nota: Los canales de adquisición vienen de la BD (getAcquisitionChannels)
             // Solo "Ninguno" es una opción manual para limpiar el campo
             const submitData: CreateContactData = {
                 name: formData.name,
-                phone: phoneDigits,
+                phone: normalizedPhone,
                 status: formData.status,
                 email: formData.email?.trim() || undefined,
                 address: formData.address?.trim() || undefined,
@@ -328,6 +330,13 @@ export function ContactModal({
             c.name.toLowerCase().includes('red') || c.name.toLowerCase().includes('social')
         );
         return redesChannel?.id;
+    };
+
+    const normalizePhone = (value: string): string => {
+        // Quitar todos los caracteres no numéricos
+        const digitsOnly = value.replace(/\D/g, '');
+        // Tomar los últimos 10 dígitos
+        return digitsOnly.slice(-10);
     };
 
     const acquisitionChannelOptions: ZenSelectOption[] = [
@@ -417,7 +426,10 @@ export function ContactModal({
                                     label="Teléfono *"
                                     required
                                     value={formData.phone}
-                                    onChange={(e) => handleInputChange('phone', e.target.value.replace(/\D/g, ''))}
+                                    onChange={(e) => {
+                                        const normalized = normalizePhone(e.target.value);
+                                        handleInputChange('phone', normalized);
+                                    }}
                                     placeholder="10 dígitos"
                                     disabled={loading}
                                     error={errors.phone}

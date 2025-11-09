@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Plus, Settings, Archive } from 'lucide-react';
+import { Search, Settings, Archive, X } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -20,8 +20,8 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ZenButton, ZenInput } from '@/components/ui/zen';
-import { PromiseCard } from './PromiseCard';
+import { ZenInput } from '@/components/ui/zen';
+import { PromiseKanbanCard } from './PromiseKanbanCard';
 import { PipelineConfigModal } from './PipelineConfigModal';
 import { PromiseFormModal } from './PromiseFormModal';
 import { movePromise } from '@/lib/actions/studio/builder/commercial/promises';
@@ -39,27 +39,35 @@ interface PromisesKanbanProps {
   onPromiseUpdated: () => void;
   onPromiseMoved: () => void;
   onPipelineStagesUpdated: () => void;
+  isPromiseFormModalOpen?: boolean;
+  setIsPromiseFormModalOpen?: (open: boolean) => void;
 }
 
 export function PromisesKanban({
   studioSlug,
   promises,
   pipelineStages,
-  search,
+  search: externalSearch,
   onSearchChange,
   onPromiseCreated,
   onPromiseUpdated,
   onPromiseMoved,
   onPipelineStagesUpdated,
+  isPromiseFormModalOpen: externalIsOpen,
+  setIsPromiseFormModalOpen: externalSetIsOpen,
 }: PromisesKanbanProps) {
   const router = useRouter();
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-  const [isPromiseFormModalOpen, setIsPromiseFormModalOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isPromiseFormModalOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+  const setIsPromiseFormModalOpen = externalSetIsOpen || setInternalIsOpen;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localPromises, setLocalPromises] = useState<PromiseWithContact[]>(promises);
   const prevPromisesRef = useRef<PromiseWithContact[]>(promises);
   const isDraggingRef = useRef(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [localSearch, setLocalSearch] = useState(externalSearch || '');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Sincronizar estado local cuando cambian las promesas desde el padre
   // Evitar sincronización durante drag and drop para prevenir parpadeos
@@ -100,20 +108,134 @@ export function PromisesKanban({
     })
   );
 
-  // Filtrar promesas por búsqueda
-  const filteredPromises = useMemo(() => {
-    if (!search.trim()) return localPromises;
+  // Sincronizar búsqueda externa si cambia (solo una vez al cargar)
+  useEffect(() => {
+    if (externalSearch !== undefined && externalSearch !== localSearch) {
+      setLocalSearch(externalSearch);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    const searchLower = search.toLowerCase();
+  // Manejar tecla Escape para limpiar búsqueda
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        setLocalSearch('');
+        searchInputRef.current?.blur();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Filtrar promesas por búsqueda local
+  const filteredPromises = useMemo(() => {
+    if (!localSearch.trim()) return localPromises;
+
+    const searchLower = localSearch.toLowerCase();
     return localPromises.filter((p) => {
       const nameMatch = p.name.toLowerCase().includes(searchLower);
       const emailMatch = p.email?.toLowerCase().includes(searchLower);
-      const phoneMatch = p.phone.includes(search);
+      const phoneMatch = p.phone.includes(localSearch);
       const eventTypeMatch = p.event_type?.name.toLowerCase().includes(searchLower);
 
-      return nameMatch || emailMatch || phoneMatch || eventTypeMatch;
+      // Búsqueda por fecha de evento
+      let dateMatch = false;
+      if (p.defined_date) {
+        const eventDate = new Date(p.defined_date);
+        const dateStr = eventDate.toLocaleDateString('es-MX', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }).toLowerCase();
+        dateMatch = dateStr.includes(searchLower);
+      }
+      if (!dateMatch && p.interested_dates && p.interested_dates.length > 0) {
+        dateMatch = p.interested_dates.some(date => {
+          const dateObj = new Date(date);
+          const dateStr = dateObj.toLocaleDateString('es-MX', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }).toLowerCase();
+          return dateStr.includes(searchLower);
+        });
+      }
+
+      // Búsqueda por agendamiento (cita)
+      let agendaMatch = false;
+      if (p.agenda) {
+        const hasAgenda = p.agenda.date !== null;
+        const isCitaKeyword = searchLower === 'cita' || searchLower === 'citas';
+        const isVirtualKeyword = searchLower === 'virtual' || searchLower === 'virtuales';
+        const isPresencialKeyword = searchLower === 'presencial' || searchLower === 'presenciales';
+
+        // Si busca "cita", mostrar todas las que tienen agendamiento
+        if (isCitaKeyword && hasAgenda) {
+          agendaMatch = true;
+        }
+        // Si busca "virtual", mostrar las que tienen type_scheduling === 'virtual'
+        else if (isVirtualKeyword && p.agenda.type_scheduling === 'virtual') {
+          agendaMatch = true;
+        }
+        // Si busca "presencial", mostrar las que tienen type_scheduling === 'presencial'
+        else if (isPresencialKeyword && p.agenda.type_scheduling === 'presencial') {
+          agendaMatch = true;
+        }
+        // Búsqueda en otros campos del agendamiento
+        else if (hasAgenda) {
+          const addressMatch = p.agenda.address?.toLowerCase().includes(searchLower) ?? false;
+          const conceptMatch = p.agenda.concept?.toLowerCase().includes(searchLower) ?? false;
+          const linkMatch = p.agenda.link_meeting_url?.toLowerCase().includes(searchLower) ?? false;
+
+          // Búsqueda por fecha de agendamiento
+          let agendaDateMatch = false;
+          if (p.agenda.date) {
+            const agendaDate = new Date(p.agenda.date);
+            const agendaDateStr = agendaDate.toLocaleDateString('es-MX', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            }).toLowerCase();
+            agendaDateMatch = agendaDateStr.includes(searchLower);
+          }
+
+          // Búsqueda por hora de agendamiento
+          const timeMatch = p.agenda.time?.toLowerCase().includes(searchLower) ?? false;
+
+          agendaMatch = addressMatch || conceptMatch || linkMatch || agendaDateMatch || timeMatch;
+        }
+      }
+
+      // Búsqueda por tags
+      const tagsMatch = p.tags?.some(tag =>
+        tag.name.toLowerCase().includes(searchLower) ||
+        tag.slug.toLowerCase().includes(searchLower)
+      );
+
+      // Búsqueda por último log
+      const logMatch = p.last_log?.content.toLowerCase().includes(searchLower);
+
+      return nameMatch || emailMatch || phoneMatch || eventTypeMatch || dateMatch || agendaMatch || tagsMatch || logMatch;
     });
-  }, [localPromises, search]);
+  }, [localPromises, localSearch]);
+
+  const handleSearchChange = (value: string) => {
+    setLocalSearch(value);
+    // Opcional: notificar al padre si es necesario
+    if (onSearchChange) {
+      onSearchChange(value);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setLocalSearch('');
+    searchInputRef.current?.focus();
+    if (onSearchChange) {
+      onSearchChange('');
+    }
+  };
 
   // Ordenar promesas: por fecha de evento (defined_date) o fecha de actualización
   const sortedPromises = useMemo(() => {
@@ -264,41 +386,52 @@ export function PromisesKanban({
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-        <div className="flex-1 w-full">
-          <ZenInput
-            id="search"
-            placeholder="Buscar promesas..."
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            icon={Search}
-            iconClassName="h-4 w-4"
-          />
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-4 flex-shrink-0">
+        <div className="flex-1 w-full relative">
+          <div className="relative">
+            <ZenInput
+              ref={searchInputRef}
+              id="search"
+              placeholder="Buscar promesas..."
+              value={localSearch}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              icon={Search}
+              iconClassName="h-4 w-4"
+              className={localSearch ? 'pr-10' : ''}
+            />
+            {localSearch && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300"
+                aria-label="Limpiar búsqueda"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
-          <ZenButton
-            variant={showArchived ? 'default' : 'outline'}
+          <button
             onClick={() => setShowArchived(!showArchived)}
-            className="w-full sm:w-auto"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${showArchived
+              ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
+              : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50'
+              }`}
           >
-            <Archive className="h-4 w-4 mr-2" />
+            <Archive className="h-3.5 w-3.5" />
             {showArchived ? 'Ocultar' : 'Mostrar'} Archivados
-          </ZenButton>
-          <ZenButton
-            variant="ghost"
+          </button>
+          <button
             onClick={() => setIsConfigModalOpen(true)}
-            className="w-full sm:w-auto"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
           >
-            <Settings className="h-4 w-4 mr-2" />
+            <Settings className="h-3.5 w-3.5" />
             Configurar
-          </ZenButton>
-          <ZenButton onClick={() => setIsPromiseFormModalOpen(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Registrar Promesa
-          </ZenButton>
+          </button>
         </div>
       </div>
 
@@ -309,21 +442,42 @@ export function PromisesKanban({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {visibleStages.map((stage: PipelineStage) => (
-            <KanbanColumn
-              key={stage.id}
-              stage={stage}
-              promises={promisesByStage[stage.id] || []}
-              onPromiseClick={handlePromiseClick}
-            />
-          ))}
+        <div className="flex gap-4 overflow-x-auto overflow-y-hidden flex-1 min-h-0 pb-4">
+          {/* Si hay más de 3 etapas, todas tienen ancho fijo con scroll */}
+          {visibleStages.length > 3 ? (
+            visibleStages.map((stage: PipelineStage) => (
+              <KanbanColumn
+                key={stage.id}
+                stage={stage}
+                promises={promisesByStage[stage.id] || []}
+                onPromiseClick={handlePromiseClick}
+                studioSlug={studioSlug}
+                isFlexible={false}
+                onPromiseArchived={onPromiseUpdated}
+              />
+            ))
+          ) : (
+            /* Si hay 3 o menos, las primeras 3 ocupan el ancho disponible */
+            <div className="flex gap-4 flex-1 min-w-0 w-full">
+              {visibleStages.map((stage: PipelineStage) => (
+                <KanbanColumn
+                  key={stage.id}
+                  stage={stage}
+                  promises={promisesByStage[stage.id] || []}
+                  onPromiseClick={handlePromiseClick}
+                  studioSlug={studioSlug}
+                  isFlexible={true}
+                  onPromiseArchived={onPromiseUpdated}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         <DragOverlay style={{ cursor: 'grabbing' }}>
           {activePromise ? (
             <div className="opacity-90 rotate-2 shadow-2xl">
-              <PromiseCard promise={activePromise} />
+              <PromiseKanbanCard promise={activePromise} studioSlug={studioSlug} onArchived={onPromiseUpdated} />
             </div>
           ) : null}
         </DragOverlay>
@@ -341,6 +495,10 @@ export function PromisesKanban({
         isOpen={isPromiseFormModalOpen}
         onClose={() => setIsPromiseFormModalOpen(false)}
         studioSlug={studioSlug}
+        onSuccess={() => {
+          onPromiseCreated();
+          setIsPromiseFormModalOpen(false);
+        }}
       />
     </div>
   );
@@ -351,19 +509,35 @@ function KanbanColumn({
   stage,
   promises,
   onPromiseClick,
+  studioSlug,
+  isFlexible = false,
+  onPromiseArchived,
 }: {
   stage: PipelineStage;
   promises: PromiseWithContact[];
   onPromiseClick: (promise: PromiseWithContact) => void;
+  studioSlug: string;
+  isFlexible?: boolean;
+  onPromiseArchived?: () => void;
 }) {
-  const { setNodeRef } = useDroppable({
+  const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
   });
 
   return (
     <div
       ref={setNodeRef}
-      className="min-w-[280px] flex flex-col bg-zinc-900/50 rounded-lg border border-zinc-700 p-4"
+      className={`${isFlexible
+        ? 'flex-1 min-w-[280px]'
+        : 'w-[280px] min-w-[280px] max-w-[280px] flex-shrink-0'
+        } flex flex-col rounded-lg border p-4 h-full overflow-hidden transition-all duration-200 ${isOver
+          ? 'bg-zinc-800/70'
+          : 'bg-zinc-900/50 border-zinc-700'
+        }`}
+      style={{
+        borderColor: isOver ? stage.color : undefined,
+        boxShadow: isOver ? `0 10px 15px -3px ${stage.color}20, 0 4px 6px -2px ${stage.color}10` : undefined,
+      }}
     >
       {/* Header de columna */}
       <div
@@ -384,7 +558,7 @@ function KanbanColumn({
 
       {/* Lista de promises */}
       <div
-        className="space-y-3"
+        className="space-y-3 flex-1 overflow-y-auto min-h-0"
         style={{
           minHeight: promises.length === 0 ? '200px' : 'auto',
         }}
@@ -394,10 +568,12 @@ function KanbanColumn({
           strategy={verticalListSortingStrategy}
         >
           {promises.map((promise) => (
-            <PromiseCard
+            <PromiseKanbanCard
               key={promise.id}
               promise={promise}
               onClick={onPromiseClick}
+              studioSlug={studioSlug}
+              onArchived={onPromiseArchived}
             />
           ))}
         </SortableContext>
