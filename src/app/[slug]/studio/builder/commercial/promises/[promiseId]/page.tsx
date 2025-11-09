@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
-import { PromiseView } from '../components/PromiseView';
+import { PromiseCardView } from '../components/PromiseCardView';
 import { PromiseFormModal } from '../components/PromiseFormModal';
 import { PromiseQuickActions } from '../components/PromiseQuickActions';
 import { getPromiseById, archivePromise, unarchivePromise, deletePromise, getPipelineStages, movePromise } from '@/lib/actions/studio/builder/commercial/promises';
@@ -448,7 +448,7 @@ export default function EditarPromesaPage() {
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          <PromiseView
+          <PromiseCardView
             studioSlug={studioSlug}
             promiseId={promiseId}
             contactId={promiseData.id}

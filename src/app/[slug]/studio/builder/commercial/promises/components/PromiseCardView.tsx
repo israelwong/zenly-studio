@@ -14,7 +14,7 @@ import { PromiseQuotesPanel } from './PromiseQuotesPanel';
 import { PromiseTags } from './PromiseTags';
 import { PromiseAgendamiento } from './PromiseAgendamiento';
 
-interface PromiseViewProps {
+interface PromiseCardViewProps {
   studioSlug: string;
   promiseId: string | null;
   contactId: string | null;
@@ -213,14 +213,14 @@ function ContactHoverCard({
   );
 }
 
-export function PromiseView({
+export function PromiseCardView({
   studioSlug,
   promiseId,
   contactId,
   data,
   onEdit,
   isSaved,
-}: PromiseViewProps) {
+}: PromiseCardViewProps) {
   return (
     <div className="space-y-6">
       {/* Layout de 3 columnas */}
@@ -261,7 +261,7 @@ export function PromiseView({
                       isReferrer={false}
                     />
                   ) : (
-                  <p className="text-sm text-zinc-200">{data.name}</p>
+                    <p className="text-sm text-zinc-200">{data.name}</p>
                   )}
                 </div>
                 <div>
