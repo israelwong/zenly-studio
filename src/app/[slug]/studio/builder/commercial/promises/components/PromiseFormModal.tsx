@@ -810,6 +810,11 @@ export function PromiseFormModal({
                             <PopoverTrigger asChild>
                                 <button
                                     type="button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setCalendarOpen(!calendarOpen);
+                                    }}
                                     className="w-full flex items-center justify-between px-3 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-300 hover:border-zinc-600 transition-colors"
                                 >
                                     <span className={selectedDates.length === 0 ? 'text-zinc-500' : ''}>
@@ -819,9 +824,10 @@ export function PromiseFormModal({
                                 </button>
                             </PopoverTrigger>
                             <PopoverContent
-                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-[100]"
+                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-[9999]"
                                 align="start"
                                 sideOffset={4}
+                                onOpenAutoFocus={(e) => e.preventDefault()}
                             >
                                 <Calendar
                                     mode="multiple"

@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ZenInput, ZenDialog, ZenTextarea, ZenSelect, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenInput, ZenDialog, ZenTextarea, ZenConfirmModal } from '@/components/ui/zen';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
-import type { ZenSelectOption } from '@/components/ui/zen';
 import { toast } from 'sonner';
 import {
     createContact,
@@ -20,6 +19,7 @@ import {
 import type { CreateContactData, Contact } from '@/lib/actions/schemas/contacts-schemas';
 import { AvatarManager } from '@/components/shared/avatar';
 import { useStorageRefresh } from '@/hooks/useStorageRefresh';
+import { useContactRefresh } from '@/hooks/useContactRefresh';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { Calendar, ArrowRight, Package } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -40,6 +40,7 @@ function ContactModalComponent({
     onSuccess
 }: ContactModalProps) {
     const { triggerRefresh } = useStorageRefresh(studioSlug);
+    const { triggerContactUpdate } = useContactRefresh();
     const [loading, setLoading] = useState(false);
     const [loadingContact, setLoadingContact] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -118,7 +119,7 @@ function ContactModalComponent({
 
     const loadReferrerContactsRef = useRef(async (excludeContactId?: string | null) => {
         try {
-            const result = await getContacts(studioSlug, { page: 1, limit: 100 });
+            const result = await getContacts(studioSlug, { page: 1, limit: 100, status: 'all' });
             if (result.success && result.data) {
                 const contacts = result.data.contacts
                     .filter((c: Contact) => c.id !== excludeContactId)
@@ -207,7 +208,7 @@ function ContactModalComponent({
     useEffect(() => {
         loadReferrerContactsRef.current = async (excludeContactId?: string | null) => {
             try {
-                const result = await getContacts(studioSlug, { page: 1, limit: 100 });
+                const result = await getContacts(studioSlug, { page: 1, limit: 100, status: 'all' });
                 if (result.success && result.data) {
                     const contacts = result.data.contacts
                         .filter((c: Contact) => c.id !== excludeContactId)
@@ -366,15 +367,17 @@ function ContactModalComponent({
             setErrors({});
             setReferrerInputValue('');
             setShowReferrerSuggestions(false);
-            loadContactRef.current(contactId);
-            loadEventsRef.current(contactId);
-            loadPromisesRef.current(contactId);
+            if (contactId) {
+                loadContactRef.current(contactId);
+                loadEventsRef.current(contactId);
+                loadPromisesRef.current(contactId);
+            }
         }
 
         isInitializingRef.current = false;
     }, [isOpen, contactId]);
 
-    const handleInputChange = (field: keyof CreateContactData, value: any) => {
+    const handleInputChange = (field: keyof CreateContactData, value: unknown) => {
         setFormData(prev => ({ ...prev, [field]: value }));
         if (errors[field]) {
             setErrors(prev => {
@@ -442,7 +445,7 @@ function ContactModalComponent({
         try {
             let result;
             if (contactId) {
-                result = await updateContact(studioSlug, contactId, formData);
+                result = await updateContact(studioSlug, { ...formData, id: contactId });
             } else {
                 result = await createContact(studioSlug, formData);
             }
@@ -450,6 +453,10 @@ function ContactModalComponent({
             if (result.success && result.data) {
                 toast.success(contactId ? 'Contacto actualizado exitosamente' : 'Contacto creado exitosamente');
                 triggerRefresh();
+                // Emitir evento de actualización para sincronizar otros componentes
+                if (contactId) {
+                    triggerContactUpdate(contactId, result.data);
+                }
                 onSuccess(result.data, !!contactId);
                 onClose();
                 resetForm();
@@ -478,7 +485,7 @@ function ContactModalComponent({
         try {
             // Verificar asociaciones antes de mostrar el modal
             const checkResult = await checkContactAssociations(studioSlug, contactId);
-            
+
             if (!checkResult.success) {
                 toast.error(checkResult.error || 'Error al verificar asociaciones');
                 return;
@@ -493,7 +500,7 @@ function ContactModalComponent({
                 if (checkResult.hasEvents) {
                     associations.push('eventos');
                 }
-                
+
                 const message = `No se puede eliminar el contacto porque está asociado a ${associations.join(' y ')}. Por favor, elimina primero las ${associations.join(' y ')} asociadas.`;
                 toast.error(message);
                 return;
@@ -532,15 +539,22 @@ function ContactModalComponent({
         }
     };
 
-    const acquisitionChannelOptions: ZenSelectOption[] = [
-        { value: 'none', label: 'Ninguno' },
-        ...acquisitionChannels.map(c => ({ value: c.id, label: c.name }))
-    ];
+    const getRedesSocialesChannelId = (): string | undefined => {
+        const redesChannel = acquisitionChannels.find((c) =>
+            c.name.toLowerCase().includes('red') || c.name.toLowerCase().includes('social')
+        );
+        return redesChannel?.id;
+    };
 
-    const socialNetworkOptions: ZenSelectOption[] = [
-        { value: 'none', label: 'Ninguno' },
-        ...socialNetworks.map(n => ({ value: n.id, label: n.name }))
-    ];
+    const getReferidosChannelId = (): string | undefined => {
+        const referidosChannel = acquisitionChannels.find((c) =>
+            c.name.toLowerCase().includes('referido') || c.name.toLowerCase().includes('referral')
+        );
+        return referidosChannel?.id;
+    };
+
+    const isRedesSociales = formData.acquisition_channel_id === getRedesSocialesChannelId();
+    const isReferidos = formData.acquisition_channel_id === getReferidosChannelId();
 
     return (
         <>
@@ -574,131 +588,177 @@ function ContactModalComponent({
                             }}
                             noValidate
                         >
-                            {/* Sección 1: Información Básica */}
-                            <div className="space-y-4 mb-6">
-                                <h3 className="text-sm font-medium text-zinc-300 mb-3">Información Básica</h3>
-                                
-                                <div className="flex items-start gap-4">
-                                    <div className="flex-shrink-0">
-                                        <AvatarManager
-                                            currentAvatarUrl={formData.avatar_url || ''}
-                                            onAvatarChange={(url) => handleInputChange('avatar_url', url)}
-                                            studioSlug={studioSlug}
-                                        />
-                                    </div>
-                                    <div className="flex-1 space-y-4">
+                            {/* Información Básica en Grid */}
+                            <div className="grid grid-cols-4 gap-4 mb-4">
+                                <div className="col-span-1 flex items-center justify-center">
+                                    <AvatarManager
+                                        url={formData.avatar_url || null}
+                                        onUpdate={async (url) => handleInputChange('avatar_url', url)}
+                                        studioSlug={studioSlug}
+                                        category="clientes"
+                                        size="md"
+                                    />
+                                </div>
+                                <div className="col-span-3 space-y-4">
+                                    <ZenInput
+                                        label="Nombre"
+                                        value={formData.name}
+                                        onChange={(e) => handleInputChange('name', e.target.value)}
+                                        placeholder="Nombre completo"
+                                        required
+                                        disabled={loading}
+                                        error={errors.name}
+                                    />
+                                    <div className="grid grid-cols-[140px_1fr] gap-4">
                                         <ZenInput
-                                            label="Nombre"
-                                            value={formData.name}
-                                            onChange={(e) => handleInputChange('name', e.target.value)}
-                                            placeholder="Nombre completo"
+                                            label="Teléfono"
+                                            value={formData.phone}
+                                            onChange={(e) => handlePhoneChange(e.target.value)}
+                                            placeholder="10 dígitos"
                                             required
                                             disabled={loading}
-                                            error={errors.name}
+                                            error={errors.phone}
+                                            maxLength={10}
                                         />
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <ZenInput
-                                                label="Teléfono"
-                                                value={formData.phone}
-                                                onChange={(e) => handlePhoneChange(e.target.value)}
-                                                placeholder="10 dígitos"
-                                                required
-                                                disabled={loading}
-                                                error={errors.phone}
-                                                maxLength={10}
-                                            />
-                                            <ZenInput
-                                                label="Email"
-                                                type="email"
-                                                value={formData.email}
-                                                onChange={(e) => handleInputChange('email', e.target.value)}
-                                                placeholder="email@ejemplo.com"
-                                                disabled={loading}
-                                                error={errors.email}
-                                            />
-                                        </div>
                                         <ZenInput
-                                            label="Dirección"
-                                            value={formData.address}
-                                            onChange={(e) => handleInputChange('address', e.target.value)}
-                                            placeholder="Dirección completa"
+                                            label="Email"
+                                            type="email"
+                                            value={formData.email}
+                                            onChange={(e) => handleInputChange('email', e.target.value)}
+                                            placeholder="email@ejemplo.com"
                                             disabled={loading}
-                                            error={errors.address}
+                                            error={errors.email}
                                         />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Sección 2: Clasificación y Referencias */}
-                            <div className="space-y-4 mb-6 pt-4 border-t border-zinc-700">
-                                <h3 className="text-sm font-medium text-zinc-300 mb-3">Clasificación y Referencias</h3>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <ZenSelect
-                                        label="Estado"
-                                        value={formData.status}
-                                        onChange={(value) => handleInputChange('status', value)}
-                                        options={[
-                                            { value: 'prospecto', label: 'Prospecto' },
-                                            { value: 'cliente', label: 'Cliente' }
-                                        ]}
-                                        disabled={loading}
-                                        error={errors.status}
-                                    />
-                                    <ZenSelect
-                                        label="Canal de Adquisición"
-                                        value={formData.acquisition_channel_id || 'none'}
-                                        onChange={(value) => handleInputChange('acquisition_channel_id', value === 'none' ? undefined : value)}
-                                        options={acquisitionChannelOptions}
-                                        disabled={loading}
-                                        error={errors.acquisition_channel_id}
-                                    />
-                                    <ZenSelect
-                                        label="Red Social"
-                                        value={formData.social_network_id || 'none'}
-                                        onChange={(value) => handleInputChange('social_network_id', value === 'none' ? undefined : value)}
-                                        options={socialNetworkOptions}
-                                        disabled={loading}
-                                        error={errors.social_network_id}
-                                    />
-                                </div>
-
-                                <div className="relative">
-                                    <ZenInput
-                                        label="Referido Por"
-                                        value={referrerInputValue}
-                                        onChange={(e) => handleReferrerInputChange(e.target.value)}
-                                        placeholder="@nombre o nombre manual"
-                                        disabled={loading}
-                                        error={errors.referrer_contact_id || errors.referrer_name}
-                                    />
-                                    {showReferrerSuggestions && filteredReferrerContacts.length > 0 && (
-                                        <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                                            {filteredReferrerContacts.map((contact) => (
-                                                <button
-                                                    key={contact.id}
-                                                    type="button"
-                                                    onClick={() => handleSelectReferrer(contact)}
-                                                    className="w-full text-left px-4 py-2 hover:bg-zinc-700 transition-colors"
-                                                >
-                                                    <div className="font-medium text-white">{contact.name}</div>
-                                                    <div className="text-xs text-zinc-400">{contact.phone}</div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                            {/* Dirección */}
+                            <div className="mb-4">
+                                <ZenTextarea
+                                    label="Dirección"
+                                    value={formData.address || ''}
+                                    onChange={(e) => handleInputChange('address', e.target.value)}
+                                    placeholder="Dirección completa"
+                                    disabled={loading}
+                                    error={errors.address}
+                                    minRows={2}
+                                />
                             </div>
 
-                            {/* Sección 3: Notas */}
-                            <ZenTextarea
-                                label="Notas"
-                                value={formData.notes || ''}
-                                onChange={(e) => handleInputChange('notes', e.target.value)}
-                                placeholder="Notas adicionales..."
-                                disabled={loading}
-                                minRows={3}
-                            />
+                            {/* Canal de Adquisición */}
+                            <div className="mb-4">
+                                <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                    Canal de Adquisición
+                                </label>
+                                <select
+                                    value={formData.acquisition_channel_id || 'none'}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        const newChannelId = value === 'none' ? undefined : value;
+                                        handleInputChange('acquisition_channel_id', newChannelId);
+
+                                        // Limpiar campos relacionados si cambia el canal
+                                        const redesChannelId = getRedesSocialesChannelId();
+                                        const referidosChannelId = getReferidosChannelId();
+                                        if (value !== redesChannelId) {
+                                            handleInputChange('social_network_id', undefined);
+                                        }
+                                        if (value !== referidosChannelId) {
+                                            handleInputChange('referrer_contact_id', undefined);
+                                            handleInputChange('referrer_name', undefined);
+                                            setReferrerInputValue('');
+                                            setShowReferrerSuggestions(false);
+                                        }
+                                    }}
+                                    disabled={loading || acquisitionChannels.length === 0}
+                                    className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
+                                        ? 'border-red-500 focus:ring-red-500'
+                                        : 'border-zinc-700 hover:border-zinc-600'
+                                        }`}
+                                >
+                                    <option value="none">Ninguno</option>
+                                    {acquisitionChannels.map((channel) => (
+                                        <option key={channel.id} value={channel.id}>
+                                            {channel.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.acquisition_channel_id && (
+                                    <p className="mt-1 text-xs text-red-500">{errors.acquisition_channel_id}</p>
+                                )}
+                            </div>
+
+                            {/* Red Social (solo si canal es Redes Sociales) */}
+                            {isRedesSociales && (
+                                <div className="mb-4">
+                                    <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                        Red Social
+                                    </label>
+                                    <select
+                                        value={formData.social_network_id || 'none'}
+                                        onChange={(e) => handleInputChange('social_network_id', e.target.value === 'none' ? undefined : e.target.value)}
+                                        disabled={loading || socialNetworks.length === 0}
+                                        className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.social_network_id
+                                            ? 'border-red-500 focus:ring-red-500'
+                                            : 'border-zinc-700 hover:border-zinc-600'
+                                            }`}
+                                    >
+                                        <option value="none">Ninguno</option>
+                                        {socialNetworks.map((network) => (
+                                            <option key={network.id} value={network.id}>
+                                                {network.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.social_network_id && (
+                                        <p className="mt-1 text-xs text-red-500">{errors.social_network_id}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Referido Por (solo si canal es Referidos) */}
+                            {isReferidos && (
+                                <div className="mb-4">
+                                    <div className="relative">
+                                        <ZenInput
+                                            label="Referido Por"
+                                            value={referrerInputValue}
+                                            onChange={(e) => handleReferrerInputChange(e.target.value)}
+                                            placeholder="@nombre o nombre manual"
+                                            disabled={loading}
+                                            error={errors.referrer_contact_id || errors.referrer_name}
+                                        />
+                                        {showReferrerSuggestions && filteredReferrerContacts.length > 0 && (
+                                            <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                                {filteredReferrerContacts.map((contact) => (
+                                                    <button
+                                                        key={contact.id}
+                                                        type="button"
+                                                        onClick={() => handleSelectReferrer(contact)}
+                                                        className="w-full text-left px-4 py-2 hover:bg-zinc-700 transition-colors"
+                                                    >
+                                                        <div className="font-medium text-white">{contact.name}</div>
+                                                        <div className="text-xs text-zinc-400">{contact.phone}</div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Notas */}
+                            <div className="mb-4">
+                                <ZenTextarea
+                                    label="Notas"
+                                    value={formData.notes || ''}
+                                    onChange={(e) => handleInputChange('notes', e.target.value)}
+                                    placeholder="Notas adicionales..."
+                                    disabled={loading}
+                                    minRows={3}
+                                />
+                            </div>
 
                             {/* Sección 4: Promesas Asociadas */}
                             {contactId && (

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { FileSignature } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
-import { SectionLayout, StorageIndicator } from '../../components';
+import { SectionLayout, StorageIndicator } from '../../../components';
 import { CondicionesComercialesWrapper } from './components';
 import { getBuilderData } from '@/lib/actions/studio/builder/builder-data.actions';
 import type { BuilderProfileData } from '@/types/builder-profile';

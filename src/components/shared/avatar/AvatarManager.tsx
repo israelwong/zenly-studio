@@ -280,7 +280,7 @@ export function AvatarManager({
                         disabled={isDisabled}
                         className={`${currentSize} border-2 border-dashed border-zinc-400 hover:border-zinc-300 hover:bg-zinc-900/30 transition-all duration-300 rounded-full group cursor-pointer relative overflow-hidden flex items-center justify-center`}
                     >
-                        <div className={`flex flex-col items-center justify-center text-center ${variant === 'compact' ? 'p-2' : 'p-4'}`}>
+                        <div className={`flex flex-col items-center justify-center text-center ${variant === 'compact' ? 'p-1' : 'p-2'}`}>
                             <div className={`${size === 'sm' ? 'w-8 h-8' : size === 'md' ? 'w-12 h-12' : 'w-16 h-16'} ${variant === 'compact' ? 'mb-1' : 'mb-2'} rounded-full bg-zinc-800/80 flex items-center justify-center group-hover:bg-zinc-700 group-hover:scale-110 transition-all duration-200`}>
                                 <Upload className={`${size === 'sm' ? 'h-4 w-4' : size === 'md' ? 'h-6 w-6' : 'h-8 w-8'} text-zinc-400 group-hover:text-zinc-300 transition-colors duration-200`} />
                             </div>
@@ -292,12 +292,9 @@ export function AvatarManager({
                                         </p>
                                     ) : (
                                         <>
-                                            <h3 className="text-zinc-200 text-xs font-medium mb-1">
+                                            <h3 className="text-zinc-200 text-[10px] font-medium mb-0.5">
                                                 Subir Avatar
                                             </h3>
-                                            <p className="text-zinc-400 text-xs">
-                                                PNG, JPG, SVG hasta 10MB
-                                            </p>
                                         </>
                                     )}
                                 </>

@@ -16,6 +16,7 @@ import { ZenConfirmModal } from '@/components/ui/zen';
 import { getContacts, deleteContact } from '@/lib/actions/studio/builder/commercial/contacts';
 import type { Contact } from '@/lib/actions/schemas/contacts-schemas';
 import { toast } from 'sonner';
+import { useContactRefresh } from '@/hooks/useContactRefresh';
 
 interface ContactsSheetProps {
   open: boolean;
@@ -42,6 +43,7 @@ export function ContactsSheet({
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const { triggerContactUpdate } = useContactRefresh();
 
   const loadContacts = useCallback(async () => {
     try {
@@ -179,6 +181,9 @@ export function ContactsSheet({
     } else if (contact) {
       // Usar el flag pasado directamente
       if (wasEditing) {
+        // Emitir evento de actualización para sincronizar otros componentes
+        triggerContactUpdate(contact.id, contact);
+        
         // Actualizar contacto existente en el estado local inmediatamente
         setContacts((prev) =>
           prev.map((c) => (c.id === contact.id ? contact : c))

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
@@ -11,6 +11,7 @@ import { getPromiseById, archivePromise, unarchivePromise, deletePromise, getPip
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
+import { useContactUpdateListener } from '@/hooks/useContactRefresh';
 
 export default function EditarPromesaPage() {
   const params = useParams();
@@ -122,6 +123,65 @@ export default function EditarPromesaPage() {
     };
     loadPipelineStages();
   }, [studioSlug]);
+
+  // Callback para manejar actualizaciones de contacto
+  const handleContactUpdate = useCallback((updatedContact: { id: string; name: string; phone: string; email: string | null } | undefined) => {
+    if (updatedContact && promiseData) {
+      // Actualizar datos locales con la información del contacto actualizado
+      setPromiseData(prev => prev ? {
+        ...prev,
+        name: updatedContact.name,
+        phone: updatedContact.phone,
+        email: updatedContact.email,
+      } : null);
+      setContactData(prev => prev ? {
+        ...prev,
+        contactName: updatedContact.name,
+        phone: updatedContact.phone,
+        email: updatedContact.email,
+      } : null);
+    } else if (promiseData?.id) {
+      // Si no viene el contacto completo, recargar desde el servidor
+      const reloadPromise = async () => {
+        try {
+          const result = await getPromiseById(promiseId);
+          if (result.success && result.data) {
+            setPromiseData({
+              id: result.data.contact_id,
+              name: result.data.contact_name,
+              phone: result.data.contact_phone,
+              email: result.data.contact_email,
+              event_type_id: result.data.event_type_id || null,
+              event_type_name: result.data.event_type_name || null,
+              interested_dates: result.data.interested_dates,
+              acquisition_channel_id: result.data.acquisition_channel_id ?? null,
+              acquisition_channel_name: result.data.acquisition_channel_name ?? null,
+              social_network_id: result.data.social_network_id ?? null,
+              social_network_name: result.data.social_network_name ?? null,
+              referrer_contact_id: result.data.referrer_contact_id ?? null,
+              referrer_name: result.data.referrer_name ?? null,
+              referrer_contact_name: result.data.referrer_contact_name ?? null,
+              referrer_contact_email: result.data.referrer_contact_email ?? null,
+              promiseId: result.data.promise_id,
+            });
+            setContactData({
+              contactId: result.data.contact_id,
+              contactName: result.data.contact_name,
+              phone: result.data.contact_phone,
+              email: result.data.contact_email,
+              promiseId: result.data.promise_id,
+            });
+          }
+        } catch (error) {
+          console.error('Error reloading promise after contact update:', error);
+        }
+      };
+      reloadPromise();
+    }
+  }, [promiseData, promiseId]);
+
+  // Escuchar actualizaciones de contacto para sincronizar datos
+  useContactUpdateListener(promiseData?.id || null, handleContactUpdate);
 
   const handlePipelineStageChange = async (newStageId: string) => {
     if (!promiseId || newStageId === currentPipelineStageId) return;
