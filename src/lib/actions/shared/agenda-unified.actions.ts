@@ -594,7 +594,7 @@ export async function crearAgendamiento(
 
         // Validar que evento_id existe si se proporciona
         if (validatedData.evento_id) {
-            const evento = await prisma.studio_eventos.findUnique({
+            const evento = await prisma.studio_events.findUnique({
                 where: { id: validatedData.evento_id },
                 select: { studio_id: true },
             });
@@ -753,7 +753,7 @@ export async function actualizarAgendamiento(
 
         // Validar evento_id si se proporciona
         if (updateData.evento_id) {
-            const evento = await prisma.studio_eventos.findUnique({
+            const evento = await prisma.studio_events.findUnique({
                 where: { id: updateData.evento_id },
                 select: { studio_id: true },
             });

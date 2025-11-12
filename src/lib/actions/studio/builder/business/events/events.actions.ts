@@ -9,14 +9,14 @@ export interface EventoBasico {
   event_date: Date;
   status: string;
   event_type_id: string | null;
-  cliente_id: string;
+  contact_id: string;
   promise_id: string | null;
-  evento_etapa_id: string | null;
-  event_types?: {
+  event_stage_id: string | null;
+  event_type?: {
     id: string;
     name: string;
   } | null;
-  clientes?: {
+  contact?: {
     id: string;
     name: string;
     phone: string;
@@ -70,19 +70,19 @@ export async function obtenerEventos(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    const eventos = await prisma.studio_eventos.findMany({
+    const eventos = await prisma.studio_events.findMany({
       where: {
         studio_id: studio.id,
         status: 'active',
       },
       include: {
-        event_types: {
+        event_type: {
           select: {
             id: true,
             name: true,
           },
         },
-        clientes: {
+        contact: {
           select: {
             id: true,
             name: true,
@@ -134,19 +134,19 @@ export async function obtenerEventoDetalle(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    const evento = await prisma.studio_eventos.findFirst({
+    const evento = await prisma.studio_events.findFirst({
       where: {
         id: eventoId,
         studio_id: studio.id,
       },
       include: {
-        event_types: {
+        event_type: {
           select: {
             id: true,
             name: true,
           },
         },
-        clientes: {
+        contact: {
           select: {
             id: true,
             name: true,

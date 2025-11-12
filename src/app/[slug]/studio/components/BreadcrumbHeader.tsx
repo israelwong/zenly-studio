@@ -193,7 +193,7 @@ export function BreadcrumbHeader({ className, studioSlug }: BreadcrumbHeaderProp
             <ZenSidebarTrigger />
             <div className="flex items-center gap-2 text-sm text-zinc-400">
                 {breadcrumbItems.map((item, index) => (
-                    <React.Fragment key={item.label}>
+                    <React.Fragment key={`${index}-${item.href || item.label}`}>
                         {item.href && !item.active ? (
                             <Link href={item.href} className="hover:text-zinc-200 transition-colors">
                                 {item.label}

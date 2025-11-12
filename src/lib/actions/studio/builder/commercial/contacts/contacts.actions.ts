@@ -664,7 +664,7 @@ export async function getContactEvents(studioSlug: string, contactId: string) {
     }
 
     // Obtener eventos con información relevante
-    const eventos = await prisma.studio_eventos.findMany({
+    const eventos = await prisma.studio_events.findMany({
       where: {
         id: { in: eventoIds },
         studio_id: studio.id

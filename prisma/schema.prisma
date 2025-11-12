@@ -133,14 +133,13 @@ model user_studio_roles {
   invited_by            String?
   accepted_at           DateTime?
   revoked_at            DateTime?
-  assigned_tasks_gantt  gantt_event_tasks[]         @relation("TaskAssignedTo")
-  completed_tasks_gantt gantt_event_tasks[]         @relation("TaskCompletedBy")
-  gantt_task_activities gantt_task_activity[]
-  event_tasks           manager_event_tasks[]
-  event_team            manager_event_team[]
-  event_timeline        manager_event_timeline[]
-  client_events         manager_events[]            @relation("EventClient")
-  managed_events        manager_events[]            @relation("EventProjectManager")
+  assigned_tasks_gantt  studio_gantt_event_tasks[]         @relation("TaskAssignedTo")
+  completed_tasks_gantt studio_gantt_event_tasks[]         @relation("TaskCompletedBy")
+  gantt_task_activities studio_gantt_task_activity[]
+  event_tasks           studio_event_tasks[]
+  event_timeline        studio_event_timeline[]
+  managed_events        studio_events[]             @relation("EventProjectManager")
+  crew_member_as_role   studio_crew_members?        @relation
   lead_activities       marketing_lead_activities[]
   lead_notes            marketing_lead_notes[]
   assigned_leads        marketing_leads[]
@@ -722,8 +721,7 @@ model studios {
   longitude                  Float?
   maps_url                   String?
   place_id                   String?
-  gantt_templates            gantt_templates[]
-  manager_events             manager_events[]
+  gantt_templates            studio_gantt_templates[]
   manager_pipeline_stages    studio_manager_pipeline_stages[]
   marketing_leads            marketing_leads[]
   marketing_pipeline_stages  marketing_pipeline_stages[]
@@ -732,9 +730,10 @@ model studios {
   platform_user_profiles     platform_user_profiles[]
   agenda                     studio_agenda[]
   business_hours             studio_business_hours[]
-  categorias_personal        studio_categorias_personal[]
+  crew_categories            studio_crew_categories[]
   category_media             studio_category_media[]          @relation("category_media")
   client_portal_access       studio_client_portal_access[]
+  events_stages              studio_events_stage[]
   clientes                   studio_clientes[]
   contacts                   studio_contacts[]
   promise_pipeline_stages    studio_promise_pipeline_stages[]
@@ -743,7 +742,7 @@ model studios {
   configuraciones            studio_configuraciones[]
   cotizaciones               studio_cotizaciones[]
   event_types                studio_event_types[]
-  eventos                    studio_eventos[]
+  eventos                    studio_events[]
   promises                   studio_promises[]
   faq                        studio_faq[]
   gastos                     studio_gastos[]
@@ -754,8 +753,8 @@ model studios {
   studio_modules             studio_modules[]
   nominas                    studio_nominas[]
   paquetes                   studio_paquetes[]
-  personal                   studio_personal[]
-  personal_profiles          studio_personal_profiles[]
+  crew_members               studio_crew_members[]
+  crew_profiles              studio_crew_profiles[]
   phones                     studio_phones[]
   portfolio_media            studio_portfolio_media[]         @relation("portfolio_media")
   portfolios                 studio_portfolios[]
@@ -986,12 +985,11 @@ model studio_event_types {
   order           Int                   @default(0)
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
-  gantt_templates gantt_templates[]
-  manager_events  manager_events[]
+  gantt_templates studio_gantt_templates[]
   marketing_leads marketing_leads[]
   quotes          studio_cotizaciones[]
   studio          studios               @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  events          studio_eventos[]
+  events          studio_events[]
   packages        studio_paquetes[]
   portfolios      studio_portfolios[]
   posts           studio_posts[]
@@ -1023,7 +1021,7 @@ model studio_items {
 
   @@index([studio_id, status])
 }
-
+//!revisar
 model studio_service_categories {
   id                 String                     @id @default(cuid())
   name               String                     @unique
@@ -1188,7 +1186,7 @@ model studio_paquete_items {
 }
 
 //! BUSINESS (PERSONAL)
-model studio_categorias_personal {
+model studio_crew_categories {
   id          String            @id @default(cuid())
   studio_id   String
   tipo        PersonalType
@@ -1202,7 +1200,7 @@ model studio_categorias_personal {
   is_active   Boolean           @default(true)
   is_default  Boolean           @default(false)
   studio      studios           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  personal    studio_personal[]
+  crew_members studio_crew_members[]
 
   @@unique([studio_id, name])
   @@index([studio_id, tipo])
@@ -1211,7 +1209,7 @@ model studio_categorias_personal {
   @@index([order])
 }
 
-model studio_personal {
+model studio_crew_members {
   id                  String                                @id @default(cuid())
   studio_id           String
   email               String?
@@ -1219,6 +1217,7 @@ model studio_personal {
   status              String                                @default("activo")
   created_at          DateTime                              @default(now())
   platform_user_id    String?
+  user_studio_role_id String?                               @unique
   updated_at          DateTime                              @updatedAt
   category_id         String
   clabe_account       String?
@@ -1229,44 +1228,48 @@ model studio_personal {
   phone               String?
   variable_salary     Float?
   nominas             studio_nominas[]
-  category            studio_categorias_personal            @relation(fields: [category_id], references: [id])
+  event_team          studio_event_team[]
+  category            studio_crew_categories                 @relation(fields: [category_id], references: [id])
   platformUser        platform_user_profiles?               @relation(fields: [platform_user_id], references: [id])
+  user_studio_role    user_studio_roles?                   @relation(fields: [user_studio_role_id], references: [id])
   studio              studios                               @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  profile_assignments studio_personal_profile_assignments[]
+  profile_assignments studio_crew_profile_assignments[]
+  cotizacion_items    studio_cotizacion_items[]
 
   @@index([studio_id])
   @@index([tipo])
   @@index([status])
   @@index([platform_user_id])
+  @@index([user_studio_role_id])
 }
 
-model studio_personal_profiles {
-  id                   String                                @id @default(cuid())
+model studio_crew_profiles {
+  id                   String                          @id @default(cuid())
   studio_id            String
-  created_at           DateTime                              @default(now())
-  is_active            Boolean                               @default(true)
-  updated_at           DateTime                              @updatedAt
+  created_at          DateTime                        @default(now())
+  is_active            Boolean                         @default(true)
+  updated_at           DateTime                        @updatedAt
   description          String?
   name                 String
-  order                Int                                   @default(0)
-  personal_assignments studio_personal_profile_assignments[]
-  studio               studios                               @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  order                Int                             @default(0)
+  crew_assignments     studio_crew_profile_assignments[]
+  studio               studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@unique([studio_id, name])
   @@index([studio_id, is_active])
   @@index([order])
 }
 
-model studio_personal_profile_assignments {
-  id          String                   @id @default(cuid())
-  created_at  DateTime                 @default(now())
-  personal_id String
-  profile_id  String
-  personal    studio_personal          @relation(fields: [personal_id], references: [id], onDelete: Cascade)
-  profile     studio_personal_profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+model studio_crew_profile_assignments {
+  id            String                @id @default(cuid())
+  created_at    DateTime              @default(now())
+  crew_member_id String
+  profile_id    String
+  crew_member   studio_crew_members   @relation(fields: [crew_member_id], references: [id], onDelete: Cascade)
+  profile       studio_crew_profiles  @relation(fields: [profile_id], references: [id], onDelete: Cascade)
 
-  @@unique([personal_id, profile_id])
-  @@index([personal_id])
+  @@unique([crew_member_id, profile_id])
+  @@index([crew_member_id])
   @@index([profile_id])
 }
 
@@ -1287,7 +1290,6 @@ model studio_clientes {
   phone                  String
   platform_user_profiles platform_user_profiles? @relation(fields: [platform_user_id], references: [id])
   studio                 studios                 @relation(fields: [studio_id], references: [id])
-  eventos                studio_eventos[]
   pagos                  studio_pagos[]
 
   @@index([studio_id, email])
@@ -1321,6 +1323,7 @@ model studio_contacts {
   contact_logs           studio_contact_logs[]
   promises               studio_promises[]
   pagos                  studio_pagos[]
+  events                 studio_events[]
 
   @@unique([studio_id, phone])
   @@index([studio_id, email])
@@ -1385,7 +1388,7 @@ model studio_promises {
   event_type        studio_event_types?             @relation(fields: [event_type_id], references: [id])
   pipeline_stage    studio_promise_pipeline_stages? @relation(fields: [pipeline_stage_id], references: [id])
   quotes            studio_cotizaciones[]
-  event             studio_eventos?
+  event             studio_events?
   logs              studio_promise_logs[]
   tags              studio_promises_tags[]
   agenda            studio_agenda[]
@@ -1445,63 +1448,105 @@ model studio_promises_tags {
   @@index([tag_id])
 }
 
-//! COMMERCIAL (EVENTOS)
+//! BUSINESS (EVENTOS)
 
-model studio_eventos {
-  id               String                    @id @default(cuid())
-  studio_id        String
-  sede             String?
-  status           String                    @default("active")
-  cliente_id       String
-  promise_id       String?                   @unique
-  created_at       DateTime                  @default(now())
-  evento_etapa_id  String?
-  updated_at       DateTime                  @updatedAt
-  user_id          String?
-  address          String?
-  event_date       DateTime
-  event_type_id    String?
-  name             String?                   @default("Pendiente")
-  agenda           studio_agenda[]
-  cotizaciones     studio_cotizaciones[]
-  evento_bitacoras studio_evento_bitacoras[]
-  clientes         studio_clientes           @relation(fields: [cliente_id], references: [id])
-  event_types      studio_event_types?       @relation(fields: [event_type_id], references: [id])
-  evento_etapas    studio_evento_etapas?     @relation(fields: [evento_etapa_id], references: [id])
-  studio           studios                   @relation(fields: [studio_id], references: [id])
-  studio_users     studio_users?             @relation(fields: [user_id], references: [id])
-  promise          studio_promises?          @relation(fields: [promise_id], references: [id])
-  gastos           studio_gastos[]
-  nominas          studio_nominas[]
+model studio_events {
+  id                       String                         @id @default(cuid())
+  studio_id                String
+  contact_id               String
+  promise_id               String?                        @unique
+  cotizacion_id            String?                         @unique
+  event_type_id            String?
+  event_stage_id           String?
+  stage_id                 String?
+  name                     String?                         @default("Pendiente")
+  event_date               DateTime
+  address                  String?
+  sede                     String?
+  status                   String                          @default("active")
+  user_id                  String?
+  created_at               DateTime                        @default(now())
+  updated_at               DateTime                        @updatedAt
+  
+  // Campos operativos (de manager_events)
+  contract_value           Decimal?
+  paid_amount              Decimal                         @default(0)
+  pending_amount           Decimal                         @default(0)
+  studio_manager_id        String?
+  started_at               DateTime?
+  completed_at             DateTime?
+  originated_from_lead_id  String?                         @unique
+  
+  // Relaciones comerciales
+  contact                  studio_contacts                 @relation(fields: [contact_id], references: [id])
+  promise                  studio_promises?               @relation(fields: [promise_id], references: [id])
+  cotizacion               studio_cotizaciones?            @relation("EventoCotizacionAutorizada", fields: [cotizacion_id], references: [id])
+  event_type               studio_event_types?             @relation(fields: [event_type_id], references: [id])
+  event_stage              studio_events_stage?             @relation(fields: [event_stage_id], references: [id])
+  stage                    studio_manager_pipeline_stages?  @relation(fields: [stage_id], references: [id])
+  project_manager          user_studio_roles?              @relation("EventProjectManager", fields: [studio_manager_id], references: [id])
+  studio                   studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  studio_users             studio_users?                   @relation(fields: [user_id], references: [id])
+  originated_lead          marketing_leads?                @relation(fields: [originated_from_lead_id], references: [id])
+  
+  // Relaciones comerciales existentes
+  agenda                   studio_agenda[]
+  cotizaciones             studio_cotizaciones[]  @relation("EventoCotizaciones")
+  event_logs               studio_events_logs[]
+  gastos                   studio_gastos[]
+  nominas                  studio_nominas[]
+  
+  // Relaciones operativas (de manager_events)
+  gantt                    studio_gantt_event_instances?
+  deliverables             studio_event_deliverables[]
+  payments                 studio_event_payments[]
+  tasks                    studio_event_tasks[]
+  team_assignments         studio_event_team[]
+  timeline                 studio_event_timeline[]
+  client_portal_access     studio_client_portal_access[]
 
-  @@index([cliente_id])
+  @@index([contact_id])
+  @@index([cotizacion_id])
   @@index([event_date])
   @@index([studio_id, status])
   @@index([promise_id])
+  @@index([stage_id])
+  @@index([originated_from_lead_id])
+  @@map("studio_eventos")
 }
 
-model studio_evento_etapas {
+model studio_events_stage {
   id         String           @id @default(cuid())
+  studio_id  String
+  name       String
+  slug       String
+  order      Int              @default(0)
+  is_active  Boolean          @default(true)
+  is_system  Boolean          @default(false)
   created_at DateTime         @default(now())
   updated_at DateTime         @updatedAt
-  name       String
-  order      Int              @default(0)
-  eventos    studio_eventos[]
+  eventos    studio_events[]
 
+  studio     studios          @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, slug])
+  @@index([studio_id, is_active, order])
   @@index([order])
+  @@map("studio_evento_etapas")
 }
 
-model studio_evento_bitacoras {
+model studio_events_logs {
   id         String         @id @default(cuid())
   status     String         @default("active")
   created_at DateTime       @default(now())
-  evento_id  String
+  event_id   String
   updated_at DateTime       @updatedAt
   comment    String
   importance String         @default("1")
-  eventos    studio_eventos @relation(fields: [evento_id], references: [id])
+  eventos    studio_events  @relation(fields: [event_id], references: [id])
 
-  @@index([evento_id, created_at])
+  @@index([event_id, created_at])
+  @@map("studio_evento_bitacoras")
 }
 
 //! COMMERCIAL (AGENDA)
@@ -1525,7 +1570,7 @@ model studio_agenda {
   date             DateTime?
   description      String?
   time             String?
-  eventos          studio_eventos?  @relation(fields: [evento_id], references: [id])
+  eventos          studio_events?   @relation(fields: [evento_id], references: [id])
   promise          studio_promises? @relation(fields: [promise_id], references: [id])
   studio           studios          @relation(fields: [studio_id], references: [id])
   studio_users     studio_users?    @relation(fields: [user_id], references: [id])
@@ -1581,25 +1626,6 @@ model studio_terminos_condiciones {
   @@index([studio_id, order])
 }
 
-model studio_metodos_pago {
-  id                                  String                                       @id @default(cuid())
-  studio_id                           String
-  payment_method                      String?                                      @default("card")
-  status                              String                                       @default("active")
-  created_at                          DateTime                                     @default(now())
-  updated_at                          DateTime                                     @updatedAt
-  base_commission_percentage          Float?
-  fixed_commission_amount             Float?
-  msi_commission_percentage           Float?
-  msi_installments                    Int?
-  order                               Int?                                         @default(0)
-  payment_method_name                 String
-  condiciones_comerciales_metodo_pago studio_condiciones_comerciales_metodo_pago[]
-  studio                              studios                                      @relation(fields: [studio_id], references: [id])
-  pagos                               studio_pagos[]
-
-  @@index([studio_id])
-}
 
 model studio_condiciones_comerciales_metodo_pago {
   id                         String                         @id @default(cuid())
@@ -1629,7 +1655,7 @@ model studio_cotizaciones {
   contact_id                             String?
   promise_id                             String?
   created_at                             DateTime                                     @default(now())
-  evento_id                              String
+  evento_id                              String?
   expires_at                             DateTime?                                    @default(dbgenerated("(now() + '10 days'::interval)"))
   updated_at                             DateTime                                     @updatedAt
   archived                               Boolean                                      @default(false)
@@ -1652,13 +1678,14 @@ model studio_cotizaciones {
   cotizacion_visitas                     studio_cotizacion_visitas[]
   condiciones_comerciales                studio_condiciones_comerciales?              @relation(fields: [condiciones_comerciales_id], references: [id])
   event_types                            studio_event_types                           @relation(fields: [event_type_id], references: [id])
-  eventos                                studio_eventos                               @relation(fields: [evento_id], references: [id])
+  eventos                                studio_events?                                @relation("EventoCotizaciones", fields: [evento_id], references: [id])
   studio                                 studios                                      @relation(fields: [studio_id], references: [id])
   contact                                studio_contacts?                             @relation(fields: [contact_id], references: [id])
   promise                                studio_promises?                             @relation(fields: [promise_id], references: [id])
   paquete                                studio_paquetes?                             @relation(fields: [paquete_id], references: [id])
   pagos                                  studio_pagos[]
   condiciones_comerciales_metodo_pago    studio_condiciones_comerciales_metodo_pago[] @relation("CondicionesComercialesMetodoPagoToCotizacion")
+  evento_autorizado                       studio_events?                                @relation("EventoCotizacionAutorizada")
 
   @@index([evento_id])
   @@index([studio_id, status])
@@ -1678,9 +1705,13 @@ model studio_cotizacion_items {
   service_category_id    String?
   quantity               Int                        @default(1)
   position               Int                        @default(0)
-  user_id                String?
+  assigned_to_crew_member_id String?
+  gantt_task_id          String?                    @unique
   assignment_date        DateTime?
   delivery_date          DateTime?
+  task_type              String?                    // "operation", "editing", "delivery"
+  internal_delivery_days Int?
+  client_delivery_days   Int?
   status                 String                     @default("pendiente")
   seccion_name_snapshot  String?
   category_name_snapshot String?
@@ -1710,10 +1741,13 @@ model studio_cotizacion_items {
   cotizaciones           studio_cotizaciones        @relation(fields: [cotizacion_id], references: [id], onDelete: Cascade)
   items                  studio_items?              @relation(fields: [item_id], references: [id])
   service_categories     studio_service_categories? @relation(fields: [service_category_id], references: [id])
-  studio_users           studio_users?              @relation(fields: [user_id], references: [id])
+  assigned_to_crew_member studio_crew_members?      @relation(fields: [assigned_to_crew_member_id], references: [id])
+  gantt_task             studio_gantt_event_tasks?      @relation("CotizacionItemGanttTask")
   nomina_servicios       studio_nomina_servicios[]
 
   @@index([cotizacion_id])
+  @@index([assigned_to_crew_member_id])
+  @@index([gantt_task_id])
 }
 
 model studio_cotizacion_costos {
@@ -1741,6 +1775,26 @@ model studio_cotizacion_visitas {
 }
 
 //! COMMERCIAL (FINANZAS)
+model studio_metodos_pago {
+  id                                  String                                       @id @default(cuid())
+  studio_id                           String
+  payment_method                      String?                                      @default("card")
+  status                              String                                       @default("active")
+  created_at                          DateTime                                     @default(now())
+  updated_at                          DateTime                                     @updatedAt
+  base_commission_percentage          Float?
+  fixed_commission_amount             Float?
+  msi_commission_percentage           Float?
+  msi_installments                    Int?
+  order                               Int?                                         @default(0)
+  payment_method_name                 String
+  condiciones_comerciales_metodo_pago studio_condiciones_comerciales_metodo_pago[]
+  studio                              studios                                      @relation(fields: [studio_id], references: [id])
+  pagos                               studio_pagos[]
+
+  @@index([studio_id])
+}
+
 model studio_pagos {
   id                                     String                                      @id @default(cuid())
   metodo_pago                            String
@@ -1809,9 +1863,9 @@ model studio_nominas {
   total_cost_snapshot    Float                     @default(0)
   payroll_services       studio_nomina_servicios[]
   authorized_by_user     studio_users?             @relation("nominas_autorizado_porTostudio_users", fields: [authorized_by], references: [id])
-  eventos                studio_eventos?           @relation(fields: [evento_id], references: [id])
+  eventos                studio_events?             @relation(fields: [evento_id], references: [id])
   paid_by_user           studio_users?             @relation("nominas_pagado_porTostudio_users", fields: [paid_by], references: [id])
-  personal               studio_personal?          @relation(fields: [personal_id], references: [id])
+  personal               studio_crew_members?      @relation(fields: [personal_id], references: [id])
   studio                 studios                   @relation(fields: [studio_id], references: [id])
   user                   studio_users              @relation("nominas_userIdTostudio_users", fields: [user_id], references: [id])
 
@@ -1856,7 +1910,7 @@ model studio_gastos {
   subcategory    String?
   supplier       String?
   user_id        String
-  eventos        studio_eventos? @relation(fields: [evento_id], references: [id])
+  eventos        studio_events?  @relation(fields: [evento_id], references: [id])
   studio         studios         @relation(fields: [studio_id], references: [id])
   user           studio_users    @relation(fields: [user_id], references: [id])
 
@@ -1972,7 +2026,7 @@ model marketing_leads {
   lost_at               DateTime?
   created_at            DateTime                    @default(now())
   updated_at            DateTime                    @updatedAt
-  converted_event       manager_events?
+  converted_event       studio_events?
   activities            marketing_lead_activities[]
   notes                 marketing_lead_notes[]
   assigned_to           user_studio_roles?          @relation(fields: [assigned_to_user_id], references: [id])
@@ -2060,55 +2114,15 @@ model studio_manager_pipeline_stages {
   is_system   Boolean          @default(false)
   created_at  DateTime         @default(now())
   updated_at  DateTime         @updatedAt
-  events      manager_events[]
+  events      studio_events[]
   studio      studios          @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@unique([studio_id, slug])
   @@index([studio_id, is_active, order])
 }
 
-model manager_events {
-  id                          String                         @id @default(cuid())
-  studio_id                   String
-  stage_id                    String
-  client_id                   String
-  event_type_id               String
-  event_name                  String
-  event_date                  DateTime
-  venue_name                  String?
-  venue_address               String?
-  studio_manager_id           String?
-  contract_value              Decimal
-  paid_amount                 Decimal                        @default(0)
-  pending_amount              Decimal                        @default(0)
-  started_at                  DateTime?
-  completed_at                DateTime?
-  originated_from_lead_id     String?                        @unique
-  is_active                   Boolean                        @default(true)
-  created_at                  DateTime                       @default(now())
-  updated_at                  DateTime                       @updatedAt
-  gantt                       gantt_event_instances?
-  deliverables                manager_event_deliverables[]
-  payments                    manager_event_payments[]
-  tasks                       manager_event_tasks[]
-  team_assignments            manager_event_team[]
-  timeline                    manager_event_timeline[]
-  client                      user_studio_roles              @relation("EventClient", fields: [client_id], references: [id])
-  event_type                  studio_event_types             @relation(fields: [event_type_id], references: [id])
-  originated_lead             marketing_leads?               @relation(fields: [originated_from_lead_id], references: [id])
-  stage                       studio_manager_pipeline_stages @relation(fields: [stage_id], references: [id])
-  studio                      studios                        @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  project_manager             user_studio_roles?             @relation("EventProjectManager", fields: [studio_manager_id], references: [id])
-  studio_client_portal_access studio_client_portal_access[]
 
-  @@index([studio_id, stage_id])
-  @@index([event_date])
-  @@index([client_id])
-  @@index([originated_from_lead_id])
-  @@index([is_active])
-}
-
-model manager_event_tasks {
+model studio_event_tasks {
   id             String             @id @default(cuid())
   event_id       String
   title          String
@@ -2120,14 +2134,14 @@ model manager_event_tasks {
   order          Int                @default(0)
   created_at     DateTime           @default(now())
   assigned_to    user_studio_roles? @relation(fields: [assigned_to_id], references: [id])
-  event          manager_events     @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  event          studio_events      @relation(fields: [event_id], references: [id], onDelete: Cascade)
 
   @@index([event_id, is_completed])
   @@index([assigned_to_id])
   @@index([due_date])
 }
 
-model manager_event_deliverables {
+model studio_event_deliverables {
   id                 String          @id @default(cuid())
   event_id           String
   type               DeliverableType
@@ -2138,29 +2152,29 @@ model manager_event_deliverables {
   delivered_at       DateTime?
   client_approved_at DateTime?
   created_at         DateTime        @default(now())
-  event              manager_events  @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  event              studio_events   @relation(fields: [event_id], references: [id], onDelete: Cascade)
 
   @@index([event_id, type])
   @@index([delivered_at])
 }
 
-model manager_event_team {
-  id         String            @id @default(cuid())
-  event_id   String
-  user_id    String
-  role       String
-  hours      Float?
-  cost       Decimal?
-  created_at DateTime          @default(now())
-  event      manager_events    @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user       user_studio_roles @relation(fields: [user_id], references: [id])
+model studio_event_team {
+  id            String            @id @default(cuid())
+  event_id      String
+  crew_member_id String
+  role          String
+  hours         Float?
+  cost          Decimal?
+  created_at    DateTime          @default(now())
+  event         studio_events      @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  crew_member   studio_crew_members @relation(fields: [crew_member_id], references: [id])
 
-  @@unique([event_id, user_id, role])
+  @@unique([event_id, crew_member_id, role])
   @@index([event_id])
-  @@index([user_id])
+  @@index([crew_member_id])
 }
 
-model manager_event_timeline {
+model studio_event_timeline {
   id          String             @id @default(cuid())
   event_id    String
   user_id     String?
@@ -2168,14 +2182,14 @@ model manager_event_timeline {
   description String
   metadata    Json?
   created_at  DateTime           @default(now())
-  event       manager_events     @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  event       studio_events      @relation(fields: [event_id], references: [id], onDelete: Cascade)
   user        user_studio_roles? @relation(fields: [user_id], references: [id])
 
   @@index([event_id, created_at])
   @@index([action_type])
 }
 
-model manager_event_payments {
+model studio_event_payments {
   id                String         @id @default(cuid())
   event_id          String
   amount            Decimal
@@ -2184,14 +2198,14 @@ model manager_event_payments {
   concept           String?
   stripe_payment_id String?        @unique
   created_at        DateTime       @default(now())
-  event             manager_events @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  event             studio_events  @relation(fields: [event_id], references: [id], onDelete: Cascade)
 
   @@index([event_id, payment_date])
 }
 
 //! BUSINESS COMMERCIAL (GANTT)
-model gantt_templates {
-  id                      String                  @id @default(cuid())
+model studio_gantt_templates {
+  id                      String                        @id @default(cuid())
   studio_id               String
   name                    String
   description             String?
@@ -2199,17 +2213,17 @@ model gantt_templates {
   estimated_duration_days Int
   pre_event_days          Int
   post_event_days         Int
-  color                   String                  @default("#3B82F6")
+  color                   String                        @default("#3B82F6")
   icon                    String?
-  is_default              Boolean                 @default(false)
-  is_active               Boolean                 @default(true)
+  is_default              Boolean                       @default(false)
+  is_active               Boolean                       @default(true)
   created_by_user_id      String
-  created_at              DateTime                @default(now())
-  updated_at              DateTime                @updatedAt
-  instances               gantt_event_instances[]
-  tasks                   gantt_template_tasks[]
-  event_type              studio_event_types?     @relation(fields: [event_type_id], references: [id])
-  studio                  studios                 @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  created_at              DateTime                      @default(now())
+  updated_at              DateTime                      @updatedAt
+  instances               studio_gantt_event_instances[]
+  tasks                   studio_gantt_template_tasks[]
+  event_type              studio_event_types?           @relation(fields: [event_type_id], references: [id])
+  studio                  studios                       @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@unique([studio_id, name])
   @@index([studio_id, is_active])
@@ -2217,97 +2231,102 @@ model gantt_templates {
   @@index([is_default])
 }
 
-model gantt_template_tasks {
-  id                 String                 @id @default(cuid())
+model studio_gantt_template_tasks {
+  id                 String                          @id @default(cuid())
   template_id        String
   name               String
   description        String?
   days_before_event  Int?
   days_after_event   Int?
-  duration_days      Int                    @default(1)
+  duration_days      Int                             @default(1)
   category           TaskCategory
-  priority           TaskPriority           @default(MEDIUM)
+  priority           TaskPriority                    @default(MEDIUM)
   depends_on_task_id String?
   suggested_role     String?
-  order              Int                    @default(0)
+  order              Int                             @default(0)
   checklist_items    Json?
-  created_at         DateTime               @default(now())
-  updated_at         DateTime               @updatedAt
-  depends_on         gantt_template_tasks?  @relation("TaskDependency", fields: [depends_on_task_id], references: [id])
-  dependent_tasks    gantt_template_tasks[] @relation("TaskDependency")
-  template           gantt_templates        @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  created_at         DateTime                        @default(now())
+  updated_at         DateTime                        @updatedAt
+  depends_on         studio_gantt_template_tasks?    @relation("TaskDependency", fields: [depends_on_task_id], references: [id])
+  dependent_tasks    studio_gantt_template_tasks[]   @relation("TaskDependency")
+  template           studio_gantt_templates          @relation(fields: [template_id], references: [id], onDelete: Cascade)
 
   @@index([template_id, order])
   @@index([category])
 }
 
-model gantt_event_instances {
-  id          String              @id @default(cuid())
-  event_id    String              @unique
+model studio_gantt_event_instances {
+  id          String                    @id @default(cuid())
+  event_id    String                    @unique
   template_id String?
-  is_custom   Boolean             @default(false)
+  is_custom   Boolean                   @default(false)
   custom_name String?
   event_date  DateTime
   start_date  DateTime
   end_date    DateTime
-  created_at  DateTime            @default(now())
-  updated_at  DateTime            @updatedAt
-  event       manager_events      @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  template    gantt_templates?    @relation(fields: [template_id], references: [id])
-  tasks       gantt_event_tasks[]
+  created_at  DateTime                  @default(now())
+  updated_at  DateTime                  @updatedAt
+  event       studio_events              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  template    studio_gantt_templates?    @relation(fields: [template_id], references: [id])
+  tasks       studio_gantt_event_tasks[]
 
   @@index([event_id])
   @@index([template_id])
   @@index([event_date])
 }
 
-model gantt_event_tasks {
-  id                   String                @id @default(cuid())
+model studio_gantt_event_tasks {
+  id                   String                          @id @default(cuid())
   gantt_instance_id    String
   template_task_id     String?
+  cotizacion_item_id   String?                         @unique
   name                 String
   description          String?
   start_date           DateTime
   end_date             DateTime
-  duration_days        Int                   @default(1)
+  duration_days        Int                             @default(1)
   category             TaskCategory
-  priority             TaskPriority          @default(MEDIUM)
+  priority             TaskPriority                    @default(MEDIUM)
   assigned_to_user_id  String?
   assigned_at          DateTime?
-  status               TaskStatus            @default(PENDING)
-  progress_percent     Int                   @default(0)
+  status               TaskStatus                      @default(PENDING)
+  progress_percent     Int                             @default(0)
   completed_at         DateTime?
   completed_by_user_id String?
   depends_on_task_id   String?
   checklist_items      Json?
-  order                Int                   @default(0)
+  order                Int                             @default(0)
   notes                String?
-  created_at           DateTime              @default(now())
-  updated_at           DateTime              @updatedAt
-  assigned_to          user_studio_roles?    @relation("TaskAssignedTo", fields: [assigned_to_user_id], references: [id])
-  completed_by         user_studio_roles?    @relation("TaskCompletedBy", fields: [completed_by_user_id], references: [id])
-  depends_on           gantt_event_tasks?    @relation("EventTaskDependency", fields: [depends_on_task_id], references: [id])
-  dependent_tasks      gantt_event_tasks[]   @relation("EventTaskDependency")
-  gantt_instance       gantt_event_instances @relation(fields: [gantt_instance_id], references: [id], onDelete: Cascade)
-  activity_log         gantt_task_activity[]
+  budget_amount        Decimal?
+  actual_cost          Decimal?
+  created_at           DateTime                        @default(now())
+  updated_at           DateTime                        @updatedAt
+  assigned_to          user_studio_roles?              @relation("TaskAssignedTo", fields: [assigned_to_user_id], references: [id])
+  completed_by         user_studio_roles?              @relation("TaskCompletedBy", fields: [completed_by_user_id], references: [id])
+  depends_on           studio_gantt_event_tasks?       @relation("EventTaskDependency", fields: [depends_on_task_id], references: [id])
+  dependent_tasks      studio_gantt_event_tasks[]      @relation("EventTaskDependency")
+  gantt_instance       studio_gantt_event_instances    @relation(fields: [gantt_instance_id], references: [id], onDelete: Cascade)
+  cotizacion_item      studio_cotizacion_items?        @relation("CotizacionItemGanttTask", fields: [cotizacion_item_id], references: [id])
+  activity_log         studio_gantt_task_activity[]
 
   @@index([gantt_instance_id, status])
   @@index([assigned_to_user_id])
   @@index([start_date, end_date])
   @@index([status])
+  @@index([cotizacion_item_id])
 }
 
-model gantt_task_activity {
-  id         String            @id @default(cuid())
+model studio_gantt_task_activity {
+  id         String                    @id @default(cuid())
   task_id    String
   user_id    String
   action     TaskAction
   old_value  Json?
   new_value  Json?
   notes      String?
-  created_at DateTime          @default(now())
-  task       gantt_event_tasks @relation(fields: [task_id], references: [id], onDelete: Cascade)
-  user       user_studio_roles @relation(fields: [user_id], references: [id])
+  created_at DateTime                  @default(now())
+  task       studio_gantt_event_tasks @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user       user_studio_roles         @relation(fields: [user_id], references: [id])
 
   @@index([task_id, created_at])
   @@index([action])
@@ -2552,7 +2571,7 @@ model platform_user_profiles {
   updated_at      DateTime          @updatedAt
   studio          studios?          @relation(fields: [studio_id], references: [id])
   studio_clientes studio_clientes[]
-  studio_personal studio_personal[]
+  studio_crew_members studio_crew_members[]
   studio_users    studio_users[]
 
   @@index([email])
@@ -2594,8 +2613,7 @@ model studio_users {
   platform_user_id                             String?
   updated_at                                   DateTime                  @updatedAt
   agenda                                       studio_agenda[]
-  cotizacion_items                             studio_cotizacion_items[]
-  eventos                                      studio_eventos[]
+  eventos                                      studio_events[]
   gastos                                       studio_gastos[]
   nominas_nominas_autorizado_porTostudio_users studio_nominas[]          @relation("nominas_autorizado_porTostudio_users")
   nominas_nominas_pagado_porTostudio_users     studio_nominas[]          @relation("nominas_pagado_porTostudio_users")
@@ -2645,7 +2663,7 @@ model studio_client_portal_access {
   access_count     Int            @default(0)
   expires_at       DateTime?
   created_at       DateTime       @default(now())
-  event            manager_events @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  event            studio_events  @relation(fields: [event_id], references: [id], onDelete: Cascade)
   studio           studios        @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@unique([studio_id, event_id, client_email])

@@ -68,7 +68,7 @@ export async function createCotizacion(
       contact = promise.contact;
 
       // Buscar evento existente asociado al promise
-      let evento = await prisma.studio_eventos.findUnique({
+      let evento = await prisma.studio_events.findUnique({
         where: { promise_id: validatedData.promise_id },
       });
 
@@ -78,38 +78,14 @@ export async function createCotizacion(
           return { success: false, error: 'El promise no tiene contacto asociado' };
         }
 
-        // Buscar cliente existente por phone o email
-        let cliente = await prisma.studio_clientes.findFirst({
-          where: {
-            studio_id: studio.id,
-            OR: [
-              { phone: contact.phone },
-              ...(contact.email ? [{ email: contact.email }] : []),
-            ],
-          },
-        });
-
-        if (!cliente) {
-          // Crear cliente si no existe usando datos del contacto
-          cliente = await prisma.studio_clientes.create({
-            data: {
-              studio_id: studio.id,
-              name: contact.name,
-              phone: contact.phone,
-              email: contact.email || contact.phone, // Usar phone como email si no hay email
-              status: 'activo',
-            },
-          });
-        }
-
-        // Crear evento
-        evento = await prisma.studio_eventos.create({
+        // Crear evento usando contact_id directamente
+        evento = await prisma.studio_events.create({
           data: {
             studio_id: studio.id,
-            cliente_id: cliente.id,
+            contact_id: contactId,
             promise_id: validatedData.promise_id,
-            event_type_id: promise.event_type_id,
-            event_date: new Date(), // Fecha por defecto, se puede actualizar después
+            event_type_id: promise.event_type_id || null,
+            event_date: promise.defined_date || new Date(),
             name: 'Pendiente',
             status: 'active',
           },

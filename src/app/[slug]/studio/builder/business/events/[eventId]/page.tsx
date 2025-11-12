@@ -59,11 +59,11 @@ export default function EventDetailPage() {
     return null;
   }
 
-  // Determinar contacto (cliente o promise)
-  const contacto = evento.clientes || evento.promise;
-  const contactoNombre = evento.clientes?.name || evento.promise?.contact_name || 'Sin nombre';
-  const contactoTelefono = evento.clientes?.phone || evento.promise?.contact_phone || 'Sin teléfono';
-  const contactoEmail = evento.clientes?.email || evento.promise?.contact_email || null;
+  // Determinar contacto (contact o promise)
+  const contacto = evento.contact || evento.promise;
+  const contactoNombre = evento.contact?.name || evento.promise?.contact_name || 'Sin nombre';
+  const contactoTelefono = evento.contact?.phone || evento.promise?.contact_phone || 'Sin teléfono';
+  const contactoEmail = evento.contact?.email || evento.promise?.contact_email || null;
 
   // Calcular monto total de cotizaciones autorizadas
   const montoTotal = evento.cotizaciones
@@ -89,7 +89,7 @@ export default function EventDetailPage() {
             <div>
               <ZenCardTitle>{evento.name || 'Evento sin nombre'}</ZenCardTitle>
               <ZenCardDescription>
-                {evento.event_types?.name || 'Sin tipo de evento'}
+                {evento.event_type?.name || 'Sin tipo de evento'}
               </ZenCardDescription>
             </div>
           </div>

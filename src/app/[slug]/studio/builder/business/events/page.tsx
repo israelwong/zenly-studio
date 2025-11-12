@@ -44,8 +44,8 @@ export default function EventsPage() {
     const searchLower = search.toLowerCase();
     return (
       evento.name?.toLowerCase().includes(searchLower) ||
-      evento.clientes?.name.toLowerCase().includes(searchLower) ||
-      evento.event_types?.name.toLowerCase().includes(searchLower) ||
+      evento.contact?.name.toLowerCase().includes(searchLower) ||
+      evento.event_type?.name.toLowerCase().includes(searchLower) ||
       evento.promise?.contact_name.toLowerCase().includes(searchLower)
     );
   });
@@ -113,18 +113,18 @@ export default function EventsPage() {
                             <h3 className="font-semibold text-white text-lg">
                               {evento.name || 'Sin nombre'}
                             </h3>
-                            {evento.event_types && (
+                            {evento.event_type && (
                               <p className="text-sm text-zinc-400 mt-1">
-                                {evento.event_types.name}
+                                {evento.event_type.name}
                               </p>
                             )}
                           </div>
 
                           <div className="space-y-2 text-sm">
-                            {evento.clientes && (
+                            {evento.contact && (
                               <div className="flex items-center gap-2 text-zinc-300">
-                                <span className="text-zinc-500">Cliente:</span>
-                                <span>{evento.clientes.name}</span>
+                                <span className="text-zinc-500">Contacto:</span>
+                                <span>{evento.contact.name}</span>
                               </div>
                             )}
                             {evento.promise && (
