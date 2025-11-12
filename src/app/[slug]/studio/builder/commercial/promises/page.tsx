@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { UserSearch, Plus, Settings2 } from 'lucide-react';
+import { UserSearch, Plus, Receipt } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { PromisesWrapper } from './components';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
@@ -39,22 +39,22 @@ export default function PromisesPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <ZenButton
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => setShowTerminosManager(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
               >
-                <FileText className="h-4 w-4 mr-2" />
+                <FileText className="h-3.5 w-3.5" />
                 Términos y Condiciones
-              </ZenButton>
-              <ZenButton
-                variant="ghost"
-                size="sm"
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowCondicionesManager(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
               >
-                <Settings2 className="h-4 w-4 mr-2" />
+                <Receipt className="h-3.5 w-3.5" />
                 Condiciones Comerciales
-              </ZenButton>
+              </button>
               <ZenButton onClick={handleOpenPromiseForm}>
                 <Plus className="h-4 w-4 mr-2" />
                 Registrar Promesa
