@@ -7,12 +7,14 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescriptio
 import { PromisesWrapper } from './components';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import { TerminosCondicionesManager } from '@/components/shared/terminos-condiciones';
+import { FileText } from 'lucide-react';
 
 export default function PromisesPage() {
   const params = useParams();
   const studioSlug = params.slug as string;
   const openPromiseFormRef = useRef<(() => void) | null>(null);
   const [showCondicionesManager, setShowCondicionesManager] = useState(false);
+  const [showTerminosManager, setShowTerminosManager] = useState(false);
 
   const handleOpenPromiseForm = () => {
     if (openPromiseFormRef.current) {
@@ -37,7 +39,14 @@ export default function PromisesPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <TerminosCondicionesManager studioSlug={studioSlug} />
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowTerminosManager(true)}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Términos y Condiciones
+              </ZenButton>
               <ZenButton
                 variant="ghost"
                 size="sm"
@@ -62,6 +71,12 @@ export default function PromisesPage() {
         studioSlug={studioSlug}
         isOpen={showCondicionesManager}
         onClose={() => setShowCondicionesManager(false)}
+      />
+
+      <TerminosCondicionesManager
+        studioSlug={studioSlug}
+        isOpen={showTerminosManager}
+        onClose={() => setShowTerminosManager(false)}
       />
     </div>
   );

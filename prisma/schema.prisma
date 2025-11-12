@@ -1568,7 +1568,7 @@ model studio_terminos_condiciones {
   studio_id   String
   title       String
   content     String
-  version     Int      @default(1)
+  order       Int      @default(0)
   is_active   Boolean  @default(true)
   is_required Boolean  @default(false)
   created_at  DateTime @default(now())
@@ -1576,7 +1576,7 @@ model studio_terminos_condiciones {
   studio      studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@index([studio_id, is_active])
-  @@index([studio_id, version])
+  @@index([studio_id, order])
 }
 
 model studio_metodos_pago {
