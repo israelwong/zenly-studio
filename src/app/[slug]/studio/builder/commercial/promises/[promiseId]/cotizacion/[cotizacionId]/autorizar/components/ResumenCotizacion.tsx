@@ -91,9 +91,37 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
     <>
       {loading ? (
         <ZenCard variant="outlined">
-          <ZenCardContent>
-            <div className="text-center py-8 text-zinc-400">
-              <p>Cargando items...</p>
+          <ZenCardHeader>
+            <div className="flex items-center justify-between">
+              <div className="h-5 w-32 bg-zinc-800 rounded animate-pulse" />
+              <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse" />
+            </div>
+          </ZenCardHeader>
+          <ZenCardContent className="space-y-4">
+            {/* Descripción skeleton */}
+            <div className="pb-4 border-b border-zinc-700">
+              <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse mb-2" />
+              <div className="h-16 w-full bg-zinc-800 rounded animate-pulse" />
+            </div>
+            {/* Items skeleton */}
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+                  <div className="pl-4 space-y-1">
+                    <div className="h-3 w-24 bg-zinc-800/70 rounded animate-pulse" />
+                    <div className="pl-4 space-y-1">
+                      {[1, 2].map((j) => (
+                        <div key={j} className="grid grid-cols-[1fr_60px_100px] gap-2">
+                          <div className="h-4 w-full bg-zinc-800/70 rounded animate-pulse" />
+                          <div className="h-4 w-12 bg-zinc-800/70 rounded animate-pulse ml-auto" />
+                          <div className="h-4 w-16 bg-zinc-800/70 rounded animate-pulse ml-auto" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </ZenCardContent>
         </ZenCard>
@@ -101,7 +129,7 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
         <ZenCard variant="outlined">
           <ZenCardHeader>
             <div className="flex items-center justify-between">
-              <ZenCardTitle className="text-lg">{cotizacion.name}</ZenCardTitle>
+              <ZenCardTitle className="text-xl">{cotizacion.name}</ZenCardTitle>
               <ZenButton
                 variant="ghost"
                 size="sm"
@@ -117,8 +145,8 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
             {cotizacion.description && (
               <div className="pb-4 border-b border-zinc-700">
                 <div>
-                  <label className="text-sm font-medium text-zinc-400">Descripción</label>
-                  <p className="text-white mt-1">{cotizacion.description}</p>
+                  <label className="text-base font-medium text-zinc-400">Descripción</label>
+                  <p className="text-base text-white mt-1">{cotizacion.description}</p>
                 </div>
               </div>
             )}
@@ -131,7 +159,7 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
                   return (
                     <div key={seccion.id} className="py-2">
                       {/* Nivel 1: Sección */}
-                      <div className="text-sm font-medium text-zinc-300 mb-1">
+                      <div className="text-base font-medium text-zinc-300 mb-1">
                         {seccion.nombre}
                       </div>
 
@@ -141,7 +169,7 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
                           return (
                             <div key={categoria.id} className="pl-4 py-1">
                               {/* Nivel 2: Categoría */}
-                              <div className="text-xs font-medium text-zinc-400 mb-0.5">
+                              <div className="text-sm font-medium text-zinc-400 mb-0.5">
                                 {categoria.nombre}
                               </div>
 
@@ -159,7 +187,7 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
                                     return (
                                       <div
                                         key={servicio.id}
-                                        className="grid grid-cols-[1fr_60px_100px] gap-2 items-baseline py-1 text-xs text-zinc-300"
+                                        className="grid grid-cols-[1fr_60px_100px] gap-2 items-baseline py-1 text-sm text-zinc-300"
                                       >
                                         <span className="break-words text-zinc-300">{servicio.nombre}</span>
                                         <span className="text-emerald-400 font-medium whitespace-nowrap text-right">x{cantidad}</span>
@@ -181,7 +209,7 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
         <ZenCard variant="outlined">
           <ZenCardHeader>
             <div className="flex items-center justify-between">
-              <ZenCardTitle className="text-lg">{cotizacion.name}</ZenCardTitle>
+              <ZenCardTitle className="text-xl">{cotizacion.name}</ZenCardTitle>
               <ZenButton
                 variant="ghost"
                 size="sm"
@@ -197,13 +225,13 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
             {cotizacion.description && (
               <div className="pb-4 border-b border-zinc-700">
                 <div>
-                  <label className="text-sm font-medium text-zinc-400">Descripción</label>
-                  <p className="text-white mt-1">{cotizacion.description}</p>
+                  <label className="text-base font-medium text-zinc-400">Descripción</label>
+                  <p className="text-base text-white mt-1">{cotizacion.description}</p>
                 </div>
               </div>
             )}
 
-            <p className="text-white">{cotizacion.items.length} item(s)</p>
+            <p className="text-base text-white">{cotizacion.items.length} item(s)</p>
           </ZenCardContent>
         </ZenCard>
       )}

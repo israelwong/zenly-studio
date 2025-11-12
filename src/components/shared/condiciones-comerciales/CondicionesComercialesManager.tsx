@@ -7,7 +7,7 @@ import { ZenDialog } from '@/components/ui/zen/modals/ZenDialog';
 import { ZenButton, ZenInput, ZenTextarea, ZenSwitch } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import {
-  obtenerCondicionesComerciales,
+  obtenerTodasCondicionesComerciales,
   crearCondicionComercial,
   actualizarCondicionComercial,
   eliminarCondicionComercial,
@@ -120,12 +120,10 @@ function SortableCondicionItem({
               </p>
             )}
             <div className={`flex items-center gap-4 mt-2 text-sm ${isActive ? 'text-zinc-300' : 'text-zinc-500'}`}>
-              {condicion.discount_percentage && (
-                <span>Descuento: {condicion.discount_percentage}%</span>
-              )}
               {condicion.advance_percentage && (
                 <span>Anticipo: {condicion.advance_percentage}%</span>
               )}
+              <span>Descuento: {condicion.discount_percentage ?? 0}%</span>
             </div>
           </div>
         </div>
@@ -334,7 +332,7 @@ export function CondicionesComercialesManager({
   const loadCondiciones = async () => {
     try {
       setLoading(true);
-      const result = await obtenerCondicionesComerciales(studioSlug);
+      const result = await obtenerTodasCondicionesComerciales(studioSlug);
 
       if (result.success && result.data) {
         setCondiciones(result.data);

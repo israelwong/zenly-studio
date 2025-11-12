@@ -20,6 +20,7 @@ export interface CotizacionResponse {
   data?: {
     id: string;
     name: string;
+    evento_id?: string;
     cotizacion?: {
       id: string;
       name: string;
@@ -34,4 +35,14 @@ export interface CotizacionResponse {
   };
   error?: string;
 }
+
+export const autorizarCotizacionSchema = z.object({
+  studio_slug: z.string().min(1, 'Studio slug requerido'),
+  cotizacion_id: z.string().cuid('ID de cotización inválido'),
+  promise_id: z.string().cuid('ID de promesa inválido'),
+  condiciones_comerciales_id: z.string().cuid('ID de condiciones comerciales inválido'),
+  monto: z.number().min(0, 'El monto debe ser mayor o igual a 0'),
+});
+
+export type AutorizarCotizacionData = z.infer<typeof autorizarCotizacionSchema>;
 

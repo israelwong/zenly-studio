@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { CondicionComercialSchema, type CondicionComercialForm } from "@/lib/actions/schemas/condiciones-comerciales-schemas";
 
-// Obtener todas las condiciones comerciales de un studio
+// Obtener todas las condiciones comerciales activas de un studio (para selectores)
 export async function obtenerCondicionesComerciales(studioSlug: string) {
     try {
         const studio = await prisma.studios.findUnique({
@@ -19,7 +19,10 @@ export async function obtenerCondicionesComerciales(studioSlug: string) {
         }
 
         const condiciones = await prisma.studio_condiciones_comerciales.findMany({
-            where: { studio_id: studio.id },
+            where: {
+                studio_id: studio.id,
+                status: 'active',
+            },
             orderBy: { order: 'asc' },
         });
 
@@ -29,6 +32,38 @@ export async function obtenerCondicionesComerciales(studioSlug: string) {
         };
     } catch (error) {
         console.error("Error al obtener condiciones comerciales:", error);
+        return {
+            success: false,
+            error: "Error al obtener condiciones comerciales",
+        };
+    }
+}
+
+// Obtener TODAS las condiciones comerciales (activas e inactivas) de un studio (para gestión)
+export async function obtenerTodasCondicionesComerciales(studioSlug: string) {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+
+        if (!studio) {
+            throw new Error("Studio no encontrado");
+        }
+
+        const condiciones = await prisma.studio_condiciones_comerciales.findMany({
+            where: {
+                studio_id: studio.id,
+            },
+            orderBy: { order: 'asc' },
+        });
+
+        return {
+            success: true,
+            data: condiciones,
+        };
+    } catch (error) {
+        console.error("Error al obtener todas las condiciones comerciales:", error);
         return {
             success: false,
             error: "Error al obtener condiciones comerciales",

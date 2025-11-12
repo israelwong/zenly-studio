@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Settings2, Plus } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from '@/components/ui/zen';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
@@ -37,27 +37,27 @@ export function CondicionesComercialesSelector({
   const [showManager, setShowManager] = useState(false);
   const [selectedCondicion, setSelectedCondicion] = useState<CondicionComercial | null>(null);
 
-  useEffect(() => {
-    const loadCondiciones = async () => {
-      try {
-        setLoading(true);
-        const result = await obtenerCondicionesComerciales(studioSlug);
+  const loadCondiciones = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await obtenerCondicionesComerciales(studioSlug);
 
-        if (result.success && result.data) {
-          setCondiciones(result.data);
-        } else {
-          toast.error(result.error || 'Error al cargar condiciones comerciales');
-        }
-      } catch (error) {
-        console.error('Error loading condiciones:', error);
-        toast.error('Error al cargar condiciones comerciales');
-      } finally {
-        setLoading(false);
+      if (result.success && result.data) {
+        setCondiciones(result.data);
+      } else {
+        toast.error(result.error || 'Error al cargar condiciones comerciales');
       }
-    };
-
-    loadCondiciones();
+    } catch (error) {
+      console.error('Error loading condiciones:', error);
+      toast.error('Error al cargar condiciones comerciales');
+    } finally {
+      setLoading(false);
+    }
   }, [studioSlug]);
+
+  useEffect(() => {
+    loadCondiciones();
+  }, [loadCondiciones]);
 
   useEffect(() => {
     if (selectedId) {
@@ -70,11 +70,10 @@ export function CondicionesComercialesSelector({
 
   useEffect(() => {
     if (selectedCondicion && precioBase > 0) {
+      // Calcular monto con descuento aplicado
       let montoFinal = precioBase;
-
-      // Aplicar descuento si existe
       if (selectedCondicion.discount_percentage) {
-        montoFinal = montoFinal * (1 - selectedCondicion.discount_percentage / 100);
+        montoFinal = precioBase * (1 - selectedCondicion.discount_percentage / 100);
       }
 
       onMontoChange(montoFinal.toFixed(2));
@@ -111,7 +110,23 @@ export function CondicionesComercialesSelector({
         </ZenCardHeader>
         <ZenCardContent className="space-y-4">
           {loading ? (
-            <div className="text-center py-4 text-zinc-400">Cargando condiciones...</div>
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="p-4 border border-zinc-700 rounded-lg bg-zinc-800/30 animate-pulse">
+                  <div className="flex items-start gap-3">
+                    <div className="h-4 w-4 bg-zinc-700 rounded-full mt-1" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-5 w-32 bg-zinc-700 rounded" />
+                      <div className="h-4 w-full bg-zinc-700 rounded" />
+                      <div className="flex gap-4 mt-2">
+                        <div className="h-4 w-24 bg-zinc-700 rounded" />
+                        <div className="h-4 w-24 bg-zinc-700 rounded" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : condiciones.length === 0 ? (
             <div className="text-center py-4">
               <p className="text-zinc-400 mb-3">No hay condiciones comerciales disponibles</p>
@@ -148,12 +163,10 @@ export function CondicionesComercialesSelector({
                       <p className="text-sm text-zinc-400 mt-1">{condicion.description}</p>
                     )}
                     <div className="flex items-center gap-4 mt-2 text-sm text-zinc-300">
-                      {condicion.discount_percentage && (
-                        <span>Descuento: {condicion.discount_percentage}%</span>
-                      )}
                       {condicion.advance_percentage && (
                         <span>Anticipo: {condicion.advance_percentage}%</span>
                       )}
+                      <span>Descuento: {condicion.discount_percentage ?? 0}%</span>
                     </div>
                   </div>
                 </label>
@@ -168,12 +181,8 @@ export function CondicionesComercialesSelector({
         isOpen={showManager}
         onClose={() => setShowManager(false)}
         onRefresh={() => {
-          // Recargar condiciones
-          obtenerCondicionesComerciales(studioSlug).then((result) => {
-            if (result.success && result.data) {
-              setCondiciones(result.data);
-            }
-          });
+          // Recargar condiciones inmediatamente cuando hay cambios
+          loadCondiciones();
         }}
       />
     </>

@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { ResumenCotizacion } from './components/ResumenCotizacion';
 import { DatosContratante } from './components/DatosContratante';
 import { CondicionesComercialesSelector } from './components/CondicionesComercialesSelector';
-import { MetodoPagoSelector } from './components/MetodoPagoSelector';
+import { autorizarCotizacion } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
 
 export default function AutorizarCotizacionPage() {
   const params = useParams();
@@ -41,8 +41,8 @@ export default function AutorizarCotizacionPage() {
 
   // Estados del formulario
   const [condicionComercialId, setCondicionComercialId] = useState<string | null>(null);
-  const [metodoPagoId, setMetodoPagoId] = useState<string | null>(null);
   const [monto, setMonto] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -87,18 +87,175 @@ export default function AutorizarCotizacionPage() {
     loadData();
   }, [cotizacionId, studioSlug, promiseId, router]);
 
-  const handleAutorizar = () => {
-    // TODO: Implementar lógica de autorización
-    toast.info('Funcionalidad de autorización pendiente de implementar');
+
+  const handleAutorizar = async () => {
+    if (!condicionComercialId || !monto) {
+      toast.error('Por favor selecciona una condición comercial');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const result = await autorizarCotizacion({
+        studio_slug: studioSlug,
+        cotizacion_id: cotizacionId,
+        promise_id: promiseId,
+        condiciones_comerciales_id: condicionComercialId,
+        monto: parseFloat(monto),
+      });
+
+      if (result.success) {
+        toast.success('Cotización autorizada exitosamente');
+        // Redirigir al detalle del evento si existe
+        if (result.data?.evento_id) {
+          router.push(`/${studioSlug}/studio/builder/business/events/${result.data.evento_id}`);
+        } else {
+          router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
+        }
+      } else {
+        toast.error(result.error || 'Error al autorizar cotización');
+      }
+    } catch (error) {
+      console.error('Error autorizando cotización:', error);
+      toast.error('Error al autorizar cotización');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (loading) {
     return (
       <div className="w-full max-w-7xl mx-auto">
-        <ZenCard>
+        <ZenCard variant="default" padding="none">
+          {/* Header Skeleton */}
+          <ZenCardHeader className="border-b border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse" />
+              <div className="h-5 w-5 bg-zinc-800 rounded-lg animate-pulse" />
+              <div className="flex-1 space-y-2">
+                <div className="h-6 w-48 bg-zinc-800 rounded animate-pulse" />
+                <div className="h-4 w-96 bg-zinc-800 rounded animate-pulse" />
+              </div>
+            </div>
+          </ZenCardHeader>
+
           <ZenCardContent className="p-6">
-            <div className="flex items-center justify-center py-12">
-              <div className="text-zinc-400">Cargando cotización...</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Columna 1: Resumen de Cotización Skeleton */}
+              <div className="space-y-6">
+                <ZenCard variant="outlined" className="h-full">
+                  <ZenCardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="h-5 w-32 bg-zinc-800 rounded animate-pulse" />
+                      <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                  </ZenCardHeader>
+                  <ZenCardContent className="space-y-4 flex-1">
+                    {/* Descripción skeleton */}
+                    <div className="pb-4 border-b border-zinc-700">
+                      <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse mb-2" />
+                      <div className="h-16 w-full bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                    {/* Items skeleton - Expandido para simetría visual */}
+                    <div className="space-y-3 flex-1">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="space-y-2">
+                          <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+                          <div className="pl-4 space-y-1">
+                            <div className="h-3 w-24 bg-zinc-800/70 rounded animate-pulse" />
+                            <div className="pl-4 space-y-1">
+                              {[1, 2, 3].map((j) => (
+                                <div key={j} className="grid grid-cols-[1fr_60px_100px] gap-2">
+                                  <div className="h-4 w-full bg-zinc-800/70 rounded animate-pulse" />
+                                  <div className="h-4 w-12 bg-zinc-800/70 rounded animate-pulse ml-auto" />
+                                  <div className="h-4 w-16 bg-zinc-800/70 rounded animate-pulse ml-auto" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ZenCardContent>
+                </ZenCard>
+              </div>
+
+              {/* Columna 2: Formulario de Autorización Skeleton */}
+              <div className="space-y-6">
+                {/* Datos del Contratante Skeleton */}
+                <ZenCard variant="outlined">
+                  <ZenCardHeader>
+                    <div className="flex items-center gap-3">
+                      <div className="h-5 w-5 bg-zinc-800 rounded-lg animate-pulse" />
+                      <div className="h-5 w-40 bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                  </ZenCardHeader>
+                  <ZenCardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="h-3 w-16 bg-zinc-800 rounded animate-pulse" />
+                      <div className="h-5 w-full bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 w-20 bg-zinc-800 rounded animate-pulse" />
+                      <div className="h-5 w-full bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 w-16 bg-zinc-800 rounded animate-pulse" />
+                      <div className="h-5 w-full bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                  </ZenCardContent>
+                </ZenCard>
+
+                {/* Condiciones Comerciales Skeleton */}
+                <ZenCard variant="outlined">
+                  <ZenCardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-5 w-5 bg-zinc-800 rounded-lg animate-pulse" />
+                        <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse" />
+                      </div>
+                      <div className="h-8 w-24 bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                  </ZenCardHeader>
+                  <ZenCardContent className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="p-4 border border-zinc-700 rounded-lg bg-zinc-800/30 animate-pulse">
+                        <div className="flex items-start gap-3">
+                          <div className="h-4 w-4 bg-zinc-700 rounded-full mt-1" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-5 w-32 bg-zinc-700 rounded" />
+                            <div className="h-4 w-full bg-zinc-700 rounded" />
+                            <div className="flex gap-4 mt-2">
+                              <div className="h-4 w-24 bg-zinc-700 rounded" />
+                              <div className="h-4 w-24 bg-zinc-700 rounded" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </ZenCardContent>
+                </ZenCard>
+
+                {/* Monto Total Skeleton */}
+                <ZenCard variant="outlined">
+                  <ZenCardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-2">
+                        <div className="h-6 w-32 bg-zinc-800 rounded animate-pulse" />
+                        <div className="h-4 w-64 bg-zinc-800 rounded animate-pulse" />
+                      </div>
+                      <div className="h-8 w-32 bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                  </ZenCardContent>
+                </ZenCard>
+
+                {/* Botones de Acción Skeleton */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+                  <div className="h-10 w-24 bg-zinc-800 rounded animate-pulse" />
+                  <div className="h-10 w-40 bg-zinc-800 rounded animate-pulse" />
+                </div>
+              </div>
             </div>
           </ZenCardContent>
         </ZenCard>
@@ -129,7 +286,7 @@ export default function AutorizarCotizacionPage() {
             <div>
               <ZenCardTitle>Autorizar Cotización</ZenCardTitle>
               <ZenCardDescription>
-                Confirma las condiciones comerciales y método de pago para autorizar esta cotización
+                Selecciona las condiciones comerciales para autorizar esta cotización
               </ZenCardDescription>
             </div>
           </div>
@@ -156,20 +313,13 @@ export default function AutorizarCotizacionPage() {
                 onMontoChange={setMonto}
               />
 
-              {/* Método de Pago */}
-              <MetodoPagoSelector
-                studioSlug={studioSlug}
-                selectedId={metodoPagoId}
-                onSelect={setMetodoPagoId}
-              />
-
-              {/* Monto Final */}
+              {/* Monto Total */}
               <ZenCard variant="outlined">
                 <ZenCardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-semibold text-white">Monto a autorizar</h3>
-                      <p className="text-sm text-zinc-400 mt-1">
+                      <h3 className="text-lg font-semibold text-white mb-1">Monto Total</h3>
+                      <p className="text-sm text-zinc-400">
                         Monto final después de aplicar condiciones comerciales
                       </p>
                     </div>
@@ -193,10 +343,11 @@ export default function AutorizarCotizacionPage() {
                 <ZenButton
                   variant="primary"
                   onClick={handleAutorizar}
-                  disabled={!condicionComercialId || !metodoPagoId || !monto}
+                  disabled={!condicionComercialId || !monto || isSubmitting}
+                  loading={isSubmitting}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Autorizar Cotización
+                  {isSubmitting ? 'Autorizando...' : 'Autorizar Cotización'}
                 </ZenButton>
               </div>
             </div>

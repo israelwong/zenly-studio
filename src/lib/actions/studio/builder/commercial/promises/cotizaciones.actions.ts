@@ -4,8 +4,10 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import {
   createCotizacionSchema,
+  autorizarCotizacionSchema,
   type CreateCotizacionData,
   type CotizacionResponse,
+  type AutorizarCotizacionData,
 } from '@/lib/actions/schemas/cotizaciones-schemas';
 
 export interface CotizacionListItem {
@@ -800,6 +802,149 @@ export async function updateCotizacionName(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar nombre',
+    };
+  }
+}
+
+/**
+ * Autorizar cotización (simplificado - solo autoriza, no registra pagos)
+ */
+export async function autorizarCotizacion(
+  data: AutorizarCotizacionData
+): Promise<CotizacionResponse> {
+  try {
+    const validatedData = autorizarCotizacionSchema.parse(data);
+
+    // Obtener studio
+    const studio = await prisma.studios.findUnique({
+      where: { slug: validatedData.studio_slug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    // Obtener cotización con relaciones
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: validatedData.cotizacion_id,
+        studio_id: studio.id,
+      },
+      include: {
+        contact: true,
+        promise: {
+          include: {
+            contact: true,
+          },
+        },
+        eventos: true,
+        condiciones_comerciales: true,
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    if (cotizacion.status === 'autorizada') {
+      return { success: false, error: 'La cotización ya está autorizada' };
+    }
+
+    const contactId = cotizacion.contact_id || cotizacion.promise?.contact_id;
+    if (!contactId) {
+      return { success: false, error: 'La cotización no tiene contacto asociado' };
+    }
+
+    // Determinar evento existente o datos para crear uno nuevo
+    let eventoId: string | null = null;
+    const eventoExistente = cotizacion.eventos?.[0];
+    
+    if (eventoExistente) {
+      eventoId = eventoExistente.id;
+    } else {
+      // Datos para crear evento nuevo (se implementará después)
+      const eventTypeId = cotizacion.promise?.event_type_id || null;
+      const eventDate = cotizacion.promise?.defined_date || new Date();
+      const clienteId = cotizacion.promise?.contact?.id || null;
+
+      console.log('[AUTORIZACION] Datos para crear/actualizar evento:', {
+        studio_id: studio.id,
+        promise_id: validatedData.promise_id,
+        event_type_id: eventTypeId,
+        event_date: eventDate,
+        cliente_id: clienteId,
+        contact_id: contactId,
+        name: cotizacion.name || 'Pendiente',
+        address: cotizacion.promise?.address || null,
+        status: 'active',
+      });
+    }
+
+    // Datos a actualizar en cotización
+    const updateData = {
+      status: 'autorizada' as const,
+      condiciones_comerciales_id: validatedData.condiciones_comerciales_id,
+      updated_at: new Date(),
+      payment_promise_date: new Date(), // Por defecto es promesa de pago
+      payment_registered: false,
+    };
+
+    console.log('[AUTORIZACION] Datos a actualizar en cotización:', {
+      cotizacion_id: validatedData.cotizacion_id,
+      updateData,
+      monto: validatedData.monto,
+      condiciones_comerciales: cotizacion.condiciones_comerciales?.name,
+    });
+
+    // Datos para actualizar promise (si existe)
+    if (validatedData.promise_id) {
+      console.log('[AUTORIZACION] Datos para actualizar promise:', {
+        promise_id: validatedData.promise_id,
+        // Se podría actualizar el stage_id aquí si es necesario
+      });
+    }
+
+    // Por ahora solo actualizamos la cotización (el CRUD completo se implementará después)
+    const result = await prisma.studio_cotizaciones.update({
+      where: { id: validatedData.cotizacion_id },
+      data: updateData,
+    });
+
+    // Registrar log en promise si existe
+    if (validatedData.promise_id) {
+      const { logPromiseAction } = await import('./promise-logs.actions');
+      await logPromiseAction(
+        validatedData.studio_slug,
+        validatedData.promise_id,
+        'quotation_authorized_promise',
+        'user',
+        null,
+        {
+          quotationName: result.name,
+          amount: validatedData.monto,
+        }
+      ).catch((error) => {
+        console.error('[AUTORIZACION] Error registrando log:', error);
+      });
+    }
+
+    revalidatePath(`/${validatedData.studio_slug}/studio/builder/commercial/promises`);
+    revalidatePath(`/${validatedData.studio_slug}/studio/builder/commercial/promises/${validatedData.promise_id}`);
+
+    return {
+      success: true,
+      data: {
+        id: result.id,
+        name: result.name,
+        evento_id: eventoId || undefined,
+      },
+    };
+  } catch (error) {
+    console.error('[AUTORIZACION] Error autorizando cotización:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al autorizar cotización',
     };
   }
 }
