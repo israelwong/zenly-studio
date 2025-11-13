@@ -25,6 +25,7 @@ interface PromiseCardViewProps {
     email: string | null;
     event_type_id: string | null;
     event_type_name?: string | null;
+    event_location?: string | null;
     interested_dates: string[] | null;
     acquisition_channel_id?: string | null;
     acquisition_channel_name?: string | null;
@@ -304,6 +305,21 @@ export function PromiseCardView({
                     <p className="text-sm text-zinc-400 italic">No especificado</p>
                   </div>
                 )}
+                {data.event_location ? (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Lugar del Evento
+                    </label>
+                    <p className="text-sm text-zinc-200">{data.event_location}</p>
+                  </div>
+                ) : data.event_type_name ? (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-400 block mb-1">
+                      Lugar del Evento
+                    </label>
+                    <p className="text-sm text-zinc-400 italic">No especificado</p>
+                  </div>
+                ) : null}
                 {data.interested_dates && data.interested_dates.length > 0 ? (
                   <div>
                     <label className="text-xs font-medium text-zinc-400 block mb-1">

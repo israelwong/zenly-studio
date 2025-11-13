@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, usePathname } from 'next/navigation';
@@ -32,11 +32,6 @@ export function StudioHeaderModal({ className, studioData }: StudioHeaderModalPr
     // const pathname = usePathname(); // Comentado ya que no se usa actualmente
     const slug = params.slug as string;
 
-    // Memoizar callback de actualización
-    const handleStudioUpdate = useCallback((data: any) => {
-        console.log('🎯 [STUDIO_HEADER] Updated with new studio data:', data);
-    }, []);
-
     // Usar datos del studio pasados como prop o hook como fallback
     const {
         identidadData,
@@ -44,8 +39,7 @@ export function StudioHeaderModal({ className, studioData }: StudioHeaderModalPr
         error,
         refetch
     } = useStudioData({
-        studioSlug: studioData?.slug || slug,
-        onUpdate: handleStudioUpdate
+        studioSlug: studioData?.slug || slug
     });
 
     // Escuchar cambios de logo para actualizar en tiempo real

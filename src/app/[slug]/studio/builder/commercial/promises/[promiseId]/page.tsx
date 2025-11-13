@@ -36,6 +36,7 @@ export default function EditarPromesaPage() {
     email: string | null;
     event_type_id: string | null;
     event_type_name: string | null;
+    event_location: string | null;
     interested_dates: string[] | null;
     acquisition_channel_id?: string | null;
     acquisition_channel_name?: string | null;
@@ -46,6 +47,7 @@ export default function EditarPromesaPage() {
     referrer_contact_name?: string | null;
     referrer_contact_email?: string | null;
     promiseId?: string | null;
+    has_event?: boolean;
   } | null>(null);
   const [contactData, setContactData] = useState<{
     contactId: string;
@@ -70,6 +72,7 @@ export default function EditarPromesaPage() {
             email: result.data.contact_email,
             event_type_id: result.data.event_type_id || null,
             event_type_name: result.data.event_type_name || null,
+            event_location: result.data.event_location || null,
             interested_dates: result.data.interested_dates,
             acquisition_channel_id: result.data.acquisition_channel_id ?? null,
             acquisition_channel_name: result.data.acquisition_channel_name ?? null,
@@ -80,6 +83,7 @@ export default function EditarPromesaPage() {
           referrer_contact_name: result.data.referrer_contact_name ?? null,
           referrer_contact_email: result.data.referrer_contact_email ?? null,
           promiseId: result.data.promise_id,
+          has_event: result.data.has_event,
           });
           setContactData({
             contactId: result.data.contact_id,
@@ -153,6 +157,7 @@ export default function EditarPromesaPage() {
               email: result.data.contact_email,
               event_type_id: result.data.event_type_id || null,
               event_type_name: result.data.event_type_name || null,
+              event_location: result.data.event_location || null,
               interested_dates: result.data.interested_dates,
               acquisition_channel_id: result.data.acquisition_channel_id ?? null,
               acquisition_channel_name: result.data.acquisition_channel_name ?? null,
@@ -163,6 +168,7 @@ export default function EditarPromesaPage() {
               referrer_contact_name: result.data.referrer_contact_name ?? null,
               referrer_contact_email: result.data.referrer_contact_email ?? null,
               promiseId: result.data.promise_id,
+              has_event: result.data.has_event,
             });
             setContactData({
               contactId: result.data.contact_id,
@@ -357,6 +363,7 @@ export default function EditarPromesaPage() {
           email: result.data.contact_email,
           event_type_id: result.data.event_type_id || null,
           event_type_name: result.data.event_type_name || null,
+          event_location: result.data.event_location || null,
           interested_dates: result.data.interested_dates,
           acquisition_channel_id: result.data.acquisition_channel_id ?? null,
           acquisition_channel_name: result.data.acquisition_channel_name ?? null,
@@ -367,6 +374,7 @@ export default function EditarPromesaPage() {
           referrer_contact_name: result.data.referrer_contact_name ?? null,
           referrer_contact_email: result.data.referrer_contact_email ?? null,
           promiseId: result.data.promise_id,
+          has_event: result.data.has_event,
         });
         setContactData({
           contactId: result.data.contact_id,
@@ -414,33 +422,46 @@ export default function EditarPromesaPage() {
                 const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
                 const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' || 
                                        currentStage?.name.toLowerCase().includes('aprobado');
+                const hasEvent = promiseData?.has_event || false;
+                const isRestricted = isApprovedStage && hasEvent;
+                
+                // Filtrar etapas: si está restringido, solo mostrar "archived" además de la actual
+                const availableStages = isRestricted
+                  ? pipelineStages.filter((s) => s.slug === 'archived' || s.id === currentPipelineStageId)
+                  : pipelineStages;
                 
                 return (
-                  <div className="relative flex items-center">
-                    <select
-                      value={currentPipelineStageId}
-                      onChange={(e) => handlePipelineStageChange(e.target.value)}
-                      disabled={isChangingStage || loading}
-                      className={`pl-3 pr-8 py-1.5 text-sm bg-zinc-900 border rounded-lg text-zinc-100 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed appearance-none ${
-                        isChangingStage
-                          ? "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
-                          : isArchived 
-                          ? "border-amber-500 focus:ring-amber-500/50 focus:border-amber-500"
-                          : isApprovedStage
-                          ? "border-emerald-500 focus:ring-emerald-500/50 focus:border-emerald-500"
-                          : "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
-                      }`}
-                    >
-                      {isChangingStage ? (
-                        <option value={currentPipelineStageId}>Actualizando estado...</option>
-                      ) : (
-                        pipelineStages.map((stage) => (
-                          <option key={stage.id} value={stage.id}>
-                            {stage.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                  <div className="flex flex-col gap-2">
+                    {isRestricted && (
+                      <div className="text-xs text-amber-400 bg-amber-950/20 border border-amber-500/30 rounded px-2 py-1">
+                        Esta promesa tiene un evento asociado. Solo puede archivarse.
+                      </div>
+                    )}
+                    <div className="relative flex items-center">
+                      <select
+                        value={currentPipelineStageId}
+                        onChange={(e) => handlePipelineStageChange(e.target.value)}
+                        disabled={isChangingStage || loading}
+                        className={`pl-3 pr-8 py-1.5 text-sm bg-zinc-900 border rounded-lg text-zinc-100 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed appearance-none ${
+                          isChangingStage
+                            ? "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
+                            : isArchived 
+                            ? "border-amber-500 focus:ring-amber-500/50 focus:border-amber-500"
+                            : isApprovedStage
+                            ? "border-emerald-500 focus:ring-emerald-500/50 focus:border-emerald-500"
+                            : "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
+                        }`}
+                      >
+                        {isChangingStage ? (
+                          <option value={currentPipelineStageId}>Actualizando estado...</option>
+                        ) : (
+                          availableStages.map((stage) => (
+                            <option key={stage.id} value={stage.id}>
+                              {stage.name}
+                            </option>
+                          ))
+                        )}
+                      </select>
                     {isChangingStage ? (
                       <Loader2 className="absolute right-2 h-4 w-4 animate-spin text-zinc-400 pointer-events-none" />
                     ) : (
@@ -450,6 +471,7 @@ export default function EditarPromesaPage() {
                         </svg>
                       </div>
                     )}
+                  </div>
                   </div>
                 );
               })()}
@@ -519,6 +541,7 @@ export default function EditarPromesaPage() {
               email: promiseData.email,
               event_type_id: promiseData.event_type_id,
               event_type_name: promiseData.event_type_name || undefined,
+              event_location: promiseData.event_location || undefined,
               interested_dates: promiseData.interested_dates,
               acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
               acquisition_channel_name: promiseData.acquisition_channel_name || undefined,
@@ -545,13 +568,12 @@ export default function EditarPromesaPage() {
           phone: promiseData.phone,
           email: promiseData.email,
           event_type_id: promiseData.event_type_id || undefined,
+          event_location: promiseData.event_location || undefined,
           interested_dates: promiseData.interested_dates || undefined,
           acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
           social_network_id: promiseData.social_network_id || undefined,
           referrer_contact_id: promiseData.referrer_contact_id || undefined,
-          referrer_name: promiseData.referrer_name || undefined,
-          referrer_contact_name: promiseData.referrer_contact_name || undefined,
-          referrer_contact_email: promiseData.referrer_contact_email || undefined,
+          referrer_name: promiseData.referrer_contact_name || promiseData.referrer_name || undefined,
         }}
         onSuccess={handleEditSuccess}
       />

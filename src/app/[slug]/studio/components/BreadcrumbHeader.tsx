@@ -25,6 +25,9 @@ export function BreadcrumbHeader({ className, studioSlug }: BreadcrumbHeaderProp
         const segments = pathname.split('/').filter(Boolean);
         const breadcrumb: BreadcrumbItem[] = [];
 
+        // Rutas contenedoras que no tienen page.tsx (solo agrupan subsecciones)
+        const CONTAINER_ROUTES = ['commercial', 'business', 'content', 'account', 'profile'];
+
         // Función para detectar si un segmento es un ID (CUID típicamente ~25 caracteres alfanuméricos)
         const isId = (segment: string): boolean => {
             // CUIDs típicamente tienen 25 caracteres, alfanuméricos
@@ -163,16 +166,25 @@ export function BreadcrumbHeader({ className, studioSlug }: BreadcrumbHeaderProp
                 const segment = segments[i];
                 const label = formatSegment(segment);
                 const isLast = i === segments.length - 1;
+                const isContainerRoute = CONTAINER_ROUTES.includes(segment);
 
-                // Construir el href acumulativo
-                const currentHrefSegments = segments.slice(0, i + 1);
-                const currentHref = `/${currentHrefSegments.join('/')}`;
+                // Si es una ruta contenedora y no es el último segmento, omitir href
+                if (isContainerRoute && !isLast) {
+                    breadcrumb.push({
+                        label,
+                        active: false
+                    });
+                } else {
+                    // Construir el href acumulativo
+                    const currentHrefSegments = segments.slice(0, i + 1);
+                    const currentHref = `/${currentHrefSegments.join('/')}`;
 
-                breadcrumb.push({
-                    label,
-                    href: currentHref,
-                    active: isLast
-                });
+                    breadcrumb.push({
+                        label,
+                        href: currentHref,
+                        active: isLast
+                    });
+                }
             }
         } else {
             // Si no estamos en configuración ni builder, solo mostrar el segmento actual si existe

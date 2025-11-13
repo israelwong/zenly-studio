@@ -10,7 +10,7 @@ import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/li
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/builder/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/builder/paquetes/paquetes.actions';
-import { createCotizacion, getCotizacionById } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
+import { createCotizacion, updateCotizacion, getCotizacionById } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -516,9 +516,32 @@ export function CotizacionForm({
         : Number(precioPersonalizado);
 
       if (isEditMode) {
-        // TODO: Implementar actualización de cotización
-        toast.error('La edición de cotizaciones aún no está implementada');
-        setLoading(false);
+        // Actualizar cotización
+        const result = await updateCotizacion({
+          studio_slug: studioSlug,
+          cotizacion_id: cotizacionId!,
+          nombre: nombre.trim(),
+          descripcion: descripcion.trim() || undefined,
+          precio: precioFinal,
+          items: Object.fromEntries(
+            itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
+          ),
+        });
+
+        if (!result.success) {
+          toast.error(result.error || 'Error al actualizar cotización');
+          return;
+        }
+
+        toast.success('Cotización actualizada exitosamente');
+
+        if (redirectOnSuccess) {
+          router.push(redirectOnSuccess);
+        } else if (promiseId) {
+          router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`);
+        } else {
+          router.back();
+        }
         return;
       }
 

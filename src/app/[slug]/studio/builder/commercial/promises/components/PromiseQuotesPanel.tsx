@@ -129,7 +129,18 @@ export function PromiseQuotesPanel({
         // result.data siempre es un array (puede estar vacío)
         // Si success es true, usar el array (vacío o con datos)
         if (result.success) {
-          setCotizaciones(result.data || []);
+          const cotizacionesData = result.data || [];
+          // Ordenar: primero las no archivadas (por order), luego las archivadas (por order)
+          const sortedCotizaciones = [...cotizacionesData].sort((a, b) => {
+            // Si una está archivada y la otra no, la archivada va al final
+            if (a.archived && !b.archived) return 1;
+            if (!a.archived && b.archived) return -1;
+            // Si ambas tienen el mismo estado de archivado, ordenar por order
+            const orderA = a.order ?? 0;
+            const orderB = b.order ?? 0;
+            return orderA - orderB;
+          });
+          setCotizaciones(sortedCotizaciones);
         } else {
           setCotizaciones([]);
         }
@@ -193,14 +204,23 @@ export function PromiseQuotesPanel({
 
     const newCotizaciones = arrayMove(cotizaciones, oldIndex, newIndex);
 
+    // Reordenar para mantener archivadas al final después del drag
+    const reorderedCotizaciones = [...newCotizaciones].sort((a, b) => {
+      if (a.archived && !b.archived) return 1;
+      if (!a.archived && b.archived) return -1;
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      return orderA - orderB;
+    });
+
     try {
       setIsReordering(true);
 
       // Actualización optimista
-      setCotizaciones(newCotizaciones);
+      setCotizaciones(reorderedCotizaciones);
 
       // Actualizar en el servidor
-      const cotizacionIds = newCotizaciones.map((c) => c.id);
+      const cotizacionIds = reorderedCotizaciones.map((c) => c.id);
       const result = await reorderCotizaciones(studioSlug, cotizacionIds);
 
       if (!result.success) {
@@ -342,7 +362,16 @@ export function PromiseQuotesPanel({
                   onDuplicateStart={(id) => setDuplicatingId(id)}
                   onDuplicateComplete={(newCotizacion) => {
                     setDuplicatingId(null);
-                    setCotizaciones((prev) => [...prev, newCotizacion]);
+                    setCotizaciones((prev) => {
+                      const updated = [...prev, newCotizacion];
+                      return updated.sort((a, b) => {
+                        if (a.archived && !b.archived) return 1;
+                        if (!a.archived && b.archived) return -1;
+                        const orderA = a.order ?? 0;
+                        const orderB = b.order ?? 0;
+                        return orderA - orderB;
+                      });
+                    });
                   }}
                   onDuplicateError={() => {
                     setDuplicatingId(null);
@@ -351,16 +380,30 @@ export function PromiseQuotesPanel({
                     setCotizaciones((prev) => prev.filter((c) => c.id !== id));
                   }}
                   onArchive={(id) => {
-                    // Actualización local: marcar como archivada
-                    setCotizaciones((prev) =>
-                      prev.map((c) => (c.id === id ? { ...c, archived: true } : c))
-                    );
+                    // Actualización local: marcar como archivada y reordenar
+                    setCotizaciones((prev) => {
+                      const updated = prev.map((c) => (c.id === id ? { ...c, archived: true } : c));
+                      return updated.sort((a, b) => {
+                        if (a.archived && !b.archived) return 1;
+                        if (!a.archived && b.archived) return -1;
+                        const orderA = a.order ?? 0;
+                        const orderB = b.order ?? 0;
+                        return orderA - orderB;
+                      });
+                    });
                   }}
                   onUnarchive={(id) => {
-                    // Actualización local: marcar como desarchivada
-                    setCotizaciones((prev) =>
-                      prev.map((c) => (c.id === id ? { ...c, archived: false } : c))
-                    );
+                    // Actualización local: marcar como desarchivada y reordenar
+                    setCotizaciones((prev) => {
+                      const updated = prev.map((c) => (c.id === id ? { ...c, archived: false } : c));
+                      return updated.sort((a, b) => {
+                        if (a.archived && !b.archived) return 1;
+                        if (!a.archived && b.archived) return -1;
+                        const orderA = a.order ?? 0;
+                        const orderB = b.order ?? 0;
+                        return orderA - orderB;
+                      });
+                    });
                   }}
                   onNameUpdate={(id, newName) => {
                     setCotizaciones((prev) =>
@@ -401,16 +444,30 @@ export function PromiseQuotesPanel({
                         setCotizaciones((prev) => prev.filter((c) => c.id !== id));
                       }}
                       onArchive={(id) => {
-                        // Actualización local: marcar como archivada
-                        setCotizaciones((prev) =>
-                          prev.map((c) => (c.id === id ? { ...c, archived: true } : c))
-                        );
+                        // Actualización local: marcar como archivada y reordenar
+                        setCotizaciones((prev) => {
+                          const updated = prev.map((c) => (c.id === id ? { ...c, archived: true } : c));
+                          return updated.sort((a, b) => {
+                            if (a.archived && !b.archived) return 1;
+                            if (!a.archived && b.archived) return -1;
+                            const orderA = a.order ?? 0;
+                            const orderB = b.order ?? 0;
+                            return orderA - orderB;
+                          });
+                        });
                       }}
                       onUnarchive={(id) => {
-                        // Actualización local: marcar como desarchivada
-                        setCotizaciones((prev) =>
-                          prev.map((c) => (c.id === id ? { ...c, archived: false } : c))
-                        );
+                        // Actualización local: marcar como desarchivada y reordenar
+                        setCotizaciones((prev) => {
+                          const updated = prev.map((c) => (c.id === id ? { ...c, archived: false } : c));
+                          return updated.sort((a, b) => {
+                            if (a.archived && !b.archived) return 1;
+                            if (!a.archived && b.archived) return -1;
+                            const orderA = a.order ?? 0;
+                            const orderB = b.order ?? 0;
+                            return orderA - orderB;
+                          });
+                        });
                       }}
                       onNameUpdate={(id, newName) => {
                         setCotizaciones((prev) =>

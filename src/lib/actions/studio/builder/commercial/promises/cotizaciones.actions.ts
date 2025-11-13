@@ -1426,6 +1426,21 @@ export async function autorizarCotizacion(
       revalidatePath(`/${validatedData.studio_slug}/studio/builder/business/events/${eventoId}`);
     }
 
+    // Crear notificación
+    try {
+      const { notifyQuoteApproved } = await import('@/lib/notifications/studio');
+      const contactName = cotizacion.contact?.name || cotizacion.promise?.contact?.name || 'Cliente';
+      await notifyQuoteApproved(
+        studio.id,
+        validatedData.cotizacion_id,
+        contactName,
+        validatedData.monto
+      );
+    } catch (notificationError) {
+      console.error('[AUTORIZACION] Error creando notificación:', notificationError);
+      // No fallar la autorización si falla la notificación
+    }
+
     return {
       success: true,
       data: {

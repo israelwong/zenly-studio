@@ -24,6 +24,7 @@ interface PromiseFormModalProps {
         phone?: string;
         email?: string;
         event_type_id?: string;
+        event_location?: string;
         interested_dates?: string[];
         acquisition_channel_id?: string;
         social_network_id?: string;
@@ -50,6 +51,7 @@ export function PromiseFormModal({
         phone: initialData?.phone || '',
         email: initialData?.email || '',
         event_type_id: initialData?.event_type_id || '',
+        event_location: initialData?.event_location || '',
         interested_dates: initialData?.interested_dates,
         acquisition_channel_id: initialData?.acquisition_channel_id ?? '',
         social_network_id: initialData?.social_network_id,
@@ -166,6 +168,7 @@ export function PromiseFormModal({
                     phone: normalizePhone(initialData.phone || ''),
                     email: initialData.email || '',
                     event_type_id: initialData.event_type_id || '',
+                    event_location: initialData.event_location || '',
                     interested_dates: initialData.interested_dates,
                     acquisition_channel_id: initialData.acquisition_channel_id ?? '',
                     social_network_id: initialData.social_network_id,
@@ -183,10 +186,12 @@ export function PromiseFormModal({
                 );
                 // Inicializar referrerInputValue: si hay referrer_name, usarlo; si no, se sincronizará cuando se carguen los contactos
                 if (initialData.referrer_name) {
+                    // Si hay referrer_name, usarlo directamente
                     setReferrerInputValue(initialData.referrer_name);
                     referrerSyncedRef.current = true;
                 } else if (initialData.referrer_contact_id) {
-                    // Si hay referrer_contact_id pero no referrer_name, inicializar vacío y se sincronizará después
+                    // Si hay referrer_contact_id pero no referrer_name, inicializar vacío
+                    // Se sincronizará cuando se carguen los contactos con el formato @nombre
                     setReferrerInputValue('');
                     referrerSyncedRef.current = false;
                 } else {
@@ -217,6 +222,7 @@ export function PromiseFormModal({
                     phone: '',
                     email: '',
                     event_type_id: '',
+                    event_location: '',
                     interested_dates: undefined,
                     acquisition_channel_id: '',
                     social_network_id: undefined,
@@ -307,9 +313,9 @@ export function PromiseFormModal({
             const referrerContact = allContacts.find((c) => c.id === formData.referrer_contact_id);
             if (referrerContact) {
                 const expectedValue = `@${referrerContact.name}`;
-                // Solo actualizar si el valor actual está vacío
+                // Actualizar siempre si el valor actual está vacío o no coincide con el esperado
                 setReferrerInputValue((current) => {
-                    if (!current || current === '') {
+                    if (!current || current === '' || current !== expectedValue) {
                         referrerSyncedRef.current = true;
                         return expectedValue;
                     }
@@ -436,6 +442,14 @@ export function PromiseFormModal({
             newErrors.event_type_id = 'El tipo de evento es requerido';
         }
 
+        // Validar lugar del evento (obligatorio si hay tipo de evento seleccionado)
+        if (formData.event_type_id && formData.event_type_id !== 'none') {
+            const eventLocation = (formData.event_location || '').trim();
+            if (!eventLocation || eventLocation === '') {
+                newErrors.event_location = 'El lugar del evento es requerido (puedes usar "Pendiente")';
+            }
+        }
+
         if (!formData.acquisition_channel_id || formData.acquisition_channel_id === '' || formData.acquisition_channel_id === 'none') {
             newErrors.acquisition_channel_id = 'El canal de adquisición es requerido';
         }
@@ -456,10 +470,16 @@ export function PromiseFormModal({
         setLoading(true);
 
         try {
+            // Normalizar lugar del evento: si está vacío o solo espacios, usar "Pendiente"
+            const eventLocation = formData.event_type_id && formData.event_type_id !== 'none'
+                ? (formData.event_location || '').trim() || 'Pendiente'
+                : undefined;
+
             // Normalizar teléfono antes de enviar
             const formDataToSubmit = {
                 ...formData,
                 phone: normalizedPhone,
+                event_location: eventLocation,
             };
 
             let result;
@@ -580,68 +600,98 @@ export function PromiseFormModal({
                     </div>
 
                     {/* Teléfono y Email */}
-                    <ZenInput
-                        label="Teléfono"
-                        value={formData.phone || ''}
-                        onChange={(e) => {
-                            const normalized = normalizePhone(e.target.value);
-                            setFormData((prev) => ({ ...prev, phone: normalized }));
-                            if (errors.phone) {
-                                setErrors((prev) => ({ ...prev, phone: '' }));
-                            }
-                        }}
-                        required
-                        error={errors.phone}
-                        placeholder="10 dígitos"
-                    />
-                    <ZenInput
-                        label="Email"
-                        type="email"
-                        value={formData.email || ''}
-                        onChange={(e) => {
-                            setFormData((prev) => ({ ...prev, email: e.target.value || undefined }));
-                            if (errors.email) {
-                                setErrors((prev) => ({ ...prev, email: '' }));
-                            }
-                        }}
-                        error={errors.email}
-                    />
-
-                    {/* Tipo de Evento */}
-                    <div>
-                        <label className="text-sm font-medium text-zinc-300 block mb-2">
-                            Tipo de Evento <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                            value={formData.event_type_id || 'none'}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <ZenInput
+                            label="Teléfono"
+                            value={formData.phone || ''}
                             onChange={(e) => {
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    event_type_id: e.target.value === 'none' ? '' : e.target.value,
-                                }));
-                                if (errors.event_type_id) {
-                                    setErrors((prev) => ({ ...prev, event_type_id: '' }));
+                                const normalized = normalizePhone(e.target.value);
+                                setFormData((prev) => ({ ...prev, phone: normalized }));
+                                if (errors.phone) {
+                                    setErrors((prev) => ({ ...prev, phone: '' }));
                                 }
                             }}
                             required
-                            disabled={isInitialLoading && eventTypes.length === 0}
-                            className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.event_type_id
-                                ? 'border-red-500 focus:ring-red-500'
-                                : 'border-zinc-700 hover:border-zinc-600'
-                                }`}
-                        >
-                            <option value="none">
-                                {isInitialLoading && eventTypes.length === 0 ? 'Cargando...' : 'Seleccionar tipo de evento'}
-                            </option>
-                            {eventTypes.map((et) => (
-                                <option key={et.id} value={et.id}>
-                                    {et.name}
+                            error={errors.phone}
+                            placeholder="10 dígitos"
+                        />
+                        <ZenInput
+                            label="Email"
+                            type="email"
+                            value={formData.email || ''}
+                            onChange={(e) => {
+                                setFormData((prev) => ({ ...prev, email: e.target.value || undefined }));
+                                if (errors.email) {
+                                    setErrors((prev) => ({ ...prev, email: '' }));
+                                }
+                            }}
+                            error={errors.email}
+                        />
+                    </div>
+
+                    {/* Tipo de Evento y Lugar del Evento */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                Tipo de Evento <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                                value={formData.event_type_id || 'none'}
+                                onChange={(e) => {
+                                    const newEventTypeId = e.target.value === 'none' ? '' : e.target.value;
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        event_type_id: newEventTypeId,
+                                        // Limpiar lugar del evento si se deselecciona el tipo
+                                        ...(newEventTypeId === '' ? { event_location: '' } : {}),
+                                        // Si se selecciona un tipo y no hay lugar, poner "Pendiente"
+                                        ...(newEventTypeId !== '' && !prev.event_location ? { event_location: 'Pendiente' } : {}),
+                                    }));
+                                    if (errors.event_type_id) {
+                                        setErrors((prev) => ({ ...prev, event_type_id: '' }));
+                                    }
+                                }}
+                                required
+                                disabled={isInitialLoading && eventTypes.length === 0}
+                                className={`w-full px-3 py-2.5 h-10 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.event_type_id
+                                    ? 'border-red-500 focus:ring-red-500'
+                                    : 'border-zinc-700 hover:border-zinc-600'
+                                    }`}
+                            >
+                                <option value="none">
+                                    {isInitialLoading && eventTypes.length === 0 ? 'Cargando...' : 'Seleccionar tipo de evento'}
                                 </option>
-                            ))}
-                        </select>
-                        {errors.event_type_id && (
-                            <p className="mt-1 text-xs text-red-500">{errors.event_type_id}</p>
-                        )}
+                                {eventTypes.map((et) => (
+                                    <option key={et.id} value={et.id}>
+                                        {et.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.event_type_id && (
+                                <p className="mt-1 text-xs text-red-500">{errors.event_type_id}</p>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                Lugar del Evento <span className="text-red-500">*</span>
+                            </label>
+                            <ZenInput
+                                type="text"
+                                placeholder="Ej: Salón de eventos, Playa, Jardín... (o 'Pendiente')"
+                                value={formData.event_location || ''}
+                                onChange={(e) => {
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        event_location: e.target.value,
+                                    }));
+                                }}
+                                required
+                                disabled={!formData.event_type_id || formData.event_type_id === 'none'}
+                                className="w-full h-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                error={errors.event_location}
+                            />
+                        </div>
                     </div>
 
                     {/* Canal de Adquisición */}

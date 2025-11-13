@@ -769,6 +769,22 @@ export async function crearAgendamiento(
             });
         }
 
+        // Crear notificación
+        try {
+            const { notifyAgendaCreated } = await import('@/lib/notifications/studio');
+            await notifyAgendaCreated(
+                studio.id,
+                agenda.id,
+                agenda.promise_id,
+                agenda.evento_id,
+                agenda.date,
+                agenda.concept
+            );
+        } catch (notificationError) {
+            console.error('[AGENDA_UNIFIED] Error creando notificación:', notificationError);
+            // No fallar la creación del agendamiento si falla la notificación
+        }
+
         return {
             success: true,
             data: item,

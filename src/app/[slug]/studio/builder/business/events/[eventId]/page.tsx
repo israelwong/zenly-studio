@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, User, Phone, Mail, DollarSign } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Phone, Mail, DollarSign, XCircle } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
-import { obtenerEventoDetalle } from '@/lib/actions/studio/builder/business/events/events.actions';
+import { obtenerEventoDetalle, cancelarEvento } from '@/lib/actions/studio/builder/business/events/events.actions';
 import type { EventoDetalle } from '@/lib/actions/studio/builder/business/events/events.actions';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ export default function EventDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [evento, setEvento] = useState<EventoDetalle | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     const loadEvento = async () => {
@@ -41,6 +42,29 @@ export default function EventDetailPage() {
     loadEvento();
   }, [studioSlug, eventId, router]);
 
+  const handleCancelarEvento = async () => {
+    if (!confirm('¿Estás seguro de cancelar este evento? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      setCancelling(true);
+      const result = await cancelarEvento(studioSlug, eventId);
+
+      if (result.success) {
+        toast.success('Evento cancelado exitosamente');
+        router.push(`/${studioSlug}/studio/builder/business/events`);
+      } else {
+        toast.error(result.error || 'Error al cancelar evento');
+      }
+    } catch (error) {
+      console.error('Error cancelando evento:', error);
+      toast.error('Error al cancelar evento');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-full max-w-7xl mx-auto">
@@ -59,11 +83,11 @@ export default function EventDetailPage() {
     return null;
   }
 
-  // Determinar contacto (contact o promise)
-  const contacto = evento.contact || evento.promise;
-  const contactoNombre = evento.contact?.name || evento.promise?.contact_name || 'Sin nombre';
-  const contactoTelefono = evento.contact?.phone || evento.promise?.contact_phone || 'Sin teléfono';
-  const contactoEmail = evento.contact?.email || evento.promise?.contact_email || null;
+  // Determinar contacto (contact o promise.contact)
+  const contacto = evento.contact || evento.promise?.contact;
+  const contactoNombre = evento.contact?.name || evento.promise?.contact?.name || 'Sin nombre';
+  const contactoTelefono = evento.contact?.phone || evento.promise?.contact?.phone || 'Sin teléfono';
+  const contactoEmail = evento.contact?.email || evento.promise?.contact?.email || null;
 
   // Calcular monto total de cotizaciones autorizadas
   const montoTotal = evento.cotizaciones
@@ -86,12 +110,25 @@ export default function EventDetailPage() {
             <div className="p-2 bg-blue-600/20 rounded-lg">
               <Calendar className="h-5 w-5 text-blue-400" />
             </div>
-            <div>
+            <div className="flex-1">
               <ZenCardTitle>{evento.name || 'Evento sin nombre'}</ZenCardTitle>
               <ZenCardDescription>
                 {evento.event_type?.name || 'Sin tipo de evento'}
               </ZenCardDescription>
             </div>
+            {evento.status === 'active' && (
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelarEvento}
+                disabled={cancelling}
+                loading={cancelling}
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Cancelar Evento
+              </ZenButton>
+            )}
           </div>
         </ZenCardHeader>
 
@@ -177,8 +214,14 @@ export default function EventDetailPage() {
 
                   <div>
                     <label className="text-xs text-zinc-500 mb-1 block">Estado</label>
-                    <div className="inline-flex items-center px-2 py-1 rounded bg-zinc-800 text-zinc-300 text-sm">
-                      {evento.status === 'active' ? 'Activo' : evento.status}
+                    <div className={`inline-flex items-center px-2 py-1 rounded text-sm ${
+                      evento.status === 'active' 
+                        ? 'bg-emerald-500/20 text-emerald-400' 
+                        : evento.status === 'cancelled'
+                        ? 'bg-red-500/20 text-red-400'
+                        : 'bg-zinc-800 text-zinc-300'
+                    }`}>
+                      {evento.status === 'active' ? 'Activo' : evento.status === 'cancelled' ? 'Cancelado' : evento.status}
                     </div>
                   </div>
                 </ZenCardContent>

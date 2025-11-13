@@ -46,17 +46,6 @@ export async function obtenerPaquetes(
             orderBy: { order: "asc" },
         });
 
-        console.log('🔍 Paquetes obtenidos de DB:', paquetes);
-        console.log('🔍 Primer paquete paquete_items:', paquetes[0]?.paquete_items);
-        
-        // Debug: verificar order de tipos de evento
-        console.log('🔍 [obtenerPaquetes] Order de tipos de evento:', paquetes.map(p => ({
-            nombre: p.name,
-            tipo_evento: p.event_types?.name,
-            tipo_evento_order: p.event_types?.order,
-            tipo_evento_id: p.event_types?.id,
-        })));
-
         return {
             success: true,
             data: paquetes as unknown as PaqueteFromDB[],

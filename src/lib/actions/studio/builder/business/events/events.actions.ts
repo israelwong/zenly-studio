@@ -451,6 +451,19 @@ export async function cancelarEvento(
       revalidatePath(`/${studioSlug}/studio/builder/commercial/promises/${evento.promise_id}/cotizacion/${evento.cotizacion_id}`);
     }
 
+    // Crear notificación
+    try {
+      const { notifyEventCancelled } = await import('@/lib/notifications/studio');
+      await notifyEventCancelled(
+        studio.id,
+        eventoId,
+        evento.name || 'Evento sin nombre'
+      );
+    } catch (notificationError) {
+      console.error('[EVENTOS] Error creando notificación:', notificationError);
+      // No fallar la cancelación si falla la notificación
+    }
+
     return { success: true };
   } catch (error) {
     console.error('[EVENTOS] Error cancelando evento:', error);

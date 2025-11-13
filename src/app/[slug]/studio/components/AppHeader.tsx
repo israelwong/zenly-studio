@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Bell, Sparkles, Calendar, ContactRound } from 'lucide-react';
+import { Sparkles, Calendar, ContactRound } from 'lucide-react';
 import { BreadcrumbHeader } from './BreadcrumbHeader';
 import { ZenButton } from '@/components/ui/zen';
 import { useZenMagicChat } from './ZenMagic';
@@ -10,6 +10,7 @@ import { StorageBadge } from './StorageBadge';
 import { AgendaUnifiedSheet } from '@/components/shared/agenda';
 import { ContactsSheet } from '@/components/shared/contacts';
 import { useContactsSheet } from '@/components/shared/contacts/ContactsSheetContext';
+import { NotificationsDropdown } from '@/components/shared/notifications/NotificationsDropdown';
 
 interface AppHeaderProps {
     studioSlug: string;
@@ -53,11 +54,8 @@ export function AppHeader({ studioSlug }: AppHeaderProps) {
                     <span className="sr-only">Ver Agenda</span>
                 </ZenButton>
 
-                {/* Botones ocultos en mobile */}
-                <ZenButton variant="ghost" size="icon" className="rounded-full hidden lg:flex">
-                    <Bell className="h-5 w-5" />
-                    <span className="sr-only">Notificaciones</span>
-                </ZenButton>
+                {/* Notificaciones */}
+                <NotificationsDropdown studioSlug={studioSlug} />
 
                 <ZenButton
                     variant="ghost"

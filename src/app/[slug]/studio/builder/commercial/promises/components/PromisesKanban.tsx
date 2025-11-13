@@ -71,13 +71,6 @@ export function PromisesKanban({
   const [localSearch, setLocalSearch] = useState(externalSearch || '');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Debug: Log cuando cambian las promesas
-  useEffect(() => {
-    console.log('[PromisesKanban] Promesas recibidas:', promises.length);
-    console.log('[PromisesKanban] Promesas:', promises);
-    console.log('[PromisesKanban] Pipeline stages:', pipelineStages.length);
-  }, [promises, pipelineStages]);
-
   // Sincronizar estado local cuando cambian las promesas desde el padre
   // Evitar sincronización durante drag and drop para prevenir parpadeos
   useEffect(() => {
@@ -314,6 +307,17 @@ export function PromisesKanban({
     const promise = localPromises.find((p: PromiseWithContact) => p.id === promiseId);
     if (!promise || !promise.promise_id) {
       toast.error('No se pudo encontrar la promesa');
+      return;
+    }
+
+    // Restricción: Si la promesa está en "approved" y tiene evento asociado,
+    // solo se puede mover a "archived"
+    if (
+      promise.promise_pipeline_stage?.slug === 'approved' &&
+      promise.event &&
+      stage.slug !== 'archived'
+    ) {
+      toast.error('Esta promesa tiene un evento asociado. Solo puede archivarse.');
       return;
     }
 

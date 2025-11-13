@@ -46,7 +46,7 @@ export default function EventsPage() {
       evento.name?.toLowerCase().includes(searchLower) ||
       evento.contact?.name.toLowerCase().includes(searchLower) ||
       evento.event_type?.name.toLowerCase().includes(searchLower) ||
-      evento.promise?.contact_name.toLowerCase().includes(searchLower)
+      evento.promise?.contact?.name.toLowerCase().includes(searchLower)
     );
   });
 
@@ -127,10 +127,10 @@ export default function EventsPage() {
                                 <span>{evento.contact.name}</span>
                               </div>
                             )}
-                            {evento.promise && (
+                            {evento.promise?.contact && (
                               <div className="flex items-center gap-2 text-zinc-300">
                                 <span className="text-zinc-500">Contacto:</span>
-                                <span>{evento.promise.contact_name}</span>
+                                <span>{evento.promise.contact.name}</span>
                               </div>
                             )}
                             <div className="flex items-center gap-2 text-zinc-300">

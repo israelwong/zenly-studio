@@ -58,7 +58,7 @@ export async function getContacts(
     // Contar total
     const total = await prisma.studio_contacts.count({ where });
 
-    // Obtener contactos
+    // Obtener contactos con información de eventos y promesas
     const contacts = await prisma.studio_contacts.findMany({
       where,
       include: {
@@ -85,6 +85,31 @@ export async function getContacts(
             name: true,
             phone: true
           }
+        },
+        // Verificar si tiene eventos asociados (cotizaciones aprobadas con evento_id)
+        cotizaciones: {
+          where: {
+            status: 'aprobada',
+            evento_id: { not: null }
+          },
+          select: {
+            evento_id: true
+          },
+          distinct: ['evento_id'],
+          take: 1
+        },
+        // Verificar promesas sin cotizaciones aprobadas
+        promises: {
+          select: {
+            id: true,
+            quotes: {
+              where: {
+                status: 'aprobada'
+              },
+              take: 1
+            }
+          },
+          take: 1
         }
       },
       orderBy: { created_at: 'desc' },
@@ -92,41 +117,58 @@ export async function getContacts(
       take: limit
     });
 
-    // Mapear datos
-    const mappedContacts: Contact[] = contacts.map(contact => ({
-      id: contact.id,
-      studio_id: contact.studio_id,
-      name: contact.name,
-      phone: contact.phone,
-      email: contact.email,
-      address: contact.address,
-      avatar_url: contact.avatar_url,
-      status: contact.status,
-      acquisition_channel_id: contact.acquisition_channel_id,
-      referrer_contact_id: contact.referrer_contact_id,
-      referrer_name: contact.referrer_name,
-      notes: contact.notes,
-      created_at: contact.created_at,
-      updated_at: contact.updated_at,
-      acquisition_channel: contact.acquisition_channel ? {
-        id: contact.acquisition_channel.id,
-        name: contact.acquisition_channel.name,
-        color: contact.acquisition_channel.color,
-        icon: contact.acquisition_channel.icon
-      } : null,
-      social_network: contact.social_network ? {
-        id: contact.social_network.id,
-        name: contact.social_network.name,
-        slug: contact.social_network.slug,
-        color: contact.social_network.color,
-        icon: contact.social_network.icon
-      } : null,
-      referrer_contact: contact.referrer_contact ? {
-        id: contact.referrer_contact.id,
-        name: contact.referrer_contact.name,
-        phone: contact.referrer_contact.phone
-      } : null
-    }));
+    // Mapear datos y determinar status dinámicamente
+    const mappedContacts: Contact[] = contacts.map(contact => {
+      // Determinar status basado en eventos y promesas
+      const hasEvents = contact.cotizaciones.length > 0;
+      const hasPromisesNoAprobadas = contact.promises.length > 0 && 
+        contact.promises.some(p => p.quotes.length === 0);
+      
+      // Si tiene eventos asociados → cliente
+      // Si solo tiene promesas no aprobadas → prospecto
+      // Si no tiene ni eventos ni promesas → usar status del contacto
+      let dynamicStatus = contact.status;
+      if (hasEvents) {
+        dynamicStatus = 'cliente';
+      } else if (hasPromisesNoAprobadas) {
+        dynamicStatus = 'prospecto';
+      }
+
+      return {
+        id: contact.id,
+        studio_id: contact.studio_id,
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+        address: contact.address,
+        avatar_url: contact.avatar_url,
+        status: dynamicStatus,
+        acquisition_channel_id: contact.acquisition_channel_id,
+        referrer_contact_id: contact.referrer_contact_id,
+        referrer_name: contact.referrer_name,
+        notes: contact.notes,
+        created_at: contact.created_at,
+        updated_at: contact.updated_at,
+        acquisition_channel: contact.acquisition_channel ? {
+          id: contact.acquisition_channel.id,
+          name: contact.acquisition_channel.name,
+          color: contact.acquisition_channel.color,
+          icon: contact.acquisition_channel.icon
+        } : null,
+        social_network: contact.social_network ? {
+          id: contact.social_network.id,
+          name: contact.social_network.name,
+          slug: contact.social_network.slug,
+          color: contact.social_network.color,
+          icon: contact.social_network.icon
+        } : null,
+        referrer_contact: contact.referrer_contact ? {
+          id: contact.referrer_contact.id,
+          name: contact.referrer_contact.name,
+          phone: contact.referrer_contact.phone
+        } : null
+      };
+    });
 
     const totalPages = Math.ceil(total / limit);
 

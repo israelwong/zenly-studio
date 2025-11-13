@@ -21,10 +21,8 @@ export function useStudioData({ studioSlug, onUpdate }: UseStudioDataOptions) {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 [STUDIO_DATA] Recargando datos del studio:', studioSlug);
 
       const data = await obtenerIdentidadStudio(studioSlug);
-      console.log('📊 [STUDIO_DATA] Datos recargados:', data);
 
       if ('error' in data) {
         throw new Error(data.error);
@@ -32,13 +30,10 @@ export function useStudioData({ studioSlug, onUpdate }: UseStudioDataOptions) {
 
       setIdentidadData(data);
       onUpdate?.(data);
-      console.log('✅ [STUDIO_DATA] Datos recargados exitosamente:', { name: data.studio_name });
     } catch (err) {
-      console.error('❌ [STUDIO_DATA] Error reloading studio data:', err);
       setError('Error al recargar datos del estudio');
     } finally {
       setLoading(false);
-      console.log('🏁 [STUDIO_DATA] Reload completado');
     }
   }, [studioSlug, onUpdate]);
 
@@ -50,10 +45,8 @@ export function useStudioData({ studioSlug, onUpdate }: UseStudioDataOptions) {
       try {
         setLoading(true);
         setError(null);
-        console.log('🔄 [STUDIO_DATA] Cargando datos del studio:', studioSlug);
 
         const data = await obtenerIdentidadStudio(studioSlug);
-        console.log('📊 [STUDIO_DATA] Datos recibidos:', data);
 
         if ('error' in data) {
           throw new Error(data.error);
@@ -61,9 +54,7 @@ export function useStudioData({ studioSlug, onUpdate }: UseStudioDataOptions) {
 
         setIdentidadData(data);
         onUpdate?.(data);
-        console.log('✅ [STUDIO_DATA] Datos cargados exitosamente:', { name: data.studio_name });
       } catch (err) {
-        console.error('❌ [STUDIO_DATA] Error loading studio data:', err);
         setError('Error al cargar datos del estudio');
 
         // Fallback a datos por defecto
@@ -79,10 +70,8 @@ export function useStudioData({ studioSlug, onUpdate }: UseStudioDataOptions) {
 
         setIdentidadData(fallbackData);
         onUpdate?.(fallbackData);
-        console.log('⚠️ [STUDIO_DATA] Usando datos de fallback:', fallbackData);
       } finally {
         setLoading(false);
-        console.log('🏁 [STUDIO_DATA] Loading completado');
       }
     };
 

@@ -28,10 +28,12 @@ export type PromiseLogAction =
   | 'quotation_created'
   | 'quotation_updated'
   | 'quotation_deleted'
+  | 'quotation_authorized'
   | 'contact_updated'
   | 'agenda_created'
   | 'agenda_updated'
-  | 'agenda_cancelled';
+  | 'agenda_cancelled'
+  | 'event_cancelled';
 
 /**
  * Diccionario de acciones con sus descripciones
@@ -76,6 +78,12 @@ const LOG_ACTIONS: Record<
   quotation_deleted: (meta) => {
     const quotationName = (meta?.quotationName as string) || 'cotización';
     return `Cotización eliminada: ${quotationName}`;
+  },
+  quotation_authorized: (meta) => {
+    const quotationName = (meta?.quotationName as string) || 'cotización';
+    const amount = meta?.amount as number;
+    const amountFormatted = amount ? `$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '';
+    return `Cotización autorizada: ${quotationName}${amountFormatted ? ` (${amountFormatted})` : ''}`;
   },
   contact_updated: (meta) => {
     const changes = meta?.changes as string[] || [];
@@ -123,6 +131,11 @@ const LOG_ACTIONS: Record<
     }) : 'fecha no especificada';
     const conceptText = concept ? `: ${concept}` : '';
     return `Cita cancelada para ${dateFormatted}${conceptText}`;
+  },
+  event_cancelled: (meta) => {
+    const eventName = (meta?.eventName as string) || 'evento';
+    const quotationName = meta?.quotationName as string;
+    return `Evento cancelado: ${eventName}${quotationName ? ` (Cotización: ${quotationName})` : ''}`;
   },
 };
 
@@ -195,6 +208,7 @@ export async function getPromiseById(
   contact_email: string | null;
   event_type_id: string | null;
   event_type_name: string | null;
+  event_location: string | null;
   interested_dates: string[] | null;
   defined_date: Date | null;
   acquisition_channel_id: string | null;
@@ -207,6 +221,7 @@ export async function getPromiseById(
   referrer_contact_email: string | null;
   pipeline_stage_slug: string | null;
   pipeline_stage_id: string | null;
+  has_event: boolean;
 }>> {
   try {
     const promise = await prisma.studio_promises.findUnique({
@@ -253,6 +268,12 @@ export async function getPromiseById(
             slug: true,
           },
         },
+        event: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -270,6 +291,7 @@ export async function getPromiseById(
         contact_email: promise.contact.email,
         event_type_id: promise.event_type_id,
         event_type_name: promise.event_type?.name || null,
+        event_location: promise.event_location || null,
         interested_dates: promise.tentative_dates
           ? (promise.tentative_dates as string[])
           : null,
@@ -284,6 +306,7 @@ export async function getPromiseById(
         referrer_contact_email: promise.contact.referrer_contact?.email || null,
         pipeline_stage_slug: promise.pipeline_stage?.slug || null,
         pipeline_stage_id: promise.pipeline_stage_id || null,
+        has_event: !!promise.event,
       },
     };
   } catch (error) {

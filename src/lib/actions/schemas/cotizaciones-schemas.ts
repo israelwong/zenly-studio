@@ -15,6 +15,20 @@ export const createCotizacionSchema = z.object({
 
 export type CreateCotizacionData = z.infer<typeof createCotizacionSchema>;
 
+export const updateCotizacionSchema = z.object({
+  studio_slug: z.string().min(1, 'Studio slug requerido'),
+  cotizacion_id: z.string().cuid('ID de cotización inválido'),
+  nombre: z.string().min(1, 'El nombre es requerido'),
+  descripcion: z.string().optional(),
+  precio: z.number().min(0, 'El precio debe ser mayor o igual a 0'),
+  items: z.record(z.string(), z.number().int().min(1)).refine(
+    (items) => Object.values(items).some((qty) => qty > 0),
+    'Debe incluir al menos un item con cantidad mayor a 0'
+  ),
+});
+
+export type UpdateCotizacionData = z.infer<typeof updateCotizacionSchema>;
+
 export interface CotizacionResponse {
   success: boolean;
   data?: {

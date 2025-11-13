@@ -99,11 +99,14 @@ export function PromiseQuotesPanelCard({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const getStatusVariant = (status: string): 'default' | 'destructive' | 'secondary' => {
+  const getStatusVariant = (status: string): 'default' | 'destructive' | 'secondary' | 'success' => {
+    if (status === 'autorizada') {
+      return 'success';
+    }
     if (status === 'aprobada' || status === 'approved') {
       return 'default';
     }
-    if (status === 'rechazada' || status === 'rejected') {
+    if (status === 'rechazada' || status === 'rejected' || status === 'cancelada') {
       return 'destructive';
     }
     return 'secondary';
@@ -113,8 +116,14 @@ export function PromiseQuotesPanelCard({
     if (status === 'aprobada' || status === 'approved') {
       return 'Aprobada';
     }
+    if (status === 'autorizada') {
+      return 'Autorizada';
+    }
     if (status === 'rechazada' || status === 'rejected') {
       return 'Rechazada';
+    }
+    if (status === 'cancelada') {
+      return 'Cancelada';
     }
     if (status === 'pendiente' || status === 'pending') {
       return 'Pendiente';

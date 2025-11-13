@@ -9,6 +9,7 @@ export const createPromiseSchema = z.object({
   phone: z.string().min(1, 'El teléfono es requerido').max(20),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   event_type_id: z.string().min(1, 'El tipo de evento es requerido'),
+  event_location: z.string().max(200, 'El lugar del evento es demasiado largo').optional().or(z.literal('')),
   interested_dates: z.array(z.string().datetime()).optional(),
   promise_pipeline_stage_id: z.string().cuid().optional(),
   acquisition_channel_id: z.string().min(1, 'El canal de adquisición es requerido'),
@@ -108,6 +109,10 @@ export interface PromiseWithContact {
     updated_at: Date;
   }>;
   cotizaciones_count?: number;
+  event?: {
+    id: string;
+    status: string;
+  } | null;
   agenda?: {
     id: string;
     type_scheduling: string | null;

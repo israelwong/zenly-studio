@@ -207,6 +207,7 @@ model platform_leads {
   platform_pipeline_stages      platform_pipeline_stages?       @relation(fields: [stage_id], references: [id])
   studio                        studios?                        @relation(fields: [studio_id], references: [id])
   platform_notifications        platform_notifications[]
+  studio_notifications          studio_notifications[]
 
   @@index([agent_id])
   @@index([campaign_id])
@@ -295,6 +296,7 @@ model platform_agents {
   agent_discount_codes   platform_agent_discount_codes[]
   platform_leads         platform_leads[]
   platform_notifications platform_notifications[]
+  studio_notifications   studio_notifications[]
 
   @@index([active])
 }
@@ -744,6 +746,7 @@ model studios {
   event_types                studio_event_types[]
   eventos                    studio_events[]
   promises                   studio_promises[]
+  studio_notifications       studio_notifications[]
   faq                        studio_faq[]
   gastos                     studio_gastos[]
   item_media                 studio_item_media[]              @relation("item_media")
@@ -1159,6 +1162,7 @@ model studio_paquetes {
   is_featured         Boolean                @default(false)
   paquete_items       studio_paquete_items[]
   cotizaciones        studio_cotizaciones[]
+  notifications       studio_notifications[]
   event_types         studio_event_types     @relation(fields: [event_type_id], references: [id])
   studio              studios                @relation(fields: [studio_id], references: [id])
 
@@ -1324,6 +1328,7 @@ model studio_contacts {
   promises               studio_promises[]
   pagos                  studio_pagos[]
   events                 studio_events[]
+  notifications         studio_notifications[]
 
   @@unique([studio_id, phone])
   @@index([studio_id, email])
@@ -1377,6 +1382,7 @@ model studio_promises {
   studio_id         String
   contact_id        String
   event_type_id     String?
+  event_location    String?
   pipeline_stage_id String?
   status            String                          @default("pending")
   defined_date      DateTime?
@@ -1391,6 +1397,7 @@ model studio_promises {
   event             studio_events?
   logs              studio_promise_logs[]
   tags              studio_promises_tags[]
+  notifications     studio_notifications[]
   agenda            studio_agenda[]
   pagos             studio_pagos[]
 
@@ -1504,6 +1511,7 @@ model studio_events {
   team_assignments         studio_event_team[]
   timeline                 studio_event_timeline[]
   client_portal_access     studio_client_portal_access[]
+  notifications            studio_notifications[]
 
   @@index([contact_id])
   @@index([cotizacion_id])
@@ -1574,6 +1582,7 @@ model studio_agenda {
   promise          studio_promises? @relation(fields: [promise_id], references: [id])
   studio           studios          @relation(fields: [studio_id], references: [id])
   studio_users     studio_users?    @relation(fields: [user_id], references: [id])
+  notifications    studio_notifications[]
 
   @@index([studio_id])
   @@index([evento_id])
@@ -1587,6 +1596,77 @@ model studio_agenda_tipos {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   name      String   @unique
+}
+
+//! NOTIFICACIONES DE ESTUDIO
+
+model studio_notifications {
+  id              String                    @id @default(cuid())
+  
+  // Scope y destinatarios
+  scope           StudioNotificationScope   @default(STUDIO)
+  studio_id       String
+  user_id         String?
+  role            StudioRole?
+  
+  // Tipo y contenido
+  type            StudioNotificationType
+  title           String
+  message         String
+  category        String                   @default("general")
+  priority        NotificationPriority     @default(MEDIUM)
+  
+  // Navegación y tracking
+  route           String?
+  route_params    Json?
+  clicked_at      DateTime?
+  is_read         Boolean                  @default(false)
+  read_at         DateTime?
+  
+  // Metadata estructurado
+  metadata        Json?
+  
+  // Relaciones con entidades del estudio
+  promise_id      String?
+  event_id        String?
+  payment_id      String?
+  paquete_id      String?
+  quote_id        String?
+  contact_id      String?
+  lead_id         String?
+  agent_id        String?
+  agenda_id       String?
+  
+  // Control de ciclo de vida
+  is_active       Boolean                  @default(true)
+  expires_at      DateTime?
+  scheduled_for   DateTime?
+  created_at      DateTime                 @default(now())
+  updated_at      DateTime                 @updatedAt
+  
+  // Relaciones
+  studio          studios                  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  user            studio_user_profiles?    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  promise         studio_promises?         @relation(fields: [promise_id], references: [id], onDelete: SetNull)
+  event           studio_events?           @relation(fields: [event_id], references: [id], onDelete: SetNull)
+  contact         studio_contacts?         @relation(fields: [contact_id], references: [id], onDelete: SetNull)
+  paquete         studio_paquetes?         @relation(fields: [paquete_id], references: [id], onDelete: SetNull)
+  agenda          studio_agenda?            @relation(fields: [agenda_id], references: [id], onDelete: SetNull)
+  platform_agents platform_agents?        @relation(fields: [agent_id], references: [id], onDelete: SetNull)
+  platform_leads  platform_leads?         @relation(fields: [lead_id], references: [id], onDelete: SetNull)
+  
+  // Índices optimizados
+  @@index([studio_id, scope, is_active, created_at])
+  @@index([user_id, is_read, created_at])
+  @@index([studio_id, user_id, is_read])
+  @@index([studio_id, role, is_read])
+  @@index([type, category])
+  @@index([created_at])
+  @@index([scheduled_for])
+  @@index([expires_at])
+  @@index([promise_id])
+  @@index([event_id])
+  @@index([payment_id])
 }
 
 //! COMMERCIAL (CONDICIONES COMERCIALES)
@@ -2593,6 +2673,7 @@ model studio_user_profiles {
   platform_activities    platform_activities[]
   platform_lead_bitacora platform_lead_bitacora[]
   platform_notifications platform_notifications[]
+  studio_notifications   studio_notifications[]
   studio                 studios?                 @relation(fields: [studio_id], references: [id])
 
   @@index([email])
@@ -2717,6 +2798,46 @@ enum StudioRole {
   ASSISTANT
   PROVIDER
   CLIENT
+}
+
+enum StudioNotificationScope {
+  STUDIO
+  USER
+  ROLE
+}
+
+enum StudioNotificationType {
+  PROMISE_CREATED
+  PROMISE_UPDATED
+  PROMISE_STAGE_CHANGED
+  EVENT_CREATED
+  EVENT_APPROVED
+  EVENT_STATUS_CHANGED
+  EVENT_CANCELLED
+  PAYMENT_RECEIVED
+  PAYMENT_PENDING
+  PAYMENT_FAILED
+  PAYMENT_REFUNDED
+  PACKAGE_CREATED
+  PACKAGE_UPDATED
+  PACKAGE_APPROVED
+  QUOTE_CREATED
+  QUOTE_APPROVED
+  QUOTE_REJECTED
+  LEAD_ASSIGNED
+  CONTACT_CREATED
+  CONTACT_UPDATED
+  AGENDA_CREATED
+  AGENDA_UPDATED
+  AGENDA_CANCELLED
+  STUDIO_SETTINGS_UPDATED
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 enum PlatformLeadBitacoraTipo {

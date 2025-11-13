@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CheckCircle } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { getCotizacionById } from '@/lib/actions/studio/builder/commercial/promises/cotizaciones.actions';
 import { getPromiseById } from '@/lib/actions/studio/builder/commercial/promises/promise-logs.actions';
@@ -28,6 +28,7 @@ export default function AutorizarCotizacionPage() {
     status: string;
     promise_id: string | null;
     contact_id: string | null;
+    evento_id: string | null;
     items: Array<{ item_id: string; quantity: number }>;
   } | null>(null);
   const [promise, setPromise] = useState<{
@@ -43,6 +44,7 @@ export default function AutorizarCotizacionPage() {
   const [condicionComercialId, setCondicionComercialId] = useState<string | null>(null);
   const [monto, setMonto] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -54,7 +56,10 @@ export default function AutorizarCotizacionPage() {
         ]);
 
         if (cotizacionResult.success && cotizacionResult.data) {
-          setCotizacion(cotizacionResult.data);
+          setCotizacion({
+            ...cotizacionResult.data,
+            evento_id: cotizacionResult.data.evento_id || null,
+          });
           // Inicializar monto con el precio de la cotización
           setMonto(cotizacionResult.data.price.toString());
         } else {
@@ -89,8 +94,7 @@ export default function AutorizarCotizacionPage() {
 
 
   const handleAutorizar = async () => {
-    if (!condicionComercialId || !monto) {
-      toast.error('Por favor selecciona una condición comercial');
+    if (!condicionComercialId || !monto || isSubmitting || isRedirecting) {
       return;
     }
 
@@ -107,6 +111,9 @@ export default function AutorizarCotizacionPage() {
 
       if (result.success) {
         toast.success('Cotización autorizada exitosamente');
+        setIsSubmitting(false);
+        setIsRedirecting(true);
+
         // Redirigir al detalle del evento si existe
         if (result.data?.evento_id) {
           router.push(`/${studioSlug}/studio/builder/business/events/${result.data.evento_id}`);
@@ -115,11 +122,11 @@ export default function AutorizarCotizacionPage() {
         }
       } else {
         toast.error(result.error || 'Error al autorizar cotización');
+        setIsSubmitting(false);
       }
     } catch (error) {
       console.error('Error autorizando cotización:', error);
       toast.error('Error al autorizar cotización');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -267,6 +274,9 @@ export default function AutorizarCotizacionPage() {
     return null;
   }
 
+  // Verificar si la cotización ya está autorizada o aprobada
+  const isAlreadyAuthorized = cotizacion.status === 'autorizada' || cotizacion.status === 'aprobada';
+
   return (
     <div className="w-full max-w-7xl mx-auto">
       <ZenCard variant="default" padding="none">
@@ -280,13 +290,26 @@ export default function AutorizarCotizacionPage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </ZenButton>
-            <div className="p-2 bg-emerald-600/20 rounded-lg">
-              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            <div className={`p-2 rounded-lg ${isAlreadyAuthorized ? 'bg-emerald-600/20' : 'bg-emerald-600/20'}`}>
+              {isAlreadyAuthorized ? (
+                <CheckCircle className="h-5 w-5 text-emerald-400" />
+              ) : (
+                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+              )}
             </div>
-            <div>
-              <ZenCardTitle>Autorizar Cotización</ZenCardTitle>
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <ZenCardTitle>Autorizar Cotización</ZenCardTitle>
+                {isAlreadyAuthorized && (
+                  <span className="text-sm text-emerald-400 font-medium">
+                    Esta cotización ya ha sido autorizada
+                  </span>
+                )}
+              </div>
               <ZenCardDescription>
-                Selecciona las condiciones comerciales para autorizar esta cotización
+                {isAlreadyAuthorized
+                  ? 'Esta cotización ya ha sido autorizada y no puede ser autorizada nuevamente'
+                  : 'Selecciona las condiciones comerciales para autorizar esta cotización'}
               </ZenCardDescription>
             </div>
           </div>
@@ -304,52 +327,92 @@ export default function AutorizarCotizacionPage() {
               {/* Datos del Contratante */}
               {promise && <DatosContratante promise={promise} />}
 
-              {/* Condiciones Comerciales */}
-              <CondicionesComercialesSelector
-                studioSlug={studioSlug}
-                selectedId={condicionComercialId}
-                onSelect={setCondicionComercialId}
-                precioBase={cotizacion.price}
-                onMontoChange={setMonto}
-              />
+              {!isAlreadyAuthorized ? (
+                <>
+                  {/* Condiciones Comerciales */}
+                  <CondicionesComercialesSelector
+                    studioSlug={studioSlug}
+                    selectedId={condicionComercialId}
+                    onSelect={setCondicionComercialId}
+                    precioBase={cotizacion.price}
+                    onMontoChange={setMonto}
+                  />
 
-              {/* Monto Total */}
-              <ZenCard variant="outlined">
-                <ZenCardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white mb-1">Monto Total</h3>
-                      <p className="text-sm text-zinc-400">
-                        Monto final después de aplicar condiciones comerciales
+                  {/* Monto Total */}
+                  <ZenCard variant="outlined">
+                    <ZenCardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-white mb-1">Monto Total</h3>
+                          <p className="text-sm text-zinc-400">
+                            Monto final después de aplicar condiciones comerciales
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-emerald-400">
+                            ${parseFloat(monto || '0').toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                      </div>
+                    </ZenCardContent>
+                  </ZenCard>
+
+                  {/* Botones de Acción */}
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+                    <ZenButton
+                      variant="ghost"
+                      onClick={() => router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`)}
+                      disabled={isSubmitting || isRedirecting}
+                    >
+                      Cancelar
+                    </ZenButton>
+                    <ZenButton
+                      variant="primary"
+                      onClick={handleAutorizar}
+                      disabled={!condicionComercialId || !monto || isSubmitting || isRedirecting}
+                      loading={isSubmitting || isRedirecting}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isRedirecting
+                        ? 'Redirigiendo...'
+                        : isSubmitting
+                          ? 'Autorizando...'
+                          : 'Autorizar Cotización'}
+                    </ZenButton>
+                  </div>
+                </>
+              ) : (
+                <ZenCard variant="outlined">
+                  <ZenCardContent className="p-6">
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <CheckCircle className="h-12 w-12 text-emerald-400 mb-4" />
+                      <h3 className="text-lg font-semibold text-white mb-2">
+                        Cotización Autorizada
+                      </h3>
+                      <p className="text-sm text-zinc-400 mb-6">
+                        Esta cotización ya ha sido autorizada y no puede ser autorizada nuevamente.
                       </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-emerald-400">
-                        ${parseFloat(monto || '0').toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <div className="flex items-center gap-3">
+                        <ZenButton
+                          variant="ghost"
+                          onClick={() => router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`)}
+                        >
+                          Volver a Promesas
+                        </ZenButton>
+                        {cotizacion.evento_id && (
+                          <ZenButton
+                            variant="primary"
+                            onClick={() => router.push(`/${studioSlug}/studio/builder/business/events/${cotizacion.evento_id}`)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Gestionar Evento
+                          </ZenButton>
+                        )}
                       </div>
                     </div>
-                  </div>
-                </ZenCardContent>
-              </ZenCard>
-
-              {/* Botones de Acción */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-                <ZenButton
-                  variant="ghost"
-                  onClick={() => router.push(`/${studioSlug}/studio/builder/commercial/promises/${promiseId}`)}
-                >
-                  Cancelar
-                </ZenButton>
-                <ZenButton
-                  variant="primary"
-                  onClick={handleAutorizar}
-                  disabled={!condicionComercialId || !monto || isSubmitting}
-                  loading={isSubmitting}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Autorizando...' : 'Autorizar Cotización'}
-                </ZenButton>
-              </div>
+                  </ZenCardContent>
+                </ZenCard>
+              )}
             </div>
           </div>
         </ZenCardContent>

@@ -21,7 +21,6 @@ interface StudioBuilderSidebarProps {
 }
 
 export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSidebarProps) {
-    console.log('🔍 StudioBuilderSidebar - studioSlug recibido:', studioSlug);
     const { isOpen, toggleSidebar } = useZenSidebar();
 
     // Estado para grupo expandido (solo uno a la vez) - Ninguno expandido por defecto
@@ -100,7 +99,7 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             title: 'Business',
             icon: Briefcase,
             items: [
-                { id: 'manager', name: 'Manager', href: `/manager`, icon: FileText },
+                { id: 'events', name: 'Events', href: `/business/events`, icon: FileText },
                 { id: 'payments', name: 'Pagos', href: `/pagos`, icon: CreditCard },
                 { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
                 { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },

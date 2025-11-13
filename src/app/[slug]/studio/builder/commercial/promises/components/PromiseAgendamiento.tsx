@@ -296,6 +296,7 @@ export function PromiseAgendamiento({
       </ZenCard>
 
       <AgendaFormModal
+        key={agendamiento?.id || 'new'}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         studioSlug={studioSlug}

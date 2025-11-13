@@ -153,12 +153,10 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
                                 alt={userName}
                                 fill
                                 className="object-cover"
-                                onError={(e) => {
-                                    console.error('[UserAvatar] Error al cargar imagen:', avatarUrl, e);
+                                onError={() => {
                                     setImageError(true);
                                 }}
                                 onLoad={() => {
-                                    console.log('[UserAvatar] Imagen cargada exitosamente:', avatarUrl);
                                     setImageError(false);
                                 }}
                                 unoptimized

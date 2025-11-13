@@ -17,9 +17,6 @@ export function useChatPersistence() {
 
     useEffect(() => {
         // TODO: Implementar lógica de persistencia
-        // Por ahora, solo logueamos el cambio de ruta
-        console.log('Navegación detectada:', pathname);
-
         // TODO: Aquí se implementará:
         // 1. Guardar estado del chat en localStorage
         // 2. Detectar cambios de contexto

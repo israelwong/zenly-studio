@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { notifyPromiseCreated } from '@/lib/notifications/studio';
 import {
   createPromiseSchema,
   updatePromiseSchema,
@@ -99,6 +100,12 @@ export async function getPromises(
                 name: true,
               },
             },
+            event: {
+              select: {
+                id: true,
+                status: true,
+              },
+            },
             logs: {
               orderBy: { created_at: 'desc' },
               take: 1,
@@ -194,6 +201,7 @@ export async function getPromises(
         last_log: latestPromise?.logs?.[0] || null,
         tags: tags.length > 0 ? tags : undefined,
         cotizaciones_count: latestPromise?.quotes?.length || 0,
+        event: latestPromise?.event || null,
         agenda: latestPromise?.agenda?.[0] || null,
       };
     });
@@ -302,11 +310,17 @@ export async function createPromise(
     });
 
     // Crear promesa asociada
+    // Normalizar event_location: si viene vacío o undefined pero hay event_type_id, usar "Pendiente"
+    const eventLocation = validatedData.event_type_id
+      ? (validatedData.event_location?.trim() || 'Pendiente')
+      : null;
+
     const promise = await prisma.studio_promises.create({
       data: {
         studio_id: studio.id,
         contact_id: contact.id,
         event_type_id: validatedData.event_type_id || null,
+        event_location: eventLocation,
         pipeline_stage_id: stageId,
         status: 'pending',
         tentative_dates: validatedData.interested_dates
@@ -354,6 +368,20 @@ export async function createPromise(
     };
 
     revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
+
+    // Crear notificación
+    try {
+      await notifyPromiseCreated(
+        studio.id,
+        promise.id,
+        contact.name,
+        promise.event_type?.name || null,
+        promise.defined_date?.toISOString() || null
+      );
+    } catch (notificationError) {
+      console.error('[PROMISES] Error creando notificación:', notificationError);
+      // No fallar la creación de la promesa si falla la notificación
+    }
 
     return {
       success: true,
@@ -490,10 +518,16 @@ export async function updatePromise(
     // Actualizar o crear promesa
     let promise;
     if (latestPromise) {
+      // Normalizar event_location: si viene vacío o undefined pero hay event_type_id, usar "Pendiente"
+      const eventLocationUpdate = validatedData.event_type_id && validatedData.event_location !== undefined
+        ? (validatedData.event_location?.trim() || 'Pendiente')
+        : validatedData.event_location !== undefined ? validatedData.event_location || null : undefined;
+
       promise = await prisma.studio_promises.update({
         where: { id: latestPromise.id },
         data: {
           event_type_id: validatedData.event_type_id || null,
+          event_location: eventLocationUpdate,
           pipeline_stage_id: validatedData.promise_pipeline_stage_id || null,
           tentative_dates: validatedData.interested_dates
             ? (validatedData.interested_dates as unknown)
@@ -529,11 +563,17 @@ export async function updatePromise(
           select: { id: true },
         }))?.id || null;
 
+      // Normalizar event_location: si viene vacío o undefined pero hay event_type_id, usar "Pendiente"
+      const eventLocationCreate = validatedData.event_type_id
+        ? (validatedData.event_location?.trim() || 'Pendiente')
+        : null;
+
       promise = await prisma.studio_promises.create({
         data: {
           studio_id: contact.studio_id,
           contact_id: contact.id,
           event_type_id: validatedData.event_type_id || null,
+          event_location: eventLocationCreate,
           pipeline_stage_id: stageId,
           status: 'pending',
           tentative_dates: validatedData.interested_dates
@@ -643,7 +683,7 @@ export async function movePromise(
       return { success: false, error: 'Etapa no encontrada' };
     }
 
-    // Obtener promesa con etapa actual
+    // Obtener promesa con etapa actual y evento asociado
     let promise = await prisma.studio_promises.findUnique({
       where: { id: validatedData.promise_id },
       include: {
@@ -662,6 +702,12 @@ export async function movePromise(
             order: true,
           },
         },
+        event: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -672,12 +718,31 @@ export async function movePromise(
     // Guardar nombre de etapa anterior para el log
     const oldStageName = promise.pipeline_stage?.name || 'desconocida';
 
-    // Obtener nombre de nueva etapa
+    // Obtener nueva etapa con slug
     const newStage = await prisma.studio_promise_pipeline_stages.findUnique({
       where: { id: validatedData.new_stage_id },
-      select: { name: true },
+      select: { name: true, slug: true },
     });
-    const newStageName = newStage?.name || 'desconocida';
+    
+    if (!newStage) {
+      return { success: false, error: 'Etapa destino no encontrada' };
+    }
+    
+    const newStageName = newStage.name;
+    const newStageSlug = newStage.slug;
+
+    // Restricción: Si la promesa está en "approved" y tiene evento asociado,
+    // solo se puede mover a "archived"
+    if (
+      promise.pipeline_stage?.slug === 'approved' &&
+      promise.event &&
+      newStageSlug !== 'archived'
+    ) {
+      return {
+        success: false,
+        error: 'Esta promesa tiene un evento asociado. Solo puede archivarse.',
+      };
+    }
 
     // Actualizar promesa
     promise = await prisma.studio_promises.update({
@@ -1059,12 +1124,21 @@ export async function deletePromise(
       return { success: false, error: 'Promesa no encontrada' };
     }
 
-    // Hard delete (cascade eliminará relaciones automáticamente)
+    // Eliminar agendamientos asociados (fechas de interés y citas)
+    await prisma.studio_agenda.deleteMany({
+      where: {
+        promise_id: promiseId,
+        studio_id: studio.id,
+      },
+    });
+
+    // Hard delete (cascade eliminará otras relaciones automáticamente)
     await prisma.studio_promises.delete({
       where: { id: promiseId },
     });
 
     revalidatePath(`/${studioSlug}/studio/builder/commercial/promises`);
+    revalidatePath(`/${studioSlug}/studio/dashboard/agenda`); // Revalidar calendario
     return { success: true };
   } catch (error) {
     console.error('[PROMISES] Error eliminando promise:', error);
