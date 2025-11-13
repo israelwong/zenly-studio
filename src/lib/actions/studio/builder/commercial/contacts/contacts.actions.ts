@@ -657,7 +657,7 @@ export async function getContactEvents(studioSlug: string, contactId: string) {
     });
 
     // Extraer IDs únicos de eventos
-    const eventoIds = Array.from(new Set(cotizaciones.map(c => c.evento_id)));
+    const eventoIds = Array.from(new Set(cotizaciones.map(c => c.evento_id).filter((id): id is string => id !== null)));
 
     if (eventoIds.length === 0) {
       return { success: true, data: [] };
@@ -674,7 +674,7 @@ export async function getContactEvents(studioSlug: string, contactId: string) {
         name: true,
         event_date: true,
         status: true,
-        event_types: {
+        event_type: {
           select: {
             id: true,
             name: true
@@ -702,7 +702,7 @@ export async function getContactEvents(studioSlug: string, contactId: string) {
       name: evento.name || 'Sin nombre',
       event_date: evento.event_date,
       status: evento.status,
-      event_type: evento.event_types?.name || null,
+      event_type: evento.event_type?.name || null,
       cotizacion: evento.cotizaciones[0] ? {
         id: evento.cotizaciones[0].id,
         status: evento.cotizaciones[0].status,
@@ -746,19 +746,13 @@ export async function checkContactAssociations(
       };
     }
 
-    // Verificar promesas
-    const promisesCount = await prisma.studio_promises.count({
+    // Verificar eventos (a través de cotizaciones aprobadas que generan eventos)
+    const cotizacionesAprobadas = await prisma.studio_cotizaciones.findMany({
       where: {
         studio_id: studio.id,
-        contact_id: contactId
-      }
-    });
-
-    // Verificar eventos (a través de cotizaciones)
-    const cotizaciones = await prisma.studio_cotizaciones.findMany({
-      where: {
-        studio_id: studio.id,
-        contact_id: contactId
+        contact_id: contactId,
+        status: 'aprobada',
+        evento_id: { not: null }
       },
       select: {
         evento_id: true
@@ -766,8 +760,28 @@ export async function checkContactAssociations(
       distinct: ['evento_id']
     });
 
-    const hasPromises = promisesCount > 0;
-    const hasEvents = cotizaciones.length > 0;
+    // Verificar promesas sin cotizaciones aprobadas (promesas no aprobadas)
+    const promesas = await prisma.studio_promises.findMany({
+      where: {
+        studio_id: studio.id,
+        contact_id: contactId
+      },
+      select: {
+        id: true,
+        quotes: {
+          where: {
+            status: 'aprobada'
+          },
+          take: 1
+        }
+      }
+    });
+
+    // Promesas sin cotizaciones aprobadas (no tienen eventos asociados)
+    const promesasNoAprobadas = promesas.filter(p => p.quotes.length === 0);
+
+    const hasEvents = cotizacionesAprobadas.length > 0;
+    const hasPromises = promesasNoAprobadas.length > 0;
     const hasAssociations = hasPromises || hasEvents;
 
     return {
@@ -801,6 +815,7 @@ export async function getContactPromises(
     event_type_name: string | null;
     pipeline_stage_name: string | null;
     created_at: Date;
+    has_approved_quote: boolean;
   }>;
   error?: string;
 }> {
@@ -831,7 +846,17 @@ export async function getContactPromises(
             name: true
           }
         },
-        created_at: true
+        created_at: true,
+        quotes: {
+          select: {
+            id: true,
+            status: true
+          },
+          where: {
+            status: 'aprobada'
+          },
+          take: 1
+        }
       },
       orderBy: { created_at: 'desc' }
     });
@@ -840,7 +865,8 @@ export async function getContactPromises(
       id: promise.id,
       event_type_name: promise.event_type?.name || null,
       pipeline_stage_name: promise.pipeline_stage?.name || null,
-      created_at: promise.created_at
+      created_at: promise.created_at,
+      has_approved_quote: promise.quotes.length > 0
     }));
 
     return { success: true, data: mappedPromises };

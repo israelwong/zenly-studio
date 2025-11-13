@@ -79,12 +79,14 @@ function ContactModalComponent({
         event_type_name: string | null;
         pipeline_stage_name: string | null;
         created_at: Date;
+        has_approved_quote: boolean;
     }>>([]);
     const [loadingPromises, setLoadingPromises] = useState(false);
     const router = useRouter();
     const hasLoadedRef = useRef<boolean>(false);
     const loadedContactIdRef = useRef<string | null | undefined>(null);
     const isInitializingRef = useRef<boolean>(false);
+    const previousAvatarUrlRef = useRef<string | null>(null);
 
     // Función helper para normalizar teléfono (debe estar antes de las funciones que la usan)
     const normalizePhone = useCallback((value: string): string => {
@@ -388,6 +390,57 @@ function ContactModalComponent({
         }
     };
 
+    const handleAvatarLocalUpdate = useCallback((url: string | null) => {
+        // Guardar el valor anterior antes de actualizar (para poder revertir si hay error)
+        setFormData(prev => {
+            previousAvatarUrlRef.current = prev.avatar_url || null;
+            return { ...prev, avatar_url: url || '' };
+        });
+
+        // Limpiar error si existe
+        if (errors.avatar_url) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors.avatar_url;
+                return newErrors;
+            });
+        }
+    }, [errors.avatar_url]);
+
+    const handleAvatarUpdate = useCallback(async (url: string) => {
+        // Si estamos editando un contacto existente, guardar solo el avatar inmediatamente en BD
+        if (contactId) {
+            try {
+                const result = await updateContact(studioSlug, {
+                    id: contactId,
+                    avatar_url: url
+                });
+
+                if (result.success && result.data) {
+                    // Disparar eventos de sincronización solo con el avatar actualizado
+                    triggerRefresh();
+                    // Enviar solo el avatar actualizado para sincronización en tiempo real
+                    triggerContactUpdate(contactId, {
+                        id: result.data.id,
+                        name: result.data.name,
+                        phone: result.data.phone,
+                        email: result.data.email,
+                        avatar_url: url
+                    });
+                } else {
+                    toast.error(result.error || 'Error al actualizar avatar');
+                    // Revertir actualización optimista en caso de error
+                    setFormData(prev => ({ ...prev, avatar_url: previousAvatarUrlRef.current || '' }));
+                }
+            } catch (error) {
+                console.error('Error updating avatar:', error);
+                toast.error('Error al actualizar avatar');
+                // Revertir actualización optimista en caso de error
+                setFormData(prev => ({ ...prev, avatar_url: previousAvatarUrlRef.current || '' }));
+            }
+        }
+    }, [contactId, studioSlug, triggerRefresh, triggerContactUpdate]);
+
     const handlePhoneChange = (value: string) => {
         const normalized = normalizePhone(value);
         handleInputChange('phone', normalized);
@@ -492,17 +545,14 @@ function ContactModalComponent({
             }
 
             if (checkResult.hasAssociations) {
-                // Construir mensaje de error detallado
-                const associations = [];
-                if (checkResult.hasPromises) {
-                    associations.push('promesas');
+                // Mensaje de error específico según el tipo de asociación
+                if (checkResult.hasPromises && checkResult.hasEvents) {
+                    toast.error('No se puede borrar porque tiene promesas y eventos asociados.');
+                } else if (checkResult.hasPromises) {
+                    toast.error('No se puede borrar porque tiene promesas asociadas.');
+                } else if (checkResult.hasEvents) {
+                    toast.error('No se puede borrar porque tiene eventos asociados.');
                 }
-                if (checkResult.hasEvents) {
-                    associations.push('eventos');
-                }
-
-                const message = `No se puede eliminar el contacto porque está asociado a ${associations.join(' y ')}. Por favor, elimina primero las ${associations.join(' y ')} asociadas.`;
-                toast.error(message);
                 return;
             }
 
@@ -564,7 +614,7 @@ function ContactModalComponent({
                 title={contactId ? 'Editar Contacto' : 'Nuevo Contacto'}
                 onSave={handleSubmit}
                 onCancel={onClose}
-                onDelete={contactId ? () => setIsDeleteModalOpen(true) : undefined}
+                onDelete={contactId ? handleDeleteClick : undefined}
                 showDeleteButton={!!contactId}
                 saveLabel={contactId ? 'Actualizar' : 'Crear'}
                 cancelLabel="Cancelar"
@@ -593,7 +643,8 @@ function ContactModalComponent({
                                 <div className="col-span-1 flex items-center justify-center">
                                     <AvatarManager
                                         url={formData.avatar_url || null}
-                                        onUpdate={async (url) => handleInputChange('avatar_url', url)}
+                                        onUpdate={handleAvatarUpdate}
+                                        onLocalUpdate={handleAvatarLocalUpdate}
                                         studioSlug={studioSlug}
                                         category="clientes"
                                         size="md"
@@ -647,80 +698,81 @@ function ContactModalComponent({
                                 />
                             </div>
 
-                            {/* Canal de Adquisición */}
-                            <div className="mb-4">
-                                <label className="text-sm font-medium text-zinc-300 block mb-2">
-                                    Canal de Adquisición
-                                </label>
-                                <select
-                                    value={formData.acquisition_channel_id || 'none'}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        const newChannelId = value === 'none' ? undefined : value;
-                                        handleInputChange('acquisition_channel_id', newChannelId);
-
-                                        // Limpiar campos relacionados si cambia el canal
-                                        const redesChannelId = getRedesSocialesChannelId();
-                                        const referidosChannelId = getReferidosChannelId();
-                                        if (value !== redesChannelId) {
-                                            handleInputChange('social_network_id', undefined);
-                                        }
-                                        if (value !== referidosChannelId) {
-                                            handleInputChange('referrer_contact_id', undefined);
-                                            handleInputChange('referrer_name', undefined);
-                                            setReferrerInputValue('');
-                                            setShowReferrerSuggestions(false);
-                                        }
-                                    }}
-                                    disabled={loading || acquisitionChannels.length === 0}
-                                    className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
-                                        ? 'border-red-500 focus:ring-red-500'
-                                        : 'border-zinc-700 hover:border-zinc-600'
-                                        }`}
-                                >
-                                    <option value="none">Ninguno</option>
-                                    {acquisitionChannels.map((channel) => (
-                                        <option key={channel.id} value={channel.id}>
-                                            {channel.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.acquisition_channel_id && (
-                                    <p className="mt-1 text-xs text-red-500">{errors.acquisition_channel_id}</p>
-                                )}
-                            </div>
-
-                            {/* Red Social (solo si canal es Redes Sociales) */}
-                            {isRedesSociales && (
-                                <div className="mb-4">
+                            {/* Canal de Adquisición, Red Social y Referidos en la misma fila */}
+                            <div className={`mb-4 ${(isRedesSociales || isReferidos) ? 'grid grid-cols-2 gap-4' : ''}`}>
+                                {/* Canal de Adquisición */}
+                                <div>
                                     <label className="text-sm font-medium text-zinc-300 block mb-2">
-                                        Red Social
+                                        Canal de Adquisición
                                     </label>
                                     <select
-                                        value={formData.social_network_id || 'none'}
-                                        onChange={(e) => handleInputChange('social_network_id', e.target.value === 'none' ? undefined : e.target.value)}
-                                        disabled={loading || socialNetworks.length === 0}
-                                        className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.social_network_id
+                                        value={formData.acquisition_channel_id || 'none'}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            const newChannelId = value === 'none' ? undefined : value;
+                                            handleInputChange('acquisition_channel_id', newChannelId);
+
+                                            // Limpiar campos relacionados si cambia el canal
+                                            const redesChannelId = getRedesSocialesChannelId();
+                                            const referidosChannelId = getReferidosChannelId();
+                                            if (value !== redesChannelId) {
+                                                handleInputChange('social_network_id', undefined);
+                                            }
+                                            if (value !== referidosChannelId) {
+                                                handleInputChange('referrer_contact_id', undefined);
+                                                handleInputChange('referrer_name', undefined);
+                                                setReferrerInputValue('');
+                                                setShowReferrerSuggestions(false);
+                                            }
+                                        }}
+                                        disabled={loading || acquisitionChannels.length === 0}
+                                        className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
                                             ? 'border-red-500 focus:ring-red-500'
                                             : 'border-zinc-700 hover:border-zinc-600'
                                             }`}
                                     >
                                         <option value="none">Ninguno</option>
-                                        {socialNetworks.map((network) => (
-                                            <option key={network.id} value={network.id}>
-                                                {network.name}
+                                        {acquisitionChannels.map((channel) => (
+                                            <option key={channel.id} value={channel.id}>
+                                                {channel.name}
                                             </option>
                                         ))}
                                     </select>
-                                    {errors.social_network_id && (
-                                        <p className="mt-1 text-xs text-red-500">{errors.social_network_id}</p>
+                                    {errors.acquisition_channel_id && (
+                                        <p className="mt-1 text-xs text-red-500">{errors.acquisition_channel_id}</p>
                                     )}
                                 </div>
-                            )}
 
-                            {/* Referido Por (solo si canal es Referidos) */}
-                            {isReferidos && (
-                                <div className="mb-4">
+                                {/* Red Social (solo si canal es Redes Sociales) */}
+                                {isRedesSociales && (
+                                    <div>
+                                        <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                            Red Social
+                                        </label>
+                                        <select
+                                            value={formData.social_network_id || 'none'}
+                                            onChange={(e) => handleInputChange('social_network_id', e.target.value === 'none' ? undefined : e.target.value)}
+                                            disabled={loading || socialNetworks.length === 0}
+                                            className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.social_network_id
+                                                ? 'border-red-500 focus:ring-red-500'
+                                                : 'border-zinc-700 hover:border-zinc-600'
+                                                }`}
+                                        >
+                                            <option value="none">Ninguno</option>
+                                            {socialNetworks.map((network) => (
+                                                <option key={network.id} value={network.id}>
+                                                    {network.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {errors.social_network_id && (
+                                            <p className="mt-1 text-xs text-red-500">{errors.social_network_id}</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Referido Por (solo si canal es Referidos) */}
+                                {isReferidos && (
                                     <div className="relative">
                                         <ZenInput
                                             label="Referido Por"
@@ -746,8 +798,8 @@ function ContactModalComponent({
                                             </div>
                                         )}
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
 
                             {/* Notas */}
                             <div className="mb-4">
@@ -762,7 +814,7 @@ function ContactModalComponent({
                             </div>
 
                             {/* Sección 4: Promesas Asociadas */}
-                            {contactId && (
+                            {contactId && !promises.some(p => p.has_approved_quote) && (
                                 <div className="space-y-3 pt-2 border-t border-zinc-700">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-medium text-zinc-300">
@@ -847,15 +899,20 @@ function ContactModalComponent({
                                     ) : (
                                         <div className="space-y-2">
                                             {events.map((event) => (
-                                                <div
+                                                <button
                                                     key={event.id}
-                                                    className="w-full text-left p-3 rounded-lg border border-zinc-700 bg-zinc-800/30"
+                                                    type="button"
+                                                    onClick={() => {
+                                                        router.push(`/${studioSlug}/studio/builder/business/events/${event.id}`);
+                                                        onClose();
+                                                    }}
+                                                    className="w-full text-left p-3 rounded-lg border border-zinc-700 bg-zinc-800/30 hover:border-blue-500/50 hover:bg-zinc-800/50 transition-colors group"
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-center gap-2 mb-1">
-                                                                <Calendar className="h-4 w-4 text-zinc-400 flex-shrink-0" />
-                                                                <span className="font-medium text-white truncate">
+                                                                <Calendar className="h-4 w-4 text-zinc-400 group-hover:text-blue-400 flex-shrink-0 transition-colors" />
+                                                                <span className="font-medium text-white group-hover:text-blue-400 truncate transition-colors">
                                                                     {event.name}
                                                                 </span>
                                                             </div>
@@ -880,11 +937,14 @@ function ContactModalComponent({
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <span className="text-xs text-zinc-500 px-2 py-1 bg-zinc-700/50 rounded">
-                                                            En desarrollo
-                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-zinc-500 px-2 py-1 bg-zinc-700/50 rounded">
+                                                                {event.status}
+                                                            </span>
+                                                            <ArrowRight className="h-4 w-4 text-zinc-500 group-hover:text-blue-400 transition-colors flex-shrink-0" />
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
                                     )}

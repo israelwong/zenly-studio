@@ -16,7 +16,7 @@ import { ZenConfirmModal } from '@/components/ui/zen';
 import { getContacts, deleteContact } from '@/lib/actions/studio/builder/commercial/contacts';
 import type { Contact } from '@/lib/actions/schemas/contacts-schemas';
 import { toast } from 'sonner';
-import { useContactRefresh } from '@/hooks/useContactRefresh';
+import { useContactRefresh, useContactUpdateListener } from '@/hooks/useContactRefresh';
 
 interface ContactsSheetProps {
   open: boolean;
@@ -242,6 +242,45 @@ export function ContactsSheet({
     setStatusFilter(value);
     setPage(1);
   };
+
+  // Escuchar actualizaciones de avatar en tiempo real (solo para avatar_url)
+  const handleContactUpdateFromEvent = useCallback((updatedContact: Contact | undefined) => {
+    if (!updatedContact) return;
+    
+    // Actualizar solo el avatar_url del contacto en la lista si está presente
+    setContacts((prev) => {
+      const contactIndex = prev.findIndex((c) => c.id === updatedContact.id);
+      if (contactIndex !== -1) {
+        // Actualizar solo el avatar_url, mantener el resto de los datos
+        const updated = [...prev];
+        updated[contactIndex] = {
+          ...updated[contactIndex],
+          avatar_url: updatedContact.avatar_url
+        };
+        return updated;
+      }
+      return prev;
+    });
+  }, []);
+
+  // Escuchar actualizaciones de avatar de todos los contactos en la lista actual
+  useEffect(() => {
+    if (!open) return;
+
+    const eventHandler = ((event: CustomEvent) => {
+      const { contactId, contact } = event.detail || {};
+      if (contactId && contact && contact.avatar_url !== undefined) {
+        // Solo actualizar si el evento incluye avatar_url (actualización de avatar)
+        handleContactUpdateFromEvent(contact);
+      }
+    }) as EventListener;
+    
+    window.addEventListener('contact-update', eventHandler);
+
+    return () => {
+      window.removeEventListener('contact-update', eventHandler);
+    };
+  }, [open, handleContactUpdateFromEvent]);
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
