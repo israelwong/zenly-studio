@@ -74,9 +74,9 @@ export function AgendaUnifiedSheet({
     onOpenChange(false);
   };
 
-  const handleViewEvento = (_eventoId: string) => {
-    // TODO: Definir ruta de eventos cuando esté disponible
-    toast.info('Ruta de eventos pendiente de implementar');
+  const handleViewEvento = (eventoId: string) => {
+    router.push(`/${studioSlug}/studio/builder/business/events/${eventoId}`);
+    onOpenChange(false);
   };
 
   const handleSelectSlot = (_slotInfo: { start: Date; end: Date }) => {
