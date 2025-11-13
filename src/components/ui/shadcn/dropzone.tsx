@@ -58,15 +58,18 @@ export function Dropzone({
     return 'Archivo';
   };
 
+  const hasNoBorder = className?.includes('border-0');
+  const hasChildren = !!children;
+  
   return (
-    <div className={cn("w-full", className)}>
+    <div className={cn("w-full", !hasChildren && className)}>
       <div
         {...getRootProps()}
         className={cn(
-          "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200",
-          "bg-zinc-800 border-zinc-700 hover:border-zinc-600",
-          isDragActive && "border-blue-500 bg-blue-500/10",
-          dragActive && "border-blue-500 bg-blue-500/10",
+          !hasNoBorder && "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200",
+          !hasNoBorder && "bg-zinc-800 border-zinc-700 hover:border-zinc-600",
+          !hasNoBorder && isDragActive && "border-blue-500 bg-blue-500/10",
+          !hasNoBorder && dragActive && "border-blue-500 bg-blue-500/10",
           disabled && "opacity-50 cursor-not-allowed",
           className
         )}

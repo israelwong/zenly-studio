@@ -597,6 +597,7 @@ function ContactModalComponent({
                                         studioSlug={studioSlug}
                                         category="clientes"
                                         size="md"
+                                        showAdjustButton={false}
                                     />
                                 </div>
                                 <div className="col-span-3 space-y-4">

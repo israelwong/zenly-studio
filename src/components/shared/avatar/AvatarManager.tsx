@@ -182,7 +182,7 @@ export function AvatarManager({
     return (
         <div className="flex flex-col items-center justify-center">
             {url ? (
-                <div className="relative group flex items-center justify-center">
+                <div className={`relative group flex items-center justify-center ${currentSize} rounded-full border-2 border-zinc-400`}>
                     {/* Dropzone invisible sobre el avatar para permitir drag and drop */}
                     <Dropzone
                         onFileSelect={handleFileSelect}
@@ -194,13 +194,13 @@ export function AvatarManager({
                         maxSize={10}
                         maxFiles={1}
                         disabled={isDisabled}
-                        className={`absolute inset-0 ${currentSize} rounded-full z-0 cursor-pointer`}
+                        className={`absolute inset-0 rounded-full z-0 cursor-pointer border-0 p-0`}
                     >
                         <div className="w-full h-full" />
                     </Dropzone>
 
                     <div className="relative flex items-center justify-center z-10">
-                        <Avatar className={`${currentSize} border-2 border-zinc-400 pointer-events-none`}>
+                        <Avatar className={`${currentSize} border-0 pointer-events-none`}>
                             <AvatarImage
                                 src={url}
                                 alt="Avatar"
@@ -235,13 +235,10 @@ export function AvatarManager({
                                             setShowCropModal(true);
                                         }}
                                         disabled={isDisabled}
-                                        className={`${variant === 'compact'
-                                            ? 'w-8 h-8 flex items-center justify-center bg-zinc-800/90 hover:bg-zinc-700 rounded-full transition-colors'
-                                            : 'flex flex-col items-center gap-1 px-2 py-1.5 bg-zinc-800/90 hover:bg-zinc-700 rounded-lg transition-colors'} disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto`}
+                                        className="w-8 h-8 flex items-center justify-center bg-zinc-800/90 hover:bg-zinc-700 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                                         title="Ajustar avatar"
                                     >
-                                        <Crop className={variant === 'compact' ? 'h-3.5 w-3.5 text-blue-400' : 'h-3 w-3 text-blue-400'} />
-                                        {variant === 'default' && <span className="text-white text-xs font-medium">Ajustar</span>}
+                                        <Crop className="h-3.5 w-3.5 text-blue-400" />
                                     </button>
                                 )}
 
@@ -254,13 +251,10 @@ export function AvatarManager({
                                         handleRemoveUrl();
                                     }}
                                     disabled={isDisabled}
-                                    className={`${variant === 'compact'
-                                        ? 'w-8 h-8 flex items-center justify-center bg-red-600/90 hover:bg-red-700 rounded-full transition-colors'
-                                        : 'flex flex-col items-center gap-1 px-2 py-1.5 bg-red-600/90 hover:bg-red-700 rounded-lg transition-colors'} disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto`}
+                                    className="w-8 h-8 flex items-center justify-center bg-red-600/90 hover:bg-red-700 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                                     title="Eliminar avatar"
                                 >
-                                    <Trash2 className={variant === 'compact' ? 'h-3.5 w-3.5 text-white' : 'h-3 w-3 text-white'} />
-                                    {variant === 'default' && <span className="text-white text-xs font-medium">Eliminar</span>}
+                                    <Trash2 className="h-3.5 w-3.5 text-white" />
                                 </button>
                             </div>
                         )}
