@@ -112,7 +112,7 @@ export async function getContacts(
           take: 1
         }
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { name: 'asc' },
       skip: (page - 1) * limit,
       take: limit
     });

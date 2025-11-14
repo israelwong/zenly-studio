@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabaseRealtime } from '@/lib/supabase/realtime-client';
+import { createClient } from '@/lib/supabase/client';
 import { getStudioNotifications, getUnreadNotificationsCount, markNotificationAsRead, markNotificationAsClicked, getCurrentUserId, deleteNotificationAction } from '@/lib/actions/studio/notifications/notifications.actions';
 import type { studio_notifications } from '@prisma/client';
 
@@ -33,6 +33,7 @@ export function useStudioNotifications({
   
   const channelRef = useRef<any>(null);
   const isMountedRef = useRef(true);
+  const supabaseRef = useRef(createClient());
 
   // Obtener userId (studio_user_profiles.id)
   useEffect(() => {
@@ -105,130 +106,239 @@ export function useStudioNotifications({
 
   // Configurar Realtime - Escucha eventos automáticos desde el trigger de base de datos
   useEffect(() => {
-    if (!studioSlug || !userId || !enabled) return;
+    if (!studioSlug || !userId || !enabled) {
+      console.log('[useStudioNotifications] Realtime deshabilitado:', {
+        studioSlug,
+        userId,
+        enabled,
+      });
+      return;
+    }
+
+    const supabase = supabaseRef.current;
+
+    console.log('[useStudioNotifications] Configurando Realtime:', {
+      studioSlug,
+      userId,
+      channel: `studio:${studioSlug}:notifications`,
+    });
 
     // Limpiar canal anterior si existe
     if (channelRef.current) {
-      supabaseRealtime.removeChannel(channelRef.current);
+      console.log('[useStudioNotifications] Limpiando canal anterior');
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
     }
 
-    const channel = supabaseRealtime
-      .channel(`studio:${studioSlug}:notifications`, {
-        config: {
-          private: true,
-          broadcast: { self: true, ack: true },
-        },
-      })
-      // Escuchar INSERT - Nueva notificación creada
-      .on('broadcast', { event: 'INSERT' }, (payload: unknown) => {
-        if (!isMountedRef.current) return;
+    const channelName = `studio:${studioSlug}:notifications`;
+    console.log('[useStudioNotifications] Creando canal:', channelName);
+
+    // Configurar autenticación antes de crear el canal
+    const setupRealtime = async () => {
+      try {
+        // Verificar que tenemos una sesión activa
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        // El payload de realtime.broadcast_changes tiene estructura: { new: {...}, old: null }
-        const broadcastPayload = payload as { new?: studio_notifications; old?: studio_notifications | null };
-        
-        if (broadcastPayload.new) {
-          const newNotification = broadcastPayload.new;
-          
-          console.log('[useStudioNotifications] Nueva notificación recibida:', {
-            id: newNotification.id,
-            user_id: newNotification.user_id,
-            current_user_id: userId,
-            title: newNotification.title,
-          });
-          
-          // Solo agregar si es para este usuario
-          if (newNotification.user_id === userId) {
-            setNotifications((prev) => {
-              // Evitar duplicados
-              if (prev.some((n) => n.id === newNotification.id)) {
-                console.log('[useStudioNotifications] Notificación duplicada, ignorando');
-                return prev;
-              }
-              console.log('[useStudioNotifications] Agregando nueva notificación');
-              return [newNotification, ...prev];
+        if (sessionError || !session) {
+          console.error('[useStudioNotifications] ❌ No hay sesión activa:', sessionError);
+          setError('No hay sesión de autenticación activa');
+          return;
+        }
+
+        console.log('[useStudioNotifications] ✅ Sesión activa encontrada:', {
+          userId: session.user.id,
+          email: session.user.email,
+        });
+
+        // Configurar autenticación Realtime
+        console.log('[useStudioNotifications] 🔐 Configurando autenticación Realtime...');
+        await supabase.realtime.setAuth();
+        console.log('[useStudioNotifications] ✅ Autenticación Realtime configurada');
+
+        const channel = supabase
+          .channel(channelName, {
+            config: {
+              private: true,
+              broadcast: { self: true, ack: true },
+            },
+          })
+          // Escuchar INSERT - Nueva notificación creada
+          .on('broadcast', { event: 'INSERT' }, (payload: unknown) => {
+            console.log('[useStudioNotifications] 🔔 Evento INSERT recibido:', {
+              payload,
+              isMounted: isMountedRef.current,
+              userId,
             });
             
-            // Incrementar contador si no está leída
-            if (!newNotification.is_read) {
-              setUnreadCount((prev) => prev + 1);
+            if (!isMountedRef.current) {
+              console.log('[useStudioNotifications] Componente desmontado, ignorando evento');
+              return;
             }
-          } else {
-            console.log('[useStudioNotifications] Notificación no es para este usuario');
-          }
-        } else {
-          console.warn('[useStudioNotifications] Payload INSERT sin campo new:', payload);
-        }
-      })
-      // Escuchar UPDATE - Notificación actualizada (marcada como leída, clickeada, etc.)
-      .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
-        if (!isMountedRef.current) return;
-        
-        const broadcastPayload = payload as { new?: studio_notifications; old?: studio_notifications | null };
-        
-        if (broadcastPayload.new) {
-          const updatedNotification = broadcastPayload.new;
-          
-          // Solo actualizar si es para este usuario
-          if (updatedNotification.user_id === userId) {
-            // Si se desactivó la notificación, eliminarla de la lista
-            if (!updatedNotification.is_active) {
-              setNotifications((prev) =>
-                prev.filter((n) => n.id !== updatedNotification.id)
-              );
+            
+            // El payload de realtime.broadcast_changes tiene estructura: { new: {...}, old: null }
+            const broadcastPayload = payload as { new?: studio_notifications; old?: studio_notifications | null };
+            
+            if (broadcastPayload.new) {
+              const newNotification = broadcastPayload.new;
               
-              // Decrementar contador si no estaba leída
-              if (!updatedNotification.is_read) {
-                setUnreadCount((prev) => Math.max(0, prev - 1));
+              console.log('[useStudioNotifications] ✅ Nueva notificación recibida:', {
+                id: newNotification.id,
+                user_id: newNotification.user_id,
+                current_user_id: userId,
+                title: newNotification.title,
+                matches_user: newNotification.user_id === userId,
+              });
+              
+              // Solo agregar si es para este usuario
+              if (newNotification.user_id === userId) {
+                setNotifications((prev) => {
+                  // Evitar duplicados
+                  if (prev.some((n) => n.id === newNotification.id)) {
+                    console.log('[useStudioNotifications] ⚠️ Notificación duplicada, ignorando');
+                    return prev;
+                  }
+                  console.log('[useStudioNotifications] ➕ Agregando nueva notificación a la lista');
+                  return [newNotification, ...prev];
+                });
+                
+                // Incrementar contador si no está leída
+                if (!newNotification.is_read) {
+                  console.log('[useStudioNotifications] 📈 Incrementando contador de no leídas');
+                  setUnreadCount((prev) => prev + 1);
+                }
+              } else {
+                console.log('[useStudioNotifications] ⏭️ Notificación no es para este usuario, ignorando');
               }
             } else {
-              // Actualizar notificación activa
-              setNotifications((prev) =>
-                prev.map((n) =>
-                  n.id === updatedNotification.id ? updatedNotification : n
-                )
-              );
+              console.warn('[useStudioNotifications] ⚠️ Payload INSERT sin campo new:', payload);
+            }
+          })
+          // Escuchar UPDATE - Notificación actualizada (marcada como leída, clickeada, etc.)
+          .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            console.log('[useStudioNotifications] 🔄 Evento UPDATE recibido:', {
+              payload,
+              isMounted: isMountedRef.current,
+            });
+            
+            if (!isMountedRef.current) return;
+            
+            const broadcastPayload = payload as { new?: studio_notifications; old?: studio_notifications | null };
+            
+            if (broadcastPayload.new) {
+              const updatedNotification = broadcastPayload.new;
+              console.log('[useStudioNotifications] 📝 Notificación actualizada:', {
+                id: updatedNotification.id,
+                user_id: updatedNotification.user_id,
+                current_user_id: userId,
+                is_active: updatedNotification.is_active,
+                is_read: updatedNotification.is_read,
+              });
               
-              // Actualizar contador según el estado de lectura
-              if (updatedNotification.is_read) {
-                setUnreadCount((prev) => Math.max(0, prev - 1));
+              // Solo actualizar si es para este usuario
+              if (updatedNotification.user_id === userId) {
+                // Si se desactivó la notificación, eliminarla de la lista
+                if (!updatedNotification.is_active) {
+                  console.log('[useStudioNotifications] 🗑️ Eliminando notificación desactivada');
+                  setNotifications((prev) =>
+                    prev.filter((n) => n.id !== updatedNotification.id)
+                  );
+                  
+                  // Decrementar contador si no estaba leída
+                  if (!updatedNotification.is_read) {
+                    setUnreadCount((prev) => Math.max(0, prev - 1));
+                  }
+                } else {
+                  console.log('[useStudioNotifications] ✏️ Actualizando notificación activa');
+                  // Actualizar notificación activa
+                  setNotifications((prev) =>
+                    prev.map((n) =>
+                      n.id === updatedNotification.id ? updatedNotification : n
+                    )
+                  );
+                  
+                  // Actualizar contador según el estado de lectura
+                  if (updatedNotification.is_read) {
+                    setUnreadCount((prev) => Math.max(0, prev - 1));
+                  }
+                }
               }
             }
-          }
-        }
-      })
-      // Escuchar DELETE - Notificación eliminada
-      .on('broadcast', { event: 'DELETE' }, (payload: unknown) => {
-        if (!isMountedRef.current) return;
-        
-        const broadcastPayload = payload as { new?: studio_notifications | null; old?: studio_notifications };
-        
-        if (broadcastPayload.old) {
-          const deletedNotification = broadcastPayload.old;
-          
-          // Solo eliminar si es para este usuario
-          if (deletedNotification.user_id === userId) {
-            setNotifications((prev) =>
-              prev.filter((n) => n.id !== deletedNotification.id)
-            );
+          })
+          // Escuchar DELETE - Notificación eliminada
+          .on('broadcast', { event: 'DELETE' }, (payload: unknown) => {
+            console.log('[useStudioNotifications] 🗑️ Evento DELETE recibido:', {
+              payload,
+              isMounted: isMountedRef.current,
+            });
             
-            // Decrementar contador si no estaba leída
-            if (!deletedNotification.is_read) {
-              setUnreadCount((prev) => Math.max(0, prev - 1));
+            if (!isMountedRef.current) return;
+            
+            const broadcastPayload = payload as { new?: studio_notifications | null; old?: studio_notifications };
+            
+            if (broadcastPayload.old) {
+              const deletedNotification = broadcastPayload.old;
+              console.log('[useStudioNotifications] 🗑️ Notificación eliminada:', {
+                id: deletedNotification.id,
+                user_id: deletedNotification.user_id,
+                current_user_id: userId,
+              });
+              
+              // Solo eliminar si es para este usuario
+              if (deletedNotification.user_id === userId) {
+                console.log('[useStudioNotifications] ➖ Eliminando notificación de la lista');
+                setNotifications((prev) =>
+                  prev.filter((n) => n.id !== deletedNotification.id)
+                );
+                
+                // Decrementar contador si no estaba leída
+                if (!deletedNotification.is_read) {
+                  setUnreadCount((prev) => Math.max(0, prev - 1));
+                }
+              }
             }
-          }
-        }
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[useStudioNotifications] Suscrito a notificaciones Realtime');
-        }
-      });
+          })
+          .subscribe(async (status, err) => {
+            console.log('[useStudioNotifications] 📡 Estado de suscripción:', {
+              status,
+              error: err,
+              channel: channelName,
+              userId,
+            });
+            
+            if (status === 'SUBSCRIBED') {
+              console.log('[useStudioNotifications] ✅ Suscrito exitosamente a notificaciones Realtime');
+              console.log('[useStudioNotifications] Canal activo:', {
+                name: channelName,
+                state: channel.state,
+              });
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('[useStudioNotifications] ❌ Error en canal:', err);
+              if (err) {
+                console.error('[useStudioNotifications] Detalles del error:', {
+                  message: err.message,
+                  code: err.code,
+                });
+              }
+            } else if (status === 'TIMED_OUT') {
+              console.warn('[useStudioNotifications] ⏱️ Timeout al suscribirse');
+            } else if (status === 'CLOSED') {
+              console.log('[useStudioNotifications] 🔒 Canal cerrado');
+            }
+          });
 
-    channelRef.current = channel;
+        channelRef.current = channel;
+      } catch (authError) {
+        console.error('[useStudioNotifications] ❌ Error configurando Realtime:', authError);
+        setError('Error al configurar Realtime: ' + (authError instanceof Error ? authError.message : 'Unknown error'));
+      }
+    };
+    
+    setupRealtime();
 
     return () => {
+      console.log('[useStudioNotifications] 🧹 Limpiando suscripción Realtime');
       if (channelRef.current) {
-        supabaseRealtime.removeChannel(channelRef.current);
+        supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
