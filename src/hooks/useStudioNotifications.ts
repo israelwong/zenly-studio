@@ -106,6 +106,7 @@ export function useStudioNotifications({
 
   // Configurar Realtime - Escucha eventos automáticos desde el trigger de base de datos
   // IMPORTANTE: Esperar a que userId esté disponible (getCurrentUserId crea el perfil si no existe)
+  // También esperar un momento para asegurar que el perfil esté completamente creado en la BD
   useEffect(() => {
     if (!studioSlug || !userId || !enabled) {
       console.log('[useStudioNotifications] Realtime deshabilitado:', {
@@ -194,12 +195,25 @@ export function useStudioNotifications({
         }
 
         // Configurar autenticación Realtime ANTES de crear el canal
+        // IMPORTANTE: Pasar el access_token explícitamente para canales privados
         console.log('[useStudioNotifications] 🔐 Configurando autenticación Realtime...');
-        const authResult = await supabase.realtime.setAuth();
+        console.log('[useStudioNotifications] Token disponible:', {
+          hasAccessToken: !!session.access_token,
+          tokenLength: session.access_token?.length,
+        });
+        
+        // Configurar autenticación con el token explícitamente
+        const authResult = await supabase.realtime.setAuth(session.access_token);
         console.log('[useStudioNotifications] ✅ Autenticación Realtime configurada:', {
           success: !authResult.error,
           error: authResult.error?.message,
         });
+        
+        if (authResult.error) {
+          console.error('[useStudioNotifications] ❌ Error configurando auth Realtime:', authResult.error);
+          setError('Error al configurar autenticación Realtime: ' + authResult.error.message);
+          return;
+        }
 
         const channel = supabase
           .channel(channelName, {
