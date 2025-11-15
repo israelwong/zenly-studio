@@ -77,16 +77,15 @@ export async function loginAction(
     // Revalidar todas las rutas para asegurar que el middleware detecte la sesión
     revalidatePath('/', 'layout')
 
-    // Redirect usando Next.js (maneja cookies automáticamente)
-    redirect(redirectPath)
+    // Retornar éxito y ruta para que el cliente haga hard redirect
+    // Esto asegura que las cookies se sincronicen correctamente
+    return {
+      success: true,
+      redirectTo: redirectPath,
+    }
 
   } catch (error) {
     console.error('❌ Error en loginAction:', error)
-    
-    // Si es un redirect de Next.js, re-throw (es esperado)
-    if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
-      throw error
-    }
 
     return {
       success: false,

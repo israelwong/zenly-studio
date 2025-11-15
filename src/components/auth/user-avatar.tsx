@@ -45,29 +45,45 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
         const getUser = async () => {
             try {
                 const supabase = createClient();
-                const { data: { user } } = await supabase.auth.getUser();
+                const { data: { user }, error } = await supabase.auth.getUser();
+                
+                if (error) {
+                    console.error("[UserAvatar] Error obteniendo usuario:", error);
+                    setIsLoading(false);
+                    return;
+                }
+                
+                if (!user) {
+                    console.log("[UserAvatar] No hay usuario autenticado");
+                    setIsLoading(false);
+                    return;
+                }
+                
+                console.log("[UserAvatar] Usuario cargado:", user.email);
                 setUser(user);
 
-                if (user) {
-                    // Obtener perfil completo del usuario desde la base de datos
-                    // Pasar studioSlug si está disponible para buscar por studio_id
-                    const authUser = studioSlug
-                        ? await getCurrentUserClient(studioSlug)
-                        : await getCurrentUserClient();
-                    if (authUser) {
-                        // Validar que avatarUrl no sea null ni cadena vacía
-                        const avatarUrl = authUser.profile.avatarUrl && authUser.profile.avatarUrl.trim() !== ''
-                            ? authUser.profile.avatarUrl
-                            : null;
+                // Obtener perfil completo del usuario desde la base de datos
+                // Pasar studioSlug si está disponible para buscar por studio_id
+                const authUser = studioSlug
+                    ? await getCurrentUserClient(studioSlug)
+                    : await getCurrentUserClient();
+                    
+                if (authUser) {
+                    console.log("[UserAvatar] Perfil cargado:", authUser.profile.fullName);
+                    // Validar que avatarUrl no sea null ni cadena vacía
+                    const avatarUrl = authUser.profile.avatarUrl && authUser.profile.avatarUrl.trim() !== ''
+                        ? authUser.profile.avatarUrl
+                        : null;
 
-                        setUserProfile({
-                            fullName: authUser.profile.fullName,
-                            avatarUrl: avatarUrl
-                        });
-                    }
+                    setUserProfile({
+                        fullName: authUser.profile.fullName,
+                        avatarUrl: avatarUrl
+                    });
+                } else {
+                    console.log("[UserAvatar] No se pudo cargar el perfil del usuario");
                 }
             } catch (error) {
-                console.error("Error getting user:", error);
+                console.error("[UserAvatar] Error getting user:", error);
             } finally {
                 setIsLoading(false);
             }

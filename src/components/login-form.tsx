@@ -30,8 +30,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       
       if (!result.success) {
         setError(result.error || 'Error al iniciar sesión')
+      } else if (result.redirectTo) {
+        // Hard redirect para sincronizar cookies
+        window.location.href = result.redirectTo
       }
-      // Si success=true, el redirect ya se hizo en el servidor
     })
   }
 
