@@ -12,29 +12,53 @@ import {
 import { Input } from '@/components/ui/shadcn/input'
 import { Label } from '@/components/ui/shadcn/label'
 import Link from 'next/link'
-import { useState, useTransition } from 'react'
-import { loginAction } from '@/lib/actions/auth/login.actions'
+import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { getDefaultRoute } from '@/types/auth'
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setIsLoading(true)
 
-    startTransition(async () => {
-      const result = await loginAction(email, password)
+    try {
+      const supabase = createClient()
       
-      if (!result.success) {
-        setError(result.error || 'Error al iniciar sesión')
-      } else if (result.redirectTo) {
-        // Hard redirect para sincronizar cookies
-        window.location.href = result.redirectTo
+      // Login directo en cliente - guarda sesión automáticamente
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (loginError) throw loginError
+      if (!data.user) throw new Error('No se pudo obtener información del usuario')
+
+      // Obtener rol y redirect
+      const userRole = data.user.user_metadata?.role
+      if (!userRole) throw new Error('Usuario sin rol asignado')
+
+      let redirectPath: string
+      if (userRole === 'suscriptor') {
+        const studioSlug = data.user.user_metadata?.studio_slug
+        if (!studioSlug) throw new Error('Usuario sin estudio asignado')
+        redirectPath = getDefaultRoute(userRole, studioSlug)
+      } else {
+        redirectPath = getDefaultRoute(userRole)
       }
-    })
+
+      // Hard redirect
+      window.location.href = redirectPath
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -77,8 +101,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                 />
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
               </Button>
             </div>
           </form>
