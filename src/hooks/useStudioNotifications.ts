@@ -45,12 +45,9 @@ export function useStudioNotifications({
 
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
   const isMountedRef = useRef(true);
-  // Singleton: crear cliente solo una vez
-  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
-
-  if (!supabaseRef.current) {
-    supabaseRef.current = createClient();
-  }
+  
+  // Usar cliente singleton global
+  const supabase = createClient();
 
   // Obtener userId (studio_user_profiles.id)
   useEffect(() => {
@@ -129,7 +126,7 @@ export function useStudioNotifications({
       return;
     }
 
-    const supabase = supabaseRef.current;
+    // Usar cliente singleton
     if (!supabase) {
       console.error('[useStudioNotifications] ❌ Cliente Supabase no inicializado');
       setError('Cliente Supabase no inicializado');
@@ -148,7 +145,7 @@ export function useStudioNotifications({
     const setupRealtime = async () => {
       try {
         // Obtener sesión del cliente Supabase
-        const supabase = supabaseRef.current!;
+        // Usar cliente singleton
         let { data: { session: ssrSession }, error: ssrSessionError } = await supabase.auth.getSession();
 
         // Si no hay sesión, intentar refrescarla (puede pasar después de login con Server Action)
@@ -180,7 +177,7 @@ export function useStudioNotifications({
         const session = ssrSession;
 
         // Verificar supabaseRef
-        const realtimeClient = supabaseRef.current;
+        const realtimeClient = supabase;
         if (!realtimeClient) {
           console.error('[useStudioNotifications] ❌ Cliente Realtime no inicializado');
           setError('Cliente Realtime no inicializado');
@@ -328,8 +325,8 @@ export function useStudioNotifications({
     setupRealtime();
 
     return () => {
-      if (channelRef.current && supabaseRef.current) {
-        supabaseRef.current.removeChannel(channelRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
@@ -423,8 +420,8 @@ export function useStudioNotifications({
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-      if (channelRef.current && supabaseRef.current) {
-        supabaseRef.current.removeChannel(channelRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
       }
     };
   }, []);
