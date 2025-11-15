@@ -15,7 +15,7 @@ import {
     RefreshCw,
     AlertTriangle
 } from 'lucide-react';
-import { obtenerHistorialAccesos } from '@/lib/actions/studio/config/seguridad/seguridad.actions';
+import { obtenerHistorialAccesos } from '@/lib/actions/studio/account/seguridad/seguridad.actions';
 import { AccessLog } from '../types';
 import { toast } from 'sonner';
 

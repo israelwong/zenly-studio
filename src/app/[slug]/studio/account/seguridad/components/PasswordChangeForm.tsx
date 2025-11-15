@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn
 import { ZenButton } from '@/components/ui/zen';
 import { ZenInput } from '@/components/ui/zen';
 import { PasswordChangeSchema, type PasswordChangeForm as PasswordChangeFormType } from '@/lib/actions/schemas/seguridad/seguridad-schemas';
-import { cambiarPassword } from '@/lib/actions/studio/config/seguridad/seguridad.actions';
+import { cambiarPassword } from '@/lib/actions/studio/account/seguridad/seguridad.actions';
 import { toast } from 'sonner';
 import { Key, Eye, EyeOff, Shield } from 'lucide-react';
 

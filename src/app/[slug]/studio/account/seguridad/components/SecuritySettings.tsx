@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { ZenButton } from '@/components/ui/zen';
 import { SecuritySettingsSchema, type SecuritySettingsForm as SecuritySettingsFormType } from '@/lib/actions/schemas/seguridad/seguridad-schemas';
-import { obtenerConfiguracionesSeguridad, actualizarConfiguracionesSeguridad } from '@/lib/actions/studio/config/seguridad/seguridad.actions';
+import { obtenerConfiguracionesSeguridad, actualizarConfiguracionesSeguridad } from '@/lib/actions/studio/account/seguridad/seguridad.actions';
 import { toast } from 'sonner';
 import { Settings, Bell, Shield, Clock, Save } from 'lucide-react';
 import type { SecuritySettings } from '../types';

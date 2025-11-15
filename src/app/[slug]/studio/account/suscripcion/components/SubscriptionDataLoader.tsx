@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { CurrentPlanCard, BillingHistoryCard, SubscriptionSkeleton } from './index';
-import { getSubscriptionData } from '@/lib/actions/studio/config/suscripcion/suscripcion.actions';
-import { SuscripcionData } from '@/lib/actions/studio/config/suscripcion/types';
+import { getSubscriptionData } from '@/lib/actions/studio/account/suscripcion/suscripcion.actions';
+import { SuscripcionData } from '@/lib/actions/studio/account/suscripcion/types';
 import { toast } from 'sonner';
 
 interface SubscriptionDataLoaderProps {

@@ -61,9 +61,9 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
             title: 'Account',
             icon: UserCog,
             items: [
-                { id: 'perfil', name: 'Perfil', href: `/account/perfil`, icon: UserCheck },
-                { id: 'seguridad', name: 'Seguridad', href: `/account/seguridad`, icon: Shield },
-                { id: 'suscripcion', name: 'Suscripción', href: `/account/suscripcion`, icon: CreditCard },
+                { id: 'perfil', name: 'Perfil', href: `/studio/account/perfil`, icon: UserCheck },
+                { id: 'seguridad', name: 'Seguridad', href: `/studio/account/seguridad`, icon: Shield },
+                { id: 'suscripcion', name: 'Suscripción', href: `/studio/account/suscripcion`, icon: CreditCard },
             ],
         },
 
@@ -199,7 +199,9 @@ export function StudioBuilderSidebar({ className, studioSlug }: StudioBuilderSid
                             {group.items.map(item => (
                                 <ZenSidebarMenuItem key={item.id}>
                                     <ActiveLink
-                                        href={`/${studioSlug}/studio/builder${item.href}`}
+                                        href={item.href.startsWith('/studio/') 
+                                            ? `/${studioSlug}${item.href}`
+                                            : `/${studioSlug}/studio/builder${item.href}`}
                                         className="flex items-center gap-3 px-3 py-1.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/30 transition-all duration-200 rounded-md group"
                                     >
                                         <item.icon className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300" />

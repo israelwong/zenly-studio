@@ -2,7 +2,7 @@ import React from 'react';
 import { ZenMagicChatProvider, ZenMagicChatWrapper } from './components/ZenMagic';
 import { ContactsSheetProvider } from '@/components/shared/contacts/ContactsSheetContext';
 import { SessionTimeoutProvider } from '@/components/providers/SessionTimeoutProvider';
-import { obtenerConfiguracionesSeguridad } from '@/lib/actions/studio/config/seguridad/seguridad.actions';
+import { obtenerConfiguracionesSeguridad } from '@/lib/actions/studio/account/seguridad/seguridad.actions';
 
 export default async function AppLayout({
     children,

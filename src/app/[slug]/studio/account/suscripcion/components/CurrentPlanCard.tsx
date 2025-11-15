@@ -14,7 +14,7 @@ import {
     Star,
     Building
 } from 'lucide-react';
-import { SuscripcionData } from '@/lib/actions/studio/config/suscripcion/types';
+import { SuscripcionData } from '@/lib/actions/studio/account/suscripcion/types';
 
 interface CurrentPlanCardProps {
     data: SuscripcionData;

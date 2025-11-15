@@ -8,7 +8,7 @@ import { ZenInput } from '@/components/ui/zen';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Save, User, Mail, Phone } from 'lucide-react';
 import { toast } from 'sonner';
-import { actualizarPerfil } from '@/lib/actions/studio/config/perfil.actions';
+import { actualizarPerfil } from '@/lib/actions/studio/account/perfil.actions';
 import { PerfilSchema, type PerfilForm as PerfilFormType } from '@/lib/actions/schemas/perfil-schemas';
 import { PerfilData } from '../types';
 import { AvatarManager } from '@/components/shared/avatar';

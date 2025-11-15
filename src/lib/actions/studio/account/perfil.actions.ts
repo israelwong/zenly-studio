@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { PerfilSchema } from '@/lib/actions/schemas/perfil-schemas';
-import { PerfilData } from '@/app/[slug]/studio/configuracion/cuenta/perfil/types';
+import { PerfilData } from '@/app/[slug]/studio/account/perfil/types';
 
 interface ActionResult<T = unknown> {
     success: boolean;
@@ -156,7 +156,7 @@ export async function actualizarPerfil(
             updatedAt: leadActualizado.updated_at
         };
 
-        revalidatePath(`/studio/${studioSlug}/configuracion/cuenta/perfil`);
+        revalidatePath(`/${studioSlug}/studio/account/perfil`);
         revalidatePath(`/${studioSlug}/studio`); // Revalidar rutas del studio para actualizar avatar en header
 
         return {

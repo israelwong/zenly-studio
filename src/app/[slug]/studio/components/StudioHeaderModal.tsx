@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { ChevronDown, User, CreditCard, Plus, Calendar, BarChart3, Users, Zap } from 'lucide-react';
 import {
     DropdownMenu,
@@ -29,7 +29,6 @@ export function StudioHeaderModal({ className, studioData }: StudioHeaderModalPr
     // className is available for future styling if needed
     void className; // Suppress unused parameter warning
     const params = useParams();
-    // const pathname = usePathname(); // Comentado ya que no se usa actualmente
     const slug = params.slug as string;
 
     // Usar datos del studio pasados como prop o hook como fallback
@@ -44,7 +43,7 @@ export function StudioHeaderModal({ className, studioData }: StudioHeaderModalPr
 
     // Escuchar cambios de logo para actualizar en tiempo real
     const logoRefresh = useLogoRefreshListener();
-    
+
     // Recargar datos cuando cambia el logo
     useEffect(() => {
         if (logoRefresh > 0) {
@@ -58,11 +57,10 @@ export function StudioHeaderModal({ className, studioData }: StudioHeaderModalPr
     // const isBuilder = pathname.includes('/studio/builder');
 
     // Usar datos del studio pasados como prop si están disponibles
-    const studioName = studioData?.studio_name || identidadData?.name || 'Studio';
-    const studioSlug = studioData?.slug || slug;
+    const studioName = studioData?.studio_name || identidadData?.studio_name || 'Studio';
 
 
-    // Función para renderizar el logo/isotipo
+    // Función para renderizar el logo
     const renderLogo = () => {
         if (loading) {
             return (
@@ -72,36 +70,7 @@ export function StudioHeaderModal({ className, studioData }: StudioHeaderModalPr
             );
         }
 
-        // Si hay isotipo, mostrarlo
-        if (identidadData?.isotipo_url) {
-            return (
-                <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
-                    <Image
-                        src={identidadData.isotipo_url}
-                        alt="Isotipo"
-                        width={32}
-                        height={32}
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                            // Fallback si falla la carga de imagen
-                            e.currentTarget.style.display = 'none';
-                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                            if (fallback) {
-                                fallback.classList.remove('hidden');
-                                fallback.classList.add('flex');
-                            }
-                        }}
-                    />
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg items-center justify-center hidden">
-                        <span className="text-white font-bold text-sm">
-                            {identidadData.studio_name?.charAt(0)?.toUpperCase() || 'S'}
-                        </span>
-                    </div>
-                </div>
-            );
-        }
-
-        // Si hay logo, usar la primera letra del nombre
+        // Si hay logo, mostrarlo
         if (identidadData?.logo_url) {
             return (
                 <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
@@ -134,7 +103,7 @@ export function StudioHeaderModal({ className, studioData }: StudioHeaderModalPr
         return (
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">
-                    {identidadData?.name?.charAt(0).toUpperCase() || 'S'}
+                    {identidadData?.studio_name?.charAt(0).toUpperCase() || 'S'}
                 </span>
             </div>
         );

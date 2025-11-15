@@ -12,7 +12,7 @@ import {
     Calendar,
     CreditCard
 } from 'lucide-react';
-import { SuscripcionData } from '@/lib/actions/studio/config/suscripcion/types';
+import { SuscripcionData } from '@/lib/actions/studio/account/suscripcion/types';
 
 interface BillingHistoryCardProps {
     data: SuscripcionData;

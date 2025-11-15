@@ -98,7 +98,7 @@ export async function cambiarPassword(
             user_agent: 'N/A'
         });
 
-        revalidatePath(`/studio/${studioSlug}/configuracion/cuenta/seguridad`);
+        revalidatePath(`/${studioSlug}/studio/account/seguridad`);
 
         return {
             success: true,
@@ -249,7 +249,7 @@ export async function actualizarConfiguracionesSeguridad(
             settings: validatedData
         });
 
-        revalidatePath(`/studio/${studioSlug}/configuracion/cuenta/seguridad`);
+        revalidatePath(`/${studioSlug}/studio/account/seguridad`);
 
         return {
             success: true,
