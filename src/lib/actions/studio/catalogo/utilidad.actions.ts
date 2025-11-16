@@ -178,7 +178,7 @@ export async function actualizarConfiguracionPrecios(
         });
 
         // Revalidar la ruta del builder
-        revalidatePath(`/${slug}/studio/commercial/catalogo`);
+        revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
 
         return {
             success: true,
