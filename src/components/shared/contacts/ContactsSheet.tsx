@@ -305,7 +305,6 @@ export function ContactsSheet({
       <Sheet
         open={open}
         onOpenChange={handleSheetOpenChange}
-        modal={false}
       >
         <SheetContent
           side="right"

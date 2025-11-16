@@ -74,24 +74,29 @@ export function ZenDialog({
   };
 
   const modalContent = (
-    <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" 
-      style={{ zIndex: 9999 }}
-      onClick={(e) => {
-        // Solo cerrar al hacer click en el overlay si está permitido
-        if (closeOnClickOutside && e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-    >
+    <>
+      {/* Overlay separado */}
       <div 
-        className={cn(
-          'bg-zinc-900 rounded-lg shadow-xl w-full max-h-[90vh] overflow-y-auto relative',
-          maxWidthClasses[maxWidth]
-        )} 
-        style={{ zIndex: 10000 }}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+        style={{ zIndex: 10050, position: 'fixed' }}
+        onClick={(e) => {
+          if (closeOnClickOutside && e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
+      />
+      {/* Contenido del modal */}
+      <div 
+        className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
+        style={{ zIndex: 10051 }}
       >
+        <div 
+          className={cn(
+            'bg-zinc-900 rounded-lg shadow-xl w-full max-h-[90vh] overflow-y-auto relative pointer-events-auto',
+            maxWidthClasses[maxWidth]
+          )} 
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Header */}
         <ZenCardHeader className="flex items-center justify-between border-b border-zinc-700">
           <div>
@@ -158,8 +163,9 @@ export function ZenDialog({
             </div>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 
   return createPortal(modalContent, document.body);
