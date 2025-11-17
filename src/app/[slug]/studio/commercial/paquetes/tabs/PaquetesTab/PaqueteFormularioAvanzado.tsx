@@ -599,7 +599,9 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             let result;
             if (paquete?.id) {
                 // Actualizar paquete existente
+                console.log('[PaqueteFormularioAvanzado] Actualizando paquete:', paquete.id, data);
                 result = await actualizarPaquete(studioSlug, paquete.id, data);
+                console.log('[PaqueteFormularioAvanzado] Resultado actualización:', result);
                 if (result.success && result.data) {
                     toast.success('Paquete actualizado exitosamente');
                     // Actualizar storage solo si el cover cambió (se subió nueva imagen/video)
@@ -610,11 +612,15 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     setOriginalCoverUrl(newCoverUrl);
                     onSave(result.data);
                 } else {
-                    toast.error(result.error || 'Error al actualizar el paquete');
+                    const errorMsg = result.error || 'Error al actualizar el paquete';
+                    console.error('[PaqueteFormularioAvanzado] Error actualizando:', errorMsg);
+                    toast.error(errorMsg);
                 }
             } else {
                 // Crear nuevo paquete
+                console.log('[PaqueteFormularioAvanzado] Creando paquete:', data);
                 result = await crearPaquete(studioSlug, data);
+                console.log('[PaqueteFormularioAvanzado] Resultado creación:', result);
                 if (result.success && result.data) {
                     toast.success('Paquete creado exitosamente');
                     // Actualizar storage solo si tiene cover (se subió imagen/video)
@@ -625,12 +631,15 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     setOriginalCoverUrl(newCoverUrl);
                     onSave(result.data);
                 } else {
-                    toast.error(result.error || 'Error al crear el paquete');
+                    const errorMsg = result.error || 'Error al crear el paquete';
+                    console.error('[PaqueteFormularioAvanzado] Error creando:', errorMsg, result);
+                    toast.error(errorMsg);
                 }
             }
         } catch (error) {
-            console.error('Error creando paquete:', error);
-            toast.error('Error al crear el paquete');
+            console.error('[PaqueteFormularioAvanzado] Error en handleSubmit:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Error al guardar el paquete';
+            toast.error(errorMessage);
         } finally {
             setLoading(false);
         }

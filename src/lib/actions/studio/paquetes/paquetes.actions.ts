@@ -31,7 +31,7 @@ export async function obtenerPaquetes(
         const paquetes = await prisma.studio_paquetes.findMany({
             where: {
                 studio_id: studio.id,
-                status: "active",
+                // Traer todos los paquetes, no solo los activos
             },
             include: {
                 event_types: {
@@ -45,6 +45,14 @@ export async function obtenerPaquetes(
             },
             orderBy: { order: "asc" },
         });
+
+        console.log('[obtenerPaquetes] Paquetes encontrados:', paquetes.length);
+        console.log('[obtenerPaquetes] Paquetes con event_type_id:', paquetes.map(p => ({
+            id: p.id,
+            name: p.name,
+            event_type_id: p.event_type_id,
+            status: p.status
+        })));
 
         return {
             success: true,
@@ -193,7 +201,8 @@ export async function crearPaquete(
             },
         });
 
-        revalidatePath(`/${slug}/studio/commercial/paquetes`);
+        // No revalidar - el estado local se actualiza en el componente
+        // revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
 
         return {
             success: true,
@@ -201,9 +210,10 @@ export async function crearPaquete(
         };
     } catch (error) {
         console.error("[crearPaquete] Error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Error al crear paquete";
         return {
             success: false,
-            error: "Error al crear paquete",
+            error: errorMessage,
         };
     }
 }
@@ -456,7 +466,8 @@ export async function actualizarPaquete(
             },
         });
 
-        revalidatePath(`/${slug}/studio/commercial/paquetes`);
+        // No revalidar - el estado local se actualiza en el componente
+        // revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
 
         return {
             success: true,
@@ -513,7 +524,8 @@ export async function eliminarPaquete(
             where: { id: paqueteId },
         });
 
-        revalidatePath(`/${slug}/studio/commercial/paquetes`);
+        // No revalidar - el estado local se actualiza en el componente
+        // revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
 
         return { success: true };
     } catch (error) {
@@ -665,7 +677,8 @@ export async function duplicarPaquete(
                 utilidad: paqueteOriginal.utilidad,
                 precio: paqueteOriginal.precio,
                 order: newPosition,
-                status: "active",
+                status: "inactive", // Paquete duplicado siempre inactivo por defecto
+                is_featured: false, // No destacar el duplicado
                 paquete_items: {
                     create: paqueteOriginal.paquete_items.map((item) => ({
                         item_id: item.item_id,
@@ -683,7 +696,8 @@ export async function duplicarPaquete(
             },
         });
 
-        revalidatePath(`/${slug}/studio/commercial/paquetes`);
+        // No revalidar - el estado local se actualiza en el componente
+        // revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
 
         return {
             success: true,

@@ -590,6 +590,16 @@ export function PaquetesTipoEventoList({
 
     // Sincronizar paquetes cuando cambian desde el padre
     useEffect(() => {
+        console.log('[PaquetesTipoEventoList] Sincronizando paquetes:', {
+            totalPaquetes: initialPaquetes.length,
+            paquetes: initialPaquetes.map(p => ({
+                id: p.id,
+                name: p.name,
+                event_type_id: p.event_type_id,
+                status: p.status
+            }))
+        });
+
         const paquetesPorTipo: Record<string, PaqueteFromDB[]> = {};
         initialPaquetes.forEach(paquete => {
             const tipoEventoId = paquete.event_type_id || 'sin-tipo';
@@ -598,6 +608,11 @@ export function PaquetesTipoEventoList({
             }
             paquetesPorTipo[tipoEventoId].push(paquete);
         });
+
+        console.log('[PaquetesTipoEventoList] Paquetes agrupados por tipo:', Object.keys(paquetesPorTipo).map(tipoId => ({
+            tipoId,
+            cantidad: paquetesPorTipo[tipoId].length
+        })));
 
         // Ordenar paquetes dentro de cada tipo por 'order'
         Object.keys(paquetesPorTipo).forEach(tipoEventoId => {

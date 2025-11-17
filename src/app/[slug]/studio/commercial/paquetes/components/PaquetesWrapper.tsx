@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import { Package, Settings } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
@@ -19,6 +20,9 @@ interface PaquetesWrapperProps {
 }
 
 export function PaquetesWrapper({ studioSlug, onPreviewRefresh, onPreviewPaquetesUpdate }: PaquetesWrapperProps) {
+    const pathname = usePathname();
+    const prevPathnameRef = useRef<string | null>(null);
+    
     // Estado de pestañas
     const [activeTab, setActiveTab] = useState<TabType>('paquetes');
 
@@ -59,6 +63,24 @@ export function PaquetesWrapper({ studioSlug, onPreviewRefresh, onPreviewPaquete
     useEffect(() => {
         cargarDatos();
     }, [cargarDatos]);
+
+    // Recargar datos cuando se vuelve a la página de paquetes (después de crear/editar)
+    useEffect(() => {
+        if (!pathname) return;
+        
+        const isPaquetesMainPage = pathname === `/${studioSlug}/studio/commercial/paquetes` || pathname.endsWith('/paquetes');
+        const wasOnEditPage = prevPathnameRef.current?.includes('/paquetes/nuevo') || 
+                              prevPathnameRef.current?.includes('/paquetes/editar') ||
+                              (prevPathnameRef.current?.includes('/paquetes/') && prevPathnameRef.current !== pathname);
+        
+        if (isPaquetesMainPage && wasOnEditPage && prevPathnameRef.current) {
+            // Se volvió de una página de creación/edición, recargar datos
+            console.log('[PaquetesWrapper] Recargando datos después de crear/editar paquete');
+            cargarDatos();
+        }
+        
+        prevPathnameRef.current = pathname;
+    }, [pathname, cargarDatos, studioSlug]);
 
 
 

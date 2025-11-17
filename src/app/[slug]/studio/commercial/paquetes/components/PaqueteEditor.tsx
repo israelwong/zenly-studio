@@ -31,6 +31,7 @@ export function PaqueteEditor({ studioSlug, mode, paquete, initialEventTypeId }:
     };
 
     const handleSave = (savedPaquete: PaqueteFromDB) => {
+        // Redirigir a la página principal - PaquetesWrapper detectará el cambio y recargará datos
         router.push(`/${studioSlug}/studio/commercial/paquetes`);
     };
 

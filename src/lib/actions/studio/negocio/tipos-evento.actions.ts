@@ -28,11 +28,13 @@ async function getStudioIdFromSlug(studioSlug: string): Promise<string | null> {
 
 /**
  * Revalidar rutas relacionadas con tipos de evento
+ * Nota: Se comenta para evitar refresh completo - el estado local se actualiza en el componente
  */
 function revalidateTiposEvento(studioSlug: string) {
-    revalidatePath(`/${studioSlug}/configuracion/negocio/tipos-evento`);
-    revalidatePath(`/${slug}/studio/commercial/catalogo`);
-    revalidatePath(`/${studioSlug}/commercial/catalogo`);
+    // No revalidar - el estado local se actualiza en el componente
+    // revalidatePath(`/${studioSlug}/configuracion/negocio/tipos-evento`);
+    // revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
+    // revalidatePath(`/${studioSlug}/commercial/catalogo`);
 }
 
 /**
