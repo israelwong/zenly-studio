@@ -146,6 +146,25 @@ export function UtilidadTab({ studioSlug }: UtilidadTabProps) {
         const cleaned = parts.length > 2
             ? parts[0] + '.' + parts.slice(1).join('')
             : onlyNumbers;
+
+        // Validaciones específicas por campo
+        const numValue = parseFloat(cleaned);
+
+        if (cleaned && !isNaN(numValue)) {
+            // Utilidad servicio y producto: máximo 3 dígitos (999)
+            if ((field === 'utilidad_servicio' || field === 'utilidad_producto')) {
+                const integerPart = cleaned.split('.')[0];
+                if (integerPart.length > 3) {
+                    return; // No actualizar si excede 3 dígitos
+                }
+            }
+
+            // Comisión de venta y sobreprecio: máximo 100
+            if ((field === 'comision_venta' || field === 'sobreprecio') && numValue > 100) {
+                return; // No actualizar si excede 100
+            }
+        }
+
         setConfig(prev => ({ ...prev, [field]: cleaned || undefined }));
     };
 
