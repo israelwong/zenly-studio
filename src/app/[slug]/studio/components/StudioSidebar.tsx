@@ -9,6 +9,7 @@ import {
 import { SidebarHeader } from '@/components/shared/sidebar';
 import { ActiveLink } from './ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
+import { useStudioData } from '@/hooks/useStudioData';
 import {
     Camera, CreditCard, File, Store, Package,
     Briefcase, Users, Sparkles, Mail, ImageIcon, FileText, UserCheck,
@@ -31,10 +32,17 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
         setExpandedGroup(prev => prev === groupId ? null : groupId);
     };
 
-    // Datos mock para el sidebar (en una implementación real, estos vendrían de props o context)
-    const studio = {
-        id: 'temp-id',
-        studio_name: 'Mi Estudio',
+    // Obtener datos del studio desde la base de datos
+    const { identidadData, loading } = useStudioData({ studioSlug });
+
+    // Preparar datos del studio para SidebarHeader
+    const studio = identidadData ? {
+        id: identidadData.id,
+        studio_name: identidadData.studio_name,
+        slug: identidadData.slug
+    } : {
+        id: '',
+        studio_name: 'Cargando...',
         slug: studioSlug
     };
 
@@ -137,6 +145,7 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
 
     return (
         <ZenSidebar className={`${className} ${isOpen ? '' : 'hidden lg:block'}`}>
+            
             <SidebarHeader studioData={studio} onToggleSidebar={toggleSidebar} />
 
             <ZenSidebarContent className="px-4">
