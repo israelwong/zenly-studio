@@ -11,7 +11,7 @@ import { ActiveLink } from './ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
 import { useStudioData } from '@/hooks/useStudioData';
 import {
-    Camera, CreditCard, File, Store, Package,
+    CreditCard, File, Store, Package,
     Briefcase, Users, Sparkles, Mail, ImageIcon, FileText, UserCheck,
     ChevronDown, ChevronRight, UserCog, DollarSign, ShoppingCart, MessageSquare
 } from 'lucide-react';
@@ -145,22 +145,11 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
 
     return (
         <ZenSidebar className={`${className} ${isOpen ? '' : 'hidden lg:block'}`}>
-            
+
             <SidebarHeader studioData={studio} onToggleSidebar={toggleSidebar} />
 
             <ZenSidebarContent className="px-4">
                 <ZenSidebarMenu>
-                    {/* Link a Profile Editor */}
-                    <div className="px-4 py-2 mb-3">
-                        <Link
-                            href={`/${studioSlug}/profile/edit`}
-                            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/30 transition-all duration-200 rounded-md border border-zinc-700/50"
-                        >
-                            <Camera className="w-4 h-4 text-zinc-400" />
-                            <span>Editor de Perfil Público</span>
-                        </Link>
-                    </div>
-
                     {/* Sección Studio */}
                     <div className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800/50 mb-3">Studio</div>
 
