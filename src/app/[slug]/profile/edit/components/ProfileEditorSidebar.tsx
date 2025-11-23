@@ -10,9 +10,8 @@ import { ActiveLink } from '@/app/[slug]/studio/components/ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
 import {
     Camera, X, Newspaper, Grid3X3, HelpCircle, Star, Share2, Phone, Calendar,
-    Navigation, MapPin, ChevronDown, ChevronRight, Eye
+    Navigation, MapPin, ChevronDown, ChevronRight
 } from 'lucide-react';
-import Link from 'next/link';
 
 interface ProfileEditorSidebarProps {
     className?: string;
@@ -99,19 +98,6 @@ export function ProfileEditorSidebar({ className, studioSlug }: ProfileEditorSid
 
             <ZenSidebarContent className="px-4">
                 <ZenSidebarMenu>
-                    {/* Link a Ver Perfil Público */}
-                    <div className="px-4 py-2 mb-3">
-                        <Link
-                            href={`/${studioSlug}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/30 transition-all duration-200 rounded-md border border-zinc-700/50"
-                        >
-                            <Eye className="w-4 h-4 text-zinc-400" />
-                            <span>Ver Perfil Público</span>
-                        </Link>
-                    </div>
-
                     {navItems.map(group => (
                         <CollapsibleGroup key={group.id} group={group}>
                             {group.items.map(item => (

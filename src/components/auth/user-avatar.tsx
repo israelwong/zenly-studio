@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LogOut, Settings, CreditCard, UserCircle, Rocket, LayoutDashboard, Shield, Camera, Eye } from "lucide-react";
+import { LogOut, Settings, CreditCard, UserCircle, Rocket, LayoutDashboard, Shield, Camera, Eye, Edit } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -129,13 +129,16 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
 
     // Determinar rutas basadas en la ruta actual
     const isInConfiguracion = pathname.includes('/configuracion');
+    const isInProfileEdit = pathname.includes('/profile/edit');
+    const isInStudio = pathname.includes('/studio');
     const basePath = studioSlug ? `/${studioSlug}/studio` : '';
     const profilePath = studioSlug ? `/${studioSlug}/profile/edit` : '';
 
     // Rutas del menú
     const menuRoutes = {
-        perfilPublico: `${profilePath}/content/posts`,
+        editorPerfil: profilePath,
         verPerfilPublico: studioSlug ? `/${studioSlug}` : '',
+        studio: `${basePath}/dashboard`,
         perfil: `${basePath}/account/perfil`,
         seguridad: `${basePath}/account/seguridad`,
         suscripcion: `${basePath}/account/suscripcion`,
@@ -185,32 +188,67 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
 
                 <ZenDropdownMenuSeparator />
 
-                {/* Gestionar */}
-                <div className="px-2 py-1.5">
-                    <div className="text-xs font-medium text-zinc-400">Gestionar</div>
-                </div>
-
+                {/* Perfil Público */}
                 {studioSlug && (
                     <>
+                        <div className="px-2 py-1.5">
+                            <div className="text-xs font-medium text-zinc-400">Perfil Público</div>
+                        </div>
+                        {!isInProfileEdit && (
+                            <ZenDropdownMenuItem className="cursor-pointer" asChild>
+                                <Link href={menuRoutes.editorPerfil}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    <span>Editor de Perfil</span>
+                                </Link>
+                            </ZenDropdownMenuItem>
+                        )}
                         <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                            <Link href={menuRoutes.perfilPublico}>
-                                <Camera className="mr-2 h-4 w-4" />
-                                <span>Mi Perfil Público</span>
-                            </Link>
-                        </ZenDropdownMenuItem>
-                        <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                            <Link href={menuRoutes.verPerfilPublico}>
+                            <Link href={menuRoutes.verPerfilPublico} target="_blank" rel="noopener noreferrer">
                                 <Eye className="mr-2 h-4 w-4" />
                                 <span>Ver Perfil Público</span>
                             </Link>
                         </ZenDropdownMenuItem>
+                        <ZenDropdownMenuSeparator />
                     </>
                 )}
+
+                {/* Studio */}
+                {studioSlug && (
+                    <>
+                        <div className="px-2 py-1.5">
+                            <div className="text-xs font-medium text-zinc-400">Studio</div>
+                        </div>
+                        <ZenDropdownMenuItem className="cursor-pointer" asChild>
+                            <Link href={menuRoutes.studio}>
+                                <LayoutDashboard className="mr-2 h-4 w-4" />
+                                <span>Dashboard</span>
+                            </Link>
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuItem className="cursor-pointer" asChild>
+                            <Link href={menuRoutes.builder}>
+                                <Rocket className="mr-2 h-4 w-4" />
+                                <span>Studio Builder</span>
+                            </Link>
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuItem className="cursor-pointer" asChild>
+                            <Link href={menuRoutes.configuracion}>
+                                <Settings className="mr-2 h-4 w-4" />
+                                <span>Configuración</span>
+                            </Link>
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuSeparator />
+                    </>
+                )}
+
+                {/* Cuenta */}
+                <div className="px-2 py-1.5">
+                    <div className="text-xs font-medium text-zinc-400">Cuenta</div>
+                </div>
 
                 <ZenDropdownMenuItem className="cursor-pointer" asChild>
                     <Link href={menuRoutes.perfil}>
                         <UserCircle className="mr-2 h-4 w-4" />
-                        <span>Account</span>
+                        <span>Perfil</span>
                     </Link>
                 </ZenDropdownMenuItem>
 
@@ -225,34 +263,6 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
                     <Link href={menuRoutes.suscripcion}>
                         <CreditCard className="mr-2 h-4 w-4" />
                         <span>Suscripción</span>
-                    </Link>
-                </ZenDropdownMenuItem>
-
-                <ZenDropdownMenuSeparator />
-
-                {/* Espacio de Trabajo */}
-                <div className="px-2 py-1.5">
-                    <div className="text-xs font-medium text-zinc-400">Espacio de Trabajo</div>
-                </div>
-
-                <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                    <Link href={`/${studioSlug}/studio/dashboard`}>
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        <span>Dashboard</span>
-                    </Link>
-                </ZenDropdownMenuItem>
-
-                <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                    <Link href={menuRoutes.builder}>
-                        <Rocket className="mr-2 h-4 w-4" />
-                        <span>Studio Builder</span>
-                    </Link>
-                </ZenDropdownMenuItem>
-
-                <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                    <Link href={menuRoutes.configuracion}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        <span>Configuración</span>
                     </Link>
                 </ZenDropdownMenuItem>
 

@@ -23,28 +23,6 @@ interface StudioSidebarProps {
 export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
     const { isOpen, toggleSidebar } = useZenSidebar();
 
-    // Estado para grupo expandido (solo uno a la vez) - Ninguno expandido por defecto
-    const [expandedGroup, setExpandedGroup] = React.useState<string | null>(null);
-
-    // Función para toggle de grupos (solo uno expandido)
-    const toggleGroup = (groupId: string) => {
-        setExpandedGroup(prev => prev === groupId ? null : groupId);
-    };
-
-    // Obtener datos del studio desde la base de datos
-    const { identidadData, loading } = useStudioData({ studioSlug });
-
-    // Preparar datos del studio para SidebarHeader
-    const studio = identidadData ? {
-        id: identidadData.id,
-        studio_name: identidadData.studio_name,
-        slug: identidadData.slug
-    } : {
-        id: '',
-        studio_name: 'Cargando...',
-        slug: studioSlug
-    };
-
     // Configuración de navegación modular según Plan Maestro ZEN
     // Nota: Profile y Content ahora están en /profile/edit/ con su propio sidebar
     const builderNavItems = [
@@ -69,10 +47,10 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             icon: Briefcase,
             items: [
                 { id: 'events', name: 'Events', href: `/business/events`, icon: FileText },
-                { id: 'payments', name: 'Pagos', href: `/business/pagos`, icon: CreditCard },
+                // { id: 'payments', name: 'Pagos', href: `/business/pagos`, icon: CreditCard },
                 { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
                 { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
-                { id: 'contratos', name: 'Contratos', href: `/business/contratos`, icon: FileText },
+                // { id: 'contratos', name: 'Contratos', href: `/business/contratos`, icon: FileText },
             ],
         },
 
@@ -85,7 +63,7 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
                 { id: 'planning', name: 'Planning', href: `/business/planning`, icon: FileText },
                 { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
                 { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
-                { id: 'portal', name: 'Portal Cliente*', href: `/portal-cliente`, icon: UserCheck },
+                // { id: 'portal', name: 'Portal Cliente*', href: `/portal-cliente`, icon: UserCheck },
             ],
         },
 
@@ -101,12 +79,44 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
 
     ];
 
+    // Estado para grupos expandidos - Todos expandidos por defecto
+    const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(
+        new Set(builderNavItems.map(group => group.id))
+    );
+
+    // Función para toggle de grupos (permite múltiples expandidos)
+    const toggleGroup = (groupId: string) => {
+        setExpandedGroups(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(groupId)) {
+                newSet.delete(groupId);
+            } else {
+                newSet.add(groupId);
+            }
+            return newSet;
+        });
+    };
+
+    // Obtener datos del studio desde la base de datos
+    const { identidadData, loading } = useStudioData({ studioSlug });
+
+    // Preparar datos del studio para SidebarHeader
+    const studio = identidadData ? {
+        id: identidadData.id,
+        studio_name: identidadData.studio_name,
+        slug: identidadData.slug
+    } : {
+        id: '',
+        studio_name: 'Cargando...',
+        slug: studioSlug
+    };
+
     // Componente para grupo colapsible con estructura de árbol
     const CollapsibleGroup = ({ group, children }: {
         group: { id: string; title: string; icon: React.ComponentType<{ className?: string }> },
         children: React.ReactNode
     }) => {
-        const isExpanded = expandedGroup === group.id;
+        const isExpanded = expandedGroups.has(group.id);
 
         return (
             <div className="mb-3">
