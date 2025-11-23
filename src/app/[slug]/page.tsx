@@ -1,7 +1,7 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import { getStudioProfileBySlug } from '@/lib/actions/public/profile.actions';
-import { ProfilePageClient } from './perfil/ProfilePageClient';
+import { ProfilePageClient } from './public-profile/ProfilePageClient';
 import { Metadata } from 'next';
 
 interface PublicProfilePageProps {
