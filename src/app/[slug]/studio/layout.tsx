@@ -7,7 +7,6 @@ import { ContactsSheetProvider } from '@/components/shared/contacts/ContactsShee
 import { SessionTimeoutProvider } from '@/components/providers/SessionTimeoutProvider';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 import { StudioInitializer } from '@/components/studio/StudioInitializer';
-import { obtenerConfiguracionesSeguridad } from '@/lib/actions/studio/account/seguridad/seguridad.actions';
 import { Toaster } from 'sonner';
 
 export default async function StudioLayout({
@@ -19,9 +18,10 @@ export default async function StudioLayout({
 }) {
     const { slug } = await params;
 
-    // Obtener configuración de timeout
+    // Obtener configuración de timeout usando importación dinámica
     let sessionTimeout = 30; // Default 30 minutos
     try {
+        const { obtenerConfiguracionesSeguridad } = await import('@/lib/actions/studio/account/seguridad/seguridad.actions');
         const settings = await obtenerConfiguracionesSeguridad(slug);
         if (settings?.session_timeout) {
             sessionTimeout = settings.session_timeout;
