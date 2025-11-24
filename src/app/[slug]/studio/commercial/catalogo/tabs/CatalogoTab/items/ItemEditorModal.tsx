@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSwitch } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/shadcn/sheet";
@@ -12,6 +12,7 @@ import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/catalogo/utili
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useStorageTracking } from "@/hooks/useStorageTracking";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
+import { useConfiguracionPreciosUpdateListener } from "@/hooks/useConfiguracionPreciosRefresh";
 import {
     crearItem,
     actualizarItem,
@@ -158,6 +159,60 @@ export function ItemEditorModal({
 
         cargarConfiguracion();
     }, [studioSlug, preciosConfig, configuracion]);
+
+    // Función helper para parsear valores de configuración
+    const parseConfigValue = (val: string | undefined, def: number): number => {
+        if (val === undefined || val === '') return def;
+        const parsed = parseFloat(val);
+        return isNaN(parsed) ? def : parsed;
+    };
+
+    // Función helper para convertir configuración de string a número
+    const convertirConfiguracion = (config: {
+        utilidad_servicio?: string;
+        utilidad_producto?: string;
+        comision_venta?: string;
+        sobreprecio?: string;
+    }): ConfiguracionPrecios => {
+        return {
+            utilidad_servicio: parseConfigValue(config.utilidad_servicio, 0.30),
+            utilidad_producto: parseConfigValue(config.utilidad_producto, 0.40),
+            comision_venta: parseConfigValue(config.comision_venta, 0.10),
+            sobreprecio: parseConfigValue(config.sobreprecio, 0.05),
+        };
+    };
+
+    // Actualizar configuración cuando cambia la prop preciosConfig
+    useEffect(() => {
+        if (preciosConfig) {
+            setConfiguracion(preciosConfig);
+        }
+    }, [preciosConfig]);
+
+    // Escuchar actualizaciones de configuración de precios desde otros componentes
+    useConfiguracionPreciosUpdateListener(studioSlug, useCallback(async (eventDetail) => {
+        if (eventDetail) {
+            // Si viene la configuración completa en el evento, usarla directamente
+            if (eventDetail.utilidad_servicio !== undefined || eventDetail.utilidad_producto !== undefined) {
+                setConfiguracion(prev => ({
+                    utilidad_servicio: eventDetail.utilidad_servicio ?? prev?.utilidad_servicio ?? 0.30,
+                    utilidad_producto: eventDetail.utilidad_producto ?? prev?.utilidad_producto ?? 0.40,
+                    comision_venta: eventDetail.comision_venta ?? prev?.comision_venta ?? 0.10,
+                    sobreprecio: eventDetail.sobreprecio ?? prev?.sobreprecio ?? 0.05,
+                }));
+            } else {
+                // Si no viene completa, recargar desde el servidor
+                try {
+                    const config = await obtenerConfiguracionPrecios(studioSlug);
+                    if (config) {
+                        setConfiguracion(convertirConfiguracion(config));
+                    }
+                } catch (error) {
+                    console.error("Error recargando configuración de precios:", error);
+                }
+            }
+        }
+    }, [studioSlug]));
 
     // Cálculo dinámico de precios
     const resultadoPrecio: ResultadoPrecio = useMemo(() => {

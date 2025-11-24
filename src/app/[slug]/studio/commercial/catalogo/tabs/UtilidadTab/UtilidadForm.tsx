@@ -69,19 +69,19 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
             const configResult = await obtenerConfiguracionPrecios(studioSlug);
 
             if (configResult) {
-                // Convertir valores de decimal (0.10) a porcentaje (10) para mostrar en UI
+                // Convertir valores de decimal (0.10) a porcentaje entero (10) para mostrar en UI
                 const loadedConfig = {
                     utilidad_servicio: configResult.utilidad_servicio
-                        ? String(parseFloat(configResult.utilidad_servicio) * 100)
+                        ? String(Math.round(parseFloat(configResult.utilidad_servicio) * 100))
                         : undefined,
                     utilidad_producto: configResult.utilidad_producto
-                        ? String(parseFloat(configResult.utilidad_producto) * 100)
+                        ? String(Math.round(parseFloat(configResult.utilidad_producto) * 100))
                         : undefined,
                     comision_venta: configResult.comision_venta
-                        ? String(parseFloat(configResult.comision_venta) * 100)
+                        ? String(Math.round(parseFloat(configResult.comision_venta) * 100))
                         : undefined,
                     sobreprecio: configResult.sobreprecio
-                        ? String(parseFloat(configResult.sobreprecio) * 100)
+                        ? String(Math.round(parseFloat(configResult.sobreprecio) * 100))
                         : undefined,
                 };
                 setConfig(loadedConfig);
@@ -147,22 +147,16 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
     };
 
     const handleInputChange = (field: 'utilidad_servicio' | 'utilidad_producto' | 'comision_venta' | 'sobreprecio', value: string) => {
-        // Permitir números y punto decimal (valores en porcentaje: 10, 30.5, etc.)
-        const onlyNumbers = value.replace(/[^0-9.]/g, '');
-        // Evitar múltiples puntos decimales
-        const parts = onlyNumbers.split('.');
-        const cleaned = parts.length > 2
-            ? parts[0] + '.' + parts.slice(1).join('')
-            : onlyNumbers;
+        // Solo permitir números enteros (sin punto decimal)
+        const onlyNumbers = value.replace(/[^0-9]/g, '');
 
         // Validaciones específicas por campo
-        const numValue = parseFloat(cleaned);
+        const numValue = parseInt(onlyNumbers, 10);
 
-        if (cleaned && !isNaN(numValue)) {
+        if (onlyNumbers && !isNaN(numValue)) {
             // Utilidad servicio y producto: máximo 3 dígitos (999)
             if ((field === 'utilidad_servicio' || field === 'utilidad_producto')) {
-                const integerPart = cleaned.split('.')[0];
-                if (integerPart.length > 3) {
+                if (onlyNumbers.length > 3) {
                     return; // No actualizar si excede 3 dígitos
                 }
             }
@@ -173,7 +167,7 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
             }
         }
 
-        setConfig(prev => ({ ...prev, [field]: cleaned || undefined }));
+        setConfig(prev => ({ ...prev, [field]: onlyNumbers || undefined }));
     };
 
     const handleRestore = () => {
@@ -225,7 +219,7 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
                             <ZenInput
                                 label="Utilidad Servicios"
                                 type="text"
-                                inputMode="decimal"
+                                inputMode="numeric"
                                 value={config.utilidad_servicio || ''}
                                 onChange={(e) => handleInputChange('utilidad_servicio', e.target.value)}
                                 placeholder="0"
@@ -236,7 +230,7 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
                             <ZenInput
                                 label="Utilidad Productos"
                                 type="text"
-                                inputMode="decimal"
+                                inputMode="numeric"
                                 value={config.utilidad_producto || ''}
                                 onChange={(e) => handleInputChange('utilidad_producto', e.target.value)}
                                 placeholder="0"
@@ -250,7 +244,7 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
                             <ZenInput
                                 label="Comisión de Venta"
                                 type="text"
-                                inputMode="decimal"
+                                inputMode="numeric"
                                 value={config.comision_venta || ''}
                                 onChange={(e) => handleInputChange('comision_venta', e.target.value)}
                                 placeholder="0"
@@ -261,7 +255,7 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
                             <ZenInput
                                 label="Sobreprecio / Descuento"
                                 type="text"
-                                inputMode="decimal"
+                                inputMode="numeric"
                                 value={config.sobreprecio || ''}
                                 onChange={(e) => handleInputChange('sobreprecio', e.target.value)}
                                 placeholder="0"
