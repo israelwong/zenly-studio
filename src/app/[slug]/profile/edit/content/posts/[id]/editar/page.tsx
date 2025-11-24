@@ -1,4 +1,4 @@
-import { PostEditor } from "@/app/[slug]/studio/components/SectionLayout/PostEditor";
+import { PostEditor } from "../../components/PostEditor";
 import { obtenerTiposEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 import { getStudioPostById } from "@/lib/actions/studio/posts";
 import { notFound } from "next/navigation";

@@ -1,4 +1,4 @@
-import { PortfolioEditor } from "@/app/[slug]/studio/components/SectionLayout/PortfolioEditor";
+import { PortfolioEditor } from "../../components/PortfolioEditor";
 import { getStudioPortfolioById } from "@/lib/actions/studio/portfolios/portfolios.actions";
 import { notFound } from "next/navigation";
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
