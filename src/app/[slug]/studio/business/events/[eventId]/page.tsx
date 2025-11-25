@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Loader2 } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
-import { obtenerEventoDetalle, cancelarEvento, getEventPipelineStages, moveEvent } from '@/lib/actions/studio/business/events';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
+import { obtenerEventoDetalle, cancelarEvento, getEventPipelineStages, moveEvent, obtenerCotizacionesAutorizadasCount, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
+import { EventCardView } from '../components/EventCardView';
 import { toast } from 'sonner';
 
 export default function EventDetailPage() {
@@ -17,20 +18,10 @@ export default function EventDetailPage() {
   const [pipelineStages, setPipelineStages] = useState<EventPipelineStage[]>([]);
   const [currentPipelineStageId, setCurrentPipelineStageId] = useState<string | null>(null);
   const [isChangingStage, setIsChangingStage] = useState(false);
-  const [eventData, setEventData] = useState<{
-    id: string;
-    name: string | null;
-    event_date: Date;
-    address: string | null;
-    sede: string | null;
-    status: string;
-    contract_value: number | null;
-    paid_amount: number;
-    pending_amount: number;
-    contact_id: string;
-    event_type_id: string | null;
-    stage_id: string | null;
-  } | null>(null);
+  const [eventData, setEventData] = useState<EventoDetalle | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cotizacionesCount, setCotizacionesCount] = useState(0);
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -39,21 +30,14 @@ export default function EventDetailPage() {
         const result = await obtenerEventoDetalle(studioSlug, eventId);
 
         if (result.success && result.data) {
-          setEventData({
-            id: result.data.id,
-            name: result.data.name,
-            event_date: result.data.event_date,
-            address: result.data.address,
-            sede: result.data.sede,
-            status: result.data.status,
-            contract_value: result.data.contract_value,
-            paid_amount: result.data.paid_amount,
-            pending_amount: result.data.pending_amount,
-            contact_id: result.data.contact_id,
-            event_type_id: result.data.event_type_id,
-            stage_id: result.data.stage_id,
-          });
+          setEventData(result.data);
           setCurrentPipelineStageId(result.data.stage_id);
+
+          // Obtener número de cotizaciones autorizadas asociadas al evento
+          const countResult = await obtenerCotizacionesAutorizadasCount(studioSlug, eventId);
+          if (countResult.success && countResult.count !== undefined) {
+            setCotizacionesCount(countResult.count);
+          }
         } else {
           toast.error(result.error || 'Evento no encontrado');
           router.push(`/${studioSlug}/studio/business/events`);
@@ -103,20 +87,7 @@ export default function EventDetailPage() {
         // Recargar datos del evento
         const eventResult = await obtenerEventoDetalle(studioSlug, eventId);
         if (eventResult.success && eventResult.data) {
-          setEventData({
-            id: eventResult.data.id,
-            name: eventResult.data.name,
-            event_date: eventResult.data.event_date,
-            address: eventResult.data.address,
-            sede: eventResult.data.sede,
-            status: eventResult.data.status,
-            contract_value: eventResult.data.contract_value,
-            paid_amount: eventResult.data.paid_amount,
-            pending_amount: eventResult.data.pending_amount,
-            contact_id: eventResult.data.contact_id,
-            event_type_id: eventResult.data.event_type_id,
-            stage_id: eventResult.data.stage_id,
-          });
+          setEventData(eventResult.data);
         }
       } else {
         toast.error(result.error || 'Error al cambiar etapa');
@@ -129,18 +100,28 @@ export default function EventDetailPage() {
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancelClick = () => {
+    setShowCancelModal(true);
+  };
+
+  const handleCancelConfirm = async () => {
+    setIsCancelling(true);
     try {
       const result = await cancelarEvento(studioSlug, eventId);
       if (result.success) {
         toast.success('Evento cancelado correctamente');
+        setShowCancelModal(false);
         router.push(`/${studioSlug}/studio/business/events`);
       } else {
         toast.error(result.error || 'Error al cancelar evento');
+        setShowCancelModal(false);
       }
     } catch (error) {
       console.error('Error cancelando evento:', error);
       toast.error('Error al cancelar evento');
+      setShowCancelModal(false);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -246,7 +227,7 @@ export default function EventDetailPage() {
                   {eventData.status !== 'CANCELLED' && (
                     <>
                       <ZenDropdownMenuItem
-                        onClick={handleCancel}
+                        onClick={handleCancelClick}
                         className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
                       >
                         Cancelar evento
@@ -260,50 +241,39 @@ export default function EventDetailPage() {
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-medium text-zinc-400 mb-2">Fecha del evento</h3>
-                <p className="text-white">
-                  {new Date(eventData.event_date).toLocaleDateString('es-MX', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
-              </div>
-              {eventData.address && (
-                <div>
-                  <h3 className="text-sm font-medium text-zinc-400 mb-2">Dirección</h3>
-                  <p className="text-white">{eventData.address}</p>
-                </div>
-              )}
-              {eventData.contract_value && (
-                <div>
-                  <h3 className="text-sm font-medium text-zinc-400 mb-2">Monto contratado</h3>
-                  <p className="text-white">
-                    ${eventData.contract_value.toLocaleString('es-MX', {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    })}
-                  </p>
-                </div>
-              )}
-              {eventData.paid_amount > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-zinc-400 mb-2">Pagado</h3>
-                  <p className="text-white">
-                    ${eventData.paid_amount.toLocaleString('es-MX', {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    })} ({eventData.contract_value ? ((eventData.paid_amount / eventData.contract_value) * 100).toFixed(0) : 0}%)
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+          <EventCardView
+            studioSlug={studioSlug}
+            eventId={eventId}
+            eventData={eventData}
+            onEventUpdated={async () => {
+              const result = await obtenerEventoDetalle(studioSlug, eventId);
+              if (result.success && result.data) {
+                setEventData(result.data);
+              }
+            }}
+          />
         </ZenCardContent>
       </ZenCard>
+
+      <ZenConfirmModal
+        isOpen={showCancelModal}
+        onClose={() => {
+          if (!isCancelling) {
+            setShowCancelModal(false);
+          }
+        }}
+        onConfirm={handleCancelConfirm}
+        title="Cancelar Evento"
+        description={
+          cotizacionesCount > 0
+            ? `Se cancelarán todas las cotizaciones asociadas a este evento (${cotizacionesCount} cotización${cotizacionesCount > 1 ? 'es' : ''}). Las cotizaciones no se eliminarán, solo cambiarán su estado a "cancelada".`
+            : '¿Estás seguro de cancelar este evento?'
+        }
+        confirmText="Cancelar evento"
+        cancelText="No cancelar"
+        variant="destructive"
+        loading={isCancelling}
+      />
     </div>
   );
 }

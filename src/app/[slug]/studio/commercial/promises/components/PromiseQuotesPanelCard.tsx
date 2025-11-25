@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore } from 'lucide-react';
+import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ZenBadge,
@@ -25,6 +25,8 @@ import {
   unarchiveCotizacion,
   duplicateCotizacion,
   updateCotizacionName,
+  cancelarCotizacion,
+  cancelarCotizacionYEvento,
   type CotizacionListItem,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
@@ -63,6 +65,7 @@ export function PromiseQuotesPanelCard({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState(cotizacion.name);
@@ -325,6 +328,52 @@ export function PromiseQuotesPanelCard({
     router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/autorizar`);
   };
 
+  const handleCancelOnly = async () => {
+    isProcessingRef.current = true;
+    setLoading(true);
+    try {
+      const result = await cancelarCotizacion(studioSlug, cotizacion.id);
+      if (result.success) {
+        toast.success('Cotización cancelada exitosamente');
+        setShowCancelModal(false);
+        onUpdate?.();
+      } else {
+        toast.error(result.error || 'Error al cancelar cotización');
+        setShowCancelModal(false);
+      }
+    } catch {
+      toast.error('Error al cancelar cotización');
+      setShowCancelModal(false);
+    } finally {
+      setLoading(false);
+      isProcessingRef.current = false;
+    }
+  };
+
+  const handleCancelWithEvent = async () => {
+    isProcessingRef.current = true;
+    setLoading(true);
+    try {
+      const result = await cancelarCotizacionYEvento(studioSlug, cotizacion.id);
+      if (result.success) {
+        toast.success('Cotización y evento cancelados exitosamente');
+        setShowCancelModal(false);
+        onUpdate?.();
+      } else {
+        toast.error(result.error || 'Error al cancelar cotización y evento');
+        setShowCancelModal(false);
+      }
+    } catch {
+      toast.error('Error al cancelar cotización y evento');
+      setShowCancelModal(false);
+    } finally {
+      setLoading(false);
+      isProcessingRef.current = false;
+    }
+  };
+
+  const isAuthorized = cotizacion.status === 'aprobada' || cotizacion.status === 'autorizada';
+
   return (
     <>
       <div
@@ -495,17 +544,31 @@ export function PromiseQuotesPanelCard({
                       Editar nombre
                     </ZenDropdownMenuItem>
                     <ZenDropdownMenuSeparator />
-                    <ZenDropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAuthorize();
-                      }}
-                      disabled={loading || isDuplicating || isEditingName || !promiseId}
-                      className="text-emerald-400 focus:text-emerald-300"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Autorizar
-                    </ZenDropdownMenuItem>
+                    {isAuthorized ? (
+                      <ZenDropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowCancelModal(true);
+                        }}
+                        disabled={loading || isDuplicating || isEditingName}
+                        className="text-red-400 focus:text-red-300"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Cancelar
+                      </ZenDropdownMenuItem>
+                    ) : (
+                      <ZenDropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAuthorize();
+                        }}
+                        disabled={loading || isDuplicating || isEditingName || !promiseId}
+                        className="text-emerald-400 focus:text-emerald-300"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Autorizar
+                      </ZenDropdownMenuItem>
+                    )}
                     <ZenDropdownMenuSeparator />
                     <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating || isEditingName}>
                       <Copy className="h-4 w-4 mr-2" />
@@ -588,6 +651,50 @@ export function PromiseQuotesPanelCard({
         variant="default"
         loading={loading}
       />
+
+      {/* Modal de cancelación con dos opciones */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-2">Cancelar Cotización</h3>
+            <p className="text-sm text-zinc-400 mb-6">
+              Esta cotización está autorizada. ¿Qué deseas hacer?
+            </p>
+            <div className="flex flex-col gap-3">
+              <ZenButton
+                variant="outline"
+                onClick={handleCancelOnly}
+                disabled={loading}
+                className="w-full justify-start"
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Cancelar solo la cotización
+              </ZenButton>
+              <ZenButton
+                variant="destructive"
+                onClick={handleCancelWithEvent}
+                disabled={loading}
+                className="w-full justify-start"
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Cancelar cotización y evento
+              </ZenButton>
+              <ZenButton
+                variant="ghost"
+                onClick={() => {
+                  if (!isProcessingRef.current) {
+                    setShowCancelModal(false);
+                  }
+                }}
+                disabled={loading}
+                className="w-full"
+              >
+                Cancelar
+              </ZenButton>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

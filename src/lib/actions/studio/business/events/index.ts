@@ -4,6 +4,7 @@ export {
   cancelarEvento,
   getEvents,
   moveEvent,
+  obtenerCotizacionesAutorizadasCount,
 } from './events.actions';
 
 export {

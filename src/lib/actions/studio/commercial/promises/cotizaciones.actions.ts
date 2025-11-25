@@ -1435,3 +1435,191 @@ export async function autorizarCotizacion(
   }
 }
 
+/**
+ * Cancela solo una cotización autorizada/aprobada
+ * - Cambia status a "cancelada"
+ * - Libera evento_id si existe
+ */
+export async function cancelarCotizacion(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<CotizacionResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        promise: {
+          studio_id: studio.id,
+        },
+      },
+      include: {
+        evento: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    // Solo se pueden cancelar cotizaciones autorizadas o aprobadas
+    if (cotizacion.status !== 'aprobada' && cotizacion.status !== 'autorizada') {
+      return { success: false, error: 'Solo se pueden cancelar cotizaciones autorizadas o aprobadas' };
+    }
+
+    await prisma.studio_cotizaciones.update({
+      where: { id: cotizacionId },
+      data: {
+        status: 'cancelada',
+        evento_id: null, // Liberar relación con evento
+        updated_at: new Date(),
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return {
+      success: true,
+      data: {
+        id: cotizacion.id,
+        name: cotizacion.name,
+      },
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error cancelando cotización:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cancelar cotización',
+    };
+  }
+}
+
+/**
+ * Cancela una cotización y elimina el evento asociado
+ * - Cancela la cotización
+ * - Elimina el evento si existe y no tiene otras cotizaciones autorizadas
+ */
+export async function cancelarCotizacionYEvento(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<CotizacionResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        promise: {
+          studio_id: studio.id,
+        },
+      },
+      include: {
+        evento: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    // Solo se pueden cancelar cotizaciones autorizadas o aprobadas
+    if (cotizacion.status !== 'aprobada' && cotizacion.status !== 'autorizada') {
+      return { success: false, error: 'Solo se pueden cancelar cotizaciones autorizadas o aprobadas' };
+    }
+
+    const eventoId = cotizacion.evento_id;
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Cancelar cotización
+      await tx.studio_cotizaciones.update({
+        where: { id: cotizacionId },
+        data: {
+          status: 'cancelada',
+          evento_id: null,
+          updated_at: new Date(),
+        },
+      });
+
+      // 2. Si hay evento asociado, verificar si tiene otras cotizaciones autorizadas
+      if (eventoId) {
+        const otrasCotizacionesAutorizadas = await tx.studio_cotizaciones.findFirst({
+          where: {
+            evento_id: eventoId,
+            id: { not: cotizacionId },
+            status: {
+              in: ['aprobada', 'autorizada'],
+            },
+          },
+        });
+
+        // Solo eliminar evento si no tiene otras cotizaciones autorizadas
+        if (!otrasCotizacionesAutorizadas) {
+          // Eliminar agendamiento asociado al evento
+          await tx.studio_agenda.deleteMany({
+            where: {
+              evento_id: eventoId,
+            },
+          });
+
+          // Eliminar evento
+          await tx.studio_events.delete({
+            where: { id: eventoId },
+          });
+        }
+      }
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+    if (eventoId) {
+      revalidatePath(`/${studioSlug}/studio/business/events`);
+      revalidatePath(`/${studioSlug}/studio/business/events/${eventoId}`);
+    }
+    revalidatePath(`/${studioSlug}/studio/dashboard/agenda`);
+
+    return {
+      success: true,
+      data: {
+        id: cotizacion.id,
+        name: cotizacion.name,
+      },
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error cancelando cotización y evento:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cancelar cotización y evento',
+    };
+  }
+}
+
