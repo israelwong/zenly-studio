@@ -2,10 +2,10 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MapPin, CreditCard, Phone } from 'lucide-react';
+import { Calendar, MapPin, CreditCard } from 'lucide-react';
 import type { EventWithContact } from '@/lib/actions/schemas/events-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
-import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 
 interface EventKanbanCardProps {
   event: EventWithContact;
@@ -75,15 +75,14 @@ export function EventKanbanCard({ event, onClick, studioSlug }: EventKanbanCardP
             </ZenAvatarFallback>
           </ZenAvatar>
 
-          {/* Nombre, Teléfono y Tipo de evento */}
+          {/* Nombre, Contacto y Tipo de evento */}
           <div className="flex-1 min-w-0">
             <h3 className="font-medium text-white text-sm leading-tight truncate">
               {event.name || 'Sin nombre'}
             </h3>
-            {contact?.phone && (
+            {contact?.name && (
               <div className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5">
-                <Phone className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{contact.phone}</span>
+                <span className="truncate">{contact.name}</span>
               </div>
             )}
             {event.event_type && (
@@ -93,23 +92,21 @@ export function EventKanbanCard({ event, onClick, studioSlug }: EventKanbanCardP
         </div>
 
         {/* Fecha del evento */}
-        <div className={`flex items-center gap-1.5 text-xs ${
-          isExpired ? 'text-red-400' : isToday ? 'text-blue-400' : 'text-zinc-400'
-        }`}>
+        <div className={`flex items-center gap-1.5 text-xs ${isExpired ? 'text-red-400' : isToday ? 'text-blue-400' : 'text-zinc-400'
+          }`}>
           <Calendar className="h-3 w-3 flex-shrink-0" />
           <span>
             {formatDate(event.event_date)}
             {daysRemaining !== null && (
-              <span className={`ml-1.5 ${
-                isExpired ? 'text-red-400 font-medium' : 
-                isToday ? 'text-blue-400 font-medium' : 
-                'text-zinc-500'
-              }`}>
+              <span className={`ml-1.5 ${isExpired ? 'text-red-400 font-medium' :
+                isToday ? 'text-blue-400 font-medium' :
+                  'text-zinc-500'
+                }`}>
                 {isExpired
                   ? `(Hace ${Math.abs(daysRemaining)} ${Math.abs(daysRemaining) === 1 ? 'día' : 'días'})`
                   : isToday
-                  ? '(Hoy)'
-                  : `(Faltan ${daysRemaining} ${daysRemaining === 1 ? 'día' : 'días'})`
+                    ? '(Hoy)'
+                    : `(Faltan ${daysRemaining} ${daysRemaining === 1 ? 'día' : 'días'})`
                 }
               </span>
             )}
@@ -139,17 +136,6 @@ export function EventKanbanCard({ event, onClick, studioSlug }: EventKanbanCardP
                 ({((event.paid_amount / event.contract_value) * 100).toFixed(0)}% pagado)
               </span>
             )}
-          </div>
-        )}
-
-        {/* Etapa actual */}
-        {event.stage && (
-          <div className="flex items-center gap-1.5">
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: event.stage.color }}
-            />
-            <span className="text-xs text-zinc-500">{event.stage.name}</span>
           </div>
         )}
 

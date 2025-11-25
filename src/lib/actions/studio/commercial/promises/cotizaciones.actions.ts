@@ -1093,7 +1093,7 @@ export async function autorizarCotizacion(
           data: {
             address: address || undefined,
             event_date: eventDate,
-            name: cotizacion.promise?.name || cotizacion.name || undefined,
+            name: cotizacion.promise?.name || 'Pendiente',
           },
         });
       }
@@ -1119,7 +1119,7 @@ export async function autorizarCotizacion(
         data: {
           address: address || undefined,
           event_date: eventDate,
-          name: cotizacion.promise?.name || cotizacion.name || undefined,
+          name: cotizacion.promise?.name || 'Pendiente',
         },
       });
 

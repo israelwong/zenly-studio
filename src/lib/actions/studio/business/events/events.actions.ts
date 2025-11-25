@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
-import { getPromiseFinancials } from '@/lib/utils/promise-financials';
+import { getPromiseFinancials } from '../../../../utils/promise-financials';
 import {
   getEventsSchema,
   moveEventSchema,

@@ -6,7 +6,7 @@ import { ArrowLeft, MoreVertical, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
 import { obtenerEventoDetalle, cancelarEvento, getEventPipelineStages, moveEvent, obtenerCotizacionesAutorizadasCount, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
-import { EventCardView } from '@/app/[slug]/studio/business/events/components/EventCardView';
+import { EventCardView } from '../components/EventCardView';
 import { toast } from 'sonner';
 
 export default function EventDetailPage() {
