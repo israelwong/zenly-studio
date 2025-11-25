@@ -100,7 +100,6 @@ export function EventCardView({
         <div className="lg:col-span-1 space-y-6">
           <EventPaymentsCard
             studioSlug={studioSlug}
-            eventId={eventId}
             cotizacionId={eventData.cotizacion?.id}
             contractValue={eventData.contract_value ?? undefined}
             paidAmount={eventData.paid_amount}
