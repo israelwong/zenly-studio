@@ -8,17 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "db:push": "tsx scripts/prisma-with-direct.ts db push",
-    "db:migrate": "tsx scripts/prisma-with-direct.ts migrate dev",
+    "db:push": "tsx scripts/prisma-safe.ts db push",
+    "db:migrate": "tsx scripts/prisma-safe.ts migrate dev",
+    "db:execute-sql": "tsx scripts/execute-sql.ts",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:seed-users": "tsx prisma/seed-with-users.ts",
-    "db:seed-demo-users": "tsx prisma/seed-demo-users.ts",
-    "db:seed-promise-pipeline": "tsx prisma/seed-promise-pipeline.ts",
-    "db:create-profiles": "tsx prisma/create-user-profiles.ts",
-    "db:seed-plans": "tsx prisma/seed-plans.ts",
-    "db:seed-agents": "tsx prisma/seed-agents.ts",
-    "db:seed-profiles": "node scripts/seed-professional-profiles.js",
+    "db:seed": "tsx prisma/01-seed.ts",
+    "db:seed-demo-users": "tsx prisma/02-seed-demo-users.ts",
+    "db:seed-catalogo": "tsx prisma/03-seed-catalogo.ts",
+    "db:seed-promise-pipeline": "tsx prisma/04-seed-promise-pipeline.ts",
+    "db:verify-seeds": "tsx scripts/verify-seeds.ts",
     "db:reset": "tsx scripts/prisma-with-direct.ts migrate reset --force && npm run db:seed",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook"
   },
@@ -119,6 +117,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^20.19.13",
+    "@types/pg": "^8.15.6",
     "@types/react": "^19.2.0",
     "@types/react-big-calendar": "^1.16.3",
     "@types/react-dom": "^19.2.0",
@@ -134,5 +133,8 @@
     "tsx": "^4.20.5",
     "tw-animate-css": "^1.3.8",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/01-seed.ts"
   }
 }

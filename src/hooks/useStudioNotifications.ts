@@ -247,11 +247,12 @@ export function useStudioNotifications({
         const channel = realtimeClient
           .channel(channelName, {
             config: {
-              private: true, // Volvemos a true porque broadcast_changes requiere canales privados
+              private: true,
               broadcast: { self: true, ack: true },
             },
           })
           // Escuchar INSERT - Nueva notificación creada
+          // realtime.broadcast_changes emite eventos con formato específico
           .on('broadcast', { event: 'INSERT' }, (payload: unknown) => {
             if (!isMountedRef.current) return;
 
@@ -259,27 +260,57 @@ export function useStudioNotifications({
               payload,
               payloadType: typeof payload,
               payloadKeys: payload ? Object.keys(payload as object) : [],
+              payloadString: JSON.stringify(payload),
               userId,
               channelName,
             });
 
-            const broadcastPayload = payload as RealtimeBroadcastPayload;
-            const newNotification = broadcastPayload?.payload?.record || broadcastPayload?.new;
+            // Intentar extraer la notificación de diferentes formatos posibles
+            let newNotification: studio_notifications | null = null;
+            
+            if (payload && typeof payload === 'object') {
+              const p = payload as any;
+              // Formato 1: { payload: { record: {...} } }
+              if (p.payload?.record) {
+                newNotification = p.payload.record;
+              }
+              // Formato 2: { record: {...} }
+              else if (p.record) {
+                newNotification = p.record;
+              }
+              // Formato 3: { new: {...} }
+              else if (p.new) {
+                newNotification = p.new;
+              }
+              // Formato 4: el payload mismo es la notificación
+              else if (p.id && p.user_id) {
+                newNotification = p as studio_notifications;
+              }
+            }
 
             console.log('[useStudioNotifications] 📦 Notificación extraída:', {
               newNotification,
               hasUserId: !!newNotification?.user_id,
               matchesUserId: newNotification?.user_id === userId,
+              notificationId: newNotification?.id,
             });
 
             if (newNotification && newNotification.user_id === userId) {
               setNotifications((prev) => {
-                if (prev.some((n) => n.id === newNotification.id)) return prev;
+                if (prev.some((n) => n.id === newNotification.id)) {
+                  console.log('[useStudioNotifications] ⚠️ Notificación ya existe, ignorando duplicado');
+                  return prev;
+                }
+                console.log('[useStudioNotifications] ✅ Agregando nueva notificación a la lista');
                 return [newNotification, ...prev];
               });
 
               if (!newNotification.is_read) {
-                setUnreadCount((prev) => prev + 1);
+                setUnreadCount((prev) => {
+                  const newCount = prev + 1;
+                  console.log('[useStudioNotifications] 📊 Contador no leídas actualizado:', { prev, newCount });
+                  return newCount;
+                });
               }
               console.log('[useStudioNotifications] ✅ Notificación INSERT procesada correctamente');
             } else {
@@ -287,6 +318,8 @@ export function useStudioNotifications({
                 hasNotification: !!newNotification,
                 hasUserId: !!newNotification?.user_id,
                 userIdMatch: newNotification?.user_id === userId,
+                expectedUserId: userId,
+                actualUserId: newNotification?.user_id,
               });
             }
           })
@@ -294,8 +327,8 @@ export function useStudioNotifications({
           .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
             if (!isMountedRef.current) return;
 
-            const broadcastPayload = payload as RealtimeBroadcastPayload;
-            const updatedNotification = broadcastPayload?.payload?.record || broadcastPayload?.new;
+            const payloadObj = payload as { payload?: { record?: studio_notifications }; record?: studio_notifications };
+            const updatedNotification = payloadObj?.payload?.record || payloadObj?.record || (payload as any)?.new;
 
             if (updatedNotification && updatedNotification.user_id === userId) {
               if (!updatedNotification.is_active) {
@@ -317,8 +350,8 @@ export function useStudioNotifications({
           .on('broadcast', { event: 'DELETE' }, (payload: unknown) => {
             if (!isMountedRef.current) return;
 
-            const broadcastPayload = payload as RealtimeBroadcastPayload;
-            const deletedNotification = broadcastPayload?.payload?.old_record || broadcastPayload?.old;
+            const payloadObj = payload as { payload?: { old_record?: studio_notifications }; old?: studio_notifications };
+            const deletedNotification = payloadObj?.payload?.old_record || payloadObj?.old || (payload as any)?.old;
 
             if (deletedNotification && deletedNotification.user_id === userId) {
               setNotifications((prev) => prev.filter((n) => n.id !== deletedNotification.id));

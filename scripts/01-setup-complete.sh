@@ -25,7 +25,7 @@ echo ""
 # ============================================
 echo "🌱 PASO 2: Seed Maestro (Platform Core)..."
 echo "-----------------------------------"
-npx tsx prisma/seed.ts
+npx tsx prisma/01-seed.ts
 echo "✅ Seed Maestro completado"
 echo ""
 
@@ -34,7 +34,7 @@ echo ""
 # ============================================
 echo "👥 PASO 3: Seed Usuarios Demo..."
 echo "-----------------------------------"
-npx tsx prisma/seed-demo-users.ts
+npx tsx prisma/02-seed-demo-users.ts
 echo "✅ Usuarios creados"
 echo ""
 
@@ -43,7 +43,7 @@ echo ""
 # ============================================
 echo "📁 PASO 4: Seed Catálogo..."
 echo "-----------------------------------"
-npx tsx prisma/seed-catalogo.ts
+npx tsx prisma/03-seed-catalogo.ts
 echo "✅ Catálogo creado"
 echo ""
 
@@ -52,7 +52,7 @@ echo ""
 # ============================================
 echo "📊 PASO 5: Seed Promise Pipeline..."
 echo "-----------------------------------"
-npx tsx prisma/seed-promise-pipeline.ts demo-studio
+npx tsx prisma/04-seed-promise-pipeline.ts demo-studio
 echo "✅ Promise Pipeline creado"
 echo ""
 

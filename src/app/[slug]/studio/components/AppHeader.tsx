@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Sparkles, Calendar, ContactRound, ShoppingBag, Store, Package } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, Calendar, ContactRound, ShoppingBag, Store, Package, Bell } from 'lucide-react';
 import Link from 'next/link';
 import { BreadcrumbHeader } from './BreadcrumbHeader';
 import { ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
@@ -21,6 +21,12 @@ export function AppHeader({ studioSlug }: AppHeaderProps) {
     const { isOpen, toggleChat } = useZenMagicChat();
     const [agendaOpen, setAgendaOpen] = useState(false);
     const { isOpen: contactsOpen, openContactsSheet, closeContactsSheet, initialContactId } = useContactsSheet();
+    const [isMounted, setIsMounted] = useState(false);
+
+    // Evitar problemas de hidratación con Radix UI
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     return (
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-zinc-900/50 px-6 backdrop-blur-sm">
@@ -56,33 +62,47 @@ export function AppHeader({ studioSlug }: AppHeaderProps) {
                 </ZenButton>
 
                 {/* Botón Shopping - Catalog y Packages */}
-                <ZenDropdownMenu>
-                    <ZenDropdownMenuTrigger asChild>
-                        <ZenButton
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full text-zinc-400 hover:text-zinc-200"
-                            title="Catálogo y Paquetes"
-                        >
-                            <ShoppingBag className="h-5 w-5" />
-                            <span className="sr-only">Catálogo y Paquetes</span>
-                        </ZenButton>
-                    </ZenDropdownMenuTrigger>
-                    <ZenDropdownMenuContent align="end" className="w-48">
-                        <ZenDropdownMenuItem asChild>
-                            <Link href={`/${studioSlug}/studio/commercial/catalogo`} className="cursor-pointer">
-                                <Store className="mr-2 h-4 w-4" />
-                                <span>Catálogo</span>
-                            </Link>
-                        </ZenDropdownMenuItem>
-                        <ZenDropdownMenuItem asChild>
-                            <Link href={`/${studioSlug}/studio/commercial/paquetes`} className="cursor-pointer">
-                                <Package className="mr-2 h-4 w-4" />
-                                <span>Paquetes</span>
-                            </Link>
-                        </ZenDropdownMenuItem>
-                    </ZenDropdownMenuContent>
-                </ZenDropdownMenu>
+                {isMounted && (
+                    <ZenDropdownMenu>
+                        <ZenDropdownMenuTrigger asChild>
+                            <ZenButton
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-full text-zinc-400 hover:text-zinc-200"
+                                title="Catálogo y Paquetes"
+                            >
+                                <ShoppingBag className="h-5 w-5" />
+                                <span className="sr-only">Catálogo y Paquetes</span>
+                            </ZenButton>
+                        </ZenDropdownMenuTrigger>
+                        <ZenDropdownMenuContent align="end" className="w-48">
+                            <ZenDropdownMenuItem asChild>
+                                <Link href={`/${studioSlug}/studio/commercial/catalogo`} className="cursor-pointer">
+                                    <Store className="mr-2 h-4 w-4" />
+                                    <span>Catálogo</span>
+                                </Link>
+                            </ZenDropdownMenuItem>
+                            <ZenDropdownMenuItem asChild>
+                                <Link href={`/${studioSlug}/studio/commercial/paquetes`} className="cursor-pointer">
+                                    <Package className="mr-2 h-4 w-4" />
+                                    <span>Paquetes</span>
+                                </Link>
+                            </ZenDropdownMenuItem>
+                        </ZenDropdownMenuContent>
+                    </ZenDropdownMenu>
+                )}
+                {!isMounted && (
+                    <ZenButton
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full text-zinc-400 hover:text-zinc-200"
+                        title="Catálogo y Paquetes"
+                        disabled
+                    >
+                        <ShoppingBag className="h-5 w-5" />
+                        <span className="sr-only">Catálogo y Paquetes</span>
+                    </ZenButton>
+                )}
 
                 <ZenButton
                     variant="ghost"

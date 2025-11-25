@@ -17,12 +17,18 @@ export const moveEventSchema = z.object({
   new_stage_id: z.string().cuid(),
 });
 
+export const updateEventDateSchema = z.object({
+  event_id: z.string().cuid(),
+  event_date: z.coerce.date(),
+});
+
 // ============================================
 // TYPES
 // ============================================
 
 export type GetEventsParams = z.infer<typeof getEventsSchema>;
 export type MoveEventData = z.infer<typeof moveEventSchema>;
+export type UpdateEventDateData = z.infer<typeof updateEventDateSchema>;
 
 export interface EventWithContact {
   id: string;

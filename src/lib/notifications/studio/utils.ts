@@ -35,6 +35,7 @@ export function buildRoute(
         }
         if (!paramsObj.event_id && notification.event_id) {
             paramsObj.event_id = notification.event_id;
+            console.log('[buildRoute] ✅ event_id obtenido de notification:', notification.event_id);
         }
         if (!paramsObj.quote_id && notification.quote_id) {
             paramsObj.quote_id = notification.quote_id;
@@ -46,6 +47,13 @@ export function buildRoute(
             paramsObj.agenda_id = notification.agenda_id;
         }
     }
+
+    console.log('[buildRoute] 📋 Parámetros disponibles:', {
+        routeTemplate,
+        paramsObj,
+        notificationEventId: notification?.event_id,
+        notificationQuoteId: notification?.quote_id,
+    });
 
     // Manejar rutas antiguas que ya tienen el slug hardcodeado
     // Si la ruta empieza con /studio/ y tiene un slug hardcodeado, reconstruirla
@@ -67,7 +75,11 @@ export function buildRoute(
             if (value && typeof value === 'string') {
                 // Reemplazar todas las ocurrencias del placeholder
                 const regex = new RegExp(`\\{${key}\\}`, 'g');
+                const beforeReplace = route;
                 route = route.replace(regex, value);
+                if (beforeReplace !== route) {
+                    console.log(`[buildRoute] 🔄 Reemplazado {${key}} con ${value}:`, { before: beforeReplace, after: route });
+                }
             }
         });
     }
@@ -78,13 +90,24 @@ export function buildRoute(
         route = route.endsWith('/promises')
             ? `${route}/${paramsObj.promise_id}`
             : route.replace('/promises', `/promises/${paramsObj.promise_id}`);
+        console.log('[buildRoute] ➕ Agregado promise_id a la ruta:', route);
     }
 
-    if (paramsObj.event_id && route.includes('/events') && !route.includes(paramsObj.event_id)) {
-        // Agregar el event_id al final si no está presente
-        route = route.endsWith('/events')
-            ? `${route}/${paramsObj.event_id}`
-            : route.replace('/events', `/events/${paramsObj.event_id}`);
+    // Si la ruta incluye /events y tiene event_id pero el placeholder no fue reemplazado
+    if (paramsObj.event_id && route.includes('/events')) {
+        // Si la ruta todavía tiene el placeholder {event_id}, reemplazarlo
+        if (route.includes('{event_id}')) {
+            route = route.replace(/{event_id}/g, paramsObj.event_id);
+            console.log('[buildRoute] 🔄 Reemplazado placeholder {event_id} restante:', route);
+        }
+        // Si la ruta termina en /events o tiene /events pero no el ID, agregarlo
+        else if (!route.includes(paramsObj.event_id)) {
+            const beforeAdd = route;
+            route = route.endsWith('/events')
+                ? `${route}/${paramsObj.event_id}`
+                : route.replace('/events', `/events/${paramsObj.event_id}`);
+            console.log('[buildRoute] ➕ Agregado event_id a la ruta:', { before: beforeAdd, after: route, event_id: paramsObj.event_id });
+        }
     }
 
     // Validar que no queden placeholders sin reemplazar

@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { notifyPromiseCreated } from '@/lib/notifications/studio';
 import {
@@ -189,6 +190,7 @@ export async function getPromises(
         avatar_url: contact.avatar_url,
         status: contact.status,
         event_type_id: latestPromise?.event_type_id || null,
+        event_name: latestPromise?.name || null,
         interested_dates: latestPromise?.tentative_dates
           ? (latestPromise.tentative_dates as string[])
           : null,
@@ -321,6 +323,7 @@ export async function createPromise(
         contact_id: contact.id,
         event_type_id: validatedData.event_type_id || null,
         event_location: eventLocation,
+        name: validatedData.event_name?.trim() || null,
         pipeline_stage_id: stageId,
         status: 'pending',
         tentative_dates: validatedData.interested_dates
@@ -356,6 +359,7 @@ export async function createPromise(
         avatar_url: contact.avatar_url,
         status: contact.status,
       event_type_id: promise.event_type_id,
+      event_name: promise.name || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
@@ -530,16 +534,40 @@ export async function updatePromise(
         ? (validatedData.event_location?.trim() || 'Pendiente')
         : validatedData.event_location !== undefined ? validatedData.event_location || null : undefined;
 
+      // Construir objeto data condicionalmente usando tipo específico de Prisma
+      const updateData: Prisma.studio_promisesUpdateInput = {};
+
+      if (validatedData.event_type_id !== undefined) {
+        updateData.event_type = validatedData.event_type_id
+          ? { connect: { id: validatedData.event_type_id } }
+          : { disconnect: true };
+      }
+
+      if (eventLocationUpdate !== undefined) {
+        updateData.event_location = eventLocationUpdate;
+      }
+
+      // Usar set para campos opcionales que pueden ser null
+      if (validatedData.event_name !== undefined) {
+        const eventNameValue = validatedData.event_name?.trim() || null;
+        updateData.name = eventNameValue;
+      }
+
+      if (validatedData.promise_pipeline_stage_id !== undefined) {
+        updateData.pipeline_stage = validatedData.promise_pipeline_stage_id
+          ? { connect: { id: validatedData.promise_pipeline_stage_id } }
+          : { disconnect: true };
+      }
+
+      if (validatedData.interested_dates !== undefined) {
+        updateData.tentative_dates = validatedData.interested_dates
+          ? (validatedData.interested_dates as unknown)
+          : null;
+      }
+
       promise = await prisma.studio_promises.update({
         where: { id: latestPromise.id },
-        data: {
-          event_type_id: validatedData.event_type_id || null,
-          event_location: eventLocationUpdate,
-          pipeline_stage_id: validatedData.promise_pipeline_stage_id || null,
-          tentative_dates: validatedData.interested_dates
-            ? (validatedData.interested_dates as unknown)
-            : null,
-        },
+        data: updateData as Prisma.studio_promisesUpdateInput,
         include: {
           event_type: {
             select: {
@@ -581,6 +609,7 @@ export async function updatePromise(
           contact_id: contact.id,
           event_type_id: validatedData.event_type_id || null,
           event_location: eventLocationCreate,
+          name: validatedData.event_name?.trim() || null,
           pipeline_stage_id: stageId,
           status: 'pending',
           tentative_dates: validatedData.interested_dates
@@ -635,6 +664,7 @@ export async function updatePromise(
         avatar_url: contact.avatar_url,
         status: contact.status,
       event_type_id: promise.event_type_id,
+      event_name: promise.name || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
@@ -812,6 +842,7 @@ export async function movePromise(
         avatar_url: contact.avatar_url,
         status: contact.status,
       event_type_id: promise.event_type_id,
+      event_name: promise.name || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
@@ -948,6 +979,7 @@ export async function archivePromise(
         avatar_url: contact.avatar_url,
         status: contact.status,
       event_type_id: updatedPromise.event_type_id,
+      event_name: updatedPromise.name || null,
       interested_dates: updatedPromise.tentative_dates
         ? (updatedPromise.tentative_dates as string[])
         : null,
@@ -1079,6 +1111,7 @@ export async function unarchivePromise(
         avatar_url: contact.avatar_url,
         status: contact.status,
       event_type_id: updatedPromise.event_type_id,
+      event_name: updatedPromise.name || null,
       interested_dates: updatedPromise.tentative_dates
         ? (updatedPromise.tentative_dates as string[])
         : null,

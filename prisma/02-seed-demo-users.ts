@@ -1,4 +1,4 @@
-// prisma/seed-demo-users.ts
+// prisma/02-seed-demo-users.ts
 /**
  * SEED USUARIOS DEMO V1.0
  * 
@@ -7,10 +7,13 @@
  * - Studio Owner
  * - Fotógrafo
  * 
- * Uso: npx tsx prisma/seed-demo-users.ts
+ * Uso: npm run db:seed-demo-users
+ * Orden: 02 (después de 01-seed.ts)
  */
 
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import { resolve } from 'path';
@@ -18,7 +21,22 @@ import { resolve } from 'path';
 // Cargar variables de entorno desde .env.local
 config({ path: resolve(process.cwd(), '.env.local') });
 
-const prisma = new PrismaClient();
+// Crear pool de conexiones PostgreSQL
+const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 1,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+// Crear adapter de Prisma para PostgreSQL
+const adapter = new PrismaPg(pgPool);
+
+// Cliente de Prisma con adapter (requerido en Prisma 7)
+const prisma = new PrismaClient({
+  adapter,
+  log: ['error'],
+});
 
 // Configuración de Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

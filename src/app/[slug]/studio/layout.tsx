@@ -18,16 +18,23 @@ export default async function StudioLayout({
 }) {
     const { slug } = await params;
 
-    // Obtener configuración de timeout usando importación dinámica
+    // Obtener configuración de timeout usando importación dinámica con timeout
     let sessionTimeout = 30; // Default 30 minutos
     try {
         const { obtenerConfiguracionesSeguridad } = await import('@/lib/actions/studio/account/seguridad/seguridad.actions');
-        const settings = await obtenerConfiguracionesSeguridad(slug);
+        // Usar Promise.race para evitar bloqueos largos
+        const settings = await Promise.race([
+            obtenerConfiguracionesSeguridad(slug),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)) // Timeout de 5s
+        ]);
         if (settings?.session_timeout) {
             sessionTimeout = settings.session_timeout;
         }
     } catch (error) {
-        console.error('[StudioLayout] Error cargando settings de seguridad:', error);
+        // Silenciar errores de timeout para no bloquear el render
+        if (error instanceof Error && !error.message.includes('timeout')) {
+            console.error('[StudioLayout] Error cargando settings de seguridad:', error);
+        }
     }
 
     return (

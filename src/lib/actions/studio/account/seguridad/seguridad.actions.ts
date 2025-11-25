@@ -174,29 +174,52 @@ export async function obtenerConfiguracionesSeguridad(
             return null;
         }
 
-        // Obtener o crear usuario en la base de datos
-        const dbUser = await getOrCreateUser(user);
+        // Usar Promise.race para evitar bloqueos largos en queries de Prisma
+        const dbUserPromise = getOrCreateUser(user);
+        const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout obteniendo usuario')), 4000)
+        );
 
-        // Buscar configuraciones existentes
-        let settings = await prisma.user_security_settings.findUnique({
+        const dbUser = await Promise.race([dbUserPromise, timeoutPromise]);
+
+        // Buscar configuraciones existentes con timeout
+        const findSettingsPromise = prisma.user_security_settings.findUnique({
             where: { user_id: dbUser.id }
         });
+        const findTimeoutPromise = new Promise<null>((resolve) => 
+            setTimeout(() => resolve(null), 3000)
+        );
 
-        // Si no existen, crear con valores por defecto
+        let settings = await Promise.race([findSettingsPromise, findTimeoutPromise]);
+
+        // Si no existen, crear con valores por defecto (solo si no fue timeout)
         if (!settings) {
-            settings = await prisma.user_security_settings.create({
-                data: {
-                    user_id: dbUser.id,
-                    email_notifications: true,
-                    device_alerts: true,
-                    session_timeout: 30
-                }
-            });
+            try {
+                const createSettingsPromise = prisma.user_security_settings.create({
+                    data: {
+                        user_id: dbUser.id,
+                        email_notifications: true,
+                        device_alerts: true,
+                        session_timeout: 30
+                    }
+                });
+                const createTimeoutPromise = new Promise<null>((resolve) => 
+                    setTimeout(() => resolve(null), 2000)
+                );
+                settings = await Promise.race([createSettingsPromise, createTimeoutPromise]);
+            } catch (createError) {
+                // Si falla la creación, retornar null (se usará default en el layout)
+                return null;
+            }
         }
 
         return settings;
 
     } catch (error) {
+        // Silenciar errores de timeout para no bloquear el render
+        if (error instanceof Error && error.message.includes('Timeout')) {
+            return null;
+        }
         console.error('Error al obtener configuraciones de seguridad:', error);
         return null;
     }

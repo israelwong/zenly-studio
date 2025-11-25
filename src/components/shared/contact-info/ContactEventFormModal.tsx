@@ -10,14 +10,17 @@ import { formatDate } from '@/lib/actions/utils/formatting';
 import { es } from 'date-fns/locale';
 import { CalendarIcon, AlertCircle, X } from 'lucide-react';
 import { createPromise, updatePromise, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/commercial/promises';
+import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/events.actions';
 import { getContacts, getAcquisitionChannels, getSocialNetworks } from '@/lib/actions/studio/commercial/contacts';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 
-interface PromiseFormModalProps {
+interface ContactEventFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     studioSlug: string;
+    context?: 'promise' | 'event'; // Contexto para adaptar labels y comportamiento
+    eventId?: string; // ID del evento cuando context es 'event'
     initialData?: {
         id?: string;
         name?: string;
@@ -25,6 +28,7 @@ interface PromiseFormModalProps {
         email?: string;
         event_type_id?: string;
         event_location?: string;
+        event_name?: string; // Nombre del evento (opcional)
         interested_dates?: string[];
         acquisition_channel_id?: string;
         social_network_id?: string;
@@ -34,13 +38,15 @@ interface PromiseFormModalProps {
     onSuccess?: () => void;
 }
 
-export function PromiseFormModal({
+export function ContactEventFormModal({
     isOpen,
     onClose,
     studioSlug,
+    context = 'promise',
+    eventId,
     initialData,
     onSuccess,
-}: PromiseFormModalProps) {
+}: ContactEventFormModalProps) {
     const router = useRouter();
     const isEditMode = !!initialData?.id;
     const [loading, setLoading] = useState(false);
@@ -52,6 +58,7 @@ export function PromiseFormModal({
         email: initialData?.email || '',
         event_type_id: initialData?.event_type_id || '',
         event_location: initialData?.event_location || '',
+        event_name: initialData?.event_name || '',
         interested_dates: initialData?.interested_dates,
         acquisition_channel_id: initialData?.acquisition_channel_id ?? '',
         social_network_id: initialData?.social_network_id,
@@ -223,6 +230,7 @@ export function PromiseFormModal({
                     email: '',
                     event_type_id: '',
                     event_location: '',
+                    event_name: '',
                     interested_dates: undefined,
                     acquisition_channel_id: '',
                     social_network_id: undefined,
@@ -483,6 +491,52 @@ export function PromiseFormModal({
             };
 
             let result;
+
+            // Si el contexto es 'event' y hay eventId, y solo se cambió la fecha, usar actualizarFechaEvento
+            if (context === 'event' && eventId && isEditMode && initialData?.id) {
+                // Verificar si solo se cambió la fecha (comparar selectedDates con initialData.interested_dates)
+                const initialDates = initialData.interested_dates
+                    ? initialData.interested_dates.map(d => new Date(d).toISOString().split('T')[0]).sort()
+                    : [];
+                const newDates = selectedDates.map(d => d.toISOString().split('T')[0]).sort();
+                const datesChanged = JSON.stringify(initialDates) !== JSON.stringify(newDates);
+
+                // Verificar si otros campos cambiaron
+                const otherFieldsChanged =
+                    formData.name !== initialData.name ||
+                    formData.phone !== initialData.phone ||
+                    formData.email !== (initialData.email || '') ||
+                    formData.event_type_id !== (initialData.event_type_id || '') ||
+                    formData.event_location !== (initialData.event_location || '') ||
+                    formData.event_name !== (initialData.event_name || '') ||
+                    formData.acquisition_channel_id !== (initialData.acquisition_channel_id || '') ||
+                    formData.social_network_id !== (initialData.social_network_id || undefined) ||
+                    formData.referrer_contact_id !== (initialData.referrer_contact_id || undefined) ||
+                    formData.referrer_name !== (initialData.referrer_name || undefined);
+
+                // Si solo cambió la fecha y hay una fecha seleccionada, usar actualizarFechaEvento
+                if (datesChanged && !otherFieldsChanged && selectedDates.length === 1) {
+                    const nuevaFecha = selectedDates[0];
+                    result = await actualizarFechaEvento(studioSlug, {
+                        event_id: eventId,
+                        event_date: nuevaFecha,
+                    });
+
+                    if (result.success) {
+                        toast.success('Fecha del evento actualizada exitosamente');
+                        onClose();
+                        if (onSuccess) {
+                            onSuccess();
+                        }
+                        return;
+                    } else {
+                        toast.error(result.error || 'Error al actualizar fecha del evento');
+                        return;
+                    }
+                }
+            }
+
+            // Flujo normal: crear o actualizar promesa
             if (isEditMode && initialData?.id) {
                 const updateData: UpdatePromiseData = {
                     id: initialData.id,
@@ -524,10 +578,12 @@ export function PromiseFormModal({
         } finally {
             setLoading(false);
         }
-    }, [studioSlug, formData, isEditMode, initialData, onClose, onSuccess, router]);
+    }, [studioSlug, formData, isEditMode, initialData, onClose, onSuccess, router, context, eventId, selectedDates]);
 
     const formatDatesDisplay = () => {
-        if (selectedDates.length === 0) return 'Seleccionar fechas';
+        if (selectedDates.length === 0) {
+            return context === 'event' ? 'Seleccionar fecha' : 'Seleccionar fechas';
+        }
         if (selectedDates.length === 1) {
             return formatDate(selectedDates[0]);
         }
@@ -627,6 +683,25 @@ export function PromiseFormModal({
                             }}
                             error={errors.email}
                         />
+                    </div>
+
+                    {/* Nombre del Evento (opcional) */}
+                    <div>
+                        <ZenInput
+                            label="Nombre del Evento (opcional)"
+                            placeholder="Ej: Los quince años de Ana, Boda de Ana y Roberto"
+                            value={formData.event_name || ''}
+                            onChange={(e) => {
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    event_name: e.target.value || undefined,
+                                }));
+                            }}
+                            className="w-full"
+                        />
+                        <p className="text-xs text-zinc-400 mt-1">
+                            Puedes especificar el nombre del evento si lo conoces
+                        </p>
                     </div>
 
                     {/* Tipo de Evento y Lugar del Evento */}
@@ -851,10 +926,10 @@ export function PromiseFormModal({
                         </div>
                     )}
 
-                    {/* Fecha de Interés */}
+                    {/* Fecha de Interés / Fecha del Evento */}
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-zinc-300 block mb-2">
-                            Fecha(s) de Interés
+                            {context === 'event' ? 'Fecha del Evento' : 'Fecha(s) de Interés'}
                         </label>
                         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                             <PopoverTrigger asChild>
@@ -879,32 +954,58 @@ export function PromiseFormModal({
                                 sideOffset={4}
                                 onOpenAutoFocus={(e) => e.preventDefault()}
                             >
-                                <Calendar
-                                    mode="multiple"
-                                    selected={selectedDates}
-                                    onSelect={(dates: Date | Date[] | undefined) => {
-                                        if (dates) {
-                                            const newDates = Array.isArray(dates) ? dates : dates ? [dates] : [];
-                                            setSelectedDates(newDates);
-                                            if (newDates.length > 0) {
-                                                setMonth(newDates[0]);
+                                {context === 'event' ? (
+                                    <Calendar
+                                        mode="single"
+                                        selected={selectedDates.length > 0 ? selectedDates[0] : undefined}
+                                        onSelect={(date: Date | undefined) => {
+                                            if (date) {
+                                                setSelectedDates([date]);
+                                                setMonth(date);
+                                            } else {
+                                                setSelectedDates([]);
+                                                setMonth(undefined);
                                             }
-                                        } else {
-                                            setSelectedDates([]);
-                                            setMonth(undefined);
-                                        }
-                                    }}
-                                    month={month}
-                                    onMonthChange={setMonth}
-                                    numberOfMonths={1}
-                                    locale={es}
-                                    buttonVariant="ghost"
-                                    className="border border-zinc-700 rounded-lg"
-                                />
+                                        }}
+                                        month={month}
+                                        onMonthChange={setMonth}
+                                        numberOfMonths={1}
+                                        locale={es}
+                                        buttonVariant="ghost"
+                                        className="border border-zinc-700 rounded-lg"
+                                    />
+                                ) : (
+                                    <Calendar
+                                        mode="multiple"
+                                        selected={selectedDates}
+                                        onSelect={(dates) => {
+                                            const dateArray = dates as Date[] | undefined;
+                                            if (dateArray) {
+                                                setSelectedDates(dateArray);
+                                                if (dateArray.length > 0) {
+                                                    setMonth(dateArray[0]);
+                                                }
+                                            } else {
+                                                setSelectedDates([]);
+                                                setMonth(undefined);
+                                            }
+                                        }}
+                                        month={month}
+                                        onMonthChange={setMonth}
+                                        numberOfMonths={1}
+                                        locale={es}
+                                        buttonVariant="ghost"
+                                        className="border border-zinc-700 rounded-lg"
+                                        required={false}
+                                    />
+                                )}
                             </PopoverContent>
                         </Popover>
                         <p className="text-xs text-zinc-400 mt-1">
-                            Puedes elegir una o más fechas de interés asociadas a una sola promesa
+                            {context === 'event'
+                                ? 'Puedes cambiar la fecha del evento siempre y cuando esté disponible'
+                                : 'Puedes elegir una o más fechas de interés asociadas a una sola promesa'
+                            }
                         </p>
                         {selectedDates.some(date => {
                             const today = new Date();

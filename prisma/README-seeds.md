@@ -4,9 +4,13 @@
 
 Sistema modular de seeds para inicializar la base de datos con datos de prueba y configuración.
 
+**Ubicación:** Todos los seeds están en `/prisma/` (convención estándar de Prisma)
+
+---
+
 ## 🚀 Seeds Disponibles
 
-### 1. Seed Principal (`seed.ts`)
+### 1. Seed Principal (`01-seed.ts`)
 
 **Comando:** `npm run db:seed`
 
@@ -22,7 +26,9 @@ Inicializa la plataforma completa:
 - ✅ Tipos de evento
 - ✅ Demo Lead
 
-### 2. Seed Usuarios Demo (`seed-demo-users.ts`)
+---
+
+### 2. Seed Usuarios Demo (`02-seed-demo-users.ts`)
 
 **Comando:** `npm run db:seed-demo-users`
 
@@ -34,6 +40,38 @@ Crea usuarios de prueba con contraseñas hardcodeadas:
 | Studio Owner | owner@demo-studio.com     | Owner123!  | SUSCRIPTOR + OWNER        | /demo-studio |
 | Fotógrafo    | fotografo@demo-studio.com | Foto123!   | SUSCRIPTOR + PHOTOGRAPHER | /demo-studio |
 
+---
+
+### 3. Seed Catálogo (`03-seed-catalogo.ts`)
+
+**Comando:** `npm run db:seed-catalogo`
+
+Crea el catálogo completo de servicios y productos para el demo studio.
+
+**Uso:**
+
+```bash
+npm run db:seed-catalogo
+```
+
+---
+
+### 4. Seed Promise Pipeline (`04-seed-promise-pipeline.ts`)
+
+**Comando:** `npm run db:seed-promise-pipeline`
+
+Crea las etapas del pipeline de promesas para un studio específico.
+
+**Uso:**
+
+```bash
+npm run db:seed-promise-pipeline demo-studio
+# O con parámetro:
+npx tsx prisma/04-seed-promise-pipeline.ts demo-studio
+```
+
+---
+
 ## 🔧 Uso Recomendado
 
 ### Para Desarrollo Completo
@@ -44,6 +82,12 @@ npm run db:seed
 
 # 2. Crear usuarios demo
 npm run db:seed-demo-users
+
+# 3. Crear catálogo (opcional)
+npm run db:seed-catalogo
+
+# 4. Crear pipeline de promesas (opcional)
+npm run db:seed-promise-pipeline
 ```
 
 ### Para Reset Completo
@@ -59,6 +103,8 @@ npm run db:reset
 # Solo crear usuarios (requiere que exista el studio)
 npm run db:seed-demo-users
 ```
+
+---
 
 ## 🔐 Credenciales de Acceso
 
@@ -80,53 +126,28 @@ npm run db:seed-demo-users
 - **Contraseña:** Foto123!
 - **URL:** /demo-studio
 
+---
+
 ## 📝 Notas Importantes
 
 1. **Supabase Auth:** Los usuarios se crean tanto en Supabase Auth como en la base de datos
-2. **Contraseñas:** Hardcodeadas para desarrollo, cambiar en producción
-3. **Studio Demo:** Requiere que exista el studio con slug `demo-studio`
-4. **Roles:** Se asignan automáticamente los roles de plataforma y studio
+2. **Orden de ejecución:** Los números al inicio del nombre indican el orden (01, 02, 03, 04)
+3. **Idempotencia:** Los seeds son idempotentes (pueden ejecutarse múltiples veces sin duplicar datos)
+4. **Ubicación:** Todos los seeds están en `/prisma/` según convención de Prisma
 
-## 🛠️ Personalización
+---
 
-### Cambiar Contraseñas
+## 🗂️ Estructura de Seeds
 
-Editar el array `DEMO_USERS` en `seed-demo-users.ts`:
-
-```typescript
-const DEMO_USERS = [
-  {
-    email: "admin@prosocial.mx",
-    password: "TuNuevaContraseña123!", // ← Cambiar aquí
-    // ...
-  },
-];
+```
+prisma/
+├── 01-seed.ts                 # Seed maestro (principal)
+├── 02-seed-demo-users.ts      # Usuarios demo con auth
+├── 03-seed-catalogo.ts        # Catálogo de servicios/productos
+├── 04-seed-promise-pipeline.ts # Pipeline de promesas
+└── README-seeds.md            # Este archivo
 ```
 
-### Agregar Usuarios
+---
 
-Agregar nuevos usuarios al array `DEMO_USERS`:
-
-```typescript
-{
-    email: 'nuevo@demo-studio.com',
-    password: 'Nueva123!',
-    full_name: 'Nuevo Usuario',
-    phone: '+52 33 0000 0000',
-    platform_role: 'SUSCRIPTOR' as const,
-    studio_role: 'PHOTOGRAPHER' as const,
-},
-```
-
-## 🔄 Flujo de Desarrollo
-
-1. **Primera vez:** `npm run db:reset`
-2. **Cambios en datos:** `npm run db:seed`
-3. **Cambios en usuarios:** `npm run db:seed-demo-users`
-4. **Reset completo:** `npm run db:reset`
-
-## ⚠️ Advertencias
-
-- **NO usar en producción:** Las contraseñas están hardcodeadas
-- **Supabase Keys:** Requiere `SUPABASE_SERVICE_ROLE_KEY` en `.env`
-- **Studio existente:** El seed de usuarios requiere que exista el studio demo
+**Última actualización: 2025-01-20**

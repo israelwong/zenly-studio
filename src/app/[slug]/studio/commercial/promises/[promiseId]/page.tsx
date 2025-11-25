@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
 import { PromiseCardView } from '../components/PromiseCardView';
-import { PromiseFormModal } from '../components/PromiseFormModal';
+import { ContactEventFormModal } from '@/components/shared/contact-info';
 import { PromiseQuickActions } from '../components/PromiseQuickActions';
 import { getPromiseById, archivePromise, unarchivePromise, deletePromise, getPipelineStages, movePromise } from '@/lib/actions/studio/commercial/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -37,6 +37,7 @@ export default function EditarPromesaPage() {
     event_type_id: string | null;
     event_type_name: string | null;
     event_location: string | null;
+    event_name: string | null;
     interested_dates: string[] | null;
     acquisition_channel_id?: string | null;
     acquisition_channel_name?: string | null;
@@ -74,18 +75,19 @@ export default function EditarPromesaPage() {
             event_type_id: result.data.event_type_id || null,
             event_type_name: result.data.event_type_name || null,
             event_location: result.data.event_location || null,
+            event_name: result.data.event_name || null,
             interested_dates: result.data.interested_dates,
             acquisition_channel_id: result.data.acquisition_channel_id ?? null,
             acquisition_channel_name: result.data.acquisition_channel_name ?? null,
             social_network_id: result.data.social_network_id ?? null,
             social_network_name: result.data.social_network_name ?? null,
-          referrer_contact_id: result.data.referrer_contact_id ?? null,
-          referrer_name: result.data.referrer_name ?? null,
-          referrer_contact_name: result.data.referrer_contact_name ?? null,
-          referrer_contact_email: result.data.referrer_contact_email ?? null,
-          promiseId: result.data.promise_id,
-          has_event: result.data.has_event,
-          evento_id: result.data.evento_id ?? null,
+            referrer_contact_id: result.data.referrer_contact_id ?? null,
+            referrer_name: result.data.referrer_name ?? null,
+            referrer_contact_name: result.data.referrer_contact_name ?? null,
+            referrer_contact_email: result.data.referrer_contact_email ?? null,
+            promiseId: result.data.promise_id,
+            has_event: result.data.has_event,
+            evento_id: result.data.evento_id ?? null,
           });
           setContactData({
             contactId: result.data.contact_id,
@@ -160,6 +162,7 @@ export default function EditarPromesaPage() {
               event_type_id: result.data.event_type_id || null,
               event_type_name: result.data.event_type_name || null,
               event_location: result.data.event_location || null,
+              event_name: result.data.event_name || null,
               interested_dates: result.data.interested_dates,
               acquisition_channel_id: result.data.acquisition_channel_id ?? null,
               acquisition_channel_name: result.data.acquisition_channel_name ?? null,
@@ -206,11 +209,11 @@ export default function EditarPromesaPage() {
         setCurrentPipelineStageId(newStageId);
         const newStage = pipelineStages.find((s) => s.id === newStageId);
         setIsArchived(newStage?.slug === 'archived');
-        
+
         // Disparar confetti si cambió a "aprobado"
-        const isApprovedStage = newStage?.slug === 'approved' || newStage?.slug === 'aprobado' || 
-                                newStage?.name.toLowerCase().includes('aprobado');
-        
+        const isApprovedStage = newStage?.slug === 'approved' || newStage?.slug === 'aprobado' ||
+          newStage?.name.toLowerCase().includes('aprobado');
+
         if (isApprovedStage) {
           confetti({
             particleCount: 100,
@@ -218,7 +221,7 @@ export default function EditarPromesaPage() {
             origin: { y: 1 }, // Desde abajo de la ventana
           });
         }
-        
+
         toast.success('Etapa actualizada correctamente');
       } else {
         toast.error(result.error || 'Error al cambiar etapa');
@@ -367,6 +370,7 @@ export default function EditarPromesaPage() {
           event_type_id: result.data.event_type_id || null,
           event_type_name: result.data.event_type_name || null,
           event_location: result.data.event_location || null,
+          event_name: result.data.event_name || null,
           interested_dates: result.data.interested_dates,
           acquisition_channel_id: result.data.acquisition_channel_id ?? null,
           acquisition_channel_name: result.data.acquisition_channel_name ?? null,
@@ -399,8 +403,8 @@ export default function EditarPromesaPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto">
-      <ZenCard 
-        variant="default" 
+      <ZenCard
+        variant="default"
         padding="none"
       >
         <ZenCardHeader className="border-b border-zinc-800">
@@ -432,14 +436,14 @@ export default function EditarPromesaPage() {
                     </div>
                   );
                 }
-                
+
                 const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
-                const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' || 
-                                       currentStage?.name.toLowerCase().includes('aprobado');
+                const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' ||
+                  currentStage?.name.toLowerCase().includes('aprobado');
                 const hasEvent = promiseData.has_event || false;
                 const isRestricted = isApprovedStage && hasEvent;
                 const eventoId = promiseData.evento_id || null;
-                
+
                 // Si está restringido (tiene cotización aprobada con evento), mostrar mensaje y botón
                 if (isRestricted && eventoId) {
                   return (
@@ -456,12 +460,12 @@ export default function EditarPromesaPage() {
                     </div>
                   );
                 }
-                
+
                 // Filtrar etapas: si está restringido, solo mostrar "archived" además de la actual
                 const availableStages = isRestricted
                   ? pipelineStages.filter((s) => s.slug === 'archived' || s.id === currentPipelineStageId)
                   : pipelineStages;
-                
+
                 return (
                   <div className="flex flex-col gap-2">
                     {isRestricted && (
@@ -474,15 +478,14 @@ export default function EditarPromesaPage() {
                         value={currentPipelineStageId}
                         onChange={(e) => handlePipelineStageChange(e.target.value)}
                         disabled={isChangingStage || loading}
-                        className={`pl-3 pr-8 py-1.5 text-sm bg-zinc-900 border rounded-lg text-zinc-100 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed appearance-none ${
-                          isChangingStage
-                            ? "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
-                            : isArchived 
+                        className={`pl-3 pr-8 py-1.5 text-sm bg-zinc-900 border rounded-lg text-zinc-100 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed appearance-none ${isChangingStage
+                          ? "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
+                          : isArchived
                             ? "border-amber-500 focus:ring-amber-500/50 focus:border-amber-500"
                             : isApprovedStage
-                            ? "border-emerald-500 focus:ring-emerald-500/50 focus:border-emerald-500"
-                            : "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
-                        }`}
+                              ? "border-emerald-500 focus:ring-emerald-500/50 focus:border-emerald-500"
+                              : "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
+                          }`}
                       >
                         {isChangingStage ? (
                           <option value={currentPipelineStageId}>Actualizando estado...</option>
@@ -494,77 +497,77 @@ export default function EditarPromesaPage() {
                           ))
                         )}
                       </select>
-                    {isChangingStage ? (
-                      <Loader2 className="absolute right-2 h-4 w-4 animate-spin text-zinc-400 pointer-events-none" />
-                    ) : (
-                      <div className="absolute right-2 pointer-events-none">
-                        <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
+                      {isChangingStage ? (
+                        <Loader2 className="absolute right-2 h-4 w-4 animate-spin text-zinc-400 pointer-events-none" />
+                      ) : (
+                        <div className="absolute right-2 pointer-events-none">
+                          <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
               <div className="flex items-center gap-2">
-              {contactData && !loading && promiseData && (() => {
-                const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
-                const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' || 
-                                       currentStage?.name.toLowerCase().includes('aprobado');
-                const hasEvent = promiseData.has_event || false;
-                const isRestricted = isApprovedStage && hasEvent;
-                return !isRestricted;
-              })() && (
-                <PromiseQuickActions
-                  studioSlug={studioSlug}
-                  contactId={contactData.contactId}
-                  contactName={contactData.contactName}
-                  phone={contactData.phone}
-                  email={contactData.email}
-                  promiseId={promiseId}
-                />
-              )}
-              <ZenDropdownMenu>
-                <ZenDropdownMenuTrigger asChild>
-                  <ZenButton
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    disabled={isArchiving || isUnarchiving || isDeleting}
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </ZenButton>
-                </ZenDropdownMenuTrigger>
-                <ZenDropdownMenuContent align="end">
-                  {isArchived ? (
-                    <ZenDropdownMenuItem
-                      onClick={() => handleUnarchive()}
-                      disabled={isUnarchiving}
-                    >
-                      <ArchiveRestore className="h-4 w-4 mr-2" />
-                      {isUnarchiving ? 'Desarchivando...' : 'Desarchivar'}
-                    </ZenDropdownMenuItem>
-                  ) : (
-                    <ZenDropdownMenuItem
-                      onClick={() => setShowArchiveModal(true)}
-                      disabled={isArchiving}
-                    >
-                      <Archive className="h-4 w-4 mr-2" />
-                      {isArchiving ? 'Archivando...' : 'Archivar'}
-                    </ZenDropdownMenuItem>
+                {contactData && !loading && promiseData && (() => {
+                  const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
+                  const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' ||
+                    currentStage?.name.toLowerCase().includes('aprobado');
+                  const hasEvent = promiseData.has_event || false;
+                  const isRestricted = isApprovedStage && hasEvent;
+                  return !isRestricted;
+                })() && (
+                    <PromiseQuickActions
+                      studioSlug={studioSlug}
+                      contactId={contactData.contactId}
+                      contactName={contactData.contactName}
+                      phone={contactData.phone}
+                      email={contactData.email}
+                      promiseId={promiseId}
+                    />
                   )}
-                  <ZenDropdownMenuSeparator />
-                  <ZenDropdownMenuItem
-                    onClick={() => setShowDeleteModal(true)}
-                    disabled={isDeleting}
-                    className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    {isDeleting ? 'Eliminando...' : 'Eliminar'}
-                  </ZenDropdownMenuItem>
-                </ZenDropdownMenuContent>
-              </ZenDropdownMenu>
+                <ZenDropdownMenu>
+                  <ZenDropdownMenuTrigger asChild>
+                    <ZenButton
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      disabled={isArchiving || isUnarchiving || isDeleting}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </ZenButton>
+                  </ZenDropdownMenuTrigger>
+                  <ZenDropdownMenuContent align="end">
+                    {isArchived ? (
+                      <ZenDropdownMenuItem
+                        onClick={() => handleUnarchive()}
+                        disabled={isUnarchiving}
+                      >
+                        <ArchiveRestore className="h-4 w-4 mr-2" />
+                        {isUnarchiving ? 'Desarchivando...' : 'Desarchivar'}
+                      </ZenDropdownMenuItem>
+                    ) : (
+                      <ZenDropdownMenuItem
+                        onClick={() => setShowArchiveModal(true)}
+                        disabled={isArchiving}
+                      >
+                        <Archive className="h-4 w-4 mr-2" />
+                        {isArchiving ? 'Archivando...' : 'Archivar'}
+                      </ZenDropdownMenuItem>
+                    )}
+                    <ZenDropdownMenuSeparator />
+                    <ZenDropdownMenuItem
+                      onClick={() => setShowDeleteModal(true)}
+                      disabled={isDeleting}
+                      className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {isDeleting ? 'Eliminando...' : 'Eliminar'}
+                    </ZenDropdownMenuItem>
+                  </ZenDropdownMenuContent>
+                </ZenDropdownMenu>
               </div>
             </div>
           </div>
@@ -581,6 +584,7 @@ export default function EditarPromesaPage() {
               event_type_id: promiseData.event_type_id,
               event_type_name: promiseData.event_type_name || undefined,
               event_location: promiseData.event_location || undefined,
+              event_name: promiseData.event_name || undefined,
               interested_dates: promiseData.interested_dates,
               acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
               acquisition_channel_name: promiseData.acquisition_channel_name || undefined,
@@ -597,17 +601,19 @@ export default function EditarPromesaPage() {
       </ZenCard>
 
       {/* Modal de edición */}
-      <PromiseFormModal
+      <ContactEventFormModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         studioSlug={studioSlug}
+        context="promise"
         initialData={{
           id: promiseData.id,
           name: promiseData.name,
           phone: promiseData.phone,
-          email: promiseData.email,
+          email: promiseData.email || undefined,
           event_type_id: promiseData.event_type_id || undefined,
           event_location: promiseData.event_location || undefined,
+          event_name: promiseData.event_name || undefined,
           interested_dates: promiseData.interested_dates || undefined,
           acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
           social_network_id: promiseData.social_network_id || undefined,

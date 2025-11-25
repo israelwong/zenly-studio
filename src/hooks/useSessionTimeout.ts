@@ -50,6 +50,9 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}) {
     onSessionTimeout,
   } = options;
 
+  // Si el timeout es muy alto (rememberMe activo), deshabilitar completamente
+  const isRememberMeActive = inactivityTimeout > 1000000; // ~2 años en minutos
+
   const router = useRouter();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const warningRef = useRef<NodeJS.Timeout | null>(null);
@@ -106,6 +109,11 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}) {
   }, [warningTime]);
 
   const resetTimers = useCallback(() => {
+    // Si rememberMe está activo, no configurar timers
+    if (isRememberMeActive) {
+      return;
+    }
+
     clearTimers();
     
     const timeoutMs = inactivityTimeout * 60 * 1000;
@@ -122,7 +130,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}) {
     timeoutRef.current = setTimeout(() => {
       handleSessionTimeout();
     }, timeoutMs);
-  }, [inactivityTimeout, warningTime, showWarning, clearTimers, showWarningToast, handleSessionTimeout]);
+  }, [inactivityTimeout, warningTime, showWarning, clearTimers, showWarningToast, handleSessionTimeout, isRememberMeActive]);
 
   const handleActivity = useCallback(() => {
     const now = Date.now();
@@ -137,6 +145,11 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}) {
   }, [resetTimers]);
 
   useEffect(() => {
+    // Si rememberMe está activo, no configurar timers ni listeners
+    if (isRememberMeActive) {
+      return;
+    }
+
     // Eventos que indican actividad del usuario
     const events = [
       'mousedown',
@@ -162,7 +175,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}) {
       });
       clearTimers();
     };
-  }, [handleActivity, resetTimers, clearTimers]);
+  }, [handleActivity, resetTimers, clearTimers, isRememberMeActive]);
 
   return {
     /**

@@ -18,7 +18,7 @@ const pgPool = globalThis.__pgPool || new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10, // Máximo de conexiones en el pool
   idleTimeoutMillis: 30000, // Cerrar conexiones inactivas después de 30s
-  connectionTimeoutMillis: 2000, // Timeout para obtener conexión del pool
+  connectionTimeoutMillis: 10000, // Timeout para obtener conexión del pool (aumentado de 2s a 10s)
 });
 
 // Reutilizar el pool en desarrollo (en producción Next.js cachea los módulos)

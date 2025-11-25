@@ -269,7 +269,7 @@ async function main() {
         console.log('\n⚠️  ALGUNAS VALIDACIONES FALLARON');
         console.log('   Revisar logs y ejecutar:');
         console.log('   1. npx supabase db reset');
-        console.log('   2. npx tsx prisma/seed-demo-users.ts');
+        console.log('   2. npx tsx prisma/02-seed-demo-users.ts');
     }
     
     process.exit(failed > 0 ? 1 : 0);

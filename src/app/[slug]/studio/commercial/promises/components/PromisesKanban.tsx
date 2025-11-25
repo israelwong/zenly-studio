@@ -23,7 +23,7 @@ import {
 import { ZenInput } from '@/components/ui/zen';
 import { PromiseKanbanCard } from './PromiseKanbanCard';
 import { PipelineConfigModal } from './PipelineConfigModal';
-import { PromiseFormModal } from './PromiseFormModal';
+import { ContactEventFormModal } from '@/components/shared/contact-info';
 import { PromiseTagsManageModal } from './PromiseTagsManageModal';
 import { movePromise } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
@@ -642,7 +642,7 @@ export function PromisesKanban({
         onClose={() => setIsTagsModalOpen(false)}
         studioSlug={studioSlug}
       />
-      <PromiseFormModal
+      <ContactEventFormModal
         isOpen={isPromiseFormModalOpen}
         onClose={() => setIsPromiseFormModalOpen(false)}
         studioSlug={studioSlug}

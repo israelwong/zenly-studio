@@ -209,6 +209,7 @@ export async function getPromiseById(
   event_type_id: string | null;
   event_type_name: string | null;
   event_location: string | null;
+  event_name: string | null; // Nombre del evento
   interested_dates: string[] | null;
   defined_date: Date | null;
   acquisition_channel_id: string | null;
@@ -293,6 +294,7 @@ export async function getPromiseById(
         event_type_id: promise.event_type_id,
         event_type_name: promise.event_type?.name || null,
         event_location: promise.event_location || null,
+        event_name: promise.name || null,
         interested_dates: promise.tentative_dates
           ? (promise.tentative_dates as string[])
           : null,

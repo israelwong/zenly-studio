@@ -1187,11 +1187,9 @@ model studio_paquete_items {
   @@index([paquete_id])
 }
 
-
-
 //! COMMERCIAL (CLIENTES)
 
-model studio_clientes {//!desusar
+model studio_clientes {
   id                     String                  @id @default(cuid())
   studio_id              String
   email                  String
@@ -1268,7 +1266,6 @@ model studio_contact_logs {
 
 //! PROMISES PIPELINE
 
-
 //! PROMISES
 
 model studio_promises {
@@ -1276,10 +1273,13 @@ model studio_promises {
   studio_id         String
   contact_id        String
   event_type_id     String?
-  event_location    String?
+  event_location    String? // Lugar del evento (consolidado con sede)
+  name              String? // Nombre del evento (opcional)
+  address           String? // Dirección del evento (movido desde studio_events)
+  event_date        DateTime? // Fecha del evento confirmada (consolidado con defined_date)
   pipeline_stage_id String?
   status            String                          @default("pending")
-  defined_date      DateTime?
+  defined_date      DateTime? // Mantener para compatibilidad con fechas tentativas
   tentative_dates   Json?
   created_at        DateTime                        @default(now())
   updated_at        DateTime                        @updatedAt
@@ -1298,6 +1298,7 @@ model studio_promises {
   @@index([studio_id, contact_id])
   @@index([studio_id, status])
   @@index([pipeline_stage_id])
+  @@index([event_date])
 }
 
 model studio_promise_pipeline_stages {
@@ -1371,30 +1372,24 @@ model studio_promises_tags {
 //! BUSINESS (EVENTOS)
 
 model studio_events {
-  id             String      @id @default(cuid())
-  studio_id      String
-  contact_id     String
-  promise_id     String?     @unique
-  cotizacion_id  String?     @unique
-  event_type_id  String?
-  stage_id       String?
-  name           String?     @default("Pendiente")
-  event_date     DateTime
-  address        String?
-  sede           String?
-  status         EventStatus @default(ACTIVE)
-  user_id        String?
-  created_at     DateTime    @default(now())
-  updated_at     DateTime    @updatedAt
+  id            String      @id @default(cuid())
+  studio_id     String
+  contact_id    String
+  promise_id    String      @unique // REQUERIDO: evento no puede existir sin promesa
+  cotizacion_id String?     @unique
+  event_type_id String?
+  stage_id      String?
+  event_date    DateTime // Leer de promise.event_date
+  status        EventStatus @default(ACTIVE)
+  user_id       String?
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
 
   // Campos operativos (de manager_events)
-  contract_value          Decimal?
-  paid_amount             Decimal  @default(0)
-  pending_amount          Decimal  @default(0)
   studio_manager_id       String?
   started_at              DateTime?
   completed_at            DateTime?
-  originated_from_lead_id String?  @unique
+  originated_from_lead_id String?   @unique
 
   // Relaciones comerciales
   contact         studio_contacts                 @relation(fields: [contact_id], references: [id])
@@ -1417,7 +1412,6 @@ model studio_events {
   // Relaciones operativas (de manager_events)
   gantt                studio_gantt_event_instances?
   deliverables         studio_event_deliverables[]
-  payments             studio_event_payments[]
   tasks                studio_event_tasks[]
   timeline             studio_event_timeline[]
   client_portal_access studio_client_portal_access[]
@@ -1646,19 +1640,6 @@ model studio_gantt_task_activity {
   @@index([action])
 }
 
-model studio_event_payments {
-  id                String        @id @default(cuid())
-  event_id          String
-  amount            Decimal
-  payment_method    String
-  payment_date      DateTime
-  concept           String?
-  stripe_payment_id String?       @unique
-  created_at        DateTime      @default(now())
-  event             studio_events @relation(fields: [event_id], references: [id], onDelete: Cascade)
-
-  @@index([event_id, payment_date])
-}
 
 //! BUSINESS (CREW)
 model studio_crew_categories {
@@ -1968,65 +1949,65 @@ model studio_cotizaciones {
 }
 
 model studio_cotizacion_items {
-  id                         String                 @id @default(cuid())
+  id                         String              @id @default(cuid())
   cotizacion_id              String
   item_id                    String?
   service_category_id        String?
-  quantity                   Int                    @default(1)
-  position                   Int                    @default(0)
+  quantity                   Int                 @default(1)
+  position                   Int                 @default(0)
   assigned_to_crew_member_id String?
-  gantt_task_id              String?                @unique
+  gantt_task_id              String?             @unique
   assignment_date            DateTime?
   delivery_date              DateTime?
   task_type                  CotizacionItemType?
   internal_delivery_days     Int?
   client_delivery_days       Int?
-  status                     ItemStatus             @default(PENDING)
-  
+  status                     ItemStatus          @default(PENDING)
+
   // Tracking de revisiones (OPCIONAL)
-  internal_review_required   Boolean                @default(false)
-  client_review_required     Boolean                @default(false)
-  internal_delivered_at      DateTime?
-  internal_approved_at       DateTime?
-  internal_rejected_at       DateTime?
-  internal_rejection_notes   String?
-  client_delivered_at        DateTime?
-  client_approved_at         DateTime?
-  client_rejected_at         DateTime?
-  client_rejection_notes     String?
-  revision_count             Int                    @default(0)
-  max_revisions_allowed      Int?
-  seccion_name_snapshot      String?
-  category_name_snapshot     String?
-  name_snapshot              String                     @default("Servicio migrado")
-  description_snapshot       String?
-  unit_price_snapshot        Float                      @default(0)
-  cost_snapshot              Float                      @default(0)
-  expense_snapshot           Float                      @default(0)
-  profit_snapshot            Float                      @default(0)
-  public_price_snapshot      Float                      @default(0)
-  profit_type_snapshot       String                     @default("servicio")
-  unit_price                 Float                      @default(0)
-  subtotal                   Float                      @default(0)
-  name                       String?
-  description                String?
-  cost                       Float?                     @default(0)
-  expense                    Float?                     @default(0)
-  profit                     Float?                     @default(0)
-  public_price               Float?                     @default(0)
-  profit_type                String?                    @default("servicio")
-  category_name              String?
-  seccion_name               String?
-  is_custom                  Boolean                    @default(false)
-  original_service_id        String?
-  created_at                 DateTime                   @default(now())
-  updated_at                 DateTime                   @updatedAt
-  cotizaciones               studio_cotizaciones        @relation(fields: [cotizacion_id], references: [id], onDelete: Cascade)
-  items                      studio_items?              @relation(fields: [item_id], references: [id])
-  service_categories         studio_service_categories? @relation(fields: [service_category_id], references: [id])
-  assigned_to_crew_member    studio_crew_members?       @relation(fields: [assigned_to_crew_member_id], references: [id])
-  gantt_task                 studio_gantt_event_tasks?  @relation("CotizacionItemGanttTask")
-  nomina_servicios           studio_nomina_servicios[]
+  internal_review_required Boolean                    @default(false)
+  client_review_required   Boolean                    @default(false)
+  internal_delivered_at    DateTime?
+  internal_approved_at     DateTime?
+  internal_rejected_at     DateTime?
+  internal_rejection_notes String?
+  client_delivered_at      DateTime?
+  client_approved_at       DateTime?
+  client_rejected_at       DateTime?
+  client_rejection_notes   String?
+  revision_count           Int                        @default(0)
+  max_revisions_allowed    Int?
+  seccion_name_snapshot    String?
+  category_name_snapshot   String?
+  name_snapshot            String                     @default("Servicio migrado")
+  description_snapshot     String?
+  unit_price_snapshot      Float                      @default(0)
+  cost_snapshot            Float                      @default(0)
+  expense_snapshot         Float                      @default(0)
+  profit_snapshot          Float                      @default(0)
+  public_price_snapshot    Float                      @default(0)
+  profit_type_snapshot     String                     @default("servicio")
+  unit_price               Float                      @default(0)
+  subtotal                 Float                      @default(0)
+  name                     String?
+  description              String?
+  cost                     Float?                     @default(0)
+  expense                  Float?                     @default(0)
+  profit                   Float?                     @default(0)
+  public_price             Float?                     @default(0)
+  profit_type              String?                    @default("servicio")
+  category_name            String?
+  seccion_name             String?
+  is_custom                Boolean                    @default(false)
+  original_service_id      String?
+  created_at               DateTime                   @default(now())
+  updated_at               DateTime                   @updatedAt
+  cotizaciones             studio_cotizaciones        @relation(fields: [cotizacion_id], references: [id], onDelete: Cascade)
+  items                    studio_items?              @relation(fields: [item_id], references: [id])
+  service_categories       studio_service_categories? @relation(fields: [service_category_id], references: [id])
+  assigned_to_crew_member  studio_crew_members?       @relation(fields: [assigned_to_crew_member_id], references: [id])
+  gantt_task               studio_gantt_event_tasks?  @relation("CotizacionItemGanttTask")
+  nomina_servicios         studio_nomina_servicios[]
 
   @@index([cotizacion_id])
   @@index([assigned_to_crew_member_id])

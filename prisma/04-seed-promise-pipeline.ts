@@ -1,4 +1,4 @@
-// prisma/seed-promise-pipeline.ts
+// prisma/04-seed-promise-pipeline.ts
 /**
  * SEED PROMISE PIPELINE
  * 
@@ -6,14 +6,36 @@
  * Crea las 4 etapas por defecto: Pendiente, En Negociación, Aprobado, Archivado
  * 
  * Uso: 
- *   npm run db:seed-promise-pipeline <studio-slug>
  *   npm run db:seed-promise-pipeline demo-studio
  *   npm run db:seed-promise-pipeline (sin argumentos pobla todos los studios activos)
+ * Orden: 04 (último)
  */
 
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
+import { config } from 'dotenv';
+import { resolve } from 'path';
 
-const prisma = new PrismaClient();
+// Cargar variables de entorno
+config({ path: resolve(process.cwd(), '.env.local') });
+
+// Crear pool de conexiones PostgreSQL
+const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 1,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+// Crear adapter de Prisma para PostgreSQL
+const adapter = new PrismaPg(pgPool);
+
+// Cliente de Prisma con adapter (requerido en Prisma 7)
+const prisma = new PrismaClient({
+  adapter,
+  log: ['error'],
+});
 
 async function seedPromisePipeline(studioId: string, studioName: string) {
     // Etapas iniciales del pipeline

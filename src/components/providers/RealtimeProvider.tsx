@@ -36,10 +36,10 @@ export function RealtimeProvider({
 
     const setupRealtime = async () => {
       try {
-        // Verificar que hay sesión activa
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Verificar que hay sesión activa usando getUser() para autenticación segura
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
         
-        if (sessionError || !session) {
+        if (userError || !user) {
           console.warn('[RealtimeProvider] No hay sesión activa, saltando Realtime');
           return;
         }

@@ -40,6 +40,12 @@ const DIRECT_CONNECTION_COMMANDS = [
   "migrate reset",
 ];
 
+// Comandos de migración que necesitan --skip-shadow-database para Supabase
+// NOTA: migrate deploy NO acepta --skip-shadow-database
+const MIGRATE_COMMANDS_WITH_SKIP_SHADOW = [
+  "migrate dev",
+];
+
 const args = process.argv.slice(2);
 const command = args.join(" ");
 
@@ -51,9 +57,16 @@ const needsDirectConnection = DIRECT_CONNECTION_COMMANDS.some((cmd) =>
 if (needsDirectConnection) {
   console.log("🔗 Usando conexión directa (DIRECT_URL) para:", command);
   
+  // Agregar --skip-shadow-database solo para migrate dev (necesario para Supabase)
+  // migrate deploy NO acepta este flag
+  const needsSkipShadow = MIGRATE_COMMANDS_WITH_SKIP_SHADOW.some((cmd) => command.includes(cmd));
+  const finalCommand = needsSkipShadow 
+    ? `${command} --skip-shadow-database`
+    : command;
+  
   // Ejecutar Prisma con DIRECT_URL como DATABASE_URL temporalmente
   // Esto evita el error "prepared statement already exists" del pooler
-  execSync(`npx prisma ${command}`, {
+  execSync(`npx prisma ${finalCommand}`, {
     stdio: "inherit",
     env: {
       ...process.env,

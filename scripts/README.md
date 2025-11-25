@@ -1,13 +1,89 @@
-# 🛠️ Scripts Utilidad
+# 🛠️ Scripts de Utilidad
 
 Scripts de desarrollo y mantenimiento para ZEN Platform.
 
 ---
 
-## 📋 Scripts Disponibles
+## 📋 Scripts Activos
 
-### `validate-auth-setup.ts`
+### Prisma & Base de Datos
 
+#### `prisma-safe.ts`
+**Propósito:** Ejecutar comandos de Prisma con timeouts y manejo de errores mejorado
+
+**Uso:** Usado automáticamente por `npm run db:push` y `npm run db:migrate`
+
+**Comandos soportados:**
+- `db push` - Sincronizar schema con base de datos
+- `migrate dev` - Crear y aplicar migraciones
+
+---
+
+#### `prisma-with-direct.ts`
+**Propósito:** Ejecutar comandos de Prisma usando conexión directa (DIRECT_URL) para evitar problemas con el pooler de Supabase
+
+**Uso:** Usado automáticamente por `npm run db:reset`
+
+**Comandos soportados:**
+- `migrate reset` - Resetear base de datos y aplicar migraciones
+- `db push` - Sincronizar schema
+- `migrate dev` / `migrate deploy` - Con `--skip-shadow-database` para Supabase
+
+---
+
+#### `execute-sql.ts`
+**Propósito:** Ejecutar archivos SQL directamente en la base de datos usando DIRECT_URL
+
+**Uso:**
+```bash
+npm run db:execute-sql <ruta-al-archivo.sql>
+```
+
+**Ejemplo:**
+```bash
+npm run db:execute-sql prisma/migrations/manual_fix.sql
+```
+
+---
+
+### Setup & Validación
+
+#### `01-setup-complete.sh`
+**Propósito:** Setup completo del proyecto (migrations + seeds)
+
+**Uso:**
+```bash
+bash scripts/01-setup-complete.sh
+```
+
+**Ejecuta:**
+1. Reset DB + Migrations (`npx supabase db reset`)
+2. Seed Maestro (Platform Core)
+3. Seed Usuarios Demo
+4. Seed Catálogo
+5. Seed Promise Pipeline
+6. Validación final
+
+---
+
+#### `02-setup-seeds-only.sh`
+**Propósito:** Ejecutar solo seeds sin resetear la base de datos
+
+**Uso:**
+```bash
+bash scripts/02-setup-seeds-only.sh
+```
+
+**Ejecuta:**
+1. Seed Maestro
+2. Seed Usuarios Demo
+3. Seed Catálogo
+4. Seed Promise Pipeline
+5. Validación (opcional)
+
+---
+
+#### `validate-auth-setup.ts`
 **Propósito:** Validar que el sistema Auth + Realtime esté configurado correctamente
 
 **Ejecutar:**
@@ -23,100 +99,48 @@ npx tsx scripts/validate-auth-setup.ts
 5. ✅ Políticas RLS existen y son correctas
 6. ✅ Políticas Realtime configuradas
 
-**Output esperado:**
-```
-🔍 VALIDACIÓN SETUP AUTH + REALTIME
-============================================================
-
-📋 1. Verificando usuarios en Supabase Auth...
-   ✅ Encontrados 3 usuarios en auth.users
-      - admin@prosocial.mx (uuid-123...)
-      - owner@demo-studio.com (uuid-456...)
-      - fotografo@demo-studio.com (uuid-789...)
-
-📋 2. Verificando studio_user_profiles.supabase_id...
-   ✅ Encontrados 3 perfiles
-      ✅ admin@prosocial.mx → supabase_id: uuid-123...
-      ✅ owner@demo-studio.com → supabase_id: uuid-456...
-      ✅ fotografo@demo-studio.com → supabase_id: uuid-789...
-
-📋 3. Verificando sincronización Auth ↔ Profiles...
-   ✅ admin@prosocial.mx sincronizado correctamente
-   ✅ owner@demo-studio.com sincronizado correctamente
-   ✅ fotografo@demo-studio.com sincronizado correctamente
-
-📋 4. Verificando RLS habilitado...
-   ✅ RLS habilitado en studio_user_profiles
-
-📋 5. Verificando políticas RLS...
-   ✅ Encontradas 3 políticas:
-      - studio_user_profiles_read_own (SELECT)
-      - studio_user_profiles_read_studio (SELECT)
-      - studio_user_profiles_update_own (UPDATE)
-
-📋 6. Verificando políticas Realtime...
-   ✅ Encontradas 2 políticas Realtime:
-      - studio_notifications_can_read_broadcasts
-      - studio_notifications_can_write_broadcasts
-
-============================================================
-
-📊 RESUMEN VALIDACIÓN:
-
-✅ authUsers
-✅ profilesSupabaseId
-✅ syncAuthProfiles
-✅ rlsEnabled
-✅ rlsPolicies
-✅ realtimePolicies
-
-6 passed, 0 failed
-
-🎉 ¡TODAS LAS VALIDACIONES PASARON!
-   Sistema listo para usar Auth + Realtime
-```
-
 **Cuándo ejecutar:**
 - Después de `npx supabase db reset`
 - Después de ejecutar seed
 - Antes de probar Realtime
 - Al hacer debug de auth issues
 
-**Si falla:**
-```bash
-# 1. Reset DB
-npx supabase db reset
+---
 
-# 2. Re-ejecutar seed
-npx tsx prisma/seed-demo-users.ts
+## 📁 Estructura
 
-# 3. Validar nuevamente
-npx tsx scripts/validate-auth-setup.ts
+```
+scripts/
+├── prisma-safe.ts          # Prisma con timeouts
+├── prisma-with-direct.ts   # Prisma con conexión directa
+├── execute-sql.ts          # Ejecutor SQL
+├── validate-auth-setup.ts  # Validación Auth
+├── verify-seeds.ts         # Verificación de seeds
+├── 01-setup-complete.sh    # Setup completo (orden 1)
+├── 02-setup-seeds-only.sh  # Solo seeds (orden 2)
+└── README.md              # Este archivo
 ```
 
 ---
 
-## 🔜 Futuros Scripts
+## 🔧 Scripts NPM Relacionados
 
-### `cleanup-inactive-users.ts` (Planeado)
-Limpiar usuarios inactivos > 90 días sin login
+Ver `package.json` para comandos completos:
 
-### `migrate-legacy-auth.ts` (Planeado)
-Migrar usuarios sin `supabase_id` desde sistema legacy
-
-### `generate-test-notifications.ts` (Planeado)
-Generar notificaciones de prueba para testing Realtime
+- `npm run db:push` - Usa `prisma-safe.ts`
+- `npm run db:migrate` - Usa `prisma-safe.ts`
+- `npm run db:execute-sql` - Usa `execute-sql.ts`
+- `npm run db:reset` - Usa `prisma-with-direct.ts`
 
 ---
 
 ## 📝 Convenciones
 
-**Naming:** `kebab-case.ts`
-**Shebang:** `#!/usr/bin/env tsx`
-**Error handling:** Exit code 0 (success) / 1 (error)
+**Naming:** `kebab-case.ts` para TypeScript, `kebab-case.sh` para bash  
+**Shebang:** `#!/usr/bin/env tsx` para TS, `#!/bin/bash` para bash  
+**Error handling:** Exit code 0 (success) / 1 (error)  
 **Logs:** Usar emojis para clarity 🎯
 
 ---
 
 **Última actualización: 2025-01-20**
-

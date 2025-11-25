@@ -50,11 +50,11 @@ export async function middleware(request: NextRequest) {
       }
     )
     
-    // Verificar sesión (getSession es suficiente aquí ya que solo verificamos si existe)
-    const { data: { session } } = await supabase.auth.getSession();
+    // Verificar sesión usando getUser() para autenticación segura
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (session?.user) {
-      const redirectResult = getRedirectPathForUser(session.user);
+    if (!userError && user) {
+      const redirectResult = getRedirectPathForUser(user);
       
       if (redirectResult.shouldRedirect && redirectResult.redirectPath) {
         return NextResponse.redirect(new URL(redirectResult.redirectPath, request.url));
@@ -100,14 +100,12 @@ export async function middleware(request: NextRequest) {
       }
     )
     
-    // Verificar sesión
-    const { data: { session } } = await supabase.auth.getSession();
+    // Verificar sesión usando getUser() para autenticación segura
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (!session?.user) {
+    if (userError || !user) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
-
-    const user = session.user;
     const userRole = user.user_metadata?.role;
     let studioSlug = user.user_metadata?.studio_slug;
 

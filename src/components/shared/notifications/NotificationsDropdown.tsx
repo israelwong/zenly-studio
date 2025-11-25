@@ -27,9 +27,15 @@ export function NotificationsDropdown({ studioSlug }: NotificationsDropdownProps
   const [open, setOpen] = useState(false);
   const [historySheetOpen, setHistorySheetOpen] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const previousUnreadCountRef = useRef(0);
   const { notifications, unreadCount, loading, error, markAsClicked, deleteNotification } =
     useStudioNotifications({ studioSlug });
+
+  // Evitar problemas de hidratación con Radix UI
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Detectar nuevas notificaciones cuando aumenta el contador
   useEffect(() => {
@@ -57,12 +63,23 @@ export function NotificationsDropdown({ studioSlug }: NotificationsDropdownProps
   const handleNotificationClick = async (
     notification: typeof notifications[0]
   ) => {
+    console.log('[NotificationsDropdown] 🔔 Click en notificación:', {
+      id: notification.id,
+      route: notification.route,
+      route_params: notification.route_params,
+      event_id: notification.event_id,
+      quote_id: notification.quote_id,
+      promise_id: notification.promise_id,
+    });
+
     const route = buildRoute(
       notification.route,
       notification.route_params as Record<string, string | null | undefined> | null,
       studioSlug,
       notification
     );
+
+    console.log('[NotificationsDropdown] 🛣️ Ruta construida:', route);
 
     // Marcar como clickeada
     await markAsClicked(notification.id, route);
@@ -98,6 +115,27 @@ export function NotificationsDropdown({ studioSlug }: NotificationsDropdownProps
   const getNotificationIcon = () => {
     return <Bell className="h-4 w-4" />;
   };
+
+  // Renderizar dropdown solo después del mount para evitar problemas de hidratación
+  if (!isMounted) {
+    return (
+      <ZenButton
+        variant="ghost"
+        size="icon"
+        className="relative rounded-full text-zinc-400 hover:text-zinc-200 hidden lg:flex"
+        title="Notificaciones"
+        disabled
+      >
+        <Bell className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+        <span className="sr-only">Notificaciones</span>
+      </ZenButton>
+    );
+  }
 
   return (
     <ZenDropdownMenu open={open} onOpenChange={setOpen}>
