@@ -4,7 +4,7 @@ import React from 'react';
 import { ContactEventInfoCard } from '@/components/shared/contact-info';
 import { EventGanttCard } from './EventGanttCard';
 import { EventPaymentsCard } from './EventPaymentsCard';
-import { EventAgendaCard } from './EventAgendaCard';
+import { EventAgendamiento } from './EventAgendamiento';
 
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
@@ -82,8 +82,16 @@ export function EventCardView({
             studioSlug={studioSlug}
             eventId={eventId}
             cotizacionId={eventData.cotizacion?.id}
-            ganttInstance={eventData.gantt ?? undefined}
-            cotizacionItems={eventData.cotizacion?.cotizacion_items}
+            ganttInstance={eventData.gantt ? {
+              id: eventData.gantt.id,
+              name: eventData.promise?.name || 'Cronograma',
+            } : undefined}
+            cotizacionItems={eventData.cotizacion?.cotizacion_items?.map(item => ({
+              id: item.id,
+              description: item.description || item.name,
+              quantity: item.quantity,
+              price: item.unit_price,
+            }))}
             onTaskUpdated={onEventUpdated}
           />
         </div>
@@ -94,17 +102,21 @@ export function EventCardView({
             studioSlug={studioSlug}
             eventId={eventId}
             cotizacionId={eventData.cotizacion?.id}
-            contractValue={eventData.contract_value}
+            contractValue={eventData.contract_value ?? undefined}
             paidAmount={eventData.paid_amount}
             pendingAmount={eventData.pending_amount}
-            payments={eventData.payments ?? []}
+            payments={(eventData.payments ?? []).map(payment => ({
+              id: payment.id,
+              amount: payment.amount,
+              date: payment.payment_date.toISOString().split('T')[0],
+            }))}
             onPaymentAdded={onEventUpdated}
           />
 
-          <EventAgendaCard
+          <EventAgendamiento
             studioSlug={studioSlug}
             eventId={eventId}
-            agenda={eventData.agenda ?? []}
+            eventDate={eventData.promise?.event_date || eventData.event_date}
             onAgendaUpdated={onEventUpdated}
           />
         </div>

@@ -359,6 +359,23 @@ export function AgendaForm({
                 )}
             </div>
 
+            {/* Nombre o descripción */}
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Nombre o descripción
+                </label>
+                <textarea
+                    value={description}
+                    onChange={(e) => {
+                        setDescription(e.target.value);
+                        setHasUserModified(true);
+                    }}
+                    placeholder="Notas adicionales sobre el agendamiento"
+                    className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                />
+            </div>
+
             {/* Campos condicionales según tipo */}
             {eventType === 'presencial' && (
                 <>
@@ -412,23 +429,6 @@ export function AgendaForm({
                     />
                 </div>
             )}
-
-            {/* Descripción */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Descripción
-                </label>
-                <textarea
-                    value={description}
-                    onChange={(e) => {
-                        setDescription(e.target.value);
-                        setHasUserModified(true);
-                    }}
-                    placeholder="Notas adicionales sobre el agendamiento"
-                    className="w-full min-h-[80px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-md text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                />
-            </div>
 
             {/* Información del contexto */}
             {contexto && (

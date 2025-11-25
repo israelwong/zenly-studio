@@ -77,6 +77,8 @@ export interface AgendaItem {
     is_confirmed_event_date?: boolean;
     // Indica si la fecha está caducada (fecha pasada)
     is_expired?: boolean;
+    // Indica si es la fecha principal del evento (event_date de la promesa)
+    is_main_event_date?: boolean;
 }
 
 export interface ActionResponse<T> {
@@ -174,6 +176,7 @@ export async function obtenerAgendaUnificada(
                         promise: {
                             select: {
                                 name: true,
+                                event_date: true,
                             },
                         },
                         contact: {
@@ -192,34 +195,44 @@ export async function obtenerAgendaUnificada(
             },
         });
 
-        const items: AgendaItem[] = agendas.map((agenda) => ({
-            id: agenda.id,
-            date: agenda.date || new Date(),
-            time: agenda.time,
-            address: agenda.address,
-            concept: agenda.concept,
-            description: agenda.description,
-            link_meeting_url: agenda.link_meeting_url,
-            type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
-            status: agenda.status,
-            contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
-            promise_id: agenda.promise_id,
-            evento_id: agenda.evento_id,
-            metadata: agenda.metadata as Record<string, unknown> | null,
-            created_at: agenda.created_at || null,
-            updated_at: agenda.updated_at || null,
-            contact_name: agenda.promise?.contact?.name || agenda.eventos?.contact?.name || null,
-            contact_phone: agenda.promise?.contact?.phone || agenda.eventos?.contact?.phone || null,
-            // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
-            contact_email: agenda.promise?.contact?.email || agenda.eventos?.contact?.email || null,
-            // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
-            contact_avatar_url: agenda.promise?.contact?.avatar_url || agenda.eventos?.contact?.avatar_url || null,
-            event_name: agenda.eventos?.promise?.name || null,
-            event_type_name: agenda.eventos?.event_type?.name || null,
-            promise_status: agenda.promise_id ? 'pending' : null,
-            evento_status: agenda.eventos?.status || null,
-            is_pending_date: false,
-        }));
+        const items: AgendaItem[] = agendas.map((agenda) => {
+            // Determinar si es fecha principal del evento comparando con event_date de la promesa
+            const eventMainDate = agenda.eventos?.promise?.event_date;
+            const agendaDate = agenda.date ? new Date(agenda.date) : null;
+            const isMainEventDate = eventMainDate && agendaDate && 
+                new Date(eventMainDate).toDateString() === agendaDate.toDateString() &&
+                agenda.contexto === 'evento';
+
+            return {
+                id: agenda.id,
+                date: agenda.date || new Date(),
+                time: agenda.time,
+                address: agenda.address,
+                concept: agenda.concept,
+                description: agenda.description,
+                link_meeting_url: agenda.link_meeting_url,
+                type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
+                status: agenda.status,
+                contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
+                promise_id: agenda.promise_id,
+                evento_id: agenda.evento_id,
+                metadata: agenda.metadata as Record<string, unknown> | null,
+                created_at: agenda.created_at || null,
+                updated_at: agenda.updated_at || null,
+                contact_name: agenda.promise?.contact?.name || agenda.eventos?.contact?.name || null,
+                contact_phone: agenda.promise?.contact?.phone || agenda.eventos?.contact?.phone || null,
+                // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
+                contact_email: agenda.promise?.contact?.email || agenda.eventos?.contact?.email || null,
+                // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
+                contact_avatar_url: agenda.promise?.contact?.avatar_url || agenda.eventos?.contact?.avatar_url || null,
+                event_name: agenda.eventos?.promise?.name || null,
+                event_type_name: agenda.eventos?.event_type?.name || null,
+                promise_status: agenda.promise_id ? 'pending' : null,
+                evento_status: agenda.eventos?.status || null,
+                is_pending_date: false,
+                is_main_event_date: isMainEventDate || false,
+            };
+        });
 
         // Obtener todas las promesas con fechas de interés (solo las que NO están en etapa "approved")
         const allPromisesWithDates = await prisma.studio_promises.findMany({
@@ -483,6 +496,7 @@ export async function obtenerAgendamientoPorId(
                         promise: {
                             select: {
                                 name: true,
+                                event_date: true,
                             },
                         },
                         contact: {
@@ -501,6 +515,13 @@ export async function obtenerAgendamientoPorId(
         if (!agenda) {
             return { success: false, error: 'Agendamiento no encontrado' };
         }
+
+        // Determinar si es fecha principal del evento
+        const eventMainDate = agenda.eventos?.promise?.event_date;
+        const agendaDate = agenda.date ? new Date(agenda.date) : null;
+        const isMainEventDate = eventMainDate && agendaDate && 
+            new Date(eventMainDate).toDateString() === agendaDate.toDateString() &&
+            agenda.contexto === 'evento';
 
         const item: AgendaItem = {
             id: agenda.id,
@@ -528,6 +549,7 @@ export async function obtenerAgendamientoPorId(
             event_type_name: agenda.eventos?.event_type?.name || null,
             promise_status: agenda.promise_id ? 'pending' : null,
             evento_status: agenda.eventos?.status || null,
+            is_main_event_date: isMainEventDate || false,
         };
 
         return {
@@ -623,6 +645,109 @@ export async function obtenerAgendamientoPorPromise(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al obtener agendamiento',
+        };
+    }
+}
+
+/**
+ * Obtener agendamientos por evento_id
+ */
+export async function obtenerAgendamientosPorEvento(
+    studioSlug: string,
+    eventoId: string
+): Promise<AgendaListResponse> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+
+        if (!studio) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        const agendas = await prisma.studio_agenda.findMany({
+            where: {
+                studio_id: studio.id,
+                evento_id: eventoId,
+                contexto: 'evento',
+            },
+            include: {
+                eventos: {
+                    select: {
+                        id: true,
+                        status: true,
+                        promise_id: true,
+                        event_type: {
+                            select: {
+                                name: true,
+                            },
+                        },
+                        promise: {
+                            select: {
+                                name: true,
+                                event_date: true,
+                            },
+                        },
+                        contact: {
+                            select: {
+                                name: true,
+                                phone: true,
+                                email: true,
+                                avatar_url: true,
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: {
+                date: 'asc',
+            },
+        });
+
+        const items: AgendaItem[] = agendas.map((agenda) => {
+            // Determinar si es fecha principal del evento
+            const eventMainDate = agenda.eventos?.promise?.event_date;
+            const agendaDate = agenda.date ? new Date(agenda.date) : null;
+            const isMainEventDate = eventMainDate && agendaDate && 
+                new Date(eventMainDate).toDateString() === agendaDate.toDateString();
+
+            return {
+                id: agenda.id,
+                date: agenda.date || new Date(),
+                time: agenda.time,
+                address: agenda.address,
+                concept: agenda.concept,
+                description: agenda.description,
+                link_meeting_url: agenda.link_meeting_url,
+                type_scheduling: (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null,
+                status: agenda.status,
+                contexto: 'evento',
+                promise_id: agenda.promise_id,
+                evento_id: agenda.evento_id,
+                metadata: agenda.metadata as Record<string, unknown> | null,
+                created_at: agenda.created_at || null,
+                updated_at: agenda.updated_at || null,
+                contact_name: agenda.eventos?.contact?.name || null,
+                contact_phone: agenda.eventos?.contact?.phone || null,
+                contact_email: agenda.eventos?.contact?.email || null,
+                contact_avatar_url: agenda.eventos?.contact?.avatar_url || null,
+                event_name: agenda.eventos?.promise?.name || null,
+                event_type_name: agenda.eventos?.event_type?.name || null,
+                evento_status: agenda.eventos?.status || null,
+                is_main_event_date: isMainEventDate || false,
+            };
+        });
+
+        return {
+            success: true,
+            data: items,
+        };
+    } catch (error) {
+        console.error('[AGENDA_UNIFIED] Error obteniendo agendamientos por evento:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al obtener agendamientos',
         };
     }
 }
@@ -729,6 +854,7 @@ export async function crearAgendamiento(
                         promise: {
                             select: {
                                 name: true,
+                                event_date: true,
                             },
                         },
                         contact: {
@@ -743,6 +869,13 @@ export async function crearAgendamiento(
                 },
             },
         });
+
+        // Determinar si es fecha principal del evento
+        const eventMainDate = agenda.eventos?.promise?.event_date;
+        const agendaDate = agenda.date ? new Date(agenda.date) : null;
+        const isMainEventDate = eventMainDate && agendaDate && 
+            new Date(eventMainDate).toDateString() === agendaDate.toDateString() &&
+            agenda.contexto === 'evento';
 
         const item: AgendaItem = {
             id: agenda.id,
@@ -774,6 +907,7 @@ export async function crearAgendamiento(
             promise_status: agenda.promise_id ? 'pending' : null,
             // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
             evento_status: agenda.eventos?.status || null,
+            is_main_event_date: isMainEventDate || false,
         };
 
         revalidatePath(`/${studioSlug}/studio/commercial/promises`);
@@ -942,6 +1076,7 @@ export async function actualizarAgendamiento(
                         promise: {
                             select: {
                                 name: true,
+                                event_date: true,
                             },
                         },
                         contact: {
@@ -956,6 +1091,13 @@ export async function actualizarAgendamiento(
                 },
             },
         });
+
+        // Determinar si es fecha principal del evento
+        const eventMainDate = agenda.eventos?.promise?.event_date;
+        const agendaDate = agenda.date ? new Date(agenda.date) : null;
+        const isMainEventDate = eventMainDate && agendaDate && 
+            new Date(eventMainDate).toDateString() === agendaDate.toDateString() &&
+            agenda.contexto === 'evento';
 
         const item: AgendaItem = {
             id: agenda.id,
@@ -987,6 +1129,7 @@ export async function actualizarAgendamiento(
             promise_status: agenda.promise_id ? 'pending' : null,
             // @ts-expect-error - Prisma includes relations but TypeScript doesn't infer them
             evento_status: agenda.eventos?.status || null,
+            is_main_event_date: isMainEventDate || false,
         };
 
         revalidatePath(`/${studioSlug}/studio/commercial/promises`);

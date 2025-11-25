@@ -18,7 +18,7 @@ interface AgendaFormModalProps {
   contexto?: 'promise' | 'evento';
   promiseId?: string | null;
   eventoId?: string | null;
-  onSuccess?: () => void;
+  onSuccess?: (agendaItem?: AgendaItem) => void;
 }
 
 export function AgendaFormModal({
@@ -65,7 +65,7 @@ export function AgendaFormModal({
 
         if (result.success) {
           toast.success('Agendamiento actualizado');
-          onSuccess?.();
+          onSuccess?.(result.data);
           onClose();
         } else {
           toast.error(result.error || 'Error al actualizar agendamiento');
@@ -88,7 +88,7 @@ export function AgendaFormModal({
 
         if (result.success) {
           toast.success('Agendamiento creado');
-          onSuccess?.();
+          onSuccess?.(result.data);
           onClose();
         } else {
           toast.error(result.error || 'Error al crear agendamiento');

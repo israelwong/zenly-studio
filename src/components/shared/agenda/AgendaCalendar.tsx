@@ -51,14 +51,27 @@ function agendaItemToEvent(item: AgendaItem) {
     end.setHours(23, 59, 59);
   }
 
-  // Generar título: "primer nombre (tipo evento)"
+  // Generar título según el tipo de agendamiento
   let title = '';
-  if (item.contact_name && item.event_type_name) {
+  
+  // Fecha principal del evento: "Nombre Evento (Tipo Evento)"
+  if (item.is_main_event_date && item.event_name && item.event_type_name) {
+    title = `${item.event_name} (${item.event_type_name})`;
+  } else if (item.is_main_event_date && item.event_name) {
+    title = item.event_name;
+  }
+  // Cita adicional del evento: "Nombre/Descripción - Nombre Evento"
+  else if (item.contexto === 'evento' && item.type_scheduling && item.event_name) {
+    const citaNombre = item.description || item.concept || 'Cita';
+    title = `${citaNombre} - ${item.event_name}`;
+  }
+  // Cita de promesa: "primer nombre (tipo evento)"
+  else if (item.contact_name && item.event_type_name) {
     title = `${getFirstName(item.contact_name)} (${item.event_type_name})`;
   } else if (item.contact_name) {
     title = getFirstName(item.contact_name);
   } else {
-    title = item.concept || item.event_name || 'Agendamiento';
+    title = item.concept || item.event_name || item.description || 'Agendamiento';
   }
 
   return {
@@ -163,8 +176,42 @@ const zenEventStyleGetter = (event: { resource?: AgendaItem }) => {
     };
   }
 
-  // 4. Evento (no promesa)
+  // 4. Evento - diferenciar fecha principal vs citas adicionales
   if (contexto === 'evento') {
+    // Fecha principal del evento - Verde emerald
+    if (item.is_main_event_date) {
+      return {
+        style: {
+          backgroundColor: '#10B981', // emerald-500
+          borderColor: '#047857', // emerald-700
+          borderWidth: '2px',
+          borderRadius: '6px',
+          color: '#FFFFFF',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          padding: '4px 8px',
+        },
+      };
+    }
+    
+    // Cita adicional del evento - Morado (virtual) o Azul (presencial)
+    if (item.type_scheduling) {
+      const isVirtual = item.type_scheduling === 'virtual';
+      return {
+        style: {
+          backgroundColor: isVirtual ? '#8B5CF6' : '#3B82F6', // purple-500 para virtual, blue-500 para presencial
+          borderColor: isVirtual ? '#7C3AED' : '#2563EB', // purple-600 para virtual, blue-600 para presencial
+          borderWidth: '2px',
+          borderRadius: '6px',
+          color: '#FFFFFF',
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          padding: '4px 8px',
+        },
+      };
+    }
+    
+    // Evento sin tipo específico (fallback) - Verde emerald
     return {
       style: {
         backgroundColor: '#10B981', // emerald-500
@@ -244,12 +291,21 @@ export function AgendaCalendar({
 
   // Calcular estadísticas
   const stats = useMemo(() => {
-    const citas = events.filter(
-      (item) => item.contexto === 'promise' && !item.is_pending_date && !item.is_confirmed_event_date && item.type_scheduling
+    // Citas virtuales: todas las que tienen type_scheduling === 'virtual'
+    const citasVirtuales = events.filter(
+      (item) => item.type_scheduling === 'virtual' && !item.is_main_event_date
     ).length;
+    // Citas presenciales: todas las que tienen type_scheduling === 'presencial'
+    const citasPresenciales = events.filter(
+      (item) => item.type_scheduling === 'presencial' && !item.is_main_event_date
+    ).length;
+    // Total de citas
+    const citas = citasVirtuales + citasPresenciales;
+    // Fechas de interés: fechas pendientes de promesas
     const fechasInteres = events.filter((item) => item.is_pending_date === true).length;
-    const fechasEvento = events.filter((item) => item.is_confirmed_event_date === true).length;
-    return { citas, fechasInteres, fechasEvento };
+    // Fechas principales de eventos: fechas principales confirmadas
+    const fechasEvento = events.filter((item) => item.is_main_event_date === true || item.is_confirmed_event_date === true).length;
+    return { citas, citasVirtuales, citasPresenciales, fechasInteres, fechasEvento };
   }, [events]);
 
   // Configurar inicio de semana (lunes) y formatos en español
@@ -588,24 +644,60 @@ export function AgendaCalendar({
       {/* Footer con estadísticas */}
       <div className="border-t border-zinc-800 px-4 py-3">
         <div className="flex items-center justify-center gap-4 text-sm flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-            <span className="text-zinc-300">
-              <span className="font-semibold text-white">{stats.citas}</span> cita{stats.citas !== 1 ? 's' : ''}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-zinc-500"></div>
-            <span className="text-zinc-300">
-              <span className="font-semibold text-white">{stats.fechasInteres}</span> fecha{stats.fechasInteres !== 1 ? 's' : ''} de interés
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-            <span className="text-zinc-300">
-              <span className="font-semibold text-white">{stats.fechasEvento}</span> fecha{stats.fechasEvento !== 1 ? 's' : ''} de evento
-            </span>
-          </div>
+          {/* Citas presenciales */}
+          {stats.citasPresenciales > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+              <span className="text-zinc-300">
+                <span className="font-semibold text-white">{stats.citasPresenciales}</span> cita{stats.citasPresenciales !== 1 ? 's' : ''} presencial{stats.citasPresenciales !== 1 ? 'es' : ''}
+              </span>
+            </div>
+          )}
+          {/* Citas virtuales */}
+          {stats.citasVirtuales > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-purple-500"></div>
+              <span className="text-zinc-300">
+                <span className="font-semibold text-white">{stats.citasVirtuales}</span> cita{stats.citasVirtuales !== 1 ? 's' : ''} virtual{stats.citasVirtuales !== 1 ? 'es' : ''}
+              </span>
+            </div>
+          )}
+          {/* Total de citas (si hay ambas) */}
+          {stats.citasPresenciales > 0 && stats.citasVirtuales > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+              <span className="text-zinc-300">
+                <span className="font-semibold text-white">{stats.citas}</span> cita{stats.citas !== 1 ? 's' : ''} total{stats.citas !== 1 ? 'es' : ''}
+              </span>
+            </div>
+          )}
+          {/* Solo mostrar total si hay citas pero no se muestran individuales */}
+          {stats.citas > 0 && stats.citasPresenciales === 0 && stats.citasVirtuales === 0 && (
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+              <span className="text-zinc-300">
+                <span className="font-semibold text-white">{stats.citas}</span> cita{stats.citas !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+          {/* Fechas de interés */}
+          {stats.fechasInteres > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-zinc-500"></div>
+              <span className="text-zinc-300">
+                <span className="font-semibold text-white">{stats.fechasInteres}</span> fecha{stats.fechasInteres !== 1 ? 's' : ''} de interés
+              </span>
+            </div>
+          )}
+          {/* Fechas principales de eventos */}
+          {stats.fechasEvento > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
+              <span className="text-zinc-300">
+                <span className="font-semibold text-white">{stats.fechasEvento}</span> fecha{stats.fechasEvento !== 1 ? 's' : ''} de evento
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
