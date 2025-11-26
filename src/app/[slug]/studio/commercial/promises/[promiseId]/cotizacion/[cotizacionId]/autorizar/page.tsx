@@ -275,7 +275,10 @@ export default function AutorizarCotizacionPage() {
   }
 
   // Verificar si la cotización ya está autorizada o aprobada
-  const isAlreadyAuthorized = cotizacion.status === 'autorizada' || cotizacion.status === 'aprobada';
+  const isAlreadyAuthorized =
+    cotizacion.status === 'autorizada' ||
+    cotizacion.status === 'aprobada' ||
+    cotizacion.status === 'approved';
 
   return (
     <div className="w-full max-w-7xl mx-auto">

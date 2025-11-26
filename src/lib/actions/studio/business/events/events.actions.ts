@@ -118,6 +118,8 @@ export interface EventoDetalle extends EventoBasico {
     price: number;
     status: string;
     created_at: Date;
+    updated_at: Date;
+    promise_id: string | null;
     condiciones_comerciales_id: string | null;
   }>; // Todas las cotizaciones del evento (incluye principal + adicionales)
   gantt?: {
@@ -810,6 +812,8 @@ export async function obtenerEventoDetalle(
             price: true,
             status: true,
             created_at: true,
+            updated_at: true,
+            promise_id: true,
             condiciones_comerciales_id: true,
           },
           orderBy: {

@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { CotizacionForm } from '../../../components/CotizacionForm';
-import { archiveCotizacion, deleteCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { archiveCotizacion, deleteCotizacion, getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getPromiseById } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { toast } from 'sonner';
 
@@ -22,6 +22,23 @@ export default function EditarCotizacionPage() {
   const [isFormLoading, setIsFormLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isValidatingDate, setIsValidatingDate] = useState(false);
+  const [cotizacionStatus, setCotizacionStatus] = useState<string | null>(null);
+
+  // Cargar estado de la cotización
+  useEffect(() => {
+    const loadCotizacionStatus = async () => {
+      try {
+        const result = await getCotizacionById(cotizacionId, studioSlug);
+        if (result.success && result.data) {
+          setCotizacionStatus(result.data.status);
+        }
+      } catch (error) {
+        console.error('Error loading cotizacion status:', error);
+      }
+    };
+
+    loadCotizacionStatus();
+  }, [cotizacionId, studioSlug]);
 
   const handleAutorizar = async () => {
     // Validar que exista al menos una fecha definida
@@ -30,7 +47,7 @@ export default function EditarCotizacionPage() {
       const result = await getPromiseById(promiseId);
 
       if (result.success && result.data) {
-        const hasDate = result.data.defined_date || 
+        const hasDate = result.data.defined_date ||
           (result.data.interested_dates && result.data.interested_dates.length > 0);
 
         if (!hasDate) {
@@ -51,6 +68,12 @@ export default function EditarCotizacionPage() {
       setIsValidatingDate(false);
     }
   };
+
+  // Verificar si la cotización ya está autorizada o aprobada
+  const isAlreadyAuthorized =
+    cotizacionStatus === 'autorizada' ||
+    cotizacionStatus === 'aprobada' ||
+    cotizacionStatus === 'approved';
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -74,16 +97,18 @@ export default function EditarCotizacionPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <ZenButton
-                variant="primary"
-                size="md"
-                onClick={handleAutorizar}
-                disabled={isFormLoading || isActionLoading || isValidatingDate}
-                loading={isValidatingDate}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Autorizar ahora
-              </ZenButton>
+              {!isAlreadyAuthorized && (
+                <ZenButton
+                  variant="primary"
+                  size="md"
+                  onClick={handleAutorizar}
+                  disabled={isFormLoading || isActionLoading || isValidatingDate}
+                  loading={isValidatingDate}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Autorizar ahora
+                </ZenButton>
+              )}
               <ZenDropdownMenu>
                 <ZenDropdownMenuTrigger asChild>
                   <ZenButton
@@ -143,7 +168,7 @@ export default function EditarCotizacionPage() {
             } else {
               toast.error(result.error || 'Error al archivar cotización');
             }
-          } catch (error) {
+          } catch {
             toast.error('Error al archivar cotización');
           } finally {
             setIsActionLoading(false);
@@ -171,7 +196,7 @@ export default function EditarCotizacionPage() {
             } else {
               toast.error(result.error || 'Error al eliminar cotización');
             }
-          } catch (error) {
+          } catch {
             toast.error('Error al eliminar cotización');
           } finally {
             setIsActionLoading(false);

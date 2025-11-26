@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ContactEventInfoCard } from '@/components/shared/contact-info';
-import { EventGanttCard } from './EventGanttCard';
+import { EventCotizacionesCard } from './EventCotizacionesCard';
 import { EventPaymentsCard } from './EventPaymentsCard';
 import { EventAgendamiento } from './EventAgendamiento';
 
@@ -76,23 +76,14 @@ export function EventDetail({
           />
         </div>
 
-        {/* Columna 2: Cotización/Gantt */}
+        {/* Columna 2: Cotizaciones */}
         <div className="lg:col-span-1">
-          <EventGanttCard
+          <EventCotizacionesCard
             studioSlug={studioSlug}
             eventId={eventId}
-            cotizacionId={eventData.cotizacion?.id}
-            ganttInstance={eventData.gantt ? {
-              id: eventData.gantt.id,
-              name: eventData.promise?.name || 'Cronograma',
-            } : undefined}
-            cotizacionItems={eventData.cotizacion?.cotizacion_items?.map(item => ({
-              id: item.id,
-              description: item.description || item.name,
-              quantity: item.quantity,
-              price: item.unit_price,
-            }))}
-            onTaskUpdated={onEventUpdated}
+            promiseId={eventData.promise_id}
+            cotizaciones={eventData.cotizaciones || []}
+            onUpdated={onEventUpdated}
           />
         </div>
 

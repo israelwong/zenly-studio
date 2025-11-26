@@ -18,6 +18,9 @@ interface ResumenCotizacionProps {
     status: string;
     items: Array<{ item_id: string; quantity: number }>;
   };
+  studioSlug?: string;
+  promiseId?: string;
+  onEditar?: () => void;
 }
 
 /**
@@ -27,11 +30,11 @@ interface ResumenCotizacionProps {
  * la función `autorizarCotizacion` automáticamente archiva todas las otras
  * cotizaciones asociadas a la misma promesa para mantener solo una cotización activa.
  */
-export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
+export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar }: ResumenCotizacionProps) {
   const params = useParams();
   const router = useRouter();
-  const studioSlug = params.slug as string;
-  const promiseId = params.promiseId as string;
+  const studioSlug = propStudioSlug || (params.slug as string);
+  const promiseId = propPromiseId || (params.promiseId as string);
 
   const [catalogo, setCatalogo] = useState<SeccionData[]>([]);
   const [configuracionPrecios, setConfiguracionPrecios] = useState<ConfiguracionPrecios | null>(null);
@@ -93,7 +96,11 @@ export function ResumenCotizacion({ cotizacion }: ResumenCotizacionProps) {
   }, [studioSlug, itemsMap]);
 
   const handleEditarCotizacion = () => {
-    router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`);
+    if (propOnEditar) {
+      propOnEditar();
+    } else {
+      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`);
+    }
   };
 
   // Expandir todas las secciones y categorías por defecto cuando se carga el catálogo
