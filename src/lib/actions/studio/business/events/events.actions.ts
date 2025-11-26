@@ -121,19 +121,71 @@ export interface EventoDetalle extends EventoBasico {
     updated_at: Date;
     promise_id: string | null;
     condiciones_comerciales_id: string | null;
+    cotizacion_items?: Array<{
+      id: string;
+      item_id: string | null;
+      quantity: number;
+      name: string | null;
+      description: string | null;
+      task_type: string | null;
+      assigned_to_crew_member_id: string | null;
+      gantt_task_id: string | null;
+      assignment_date: Date | null;
+      delivery_date: Date | null;
+      internal_delivery_days: number | null;
+      client_delivery_days: number | null;
+      status: string;
+      assigned_to_crew_member: {
+        id: string;
+        name: string;
+        tipo: string;
+        category: {
+          id: string;
+          name: string;
+        };
+      } | null;
+      gantt_task: {
+        id: string;
+        name: string;
+        start_date: Date;
+        end_date: Date;
+        status: string;
+        progress_percent: number;
+        assigned_to_user_id: string | null;
+        depends_on_task_id: string | null;
+      } | null;
+    }>;
   }>; // Todas las cotizaciones del evento (incluye principal + adicionales)
   gantt?: {
     id: string;
     event_date: Date;
     start_date: Date;
     end_date: Date;
+    template_id: string | null;
+    is_custom: boolean;
     tasks?: Array<{
       id: string;
       name: string;
+      description: string | null;
       start_date: Date;
       end_date: Date;
+      duration_days: number;
+      category: string;
+      priority: string;
+      assigned_to_user_id: string | null;
       status: string;
       progress_percent: number;
+      cotizacion_item_id: string | null;
+      depends_on_task_id: string | null;
+      checklist_items: unknown;
+      assigned_to: {
+        id: string;
+        user: {
+          id: string;
+          full_name: string | null;
+          email: string;
+        };
+      } | null;
     }>;
   } | null;
   payments?: Array<{
@@ -815,6 +867,51 @@ export async function obtenerEventoDetalle(
             updated_at: true,
             promise_id: true,
             condiciones_comerciales_id: true,
+            cotizacion_items: {
+              select: {
+                id: true,
+                item_id: true,
+                quantity: true,
+                name: true,
+                description: true,
+                task_type: true,
+                assigned_to_crew_member_id: true,
+                gantt_task_id: true,
+                assignment_date: true,
+                delivery_date: true,
+                internal_delivery_days: true,
+                client_delivery_days: true,
+                status: true,
+                assigned_to_crew_member: {
+                  select: {
+                    id: true,
+                    name: true,
+                    tipo: true,
+                    category: {
+                      select: {
+                        id: true,
+                        name: true,
+                      },
+                    },
+                  },
+                },
+                gantt_task: {
+                  select: {
+                    id: true,
+                    name: true,
+                    start_date: true,
+                    end_date: true,
+                    status: true,
+                    progress_percent: true,
+                    assigned_to_user_id: true,
+                    depends_on_task_id: true,
+                  },
+                },
+              },
+              orderBy: {
+                position: 'asc',
+              },
+            },
           },
           orderBy: {
             created_at: 'asc',
@@ -826,17 +923,36 @@ export async function obtenerEventoDetalle(
             event_date: true,
             start_date: true,
             end_date: true,
+            template_id: true,
+            is_custom: true,
             tasks: {
               select: {
                 id: true,
                 name: true,
+                description: true,
                 start_date: true,
                 end_date: true,
+                duration_days: true,
+                category: true,
+                priority: true,
+                assigned_to_user_id: true,
                 status: true,
                 progress_percent: true,
-                assigned_to_user_id: true,
                 cotizacion_item_id: true,
                 depends_on_task_id: true,
+                checklist_items: true,
+                assigned_to: {
+                  select: {
+                    id: true,
+                    user: {
+                      select: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
               },
               orderBy: {
                 start_date: 'asc',
@@ -949,6 +1065,11 @@ export async function obtenerEventoDetalle(
       cotizaciones: evento.cotizaciones.map(cot => ({
         ...cot,
         price: Number(cot.price),
+        cotizacion_items: cot.cotizacion_items.map(item => ({
+          ...item,
+          internal_delivery_days: item.internal_delivery_days ? Number(item.internal_delivery_days) : null,
+          client_delivery_days: item.client_delivery_days ? Number(item.client_delivery_days) : null,
+        })),
       })),
       payments: pagos.map(pago => ({
         id: pago.id,
@@ -1659,6 +1780,176 @@ export async function obtenerCotizacionesAutorizadasCount(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener count de cotizaciones',
+    };
+  }
+}
+
+/**
+ * Obtener crew members de un studio
+ */
+export async function obtenerCrewMembers(studioSlug: string) {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const crewMembers = await prisma.studio_crew_members.findMany({
+      where: {
+        studio_id: studio.id,
+        status: 'activo',
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [
+        { order: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+
+    return {
+      success: true,
+      data: crewMembers.map(member => ({
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        phone: member.phone,
+        tipo: member.tipo,
+        status: member.status,
+        category: {
+          id: member.category.id,
+          name: member.category.name,
+        },
+        fixed_salary: member.fixed_salary ? Number(member.fixed_salary) : null,
+        variable_salary: member.variable_salary ? Number(member.variable_salary) : null,
+      })),
+    };
+  } catch (error) {
+    console.error('[EVENTOS] Error obteniendo crew members:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener crew members',
+    };
+  }
+}
+
+/**
+ * Asignar crew member a un item de cotización
+ */
+export async function asignarCrewAItem(
+  studioSlug: string,
+  itemId: string,
+  crewMemberId: string | null
+) {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    // Verificar que el item existe y pertenece al studio
+    const item = await prisma.studio_cotizacion_items.findFirst({
+      where: {
+        id: itemId,
+        cotizacion: {
+          studio_id: studio.id,
+        },
+      },
+    });
+
+    if (!item) {
+      return { success: false, error: 'Item no encontrado' };
+    }
+
+    // Si se está asignando un crew member, verificar que existe
+    if (crewMemberId) {
+      const crewMember = await prisma.studio_crew_members.findFirst({
+        where: {
+          id: crewMemberId,
+          studio_id: studio.id,
+        },
+      });
+
+      if (!crewMember) {
+        return { success: false, error: 'Crew member no encontrado' };
+      }
+    }
+
+    // Actualizar el item
+    await prisma.studio_cotizacion_items.update({
+      where: { id: itemId },
+      data: {
+        assigned_to_crew_member_id: crewMemberId,
+        assignment_date: crewMemberId ? new Date() : null,
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events`);
+    return { success: true };
+  } catch (error) {
+    console.error('[EVENTOS] Error asignando crew a item:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al asignar crew member',
+    };
+  }
+}
+
+/**
+ * Obtener categorías de crew members
+ */
+export async function obtenerCategoriasCrew(studioSlug: string) {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const categorias = await prisma.studio_crew_categories.findMany({
+      where: {
+        studio_id: studio.id,
+        is_active: true,
+      },
+      orderBy: [
+        { order: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+
+    return {
+      success: true,
+      data: categorias.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        tipo: cat.tipo,
+        color: cat.color,
+        icono: cat.icono,
+        order: cat.order,
+      })),
+    };
+  } catch (error) {
+    console.error('[EVENTOS] Error obteniendo categorías crew:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener categorías',
     };
   }
 }

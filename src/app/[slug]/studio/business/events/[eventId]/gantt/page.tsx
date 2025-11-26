@@ -2,10 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar } from 'lucide-react';
+import { ArrowLeft, Users } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { obtenerEventoDetalle, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
+import { EventGanttView } from './components/EventGanttView';
+import { GanttDateRangeConfig } from './components/GanttDateRangeConfig';
+import { CrewMembersManager } from '@/components/shared/crew-members/CrewMembersManager';
+import { type DateRange } from 'react-day-picker';
 
 export default function EventGanttPage() {
   const params = useParams();
@@ -14,6 +18,8 @@ export default function EventGanttPage() {
   const eventId = params.eventId as string;
   const [loading, setLoading] = useState(true);
   const [eventData, setEventData] = useState<EventoDetalle | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [crewManagerOpen, setCrewManagerOpen] = useState(false);
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -68,10 +74,6 @@ export default function EventGanttPage() {
     return null;
   }
 
-  const cotizacionesAprobadas = (eventData.cotizaciones || []).filter(
-    (c) => c.status === 'autorizada' || c.status === 'aprobada' || c.status === 'approved'
-  );
-
   return (
     <div className="w-full max-w-7xl mx-auto">
       <ZenCard variant="default" padding="none">
@@ -93,60 +95,40 @@ export default function EventGanttPage() {
                 </ZenCardDescription>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <GanttDateRangeConfig
+                dateRange={dateRange}
+                onDateRangeChange={setDateRange}
+              />
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setCrewManagerOpen(true)}
+                className="gap-2"
+              >
+                <Users className="h-4 w-4" />
+                Personal
+              </ZenButton>
+            </div>
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          <div className="space-y-6">
-            {/* Placeholder para vista Gantt */}
-            <div className="p-8 bg-zinc-900 rounded-lg border border-zinc-800 text-center">
-              <Calendar className="h-12 w-12 text-zinc-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-zinc-200 mb-2">
-                Vista Gantt
-              </h3>
-              <p className="text-sm text-zinc-400 mb-4">
-                Aquí se mostrará el cronograma con las cotizaciones y sus items
-              </p>
-              {cotizacionesAprobadas.length > 0 ? (
-                <div className="text-sm text-zinc-500">
-                  {cotizacionesAprobadas.length} cotización{cotizacionesAprobadas.length > 1 ? 'es' : ''} aprobada{cotizacionesAprobadas.length > 1 ? 's' : ''} encontrada{cotizacionesAprobadas.length > 1 ? 's' : ''}
-                </div>
-              ) : (
-                <div className="text-sm text-zinc-500">
-                  No hay cotizaciones aprobadas para mostrar
-                </div>
-              )}
-            </div>
-
-            {/* Información de cotizaciones */}
-            {cotizacionesAprobadas.length > 0 && (
-              <div className="space-y-4">
-                <h4 className="text-sm font-semibold text-zinc-300">
-                  Cotizaciones aprobadas
-                </h4>
-                <div className="space-y-2">
-                  {cotizacionesAprobadas.map((cotizacion) => (
-                    <div
-                      key={cotizacion.id}
-                      className="p-4 bg-zinc-900 rounded-lg border border-zinc-800"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-zinc-100">
-                            {cotizacion.name}
-                          </p>
-                          <p className="text-xs text-zinc-400 mt-1">
-                            Items de esta cotización aparecerán en el Gantt
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <EventGanttView
+            studioSlug={studioSlug}
+            eventId={eventId}
+            eventData={eventData}
+            ganttInstance={eventData.gantt || undefined}
+          />
         </ZenCardContent>
       </ZenCard>
+
+      <CrewMembersManager
+        studioSlug={studioSlug}
+        eventId={eventId}
+        mode="manage"
+        isOpen={crewManagerOpen}
+        onClose={() => setCrewManagerOpen(false)}
+      />
     </div>
   );
 }

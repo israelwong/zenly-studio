@@ -5,6 +5,9 @@ export {
   getEvents,
   moveEvent,
   obtenerCotizacionesAutorizadasCount,
+  obtenerCrewMembers,
+  asignarCrewAItem,
+  obtenerCategoriasCrew,
 } from './events.actions';
 
 export {
