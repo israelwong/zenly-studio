@@ -12,7 +12,7 @@ import { useStudioData } from '@/hooks/useStudioData';
 import {
     File,
     Briefcase, Users, Sparkles, Mail, ImageIcon, FileText,
-    ChevronDown, ChevronRight, UserCog, DollarSign, ShoppingCart, MessageSquare, Megaphone
+    UserCog, DollarSign, Megaphone
 } from 'lucide-react';
 
 interface StudioSidebarProps {
@@ -27,72 +27,36 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
     // Nota: Profile y Content ahora están en /profile/edit/ con su propio sidebar
     const builderNavItems = [
 
-        // 5. COMERCIAL (Pago - Plan Pro+)
-        {
-            id: 'comercial',
-            title: 'Commercial',
-            icon: ShoppingCart,
-            items: [
-                { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
-                { id: 'conversations', name: 'Conversations', href: `/commercial/conversations`, icon: MessageSquare },
-                { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
-            ],
-        },
-
-        // 4. BUSINESS (Pago - Plan Pro+)
         {
             id: 'business',
             title: 'Business',
             icon: Briefcase,
             items: [
+                // { id: 'conversations', name: 'Conversations', href: `/commercial/conversations`, icon: MessageSquare },
+                { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
+                { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
                 { id: 'events', name: 'Events', href: `/business/events`, icon: FileText },
-                { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
                 { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
-            ],
-        },
-
-        // 6. CLIENTS (Pago - Monetización)
-        {
-            id: 'clients',
-            title: 'Clients',
-            icon: Users,
-            items: [
-                // { id: 'planning', name: 'Planning', href: `/business/planning`, icon: FileText },
-                { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
-                { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
-                // { id: 'portal', name: 'Portal Cliente*', href: `/portal-cliente`, icon: UserCheck },
-            ],
-        },
-
-        // 7. MAGIC (IA - Multiplicador)
-        {
-            id: 'magic',
-            title: 'Magic',
-            icon: Sparkles,
-            items: [
+                { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
                 { id: 'magic', name: 'Asistente IA', href: `/magic`, icon: Sparkles },
             ],
         },
 
+        // (Pago - Monetización)
+        {
+            id: 'revenues',
+            title: 'Revenues',
+            icon: Users,
+            items: [
+                { id: 'planning', name: 'Planning', href: `/business/planning`, icon: FileText },
+                { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
+                { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
+            ],
+        },
+
+
     ];
 
-    // Estado para grupos expandidos - Todos expandidos por defecto
-    const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(
-        new Set(builderNavItems.map(group => group.id))
-    );
-
-    // Función para toggle de grupos (permite múltiples expandidos)
-    const toggleGroup = (groupId: string) => {
-        setExpandedGroups(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(groupId)) {
-                newSet.delete(groupId);
-            } else {
-                newSet.add(groupId);
-            }
-            return newSet;
-        });
-    };
 
     // Obtener datos del studio desde la base de datos
     const { identidadData } = useStudioData({ studioSlug });
@@ -108,43 +72,22 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
         slug: studioSlug
     };
 
-    // Componente para grupo colapsible con estructura de árbol
-    const CollapsibleGroup = ({ group, children }: {
+    // Componente para grupo de menú sin colapsable
+    const MenuGroup = ({ group, children }: {
         group: { id: string; title: string; icon: React.ComponentType<{ className?: string }> },
         children: React.ReactNode
     }) => {
-        const isExpanded = expandedGroups.has(group.id);
-
         return (
-            <div className="mb-3">
-                {/* Header del grupo colapsible */}
-                <button
-                    onClick={() => toggleGroup(group.id)}
-                    className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-all duration-200 rounded-md"
-                >
-                    <div className="flex items-center gap-3">
-                        <group.icon className="w-5 h-5 text-zinc-400" />
-                        <span className="text-zinc-200">{group.title}</span>
-                    </div>
-                    {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-zinc-500" />
-                    ) : (
-                        <ChevronRight className="w-4 h-4 text-zinc-500" />
-                    )}
-                </button>
+            <div className="mb-6">
+                {/* Header del grupo - sin icono */}
+                <div className="px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+                    {group.title}
+                </div>
 
-                {/* Contenido del grupo con estructura de árbol */}
-                {isExpanded && (
-                    <div className="relative">
-                        {/* Línea vertical conectora */}
-                        <div className="absolute left-6 top-0 w-px h-full bg-zinc-700/60"></div>
-
-                        {/* Elementos del menú con indentación y menos espaciado */}
-                        <div className="pl-8 space-y-0.5">
-                            {children}
-                        </div>
-                    </div>
-                )}
+                {/* Elementos del menú */}
+                <div className="space-y-1">
+                    {children}
+                </div>
             </div>
         );
     };
@@ -155,26 +98,24 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             <SidebarHeader studioData={studio} onToggleSidebar={toggleSidebar} />
 
             <ZenSidebarContent className="px-4">
-                <ZenSidebarMenu>
+                <ZenSidebarMenu className="pt-3">
                     {/* Sección Studio */}
-                    <div className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800/50 mb-3">Studio</div>
-
                     {builderNavItems.map(group => (
-                        <CollapsibleGroup key={group.id} group={group}>
+                        <MenuGroup key={group.id} group={group}>
                             {group.items.map(item => (
                                 <ZenSidebarMenuItem key={item.id}>
                                     <ActiveLink
                                         href={item.href.startsWith('/studio/')
                                             ? `/${studioSlug}${item.href}`
                                             : `/${studioSlug}/studio${item.href}`}
-                                        className="flex items-center gap-3 px-3 py-1.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/30 transition-all duration-200 rounded-md group"
+                                        className="flex items-center gap-2.5 px-3 py-1 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/40 transition-all duration-200 rounded-md group"
                                     >
-                                        <item.icon className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300" />
+                                        <item.icon className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 flex-shrink-0" />
                                         <span className="text-zinc-300 group-hover:text-white">{item.name}</span>
                                     </ActiveLink>
                                 </ZenSidebarMenuItem>
                             ))}
-                        </CollapsibleGroup>
+                        </MenuGroup>
                     ))}
                 </ZenSidebarMenu>
             </ZenSidebarContent>
