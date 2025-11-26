@@ -6,7 +6,7 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from 
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
 
-interface EventDetailsCardProps {
+interface EventCardInfoProps {
   studioSlug: string;
   eventId: string;
   initialData: {
@@ -40,13 +40,13 @@ interface EventDetailsCardProps {
   onEventUpdated?: () => void;
 }
 
-export function EventDetailsCard({
+export function EventCardInfo({
   studioSlug,
   eventId,
   initialData,
   onEdit,
   onEventUpdated,
-}: EventDetailsCardProps) {
+}: EventCardInfoProps) {
   const [showPromiseModal, setShowPromiseModal] = useState(false);
 
   const handleEdit = () => {
