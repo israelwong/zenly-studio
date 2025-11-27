@@ -116,12 +116,12 @@ export function CrewMembersManager({
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="w-full max-w-2xl bg-zinc-900 border-zinc-800 sm:max-w-2xl overflow-y-auto max-h-[80vh]">
+      <SheetContent className="w-full max-w-2xl bg-zinc-900 border-zinc-800 sm:max-w-2xl overflow-y-auto h-screen flex flex-col">
         <SheetHeader>
           <SheetTitle className="text-xl">Gestión de Personal</SheetTitle>
         </SheetHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'lista' | 'crear')} className="mt-6">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'lista' | 'crear')} className="mt-6 flex flex-col flex-1">
           <TabsList className="grid w-full grid-cols-2 bg-zinc-800">
             <TabsTrigger value="lista">Lista</TabsTrigger>
             <TabsTrigger value="crear">
@@ -130,7 +130,7 @@ export function CrewMembersManager({
           </TabsList>
 
           {/* TAB: LISTA */}
-          <TabsContent value="lista" className="space-y-4 mt-6">
+          <TabsContent value="lista" className="space-y-4 mt-6 flex-1 overflow-y-auto">
             {mode === 'manage' && (
               <div className="flex gap-2">
                 <ZenInput
@@ -198,7 +198,7 @@ export function CrewMembersManager({
           </TabsContent>
 
           {/* TAB: CREAR/EDITAR */}
-          <TabsContent value="crear" className="mt-6">
+          <TabsContent value="crear" className="mt-6 flex-1 overflow-y-auto">
             {mode === 'manage' ? (
               <CrewMemberForm
                 studioSlug={studioSlug}
