@@ -89,9 +89,9 @@ export default function EventGanttPage() {
                 <ArrowLeft className="h-4 w-4" />
               </ZenButton>
               <div>
-                <ZenCardTitle>Cronograma Gantt</ZenCardTitle>
+                <ZenCardTitle>{eventData.name || 'Evento sin nombre'}</ZenCardTitle>
                 <ZenCardDescription>
-                  {eventData.name || 'Evento sin nombre'}
+                  Cronograma Gantt
                 </ZenCardDescription>
               </div>
             </div>
