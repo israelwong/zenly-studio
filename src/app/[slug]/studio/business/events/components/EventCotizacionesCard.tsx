@@ -222,7 +222,7 @@ export function EventCotizacionesCard({
                   return (
                     <div
                       key={cotizacion.id}
-                      className="flex items-start gap-3 p-3 bg-zinc-900 rounded border border-zinc-800 relative group"
+                      className="flex items-start gap-4 p-4 pr-12 bg-zinc-900 rounded border border-zinc-800 relative group"
                     >
                       <FileText className="h-4 w-4 text-zinc-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0 relative">
