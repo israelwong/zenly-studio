@@ -28,6 +28,11 @@ export default function EventGanttPage() {
         const result = await obtenerEventoDetalle(studioSlug, eventId);
 
         if (result.success && result.data) {
+          console.log('[GANTT DEBUG] Event data:', {
+            promise: result.data.promise,
+            name: result.data.name,
+            promiseName: result.data.promise?.name,
+          });
           setEventData(result.data);
         } else {
           toast.error(result.error || 'Evento no encontrado');
@@ -72,6 +77,16 @@ export default function EventGanttPage() {
 
   if (!eventData) {
     return null;
+  }
+
+  // Debug log en cliente
+  if (typeof window !== 'undefined') {
+    console.log('[GANTT CLIENT DEBUG]', {
+      eventId,
+      promise: eventData.promise,
+      name: eventData.name,
+      promiseName: eventData.promise?.name,
+    });
   }
 
   return (

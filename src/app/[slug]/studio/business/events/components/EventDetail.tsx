@@ -58,10 +58,10 @@ export function EventDetail({
             promiseId={eventData.promise_id}
             eventId={eventId}
             promiseData={eventData.promise ? {
-              id: eventData.promise.id,
-              name: eventData.promise.contact.name,
-              phone: eventData.promise.contact.phone,
-              email: eventData.promise.contact.email,
+              id: eventData.promise.contact?.id || '',
+              name: eventData.promise.contact?.name || '',
+              phone: eventData.promise.contact?.phone || '',
+              email: eventData.promise.contact?.email || null,
               event_type_id: eventData.promise.event_type_id,
               event_location: eventData.promise.event_location,
               event_name: eventData.promise.name || null,
