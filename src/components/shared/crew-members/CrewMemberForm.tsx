@@ -114,6 +114,12 @@ export function CrewMemberForm({
     if (!formData.tipo || formData.tipo === '') {
       newErrors.tipo = 'Selecciona un tipo de personal';
     }
+    if (salaryType === 'fixed' && !formData.fixed_salary.trim()) {
+      newErrors.fixed_salary = 'Ingresa el salario fijo';
+    }
+    if (salaryType === 'variable' && !formData.variable_salary.trim()) {
+      newErrors.variable_salary = 'Ingresa el monto variable base';
+    }
     if (formData.skill_ids.length === 0) {
       newErrors.skill_ids = 'Selecciona al menos una habilidad';
     }
@@ -229,7 +235,7 @@ export function CrewMemberForm({
       {/* Tipo de Honorarios - Radio Buttons */}
       <div>
         <label className="block text-sm font-medium text-zinc-200 mb-3">
-          Tipo de Honorarios (opcional)
+          Tipo de Honorarios *
         </label>
         <div className="space-y-3">
           {/* Radio: Salario Fijo */}
