@@ -211,7 +211,7 @@ export function CrewSkillsManageModal({
     return (
         <>
       <ZenDialog isOpen={isOpen} onClose={onClose} title="Gestionar Habilidades">
-        <div className="space-y-4 max-h-96 overflow-y-auto w-96">
+        <div className="space-y-4 max-h-96 overflow-y-auto w-80">
                     {/* Crear nuevas habilidades */}
                     <div className="space-y-2">
                         <label className="block text-xs font-medium text-zinc-400 uppercase">
