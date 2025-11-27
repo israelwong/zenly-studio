@@ -31,6 +31,7 @@ interface CotizacionAprobada {
   id: string;
   name: string;
   price: number;
+  discount?: number | null;
   status: string;
   created_at: Date;
   updated_at: Date;
@@ -72,7 +73,11 @@ export function EventCotizacionesCard({
     (c) => c.status === 'autorizada' || c.status === 'aprobada' || c.status === 'approved'
   );
 
-  const totalAprobado = cotizacionesAprobadas.reduce((sum, c) => sum + Number(c.price), 0);
+  // Calcular total a pagar considerando descuentos
+  const totalAprobado = cotizacionesAprobadas.reduce((sum, c) => {
+    const totalPagar = Number(c.price) - (c.discount ? Number(c.discount) : 0);
+    return sum + totalPagar;
+  }, 0);
 
   const handleAnexarCotizacion = () => {
     if (!promiseId) {
@@ -224,10 +229,27 @@ export function EventCotizacionesCard({
                         <p className="text-sm font-medium text-zinc-100 truncate">
                           {cotizacion.name}
                         </p>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          {formatAmount(cotizacion.price)}
-                        </p>
-                        <p className="text-xs text-zinc-500 mt-1">
+                        <div className="mt-1 space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-400">Precio:</span>
+                            <span className="text-zinc-300">{formatAmount(cotizacion.price)}</span>
+                          </div>
+                          {cotizacion.discount ? (
+                            <>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-zinc-400">Descuento:</span>
+                                <span className="text-red-400">-{formatAmount(cotizacion.discount)}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs border-t border-zinc-700 pt-1">
+                                <span className="font-medium text-emerald-400">Total a pagar:</span>
+                                <span className="font-medium text-emerald-400">
+                                  {formatAmount(cotizacion.price - cotizacion.discount)}
+                                </span>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-zinc-500 mt-2">
                           Autorizada: {formatDate(cotizacion.updated_at)}
                         </p>
                         {/* Spinner de carga */}
