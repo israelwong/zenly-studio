@@ -137,7 +137,6 @@ model user_studio_roles {
   event_tasks           studio_event_tasks[]
   event_timeline        studio_event_timeline[]
   managed_events        studio_events[]              @relation("EventProjectManager")
-  crew_member_as_role   studio_crew_members?         @relation
   lead_activities       marketing_lead_activities[]
   lead_notes            marketing_lead_notes[]
   assigned_leads        marketing_leads[]
@@ -730,7 +729,7 @@ model studios {
   platform_user_profiles     platform_user_profiles[]
   agenda                     studio_agenda[]
   business_hours             studio_business_hours[]
-  crew_categories            studio_crew_categories[]
+  crew_skills                studio_crew_skills[]
   category_media             studio_category_media[]          @relation("category_media")
   client_portal_access       studio_client_portal_access[]
   clientes                   studio_clientes[]
@@ -1641,27 +1640,6 @@ model studio_gantt_task_activity {
 
 
 //! BUSINESS (CREW)
-model studio_crew_categories {
-  id           String                @id @default(cuid())
-  studio_id    String
-  tipo         PersonalType
-  color        String?
-  icono        String?
-  created_at   DateTime              @default(now())
-  updated_at   DateTime              @updatedAt
-  description  String?
-  name         String
-  order        Int                   @default(0)
-  is_active    Boolean               @default(true)
-  is_default   Boolean               @default(false)
-  studio       studios               @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  crew_members studio_crew_members[]
-
-  @@unique([studio_id, name])
-  @@index([studio_id, is_active])
-  @@index([order])
-}
-
 model studio_crew_members {
   id                  String                   @id @default(cuid())
   studio_id           String
@@ -1671,28 +1649,72 @@ model studio_crew_members {
   emergency_phone     String?
   tipo                PersonalType
   status              String                   @default("activo")
-  category_id         String
-  additional_roles    String[]                 @default([])
   fixed_salary        Float?
   variable_salary     Float?
   clabe_account       String?
   order               Int?
-  platform_user_id    String?
-  user_studio_role_id String?                  @unique
   created_at          DateTime                 @default(now())
   updated_at          DateTime                 @updatedAt
 
-  category            studio_crew_categories  @relation(fields: [category_id], references: [id])
-  platformUser        platform_user_profiles? @relation(fields: [platform_user_id], references: [id])
-  user_studio_role    user_studio_roles?      @relation(fields: [user_studio_role_id], references: [id])
-  studio              studios                 @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  studio              studios                  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  skills              studio_crew_member_skills[]
+  account             studio_crew_member_account?
   nominas             studio_nominas[]
   cotizacion_items    studio_cotizacion_items[]
 
   @@index([studio_id])
   @@index([status])
-  @@index([category_id])
-  @@index([platform_user_id])
+  @@index([tipo])
+}
+
+model studio_crew_skills {
+  id        String                       @id @default(cuid())
+  studio_id String
+  name      String
+  color     String?
+  icono     String?
+  order     Int                          @default(0)
+  is_active Boolean                      @default(true)
+  created_at DateTime                    @default(now())
+  updated_at DateTime                    @updatedAt
+
+  studio   studios                @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  crew_members studio_crew_member_skills[]
+
+  @@unique([studio_id, name])
+  @@index([studio_id, is_active])
+  @@index([order])
+}
+
+model studio_crew_member_skills {
+  id            String @id @default(cuid())
+  crew_member_id String
+  skill_id      String
+  is_primary    Boolean @default(false)
+  created_at    DateTime @default(now())
+
+  crew_member studio_crew_members @relation(fields: [crew_member_id], references: [id], onDelete: Cascade)
+  skill       studio_crew_skills @relation(fields: [skill_id], references: [id], onDelete: Cascade)
+
+  @@unique([crew_member_id, skill_id])
+  @@index([crew_member_id])
+  @@index([skill_id])
+}
+
+model studio_crew_member_account {
+  id             String @id @default(cuid())
+  crew_member_id String @unique
+  email          String @unique
+  supabase_id    String? @unique
+  is_active      Boolean @default(false)
+  last_login     DateTime?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  crew_member studio_crew_members @relation(fields: [crew_member_id], references: [id], onDelete: Cascade)
+
+  @@index([supabase_id])
+  @@index([is_active])
 }
 
 
@@ -2577,7 +2599,6 @@ model platform_user_profiles {
   updated_at          DateTime              @updatedAt
   studio              studios?              @relation(fields: [studio_id], references: [id])
   studio_clientes     studio_clientes[]
-  studio_crew_members studio_crew_members[]
   studio_users        studio_users[]
 
   @@index([email])
