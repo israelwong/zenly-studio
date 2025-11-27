@@ -19,10 +19,6 @@ interface CrewMember {
   phone: string | null;
   tipo: string;
   status: string;
-  category: {
-    id: string;
-    name: string;
-  };
   fixed_salary: number | null;
   variable_salary: number | null;
 }
@@ -127,7 +123,7 @@ export function CrewMemberSelector({
                 <div className="flex-1 min-w-0">
                   <div className="text-zinc-300 truncate">{member.name}</div>
                   <div className="text-xs text-zinc-500 truncate">
-                    {member.category.name}
+                    {member.tipo}
                   </div>
                 </div>
               </button>
