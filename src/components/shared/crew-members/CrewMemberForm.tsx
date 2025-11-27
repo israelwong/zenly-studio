@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Settings2 } from 'lucide-react';
 import { ZenButton, ZenInput } from '@/components/ui/zen';
 import { ZenSelect } from '@/components/ui/zen';
 import { crearCrewMember, actualizarCrewMember } from '@/lib/actions/studio/crew';
 import { toast } from 'sonner';
 import { SkillsInput } from './SkillsInput';
+import { CrewSkillsManageModal } from './CrewSkillsManageModal';
 import { PersonalType } from '@prisma/client';
 
 interface CrewMemberFormProps {
@@ -35,6 +37,7 @@ export function CrewMemberForm({
   const [salaryType, setSalaryType] = useState<'fixed' | 'variable'>(
     initialMember?.fixed_salary ? 'fixed' : 'variable'
   );
+  const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: initialMember?.name || '',
@@ -111,7 +114,7 @@ export function CrewMemberForm({
     if (!formData.phone.trim()) {
       newErrors.phone = 'El teléfono es requerido';
     }
-    if (!formData.tipo || formData.tipo === '') {
+    if (!formData.tipo) {
       newErrors.tipo = 'Selecciona un tipo de personal';
     }
     if (salaryType === 'fixed' && !formData.fixed_salary.trim()) {
@@ -238,26 +241,7 @@ export function CrewMemberForm({
           Tipo de Honorarios *
         </label>
         <div className="space-y-3">
-          {/* Radio: Salario Fijo */}
-          <div className="flex items-start gap-3">
-            <input
-              type="radio"
-              id="salary-fixed"
-              name="salaryType"
-              value="fixed"
-              checked={salaryType === 'fixed'}
-              onChange={(e) => setSalaryType(e.target.value as 'fixed')}
-              className="mt-1"
-            />
-            <div className="flex-1">
-              <label htmlFor="salary-fixed" className="block text-sm font-medium text-zinc-200 cursor-pointer">
-                Salario Fijo
-              </label>
-              <p className="text-xs text-zinc-400">
-                Ingresa un monto fijo que recibirá por mes
-              </p>
-            </div>
-          </div>
+
 
           {/* Radio: Honorarios Variables */}
           <div className="flex items-start gap-3">
@@ -276,6 +260,27 @@ export function CrewMemberForm({
               </label>
               <p className="text-xs text-zinc-400">
                 Se ganará según el presupuesto definido en la tarea asignada
+              </p>
+            </div>
+          </div>
+
+          {/* Radio: Salario Fijo */}
+          <div className="flex items-start gap-3">
+            <input
+              type="radio"
+              id="salary-fixed"
+              name="salaryType"
+              value="fixed"
+              checked={salaryType === 'fixed'}
+              onChange={(e) => setSalaryType(e.target.value as 'fixed')}
+              className="mt-1"
+            />
+            <div className="flex-1">
+              <label htmlFor="salary-fixed" className="block text-sm font-medium text-zinc-200 cursor-pointer">
+                Salario Fijo
+              </label>
+              <p className="text-xs text-zinc-400">
+                Ingresa un monto fijo que recibirá por mes
               </p>
             </div>
           </div>
@@ -302,10 +307,20 @@ export function CrewMemberForm({
       )}
 
       {/* Skills */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-200 mb-2">
-          Habilidades/Roles *
-        </label>
+      <div className="border-t border-zinc-700 pt-6">
+        <div className="flex items-center justify-between mb-4">
+          <label className="block text-sm font-medium text-zinc-200">
+            Habilidades/Roles *
+          </label>
+          <button
+            type="button"
+            onClick={() => setIsSkillsModalOpen(true)}
+            className="p-1.5 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors"
+            title="Gestionar habilidades"
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
+        </div>
         <SkillsInput
           studioSlug={studioSlug}
           selectedSkillIds={formData.skill_ids}
@@ -315,12 +330,13 @@ export function CrewMemberForm({
       </div>
 
       {/* Botones */}
-      <div className="flex gap-3 pt-4 border-t border-zinc-700">
+      <div className="flex gap-3 pt-6 border-t border-zinc-700">
         <ZenButton
           type="button"
           variant="ghost"
           onClick={onCancel}
           disabled={loading}
+          className="flex-1"
         >
           Cancelar
         </ZenButton>
@@ -328,10 +344,18 @@ export function CrewMemberForm({
           type="submit"
           loading={loading}
           disabled={loading}
+          className="flex-1"
         >
           {initialMember ? 'Actualizar' : 'Crear'}
         </ZenButton>
       </div>
+
+      {/* Modal de gestión de habilidades */}
+      <CrewSkillsManageModal
+        isOpen={isSkillsModalOpen}
+        onClose={() => setIsSkillsModalOpen(false)}
+        studioSlug={studioSlug}
+      />
     </form>
   );
 }
