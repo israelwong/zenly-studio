@@ -1161,6 +1161,11 @@ export async function autorizarCotizacion(
       sobreprecio: Number(configResult?.sobreprecio) || 0,
     };
 
+    // Calcular descuento si el monto final es diferente al precio original
+    const descuento = cotizacion.price > validatedData.monto 
+      ? cotizacion.price - validatedData.monto 
+      : 0;
+
     // Transacción para garantizar consistencia
     await prisma.$transaction(async (tx) => {
       // 1. Actualizar cotización autorizada a "aprobada"
@@ -1173,6 +1178,7 @@ export async function autorizarCotizacion(
           updated_at: new Date(),
           payment_promise_date: new Date(),
           payment_registered: false,
+          discount: descuento > 0 ? descuento : null, // Guardar descuento si existe
         },
       });
 
