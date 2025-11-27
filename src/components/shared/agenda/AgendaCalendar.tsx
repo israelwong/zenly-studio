@@ -53,7 +53,7 @@ function agendaItemToEvent(item: AgendaItem) {
 
   // Generar título según el tipo de agendamiento
   let title = '';
-  
+
   // Fecha principal del evento: "Nombre Evento (Tipo Evento)"
   if (item.is_main_event_date && item.event_name && item.event_type_name) {
     title = `${item.event_name} (${item.event_type_name})`;
@@ -177,7 +177,7 @@ const zenEventStyleGetter = (event: { resource?: AgendaItem }) => {
   }
 
   // 4. Evento - diferenciar fecha principal vs citas adicionales
-  if (contexto === 'evento') {
+  if (contexto === 'evento' && item) {
     // Fecha principal del evento - Verde emerald
     if (item.is_main_event_date) {
       return {
@@ -193,7 +193,7 @@ const zenEventStyleGetter = (event: { resource?: AgendaItem }) => {
         },
       };
     }
-    
+
     // Cita adicional del evento - Morado (virtual) o Azul (presencial)
     if (item.type_scheduling) {
       const isVirtual = item.type_scheduling === 'virtual';
@@ -210,7 +210,7 @@ const zenEventStyleGetter = (event: { resource?: AgendaItem }) => {
         },
       };
     }
-    
+
     // Evento sin tipo específico (fallback) - Verde emerald
     return {
       style: {
