@@ -1,11 +1,22 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Edit, Trash2 } from 'lucide-react';
-import { ZenButton, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
-import { obtenerCrewMembers, obtenerCategoriasCrew } from '@/lib/actions/studio/business/events';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Edit, Trash2, Search } from 'lucide-react';
+import { ZenButton, ZenInput } from '@/components/ui/zen';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/shadcn/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { obtenerCrewMembers } from '@/lib/actions/studio/crew';
 import { toast } from 'sonner';
+import { CrewMemberForm } from './CrewMemberForm';
+import { CrewMemberCard } from './CrewMemberCard';
+
+interface CrewMembersManagerProps {
+  studioSlug: string;
+  onMemberSelect?: (memberId: string) => void;
+  mode?: 'select' | 'manage';
+  isOpen: boolean;
+  onClose: () => void;
+}
 
 interface CrewMember {
   id: string;
@@ -14,30 +25,20 @@ interface CrewMember {
   phone: string | null;
   tipo: string;
   status: string;
-  category: {
+  skills: Array<{
     id: string;
     name: string;
-  };
-  additional_roles: string[];
+    color: string | null;
+    icono: string | null;
+    is_primary: boolean;
+  }>;
   fixed_salary: number | null;
   variable_salary: number | null;
-}
-
-interface CrewCategory {
-  id: string;
-  name: string;
-  tipo: string;
-  color: string | null;
-  icono: string | null;
-  order: number;
-}
-
-interface CrewMembersManagerProps {
-  studioSlug: string;
-  onMemberSelect?: (memberId: string) => void;
-  mode?: 'select' | 'manage';
-  isOpen: boolean;
-  onClose: () => void;
+  account: {
+    id: string;
+    email: string;
+    is_active: boolean;
+  } | null;
 }
 
 export function CrewMembersManager({
@@ -48,23 +49,20 @@ export function CrewMembersManager({
   onClose,
 }: CrewMembersManagerProps) {
   const [members, setMembers] = useState<CrewMember[]>([]);
-  const [categories, setCategories] = useState<CrewCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'lista' | 'crear'>('lista');
+  const [editingMember, setEditingMember] = useState<CrewMember | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [membersResult, categoriesResult] = await Promise.all([
-        obtenerCrewMembers(studioSlug),
-        obtenerCategoriasCrew(studioSlug),
-      ]);
+      const result = await obtenerCrewMembers(studioSlug);
 
-      if (membersResult.success && membersResult.data) {
-        setMembers(membersResult.data);
-      }
-
-      if (categoriesResult.success && categoriesResult.data) {
-        setCategories(categoriesResult.data);
+      if (result.success && result.data) {
+        setMembers(result.data);
+      } else {
+        toast.error(result.error || 'Error al cargar personal');
       }
     } catch (error) {
       console.error('Error loading crew members:', error);
@@ -87,112 +85,138 @@ export function CrewMembersManager({
     }
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-zinc-900 border-zinc-800">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Gestión de Personal</DialogTitle>
-        </DialogHeader>
+  const handleCrewCreated = () => {
+    setActiveTab('lista');
+    loadData();
+    toast.success('Personal creado exitosamente');
+  };
 
-        <div className="space-y-4">
-          {mode === 'manage' && (
-            <div className="flex justify-end">
-              <ZenButton size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Agregar Personal
-              </ZenButton>
-            </div>
-          )}
+  const handleCrewUpdated = () => {
+    setEditingMember(null);
+    setActiveTab('lista');
+    loadData();
+    toast.success('Personal actualizado exitosamente');
+  };
 
-          {loading ? (
-            <div className="text-center py-8 text-zinc-400">Cargando...</div>
-          ) : members.length === 0 ? (
-            <div className="text-center py-8 text-zinc-400">
-              No hay personal registrado
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {categories.map((category) => {
-                const categoryMembers = members.filter(
-                  (m) => m.category.id === category.id
-                );
+  const handleCrewDeleted = () => {
+    setActiveTab('lista');
+    loadData();
+    toast.success('Personal eliminado exitosamente');
+  };
 
-                if (categoryMembers.length === 0) return null;
-
-                return (
-                  <ZenCard key={category.id} variant="outlined">
-                    <ZenCardHeader>
-                      <ZenCardTitle className="text-base">{category.name}</ZenCardTitle>
-                    </ZenCardHeader>
-                    <ZenCardContent>
-                      <div className="space-y-2">
-                        {categoryMembers.map((member) => (
-                          <div
-                            key={member.id}
-                            className={cn(
-                              'flex items-center justify-between p-3 rounded-lg border border-zinc-800 hover:bg-zinc-800/50 transition-colors',
-                              mode === 'select' && 'cursor-pointer'
-                            )}
-                            onClick={() => handleMemberClick(member.id)}
-                          >
-                            <div className="flex-1">
-                              <div className="font-medium text-zinc-200">
-                                {member.name}
-                              </div>
-                              <div className="text-xs text-zinc-500">
-                                {category.name}
-                                {member.additional_roles.length > 0 && (
-                                  <span> + {member.additional_roles.length} más</span>
-                                )}
-                              </div>
-                              {member.email && (
-                                <div className="text-sm text-zinc-400">{member.email}</div>
-                              )}
-                              {member.phone && (
-                                <div className="text-sm text-zinc-400">{member.phone}</div>
-                              )}
-                            </div>
-                            {mode === 'manage' && (
-                              <div className="flex items-center gap-2">
-                                <ZenButton
-                                  variant="ghost"
-                                  size="sm"
-                                  className="p-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toast.info('Edición próximamente disponible');
-                                  }}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </ZenButton>
-                                <ZenButton
-                                  variant="ghost"
-                                  size="sm"
-                                  className="p-2 text-red-400 hover:text-red-300"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toast.info('Eliminación próximamente disponible');
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </ZenButton>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </ZenCardContent>
-                  </ZenCard>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+  // Filtrar miembros por búsqueda
+  const filteredMembers = members.filter((member) =>
+    member.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
-}
 
-function cn(...classes: (string | undefined | null | false)[]): string {
-  return classes.filter(Boolean).join(' ');
+  // Ordenar alfabéticamente
+  const sortedMembers = [...filteredMembers].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+
+  return (
+    <Sheet open={isOpen} onOpenChange={onClose}>
+      <SheetContent className="w-full max-w-2xl bg-zinc-900 border-zinc-800 sm:max-w-2xl overflow-y-auto max-h-[80vh]">
+        <SheetHeader>
+          <SheetTitle className="text-xl">Gestión de Personal</SheetTitle>
+        </SheetHeader>
+
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'lista' | 'crear')} className="mt-6">
+          <TabsList className="grid w-full grid-cols-2 bg-zinc-800">
+            <TabsTrigger value="lista">Lista</TabsTrigger>
+            <TabsTrigger value="crear">
+              {editingMember ? 'Editar' : 'Crear'}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* TAB: LISTA */}
+          <TabsContent value="lista" className="space-y-4 mt-6">
+            {mode === 'manage' && (
+              <div className="flex gap-2">
+                <ZenInput
+                  placeholder="Buscar por nombre..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  startIcon={<Search className="h-4 w-4" />}
+                  className="flex-1"
+                />
+                <ZenButton
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => {
+                    setEditingMember(null);
+                    setActiveTab('crear');
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Crear
+                </ZenButton>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="text-center py-12 text-zinc-400">Cargando personal...</div>
+            ) : members.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-zinc-400 mb-4">No hay personal registrado</p>
+                {mode === 'manage' && (
+                  <ZenButton
+                    size="sm"
+                    onClick={() => {
+                      setEditingMember(null);
+                      setActiveTab('crear');
+                    }}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Crear el primero
+                  </ZenButton>
+                )}
+              </div>
+            ) : sortedMembers.length === 0 ? (
+              <div className="text-center py-8 text-zinc-400">
+                No hay coincidencias para "{searchTerm}"
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {sortedMembers.map((member) => (
+                  <CrewMemberCard
+                    key={member.id}
+                    member={member}
+                    mode={mode}
+                    onSelect={() => handleMemberClick(member.id)}
+                    onEdit={() => {
+                      setEditingMember(member);
+                      setActiveTab('crear');
+                    }}
+                    onDelete={handleCrewDeleted}
+                    studioSlug={studioSlug}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* TAB: CREAR/EDITAR */}
+          <TabsContent value="crear" className="mt-6">
+            {mode === 'manage' ? (
+              <CrewMemberForm
+                studioSlug={studioSlug}
+                initialMember={editingMember}
+                onSuccess={editingMember ? handleCrewUpdated : handleCrewCreated}
+                onCancel={() => {
+                  setEditingMember(null);
+                  setActiveTab('lista');
+                }}
+              />
+            ) : (
+              <div className="text-center py-12 text-zinc-400">
+                Este modo no permite crear personal
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </SheetContent>
+    </Sheet>
+  );
 }
