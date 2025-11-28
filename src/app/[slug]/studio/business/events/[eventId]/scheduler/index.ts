@@ -1,6 +1,9 @@
 // Export all components and utilities
 export { SchedulerV2 } from './components/SchedulerV2';
 export { SchedulerSidebar } from './components/SchedulerSidebar';
+export { EventGanttSchedulerV2 } from './components/EventGanttSchedulerV2';
+export { EventGanttView } from './components/EventGanttView';
+export { GanttDateRangeConfig } from './components/GanttDateRangeConfig';
 export { SchedulerTimeline } from './components/SchedulerTimeline';
 export { SchedulerHeader } from './components/SchedulerHeader';
 export { SchedulerGrid } from './components/SchedulerGrid';

@@ -4,7 +4,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { type DateRange } from 'react-day-picker';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
-import { SchedulerV2 } from '../scheduler-v2';
+import { SchedulerV2 } from './SchedulerV2';
 import { actualizarGanttTask } from '@/lib/actions/studio/business/events/gantt-actions';
 import { crearGanttTask, eliminarGanttTask, actualizarGanttTask as actualizarGanttTaskComplete } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
