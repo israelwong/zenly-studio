@@ -6,7 +6,7 @@ import { ArrowLeft, Users, Clock, TrendingUp } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { obtenerEventoDetalle, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
-import { EventGanttView, GanttDateRangeConfig } from '../scheduler';
+import { EventGanttView, GanttDateRangeConfig } from './index';
 import { CrewMembersManager } from '@/components/shared/crew-members/CrewMembersManager';
 import { type DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';

@@ -87,7 +87,7 @@ export function EventCotizacionesCard({
   };
 
   const handleGestionarGantt = () => {
-    router.push(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
+    router.push(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
   };
 
   const handleVer = async (cotizacion: CotizacionAprobada) => {
