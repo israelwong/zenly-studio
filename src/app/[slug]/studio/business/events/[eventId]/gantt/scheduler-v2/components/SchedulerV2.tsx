@@ -64,20 +64,6 @@ export const SchedulerV2 = React.memo(({
     [onTaskUpdate]
   );
 
-  // Función por defecto para renderizar items en sidebar
-  const defaultRenderSidebarItem = useCallback(
-    (item: CotizacionItem, metadata: ItemMetadata) => (
-      <div className="w-full">
-        <p className="text-sm font-medium text-zinc-200">{metadata.servicioNombre}</p>
-        {item.assigned_to_crew_member && (
-          <p className="text-xs text-zinc-500">
-            {item.assigned_to_crew_member.name}
-          </p>
-        )}
-      </div>
-    ),
-    []
-  );
 
   if (!dateRange?.from || !dateRange?.to) {
     return (
@@ -96,11 +82,12 @@ export const SchedulerV2 = React.memo(({
         className="flex h-[calc(100vh-300px)] bg-zinc-950 relative overflow-auto"
       >
         {/* Sidebar Sticky Left */}
-        <div className="w-[360px] flex-shrink-0 border-r border-zinc-800 bg-zinc-950 sticky left-0 z-10">
+        <div className="w-[360px] flex-shrink-0 border-r border-zinc-800 bg-zinc-950 sticky left-0 z-20">
           <SchedulerSidebar
             secciones={secciones}
             itemsMap={itemsMap}
-            renderItem={renderSidebarItem || defaultRenderSidebarItem}
+            studioSlug={studioSlug}
+            renderItem={renderSidebarItem}
           />
         </div>
 

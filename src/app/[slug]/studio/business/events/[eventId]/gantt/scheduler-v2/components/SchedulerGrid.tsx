@@ -30,13 +30,13 @@ export const SchedulerGrid = React.memo(({
         {secciones.map((seccion) => (
           <React.Fragment key={seccion.id}>
             {/* Sección Header - Phantom (sin contenido, solo para alineación) */}
-            <div className="h-[32px] bg-zinc-900/50 border-b border-zinc-800 flex-shrink-0" />
+            <div className="h-[40px] bg-zinc-900/50 border-b border-zinc-800 flex-shrink-0" />
 
             {/* Categorías */}
             {seccion.categorias.map((categoria) => (
               <React.Fragment key={categoria.id}>
                 {/* Categoría Header - Phantom (sin contenido, solo para alineación) */}
-                <div className="h-[24px] bg-zinc-900/30 border-b border-zinc-800/50 flex-shrink-0" />
+                <div className="h-[32px] bg-zinc-900/30 border-b border-zinc-800/50 flex-shrink-0" />
 
                 {/* Items (Rows) */}
                 {categoria.servicios.map((servicio) => {
