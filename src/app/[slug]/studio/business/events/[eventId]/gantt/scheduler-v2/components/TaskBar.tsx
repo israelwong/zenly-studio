@@ -49,7 +49,10 @@ export const TaskBar = React.memo(({
   const [localStartDate, setLocalStartDate] = useState(startDate);
   const [localEndDate, setLocalEndDate] = useState(endDate);
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  
+  // Track movimiento real
+  const isDraggingRef = React.useRef(false);
+  const dragStartPosRef = React.useRef({ x: 0, width: 0 });
 
   // Sincronizar estado local cuando las props cambien (actualización optimista externa)
   useEffect(() => {
@@ -67,28 +70,33 @@ export const TaskBar = React.memo(({
   const initialX = getPositionFromDate(localStartDate, dateRange);
   const width = getWidthFromDuration(localStartDate, localEndDate);
 
-  // Manejar drag start
-  const handleDragStart = useCallback(() => {
-    setIsDragging(true);
+  // Manejar drag start - guardar posición inicial
+  const handleDragStart = useCallback((_e: RndDragEvent, d: { x: number; y: number }) => {
+    dragStartPosRef.current.x = d.x;
+    isDraggingRef.current = false; // No es drag hasta que haya movimiento
   }, []);
 
-  // Manejar drag (movimiento horizontal)
+  // Manejar drag stop - detectar movimiento real
   const handleDragStop = useCallback(
     async (_e: RndDragEvent, d: { x: number; y: number }) => {
-      // Solo actualizar si hubo movimiento real
-      const currentX = getPositionFromDate(localStartDate, dateRange);
-      const hasMoved = d.x !== currentX;
+      // Detectar si hubo movimiento real (threshold de 5px)
+      const hasMoved = Math.abs(d.x - dragStartPosRef.current.x) > 5;
+      
+      if (hasMoved) {
+        isDraggingRef.current = true; // Marcar como drag real
+      }
       
       if (!hasMoved) {
-        setIsDragging(false);
-        return; // No hubo movimiento, ignorar
+        // No hubo movimiento, fue solo un click
+        isDraggingRef.current = false;
+        return;
       }
 
       const newStartDate = getDateFromPosition(d.x, dateRange);
       
       // Validar que esté dentro del rango
       if (!isDateInRange(newStartDate, dateRange)) {
-        setIsDragging(false);
+        setTimeout(() => isDraggingRef.current = false, 150);
         return;
       }
 
@@ -98,7 +106,7 @@ export const TaskBar = React.memo(({
 
       // Validar que la fecha de fin no salga del rango
       if (!isDateInRange(newEndDate, dateRange)) {
-        setIsDragging(false);
+        setTimeout(() => isDraggingRef.current = false, 150);
         return;
       }
 
@@ -109,23 +117,24 @@ export const TaskBar = React.memo(({
         await onUpdate(taskId, newStartDate, newEndDate);
       } catch (error) {
         console.error('Error updating task position:', error);
-        // Revertir en caso de error
         setLocalStartDate(startDate);
         setLocalEndDate(endDate);
       } finally {
         setIsUpdating(false);
-        setIsDragging(false);
+        // Mantener flag por 200ms para bloquear onClick
+        setTimeout(() => isDraggingRef.current = false, 200);
       }
     },
     [taskId, localStartDate, localEndDate, dateRange, onUpdate, startDate, endDate]
   );
 
-  // Manejar resize start
-  const handleResizeStart = useCallback(() => {
-    setIsDragging(true);
+  // Manejar resize start - guardar ancho inicial
+  const handleResizeStart = useCallback((_e: React.SyntheticEvent, _direction: string, ref: HTMLElement) => {
+    dragStartPosRef.current.width = ref.offsetWidth;
+    isDraggingRef.current = false; // No es resize hasta que haya cambio
   }, []);
 
-  // Manejar resize (cambio de duración)
+  // Manejar resize stop - detectar cambio real
   const handleResizeStop = useCallback(
     async (
       _e: React.SyntheticEvent,
@@ -134,8 +143,22 @@ export const TaskBar = React.memo(({
       _delta: { height: number; width: number },
       position: { x: number; y: number }
     ) => {
-      const newStartDate = getDateFromPosition(position.x, dateRange);
       const newWidth = _ref.offsetWidth;
+      
+      // Detectar si hubo cambio real (threshold de 10px = grid snap)
+      const hasResized = Math.abs(newWidth - dragStartPosRef.current.width) > 10;
+      
+      if (hasResized) {
+        isDraggingRef.current = true; // Marcar como resize real
+      }
+      
+      if (!hasResized) {
+        // No hubo resize, fue solo un click
+        isDraggingRef.current = false;
+        return;
+      }
+
+      const newStartDate = getDateFromPosition(position.x, dateRange);
       
       // Convertir ancho a duración en días
       const newDurationDays = Math.max(1, Math.round(newWidth / 60));
@@ -144,7 +167,7 @@ export const TaskBar = React.memo(({
 
       // Validar que las fechas estén dentro del rango
       if (!isDateInRange(newStartDate, dateRange) || !isDateInRange(newEndDate, dateRange)) {
-        setIsDragging(false);
+        setTimeout(() => isDraggingRef.current = false, 150);
         return;
       }
 
@@ -155,12 +178,12 @@ export const TaskBar = React.memo(({
         await onUpdate(taskId, newStartDate, newEndDate);
       } catch (error) {
         console.error('Error updating task duration:', error);
-        // Revertir en caso de error
         setLocalStartDate(startDate);
         setLocalEndDate(endDate);
       } finally {
         setIsUpdating(false);
-        setIsDragging(false);
+        // Mantener flag por 200ms para bloquear onClick
+        setTimeout(() => isDraggingRef.current = false, 200);
       }
     },
     [taskId, dateRange, onUpdate, startDate, endDate]
@@ -182,12 +205,12 @@ export const TaskBar = React.memo(({
     e.stopPropagation(); // Prevenir propagación al row
     
     // Solo abrir popover si NO hubo drag/resize
-    if (!isDragging) {
+    if (!isDraggingRef.current) {
       setPopoverOpen(true);
     }
     
     onClick?.(e);
-  }, [isDragging, onClick]);
+  }, [onClick]);
 
   return (
     <Rnd
