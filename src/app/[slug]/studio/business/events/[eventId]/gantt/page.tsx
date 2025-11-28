@@ -176,7 +176,7 @@ export default function EventGanttPage() {
               />
               <div className="h-6 w-px bg-zinc-700 mx-1" />
               <ZenButton
-                variant={showDuration ? "default" : "ghost"}
+                variant={showDuration ? "primary" : "ghost"}
                 size="sm"
                 onClick={() => setShowDuration(!showDuration)}
                 className={cn(
@@ -188,7 +188,7 @@ export default function EventGanttPage() {
                 Duración
               </ZenButton>
               <ZenButton
-                variant={showProgress ? "default" : "ghost"}
+                variant={showProgress ? "primary" : "ghost"}
                 size="sm"
                 onClick={() => setShowProgress(!showProgress)}
                 className={cn(

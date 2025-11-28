@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { type DateRange } from 'react-day-picker';
 import { EventGanttCard } from './EventGanttCard';
+import { EventGanttSchedulerV2 } from './EventGanttSchedulerV2';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
+import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
+import { toast } from 'sonner';
 
 interface EventGanttViewProps {
   studioSlug: string;
@@ -24,6 +28,33 @@ export function EventGanttView({
   showDuration = false,
   showProgress = false,
 }: EventGanttViewProps) {
+  const [secciones, setSecciones] = useState<SeccionData[]>([]);
+  const [loadingSecciones, setLoadingSecciones] = useState(false);
+  const [useSchedulerV2, setUseSchedulerV2] = useState(true); // Toggle entre V1 y V2
+
+  // Cargar secciones del catálogo
+  useEffect(() => {
+    const loadSecciones = async () => {
+      setLoadingSecciones(true);
+      try {
+        const result = await obtenerCatalogo(studioSlug, true);
+        if (result.success && result.data) {
+          setSecciones(result.data);
+        } else {
+          toast.error('Error al cargar las secciones');
+        }
+      } catch (error) {
+        console.error('Error loading secciones:', error);
+        toast.error('Error al cargar las secciones');
+      } finally {
+        setLoadingSecciones(false);
+      }
+    };
+
+    if (studioSlug) {
+      loadSecciones();
+    }
+  }, [studioSlug]);
 
   // Filtrar cotizaciones aprobadas
   const cotizacionesAprobadas = useMemo(() => {
@@ -57,6 +88,19 @@ export function EventGanttView({
 
     return { from: start, to: end };
   }, [propDateRange, ganttInstance, eventData.event_date, eventData.promise?.event_date]);
+
+  // Si SchedulerV2 está habilitado y hay secciones cargadas
+  if (useSchedulerV2 && secciones.length > 0 && defaultDateRange) {
+    return (
+      <EventGanttSchedulerV2
+        studioSlug={studioSlug}
+        eventId={eventId}
+        eventData={eventData}
+        dateRange={defaultDateRange}
+        secciones={secciones}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -105,7 +105,7 @@ export function EventCardInfo({
           )}
 
           <div>
-            <label className="text-xs font-medium text-zinc-400 block mb-1 flex items-center gap-1.5">
+            <label className="text-xs font-medium text-zinc-400 flex items-center gap-1.5 mb-1">
               <Calendar className="h-3.5 w-3.5" />
               Fecha del Evento
             </label>
@@ -116,7 +116,7 @@ export function EventCardInfo({
 
           {initialData.address && (
             <div>
-              <label className="text-xs font-medium text-zinc-400 block mb-1 flex items-center gap-1.5">
+              <label className="text-xs font-medium text-zinc-400 flex items-center gap-1.5 mb-1">
                 <MapPin className="h-3.5 w-3.5" />
                 Dirección
               </label>

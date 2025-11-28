@@ -1,21 +1,22 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ZenDialog, ZenInput, ZenTextarea, ZenSelect, ZenSwitch, ZenButton } from '@/components/ui/zen';
+import { ZenDialog, ZenTextarea, ZenSwitch, ZenButton } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { ZenCalendar } from '@/components/ui/zen';
-import { obtenerCrewMembers, crearGanttTask, actualizarGanttTask, obtenerGanttTask } from '@/lib/actions/studio/business/events';
+import { ZenCalendar, type ZenCalendarProps } from '@/components/ui/zen';
+import { crearGanttTask, actualizarGanttTask, obtenerGanttTask, eliminarGanttTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
-import { Calendar } from 'lucide-react';
+import { Calendar, Trash2 } from 'lucide-react';
 import { type DateRange } from 'react-day-picker';
 
-interface CrewMember {
-    id: string;
-    name: string;
-    tipo: string;
-}
+// Tipo específico para ZenCalendar con mode="single"
+type ZenCalendarSingleProps = Omit<ZenCalendarProps, 'mode' | 'selected' | 'onSelect'> & {
+    mode: 'single';
+    selected?: Date;
+    onSelect?: (date: Date | undefined) => void;
+};
 
 interface GanttTaskModalProps {
     isOpen: boolean;
@@ -23,6 +24,7 @@ interface GanttTaskModalProps {
     studioSlug: string;
     eventId: string;
     itemId: string;
+    itemName?: string; // Nombre del servicio/item
     dayDate: Date | null;
     dateRange?: DateRange;
     taskId?: string | null; // Si existe, es edición
@@ -35,43 +37,21 @@ export function GanttTaskModal({
     studioSlug,
     eventId,
     itemId,
+    itemName,
     dayDate,
     dateRange,
     taskId,
     onSuccess,
 }: GanttTaskModalProps) {
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
+    const [notes, setNotes] = useState('');
     const [isRange, setIsRange] = useState(false);
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [endDate, setEndDate] = useState<Date | null>(null);
-    const [assignedMemberId, setAssignedMemberId] = useState<string | null>(null);
     const [isCompleted, setIsCompleted] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [crewMembers, setCrewMembers] = useState<CrewMember[]>([]);
-    const [loadingMembers, setLoadingMembers] = useState(false);
     const [startDateOpen, setStartDateOpen] = useState(false);
     const [endDateOpen, setEndDateOpen] = useState(false);
 
-    // Cargar crew members
-    useEffect(() => {
-        if (isOpen && crewMembers.length === 0) {
-            const loadMembers = async () => {
-                try {
-                    setLoadingMembers(true);
-                    const result = await obtenerCrewMembers(studioSlug);
-                    if (result.success && result.data) {
-                        setCrewMembers(result.data);
-                    }
-                } catch (error) {
-                    console.error('Error loading crew members:', error);
-                } finally {
-                    setLoadingMembers(false);
-                }
-            };
-            loadMembers();
-        }
-    }, [isOpen, studioSlug, crewMembers.length]);
 
     // Cargar datos de tarea existente si se está editando
     useEffect(() => {
@@ -82,23 +62,18 @@ export function GanttTaskModal({
                     const result = await obtenerGanttTask(studioSlug, eventId, taskId);
                     if (result.success && result.data) {
                         const task = result.data as {
-                            name: string;
-                            description: string | null;
                             start_date: Date;
                             end_date: Date;
                             status: string;
                             notes: string | null;
                         };
-                        setName(task.name);
-                        setDescription(task.description || '');
                         setStartDate(new Date(task.start_date));
                         setEndDate(new Date(task.end_date));
                         setIsRange(task.start_date.toDateString() !== task.end_date.toDateString());
                         setIsCompleted(task.status === 'COMPLETED');
-                        // TODO: Cargar notas si están en un campo separado
+                        setNotes(task.notes || '');
                     }
-                } catch (error) {
-                    console.error('Error loading task:', error);
+                } catch {
                     toast.error('Error al cargar la tarea');
                 } finally {
                     setLoading(false);
@@ -110,24 +85,18 @@ export function GanttTaskModal({
             setStartDate(dayDate);
             setEndDate(dayDate);
             setIsRange(false);
-            setName('');
-            setDescription('');
+            setNotes('');
             setIsCompleted(false);
         }
     }, [isOpen, taskId, dayDate, studioSlug, eventId]);
 
     // Calcular duración en días
-    const durationDays = startDate && endDate 
+    const durationDays = startDate && endDate
         ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
         : 0;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (!name.trim()) {
-            toast.error('El nombre de la tarea es requerido');
-            return;
-        }
 
         if (!startDate) {
             toast.error('La fecha de inicio es requerida');
@@ -169,11 +138,9 @@ export function GanttTaskModal({
             if (taskId) {
                 // Actualizar tarea existente
                 const result = await actualizarGanttTask(studioSlug, eventId, taskId, {
-                    name,
-                    description: description || undefined,
                     startDate: startDate || undefined,
                     endDate: finalEndDate,
-                    notes: description || undefined,
+                    notes: notes || undefined,
                     isCompleted,
                 });
 
@@ -185,14 +152,13 @@ export function GanttTaskModal({
                     toast.error(result.error || 'Error al actualizar la tarea');
                 }
             } else {
-                // Crear nueva tarea
+                // Crear nueva tarea usando el nombre del item
                 const result = await crearGanttTask(studioSlug, eventId, {
                     itemId,
-                    name,
-                    description: description || undefined,
+                    name: itemName || 'Tarea',
                     startDate: startDate!,
                     endDate: finalEndDate,
-                    notes: description || undefined,
+                    notes: notes || undefined,
                     isCompleted,
                 });
 
@@ -204,29 +170,50 @@ export function GanttTaskModal({
                     toast.error(result.error || 'Error al crear la tarea');
                 }
             }
-        } catch (error) {
-            console.error('Error saving task:', error);
+        } catch {
             toast.error('Error al guardar la tarea');
         } finally {
             setLoading(false);
         }
     };
 
+    const handleDelete = async () => {
+        if (!taskId) return;
+
+        if (!confirm('¿Estás seguro de eliminar esta tarea?')) {
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const result = await eliminarGanttTask(studioSlug, eventId, taskId);
+
+            if (result.success) {
+                toast.success('Tarea eliminada correctamente');
+                onSuccess();
+                handleClose();
+            } else {
+                toast.error(result.error || 'Error al eliminar la tarea');
+            }
+        } catch {
+            toast.error('Error al eliminar la tarea');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleClose = () => {
-        setName('');
-        setDescription('');
+        setNotes('');
         setIsRange(false);
         setStartDate(null);
         setEndDate(null);
-        setAssignedMemberId(null);
         setIsCompleted(false);
         onClose();
     };
 
-    const crewMemberOptions = crewMembers.map(member => ({
-        value: member.id,
-        label: `${member.name} (${member.tipo})`,
-    }));
+    if (!isOpen) {
+        return null;
+    }
 
     return (
         <ZenDialog
@@ -237,31 +224,14 @@ export function GanttTaskModal({
             maxWidth="lg"
             showCloseButton={true}
             closeOnClickOutside={false}
-            onSave={handleSubmit}
+            onSave={() => handleSubmit(new Event('submit') as unknown as React.FormEvent)}
             onCancel={handleClose}
             saveLabel="Guardar"
             cancelLabel="Cancelar"
             isLoading={loading}
+            zIndex={10060}
         >
             <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Nombre */}
-                <ZenInput
-                    label="Nombre de la tarea"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ej: Sesión previa de fotos"
-                    required
-                />
-
-                {/* Descripción */}
-                <ZenTextarea
-                    label="Descripción / Notas"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Información adicional sobre la tarea..."
-                    rows={3}
-                />
-
                 {/* Tipo de rango */}
                 <div className="flex items-center gap-4">
                     <ZenSwitch
@@ -292,17 +262,18 @@ export function GanttTaskModal({
                                 >
                                     <Calendar className="mr-2 h-4 w-4" />
                                     {startDate ? (
-                                        format(startDate, 'PPP', { locale: es })
+                                        format(startDate, "d MMM yyyy", { locale: es })
                                     ) : (
                                         <span className="text-zinc-500">Seleccionar fecha</span>
                                     )}
                                 </ZenButton>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800" align="start">
-                                <ZenCalendar
-                                    mode="single"
-                                    selected={startDate || undefined}
-                                    onSelect={(date) => {
+                                {React.createElement(ZenCalendar, {
+                                    mode: "single" as const,
+                                    defaultMonth: startDate || new Date(),
+                                    selected: startDate,
+                                    onSelect: (date) => {
                                         if (date) {
                                             setStartDate(date);
                                             if (!isRange) {
@@ -310,9 +281,9 @@ export function GanttTaskModal({
                                             }
                                             setStartDateOpen(false);
                                         }
-                                    }}
-                                    locale={es}
-                                />
+                                    },
+                                    locale: es,
+                                } as ZenCalendarSingleProps)}
                             </PopoverContent>
                         </Popover>
                     </div>
@@ -332,25 +303,26 @@ export function GanttTaskModal({
                                     >
                                         <Calendar className="mr-2 h-4 w-4" />
                                         {endDate ? (
-                                            format(endDate, 'PPP', { locale: es })
+                                            format(endDate, "d MMM yyyy", { locale: es })
                                         ) : (
                                             <span className="text-zinc-500">Seleccionar fecha</span>
                                         )}
                                     </ZenButton>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800" align="start">
-                                    <ZenCalendar
-                                        mode="single"
-                                        selected={endDate || undefined}
-                                        onSelect={(date) => {
+                                    {React.createElement(ZenCalendar, {
+                                        mode: "single" as const,
+                                        defaultMonth: endDate || new Date(),
+                                        selected: endDate,
+                                        onSelect: (date) => {
                                             if (date) {
                                                 setEndDate(date);
                                                 setEndDateOpen(false);
                                             }
-                                        }}
-                                        locale={es}
-                                        disabled={(date) => startDate ? date < startDate : false}
-                                    />
+                                        },
+                                        locale: es,
+                                        disabled: (date: Date) => startDate ? date < startDate : false,
+                                    } as ZenCalendarSingleProps)}
                                 </PopoverContent>
                             </Popover>
                         </div>
@@ -364,14 +336,13 @@ export function GanttTaskModal({
                     </div>
                 )}
 
-                {/* Asignado a */}
-                <ZenSelect
-                    label="Asignado a"
-                    value={assignedMemberId || ''}
-                    onChange={(value) => setAssignedMemberId(value || null)}
-                    options={crewMemberOptions}
-                    placeholder="Seleccionar personal (opcional)"
-                    loading={loadingMembers}
+                {/* Notas / Bitácora */}
+                <ZenTextarea
+                    label="Notas / Bitácora"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Agrega notas, comentarios o bitácora de la tarea..."
+                    rows={4}
                 />
 
                 {/* Completada */}
@@ -380,6 +351,22 @@ export function GanttTaskModal({
                     onCheckedChange={setIsCompleted}
                     label="Tarea completada"
                 />
+
+                {/* Botón eliminar (solo en modo edición) */}
+                {taskId && (
+                    <div className="pt-4 border-t border-zinc-800">
+                        <ZenButton
+                            type="button"
+                            variant="ghost"
+                            onClick={handleDelete}
+                            disabled={loading}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-950/50"
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar tarea
+                        </ZenButton>
+                    </div>
+                )}
             </form>
         </ZenDialog>
     );

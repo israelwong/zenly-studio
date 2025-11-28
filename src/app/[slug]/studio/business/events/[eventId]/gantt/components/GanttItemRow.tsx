@@ -113,7 +113,7 @@ export function GanttItemRow({
             )}
 
             {/* Timeline */}
-            <td className="p-0 min-w-[400px]">
+            <td className="p-0 py-3 min-w-[400px]">
                 <GanttTimelineRow
                     dateRange={dateRange}
                     itemId={localItem.id}

@@ -51,7 +51,7 @@ export function GanttTimelineRow({
     };
 
     return (
-        <div className="flex h-full min-h-[40px] relative">
+        <div className="flex h-full min-h-[60px] relative">
             {days.map((day, index) => {
                 const dayDate = new Date(day);
                 dayDate.setHours(0, 0, 0, 0);
@@ -64,7 +64,7 @@ export function GanttTimelineRow({
                         isHeader={isHeader}
                         itemId={itemId}
                         tasks={tasks}
-                        onDayClick={onDayClick}
+                        onDayClick={isHeader ? undefined : onDayClick}
                         onTaskClick={onTaskClick}
                         showMonth={isHeader && shouldShowMonth(day, index)}
                         isToday={isToday}

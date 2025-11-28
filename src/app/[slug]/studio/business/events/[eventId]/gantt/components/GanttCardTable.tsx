@@ -13,7 +13,7 @@ interface GanttCardTableProps {
     showDuration?: boolean;
     showProgress?: boolean;
     onTaskClick?: (taskId: string, dayDate: Date, itemId: string) => void;
-    onAddTaskClick?: (dayDate: Date, itemId: string) => void;
+    onAddTaskClick?: (dayDate: Date, itemId: string, itemName: string) => void;
 }
 
 export function GanttCardTable({ 

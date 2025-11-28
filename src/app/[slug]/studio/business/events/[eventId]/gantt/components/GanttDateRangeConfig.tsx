@@ -48,7 +48,7 @@ export function GanttDateRangeConfig({
         }
       }
     } catch (error) {
-      console.error('Error guardando rango:', error);
+      // Error manejado por toast en el componente
     } finally {
       setSaving(false);
     }

@@ -96,6 +96,7 @@
     "react-image-crop": "^11.0.10",
     "react-photo-album": "^3.2.0",
     "react-qrcode-logo": "^4.0.0",
+    "react-rnd": "^10.5.2",
     "react-type-animation": "^3.2.0",
     "recharts": "^3.2.0",
     "resend": "^6.0.3",

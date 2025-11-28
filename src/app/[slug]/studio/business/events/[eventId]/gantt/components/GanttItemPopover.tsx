@@ -64,9 +64,9 @@ export function GanttItemPopover({ item, studioSlug, children, onCrewMemberUpdat
             if (result.success && result.data) {
                 setMembers(result.data);
             }
-        } catch (error) {
-            console.error('Error loading crew members:', error);
-        } finally {
+            } catch (error) {
+                // Error silencioso
+            } finally {
             setLoadingMembers(false);
         }
     }, [studioSlug]);
