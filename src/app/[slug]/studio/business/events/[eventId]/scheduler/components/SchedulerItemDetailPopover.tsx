@@ -21,7 +21,7 @@ interface CrewMember {
     variable_salary: number | null;
 }
 
-interface GanttItemPopoverProps {
+interface SchedulerItemDetailPopoverProps {
     item: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
     studioSlug: string;
     children: React.ReactNode;
@@ -44,7 +44,7 @@ function getInitials(name: string) {
         .slice(0, 2);
 }
 
-export function GanttItemPopover({ item, studioSlug, children, onCrewMemberUpdate }: GanttItemPopoverProps) {
+export function SchedulerItemDetailPopover({ item, studioSlug, children, onCrewMemberUpdate }: SchedulerItemDetailPopoverProps) {
     const [open, setOpen] = useState(false);
     const [members, setMembers] = useState<CrewMember[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);

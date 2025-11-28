@@ -3,12 +3,12 @@ import { asignarCrewAItem } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 
-interface GanttPersonalCellProps {
+interface SchedulerPersonalCellProps {
     item: NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items'][0];
     studioSlug: string;
 }
 
-export function GanttPersonalCell({ item, studioSlug }: GanttPersonalCellProps) {
+export function SchedulerPersonalCell({ item, studioSlug }: SchedulerPersonalCellProps) {
     const handleCrewChange = async (memberId: string | null) => {
         const result = await asignarCrewAItem(
             studioSlug,

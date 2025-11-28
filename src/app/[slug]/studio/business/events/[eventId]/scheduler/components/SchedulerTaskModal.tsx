@@ -18,7 +18,7 @@ type ZenCalendarSingleProps = Omit<ZenCalendarProps, 'mode' | 'selected' | 'onSe
     onSelect?: (date: Date | undefined) => void;
 };
 
-interface GanttTaskModalProps {
+interface SchedulerTaskModalProps {
     isOpen: boolean;
     onClose: () => void;
     studioSlug: string;
@@ -31,7 +31,7 @@ interface GanttTaskModalProps {
     onSuccess: () => void;
 }
 
-export function GanttTaskModal({
+export function SchedulerTaskModal({
     isOpen,
     onClose,
     studioSlug,
@@ -42,7 +42,7 @@ export function GanttTaskModal({
     dateRange,
     taskId,
     onSuccess,
-}: GanttTaskModalProps) {
+}: SchedulerTaskModalProps) {
     const [notes, setNotes] = useState('');
     const [isRange, setIsRange] = useState(false);
     const [startDate, setStartDate] = useState<Date | null>(null);

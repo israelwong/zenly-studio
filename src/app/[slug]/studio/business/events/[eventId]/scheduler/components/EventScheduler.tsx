@@ -9,7 +9,7 @@ import { actualizarGanttTask } from '@/lib/actions/studio/business/events/gantt-
 import { crearGanttTask, eliminarGanttTask, actualizarGanttTask as actualizarGanttTaskComplete } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { GanttAgrupacionCell } from './GanttAgrupacionCell';
+import { SchedulerAgrupacionCell } from './SchedulerAgrupacionCell';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -20,7 +20,7 @@ interface ItemMetadata {
   servicioId: string;
 }
 
-interface EventGanttSchedulerV2Props {
+interface EventSchedulerProps {
   studioSlug: string;
   eventId: string;
   eventData: EventoDetalle;
@@ -28,13 +28,13 @@ interface EventGanttSchedulerV2Props {
   secciones: SeccionData[];
 }
 
-export function EventGanttSchedulerV2({
+export function EventScheduler({
   studioSlug,
   eventId,
   eventData,
   dateRange,
   secciones,
-}: EventGanttSchedulerV2Props) {
+}: EventSchedulerProps) {
   const router = useRouter();
   
   // Estado local para actualizaciones optimistas
@@ -280,7 +280,7 @@ export function EventGanttSchedulerV2({
       const isCompleted = !!item.gantt_task?.completed_at;
       
       return (
-        <GanttAgrupacionCell
+        <SchedulerAgrupacionCell
           servicio={metadata.servicioNombre}
           isCompleted={isCompleted}
           assignedCrewMember={item.assigned_to_crew_member}

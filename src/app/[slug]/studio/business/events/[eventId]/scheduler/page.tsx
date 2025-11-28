@@ -6,12 +6,12 @@ import { ArrowLeft, Users, Clock, TrendingUp } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { obtenerEventoDetalle, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
-import { EventGanttView, GanttDateRangeConfig } from './index';
+import { EventSchedulerView, SchedulerDateRangeConfig } from './index';
 import { CrewMembersManager } from '@/components/shared/crew-members/CrewMembersManager';
 import { type DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
 
-export default function EventGanttPage() {
+export default function EventSchedulerPage() {
   const params = useParams();
   const router = useRouter();
   const studioSlug = params.slug as string;
@@ -146,7 +146,7 @@ export default function EventGanttPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <GanttDateRangeConfig
+              <SchedulerDateRangeConfig
                 dateRange={dateRange}
                 onDateRangeChange={setDateRange}
                 studioSlug={studioSlug}
@@ -212,7 +212,7 @@ export default function EventGanttPage() {
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          <EventGanttView
+          <EventSchedulerView
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventData}

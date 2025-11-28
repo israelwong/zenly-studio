@@ -2,7 +2,7 @@ import { type DateRange } from 'react-day-picker';
 import { eachDayOfInterval, isSameMonth } from 'date-fns';
 import { DayCell } from './DayCell';
 
-interface GanttTimelineRowProps {
+interface SchedulerTimelineRowProps {
     dateRange?: DateRange;
     isHeader?: boolean;
     itemId?: string;
@@ -17,14 +17,14 @@ interface GanttTimelineRowProps {
     onTaskClick?: (taskId: string, date: Date) => void;
 }
 
-export function GanttTimelineRow({
+export function SchedulerTimelineRow({
     dateRange,
     isHeader = false,
     itemId,
     tasks = [],
     onDayClick,
     onTaskClick
-}: GanttTimelineRowProps) {
+}: SchedulerTimelineRowProps) {
     if (!dateRange?.from || !dateRange?.to) {
         return (
             <div className={`h-full w-full min-h-[40px] flex items-center justify-center ${isHeader ? '' : 'bg-zinc-900/20 rounded border border-zinc-800/50 border-dashed'}`}>

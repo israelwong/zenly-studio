@@ -8,7 +8,7 @@ import { ZenCalendar, ZenButton } from '@/components/ui/zen';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-interface GanttDateRangeConfigProps {
+interface SchedulerDateRangeConfigProps {
   dateRange?: DateRange;
   onDateRangeChange: (range: DateRange | undefined) => void;
   studioSlug: string;
@@ -16,13 +16,13 @@ interface GanttDateRangeConfigProps {
   onSave?: () => void;
 }
 
-export function GanttDateRangeConfig({
+export function SchedulerDateRangeConfig({
   dateRange,
   onDateRangeChange,
   studioSlug,
   eventId,
   onSave,
-}: GanttDateRangeConfigProps) {
+}: SchedulerDateRangeConfigProps) {
   const [open, setOpen] = useState(false);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(dateRange);
   const [saving, setSaving] = useState(false);

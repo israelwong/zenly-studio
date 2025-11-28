@@ -2,15 +2,15 @@
 
 import { useState, useCallback } from 'react';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
-import { GanttAgrupacionCell } from './GanttAgrupacionCell';
-import { GanttDurationCell } from './GanttDurationCell';
-import { GanttProgressCell } from './GanttProgressCell';
-import { GanttTimelineRow } from './GanttTimelineRow';
-import { GanttItemPopover } from './GanttItemPopover';
+import { SchedulerAgrupacionCell } from './SchedulerAgrupacionCell';
+import { SchedulerDurationCell } from './SchedulerDurationCell';
+import { SchedulerProgressCell } from './SchedulerProgressCell';
+import { SchedulerTimelineRow } from './SchedulerTimelineRow';
+import { SchedulerItemDetailPopover } from './SchedulerItemDetailPopover';
 
 import { type DateRange } from 'react-day-picker';
 
-interface GanttItemRowProps {
+interface SchedulerItemRowProps {
     item: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
     itemData: {
         seccionNombre: string;
@@ -26,7 +26,7 @@ interface GanttItemRowProps {
     onAddTaskClick?: (dayDate: Date, itemId: string, itemName: string) => void;
 }
 
-export function GanttItemRow({
+export function SchedulerItemRow({
     item,
     itemData,
     studioSlug,
@@ -35,7 +35,7 @@ export function GanttItemRow({
     showProgress = false,
     onTaskClick,
     onAddTaskClick
-}: GanttItemRowProps) {
+}: SchedulerItemRowProps) {
     // Estado local del item para actualización en tiempo real
     const [localItem, setLocalItem] = useState(item);
 
@@ -84,37 +84,37 @@ export function GanttItemRow({
         <tr className="border-b border-zinc-800 hover:bg-zinc-900/50 transition-colors group">
             {/* Agrupación (Sticky Left) */}
             <td className="px-4 py-3 sticky left-0 bg-zinc-950 z-20 group-hover:bg-zinc-900 transition-colors border-r border-zinc-800/50 min-w-[360px]">
-                <GanttItemPopover
+                <SchedulerItemDetailPopover
                     item={localItem}
                     studioSlug={studioSlug}
                     onCrewMemberUpdate={handleCrewMemberUpdate}
                 >
                     <button className="w-full text-left">
-                        <GanttAgrupacionCell
+                        <SchedulerAgrupacionCell
                             servicio={itemData.servicioNombre}
                             assignedCrewMember={localItem.assigned_to_crew_member}
                         />
                     </button>
-                </GanttItemPopover>
+                </SchedulerItemDetailPopover>
             </td>
 
             {/* Duración */}
             {showDuration && (
                 <td className="px-4 py-3 bg-zinc-950 group-hover:bg-zinc-900 transition-colors">
-                    <GanttDurationCell item={item} />
+                    <SchedulerDurationCell item={item} />
                 </td>
             )}
 
             {/* Progreso */}
             {showProgress && (
                 <td className="px-4 py-3 bg-zinc-950 group-hover:bg-zinc-900 transition-colors">
-                    <GanttProgressCell item={item} />
+                    <SchedulerProgressCell item={item} />
                 </td>
             )}
 
             {/* Timeline */}
             <td className="p-0 py-3 min-w-[400px]">
-                <GanttTimelineRow
+                <SchedulerTimelineRow
                     dateRange={dateRange}
                     itemId={localItem.id}
                     tasks={tasks}

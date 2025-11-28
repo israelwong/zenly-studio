@@ -2,14 +2,14 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { type DateRange } from 'react-day-picker';
-import { EventGanttCard } from './EventGanttCard';
-import { EventGanttSchedulerV2 } from './EventGanttSchedulerV2';
+import { EventSchedulerCard } from './EventSchedulerCard';
+import { EventScheduler } from './EventScheduler';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { toast } from 'sonner';
 
-interface EventGanttViewProps {
+interface EventSchedulerViewProps {
   studioSlug: string;
   eventId: string;
   eventData: EventoDetalle;
@@ -19,7 +19,7 @@ interface EventGanttViewProps {
   showProgress?: boolean;
 }
 
-export function EventGanttView({
+export function EventSchedulerView({
   studioSlug,
   eventId,
   eventData,
@@ -27,7 +27,7 @@ export function EventGanttView({
   dateRange: propDateRange,
   showDuration = false,
   showProgress = false,
-}: EventGanttViewProps) {
+}: EventSchedulerViewProps) {
   const [secciones, setSecciones] = useState<SeccionData[]>([]);
   const [loadingSecciones, setLoadingSecciones] = useState(true);
 
@@ -102,7 +102,7 @@ export function EventGanttView({
   // Usar SchedulerV2 como vista principal (V2 es la nueva vista por defecto)
   if (secciones.length > 0 && defaultDateRange) {
     return (
-      <EventGanttSchedulerV2
+      <EventScheduler
         studioSlug={studioSlug}
         eventId={eventId}
         eventData={eventData}
@@ -119,7 +119,7 @@ export function EventGanttView({
       {cotizacionesAprobadas.length > 0 ? (
         <div className="space-y-4">
           {cotizacionesAprobadas.map((cotizacion) => (
-            <EventGanttCard
+            <EventSchedulerCard
               key={cotizacion.id}
               cotizacion={cotizacion}
               studioSlug={studioSlug}

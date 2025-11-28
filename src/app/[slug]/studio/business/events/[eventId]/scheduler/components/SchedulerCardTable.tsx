@@ -1,11 +1,11 @@
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
-import { GanttItemRow } from './GanttItemRow';
+import { SchedulerItemRow } from './SchedulerItemRow';
 import { type DateRange } from 'react-day-picker';
-import { GanttTimelineRow } from './GanttTimelineRow';
+import { SchedulerTimelineRow } from './SchedulerTimelineRow';
 import React from 'react';
 
-interface GanttCardTableProps {
+interface SchedulerCardTableProps {
     secciones: SeccionData[];
     itemsMap: Map<string, NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0]>;
     studioSlug: string;
@@ -16,7 +16,7 @@ interface GanttCardTableProps {
     onAddTaskClick?: (dayDate: Date, itemId: string, itemName: string) => void;
 }
 
-export function GanttCardTable({ 
+export function SchedulerCardTable({ 
     secciones, 
     itemsMap, 
     studioSlug, 
@@ -25,7 +25,7 @@ export function GanttCardTable({
     showProgress = false,
     onTaskClick,
     onAddTaskClick 
-}: GanttCardTableProps) {
+}: SchedulerCardTableProps) {
     return (
         <div className="overflow-x-auto border border-zinc-800 rounded-lg shadow-sm">
             <table className="w-full border-collapse bg-zinc-950 text-left text-sm">
@@ -39,7 +39,7 @@ export function GanttCardTable({
                             <th className="px-4 py-3 border-b border-zinc-800 min-w-[100px]">Progreso</th>
                         )}
                         <th className="p-0 border-b border-zinc-800 min-w-[400px]">
-                            <GanttTimelineRow dateRange={dateRange} isHeader />
+                            <SchedulerTimelineRow dateRange={dateRange} isHeader />
                         </th>
                     </tr>
                 </thead>
@@ -71,7 +71,7 @@ export function GanttCardTable({
                                         if (!item) return null;
 
                                         return (
-                                            <GanttItemRow
+                                            <SchedulerItemRow
                                                 key={item.id}
                                                 item={item}
                                                 itemData={{

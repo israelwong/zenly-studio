@@ -1,6 +1,6 @@
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 
-interface GanttCostCellProps {
+interface SchedulerCostCellProps {
   item: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 }
 
@@ -11,7 +11,7 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-export function GanttCostCell({ item }: GanttCostCellProps) {
+export function SchedulerCostCell({ item }: SchedulerCostCellProps) {
   // Mostrar costo total interno: costo (unitario) * cantidad
   // Este es el costo que se paga al personal, no el precio al cliente
   const unitaryCost = item.cost ?? 0;

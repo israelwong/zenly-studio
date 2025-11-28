@@ -6,12 +6,12 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/componen
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
-import { GanttCardTable } from './GanttCardTable';
-import { GanttTaskModal } from './GanttTaskModal';
+import { SchedulerCardTable } from './SchedulerCardTable';
+import { SchedulerTaskModal } from './SchedulerTaskModal';
 
 import { type DateRange } from 'react-day-picker';
 
-interface EventGanttCardProps {
+interface EventSchedulerCardProps {
   cotizacion: NonNullable<EventoDetalle['cotizaciones']>[0];
   studioSlug: string;
   eventId: string;
@@ -27,7 +27,7 @@ interface GroupedItem {
   items: NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items'];
 }
 
-export function EventGanttCard({ cotizacion, studioSlug, eventId, eventDate, dateRange, showDuration = false, showProgress = false }: EventGanttCardProps) {
+export function EventSchedulerCard({ cotizacion, studioSlug, eventId, eventDate, dateRange, showDuration = false, showProgress = false }: EventSchedulerCardProps) {
   const router = useRouter();
   const [catalogo, setCatalogo] = useState<SeccionData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,7 +133,7 @@ export function EventGanttCard({ cotizacion, studioSlug, eventId, eventDate, dat
         <ZenCardTitle className="text-lg">{cotizacion.name}</ZenCardTitle>
       </ZenCardHeader>
       <ZenCardContent className="p-0 sm:p-0">
-        <GanttCardTable
+        <SchedulerCardTable
           secciones={catalogoFiltrado}
           itemsMap={itemsMap}
           studioSlug={studioSlug}
@@ -164,7 +164,7 @@ export function EventGanttCard({ cotizacion, studioSlug, eventId, eventDate, dat
 
       {/* Modal de tarea */}
       {taskModalState.itemId && (
-        <GanttTaskModal
+        <SchedulerTaskModal
           isOpen={taskModalState.isOpen}
           onClose={() => {
             setTaskModalState({

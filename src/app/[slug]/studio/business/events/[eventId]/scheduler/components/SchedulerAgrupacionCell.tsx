@@ -1,7 +1,7 @@
 import { User } from 'lucide-react';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 
-interface GanttAgrupacionCellProps {
+interface SchedulerAgrupacionCellProps {
     servicio: string;
     isCompleted?: boolean;
     assignedCrewMember?: {
@@ -15,7 +15,7 @@ interface GanttAgrupacionCellProps {
     } | null;
 }
 
-export function GanttAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember }: GanttAgrupacionCellProps) {
+export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember }: SchedulerAgrupacionCellProps) {
     const hasAssigned = !!assignedCrewMember;
     
     // Generar iniciales del nombre
