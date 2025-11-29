@@ -36,9 +36,9 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
                 { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
                 { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
                 { id: 'events', name: 'Events', href: `/business/events`, icon: FileText },
-                { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
+                // { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
                 { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
-                { id: 'magic', name: 'Asistente IA', href: `/magic`, icon: Sparkles },
+                // { id: 'magic', name: 'Asistente IA', href: `/magic`, icon: Sparkles },
             ],
         },
 

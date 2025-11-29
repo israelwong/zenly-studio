@@ -15,7 +15,7 @@ import {
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import type { CondicionComercialForm } from '@/lib/actions/schemas/condiciones-comerciales-schemas';
 import { useConfiguracionPreciosUpdateListener, type ConfiguracionPreciosUpdateEventDetail } from '@/hooks/useConfiguracionPreciosRefresh';
-import { UtilidadForm } from '@/app/[slug]/studio/commercial/catalogo/tabs/UtilidadTab/UtilidadForm';
+import { UtilidadForm } from '@/app/[slug]/studio/commercial/catalogo/components/UtilidadForm';
 import { toast } from 'sonner';
 import {
   DndContext,
