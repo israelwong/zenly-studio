@@ -32,11 +32,17 @@ export default function EventSchedulerPage() {
     const unassigned = total - itemsWithTasks.length; // Items sin tarea asignada
 
     // Items con tarea pero sin crew member asignado
-    const withoutCrew = itemsWithTasks.filter(item =>
-      !item.gantt_task?.completed_at && !item.assigned_to_crew_member_id
-    ).length;
+    const withoutCrew = itemsWithTasks.filter(item => {
+      const hasCompleted = !!item.gantt_task?.completed_at;
+      const hasCrew = !!item.assigned_to_crew_member_id;
+      return !hasCompleted && !hasCrew;
+    }).length;
 
-    const completed = itemsWithTasks.filter(item => item.gantt_task?.completed_at).length;
+    // Items completados (completed_at puede ser Date o string ISO)
+    const completed = itemsWithTasks.filter(item => {
+      const completedAt = item.gantt_task?.completed_at;
+      return !!completedAt; // Funciona tanto para Date como para string ISO
+    }).length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     // Calcular estados basados en fechas

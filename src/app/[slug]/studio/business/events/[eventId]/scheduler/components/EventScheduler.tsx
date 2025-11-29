@@ -74,7 +74,31 @@ export function EventScheduler({
           ...cotizacion,
           cotizacion_items: cotizacion.cotizacion_items?.map(item => {
             if (item.id === updatedItem.id) {
-              return updatedItem;
+              // Asegurar que el item actualizado tenga todos los campos necesarios
+              // Especialmente importante para gantt_task cuando se completa
+              // Preservar todos los campos del gantt_task original y mergear con los actualizados
+              const mergedGanttTask = updatedItem.gantt_task && item.gantt_task
+                ? {
+                  ...item.gantt_task, // Preservar campos originales (start_date, end_date, etc.)
+                  ...updatedItem.gantt_task, // Sobrescribir con campos actualizados (completed_at, status, progress_percent, etc.)
+                }
+                : (updatedItem.gantt_task || item.gantt_task);
+
+              // Mergear el item completo preservando todos los campos originales
+              // y sobrescribiendo solo los campos actualizados
+              const mergedItem = {
+                ...item, // Preservar todos los campos originales del item
+                ...updatedItem, // Sobrescribir con campos actualizados
+                // Asegurar que assigned_to_crew_member_id se preserve correctamente
+                assigned_to_crew_member_id: updatedItem.assigned_to_crew_member_id !== undefined
+                  ? updatedItem.assigned_to_crew_member_id
+                  : item.assigned_to_crew_member_id,
+                assigned_to_crew_member: updatedItem.assigned_to_crew_member !== undefined
+                  ? updatedItem.assigned_to_crew_member
+                  : item.assigned_to_crew_member,
+                gantt_task: mergedGanttTask,
+              };
+              return mergedItem;
             }
             return item;
           }),
@@ -84,7 +108,7 @@ export function EventScheduler({
       return newData;
     });
 
-    // Notificar al padre para actualizar stats
+    // Notificar al padre para actualizar stats inmediatamente
     if (updatedData! && onDataChange) {
       onDataChange(updatedData);
     }
@@ -405,6 +429,8 @@ export function EventScheduler({
                     gantt_task: item.gantt_task ? {
                       ...item.gantt_task,
                       completed_at: isCompleted ? new Date().toISOString() : null,
+                      status: isCompleted ? 'COMPLETED' : 'PENDING',
+                      progress_percent: isCompleted ? 100 : (item.gantt_task.progress_percent || 0),
                     } : null,
                   };
                 }
@@ -518,7 +544,9 @@ export function EventScheduler({
                     ...item,
                     gantt_task: item.gantt_task ? {
                       ...item.gantt_task,
-                      completed_at: new Date(),
+                      completed_at: new Date().toISOString(),
+                      status: 'COMPLETED',
+                      progress_percent: 100,
                     } : null,
                   };
                 }
@@ -578,7 +606,9 @@ export function EventScheduler({
                   ...item,
                   gantt_task: item.gantt_task ? {
                     ...item.gantt_task,
-                    completed_at: new Date(),
+                    completed_at: new Date().toISOString(),
+                    status: 'COMPLETED',
+                    progress_percent: 100,
                   } : null,
                 };
               }
@@ -590,7 +620,7 @@ export function EventScheduler({
         return newData;
       });
 
-      // Notificar al padre
+      // Notificar al padre para actualizar stats
       if (updatedData! && onDataChange) {
         onDataChange(updatedData);
       }
