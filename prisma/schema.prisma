@@ -2028,7 +2028,7 @@ model studio_cotizacion_visitas {
   @@index([cotizacion_id, created_at])
 }
 
-//! COMMERCIAL (FINANZAS)
+//! PAGOS
 model studio_metodos_pago {
   id                                  String                                       @id @default(cuid())
   studio_id                           String
@@ -2093,6 +2093,7 @@ model studio_pagos {
   @@index([cotizacion_id])
 }
 
+//! NOMINAS
 model studio_nominas {
   id                     String                    @id @default(cuid())
   studio_id              String

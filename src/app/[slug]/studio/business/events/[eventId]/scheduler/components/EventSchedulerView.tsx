@@ -124,7 +124,7 @@ export function EventSchedulerView({
     );
   }
 
-  // Usar SchedulerV2 como vista principal (V2 es la nueva vista por defecto)
+  // Usar SchedulerPanel como vista principal
   if (secciones.length > 0 && defaultDateRange) {
     return (
       <EventScheduler

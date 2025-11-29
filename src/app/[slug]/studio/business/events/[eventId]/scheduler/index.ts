@@ -1,5 +1,5 @@
 // Export all components and utilities
-export { SchedulerV2 } from './components/SchedulerV2';
+export { SchedulerPanel } from './components/SchedulerPanel';
 export { SchedulerSidebar } from './components/SchedulerSidebar';
 export { EventScheduler } from './components/EventScheduler';
 export { EventSchedulerView } from './components/EventSchedulerView';

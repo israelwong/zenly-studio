@@ -50,7 +50,7 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             items: [
                 { id: 'planning', name: 'Planning', href: `/business/planning`, icon: FileText },
                 { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
-                { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
+                // { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
             ],
         },
 

@@ -16,7 +16,7 @@ interface ItemMetadata {
   servicioId: string;
 }
 
-interface SchedulerV2Props {
+interface SchedulerPanelProps {
   secciones: SeccionData[];
   itemsMap: Map<string, CotizacionItem>;
   studioSlug: string;
@@ -30,12 +30,12 @@ interface SchedulerV2Props {
 }
 
 /**
- * SchedulerV2 - Contenedor principal del nuevo Scheduler con soporte para drag & drop
+ * SchedulerPanel - Contenedor principal del nuevo Scheduler con soporte para drag & drop
  * 
  * Utiliza CSS Grid para sincronizar scroll entre sidebar y timeline
  * Opción A: Contenedor único con display: grid que incluye sidebar y timeline
  */
-export const SchedulerV2 = React.memo(({
+export const SchedulerPanel = React.memo(({
   secciones,
   itemsMap,
   studioSlug,
@@ -46,7 +46,7 @@ export const SchedulerV2 = React.memo(({
   onTaskDelete,
   onTaskToggleComplete,
   renderSidebarItem,
-}: SchedulerV2Props) => {
+}: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
   // No necesitamos sincronización, todo usa el mismo scroll
@@ -80,7 +80,7 @@ export const SchedulerV2 = React.memo(({
   return (
     <div className="border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
       {/* Contenedor principal con scroll unificado */}
-      <div 
+      <div
         ref={timelineRef}
         onScroll={handleTimelineScroll}
         className="flex h-[calc(100vh-300px)] bg-zinc-950 relative overflow-auto"
@@ -114,5 +114,4 @@ export const SchedulerV2 = React.memo(({
   );
 });
 
-SchedulerV2.displayName = 'SchedulerV2';
-
+SchedulerPanel.displayName = 'SchedulerPanel';

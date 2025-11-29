@@ -51,12 +51,12 @@ export function UtilityDock({
       label: 'ZEN Magic',
       action: onMagicClick,
     },
-    {
-      id: 'analytics',
-      icon: BarChart3,
-      label: 'Analytics',
-      href: `/${studioSlug}/studio/dashboard/finanzas`,
-    },
+    // {
+    //   id: 'analytics',
+    //   icon: BarChart3,
+    //   label: 'Analytics',
+    //   href: `/${studioSlug}/studio/dashboard/finanzas`,
+    // },
     {
       id: 'help',
       icon: HelpCircle,
