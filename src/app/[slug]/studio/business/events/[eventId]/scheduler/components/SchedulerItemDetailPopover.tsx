@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
 
 interface CrewMember {
     id: string;
@@ -25,7 +26,7 @@ interface SchedulerItemDetailPopoverProps {
     item: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
     studioSlug: string;
     children: React.ReactNode;
-    onCrewMemberUpdate?: (crewMemberId: string | null, crewMember?: CrewMember | null) => void;
+    onItemUpdate?: (updatedItem: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0]) => void;
 }
 
 function formatCurrency(value: number) {
@@ -44,18 +45,22 @@ function getInitials(name: string) {
         .slice(0, 2);
 }
 
-export function SchedulerItemDetailPopover({ item, studioSlug, children, onCrewMemberUpdate }: SchedulerItemDetailPopoverProps) {
+export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemUpdate }: SchedulerItemDetailPopoverProps) {
+    // Hook de sincronización (optimista + servidor)
+    const { localItem, updateCrewMember } = useSchedulerItemSync(item, onItemUpdate);
+
     const [open, setOpen] = useState(false);
     const [members, setMembers] = useState<CrewMember[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedMemberId, setSelectedMemberId] = useState<string | null>(item.assigned_to_crew_member_id || null);
     const [formModalOpen, setFormModalOpen] = useState(false);
 
-    const isService = item.profit_type === 'servicio' || item.profit_type === 'service';
-    const itemName = item.name || 'Sin nombre';
-    const costoUnitario = item.cost ?? item.cost_snapshot ?? 0;
-    const costoTotal = costoUnitario * item.quantity;
+    // Usar localItem (sincronizado con servidor)
+    const selectedMemberId = localItem.assigned_to_crew_member_id;
+    const isService = localItem.profit_type === 'servicio' || localItem.profit_type === 'service';
+    const itemName = localItem.name || 'Sin nombre';
+    const costoUnitario = localItem.cost ?? localItem.cost_snapshot ?? 0;
+    const costoTotal = costoUnitario * localItem.quantity;
 
     const loadMembers = useCallback(async () => {
         try {
@@ -64,9 +69,9 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onCrewM
             if (result.success && result.data) {
                 setMembers(result.data);
             }
-            } catch (error) {
-                // Error silencioso
-            } finally {
+        } catch (error) {
+            // Error silencioso
+        } finally {
             setLoadingMembers(false);
         }
     }, [studioSlug]);
@@ -90,18 +95,25 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onCrewM
     }, [members, searchTerm]);
 
     const handleMemberSelect = async (memberId: string | null) => {
-        const result = await asignarCrewAItem(studioSlug, item.id, memberId);
-        if (result.success) {
-            setSelectedMemberId(memberId);
-            // Obtener el crew member completo de la lista cargada
-            const selectedMember = memberId ? members.find(m => m.id === memberId) : null;
-            // Actualizar estado local en el componente padre
-            onCrewMemberUpdate?.(memberId, selectedMember || null);
-            toast.success('Personal asignado correctamente');
-            setSearchTerm('');
-        } else {
-            toast.error(result.error || 'Error al asignar personal');
-        }
+        const selectedMember = memberId ? members.find(m => m.id === memberId) : null;
+
+        await updateCrewMember(
+            memberId,
+            selectedMember ? {
+                id: selectedMember.id,
+                name: selectedMember.name,
+                tipo: selectedMember.tipo,
+            } : null,
+            async () => {
+                const result = await asignarCrewAItem(studioSlug, localItem.id, memberId);
+                if (!result.success) {
+                    throw new Error(result.error || 'Error al asignar personal');
+                }
+            }
+        );
+
+        toast.success('Personal asignado correctamente');
+        setSearchTerm('');
     };
 
     const handleRemoveAssignment = async () => {

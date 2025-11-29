@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React from 'react';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { SchedulerItemPopover } from './SchedulerItemPopover';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
+import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -21,7 +22,7 @@ interface SchedulerSidebarProps {
   studioSlug: string;
   eventId: string;
   renderItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
-  onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
+  onItemUpdate?: (updatedItem: CotizacionItem) => void;
 }
 
 interface SchedulerItemProps {
@@ -30,7 +31,7 @@ interface SchedulerItemProps {
   studioSlug: string;
   eventId: string;
   renderItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
-  onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
+  onItemUpdate?: (updatedItem: CotizacionItem) => void;
 }
 
 function getInitials(name: string) {
@@ -42,94 +43,36 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-// Componente individual para cada item con su propio estado
-function SchedulerItem({ item: initialItem, metadata, studioSlug, eventId, renderItem, onTaskToggleComplete }: SchedulerItemProps) {
-  const [localItem, setLocalItem] = useState(initialItem);
-
-  // Sincronizar cuando el item externo cambia (actualización desde TaskBar o sidebar popover)
-  useEffect(() => {
-    setLocalItem(initialItem);
-  }, [
-    initialItem,
-    initialItem.gantt_task?.start_date,
-    initialItem.gantt_task?.end_date,
-    initialItem.gantt_task?.completed_at,
-    initialItem.assigned_to_crew_member_id,
-  ]);
-
-  const handleTaskCompletedUpdate = useCallback(async (isCompleted: boolean) => {
-    // Actualizar UI local inmediatamente
-    setLocalItem(prev => {
-      if (!prev.gantt_task) return prev;
-      
-      return {
-        ...prev,
-        gantt_task: {
-          ...prev.gantt_task,
-          completed_at: isCompleted ? new Date() : null,
-        },
-      } as typeof prev;
-    });
-
-    // Propagar al padre para actualizar badge y otros componentes
-    if (localItem.gantt_task?.id && onTaskToggleComplete) {
-      await onTaskToggleComplete(localItem.gantt_task.id, isCompleted);
-    }
-  }, [localItem.gantt_task?.id, onTaskToggleComplete]);
-
-  const handleCrewMemberUpdate = useCallback((crewMemberId: string | null, crewMember?: { id: string; name: string; tipo: string } | null) => {
-    if (crewMemberId && crewMember) {
-      setLocalItem(prev => ({
-        ...prev,
-        assigned_to_crew_member_id: crewMemberId,
-        assigned_to_crew_member: {
-          id: crewMember.id,
-          name: crewMember.name,
-          tipo: crewMember.tipo as 'OPERATIVO' | 'ADMINISTRATIVO' | 'PROVEEDOR',
-          category: {
-            id: '',
-            name: crewMember.tipo || 'Sin categoría',
-          },
-        },
-      } as typeof prev));
-    } else {
-      setLocalItem(prev => ({
-        ...prev,
-        assigned_to_crew_member_id: null,
-        assigned_to_crew_member: null,
-      }));
-    }
-  }, []);
-
-  // Determinar si está completado
+// Componente individual para cada item (con sincronización optimista)
+function SchedulerItem({ item, metadata, studioSlug, eventId, renderItem, onItemUpdate }: SchedulerItemProps) {
+  // Hook de sincronización (optimista + servidor)
+  const { localItem } = useSchedulerItemSync(item, onItemUpdate);
   const isCompleted = !!localItem.gantt_task?.completed_at;
 
   const DefaultItemRender = () => (
     <div className="w-full flex items-center gap-2">
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium truncate ${
-          isCompleted 
-            ? 'text-zinc-500 line-through decoration-zinc-600' 
-            : 'text-zinc-200'
-        }`}>
+        <p className={`text-sm font-medium truncate ${isCompleted
+          ? 'text-zinc-500 line-through decoration-zinc-600'
+          : 'text-zinc-200'
+          }`}>
           {metadata.servicioNombre}
         </p>
         {localItem.assigned_to_crew_member && (
           <div className="flex items-center gap-1.5 mt-1">
             <ZenAvatar className="h-4 w-4 flex-shrink-0">
               <ZenAvatarFallback className={
-                isCompleted 
-                  ? "bg-emerald-600/20 text-emerald-400 text-[8px]" 
+                isCompleted
+                  ? "bg-emerald-600/20 text-emerald-400 text-[8px]"
                   : "bg-blue-600/20 text-blue-400 text-[8px]"
               }>
                 {getInitials(localItem.assigned_to_crew_member.name)}
               </ZenAvatarFallback>
             </ZenAvatar>
-            <p className={`text-xs truncate ${
-              isCompleted 
-                ? 'text-zinc-600 line-through decoration-zinc-700' 
-                : 'text-zinc-500'
-            }`}>
+            <p className={`text-xs truncate ${isCompleted
+              ? 'text-zinc-600 line-through decoration-zinc-700'
+              : 'text-zinc-500'
+              }`}>
               {localItem.assigned_to_crew_member.name}
             </p>
           </div>
@@ -143,8 +86,7 @@ function SchedulerItem({ item: initialItem, metadata, studioSlug, eventId, rende
       item={localItem}
       studioSlug={studioSlug}
       eventId={eventId}
-      onCrewMemberUpdate={handleCrewMemberUpdate}
-      onTaskCompletedUpdate={handleTaskCompletedUpdate}
+      onItemUpdate={onItemUpdate}
     >
       <button className="w-full text-left">
         {renderItem ? renderItem(localItem, metadata) : <DefaultItemRender />}
@@ -160,6 +102,7 @@ export const SchedulerSidebar = React.memo(({
   eventId,
   renderItem,
   onTaskToggleComplete,
+  onItemUpdate,
 }: SchedulerSidebarProps) => {
   return (
     <div className="w-full bg-zinc-950">
@@ -206,7 +149,7 @@ export const SchedulerSidebar = React.memo(({
                       studioSlug={studioSlug}
                       eventId={eventId}
                       renderItem={renderItem}
-                      onTaskToggleComplete={onTaskToggleComplete}
+                      onItemUpdate={onItemUpdate}
                     />
                   </div>
                 );

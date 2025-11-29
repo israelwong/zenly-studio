@@ -27,6 +27,7 @@ interface SchedulerPanelProps {
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
   renderSidebarItem?: (item: CotizacionItem, metadata: ItemMetadata) => React.ReactNode;
+  onItemUpdate?: (updatedItem: CotizacionItem) => void;
 }
 
 /**
@@ -46,6 +47,7 @@ export const SchedulerPanel = React.memo(({
   onTaskDelete,
   onTaskToggleComplete,
   renderSidebarItem,
+  onItemUpdate,
 }: SchedulerPanelProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -94,6 +96,7 @@ export const SchedulerPanel = React.memo(({
             eventId={eventId}
             renderItem={renderSidebarItem}
             onTaskToggleComplete={onTaskToggleComplete}
+            onItemUpdate={onItemUpdate}
           />
         </div>
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { SchedulerAgrupacionCell } from './SchedulerAgrupacionCell';
 import { SchedulerTimelineRow } from './SchedulerTimelineRow';
 import { SchedulerItemDetailPopover } from './SchedulerItemDetailPopover';
+import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
 
 import { type DateRange } from 'react-day-picker';
 
@@ -20,6 +21,7 @@ interface SchedulerItemRowProps {
     dateRange?: DateRange;
     onTaskClick?: (taskId: string, dayDate: Date, itemId: string) => void;
     onAddTaskClick?: (dayDate: Date, itemId: string, itemName: string) => void;
+    onItemUpdate?: (updatedItem: NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0]) => void;
 }
 
 export function SchedulerItemRow({
@@ -28,36 +30,11 @@ export function SchedulerItemRow({
     studioSlug,
     dateRange,
     onTaskClick,
-    onAddTaskClick
+    onAddTaskClick,
+    onItemUpdate
 }: SchedulerItemRowProps) {
-    // Estado local del item para actualización en tiempo real
-    const [localItem, setLocalItem] = useState(item);
-
-    // Callback para actualizar el crew member asignado
-    const handleCrewMemberUpdate = useCallback((crewMemberId: string | null, crewMember?: { id: string; name: string; tipo: string } | null) => {
-        if (crewMemberId && crewMember) {
-            setLocalItem(prev => ({
-                ...prev,
-                assigned_to_crew_member_id: crewMemberId,
-                assigned_to_crew_member: {
-                    id: crewMember.id,
-                    name: crewMember.name,
-                    tipo: crewMember.tipo as 'OPERATIVO' | 'ADMINISTRATIVO' | 'PROVEEDOR',
-                    category: {
-                        id: '',
-                        name: crewMember.tipo || 'Sin categoría', // Usar tipo como fallback temporal
-                    },
-                },
-            } as typeof prev));
-        } else {
-            // Quitar asignación
-            setLocalItem(prev => ({
-                ...prev,
-                assigned_to_crew_member_id: null,
-                assigned_to_crew_member: null,
-            }));
-        }
-    }, []);
+    // Hook de sincronización (optimista + servidor)
+    const { localItem } = useSchedulerItemSync(item, onItemUpdate);
 
     const handleDayClick = useCallback((date: Date) => {
         if (onAddTaskClick) {
@@ -86,7 +63,7 @@ export function SchedulerItemRow({
                 <SchedulerItemDetailPopover
                     item={localItem}
                     studioSlug={studioSlug}
-                    onCrewMemberUpdate={handleCrewMemberUpdate}
+                    onItemUpdate={onItemUpdate}
                 >
                     <button className="w-full text-left">
                         <SchedulerAgrupacionCell

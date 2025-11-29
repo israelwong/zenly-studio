@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Users, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
@@ -62,38 +62,38 @@ export default function EventSchedulerPage() {
     return { completed, total, percentage, delayed, inProcess, pending, unassigned };
   }, [eventData, dateRange]);
 
-  useEffect(() => {
-    const loadEvent = async () => {
-      try {
-        setLoading(true);
-        const result = await obtenerEventoDetalle(studioSlug, eventId);
+  const loadEvent = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await obtenerEventoDetalle(studioSlug, eventId);
 
-        if (result.success && result.data) {
-          setEventData(result.data);
-          // Inicializar dateRange si existe gantt configurado
-          if (result.data.gantt?.start_date && result.data.gantt?.end_date) {
-            setDateRange({
-              from: result.data.gantt.start_date,
-              to: result.data.gantt.end_date,
-            });
-          }
-        } else {
-          toast.error(result.error || 'Evento no encontrado');
-          router.push(`/${studioSlug}/studio/business/events/${eventId}`);
+      if (result.success && result.data) {
+        setEventData(result.data);
+        // Inicializar dateRange si existe gantt configurado (solo la primera vez)
+        if (!dateRange && result.data.gantt?.start_date && result.data.gantt?.end_date) {
+          setDateRange({
+            from: result.data.gantt.start_date,
+            to: result.data.gantt.end_date,
+          });
         }
-      } catch (error) {
-        console.error('Error loading event:', error);
-        toast.error('Error al cargar el evento');
+      } else {
+        toast.error(result.error || 'Evento no encontrado');
         router.push(`/${studioSlug}/studio/business/events/${eventId}`);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Error loading event:', error);
+      toast.error('Error al cargar el evento');
+      router.push(`/${studioSlug}/studio/business/events/${eventId}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId, studioSlug, router, dateRange]);
 
+  useEffect(() => {
     if (eventId) {
       loadEvent();
     }
-  }, [eventId, studioSlug, router]);
+  }, [eventId, loadEvent]);
 
   if (loading) {
     return (

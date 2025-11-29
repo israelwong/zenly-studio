@@ -64,6 +64,22 @@ export function EventScheduler({
     costoTotal: number;
   } | null>(null);
 
+  // Callback para actualizar un item específico en localEventData
+  const handleItemUpdate = useCallback((updatedItem: CotizacionItem) => {
+    setLocalEventData(prev => ({
+      ...prev,
+      cotizaciones: prev.cotizaciones?.map(cotizacion => ({
+        ...cotizacion,
+        cotizacion_items: cotizacion.cotizacion_items?.map(item => {
+          if (item.id === updatedItem.id) {
+            return updatedItem;
+          }
+          return item;
+        }),
+      })),
+    }));
+  }, []);
+
   // Construir map de items desde cotizaciones aprobadas
   // Usar localEventData para reflejar cambios inmediatamente
   const itemsMap = useMemo(() => {
@@ -430,7 +446,14 @@ export function EventScheduler({
           return;
         }
 
-        // Actualizar estado local del item
+        // Obtener el crew member completo para actualizar el item
+        const { obtenerCrewMembers } = await import('@/lib/actions/studio/business/events');
+        const crewResult = await obtenerCrewMembers(studioSlug);
+        const crewMember = crewResult.success && crewResult.data
+          ? crewResult.data.find(m => m.id === crewMemberId)
+          : null;
+
+        // Actualizar estado local del item con crew member completo
         setLocalEventData(prev => ({
           ...prev,
           cotizaciones: prev.cotizaciones?.map(cotizacion => ({
@@ -440,6 +463,11 @@ export function EventScheduler({
                 return {
                   ...item,
                   assigned_to_crew_member_id: crewMemberId,
+                  assigned_to_crew_member: crewMember ? {
+                    id: crewMember.id,
+                    name: crewMember.name,
+                    tipo: crewMember.tipo as 'OPERATIVO' | 'ADMINISTRATIVO' | 'PROVEEDOR',
+                  } : null,
                 };
               }
               return item;
@@ -495,7 +523,6 @@ export function EventScheduler({
         }
         setAssignCrewModalOpen(false);
         setPendingTaskCompletion(null);
-        router.refresh();
       } catch (error) {
         console.error('Error assigning and completing:', error);
         toast.error('Error al asignar y completar');
@@ -551,7 +578,6 @@ export function EventScheduler({
       toast.warning('Tarea completada. No se generó pago porque no hay personal asignado.');
       setAssignCrewModalOpen(false);
       setPendingTaskCompletion(null);
-      router.refresh();
     } catch (error) {
       console.error('Error completing without payment:', error);
       toast.error('Error al completar la tarea');
@@ -559,20 +585,28 @@ export function EventScheduler({
   }, [studioSlug, eventId, router, onDataChange, pendingTaskCompletion]);
 
   // Renderizar item en sidebar
-  const renderSidebarItem = useCallback(
-    (item: CotizacionItem, metadata: ItemMetadata) => {
-      const isCompleted = !!item.gantt_task?.completed_at;
+  const renderSidebarItem = (item: CotizacionItem, metadata: ItemMetadata) => {
+    const isCompleted = !!item.gantt_task?.completed_at;
 
-      return (
-        <SchedulerAgrupacionCell
-          servicio={metadata.servicioNombre}
-          isCompleted={isCompleted}
-          assignedCrewMember={item.assigned_to_crew_member}
-        />
-      );
-    },
-    []
-  );
+    // Construir objeto crew member con category basado en tipo
+    const assignedCrewMember = item.assigned_to_crew_member ? {
+      id: item.assigned_to_crew_member.id,
+      name: item.assigned_to_crew_member.name,
+      tipo: item.assigned_to_crew_member.tipo,
+      category: {
+        id: item.assigned_to_crew_member.tipo || '',
+        name: item.assigned_to_crew_member.tipo || 'Sin categoría',
+      },
+    } : null;
+
+    return (
+      <SchedulerAgrupacionCell
+        servicio={metadata.servicioNombre}
+        isCompleted={isCompleted}
+        assignedCrewMember={assignedCrewMember}
+      />
+    );
+  };
 
   if (!dateRange?.from || !dateRange?.to) {
     return (
@@ -604,6 +638,7 @@ export function EventScheduler({
         onTaskDelete={handleTaskDelete}
         onTaskToggleComplete={handleTaskToggleComplete}
         renderSidebarItem={renderSidebarItem}
+        onItemUpdate={handleItemUpdate}
       />
 
       {/* Modal para asignar personal antes de completar (desde TaskBar) */}

@@ -18,7 +18,7 @@ interface SchedulerAgrupacionCellProps {
 
 export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember, duration }: SchedulerAgrupacionCellProps) {
     const hasAssigned = !!assignedCrewMember;
-    
+
     // Generar iniciales del nombre
     const getInitials = (name: string) => {
         return name
@@ -32,20 +32,20 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
     // Determinar color del avatar según categoría o tipo
     const getAvatarColor = () => {
         if (!hasAssigned || !assignedCrewMember) return 'bg-zinc-700/50 text-zinc-500';
-        
+
         const categoryName = assignedCrewMember.category?.name;
         const tipo = assignedCrewMember.tipo;
-        
+
         // Si hay categoría y es Fotógrafo, usar emerald
         if (categoryName === 'Fotógrafo') {
             return 'bg-emerald-600/20 text-emerald-400 text-[10px]';
         }
-        
+
         // Si hay tipo y es fotógrafo (variaciones), usar emerald
         if (tipo?.toLowerCase().includes('fotógrafo') || tipo?.toLowerCase().includes('fotografo')) {
             return 'bg-emerald-600/20 text-emerald-400 text-[10px]';
         }
-        
+
         // Por defecto, azul
         return 'bg-blue-600/20 text-blue-400 text-[10px]';
     };
@@ -64,14 +64,13 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
                     </ZenAvatarFallback>
                 )}
             </ZenAvatar>
-            
+
             {/* Nombre del servicio con duración */}
             <div className="flex-1 min-w-0">
-                <p className={`text-sm break-words cursor-pointer transition-colors ${
-                    isCompleted 
-                        ? 'text-zinc-500 line-through decoration-zinc-600 hover:text-zinc-400' 
-                        : 'text-zinc-300 hover:text-zinc-200'
-                }`}>
+                <p className={`text-sm break-words cursor-pointer transition-colors ${isCompleted
+                    ? 'text-zinc-500 line-through decoration-zinc-600 hover:text-zinc-400'
+                    : 'text-zinc-300 hover:text-zinc-200'
+                    }`}>
                     {servicio}
                     {duration && duration > 0 && (
                         <span className="ml-1.5 text-zinc-600 text-xs font-normal">
