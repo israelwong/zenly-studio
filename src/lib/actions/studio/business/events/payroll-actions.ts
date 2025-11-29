@@ -14,8 +14,20 @@ import { createClient } from '@/lib/supabase/server';
 export async function crearNominaDesdeTareaCompletada(
   studioSlug: string,
   eventId: string,
-  taskId: string
-): Promise<{ success: boolean; error?: string; data?: { nominaId: string } }> {
+  taskId: string,
+  itemData?: {
+    itemId: string;
+    personalId: string;
+    costo: number;
+    cantidad: number;
+    itemName?: string;
+  }
+): Promise<{ success: boolean; error?: string; data?: { nominaId: string; personalNombre: string; costoTotal: number } }> {
+  console.log('[PAYROLL] 🔄 Iniciando creación de nómina desde tarea completada:', {
+    studioSlug,
+    eventId,
+    taskId,
+  });
   try {
     // Obtener studio
     const studio = await prisma.studios.findUnique({
@@ -27,53 +39,89 @@ export async function crearNominaDesdeTareaCompletada(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener tarea con item y crew member
-    const task = await prisma.studio_gantt_event_tasks.findFirst({
-      where: {
-        id: taskId,
-        gantt_instance: {
-          event_id: eventId,
+    // Si se pasan datos del item, usarlos directamente (más eficiente)
+    let itemId: string;
+    let personalId: string;
+    let costo: number;
+    let cantidad: number;
+    let itemName: string;
+
+    if (itemData) {
+      // Usar datos pasados desde el componente
+      itemId = itemData.itemId;
+      personalId = itemData.personalId;
+      costo = itemData.costo;
+      cantidad = itemData.cantidad;
+      itemName = itemData.itemName || 'Servicio sin nombre';
+
+      console.log('[PAYROLL] ✅ Usando datos del item pasados directamente:', {
+        itemId,
+        personalId,
+        costo,
+        cantidad,
+      });
+    } else {
+      // Obtener datos desde la base de datos (fallback)
+      const task = await prisma.studio_gantt_event_tasks.findFirst({
+        where: {
+          id: taskId,
+          gantt_instance: {
+            event_id: eventId,
+          },
         },
-      },
-      include: {
-        cotizacion_item: {
-          include: {
-            cotizaciones: {
-              select: {
-                evento_id: true,
+        include: {
+          cotizacion_item: {
+            include: {
+              cotizaciones: {
+                select: {
+                  evento_id: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    if (!task || !task.cotizacion_item) {
-      return { success: false, error: 'Tarea o item no encontrado' };
+      if (!task || !task.cotizacion_item) {
+        return { success: false, error: 'Tarea o item no encontrado' };
+      }
+
+      const item = task.cotizacion_item;
+      itemId = item.id;
+      personalId = item.assigned_to_crew_member_id || '';
+      costo = item.cost ?? item.cost_snapshot ?? 0;
+      cantidad = item.quantity || 1;
+      itemName = item.name || item.name_snapshot || 'Servicio sin nombre';
     }
 
-    const item = task.cotizacion_item;
-
     // Validar que tiene crew member asignado
-    if (!item.assigned_to_crew_member_id) {
+    if (!personalId) {
+      console.log('[PAYROLL] ⚠️ Validación fallida: No tiene personal asignado');
       return { success: false, error: 'La tarea no tiene personal asignado' };
     }
 
     // Validar que tiene costo
-    const costo = item.cost ?? item.cost_snapshot ?? 0;
     if (costo <= 0) {
+      console.log('[PAYROLL] ⚠️ Validación fallida: No tiene costo definido', { costo });
       return { success: false, error: 'El item no tiene costo definido' };
     }
+
+    console.log('[PAYROLL] ✅ Validaciones pasadas:', {
+      personal_id: personalId,
+      costo,
+      item_id: itemId,
+      cantidad,
+    });
 
     // Verificar que no existe nómina previa para este item
     const nominaExistente = await prisma.studio_nominas.findFirst({
       where: {
         studio_id: studio.id,
         evento_id: eventId,
-        personal_id: item.assigned_to_crew_member_id,
+        personal_id: personalId,
         payroll_services: {
           some: {
-            quote_service_id: item.id,
+            quote_service_id: itemId,
           },
         },
       },
@@ -88,64 +136,102 @@ export async function crearNominaDesdeTareaCompletada(
       };
     }
 
-    // Obtener usuario actual (studio_users.id)
+    // Obtener studio_users.id del usuario autenticado que completó la tarea
+    // El personal_id ya está correctamente asignado
     const supabase = await createClient();
     const { data: { user: authUser } } = await supabase.auth.getUser();
 
-    if (!authUser) {
-      return { success: false, error: 'Usuario no autenticado' };
-    }
-
-    // Buscar studio_users por platform_user_id relacionado con el usuario autenticado
-    const platformUserProfile = await prisma.platform_user_profiles.findFirst({
-      where: {
-        supabaseUserId: authUser.id,
-      },
-      select: { id: true },
+    console.log('[PAYROLL] 🔍 Obteniendo usuario autenticado que completó la tarea:', {
+      authUserExists: !!authUser,
+      authUserId: authUser?.id,
     });
 
-    if (!platformUserProfile) {
-      return { success: false, error: 'Perfil de usuario no encontrado' };
+    let userId: string | null = null;
+
+    if (authUser) {
+      // Buscar platform_user_profiles del usuario autenticado
+      const platformUserProfile = await prisma.platform_user_profiles.findFirst({
+        where: {
+          supabaseUserId: authUser.id,
+        },
+        select: { id: true },
+      });
+
+      if (platformUserProfile) {
+        // Buscar studio_users del usuario autenticado
+        const studioUser = await prisma.studio_users.findFirst({
+          where: {
+            studio_id: studio.id,
+            platform_user_id: platformUserProfile.id,
+            is_active: true,
+          },
+          select: { id: true },
+        });
+
+        if (studioUser) {
+          console.log('[PAYROLL] ✅ Usuario autenticado encontrado:', { userId: studioUser.id });
+          userId = studioUser.id;
+        }
+      }
     }
 
-    // Buscar studio_users que tenga este platform_user_id
-    const studioUser = await prisma.studio_users.findFirst({
-      where: {
-        studio_id: studio.id,
-        platform_user_id: platformUserProfile.id,
-        is_active: true,
-      },
-      select: { id: true },
+    // Fallback: si no se encuentra el usuario autenticado, usar el primer usuario activo del studio
+    if (!userId) {
+      const fallbackUser = await prisma.studio_users.findFirst({
+        where: {
+          studio_id: studio.id,
+          is_active: true,
+        },
+        orderBy: { created_at: 'asc' },
+        select: { id: true },
+      });
+
+      if (!fallbackUser) {
+        console.error('[PAYROLL] ❌ No se encontró ningún usuario activo en el studio:', {
+          studioId: studio.id,
+        });
+        return {
+          success: false,
+          error: 'No se encontró usuario válido para registrar la nómina. Contacta al administrador.',
+        };
+      }
+
+      console.log('[PAYROLL] ⚠️ Usando usuario fallback (no se encontró usuario autenticado):', {
+        userId: fallbackUser.id,
+      });
+      userId = fallbackUser.id;
+    }
+
+    // Obtener nombre del personal asignado
+    const crewMember = await prisma.studio_crew_members.findUnique({
+      where: { id: personalId },
+      select: { name: true },
     });
 
-    if (!studioUser) {
-      return {
-        success: false,
-        error: 'Usuario de studio no encontrado. Contacta al administrador.',
-      };
-    }
-
-    const userId = studioUser.id;
-
-    // Obtener nombre del servicio/item
-    const servicioNombre =
-      item.name || item.name_snapshot || 'Servicio sin nombre';
-
-    // Calcular costo total (costo unitario * cantidad)
-    const costoTotal = costo * (item.quantity || 1);
+    const personalNombre = crewMember?.name || 'Personal desconocido';
 
     // Crear nómina y servicio en transacción
     const resultado = await prisma.$transaction(async (tx) => {
       // Crear nómina
+      // Obtener nombre de la tarea si no tenemos itemData
+      let taskName = 'Tarea sin nombre';
+      if (!itemData) {
+        const task = await tx.studio_gantt_event_tasks.findUnique({
+          where: { id: taskId },
+          select: { name: true },
+        });
+        taskName = task?.name || taskName;
+      }
+
       const nomina = await tx.studio_nominas.create({
         data: {
           studio_id: studio.id,
           evento_id: eventId,
-          personal_id: item.assigned_to_crew_member_id,
+          personal_id: personalId,
           user_id: userId,
           status: 'pendiente',
-          concept: servicioNombre,
-          description: `Nómina generada automáticamente al completar tarea: ${task.name || 'Tarea sin nombre'}`,
+          concept: itemName,
+          description: `Nómina generada automáticamente al completar tarea: ${taskName}`,
           gross_amount: costoTotal,
           net_amount: costoTotal,
           total_cost_snapshot: costoTotal,
@@ -161,12 +247,12 @@ export async function crearNominaDesdeTareaCompletada(
       await tx.studio_nomina_servicios.create({
         data: {
           payroll_id: nomina.id,
-          quote_service_id: item.id,
-          service_name: servicioNombre,
+          quote_service_id: itemId,
+          service_name: itemName,
           assigned_cost: costoTotal,
-          assigned_quantity: item.quantity || 1,
-          category_name: item.category_name_snapshot || null,
-          section_name: item.seccion_name_snapshot || null,
+          assigned_quantity: cantidad,
+          category_name: null, // Se puede obtener del item si es necesario
+          section_name: null, // Se puede obtener del item si es necesario
         },
       });
 
@@ -177,9 +263,19 @@ export async function crearNominaDesdeTareaCompletada(
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
 
+    console.log('[PAYROLL] ✅ Nómina creada exitosamente:', {
+      nominaId: resultado.id,
+      personal_id: personalId,
+      costoTotal,
+    });
+
     return {
       success: true,
-      data: { nominaId: resultado.id },
+      data: {
+        nominaId: resultado.id,
+        personalNombre,
+        costoTotal,
+      },
     };
   } catch (error) {
     console.error('[PAYROLL] Error creando nómina desde tarea completada:', error);
@@ -189,6 +285,122 @@ export async function crearNominaDesdeTareaCompletada(
         error instanceof Error
           ? error.message
           : 'Error al crear nómina automáticamente',
+    };
+  }
+}
+
+/**
+ * Eliminar nómina automáticamente cuando se desmarca una tarea
+ * Solo elimina si la nómina está en estado "pendiente"
+ */
+export async function eliminarNominaDesdeTareaDesmarcada(
+  studioSlug: string,
+  eventId: string,
+  taskId: string
+): Promise<{ success: boolean; error?: string }> {
+  console.log('[PAYROLL] 🔄 Iniciando eliminación de nómina desde tarea desmarcada:', {
+    studioSlug,
+    eventId,
+    taskId,
+  });
+  try {
+    // Obtener studio
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    // Obtener tarea con item
+    const task = await prisma.studio_gantt_event_tasks.findFirst({
+      where: {
+        id: taskId,
+        gantt_instance: {
+          event_id: eventId,
+        },
+      },
+      include: {
+        cotizacion_item: {
+          select: {
+            id: true,
+            assigned_to_crew_member_id: true,
+          },
+        },
+      },
+    });
+
+    if (!task || !task.cotizacion_item) {
+      console.log('[PAYROLL] ⚠️ Tarea o item no encontrado');
+      return { success: false, error: 'Tarea o item no encontrado' };
+    }
+
+    const item = task.cotizacion_item;
+
+    // Buscar nómina asociada a este item
+    const nomina = await prisma.studio_nominas.findFirst({
+      where: {
+        studio_id: studio.id,
+        evento_id: eventId,
+        personal_id: item.assigned_to_crew_member_id,
+        status: 'pendiente', // Solo eliminar si está pendiente
+        payroll_services: {
+          some: {
+            quote_service_id: item.id,
+          },
+        },
+      },
+      include: {
+        payroll_services: {
+          where: {
+            quote_service_id: item.id,
+          },
+        },
+      },
+    });
+
+    if (!nomina) {
+      console.log('[PAYROLL] ℹ️ No se encontró nómina pendiente para eliminar');
+      return { success: true }; // No hay nómina que eliminar, no es un error
+    }
+
+    // Solo eliminar si está en estado pendiente
+    if (nomina.status !== 'pendiente') {
+      console.log('[PAYROLL] ⚠️ La nómina no está en estado pendiente, no se puede eliminar:', {
+        nominaId: nomina.id,
+        status: nomina.status,
+      });
+      return {
+        success: false,
+        error: `No se puede eliminar nómina con estado: ${nomina.status}`,
+      };
+    }
+
+    // Eliminar nómina (esto eliminará automáticamente los servicios relacionados por onDelete: Cascade)
+    await prisma.studio_nominas.delete({
+      where: { id: nomina.id },
+    });
+
+    console.log('[PAYROLL] ✅ Nómina eliminada exitosamente:', {
+      nominaId: nomina.id,
+      personal_id: item.assigned_to_crew_member_id,
+    });
+
+    // Revalidar rutas relacionadas
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('[PAYROLL] Error eliminando nómina desde tarea desmarcada:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Error al eliminar nómina automáticamente',
     };
   }
 }

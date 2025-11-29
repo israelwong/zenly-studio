@@ -12,6 +12,7 @@ import { Check, X, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { AssignCrewBeforeCompleteModal } from './AssignCrewBeforeCompleteModal';
 
 interface CrewMember {
     id: string;
@@ -58,6 +59,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onCr
     const [formModalOpen, setFormModalOpen] = useState(false);
     const [isTaskCompleted, setIsTaskCompleted] = useState(!!item.gantt_task?.completed_at);
     const [isUpdatingCompletion, setIsUpdatingCompletion] = useState(false);
+    const [assignCrewModalOpen, setAssignCrewModalOpen] = useState(false);
 
     // Sincronizar selectedMemberId cuando cambie el item
     useEffect(() => {
@@ -81,9 +83,9 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onCr
             if (result.success && result.data) {
                 setMembers(result.data);
             }
-            } catch (error) {
-                // Error silencioso
-            } finally {
+        } catch (error) {
+            // Error silencioso
+        } finally {
             setLoadingMembers(false);
         }
     }, [studioSlug]);
@@ -154,6 +156,13 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onCr
             return;
         }
 
+        // Si se está intentando completar y no hay personal asignado, mostrar modal
+        if (checked && !item.assigned_to_crew_member_id && costoTotal > 0) {
+            setAssignCrewModalOpen(true);
+            return;
+        }
+
+        // Si se está desmarcando, proceder normalmente
         setIsUpdatingCompletion(true);
         try {
             const result = await actualizarGanttTask(
@@ -162,13 +171,121 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onCr
                 item.gantt_task.id,
                 {
                     isCompleted: checked,
+                    // Pasar datos del item para evitar consultas innecesarias
+                    itemData: checked && item.assigned_to_crew_member_id && costoTotal > 0 ? {
+                        itemId: item.id,
+                        personalId: item.assigned_to_crew_member_id,
+                        costo: costoUnitario,
+                        cantidad: item.quantity || 1,
+                        itemName: itemName,
+                    } : undefined,
                 }
             );
 
             if (result.success) {
                 setIsTaskCompleted(checked);
                 onTaskCompletedUpdate?.(checked);
-                toast.success(checked ? 'Tarea marcada como completada' : 'Tarea marcada como pendiente');
+
+                // Debug: ver qué está recibiendo
+                console.log('[POPOVER] Resultado de actualizarGanttTask:', {
+                    success: result.success,
+                    payrollResult: result.payrollResult,
+                    checked,
+                });
+
+                // Mostrar toast según resultado de nómina
+                if (checked && result.payrollResult) {
+                    if (result.payrollResult.success && result.payrollResult.personalNombre) {
+                        toast.success(`Tarea completada. Se generó pago de nómina para ${result.payrollResult.personalNombre}`);
+                    } else {
+                        toast.warning(`Tarea completada. No se generó pago de nómina: ${result.payrollResult.error || 'Sin personal asignado'}`);
+                    }
+                } else if (checked) {
+                    toast.warning('Tarea completada. No se generó pago de nómina porque no hay personal asignado.');
+                } else {
+                    toast.success('Tarea marcada como pendiente');
+                }
+            } else {
+                toast.error(result.error || 'Error al actualizar el estado de la tarea');
+            }
+        } catch (error) {
+            console.error('Error updating task completion:', error);
+            toast.error('Error al actualizar el estado de la tarea');
+        } finally {
+            setIsUpdatingCompletion(false);
+        }
+    };
+
+    const handleAssignAndComplete = async (crewMemberId: string) => {
+        setIsUpdatingCompletion(true);
+        try {
+            // Primero asignar el personal
+            const assignResult = await asignarCrewAItem(studioSlug, item.id, crewMemberId);
+            if (!assignResult.success) {
+                toast.error(assignResult.error || 'Error al asignar personal');
+                return;
+            }
+
+            // Actualizar el estado local del crew member
+            const selectedMember = members.find(m => m.id === crewMemberId);
+            onCrewMemberUpdate?.(crewMemberId, selectedMember || null);
+
+            // Luego completar la tarea (esto creará la nómina automáticamente)
+            const result = await actualizarGanttTask(
+                studioSlug,
+                eventId,
+                item.gantt_task!.id,
+                {
+                    isCompleted: true,
+                    // Pasar datos del item para evitar consultas innecesarias
+                    itemData: {
+                        itemId: item.id,
+                        personalId: crewMemberId,
+                        costo: costoUnitario,
+                        cantidad: item.quantity || 1,
+                        itemName: itemName,
+                    },
+                }
+            );
+
+            if (result.success) {
+                setIsTaskCompleted(true);
+                onTaskCompletedUpdate?.(true);
+
+                // Mostrar toast con información de nómina
+                if (result.payrollResult?.success && result.payrollResult.personalNombre) {
+                    toast.success(`Personal asignado y tarea completada. Se generó pago de nómina para ${result.payrollResult.personalNombre}`);
+                } else {
+                    toast.warning(`Tarea completada. No se generó pago de nómina: ${result.payrollResult?.error || 'Error desconocido'}`);
+                }
+            } else {
+                toast.error(result.error || 'Error al completar la tarea');
+            }
+        } catch (error) {
+            console.error('Error assigning and completing:', error);
+            toast.error('Error al asignar y completar');
+        } finally {
+            setIsUpdatingCompletion(false);
+        }
+    };
+
+    const handleCompleteWithoutPayment = async () => {
+        setIsUpdatingCompletion(true);
+        try {
+            const result = await actualizarGanttTask(
+                studioSlug,
+                eventId,
+                item.gantt_task!.id,
+                {
+                    isCompleted: true,
+                    // No pasar itemData porque no hay personal asignado
+                }
+            );
+
+            if (result.success) {
+                setIsTaskCompleted(true);
+                onTaskCompletedUpdate?.(true);
+                toast.warning('Tarea completada. No se generó pago porque no hay personal asignado.');
             } else {
                 toast.error(result.error || 'Error al actualizar el estado de la tarea');
             }
@@ -404,6 +521,20 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onCr
                 initialMember={null}
                 onSuccess={handleCrewCreated}
             />
+
+            {/* Modal para asignar personal antes de completar */}
+            {item.gantt_task && (
+                <AssignCrewBeforeCompleteModal
+                    isOpen={assignCrewModalOpen}
+                    onClose={() => setAssignCrewModalOpen(false)}
+                    onCompleteWithoutPayment={handleCompleteWithoutPayment}
+                    onAssignAndComplete={handleAssignAndComplete}
+                    studioSlug={studioSlug}
+                    itemId={item.id}
+                    itemName={itemName}
+                    costoTotal={costoTotal}
+                />
+            )}
         </>
     );
 }

@@ -2,7 +2,6 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import type { DateRange } from 'react-day-picker';
 
 interface UpdateGanttTaskInput {
   start_date: Date;
@@ -10,10 +9,11 @@ interface UpdateGanttTaskInput {
 }
 
 /**
- * Actualiza una tarea del Gantt (start_date, end_date)
+ * Actualiza solo las fechas de una tarea del Gantt (start_date, end_date)
  * Se ejecuta en el servidor para validar permisos y persistir en BD
+ * Para actualizaciones completas (incluyendo isCompleted), usar actualizarGanttTask de events.actions.ts
  */
-export async function actualizarGanttTask(
+export async function actualizarGanttTaskFechas(
   studioSlug: string,
   eventId: string,
   taskId: string,
@@ -71,8 +71,8 @@ export async function obtenerGanttTareas(studioSlug: string, eventId: string) {
     const tareas = await prisma.studio_gantt_event_tasks.findMany({
       where: {
         cotizacion_item: {
-          cotizacion: {
-            event_id: eventId,
+          cotizaciones: {
+            evento_id: eventId,
           },
         },
       },
@@ -94,37 +94,3 @@ export async function obtenerGanttTareas(studioSlug: string, eventId: string) {
     };
   }
 }
-
-/**
- * Completa/descompleta una tarea
- */
-export async function marcarTareaCompletada(
-  studioSlug: string,
-  taskId: string,
-  isCompleted: boolean
-) {
-  try {
-    const updatedTask = await prisma.studio_gantt_event_tasks.update({
-      where: { id: taskId },
-      data: {
-        completed_at: isCompleted ? new Date() : null,
-        status: isCompleted ? 'COMPLETED' : 'PENDING',
-        progress_percent: isCompleted ? 100 : 0,
-      },
-    });
-
-    revalidatePath(`/[slug]/studio/business/events/[eventId]/gantt`, 'page');
-
-    return {
-      success: true,
-      data: updatedTask,
-    };
-  } catch (error) {
-    console.error('Error marking task as completed:', error);
-    return {
-      success: false,
-      error: 'Error al marcar tarea como completada',
-    };
-  }
-}
-

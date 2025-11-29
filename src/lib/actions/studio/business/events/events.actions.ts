@@ -2171,8 +2171,15 @@ export async function actualizarGanttTask(
     assignedToCrewMemberId?: string | null;
     notes?: string;
     isCompleted?: boolean;
+    itemData?: {
+      itemId: string;
+      personalId: string;
+      costo: number;
+      cantidad: number;
+      itemName?: string;
+    };
   }
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; payrollResult?: { success: boolean; personalNombre?: string; error?: string } }> {
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -2244,26 +2251,82 @@ export async function actualizarGanttTask(
     });
 
     // Si se completó la tarea, intentar crear nómina automáticamente
+    // Retornar información de nómina para mostrar toast en el cliente
+    let payrollResult: { success: boolean; personalNombre?: string; error?: string } | null = null;
+    console.log('[GANTT] 🔍 Verificando si debe crear nómina:', {
+      isCompleted: data.isCompleted,
+      cotizacion_item_id: task.cotizacion_item_id,
+      taskId,
+    });
     if (data.isCompleted === true && task.cotizacion_item_id) {
+      console.log('[GANTT] ✅ Condiciones cumplidas, creando nómina...');
       // Importar dinámicamente para evitar dependencias circulares
       const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
 
-      // Crear nómina en background (no bloquear si falla)
-      crearNominaDesdeTareaCompletada(studioSlug, eventId, taskId).catch(
-        (error) => {
+      // Crear nómina (esperar resultado para retornarlo)
+      try {
+        const result = await crearNominaDesdeTareaCompletada(
+          studioSlug,
+          eventId,
+          taskId,
+          data.itemData // Pasar datos del item si están disponibles
+        );
+        if (result.success && result.data) {
+          console.log('[GANTT] ✅ Nómina creada automáticamente:', result.data.nominaId);
+          payrollResult = {
+            success: true,
+            personalNombre: result.data.personalNombre,
+          };
+        } else {
+          console.warn('[GANTT] ⚠️ No se pudo crear nómina automática:', result.error);
+          payrollResult = {
+            success: false,
+            error: result.error,
+          };
+        }
+      } catch (error) {
+        // Log error pero no bloquear la actualización de la tarea
+        console.error(
+          '[GANTT] ❌ Error creando nómina automática (no crítico):',
+          error
+        );
+        payrollResult = {
+          success: false,
+          error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+      }
+    }
+
+    // Si se desmarcó la tarea (pasó a pendiente), eliminar nómina asociada
+    if (data.isCompleted === false && task.cotizacion_item_id) {
+      // Importar dinámicamente para evitar dependencias circulares
+      const { eliminarNominaDesdeTareaDesmarcada } = await import('./payroll-actions');
+
+      // Eliminar nómina en background (no bloquear si falla)
+      eliminarNominaDesdeTareaDesmarcada(studioSlug, eventId, taskId)
+        .then((result) => {
+          if (result.success) {
+            console.log('[GANTT] ✅ Nómina eliminada automáticamente');
+          } else {
+            console.warn('[GANTT] ⚠️ No se pudo eliminar nómina automática:', result.error);
+          }
+        })
+        .catch((error) => {
           // Log error pero no bloquear la actualización de la tarea
           console.error(
-            '[GANTT] Error creando nómina automática (no crítico):',
+            '[GANTT] ❌ Error eliminando nómina automática (no crítico):',
             error
           );
-        }
-      );
+        });
     }
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
 
-    return { success: true };
+    return {
+      success: true,
+      payrollResult: payrollResult || undefined,
+    };
   } catch (error) {
     console.error('[GANTT] Error actualizando tarea:', error);
     return {

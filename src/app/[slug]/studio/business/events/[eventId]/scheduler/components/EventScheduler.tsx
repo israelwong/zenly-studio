@@ -5,11 +5,12 @@ import { type DateRange } from 'react-day-picker';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { SchedulerPanel } from './SchedulerPanel';
-import { actualizarGanttTask } from '@/lib/actions/studio/business/events/gantt-actions';
-import { crearGanttTask, eliminarGanttTask, actualizarGanttTask as actualizarGanttTaskComplete } from '@/lib/actions/studio/business/events';
+import { actualizarGanttTaskFechas } from '@/lib/actions/studio/business/events/gantt-actions';
+import { crearGanttTask, eliminarGanttTask, actualizarGanttTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { SchedulerAgrupacionCell } from './SchedulerAgrupacionCell';
+import { AssignCrewBeforeCompleteModal } from './AssignCrewBeforeCompleteModal';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
@@ -55,6 +56,13 @@ export function EventScheduler({
 
   // Estado local para actualizaciones optimistas
   const [localEventData, setLocalEventData] = useState(eventData);
+  const [assignCrewModalOpen, setAssignCrewModalOpen] = useState(false);
+  const [pendingTaskCompletion, setPendingTaskCompletion] = useState<{
+    taskId: string;
+    itemId: string;
+    itemName: string;
+    costoTotal: number;
+  } | null>(null);
 
   // Construir map de items desde cotizaciones aprobadas
   // Usar localEventData para reflejar cambios inmediatamente
@@ -125,7 +133,7 @@ export function EventScheduler({
           onDataChange(updatedData);
         }
 
-        const result = await actualizarGanttTask(studioSlug, eventId, taskId, {
+        const result = await actualizarGanttTaskFechas(studioSlug, eventId, taskId, {
           start_date: startDate,
           end_date: endDate,
         });
@@ -268,9 +276,82 @@ export function EventScheduler({
   // Manejar toggle de completado desde TaskBar
   const handleTaskToggleComplete = useCallback(
     async (taskId: string, isCompleted: boolean) => {
+      // Si se está desmarcando, proceder normalmente
+      if (!isCompleted) {
+        try {
+          const result = await actualizarGanttTask(studioSlug, eventId, taskId, {
+            isCompleted: false,
+          });
+
+          if (!result.success) {
+            toast.error(result.error || 'Error al actualizar el estado');
+            return;
+          }
+
+          // Actualización optimista
+          setLocalEventData(prev => ({
+            ...prev,
+            cotizaciones: prev.cotizaciones?.map(cotizacion => ({
+              ...cotizacion,
+              cotizacion_items: cotizacion.cotizacion_items?.map(item => {
+                if (item.gantt_task?.id === taskId) {
+                  return {
+                    ...item,
+                    gantt_task: item.gantt_task ? {
+                      ...item.gantt_task,
+                      completed_at: null,
+                    } : null,
+                  };
+                }
+                return item;
+              }),
+            })),
+          }));
+
+          toast.success('Tarea marcada como pendiente');
+          router.refresh();
+        } catch (error) {
+          console.error('Error toggling complete:', error);
+          toast.error('Error al actualizar el estado');
+        }
+        return;
+      }
+
+      // Si se está completando, buscar el item asociado
+      let itemFound: CotizacionItem | null = null;
+      for (const cotizacion of localEventData.cotizaciones || []) {
+        itemFound = cotizacion.cotizacion_items?.find(
+          (item) => item.gantt_task?.id === taskId
+        ) || null;
+        if (itemFound) break;
+      }
+
+      if (!itemFound) {
+        toast.error('No se encontró el item asociado a la tarea');
+        return;
+      }
+
+      // Calcular costo
+      const costoUnitario = itemFound.cost ?? itemFound.cost_snapshot ?? 0;
+      const costoTotal = costoUnitario * (itemFound.quantity || 1);
+      const itemName = itemFound.name || itemFound.name_snapshot || 'Tarea sin nombre';
+
+      // Si no hay personal asignado y tiene costo, mostrar modal
+      if (!itemFound.assigned_to_crew_member_id && costoTotal > 0) {
+        setPendingTaskCompletion({
+          taskId,
+          itemId: itemFound.id,
+          itemName,
+          costoTotal,
+        });
+        setAssignCrewModalOpen(true);
+        return;
+      }
+
+      // Si hay personal o no tiene costo, proceder normalmente
       try {
-        const result = await actualizarGanttTaskComplete(studioSlug, eventId, taskId, {
-          isCompleted,
+        const result = await actualizarGanttTask(studioSlug, eventId, taskId, {
+          isCompleted: true,
         });
 
         if (!result.success) {
@@ -278,12 +359,10 @@ export function EventScheduler({
           return;
         }
 
-        // Actualización optimista: actualizar completed_at
-        let updatedData: EventoDetalle;
-        setLocalEventData(prev => {
-          const newData = { ...prev };
-
-          newData.cotizaciones = prev.cotizaciones?.map(cotizacion => ({
+        // Actualización optimista
+        setLocalEventData(prev => ({
+          ...prev,
+          cotizaciones: prev.cotizaciones?.map(cotizacion => ({
             ...cotizacion,
             cotizacion_items: cotizacion.cotizacion_items?.map(item => {
               if (item.gantt_task?.id === taskId) {
@@ -291,32 +370,193 @@ export function EventScheduler({
                   ...item,
                   gantt_task: item.gantt_task ? {
                     ...item.gantt_task,
-                    completed_at: isCompleted ? new Date() : null,
+                    completed_at: new Date(),
                   } : null,
                 };
               }
               return item;
             }),
-          }));
+          })),
+        }));
 
-          updatedData = newData;
-          return newData;
-        });
-
-        // Notificar al padre del cambio después del setState
-        if (updatedData! && onDataChange) {
-          onDataChange(updatedData);
+        // Notificar al padre
+        if (onDataChange) {
+          onDataChange(localEventData);
         }
 
-        toast.success(isCompleted ? 'Tarea completada' : 'Tarea marcada como pendiente');
+        // Debug: ver qué está recibiendo
+        console.log('[EVENT_SCHEDULER] Resultado de actualizarGanttTask:', {
+          success: result.success,
+          payrollResult: result.payrollResult,
+        });
+
+        // Mostrar toast según resultado de nómina
+        if (result.payrollResult) {
+          if (result.payrollResult.success && result.payrollResult.personalNombre) {
+            toast.success(`Tarea completada. Se generó pago de nómina para ${result.payrollResult.personalNombre}`);
+          } else {
+            toast.warning(`Tarea completada. No se generó pago de nómina: ${result.payrollResult.error || 'Sin personal asignado'}`);
+          }
+        } else if (!itemFound.assigned_to_crew_member_id) {
+          toast.warning('Tarea completada. No se generó pago porque no hay personal asignado.');
+        } else {
+          toast.success('Tarea completada');
+        }
         router.refresh();
       } catch (error) {
         console.error('Error toggling complete:', error);
         toast.error('Error al actualizar el estado');
       }
     },
-    [studioSlug, eventId, router, onDataChange]
+    [studioSlug, eventId, router, onDataChange, localEventData]
   );
+
+  // Handler para asignar y completar desde el modal
+  const handleAssignAndComplete = useCallback(
+    async (crewMemberId: string) => {
+      if (!pendingTaskCompletion) return;
+
+      try {
+        // Asignar personal
+        const { asignarCrewAItem } = await import('@/lib/actions/studio/business/events');
+        const assignResult = await asignarCrewAItem(
+          studioSlug,
+          pendingTaskCompletion.itemId,
+          crewMemberId
+        );
+
+        if (!assignResult.success) {
+          toast.error(assignResult.error || 'Error al asignar personal');
+          return;
+        }
+
+        // Actualizar estado local del item
+        setLocalEventData(prev => ({
+          ...prev,
+          cotizaciones: prev.cotizaciones?.map(cotizacion => ({
+            ...cotizacion,
+            cotizacion_items: cotizacion.cotizacion_items?.map(item => {
+              if (item.id === pendingTaskCompletion.itemId) {
+                return {
+                  ...item,
+                  assigned_to_crew_member_id: crewMemberId,
+                };
+              }
+              return item;
+            }),
+          })),
+        }));
+
+        // Completar la tarea (esto creará la nómina automáticamente)
+        const result = await actualizarGanttTask(studioSlug, eventId, pendingTaskCompletion.taskId, {
+          isCompleted: true,
+        });
+
+        if (!result.success) {
+          toast.error(result.error || 'Error al completar la tarea');
+          return;
+        }
+
+        // Actualización optimista
+        let updatedData: EventoDetalle;
+        setLocalEventData(prev => {
+          const newData = {
+            ...prev,
+            cotizaciones: prev.cotizaciones?.map(cotizacion => ({
+              ...cotizacion,
+              cotizacion_items: cotizacion.cotizacion_items?.map(item => {
+                if (item.gantt_task?.id === pendingTaskCompletion.taskId) {
+                  return {
+                    ...item,
+                    gantt_task: item.gantt_task ? {
+                      ...item.gantt_task,
+                      completed_at: new Date(),
+                    } : null,
+                  };
+                }
+                return item;
+              }),
+            })),
+          };
+          updatedData = newData;
+          return newData;
+        });
+
+        // Notificar al padre
+        if (updatedData! && onDataChange) {
+          onDataChange(updatedData);
+        }
+
+        // Mostrar toast con información de nómina
+        if (result.payrollResult?.success && result.payrollResult.personalNombre) {
+          toast.success(`Personal asignado y tarea completada. Se generó pago de nómina para ${result.payrollResult.personalNombre}`);
+        } else {
+          toast.warning(`Tarea completada. No se generó pago de nómina: ${result.payrollResult?.error || 'Error desconocido'}`);
+        }
+        setAssignCrewModalOpen(false);
+        setPendingTaskCompletion(null);
+        router.refresh();
+      } catch (error) {
+        console.error('Error assigning and completing:', error);
+        toast.error('Error al asignar y completar');
+      }
+    },
+    [studioSlug, eventId, router, onDataChange, pendingTaskCompletion]
+  );
+
+  // Handler para completar sin pago desde el modal
+  const handleCompleteWithoutPayment = useCallback(async () => {
+    if (!pendingTaskCompletion) return;
+
+    try {
+      const result = await actualizarGanttTask(studioSlug, eventId, pendingTaskCompletion.taskId, {
+        isCompleted: true,
+      });
+
+      if (!result.success) {
+        toast.error(result.error || 'Error al actualizar el estado');
+        return;
+      }
+
+      // Actualización optimista
+      let updatedData: EventoDetalle;
+      setLocalEventData(prev => {
+        const newData = {
+          ...prev,
+          cotizaciones: prev.cotizaciones?.map(cotizacion => ({
+            ...cotizacion,
+            cotizacion_items: cotizacion.cotizacion_items?.map(item => {
+              if (item.gantt_task?.id === pendingTaskCompletion.taskId) {
+                return {
+                  ...item,
+                  gantt_task: item.gantt_task ? {
+                    ...item.gantt_task,
+                    completed_at: new Date(),
+                  } : null,
+                };
+              }
+              return item;
+            }),
+          })),
+        };
+        updatedData = newData;
+        return newData;
+      });
+
+      // Notificar al padre
+      if (updatedData! && onDataChange) {
+        onDataChange(updatedData);
+      }
+
+      toast.warning('Tarea completada. No se generó pago porque no hay personal asignado.');
+      setAssignCrewModalOpen(false);
+      setPendingTaskCompletion(null);
+      router.refresh();
+    } catch (error) {
+      console.error('Error completing without payment:', error);
+      toast.error('Error al completar la tarea');
+    }
+  }, [studioSlug, eventId, router, onDataChange, pendingTaskCompletion]);
 
   // Renderizar item en sidebar
   const renderSidebarItem = useCallback(
@@ -365,6 +605,23 @@ export function EventScheduler({
         onTaskToggleComplete={handleTaskToggleComplete}
         renderSidebarItem={renderSidebarItem}
       />
+
+      {/* Modal para asignar personal antes de completar (desde TaskBar) */}
+      {pendingTaskCompletion && (
+        <AssignCrewBeforeCompleteModal
+          isOpen={assignCrewModalOpen}
+          onClose={() => {
+            setAssignCrewModalOpen(false);
+            setPendingTaskCompletion(null);
+          }}
+          onCompleteWithoutPayment={handleCompleteWithoutPayment}
+          onAssignAndComplete={handleAssignAndComplete}
+          studioSlug={studioSlug}
+          itemId={pendingTaskCompletion.itemId}
+          itemName={pendingTaskCompletion.itemName}
+          costoTotal={pendingTaskCompletion.costoTotal}
+        />
+      )}
     </div>
   );
 }
