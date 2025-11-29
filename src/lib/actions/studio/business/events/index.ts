@@ -15,6 +15,8 @@ export {
   obtenerGanttTask,
 } from './events.actions';
 
+export { crearNominaDesdeTareaCompletada } from './payroll-actions';
+
 export {
   getEventPipelineStages,
   updateEventPipelineStage,

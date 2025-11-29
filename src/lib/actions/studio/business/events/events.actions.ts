@@ -2243,6 +2243,23 @@ export async function actualizarGanttTask(
       data: updateData,
     });
 
+    // Si se completó la tarea, intentar crear nómina automáticamente
+    if (data.isCompleted === true && task.cotizacion_item_id) {
+      // Importar dinámicamente para evitar dependencias circulares
+      const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
+
+      // Crear nómina en background (no bloquear si falla)
+      crearNominaDesdeTareaCompletada(studioSlug, eventId, taskId).catch(
+        (error) => {
+          // Log error pero no bloquear la actualización de la tarea
+          console.error(
+            '[GANTT] Error creando nómina automática (no crítico):',
+            error
+          );
+        }
+      );
+    }
+
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
 
