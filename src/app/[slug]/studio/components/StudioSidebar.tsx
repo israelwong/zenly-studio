@@ -93,7 +93,7 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
     };
 
     return (
-        <ZenSidebar className={`${className} ${isOpen ? '' : 'hidden lg:block'}`}>
+        <ZenSidebar className={`${className} ${isOpen ? '' : 'hidden lg:block'} !w-60 lg:!w-60 sm:!w-60`}>
 
             <SidebarHeader studioData={studio} onToggleSidebar={toggleSidebar} />
 

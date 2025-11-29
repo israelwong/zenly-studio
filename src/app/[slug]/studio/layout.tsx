@@ -1,13 +1,12 @@
 import React from 'react';
 import { ZenSidebarProvider } from '@/components/ui/zen/layout/ZenSidebar';
-import { StudioSidebar } from './components/StudioSidebar';
-import { AppHeader } from './components/AppHeader';
-import { ZenMagicChatProvider, ZenMagicChatWrapper } from './components/ZenMagic';
+import { ZenMagicChatProvider } from './components/ZenMagic';
 import { ContactsSheetProvider } from '@/components/shared/contacts/ContactsSheetContext';
 import { SessionTimeoutProvider } from '@/components/providers/SessionTimeoutProvider';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 import { StudioInitializer } from '@/components/studio/StudioInitializer';
 import { Toaster } from 'sonner';
+import { StudioLayoutWrapper } from './components/StudioLayoutWrapper';
 
 export default async function StudioLayout({
     children,
@@ -44,20 +43,9 @@ export default async function StudioLayout({
                 <ZenMagicChatProvider>
                     <ContactsSheetProvider>
                         <ZenSidebarProvider>
-                            <div className="flex h-screen overflow-hidden">
-                                <StudioSidebar studioSlug={slug} />
-                                <div className="flex flex-1 overflow-hidden">
-                                    <div className="flex flex-col flex-1 overflow-hidden">
-                                        <AppHeader studioSlug={slug} />
-                                        <main className="flex-1 overflow-y-auto bg-zinc-900/40">
-                                            <div className="mx-auto max-w-7xl p-4 md:p-6 lg:p-8">
-                                                {children}
-                                            </div>
-                                        </main>
-                                    </div>
-                                </div>
-                                <ZenMagicChatWrapper studioSlug={slug} />
-                            </div>
+                            <StudioLayoutWrapper studioSlug={slug}>
+                                {children}
+                            </StudioLayoutWrapper>
                             <Toaster position="top-right" richColors />
                         </ZenSidebarProvider>
                     </ContactsSheetProvider>

@@ -35,6 +35,7 @@ export { SectionNavigation } from './shadcn/section-navigation';
 export { Logo } from './shadcn/logo';
 export { ThemeToggle } from './shadcn/theme-toggle';
 export { Toaster } from './shadcn/sonner';
+export { Command, CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator, CommandShortcut } from './shadcn/command';
 
 // Social Media Icons
 export * from './icons';
