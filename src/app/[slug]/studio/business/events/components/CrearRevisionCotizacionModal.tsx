@@ -98,6 +98,14 @@ export function CrearRevisionCotizacionModal({
             comision_venta: Number(configResult.comision_venta) || 0,
             sobreprecio: Number(configResult.sobreprecio) || 0,
           });
+        } else {
+          // Configuración por defecto si no existe
+          setConfiguracionPrecios({
+            utilidad_servicio: 0.30,
+            utilidad_producto: 0.40,
+            comision_venta: 0.10,
+            sobreprecio: 0.05,
+          });
         }
       } catch (error) {
         console.error('Error loading catalog:', error);
@@ -110,14 +118,59 @@ export function CrearRevisionCotizacionModal({
     loadData();
   }, [isOpen, studioSlug]);
 
-  // Calcular precio
+  // Crear mapa de servicios para acceso rápido
+  const servicioMap = useMemo(() => {
+    const map = new Map();
+    catalogo.forEach(seccion => {
+      seccion.categorias.forEach(categoria => {
+        categoria.servicios.forEach(servicio => {
+          map.set(servicio.id, servicio);
+        });
+      });
+    });
+    return map;
+  }, [catalogo]);
+
+  // Calcular precio total
   const calculoPrecio = useMemo(() => {
     if (!configuracionPrecios || !catalogo.length) {
       return { total: 0, desglose: [] };
     }
 
-    return calcularPrecio(items, catalogo, configuracionPrecios);
-  }, [items, catalogo, configuracionPrecios]);
+    // Iterar sobre items seleccionados y calcular precio unitario de cada uno
+    const serviciosSeleccionados = Object.entries(items)
+      .filter(([, cantidad]) => cantidad > 0)
+      .map(([id, cantidad]) => {
+        const servicio = servicioMap.get(id);
+        if (!servicio) return null;
+
+        const tipoUtilidad = servicio.tipo_utilidad === 'service' ? 'servicio' : 'producto';
+        const precios = calcularPrecio(
+          servicio.costo || 0,
+          servicio.gasto || 0,
+          tipoUtilidad,
+          configuracionPrecios
+        );
+
+        return {
+          ...servicio,
+          precioUnitario: precios.precio_final,
+          cantidad,
+          resultadoPrecio: precios,
+        };
+      })
+      .filter(Boolean);
+
+    // Calcular total sumando precioUnitario * cantidad
+    const subtotal = serviciosSeleccionados.reduce((sum, s) => {
+      return sum + ((s?.precioUnitario || 0) * (s?.cantidad || 0));
+    }, 0);
+
+    return {
+      total: subtotal,
+      desglose: serviciosSeleccionados,
+    };
+  }, [items, catalogo, configuracionPrecios, servicioMap]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
