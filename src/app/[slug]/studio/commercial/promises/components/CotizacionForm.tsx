@@ -25,6 +25,7 @@ interface CotizacionFormProps {
   onLoadingChange?: (loading: boolean) => void;
   hideActionButtons?: boolean;
   onAfterSave?: () => void;
+  customActionButtons?: React.ReactNode;
 }
 
 export function CotizacionForm({
@@ -37,6 +38,7 @@ export function CotizacionForm({
   onLoadingChange,
   hideActionButtons = false,
   onAfterSave,
+  customActionButtons,
   onCreateAsRevision,
   revisionOriginalId,
 }: CotizacionFormProps & {
@@ -1010,35 +1012,37 @@ export function CotizacionForm({
                   </div>
                 )}
               </div>
-
-              {/* Botones */}
-              {!hideActionButtons && (
-                <div className="border-t border-zinc-700 pt-3">
-                  <div className="flex gap-2">
-                    <ZenButton
-                      type="button"
-                      variant="secondary"
-                      onClick={handleCancelClick}
-                      disabled={loading}
-                      className="flex-1"
-                    >
-                      Cancelar
-                    </ZenButton>
-                    <ZenButton
-                      type="submit"
-                      variant="primary"
-                      loading={loading}
-                      loadingText="Guardando..."
-                      disabled={loading}
-                      className="flex-1"
-                    >
-                      {isEditMode ? 'Actualizar' : 'Crear'} Cotización
-                    </ZenButton>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
+
+          {/* Botones fuera del card de Cálculo Financiero */}
+          {customActionButtons ? (
+            customActionButtons
+          ) : !hideActionButtons ? (
+            <div className="border-t border-zinc-700 pt-3 mt-4">
+              <div className="flex gap-2">
+                <ZenButton
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCancelClick}
+                  disabled={loading}
+                  className="flex-1"
+                >
+                  Cancelar
+                </ZenButton>
+                <ZenButton
+                  type="submit"
+                  variant="primary"
+                  loading={loading}
+                  loadingText="Guardando..."
+                  disabled={loading}
+                  className="flex-1"
+                >
+                  {isEditMode ? 'Actualizar' : 'Crear'} Cotización
+                </ZenButton>
+              </div>
+            </div>
+          ) : null}
         </form>
       </div>
 

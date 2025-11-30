@@ -47,9 +47,7 @@ export default function EditarRevisionPage() {
     name: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [eventoId, setEventoId] = useState<string | null>(null);
   const [isCreatingRevision, setIsCreatingRevision] = useState(false);
-  const [pendingAction, setPendingAction] = useState<'guardar' | 'autorizar' | null>(null);
   const pendingActionRef = React.useRef<'guardar' | 'autorizar' | null>(null);
 
   // Cargar datos de revisión y original
@@ -66,7 +64,6 @@ export default function EditarRevisionPage() {
               id: originalResult.data.id,
               name: originalResult.data.name,
             });
-            setEventoId(originalResult.data.evento_id);
             // Preparar datos de la original para el formulario
             setCotizacion({
               id: 'new',
@@ -98,7 +95,6 @@ export default function EditarRevisionPage() {
               revision_number: cotizacionResult.data.revision_number ?? null,
               revision_status: cotizacionResult.data.revision_status ?? null,
             });
-            setEventoId(cotizacionResult.data.evento_id);
 
             // Si es revisión, cargar cotización original
             if (cotizacionResult.data.revision_of_id) {
@@ -111,10 +107,6 @@ export default function EditarRevisionPage() {
                   id: originalResult.data.id,
                   name: originalResult.data.name,
                 });
-                // Si la original tiene evento_id y la revisión no, usar el de la original
-                if (!cotizacionResult.data.evento_id && originalResult.data.evento_id) {
-                  setEventoId(originalResult.data.evento_id);
-                }
               }
             }
           } else {
@@ -180,7 +172,6 @@ export default function EditarRevisionPage() {
           // Por defecto, redirigir a la página de edición de la revisión creada
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${result.data.id}/revision`);
         }
-        setPendingAction(null);
         pendingActionRef.current = null;
         return { success: true, revisionId: result.data.id };
       }
@@ -197,7 +188,6 @@ export default function EditarRevisionPage() {
     if (isNewRevision) {
       // Si es nueva revisión, establecer acción pendiente usando ref para acceso inmediato
       pendingActionRef.current = 'guardar';
-      setPendingAction('guardar');
     }
     // Disparar submit del formulario usando requestSubmit para evitar recarga de página
     // Si es nueva revisión, onCreateAsRevision creará la revisión y redirigirá a promiseId
@@ -215,7 +205,6 @@ export default function EditarRevisionPage() {
   const handleAutorizarRevision = async () => {
     // Establecer acción pendiente para guardar antes de autorizar
     pendingActionRef.current = 'autorizar';
-    setPendingAction('autorizar');
 
     // Disparar submit del formulario para guardar cambios
     const form = document.querySelector('form') as HTMLFormElement;
@@ -239,16 +228,104 @@ export default function EditarRevisionPage() {
     }
     // Limpiar acción pendiente
     pendingActionRef.current = null;
-    setPendingAction(null);
   };
 
-  if (loading) {
+  // Si no hay datos de cotización, mostrar skeleton completo (clon del CotizacionForm skeleton)
+  if (!cotizacion && loading) {
     return (
       <div className="w-full max-w-7xl mx-auto">
         <ZenCard variant="default" padding="none">
+          <ZenCardHeader className="border-b border-zinc-800">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-6 w-48 bg-zinc-800 rounded animate-pulse" />
+                  <div className="h-4 w-64 bg-zinc-800 rounded animate-pulse" />
+                </div>
+              </div>
+              <div className="h-10 w-48 bg-zinc-800 rounded animate-pulse" />
+            </div>
+          </ZenCardHeader>
+
           <ZenCardContent className="p-6">
-            <div className="text-center py-8">
-              <p className="text-zinc-400">Cargando revisión...</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Columna 1: Servicios Disponibles - Skeleton */}
+              <div className="lg:col-span-2">
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-6 w-48 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-5 w-16 bg-zinc-800 rounded-full animate-pulse" />
+                  </div>
+                  <div className="h-10 w-full bg-zinc-800 rounded-lg animate-pulse" />
+                </div>
+
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, seccionIndex) => (
+                    <div key={`skeleton-seccion-${seccionIndex}`} className="border border-zinc-700 rounded-lg overflow-hidden">
+                      <div className="p-4 bg-zinc-800/30">
+                        <div className="flex items-center gap-3">
+                          <div className="h-4 w-4 bg-zinc-700 rounded animate-pulse" />
+                          <div className="h-5 w-32 bg-zinc-700 rounded animate-pulse" />
+                          <div className="h-5 w-24 bg-zinc-700 rounded-full animate-pulse ml-auto" />
+                        </div>
+                      </div>
+                      <div className="bg-zinc-900/50">
+                        {[...Array(2)].map((_, categoriaIndex) => (
+                          <div key={`skeleton-categoria-${categoriaIndex}`} className={categoriaIndex > 0 ? 'border-t border-zinc-700/50' : ''}>
+                            <div className="p-3 pl-8">
+                              <div className="flex items-center gap-3">
+                                <div className="h-3 w-3 bg-zinc-700 rounded animate-pulse" />
+                                <div className="h-4 w-28 bg-zinc-700 rounded animate-pulse" />
+                                <div className="h-4 w-20 bg-zinc-700 rounded-full animate-pulse ml-auto" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Columna 2: Configuración - Skeleton */}
+              <div className="lg:sticky lg:top-6">
+                <div className="space-y-4">
+                  <div>
+                    <div className="h-6 w-32 bg-zinc-800 rounded animate-pulse mb-4" />
+                    <div className="space-y-4">
+                      <div>
+                        <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse mb-2" />
+                        <div className="h-10 w-full bg-zinc-800 rounded-lg animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="h-4 w-28 bg-zinc-800 rounded animate-pulse mb-2" />
+                        <div className="h-20 w-full bg-zinc-800 rounded-lg animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="h-6 w-40 bg-zinc-800 rounded animate-pulse mb-4" />
+                    <div className="bg-zinc-800/50 rounded-lg p-4 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="h-3 w-20 bg-zinc-700 rounded animate-pulse mb-2" />
+                          <div className="h-10 w-full bg-zinc-700 rounded animate-pulse" />
+                        </div>
+                        <div>
+                          <div className="h-3 w-24 bg-zinc-700 rounded animate-pulse mb-2" />
+                          <div className="h-10 w-full bg-zinc-700 rounded animate-pulse" />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="h-4 w-24 bg-zinc-700 rounded animate-pulse mb-2" />
+                        <div className="h-8 w-32 bg-zinc-700 rounded animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </ZenCardContent>
         </ZenCard>
@@ -261,6 +338,8 @@ export default function EditarRevisionPage() {
   }
 
   const revisionNumber = cotizacion.revision_number || (isNewRevision ? 'Nueva' : 1);
+  const isAuthorized = cotizacion.status === 'aprobada' || cotizacion.status === 'autorizada';
+  const eventoId = cotizacion.evento_id;
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -278,8 +357,12 @@ export default function EditarRevisionPage() {
               </ZenButton>
               <div>
                 <div className="flex items-center gap-2">
-                  <ZenCardTitle>Editar Revisión #{revisionNumber}</ZenCardTitle>
-                  <ZenBadge variant="secondary">Revisión Pendiente</ZenBadge>
+                  <ZenCardTitle>
+                    {isAuthorized ? 'Revisión Autorizada' : `Editar Revisión #${revisionNumber}`}
+                  </ZenCardTitle>
+                  <ZenBadge variant={isAuthorized ? 'success' : 'secondary'}>
+                    {isAuthorized ? 'Autorizada' : 'Revisión Pendiente'}
+                  </ZenBadge>
                 </div>
                 <ZenCardDescription>
                   {cotizacionOriginal && (
@@ -290,6 +373,24 @@ export default function EditarRevisionPage() {
                 </ZenCardDescription>
               </div>
             </div>
+            {isAuthorized && eventoId ? (
+              <ZenButton
+                variant="primary"
+                onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventoId}`)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50"
+              >
+                Gestionar Evento
+              </ZenButton>
+            ) : !isAuthorized ? (
+              <ZenButton
+                variant="primary"
+                onClick={handleAutorizarRevision}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50"
+                loading={isCreatingRevision}
+              >
+                Pasar a Autorización
+              </ZenButton>
+            ) : null}
           </div>
         </ZenCardHeader>
 
@@ -319,36 +420,52 @@ export default function EditarRevisionPage() {
             studioSlug={studioSlug}
             promiseId={promiseId}
             cotizacionId={isNewRevision ? undefined : cotizacionId}
-            hideActionButtons={true}
             revisionOriginalId={originalId || cotizacion?.revision_of_id || null}
             onCreateAsRevision={isNewRevision ? handleCreateRevision : undefined}
             onAfterSave={!isNewRevision ? handleAfterSave : undefined}
+            customActionButtons={
+              isAuthorized ? (
+                // Si está autorizada, solo mostrar botón Cerrar
+                <div className="border-t border-zinc-700 pt-3 mt-4">
+                  <div className="flex justify-end">
+                    <ZenButton
+                      type="button"
+                      variant="secondary"
+                      onClick={handleCancel}
+                    >
+                      Cerrar
+                    </ZenButton>
+                  </div>
+                </div>
+              ) : (
+                // Si está pendiente, mostrar Cancelar y Guardar Borrador
+                <div className="border-t border-zinc-700 pt-3 mt-4">
+                  <div className="flex gap-2">
+                    <ZenButton
+                      type="button"
+                      variant="secondary"
+                      onClick={handleCancel}
+                      disabled={isCreatingRevision}
+                      className="flex-1"
+                    >
+                      Cancelar
+                    </ZenButton>
+                    <ZenButton
+                      type="button"
+                      variant="primary"
+                      onClick={handleGuardarBorrador}
+                      loading={isCreatingRevision}
+                      disabled={isCreatingRevision}
+                      className="flex-1"
+                    >
+                      Guardar Borrador
+                    </ZenButton>
+                  </div>
+                </div>
+              )
+            }
           />
 
-          {/* Botones de acción personalizados */}
-          <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-zinc-800">
-            <ZenButton
-              variant="ghost"
-              onClick={handleCancel}
-            >
-              Cancelar
-            </ZenButton>
-            <ZenButton
-              variant="outline"
-              onClick={handleGuardarBorrador}
-              loading={isCreatingRevision}
-            >
-              Guardar Borrador
-            </ZenButton>
-            <ZenButton
-              variant="primary"
-              onClick={handleAutorizarRevision}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white focus-visible:ring-emerald-500/50"
-              loading={isCreatingRevision}
-            >
-              Pasar a Autorización
-            </ZenButton>
-          </div>
         </ZenCardContent>
       </ZenCard>
     </div>
