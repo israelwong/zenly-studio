@@ -75,23 +75,31 @@ export function useSchedulerItemSync(
     syncFn: () => Promise<void>
   ) => {
     // 1. Actualización optimista inmediata
-    if (!localItem.gantt_task) return;
+    // Usar callback de estado para garantizar el estado más reciente
+    let updatedItem: CotizacionItem;
+    setLocalItem(prev => {
+      if (!prev.gantt_task) {
+        updatedItem = prev;
+        return prev;
+      }
 
-    // Preservar todos los campos del gantt_task original y solo actualizar los necesarios
-    const updatedItem = {
-      ...localItem,
-      gantt_task: {
-        ...localItem.gantt_task, // Preservar todos los campos originales
-        completed_at: isCompleted ? new Date().toISOString() : null,
-        status: isCompleted ? 'COMPLETED' : 'PENDING',
-        progress_percent: isCompleted ? 100 : (localItem.gantt_task.progress_percent || 0),
-      },
-    } as CotizacionItem;
+      // Preservar todos los campos del gantt_task original y solo actualizar los necesarios
+      // IMPORTANTE: Preservar assigned_to_crew_member del estado anterior
+      updatedItem = {
+        ...prev,
+        gantt_task: {
+          ...prev.gantt_task, // Preservar todos los campos originales
+          completed_at: isCompleted ? new Date().toISOString() : null,
+          status: isCompleted ? 'COMPLETED' : 'PENDING',
+          progress_percent: isCompleted ? 100 : (prev.gantt_task.progress_percent || 0),
+        },
+      } as CotizacionItem;
 
-    setLocalItem(updatedItem);
+      return updatedItem;
+    });
 
     // 2. Notificar al padre inmediatamente para actualizar stats
-    if (onItemUpdate) {
+    if (onItemUpdate && updatedItem!) {
       onItemUpdate(updatedItem);
     }
 

@@ -213,13 +213,16 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
             const selectedMember = members.find(m => m.id === crewMemberId);
 
             // 1. Asignar personal (con actualización optimista)
+            // Guardar el crew member para usarlo después
+            const crewMemberData = selectedMember ? {
+                id: selectedMember.id,
+                name: selectedMember.name,
+                tipo: selectedMember.tipo,
+            } : null;
+
             await updateCrewMember(
                 crewMemberId,
-                selectedMember ? {
-                    id: selectedMember.id,
-                    name: selectedMember.name,
-                    tipo: selectedMember.tipo,
-                } : null,
+                crewMemberData,
                 async () => {
                     const assignResult = await asignarCrewAItem(studioSlug, localItem.id, crewMemberId);
                     if (!assignResult.success) {
@@ -229,6 +232,8 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
             );
 
             // 2. Completar tarea (con actualización optimista)
+            // Nota: updateCompletionStatus preserva ...localItem que incluye assigned_to_crew_member
+            // del updateCrewMember anterior, pero necesitamos asegurar que se propague correctamente
             await updateCompletionStatus(true, async () => {
                 const result = await actualizarGanttTask(
                     studioSlug,
