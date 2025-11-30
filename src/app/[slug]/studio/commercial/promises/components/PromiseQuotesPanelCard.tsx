@@ -473,17 +473,10 @@ export function PromiseQuotesPanelCard({
                 </ZenButton>
               </div>
             ) : (
-              <div className="flex items-center gap-2 mb-1">
-                <h4 className={`text-sm font-medium truncate ${cotizacion.archived ? 'text-zinc-500' : 'text-zinc-200'
-                  }`}>
-                  {cotizacion.name}
-                </h4>
-                {cotizacion.revision_of_id && cotizacion.revision_status === 'pending_revision' && (
-                  <span className="text-[10px] text-blue-400 bg-blue-900/20 px-1.5 py-0.5 rounded border border-blue-700/30">
-                    Revisión
-                  </span>
-                )}
-              </div>
+              <h4 className={`text-sm font-medium truncate mb-1 ${cotizacion.archived ? 'text-zinc-500' : 'text-zinc-200'
+                }`}>
+                {cotizacion.name}
+              </h4>
             )}
             {cotizacion.description && (
               <p className={`text-xs line-clamp-1 mb-2 ${cotizacion.archived ? 'text-zinc-600' : 'text-zinc-400'
