@@ -249,6 +249,18 @@ export function EventCotizacionesCard({
       toast.error('No hay promesa asociada');
       return;
     }
+    
+    // Si la cotización está autorizada/aprobada, redirigir a crear revisión en lugar de editar
+    // porque updateCotizacion() bloquea edición de cotizaciones autorizadas
+    if (cotizacion.status === 'aprobada' || cotizacion.status === 'autorizada' || cotizacion.status === 'approved') {
+      // Si no tiene revision_status o es 'active', sugerir crear revisión
+      if (!cotizacion.revision_status || cotizacion.revision_status === 'active') {
+        toast.info('Las cotizaciones autorizadas se editan creando una revisión');
+        handleCrearRevision(cotizacion);
+        return;
+      }
+    }
+    
     router.push(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/cotizacion/${cotizacion.id}`);
   };
 
