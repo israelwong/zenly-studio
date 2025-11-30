@@ -8,19 +8,19 @@ import { EventAgendamiento } from './EventAgendamiento';
 
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
-interface EventDetailProps {
+interface EventPanelProps {
   studioSlug: string;
   eventId: string;
   eventData: EventoDetalle;
   onEventUpdated?: () => void;
 }
 
-export function EventDetail({
+export function EventPanel({
   studioSlug,
   eventId,
   eventData,
   onEventUpdated,
-}: EventDetailProps) {
+}: EventPanelProps) {
   return (
     <div className="space-y-6">
       {/* Layout de 3 columnas */}
@@ -119,4 +119,3 @@ export function EventDetail({
     </div>
   );
 }
-

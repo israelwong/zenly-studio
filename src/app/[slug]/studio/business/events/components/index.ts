@@ -9,5 +9,6 @@ export { EventSchedulerInfoCard } from './EventSchedulerInfoCard';
 export { EventPaymentsCard } from './EventPaymentsCard';
 export { EventAgendaCard } from './EventAgendaCard';
 export { EventAgendamiento } from './EventAgendamiento';
-export { EventDetail } from './EventDetail';
+export { EventPanel } from './EventPanel';
+export { ResumenCotizacionAutorizada } from './ResumenCotizacionAutorizada';
 

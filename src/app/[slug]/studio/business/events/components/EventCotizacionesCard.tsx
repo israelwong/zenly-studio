@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Plus, Calendar, MoreVertical, Eye, Edit, X, Loader2 } from 'lucide-react';
+import { Plus, Calendar, MoreVertical, Eye, Edit, X, Loader2, CheckCircle2, Users } from 'lucide-react';
 import {
   ZenCard,
   ZenCardHeader,
@@ -16,35 +16,117 @@ import {
   ZenDropdownMenuSeparator,
   ZenConfirmModal,
   ZenDialog,
+  ZenAvatar,
+  ZenAvatarFallback,
 } from '@/components/ui/zen';
 import { formatNumber, formatDate } from '@/lib/actions/utils/formatting';
 import { cancelarCotizacion, cancelarCotizacionYEvento, getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { ResumenCotizacion } from '@/app/[slug]/studio/commercial/promises/[promiseId]/cotizacion/[cotizacionId]/autorizar/components/ResumenCotizacion';
+import { ResumenCotizacionAutorizada, type CotizacionItem as ResumenCotizacionItem } from './ResumenCotizacionAutorizada';
 import { toast } from 'sonner';
+import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
 // Helper para formatear montos con separadores de miles
 const formatAmount = (amount: number): string => {
   return `$${formatNumber(amount, 2)}`;
 };
 
-interface CotizacionAprobada {
-  id: string;
-  name: string;
-  price: number;
-  discount?: number | null;
-  status: string;
-  created_at: Date;
-  updated_at: Date;
-  promise_id: string | null;
-}
+// Helper para obtener iniciales
+const getInitials = (name: string): string => {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+};
+
+// Tipo extendido con items y relaciones
+type CotizacionAprobada = NonNullable<EventoDetalle['cotizaciones']>[number];
+type CotizacionItem = NonNullable<CotizacionAprobada['cotizacion_items']>[number];
 
 interface EventCotizacionesCardProps {
   studioSlug: string;
   eventId: string;
   promiseId?: string | null;
-  cotizaciones: CotizacionAprobada[];
+  cotizaciones?: EventoDetalle['cotizaciones'];
   onUpdated?: () => void;
 }
+
+// Stats calculados por cotización
+interface CotizacionStats {
+  totalItems: number;
+  completedTasks: number;
+  totalTasks: number;
+  assignedCrew: number;
+  totalRequiringCrew: number;
+  crewMembers: Array<{
+    id: string;
+    name: string;
+    tipo: string;
+  }>;
+}
+
+// Calcular stats de una cotización
+const calculateCotizacionStats = (cotizacion: CotizacionAprobada | undefined): CotizacionStats => {
+  if (!cotizacion?.cotizacion_items) {
+    return {
+      totalItems: 0,
+      completedTasks: 0,
+      totalTasks: 0,
+      assignedCrew: 0,
+      totalRequiringCrew: 0,
+      crewMembers: [],
+    };
+  }
+
+  const items = cotizacion.cotizacion_items as CotizacionItem[] | undefined;
+  if (!items) {
+    return {
+      totalItems: 0,
+      completedTasks: 0,
+      totalTasks: 0,
+      assignedCrew: 0,
+      totalRequiringCrew: 0,
+      crewMembers: [],
+    };
+  }
+
+  const totalItems = items.length;
+
+  // Items con tarea del scheduler
+  const itemsWithTasks = items.filter((item) => item.scheduler_task);
+  const totalTasks = itemsWithTasks.length;
+  const completedTasks = itemsWithTasks.filter((item) => item.scheduler_task?.completed_at).length;
+
+  // Items que requieren crew (típicamente servicios operativos)
+  const itemsRequiringCrew = items.filter((item) =>
+    item.profit_type === 'servicio' || item.profit_type_snapshot === 'servicio'
+  );
+  const totalRequiringCrew = itemsRequiringCrew.length;
+  const assignedCrew = itemsRequiringCrew.filter((item) => item.assigned_to_crew_member_id).length;
+
+  // Crew members únicos
+  const crewMap = new Map<string, { id: string; name: string; tipo: string }>();
+  items.forEach((item) => {
+    if (item.assigned_to_crew_member) {
+      crewMap.set(item.assigned_to_crew_member.id, {
+        id: item.assigned_to_crew_member.id,
+        name: item.assigned_to_crew_member.name,
+        tipo: item.assigned_to_crew_member.tipo,
+      });
+    }
+  });
+
+  return {
+    totalItems,
+    completedTasks,
+    totalTasks,
+    assignedCrew,
+    totalRequiringCrew,
+    crewMembers: Array.from(crewMap.values()),
+  };
+};
 
 export function EventCotizacionesCard({
   studioSlug,
@@ -60,18 +142,11 @@ export function EventCotizacionesCard({
   const [isCancelling, setIsCancelling] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [loadingCotizacionId, setLoadingCotizacionId] = useState<string | null>(null);
-  const [cotizacionCompleta, setCotizacionCompleta] = useState<{
-    id: string;
-    name: string;
-    description: string | null;
-    price: number;
-    status: string;
-    items: Array<{ item_id: string; quantity: number }>;
-  } | null>(null);
+  const [cotizacionCompleta, setCotizacionCompleta] = useState<CotizacionAprobada | null>(null);
 
-  const cotizacionesAprobadas = cotizaciones.filter(
+  const cotizacionesAprobadas = (cotizaciones || []).filter(
     (c) => c.status === 'autorizada' || c.status === 'aprobada' || c.status === 'approved'
-  );
+  ) as CotizacionAprobada[];
 
   // Calcular total a pagar considerando descuentos
   const totalAprobado = cotizacionesAprobadas.reduce((sum, c) => {
@@ -90,28 +165,36 @@ export function EventCotizacionesCard({
     router.push(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
   };
 
-  const handleVer = async (cotizacion: CotizacionAprobada) => {
-    setLoadingCotizacionId(cotizacion.id);
-    try {
-      const result = await getCotizacionById(cotizacion.id, studioSlug);
-      if (result.success && result.data) {
-        setCotizacionCompleta({
-          id: result.data.id,
-          name: result.data.name,
-          description: result.data.description,
-          price: result.data.price,
-          status: result.data.status,
-          items: result.data.items,
+  const handleVer = (cotizacion: CotizacionAprobada) => {
+    // Usar datos directamente de la cotización que ya tenemos
+    // Si tiene cotizacion_items, es autorizada y usamos ResumenCotizacionAutorizada
+    // Si no, cargamos datos básicos y usamos ResumenCotizacion
+    if (cotizacion.cotizacion_items && cotizacion.cotizacion_items.length > 0) {
+      // Cotización autorizada: usar datos guardados directamente
+      setCotizacionCompleta(cotizacion);
+      setShowViewModal(true);
+    } else {
+      // Cotización no autorizada: cargar datos básicos para ResumenCotizacion
+      setLoadingCotizacionId(cotizacion.id);
+      getCotizacionById(cotizacion.id, studioSlug)
+        .then((result) => {
+          if (result.success && result.data) {
+            setCotizacionCompleta({
+              ...cotizacion,
+              description: result.data.description,
+            } as CotizacionAprobada);
+            setShowViewModal(true);
+          } else {
+            toast.error(result.error || 'Error al cargar la cotización');
+          }
+        })
+        .catch((error) => {
+          console.error('Error loading cotizacion:', error);
+          toast.error('Error al cargar la cotización');
+        })
+        .finally(() => {
+          setLoadingCotizacionId(null);
         });
-        setShowViewModal(true);
-      } else {
-        toast.error(result.error || 'Error al cargar la cotización');
-      }
-    } catch (error) {
-      console.error('Error loading cotizacion:', error);
-      toast.error('Error al cargar la cotización');
-    } finally {
-      setLoadingCotizacionId(null);
     }
   };
 
@@ -219,17 +302,18 @@ export function EventCotizacionesCard({
                 {cotizacionesAprobadas.map((cotizacion) => {
                   const isMenuOpen = openMenuId === cotizacion.id;
                   const isLoading = loadingCotizacionId === cotizacion.id;
+                  const stats = calculateCotizacionStats(cotizacion);
+
                   return (
                     <div
                       key={cotizacion.id}
                       className="flex items-start gap-4 p-4 pr-12 bg-zinc-900 rounded border border-zinc-800 relative group"
                     >
-                      <FileText className="h-4 w-4 text-zinc-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0 relative">
-                        <p className="text-sm font-medium text-zinc-100 truncate">
+                        <p className="text-sm font-medium text-zinc-100 truncate mb-2">
                           {cotizacion.name}
                         </p>
-                        <div className="mt-1 space-y-1">
+                        <div className="space-y-1">
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-zinc-400">Precio:</span>
                             <span className="text-zinc-300">{formatAmount(cotizacion.price)}</span>
@@ -249,6 +333,55 @@ export function EventCotizacionesCard({
                             </>
                           ) : null}
                         </div>
+
+                        {/* Stats de progreso */}
+                        {(stats.totalTasks > 0 || stats.totalRequiringCrew > 0) && (
+                          <div className="mt-2 pt-2 border-t border-zinc-800 space-y-1.5">
+                            {/* Stats de tareas */}
+                            {stats.totalTasks > 0 && (
+                              <div className="flex items-center gap-2 text-xs">
+                                <CheckCircle2 className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+                                <span className="text-zinc-400">Tareas:</span>
+                                <span className={`font-medium ${stats.completedTasks === stats.totalTasks ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                                  {stats.completedTasks}/{stats.totalTasks}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Stats de asignaciones */}
+                            {stats.totalRequiringCrew > 0 && (
+                              <div className="flex items-center gap-2 text-xs">
+                                <Users className="h-3 w-3 text-blue-400 flex-shrink-0" />
+                                <span className="text-zinc-400">Crew:</span>
+                                <span className={`font-medium ${stats.assignedCrew === stats.totalRequiringCrew ? 'text-emerald-400' : stats.assignedCrew > 0 ? 'text-blue-400' : 'text-zinc-500'}`}>
+                                  {stats.assignedCrew}/{stats.totalRequiringCrew}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Dream Team - Mini avatares */}
+                            {stats.crewMembers.length > 0 && (
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                <span className="text-[10px] text-zinc-500">Equipo:</span>
+                                <div className="flex items-center gap-1">
+                                  {stats.crewMembers.slice(0, 4).map((member) => (
+                                    <ZenAvatar key={member.id} className="h-5 w-5 border border-zinc-700" title={member.name}>
+                                      <ZenAvatarFallback className="bg-blue-600/20 text-blue-400 text-[10px]">
+                                        {getInitials(member.name)}
+                                      </ZenAvatarFallback>
+                                    </ZenAvatar>
+                                  ))}
+                                  {stats.crewMembers.length > 4 && (
+                                    <span className="text-[10px] text-zinc-500 ml-0.5" title={`${stats.crewMembers.length - 4} miembros más`}>
+                                      +{stats.crewMembers.length - 4}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <p className="text-xs text-zinc-500 mt-2">
                           Autorizada: {formatDate(cotizacion.updated_at)}
                         </p>
@@ -367,7 +500,7 @@ export function EventCotizacionesCard({
       )}
 
       {/* Modal para ver resumen de cotización */}
-      {showViewModal && (
+      {showViewModal && cotizacionCompleta && (
         <ZenDialog
           isOpen={showViewModal}
           onClose={() => {
@@ -377,11 +510,38 @@ export function EventCotizacionesCard({
           title="Resumen de Cotización"
           maxWidth="5xl"
         >
-          {cotizacionCompleta && (
-            <ResumenCotizacion
-              cotizacion={cotizacionCompleta}
+          {cotizacionCompleta.cotizacion_items && cotizacionCompleta.cotizacion_items.length > 0 ? (
+            // Cotización autorizada: mostrar datos guardados
+            <ResumenCotizacionAutorizada
+              cotizacion={{
+                id: cotizacionCompleta.id,
+                name: cotizacionCompleta.name,
+                description: null, // Los items tienen su propia descripción
+                price: cotizacionCompleta.price,
+                discount: cotizacionCompleta.discount,
+                status: cotizacionCompleta.status,
+                cotizacion_items: cotizacionCompleta.cotizacion_items as ResumenCotizacionItem[],
+              }}
               studioSlug={studioSlug}
-              promiseId={cotizacionesAprobadas.find((c) => c.id === cotizacionCompleta.id)?.promise_id || undefined}
+              promiseId={cotizacionCompleta.promise_id || undefined}
+              onEditar={handleEditarDesdeModal}
+            />
+          ) : (
+            // Cotización no autorizada: usar componente original que carga catálogo
+            <ResumenCotizacion
+              cotizacion={{
+                id: cotizacionCompleta.id,
+                name: cotizacionCompleta.name,
+                description: null, // No disponible en EventoDetalle
+                price: cotizacionCompleta.price,
+                status: cotizacionCompleta.status,
+                items: cotizacionCompleta.cotizacion_items?.map((item) => ({
+                  item_id: item.item_id || '',
+                  quantity: item.quantity,
+                })) || [],
+              }}
+              studioSlug={studioSlug}
+              promiseId={cotizacionCompleta.promise_id || undefined}
               onEditar={handleEditarDesdeModal}
             />
           )}

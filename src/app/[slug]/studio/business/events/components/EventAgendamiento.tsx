@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, MapPin, Clock, Edit, Plus, Video, Link as LinkIcon, X, Copy, Check, Star, MoreVertical } from 'lucide-react';
-import { 
-  ZenCard, 
-  ZenCardHeader, 
-  ZenCardTitle, 
-  ZenCardContent, 
-  ZenButton, 
+import {
+  ZenCard,
+  ZenCardHeader,
+  ZenCardTitle,
+  ZenCardContent,
+  ZenButton,
   ZenConfirmModal,
   ZenDropdownMenu,
   ZenDropdownMenuTrigger,
@@ -319,9 +319,9 @@ export function EventAgendamiento({
             </div>
           )}
 
-        {/* Nombre o descripción */}
-        {(agendamiento.description || agendamiento.concept) && (
-          <div className={`pt-2 ${!isMainDate ? 'border-t border-zinc-700/30' : ''}`}>
+        {/* Nombre o descripción (ocultar para fecha principal) */}
+        {!isMainDate && (agendamiento.description || agendamiento.concept) && (
+          <div className="pt-2 border-t border-zinc-700/30">
             <p className="text-xs text-zinc-300 leading-relaxed">
               {agendamiento.description || agendamiento.concept}
             </p>
@@ -383,9 +383,6 @@ export function EventAgendamiento({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-emerald-200">
                         {formatDate(eventDate)}
-                      </p>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        Esta fecha proviene de la promesa asociada
                       </p>
                     </div>
                   </div>

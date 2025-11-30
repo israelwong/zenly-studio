@@ -6,7 +6,7 @@ import { ArrowLeft, MoreVertical, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
 import { obtenerEventoDetalle, cancelarEvento, getEventPipelineStages, moveEvent, obtenerCotizacionesAutorizadasCount, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
-import { EventDetail } from '../components/EventDetail';
+import { EventPanel } from '../components/EventPanel';
 import { toast } from 'sonner';
 
 export default function EventDetailPage() {
@@ -241,7 +241,7 @@ export default function EventDetailPage() {
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
-          <EventDetail
+          <EventPanel
             studioSlug={studioSlug}
             eventId={eventId}
             eventData={eventData}

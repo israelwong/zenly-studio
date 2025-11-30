@@ -142,6 +142,10 @@ export interface EventoDetalle extends EventoBasico {
       internal_delivery_days: number | null;
       client_delivery_days: number | null;
       status: string;
+      seccion_name: string | null;
+      category_name: string | null;
+      seccion_name_snapshot: string | null;
+      category_name_snapshot: string | null;
       assigned_to_crew_member: {
         id: string;
         name: string;
@@ -896,6 +900,10 @@ export async function obtenerEventoDetalle(
                 internal_delivery_days: true,
                 client_delivery_days: true,
                 status: true,
+                seccion_name: true,
+                category_name: true,
+                seccion_name_snapshot: true,
+                category_name_snapshot: true,
                 assigned_to_crew_member: {
                   select: {
                     id: true,
