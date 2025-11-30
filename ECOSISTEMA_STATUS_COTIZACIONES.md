@@ -14,6 +14,7 @@ model studio_cotizaciones {
 ## 🎯 Estrategia de Validación: OPCIÓN 2
 
 **Usamos `revision_status` como diferenciador principal** para determinar si una cotización es:
+
 - Cotización normal
 - Revisión en borrador
 - Revisión activa
@@ -21,19 +22,20 @@ model studio_cotizaciones {
 
 ## 📊 Matriz de Estados
 
-| status | revision_status | revision_of_id | Significado | Badge |
-|--------|----------------|----------------|-------------|-------|
-| `pendiente` | `null` | `null` | Cotización nueva sin autorizar | 🔘 Pendiente (Zinc) |
-| `aprobada` | `null` | `null` | Cotización autorizada activa | 🟢 Aprobada (Verde) |
-| `pendiente` | `pending_revision` | `{id}` | Revisión en borrador | 🟡 Revisión #N (Ámbar) |
-| `aprobada` | `active` | `{id}` | Revisión autorizada activa | 🟡 Revisión Activa #N (Ámbar) |
-| `aprobada` | `pending_revision` | `null` | Original con revisión pendiente | 🟢 Aprobada* (Verde + indicador) |
-| `aprobada` | `replaced` | `null` | Original reemplazada (archivada) | - (Archivada) |
-| `cancelada` | - | - | Cotización cancelada | 🔴 Cancelada (Rojo) |
+| status      | revision_status    | revision_of_id | Significado                      | Badge                             |
+| ----------- | ------------------ | -------------- | -------------------------------- | --------------------------------- |
+| `pendiente` | `null`             | `null`         | Cotización nueva sin autorizar   | 🔘 Pendiente (Zinc)               |
+| `aprobada`  | `null`             | `null`         | Cotización autorizada activa     | 🟢 Aprobada (Verde)               |
+| `pendiente` | `pending_revision` | `{id}`         | Revisión en borrador             | 🟡 Revisión #N (Ámbar)            |
+| `aprobada`  | `active`           | `{id}`         | Revisión autorizada activa       | 🟡 Revisión Activa #N (Ámbar)     |
+| `aprobada`  | `pending_revision` | `null`         | Original con revisión pendiente  | 🟢 Aprobada\* (Verde + indicador) |
+| `aprobada`  | `replaced`         | `null`         | Original reemplazada (archivada) | - (Archivada)                     |
+| `cancelada` | -                  | -              | Cotización cancelada             | 🔴 Cancelada (Rojo)               |
 
 ## 🔄 Flujos de Estado
 
 ### 1. Crear Cotización Nueva
+
 ```typescript
 {
   status: 'pendiente',
@@ -44,6 +46,7 @@ model studio_cotizaciones {
 ```
 
 ### 2. Autorizar Cotización
+
 ```typescript
 {
   status: 'aprobada',        // ✅ Cambia a aprobada
@@ -54,6 +57,7 @@ model studio_cotizaciones {
 ### 3. Crear Revisión de Cotización Aprobada
 
 **Nueva revisión:**
+
 ```typescript
 {
   status: 'pendiente',              // Vuelve a pendiente
@@ -64,6 +68,7 @@ model studio_cotizaciones {
 ```
 
 **Original marcada:**
+
 ```typescript
 {
   status: 'aprobada',              // Mantiene aprobada
@@ -72,6 +77,7 @@ model studio_cotizaciones {
 ```
 
 ### 4. Guardar Borrador de Revisión (updateCotizacion)
+
 ```typescript
 // NO cambia status ni revision_status
 // Solo actualiza: name, description, price, items
@@ -84,6 +90,7 @@ model studio_cotizaciones {
 ### 5. Autorizar Revisión
 
 **Revisión autorizada:**
+
 ```typescript
 {
   status: 'aprobada',           // ✅ Cambia a aprobada
@@ -92,6 +99,7 @@ model studio_cotizaciones {
 ```
 
 **Original archivada:**
+
 ```typescript
 {
   archived: true,               // Se archiva
@@ -102,42 +110,44 @@ model studio_cotizaciones {
 ## 🏷️ Lógica de Badges (PromiseQuotesPanelCard)
 
 ### Función `getStatusVariant()`
+
 ```typescript
 // PRIORIDAD: revision_status tiene precedencia sobre status
 
-if (revisionStatus === 'pending_revision' || revisionStatus === 'active') {
-  return 'warning'; // 🟡 Ámbar - Es revisión
+if (revisionStatus === "pending_revision" || revisionStatus === "active") {
+  return "warning"; // 🟡 Ámbar - Es revisión
 }
 
-if (status === 'aprobada') {
-  return 'success'; // 🟢 Verde - Aprobada normal
+if (status === "aprobada") {
+  return "success"; // 🟢 Verde - Aprobada normal
 }
 
-if (status === 'rechazada' || status === 'cancelada') {
-  return 'destructive'; // 🔴 Rojo
+if (status === "rechazada" || status === "cancelada") {
+  return "destructive"; // 🔴 Rojo
 }
 
-return 'secondary'; // 🔘 Zinc - Pendiente
+return "secondary"; // 🔘 Zinc - Pendiente
 ```
 
 ### Función `getStatusLabel()`
+
 ```typescript
 // PRIORIDAD: revision_status primero
 
-if (revisionStatus === 'pending_revision') {
-  return 'Revisión'; // + #N si existe revision_number
+if (revisionStatus === "pending_revision") {
+  return "Revisión"; // + #N si existe revision_number
 }
 
-if (revisionStatus === 'active') {
-  return 'Revisión Activa'; // + #N
+if (revisionStatus === "active") {
+  return "Revisión Activa"; // + #N
 }
 
-if (status === 'aprobada') {
-  return 'Aprobada';
+if (status === "aprobada") {
+  return "Aprobada";
 }
 
-if (status === 'pendiente') {
-  return 'Pendiente';
+if (status === "pendiente") {
+  return "Pendiente";
 }
 
 // ... otros status
@@ -146,22 +156,24 @@ if (status === 'pendiente') {
 ## ✅ Validaciones Importantes
 
 ### Al actualizar cotización (updateCotizacion)
+
 ```typescript
 // ❌ No permitir editar si está aprobada Y NO es revisión
-if (cotizacion.status === 'aprobada' && !cotizacion.revision_of_id) {
+if (cotizacion.status === "aprobada" && !cotizacion.revision_of_id) {
   return error; // Solo se edita creando revisión
 }
 
 // ✅ Permitir editar si es revisión pendiente
-if (cotizacion.revision_status === 'pending_revision') {
+if (cotizacion.revision_status === "pending_revision") {
   // Editar libremente (es borrador de revisión)
 }
 ```
 
 ### Al crear revisión (crearRevisionCotizacion)
+
 ```typescript
 // Solo de cotizaciones aprobadas
-if (cotizacion.status !== 'aprobada') {
+if (cotizacion.status !== "aprobada") {
   return error;
 }
 
@@ -169,8 +181,8 @@ if (cotizacion.status !== 'aprobada') {
 const revisionesPendientes = await prisma.studio_cotizaciones.count({
   where: {
     revision_of_id: cotizacionId,
-    revision_status: 'pending_revision'
-  }
+    revision_status: "pending_revision",
+  },
 });
 
 if (revisionesPendientes > 0) {
@@ -180,13 +192,13 @@ if (revisionesPendientes > 0) {
 
 ## 🎨 Colores de Badges
 
-| Variant | Color | Uso |
-|---------|-------|-----|
-| `secondary` | Zinc (gris) | Pendiente |
-| `success` | Verde | Aprobada |
-| `warning` | Ámbar/Amarillo | Revisión (pendiente o activa) |
-| `destructive` | Rojo | Cancelada/Rechazada |
-| `info` | Azul | (Reservado para futuro) |
+| Variant       | Color          | Uso                           |
+| ------------- | -------------- | ----------------------------- |
+| `secondary`   | Zinc (gris)    | Pendiente                     |
+| `success`     | Verde          | Aprobada                      |
+| `warning`     | Ámbar/Amarillo | Revisión (pendiente o activa) |
+| `destructive` | Rojo           | Cancelada/Rechazada           |
+| `info`        | Azul           | (Reservado para futuro)       |
 
 ## 📝 Notas Importantes
 

@@ -388,6 +388,7 @@ export function PromiseQuotesPanelCard({
   };
 
   const isAuthorized = cotizacion.status === 'aprobada' || cotizacion.status === 'autorizada';
+  const isRevision = cotizacion.revision_status === 'pending_revision' || cotizacion.revision_status === 'active';
 
   return (
     <>
@@ -587,33 +588,46 @@ export function PromiseQuotesPanelCard({
                         Autorizar
                       </ZenDropdownMenuItem>
                     )}
-                    <ZenDropdownMenuSeparator />
-                    <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating || isEditingName}>
-                      <Copy className="h-4 w-4 mr-2" />
-                      Duplicar
-                    </ZenDropdownMenuItem>
-                    <ZenDropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowArchiveModal(true);
-                      }}
-                      disabled={loading || isDuplicating}
-                    >
-                      <Archive className="h-4 w-4 mr-2" />
-                      Archivar
-                    </ZenDropdownMenuItem>
-                    <ZenDropdownMenuSeparator />
-                    <ZenDropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowDeleteModal(true);
-                      }}
-                      disabled={loading || isDuplicating}
-                      className="text-red-400 focus:text-red-300"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Eliminar
-                    </ZenDropdownMenuItem>
+
+                    {/* Duplicar: NO mostrar si es aprobada o revisión */}
+                    {!isAuthorized && !isRevision && (
+                      <>
+                        <ZenDropdownMenuSeparator />
+                        <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating || isEditingName}>
+                          <Copy className="h-4 w-4 mr-2" />
+                          Duplicar
+                        </ZenDropdownMenuItem>
+                      </>
+                    )}
+
+                    {/* Archivar y Eliminar: NO mostrar si es aprobada */}
+                    {!isAuthorized && (
+                      <>
+                        <ZenDropdownMenuSeparator />
+                        <ZenDropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowArchiveModal(true);
+                          }}
+                          disabled={loading || isDuplicating}
+                        >
+                          <Archive className="h-4 w-4 mr-2" />
+                          Archivar
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuSeparator />
+                        <ZenDropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDeleteModal(true);
+                          }}
+                          disabled={loading || isDuplicating}
+                          className="text-red-400 focus:text-red-300"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Eliminar
+                        </ZenDropdownMenuItem>
+                      </>
+                    )}
                   </>
                 )}
               </ZenDropdownMenuContent>

@@ -24,8 +24,8 @@ import { formatNumber, formatDate } from '@/lib/actions/utils/formatting';
 import { cancelarCotizacion, cancelarCotizacionYEvento, getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { ResumenCotizacion } from '@/app/[slug]/studio/commercial/promises/[promiseId]/cotizacion/[cotizacionId]/autorizar/components/ResumenCotizacion';
 import { ResumenCotizacionAutorizada, type CotizacionItem as ResumenCotizacionItem } from './ResumenCotizacionAutorizada';
-import { CrearRevisionCotizacionModal } from './CrearRevisionCotizacionModal';
 import { AutorizarRevisionModal } from './AutorizarRevisionModal';
+import { InfoCrearRevisionModal } from './InfoCrearRevisionModal';
 import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
@@ -147,7 +147,6 @@ export function EventCotizacionesCard({
   const [loadingCotizacionId, setLoadingCotizacionId] = useState<string | null>(null);
   const [cotizacionCompleta, setCotizacionCompleta] = useState<CotizacionAprobada | null>(null);
   const [showInfoCrearRevisionModal, setShowInfoCrearRevisionModal] = useState(false);
-  const [showCrearRevisionModal, setShowCrearRevisionModal] = useState(false);
   const [cotizacionParaRevision, setCotizacionParaRevision] = useState<CotizacionAprobada | null>(null);
   const [showAutorizarRevisionModal, setShowAutorizarRevisionModal] = useState(false);
   const [revisionParaAutorizar, setRevisionParaAutorizar] = useState<CotizacionAprobada | null>(null);
@@ -173,19 +172,6 @@ export function EventCotizacionesCard({
   const handleCrearRevision = (cotizacion: CotizacionAprobada) => {
     setCotizacionParaRevision(cotizacion);
     setShowInfoCrearRevisionModal(true);
-  };
-
-  const handleConfirmarCrearRevision = () => {
-    setShowInfoCrearRevisionModal(false);
-    if (cotizacionParaRevision) {
-      setShowCrearRevisionModal(true);
-    }
-  };
-
-  const handleRevisionCreada = () => {
-    setShowCrearRevisionModal(false);
-    setCotizacionParaRevision(null);
-    onUpdated?.();
   };
 
   const handleAutorizarRevision = (revision: CotizacionAprobada) => {
@@ -257,18 +243,17 @@ export function EventCotizacionesCard({
       toast.error('No hay promesa asociada');
       return;
     }
-    
+
     // Si la cotización está autorizada/aprobada, redirigir a crear revisión en lugar de editar
     // porque updateCotizacion() bloquea edición de cotizaciones autorizadas
     if (cotizacion.status === 'aprobada' || cotizacion.status === 'autorizada' || cotizacion.status === 'approved') {
       // Si no tiene revision_status o es 'active', sugerir crear revisión
       if (!cotizacion.revision_status || cotizacion.revision_status === 'active') {
-        toast.info('Las cotizaciones autorizadas se editan creando una revisión');
         handleCrearRevision(cotizacion);
         return;
       }
     }
-    
+
     router.push(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/cotizacion/${cotizacion.id}`);
   };
 
@@ -686,7 +671,7 @@ export function EventCotizacionesCard({
         </ZenDialog>
       )}
 
-      {/* Modal informativo antes de crear revisión */}
+      {/* Modal informativo que crea revisión directamente */}
       {cotizacionParaRevision && (
         <InfoCrearRevisionModal
           isOpen={showInfoCrearRevisionModal}
@@ -694,49 +679,13 @@ export function EventCotizacionesCard({
             setShowInfoCrearRevisionModal(false);
             setCotizacionParaRevision(null);
           }}
-          onConfirm={handleConfirmarCrearRevision}
-          cotizacion={cotizacionParaRevision}
-        />
-      )}
-
-      {/* Modal para crear revisión */}
-      {cotizacionParaRevision && (
-        <CrearRevisionCotizacionModal
-          isOpen={showCrearRevisionModal}
-          onClose={() => {
-            setShowCrearRevisionModal(false);
-            setCotizacionParaRevision(null);
-          }}
-          studioSlug={studioSlug}
-          cotizacionOriginal={cotizacionParaRevision}
-          onSuccess={handleRevisionCreada}
-        />
-      )}
-
-      {/* Modal informativo antes de crear revisión */}
-      {cotizacionParaRevision && (
-        <InfoCrearRevisionModal
-          isOpen={showInfoCrearRevisionModal}
-          onClose={() => {
+          onConfirm={() => {
             setShowInfoCrearRevisionModal(false);
             setCotizacionParaRevision(null);
+            onUpdated?.();
           }}
-          onConfirm={handleConfirmarCrearRevision}
           cotizacion={cotizacionParaRevision}
-        />
-      )}
-
-      {/* Modal para crear revisión */}
-      {cotizacionParaRevision && (
-        <CrearRevisionCotizacionModal
-          isOpen={showCrearRevisionModal}
-          onClose={() => {
-            setShowCrearRevisionModal(false);
-            setCotizacionParaRevision(null);
-          }}
           studioSlug={studioSlug}
-          cotizacionOriginal={cotizacionParaRevision}
-          onSuccess={handleRevisionCreada}
         />
       )}
 

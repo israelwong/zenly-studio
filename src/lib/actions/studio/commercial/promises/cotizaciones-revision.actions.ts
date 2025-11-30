@@ -264,10 +264,11 @@ export async function autorizarRevisionCotizacion(
         },
       });
 
-      // 3. Marcar original como "replaced"
+      // 3. Archivar y marcar original como "replaced"
       await tx.studio_cotizaciones.update({
         where: { id: original.id },
         data: {
+          archived: true,
           revision_status: 'replaced',
         },
       });

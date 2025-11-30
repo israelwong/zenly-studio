@@ -1,15 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { FileText, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
-import { ZenDialog, ZenButton } from '@/components/ui/zen';
+import { ZenDialog } from '@/components/ui/zen';
+import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
 interface InfoCrearRevisionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm?: () => void;
   cotizacion: NonNullable<EventoDetalle['cotizaciones']>[number];
+  studioSlug: string;
 }
 
 export function InfoCrearRevisionModal({
@@ -17,19 +20,51 @@ export function InfoCrearRevisionModal({
   onClose,
   onConfirm,
   cotizacion,
+  studioSlug,
 }: InfoCrearRevisionModalProps) {
+  const router = useRouter();
+  const [isCreating, setIsCreating] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  const handleConfirm = () => {
+    if (!cotizacion.promise_id) {
+      toast.error('No hay promesa asociada');
+      return;
+    }
+
+    setIsRedirecting(true);
+    // Redirigir a página de revisión con query param indicando que es nueva
+    // Usamos un ID temporal "new" que la página detectará para crear la revisión al guardar
+    const redirectUrl = `/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/cotizacion/new/revision?originalId=${cotizacion.id}`;
+    router.push(redirectUrl);
+  };
+
+  // Prevenir que el modal se cierre cuando está redirigiendo
+  const handleClose = () => {
+    if (!isRedirecting && !isCreating) {
+      onClose();
+    }
+  };
+
   return (
     <ZenDialog
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       title="Crear Revisión de Cotización"
       description="¿Qué significa crear una revisión?"
       maxWidth="lg"
-      onCancel={onClose}
+      onCancel={handleClose}
       cancelLabel="Cancelar"
-      onSave={onConfirm}
-      saveLabel="Continuar con la Revisión"
+      onSave={handleConfirm}
+      saveLabel={
+        isRedirecting
+          ? 'Redirigiendo para edición...'
+          : isCreating
+            ? 'Creando Revisión...'
+            : 'Continuar con edición'
+      }
       saveVariant="primary"
+      isLoading={isCreating || isRedirecting}
     >
       <div className="space-y-6">
         {/* Información principal */}
@@ -86,7 +121,7 @@ export function InfoCrearRevisionModal({
                   Revisión Pendiente
                 </p>
                 <p className="text-xs text-zinc-400">
-                  La revisión quedará como "pendiente" hasta que la autorices. La cotización original seguirá siendo la activa del evento.
+                  La revisión quedará como &quot;pendiente&quot; hasta que la autorices. La cotización original seguirá siendo la activa del evento.
                 </p>
               </div>
             </div>
