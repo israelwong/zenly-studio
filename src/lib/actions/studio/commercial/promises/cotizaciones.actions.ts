@@ -1166,8 +1166,8 @@ export async function autorizarCotizacion(
     };
 
     // Calcular descuento si el monto final es diferente al precio original
-    const descuento = cotizacion.price > validatedData.monto 
-      ? cotizacion.price - validatedData.monto 
+    const descuento = cotizacion.price > validatedData.monto
+      ? cotizacion.price - validatedData.monto
       : 0;
 
     // Transacción para garantizar consistencia

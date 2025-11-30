@@ -122,6 +122,9 @@ export interface EventoDetalle extends EventoBasico {
     updated_at: Date;
     promise_id: string | null;
     condiciones_comerciales_id: string | null;
+    revision_of_id?: string | null;
+    revision_number?: number;
+    revision_status?: string | null;
     cotizacion_items?: Array<{
       id: string;
       item_id: string | null;
@@ -879,6 +882,9 @@ export async function obtenerEventoDetalle(
             updated_at: true,
             promise_id: true,
             condiciones_comerciales_id: true,
+            revision_of_id: true,
+            revision_number: true,
+            revision_status: true,
             cotizacion_items: {
               select: {
                 id: true,

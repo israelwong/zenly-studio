@@ -18,11 +18,14 @@ import {
   ZenDialog,
   ZenAvatar,
   ZenAvatarFallback,
+  ZenBadge,
 } from '@/components/ui/zen';
 import { formatNumber, formatDate } from '@/lib/actions/utils/formatting';
 import { cancelarCotizacion, cancelarCotizacionYEvento, getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { ResumenCotizacion } from '@/app/[slug]/studio/commercial/promises/[promiseId]/cotizacion/[cotizacionId]/autorizar/components/ResumenCotizacion';
 import { ResumenCotizacionAutorizada, type CotizacionItem as ResumenCotizacionItem } from './ResumenCotizacionAutorizada';
+import { CrearRevisionCotizacionModal } from './CrearRevisionCotizacionModal';
+import { AutorizarRevisionModal } from './AutorizarRevisionModal';
 import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
@@ -143,16 +146,50 @@ export function EventCotizacionesCard({
   const [showViewModal, setShowViewModal] = useState(false);
   const [loadingCotizacionId, setLoadingCotizacionId] = useState<string | null>(null);
   const [cotizacionCompleta, setCotizacionCompleta] = useState<CotizacionAprobada | null>(null);
+  const [showCrearRevisionModal, setShowCrearRevisionModal] = useState(false);
+  const [cotizacionParaRevision, setCotizacionParaRevision] = useState<CotizacionAprobada | null>(null);
+  const [showAutorizarRevisionModal, setShowAutorizarRevisionModal] = useState(false);
+  const [revisionParaAutorizar, setRevisionParaAutorizar] = useState<CotizacionAprobada | null>(null);
 
   const cotizacionesAprobadas = (cotizaciones || []).filter(
     (c) => c.status === 'autorizada' || c.status === 'aprobada' || c.status === 'approved'
   ) as CotizacionAprobada[];
 
-  // Calcular total a pagar considerando descuentos
-  const totalAprobado = cotizacionesAprobadas.reduce((sum, c) => {
+  // Separar cotizaciones activas de revisiones pendientes
+  const cotizacionesActivas = cotizacionesAprobadas.filter(
+    (c) => !c.revision_status || c.revision_status === 'active'
+  );
+  const revisionesPendientes = (cotizaciones || []).filter(
+    (c) => c.revision_status === 'pending_revision' && c.status === 'pendiente'
+  ) as CotizacionAprobada[];
+
+  // Calcular total a pagar considerando descuentos (solo cotizaciones activas)
+  const totalAprobado = cotizacionesActivas.reduce((sum, c) => {
     const totalPagar = Number(c.price) - (c.discount ? Number(c.discount) : 0);
     return sum + totalPagar;
   }, 0);
+
+  const handleCrearRevision = (cotizacion: CotizacionAprobada) => {
+    setCotizacionParaRevision(cotizacion);
+    setShowCrearRevisionModal(true);
+  };
+
+  const handleRevisionCreada = () => {
+    setShowCrearRevisionModal(false);
+    setCotizacionParaRevision(null);
+    onUpdated?.();
+  };
+
+  const handleAutorizarRevision = (revision: CotizacionAprobada) => {
+    setRevisionParaAutorizar(revision);
+    setShowAutorizarRevisionModal(true);
+  };
+
+  const handleRevisionAutorizada = () => {
+    setShowAutorizarRevisionModal(false);
+    setRevisionParaAutorizar(null);
+    onUpdated?.();
+  };
 
   const handleAnexarCotizacion = () => {
     if (!promiseId) {
@@ -449,6 +486,86 @@ export function EventCotizacionesCard({
                 })}
               </div>
 
+              {/* Revisiones pendientes */}
+              {revisionesPendientes.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-zinc-800">
+                  <p className="text-xs font-medium text-zinc-400 mb-3">Revisiones Pendientes</p>
+                  <div className="space-y-3">
+                    {revisionesPendientes.map((revision) => {
+                      const isMenuOpen = openMenuId === revision.id;
+                      return (
+                        <div
+                          key={revision.id}
+                          className="flex items-start gap-4 p-4 pr-12 bg-blue-950/20 rounded border border-blue-500/30 relative group"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <ZenBadge variant="outline" className="text-xs text-blue-400 border-blue-500/50">
+                                Revisión #{revision.revision_number || 1}
+                              </ZenBadge>
+                              <p className="text-sm font-medium text-zinc-100 truncate">
+                                {revision.name}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-zinc-400">Precio:</span>
+                                <span className="text-zinc-300">{formatAmount(revision.price)}</span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-zinc-500 mt-2">
+                              Pendiente de autorización
+                            </p>
+                          </div>
+                          {/* Menú dropdown para revisiones */}
+                          <div className="absolute top-3 right-3 z-20">
+                            <ZenDropdownMenu
+                              open={isMenuOpen}
+                              onOpenChange={(open) => setOpenMenuId(open ? revision.id : null)}
+                            >
+                              <ZenDropdownMenuTrigger asChild>
+                                <ZenButton
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-zinc-400 hover:text-zinc-300"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </ZenButton>
+                              </ZenDropdownMenuTrigger>
+                              <ZenDropdownMenuContent align="end">
+                                <ZenDropdownMenuItem
+                                  onClick={() => {
+                                    handleVer(revision);
+                                    setOpenMenuId(null);
+                                  }}
+                                >
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Ver
+                                </ZenDropdownMenuItem>
+                                {promiseId && (
+                                  <>
+                                    <ZenDropdownMenuSeparator />
+                                    <ZenDropdownMenuItem
+                                      onClick={() => {
+                                        handleAutorizarRevision(revision);
+                                        setOpenMenuId(null);
+                                      }}
+                                    >
+                                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                                      Autorizar Revisión
+                                    </ZenDropdownMenuItem>
+                                  </>
+                                )}
+                              </ZenDropdownMenuContent>
+                            </ZenDropdownMenu>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Resumen - Total aprobado */}
               {totalAprobado > 0 && (
                 <div className="grid grid-cols-1 gap-2 text-xs pt-2 border-t border-zinc-800">
@@ -471,6 +588,35 @@ export function EventCotizacionesCard({
               )}
             </div>
           )}
+
+      {/* Modal para crear revisión */}
+      {showCrearRevisionModal && cotizacionParaRevision && (
+        <CrearRevisionCotizacionModal
+          isOpen={showCrearRevisionModal}
+          onClose={() => {
+            setShowCrearRevisionModal(false);
+            setCotizacionParaRevision(null);
+          }}
+          studioSlug={studioSlug}
+          cotizacionOriginal={cotizacionParaRevision}
+          onSuccess={handleRevisionCreada}
+        />
+      )}
+
+      {/* Modal para autorizar revisión */}
+      {showAutorizarRevisionModal && revisionParaAutorizar && promiseId && (
+        <AutorizarRevisionModal
+          isOpen={showAutorizarRevisionModal}
+          onClose={() => {
+            setShowAutorizarRevisionModal(false);
+            setRevisionParaAutorizar(null);
+          }}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+          revision={revisionParaAutorizar}
+          onSuccess={handleRevisionAutorizada}
+        />
+      )}
         </div>
       </ZenCardContent>
 
