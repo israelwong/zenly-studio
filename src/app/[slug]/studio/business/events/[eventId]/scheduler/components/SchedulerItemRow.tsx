@@ -43,7 +43,7 @@ export function SchedulerItemRow({
     }, [onAddTaskClick, localItem.id, itemData.servicioNombre]);
 
     // Obtener tareas del item (si existen)
-    const tasks = localItem.gantt_task ? [localItem.gantt_task].map(task => ({
+    const tasks = localItem.scheduler_task ? [localItem.scheduler_task].map(task => ({
         id: task.id,
         name: task.name,
         start_date: task.start_date,
@@ -52,8 +52,8 @@ export function SchedulerItemRow({
     })) : [];
 
     // Calcular duración en días
-    const duration = localItem.gantt_task?.start_date && localItem.gantt_task?.end_date
-        ? Math.ceil((new Date(localItem.gantt_task.end_date).getTime() - new Date(localItem.gantt_task.start_date).getTime()) / (1000 * 60 * 60 * 24))
+    const duration = localItem.scheduler_task?.start_date && localItem.scheduler_task?.end_date
+        ? Math.ceil((new Date(localItem.scheduler_task.end_date).getTime() - new Date(localItem.scheduler_task.start_date).getTime()) / (1000 * 60 * 60 * 24))
         : undefined;
 
     return (

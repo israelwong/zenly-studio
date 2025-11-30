@@ -3,21 +3,21 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
-interface UpdateGanttTaskInput {
+interface UpdateSchedulerTaskInput {
   start_date: Date;
   end_date: Date;
 }
 
 /**
- * Actualiza solo las fechas de una tarea del Gantt (start_date, end_date)
+ * Actualiza solo las fechas de una tarea del Scheduler (start_date, end_date)
  * Se ejecuta en el servidor para validar permisos y persistir en BD
- * Para actualizaciones completas (incluyendo isCompleted), usar actualizarGanttTask de events.actions.ts
+ * Para actualizaciones completas (incluyendo isCompleted), usar actualizarSchedulerTask de events.actions.ts
  */
-export async function actualizarGanttTaskFechas(
+export async function actualizarSchedulerTaskFechas(
   studioSlug: string,
   eventId: string,
   taskId: string,
-  data: UpdateGanttTaskInput
+  data: UpdateSchedulerTaskInput
 ) {
   try {
     // Validar que las fechas sean válidas
@@ -39,7 +39,7 @@ export async function actualizarGanttTaskFechas(
     }
 
     // Actualizar la tarea en BD
-    const updatedTask = await prisma.studio_gantt_event_tasks.update({
+    const updatedTask = await prisma.studio_scheduler_event_tasks.update({
       where: { id: taskId },
       data: {
         start_date: startDate,
@@ -48,14 +48,14 @@ export async function actualizarGanttTaskFechas(
     });
 
     // Revalidar la página para reflejar cambios
-    revalidatePath(`/[slug]/studio/business/events/[eventId]/gantt`, 'page');
+    revalidatePath(`/[slug]/studio/business/events/[eventId]/scheduler`, 'page');
 
     return {
       success: true,
       data: updatedTask,
     };
   } catch (error) {
-    console.error('Error updating gantt task:', error);
+    console.error('Error updating scheduler task:', error);
     return {
       success: false,
       error: 'Error al actualizar la tarea',
@@ -66,9 +66,9 @@ export async function actualizarGanttTaskFechas(
 /**
  * Obtiene todas las tareas de un evento
  */
-export async function obtenerGanttTareas(studioSlug: string, eventId: string) {
+export async function obtenerSchedulerTareas(studioSlug: string, eventId: string) {
   try {
-    const tareas = await prisma.studio_gantt_event_tasks.findMany({
+    const tareas = await prisma.studio_scheduler_event_tasks.findMany({
       where: {
         cotizacion_item: {
           cotizaciones: {
@@ -86,7 +86,7 @@ export async function obtenerGanttTareas(studioSlug: string, eventId: string) {
       data: tareas,
     };
   } catch (error) {
-    console.error('Error fetching gantt tasks:', error);
+    console.error('Error fetching scheduler tasks:', error);
     return {
       success: false,
       error: 'Error al obtener las tareas',

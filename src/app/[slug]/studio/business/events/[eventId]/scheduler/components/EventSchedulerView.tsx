@@ -11,7 +11,7 @@ interface EventSchedulerViewProps {
   studioSlug: string;
   eventId: string;
   eventData: EventoDetalle;
-  ganttInstance?: EventoDetalle['gantt'];
+  schedulerInstance?: EventoDetalle['scheduler'];
   dateRange?: DateRange;
   onDataChange?: (data: EventoDetalle) => void;
 }
@@ -20,7 +20,7 @@ export function EventSchedulerView({
   studioSlug,
   eventId,
   eventData,
-  ganttInstance,
+  schedulerInstance,
   dateRange: propDateRange,
   onDataChange,
 }: EventSchedulerViewProps) {
@@ -50,13 +50,13 @@ export function EventSchedulerView({
 
   // Calcular rango por defecto si no está configurado
   const defaultDateRange = useMemo(() => {
-    // Prioridad: dateRange prop > ganttInstance > fecha del evento
+    // Prioridad: dateRange prop > schedulerInstance > fecha del evento
     if (propDateRange) return propDateRange;
 
-    if (ganttInstance?.start_date && ganttInstance?.end_date) {
+    if (schedulerInstance?.start_date && schedulerInstance?.end_date) {
       return {
-        from: new Date(ganttInstance.start_date),
-        to: new Date(ganttInstance.end_date),
+        from: new Date(schedulerInstance.start_date),
+        to: new Date(schedulerInstance.end_date),
       };
     }
 
@@ -70,7 +70,7 @@ export function EventSchedulerView({
     end.setDate(end.getDate() + 30); // 30 días después del evento
 
     return { from: start, to: end };
-  }, [propDateRange, ganttInstance, eventData.event_date, eventData.promise?.event_date]);
+  }, [propDateRange, schedulerInstance, eventData.event_date, eventData.promise?.event_date]);
 
 
   // Mostrar skeleton interno mientras carga secciones (mismo diseño que el scheduler)

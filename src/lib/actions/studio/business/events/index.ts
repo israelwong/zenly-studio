@@ -8,17 +8,22 @@ export {
   obtenerCrewMembers,
   asignarCrewAItem,
   obtenerCategoriasCrew,
-  actualizarRangoGantt,
-  crearGanttTask,
-  actualizarGanttTask,
-  eliminarGanttTask,
-  obtenerGanttTask,
+  actualizarRangoScheduler,
+  crearSchedulerTask,
+  actualizarSchedulerTask,
+  eliminarSchedulerTask,
+  obtenerSchedulerTask,
 } from './events.actions';
 
 export {
   crearNominaDesdeTareaCompletada,
   eliminarNominaDesdeTareaDesmarcada,
 } from './payroll-actions';
+
+export {
+  actualizarSchedulerTaskFechas,
+  obtenerSchedulerTareas,
+} from './scheduler-actions';
 
 export {
   getEventPipelineStages,

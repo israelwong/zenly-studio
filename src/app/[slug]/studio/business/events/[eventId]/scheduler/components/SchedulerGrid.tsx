@@ -49,14 +49,14 @@ export const SchedulerGrid = React.memo(({
                   const item = itemsMap.get(servicio.id);
                   if (!item) return null;
 
-                  const tasks = item.gantt_task
+                  const tasks = item.scheduler_task
                     ? [
                         {
-                          id: item.gantt_task.id,
-                          name: item.gantt_task.name,
-                          start_date: new Date(item.gantt_task.start_date),
-                          end_date: new Date(item.gantt_task.end_date),
-                          is_completed: !!item.gantt_task.completed_at,
+                          id: item.scheduler_task.id,
+                          name: item.scheduler_task.name,
+                          start_date: new Date(item.scheduler_task.start_date),
+                          end_date: new Date(item.scheduler_task.end_date),
+                          is_completed: !!item.scheduler_task.completed_at,
                         },
                       ]
                     : [];

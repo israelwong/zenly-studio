@@ -25,7 +25,7 @@ export function useSchedulerItemSync(
   }, [
     initialItem.id,
     initialItem.assigned_to_crew_member_id,
-    initialItem.gantt_task?.completed_at,
+    initialItem.scheduler_task?.completed_at,
   ]);
 
   /**
@@ -78,20 +78,20 @@ export function useSchedulerItemSync(
     // Usar callback de estado para garantizar el estado más reciente
     let updatedItem: CotizacionItem;
     setLocalItem(prev => {
-      if (!prev.gantt_task) {
+      if (!prev.scheduler_task) {
         updatedItem = prev;
         return prev;
       }
 
-      // Preservar todos los campos del gantt_task original y solo actualizar los necesarios
+      // Preservar todos los campos del scheduler_task original y solo actualizar los necesarios
       // IMPORTANTE: Preservar assigned_to_crew_member del estado anterior
       updatedItem = {
         ...prev,
-        gantt_task: {
-          ...prev.gantt_task, // Preservar todos los campos originales
+        scheduler_task: {
+          ...prev.scheduler_task, // Preservar todos los campos originales
           completed_at: isCompleted ? new Date().toISOString() : null,
           status: isCompleted ? 'COMPLETED' : 'PENDING',
-          progress_percent: isCompleted ? 100 : (prev.gantt_task.progress_percent || 0),
+          progress_percent: isCompleted ? 100 : (prev.scheduler_task.progress_percent || 0),
         },
       } as CotizacionItem;
 

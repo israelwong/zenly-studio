@@ -34,8 +34,8 @@ export function SchedulerDateRangeConfig({
 
     setSaving(true);
     try {
-      const { actualizarRangoGantt } = await import('@/lib/actions/studio/business/events');
-      const result = await actualizarRangoGantt(studioSlug, eventId, {
+      const { actualizarRangoScheduler } = await import('@/lib/actions/studio/business/events');
+      const result = await actualizarRangoScheduler(studioSlug, eventId, {
         from: tempRange.from,
         to: tempRange.to,
       });

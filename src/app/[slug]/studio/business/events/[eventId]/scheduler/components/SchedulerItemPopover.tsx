@@ -64,7 +64,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
 
     // Usar localItem (sincronizado con servidor)
     const selectedMemberId = localItem.assigned_to_crew_member_id;
-    const isTaskCompleted = !!localItem.gantt_task?.completed_at;
+    const isTaskCompleted = !!localItem.scheduler_task?.completed_at;
 
     const isService = localItem.profit_type === 'servicio' || localItem.profit_type === 'service';
     const itemName = localItem.name || 'Sin nombre';
@@ -160,7 +160,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     };
 
     const handleTaskCompletionToggle = async (checked: boolean) => {
-        if (!localItem.gantt_task?.id) return;
+        if (!localItem.scheduler_task?.id) return;
 
         // Si se intenta completar pero no hay personal asignado, mostrar modal
         if (checked && !localItem.assigned_to_crew_member_id) {
@@ -175,10 +175,10 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
 
         try {
             await updateCompletionStatus(checked, async () => {
-                const result = await actualizarGanttTask(
+                const result = await actualizarSchedulerTask(
                     studioSlug,
                     eventId,
-                    localItem.gantt_task!.id,
+                    localItem.scheduler_task!.id,
                     {
                         isCompleted: checked,
                         assignedToCrewMemberId: localItem.assigned_to_crew_member_id || undefined,
@@ -205,7 +205,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     };
 
     const handleAssignAndComplete = async (crewMemberId: string) => {
-        if (!localItem.gantt_task?.id) return;
+        if (!localItem.scheduler_task?.id) return;
 
         setIsUpdatingCompletion(true);
 
@@ -235,10 +235,10 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
             // Nota: updateCompletionStatus preserva ...localItem que incluye assigned_to_crew_member
             // del updateCrewMember anterior, pero necesitamos asegurar que se propague correctamente
             await updateCompletionStatus(true, async () => {
-                const result = await actualizarGanttTask(
+                const result = await actualizarSchedulerTask(
                     studioSlug,
                     eventId,
-                    localItem.gantt_task!.id,
+                    localItem.scheduler_task!.id,
                     {
                         isCompleted: true,
                         assignedToCrewMemberId: crewMemberId,
@@ -265,16 +265,16 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     };
 
     const handleCompleteWithoutPayment = async () => {
-        if (!localItem.gantt_task?.id) return;
+        if (!localItem.scheduler_task?.id) return;
 
         setIsUpdatingCompletion(true);
 
         try {
             await updateCompletionStatus(true, async () => {
-                const result = await actualizarGanttTask(
+                const result = await actualizarSchedulerTask(
                     studioSlug,
                     eventId,
-                    localItem.gantt_task!.id,
+                    localItem.scheduler_task!.id,
                     {
                         isCompleted: true,
                     }
@@ -294,9 +294,9 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
         setIsUpdatingCompletion(false);
     };
 
-    const hasTask = !!localItem.gantt_task;
-    const taskStartDate = localItem.gantt_task ? new Date(localItem.gantt_task.start_date) : null;
-    const taskEndDate = localItem.gantt_task ? new Date(localItem.gantt_task.end_date) : null;
+    const hasTask = !!localItem.scheduler_task;
+    const taskStartDate = localItem.scheduler_task ? new Date(localItem.scheduler_task.start_date) : null;
+    const taskEndDate = localItem.scheduler_task ? new Date(localItem.scheduler_task.end_date) : null;
 
     return (
         <>
@@ -524,7 +524,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
             />
 
             {/* Modal para asignar personal antes de completar */}
-            {localItem.gantt_task && (
+            {localItem.scheduler_task && (
                 <AssignCrewBeforeCompleteModal
                     isOpen={assignCrewModalOpen}
                     onClose={() => setAssignCrewModalOpen(false)}

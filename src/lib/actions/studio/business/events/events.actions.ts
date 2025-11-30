@@ -100,7 +100,7 @@ export interface EventoDetalle extends EventoBasico {
       unit_price: number;
       subtotal: number;
       assigned_to_crew_member_id: string | null;
-      gantt_task_id: string | null;
+      scheduler_task_id: string | null;
       task_type: string | null;
       status: string;
       internal_delivery_days: number | null;
@@ -136,7 +136,7 @@ export interface EventoDetalle extends EventoBasico {
       profit_type_snapshot: string | null;
       task_type: string | null;
       assigned_to_crew_member_id: string | null;
-      gantt_task_id: string | null;
+      scheduler_task_id: string | null;
       assignment_date: Date | null;
       delivery_date: Date | null;
       internal_delivery_days: number | null;
@@ -151,7 +151,7 @@ export interface EventoDetalle extends EventoBasico {
           name: string;
         };
       } | null;
-      gantt_task: {
+      scheduler_task: {
         id: string;
         name: string;
         start_date: Date;
@@ -164,12 +164,11 @@ export interface EventoDetalle extends EventoBasico {
       } | null;
     }>;
   }>; // Todas las cotizaciones del evento (incluye principal + adicionales)
-  gantt?: {
+  scheduler?: {
     id: string;
     event_date: Date;
     start_date: Date;
     end_date: Date;
-    template_id: string | null;
     is_custom: boolean;
     tasks?: Array<{
       id: string;
@@ -846,7 +845,7 @@ export async function obtenerEventoDetalle(
                 unit_price: true,
                 subtotal: true,
                 assigned_to_crew_member_id: true,
-                gantt_task_id: true,
+                scheduler_task_id: true,
                 task_type: true,
                 status: true,
                 internal_delivery_days: true,
@@ -891,7 +890,7 @@ export async function obtenerEventoDetalle(
                 profit_type_snapshot: true,
                 task_type: true,
                 assigned_to_crew_member_id: true,
-                gantt_task_id: true,
+                scheduler_task_id: true,
                 assignment_date: true,
                 delivery_date: true,
                 internal_delivery_days: true,
@@ -904,7 +903,7 @@ export async function obtenerEventoDetalle(
                     tipo: true,
                   },
                 },
-                gantt_task: {
+                scheduler_task: {
                   select: {
                     id: true,
                     name: true,
@@ -927,13 +926,12 @@ export async function obtenerEventoDetalle(
             created_at: 'asc',
           },
         },
-        gantt: {
+        scheduler: {
           select: {
             id: true,
             event_date: true,
             start_date: true,
             end_date: true,
-            template_id: true,
             is_custom: true,
             tasks: {
               select: {
@@ -1405,20 +1403,12 @@ export async function actualizarFechaEvento(
       select: {
         id: true,
         event_date: true,
-        gantt: {
+        scheduler: {
           select: {
             id: true,
-            template_id: true,
-            template: {
-              select: {
-                pre_event_days: true,
-                post_event_days: true,
-              },
-            },
             tasks: {
               select: {
                 id: true,
-                template_task_id: true,
                 duration_days: true,
                 start_date: true,
               },
@@ -1461,78 +1451,45 @@ export async function actualizarFechaEvento(
       });
     }
 
-    // Si existe gantt_instance, recalcular fechas
-    if (evento.gantt) {
-      const ganttInstance = evento.gantt;
-      const template = ganttInstance.template;
+    // Si existe scheduler_instance, recalcular fechas
+    if (evento.scheduler) {
+      const schedulerInstance = evento.scheduler;
 
-      // Calcular nuevas fechas del gantt_instance
+      // Calcular nuevas fechas del scheduler_instance basándose en las tareas existentes
       let newStartDate: Date;
       let newEndDate: Date;
 
-      if (template) {
-        // Si hay template, usar pre_event_days y post_event_days
+      const tasks = schedulerInstance.tasks;
+      if (tasks.length > 0) {
+        // Calcular rango basado en fechas de tareas existentes
+        const taskDates = tasks.map(t => ({
+          start: new Date(t.start_date),
+          end: new Date(t.start_date.getTime() + (t.duration_days - 1) * 24 * 60 * 60 * 1000),
+        }));
+
+        const minStart = new Date(Math.min(...taskDates.map(d => d.start.getTime())));
+        const maxEnd = new Date(Math.max(...taskDates.map(d => d.end.getTime())));
+
+        // Calcular offset desde la fecha original del evento
+        const fechaOriginal = evento.event_date;
+        const offsetStart = (minStart.getTime() - fechaOriginal.getTime()) / (1000 * 60 * 60 * 24);
+        const offsetEnd = (maxEnd.getTime() - fechaOriginal.getTime()) / (1000 * 60 * 60 * 24);
+
         newStartDate = new Date(nuevaFecha);
-        newStartDate.setDate(newStartDate.getDate() - template.pre_event_days);
+        newStartDate.setDate(newStartDate.getDate() + offsetStart);
         newEndDate = new Date(nuevaFecha);
-        newEndDate.setDate(newEndDate.getDate() + template.post_event_days);
+        newEndDate.setDate(newEndDate.getDate() + offsetEnd);
       } else {
-        // Si no hay template, calcular basándose en las tareas existentes
-        const tasks = ganttInstance.tasks;
-        if (tasks.length > 0) {
-          // Obtener template_tasks si existen
-          const templateTaskIds = tasks
-            .map((t) => t.template_task_id)
-            .filter((id): id is string => id !== null);
-
-          let minDaysBefore = 0;
-          let maxDaysAfter = 0;
-
-          if (templateTaskIds.length > 0) {
-            const templateTasks = await prisma.studio_gantt_template_tasks.findMany({
-              where: { id: { in: templateTaskIds } },
-              select: {
-                id: true,
-                days_before_event: true,
-                days_after_event: true,
-              },
-            });
-
-            const templateTasksMap = new Map(
-              templateTasks.map((tt) => [tt.id, tt])
-            );
-
-            for (const task of tasks) {
-              if (task.template_task_id) {
-                const templateTask = templateTasksMap.get(task.template_task_id);
-                if (templateTask) {
-                  if (templateTask.days_before_event !== null) {
-                    minDaysBefore = Math.min(minDaysBefore, -templateTask.days_before_event);
-                  }
-                  if (templateTask.days_after_event !== null) {
-                    maxDaysAfter = Math.max(maxDaysAfter, templateTask.days_after_event);
-                  }
-                }
-              }
-            }
-          }
-
-          newStartDate = new Date(nuevaFecha);
-          newStartDate.setDate(newStartDate.getDate() + minDaysBefore);
-          newEndDate = new Date(nuevaFecha);
-          newEndDate.setDate(newEndDate.getDate() + maxDaysAfter);
-        } else {
-          // Sin tareas, usar fechas por defecto
-          newStartDate = new Date(nuevaFecha);
-          newStartDate.setDate(newStartDate.getDate() - 7); // 7 días antes por defecto
-          newEndDate = new Date(nuevaFecha);
-          newEndDate.setDate(newEndDate.getDate() + 1); // 1 día después por defecto
-        }
+        // Sin tareas, usar fechas por defecto
+        newStartDate = new Date(nuevaFecha);
+        newStartDate.setDate(newStartDate.getDate() - 7); // 7 días antes por defecto
+        newEndDate = new Date(nuevaFecha);
+        newEndDate.setDate(newEndDate.getDate() + 1); // 1 día después por defecto
       }
 
-      // Actualizar gantt_instance
-      await prisma.studio_gantt_event_instances.update({
-        where: { id: ganttInstance.id },
+      // Actualizar scheduler_instance
+      await prisma.studio_scheduler_event_instances.update({
+        where: { id: schedulerInstance.id },
         data: {
           event_date: nuevaFecha,
           start_date: newStartDate,
@@ -1540,91 +1497,32 @@ export async function actualizarFechaEvento(
         },
       });
 
-      // Recalcular fechas de todas las tareas
-      // Obtener todas las tareas y sus template_tasks si existen
-      const allTasks = await prisma.studio_gantt_event_tasks.findMany({
-        where: { gantt_instance_id: ganttInstance.id },
+      // Recalcular fechas de todas las tareas manteniendo el offset relativo desde la fecha del evento
+      const allTasks = await prisma.studio_scheduler_event_tasks.findMany({
+        where: { scheduler_instance_id: schedulerInstance.id },
         select: {
           id: true,
-          template_task_id: true,
           duration_days: true,
           start_date: true,
         },
       });
 
-      // Obtener template_tasks si existen
-      const templateTaskIds = allTasks
-        .map((t) => t.template_task_id)
-        .filter((id): id is string => id !== null);
-
-      const templateTasksMap = new Map<string, {
-        days_before_event: number | null;
-        days_after_event: number | null;
-        duration_days: number;
-      }>();
-
-      if (templateTaskIds.length > 0) {
-        const templateTasks = await prisma.studio_gantt_template_tasks.findMany({
-          where: { id: { in: templateTaskIds } },
-          select: {
-            id: true,
-            days_before_event: true,
-            days_after_event: true,
-            duration_days: true,
-          },
-        });
-
-        templateTasks.forEach((tt) => {
-          templateTasksMap.set(tt.id, {
-            days_before_event: tt.days_before_event,
-            days_after_event: tt.days_after_event,
-            duration_days: tt.duration_days,
-          });
-        });
-      }
+      const fechaOriginal = evento.event_date;
 
       for (const task of allTasks) {
-        const templateTask = task.template_task_id
-          ? templateTasksMap.get(task.template_task_id)
-          : null;
-        let daysBefore: number | null = null;
-        let daysAfter: number | null = null;
-        let durationDays = task.duration_days;
-
-        // Usar template_task si existe
-        if (templateTask) {
-          daysBefore = templateTask.days_before_event;
-          daysAfter = templateTask.days_after_event;
-          durationDays = templateTask.duration_days;
-        }
-
-        let taskStartDate: Date;
-
-        if (daysBefore !== null) {
-          // Tarea antes del evento
-          taskStartDate = new Date(nuevaFecha);
-          taskStartDate.setDate(taskStartDate.getDate() - daysBefore);
-        } else if (daysAfter !== null) {
-          // Tarea después del evento
-          taskStartDate = new Date(nuevaFecha);
-          taskStartDate.setDate(taskStartDate.getDate() + daysAfter);
-        } else {
-          // Sin offset específico, mantener la diferencia relativa desde la fecha original
-          // o usar fecha del evento si no hay referencia
-          const fechaOriginal = evento.event_date;
-          const diffDays = Math.floor(
-            (task.start_date.getTime() - fechaOriginal.getTime()) / (1000 * 60 * 60 * 24)
-          );
-          taskStartDate = new Date(nuevaFecha);
-          taskStartDate.setDate(taskStartDate.getDate() + diffDays);
-        }
+        // Mantener la diferencia relativa desde la fecha original del evento
+        const diffDays = Math.floor(
+          (task.start_date.getTime() - fechaOriginal.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        const taskStartDate = new Date(nuevaFecha);
+        taskStartDate.setDate(taskStartDate.getDate() + diffDays);
 
         // Calcular end_date basándose en duration_days
         const taskEndDate = new Date(taskStartDate);
-        taskEndDate.setDate(taskEndDate.getDate() + durationDays);
+        taskEndDate.setDate(taskEndDate.getDate() + task.duration_days - 1);
 
         // Actualizar tarea
-        await prisma.studio_gantt_event_tasks.update({
+        await prisma.studio_scheduler_event_tasks.update({
           where: { id: task.id },
           data: {
             start_date: taskStartDate,
@@ -1925,10 +1823,10 @@ export async function asignarCrewAItem(
     let payrollResult: { success: boolean; personalNombre?: string; error?: string } | null = null;
     if (crewMemberId && eventId) {
       // Buscar la tarea asociada al item
-      const task = await prisma.studio_gantt_event_tasks.findFirst({
+      const task = await prisma.studio_scheduler_event_tasks.findFirst({
         where: {
           cotizacion_item_id: itemId,
-          gantt_instance: {
+          scheduler_instance: {
             event_id: eventId,
           },
         },
@@ -2074,9 +1972,9 @@ export async function obtenerCategoriasCrew(studioSlug: string) {
 }
 
 /**
- * Obtener o crear instancia de Gantt para un evento
+ * Obtener o crear instancia de Scheduler para un evento
  */
-async function obtenerOCrearGanttInstance(
+async function obtenerOCrearSchedulerInstance(
   studioSlug: string,
   eventId: string,
   dateRange?: { from: Date; to: Date }
@@ -2092,7 +1990,7 @@ async function obtenerOCrearGanttInstance(
     }
 
     // Buscar instancia existente
-    let instance = await prisma.studio_gantt_event_instances.findUnique({
+    let instance = await prisma.studio_scheduler_event_instances.findUnique({
       where: { event_id: eventId },
       select: { id: true },
     });
@@ -2112,7 +2010,7 @@ async function obtenerOCrearGanttInstance(
       const endDate = dateRange?.to || new Date(event.event_date);
       endDate.setDate(endDate.getDate() + 30); // Default: 30 días después
 
-      instance = await prisma.studio_gantt_event_instances.create({
+      instance = await prisma.studio_scheduler_event_instances.create({
         data: {
           event_id: eventId,
           event_date: event.event_date,
@@ -2134,9 +2032,9 @@ async function obtenerOCrearGanttInstance(
 }
 
 /**
- * Crear tarea de Gantt
+ * Crear tarea de Scheduler
  */
-export async function crearGanttTask(
+export async function crearSchedulerTask(
   studioSlug: string,
   eventId: string,
   data: {
@@ -2188,7 +2086,7 @@ export async function crearGanttTask(
     const ganttInstanceId = instanceResult.data.id;
 
     // Verificar que no existe ya una tarea para este item
-    const existingTask = await prisma.studio_gantt_event_tasks.findUnique({
+    const existingTask = await prisma.studio_scheduler_event_tasks.findUnique({
       where: { cotizacion_item_id: data.itemId },
       select: { id: true },
     });
@@ -2203,9 +2101,9 @@ export async function crearGanttTask(
     ) + 1;
 
     // Crear la tarea
-    const task = await prisma.studio_gantt_event_tasks.create({
+    const task = await prisma.studio_scheduler_event_tasks.create({
       data: {
-        gantt_instance_id: ganttInstanceId,
+        scheduler_instance_id: schedulerInstanceId,
         cotizacion_item_id: data.itemId,
         name: data.name,
         description: data.description || null,
@@ -2243,9 +2141,9 @@ export async function crearGanttTask(
 }
 
 /**
- * Actualizar tarea de Gantt
+ * Actualizar tarea de Scheduler
  */
-export async function actualizarGanttTask(
+export async function actualizarSchedulerTask(
   studioSlug: string,
   eventId: string,
   taskId: string,
@@ -2280,7 +2178,7 @@ export async function actualizarGanttTask(
     const task = await prisma.studio_gantt_event_tasks.findFirst({
       where: {
         id: taskId,
-        gantt_instance: {
+        scheduler_instance: {
           event_id: eventId,
         },
       },
@@ -2331,7 +2229,7 @@ export async function actualizarGanttTask(
     }
 
     // Actualizar la tarea
-    await prisma.studio_gantt_event_tasks.update({
+    await prisma.studio_scheduler_event_tasks.update({
       where: { id: taskId },
       data: updateData,
     });
@@ -2339,13 +2237,13 @@ export async function actualizarGanttTask(
     // Si se completó la tarea, intentar crear nómina automáticamente
     // Retornar información de nómina para mostrar toast en el cliente
     let payrollResult: { success: boolean; personalNombre?: string; error?: string } | null = null;
-    console.log('[GANTT] 🔍 Verificando si debe crear nómina:', {
+    console.log('[SCHEDULER] 🔍 Verificando si debe crear nómina:', {
       isCompleted: data.isCompleted,
       cotizacion_item_id: task.cotizacion_item_id,
       taskId,
     });
     if (data.isCompleted === true && task.cotizacion_item_id) {
-      console.log('[GANTT] ✅ Condiciones cumplidas, creando nómina...');
+      console.log('[SCHEDULER] ✅ Condiciones cumplidas, creando nómina...');
       // Importar dinámicamente para evitar dependencias circulares
       const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
 
@@ -2373,7 +2271,7 @@ export async function actualizarGanttTask(
       } catch (error) {
         // Log error pero no bloquear la actualización de la tarea
         console.error(
-          '[GANTT] ❌ Error creando nómina automática (no crítico):',
+          '[SCHEDULER] ❌ Error creando nómina automática (no crítico):',
           error
         );
         payrollResult = {
@@ -2392,15 +2290,15 @@ export async function actualizarGanttTask(
       eliminarNominaDesdeTareaDesmarcada(studioSlug, eventId, taskId)
         .then((result) => {
           if (result.success) {
-            console.log('[GANTT] ✅ Nómina eliminada automáticamente');
+            console.log('[SCHEDULER] ✅ Nómina eliminada automáticamente');
           } else {
-            console.warn('[GANTT] ⚠️ No se pudo eliminar nómina automática:', result.error);
+            console.warn('[SCHEDULER] ⚠️ No se pudo eliminar nómina automática:', result.error);
           }
         })
         .catch((error) => {
           // Log error pero no bloquear la actualización de la tarea
           console.error(
-            '[GANTT] ❌ Error eliminando nómina automática (no crítico):',
+            '[SCHEDULER] ❌ Error eliminando nómina automática (no crítico):',
             error
           );
         });
@@ -2424,9 +2322,9 @@ export async function actualizarGanttTask(
 }
 
 /**
- * Actualizar rango de fechas de la instancia de Gantt
+ * Actualizar rango de fechas de la instancia de Scheduler
  */
-export async function actualizarRangoGantt(
+export async function actualizarRangoScheduler(
   studioSlug: string,
   eventId: string,
   dateRange: { from: Date; to: Date }
@@ -2442,7 +2340,7 @@ export async function actualizarRangoGantt(
     }
 
     // Obtener o crear instancia de Gantt
-    let instance = await prisma.studio_gantt_event_instances.findUnique({
+    let instance = await prisma.studio_scheduler_event_instances.findUnique({
       where: { event_id: eventId },
       select: { id: true },
     });
@@ -2457,7 +2355,7 @@ export async function actualizarRangoGantt(
         return { success: false, error: 'Evento no encontrado' };
       }
 
-      instance = await prisma.studio_gantt_event_instances.create({
+      instance = await prisma.studio_scheduler_event_instances.create({
         data: {
           event_id: eventId,
           event_date: event.event_date,
@@ -2468,7 +2366,7 @@ export async function actualizarRangoGantt(
       });
     } else {
       // Actualizar rango existente
-      await prisma.studio_gantt_event_instances.update({
+      await prisma.studio_scheduler_event_instances.update({
         where: { id: instance.id },
         data: {
           start_date: dateRange.from,
@@ -2477,10 +2375,10 @@ export async function actualizarRangoGantt(
       });
     }
 
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     return { success: true };
   } catch (error) {
-    console.error('[GANTT] Error actualizando rango:', error);
+    console.error('[SCHEDULER] Error actualizando rango:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar rango',
@@ -2489,9 +2387,9 @@ export async function actualizarRangoGantt(
 }
 
 /**
- * Obtener tarea de Gantt por ID
+ * Obtener tarea de Scheduler por ID
  */
-export async function obtenerGanttTask(
+export async function obtenerSchedulerTask(
   studioSlug: string,
   eventId: string,
   taskId: string
@@ -2509,7 +2407,7 @@ export async function obtenerGanttTask(
     const task = await prisma.studio_gantt_event_tasks.findFirst({
       where: {
         id: taskId,
-        gantt_instance: {
+        scheduler_instance: {
           event_id: eventId,
         },
       },
@@ -2542,9 +2440,9 @@ export async function obtenerGanttTask(
 }
 
 /**
- * Eliminar tarea de Gantt
+ * Eliminar tarea de Scheduler
  */
-export async function eliminarGanttTask(
+export async function eliminarSchedulerTask(
   studioSlug: string,
   eventId: string,
   taskId: string
@@ -2563,7 +2461,7 @@ export async function eliminarGanttTask(
     const task = await prisma.studio_gantt_event_tasks.findFirst({
       where: {
         id: taskId,
-        gantt_instance: {
+        scheduler_instance: {
           event_id: eventId,
         },
       },
@@ -2575,16 +2473,16 @@ export async function eliminarGanttTask(
     }
 
     // Eliminar la tarea
-    await prisma.studio_gantt_event_tasks.delete({
+    await prisma.studio_scheduler_event_tasks.delete({
       where: { id: taskId },
     });
 
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/gantt`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
 
     return { success: true };
   } catch (error) {
-    console.error('[GANTT] Error eliminando tarea:', error);
+    console.error('[SCHEDULER] Error eliminando tarea:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al eliminar tarea',

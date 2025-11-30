@@ -5,8 +5,8 @@ import { type DateRange } from 'react-day-picker';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { SchedulerPanel } from './SchedulerPanel';
-import { actualizarGanttTaskFechas } from '@/lib/actions/studio/business/events/gantt-actions';
-import { crearGanttTask, eliminarGanttTask, actualizarGanttTask } from '@/lib/actions/studio/business/events';
+import { actualizarSchedulerTaskFechas } from '@/lib/actions/studio/business/events/scheduler-actions';
+import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { SchedulerAgrupacionCell } from './SchedulerAgrupacionCell';
@@ -14,7 +14,7 @@ import { AssignCrewBeforeCompleteModal } from './AssignCrewBeforeCompleteModal';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
-interface CreatedGanttTask {
+interface CreatedSchedulerTask {
   id: string;
   name: string;
   start_date: Date;
@@ -75,14 +75,14 @@ export function EventScheduler({
           cotizacion_items: cotizacion.cotizacion_items?.map(item => {
             if (item.id === updatedItem.id) {
               // Asegurar que el item actualizado tenga todos los campos necesarios
-              // Especialmente importante para gantt_task cuando se completa
-              // Preservar todos los campos del gantt_task original y mergear con los actualizados
-              const mergedGanttTask = updatedItem.gantt_task && item.gantt_task
+              // Especialmente importante para scheduler_task cuando se completa
+              // Preservar todos los campos del scheduler_task original y mergear con los actualizados
+              const mergedSchedulerTask = updatedItem.scheduler_task && item.scheduler_task
                 ? {
-                  ...item.gantt_task, // Preservar campos originales (start_date, end_date, etc.)
-                  ...updatedItem.gantt_task, // Sobrescribir con campos actualizados (completed_at, status, progress_percent, etc.)
+                  ...item.scheduler_task, // Preservar campos originales (start_date, end_date, etc.)
+                  ...updatedItem.scheduler_task, // Sobrescribir con campos actualizados (completed_at, status, progress_percent, etc.)
                 }
-                : (updatedItem.gantt_task || item.gantt_task);
+                : (updatedItem.scheduler_task || item.scheduler_task);
 
               // Mergear el item completo preservando todos los campos originales
               // y sobrescribiendo solo los campos actualizados
@@ -96,7 +96,7 @@ export function EventScheduler({
                 assigned_to_crew_member: updatedItem.assigned_to_crew_member !== undefined
                   ? updatedItem.assigned_to_crew_member
                   : item.assigned_to_crew_member,
-                gantt_task: mergedGanttTask,
+                scheduler_task: mergedSchedulerTask,
               };
               return mergedItem;
             }
@@ -160,11 +160,11 @@ export function EventScheduler({
           newData.cotizaciones = prev.cotizaciones?.map(cotizacion => ({
             ...cotizacion,
             cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-              if (item.gantt_task?.id === taskId) {
+              if (item.scheduler_task?.id === taskId) {
                 return {
                   ...item,
-                  gantt_task: item.gantt_task ? {
-                    ...item.gantt_task,
+                  scheduler_task: item.scheduler_task ? {
+                    ...item.scheduler_task,
                     start_date: startDate,
                     end_date: endDate,
                   } : null,
@@ -183,7 +183,7 @@ export function EventScheduler({
           onDataChange(updatedData);
         }
 
-        const result = await actualizarGanttTaskFechas(studioSlug, eventId, taskId, {
+        const result = await actualizarSchedulerTaskFechas(studioSlug, eventId, taskId, {
           start_date: startDate,
           end_date: endDate,
         });
@@ -232,11 +232,11 @@ export function EventScheduler({
             cotizacion_items: cotizacion.cotizacion_items?.map(item => {
               // Encontrar el item correcto por item_id del catálogo
               if (item.item_id === catalogItemId && result.data) {
-                const taskData = result.data as CreatedGanttTask;
+                const taskData = result.data as CreatedSchedulerTask;
                 return {
                   ...item,
-                  gantt_task_id: taskData.id,
-                  gantt_task: {
+                  scheduler_task_id: taskData.id,
+                  scheduler_task: {
                     id: taskData.id,
                     name: itemName,
                     start_date: startDate,
@@ -289,11 +289,11 @@ export function EventScheduler({
           newData.cotizaciones = prev.cotizaciones?.map(cotizacion => ({
             ...cotizacion,
             cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-              if (item.gantt_task?.id === taskId) {
+              if (item.scheduler_task?.id === taskId) {
                 return {
                   ...item,
-                  gantt_task_id: null,
-                  gantt_task: null,
+                  scheduler_task_id: null,
+                  scheduler_task: null,
                 };
               }
               return item;
@@ -323,7 +323,7 @@ export function EventScheduler({
       // Si se está desmarcando, proceder normalmente
       if (!isCompleted) {
         try {
-          const result = await actualizarGanttTask(studioSlug, eventId, taskId, {
+          const result = await actualizarSchedulerTask(studioSlug, eventId, taskId, {
             isCompleted: false,
           });
 
@@ -340,11 +340,11 @@ export function EventScheduler({
               cotizaciones: prev.cotizaciones?.map(cotizacion => ({
                 ...cotizacion,
                 cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-                  if (item.gantt_task?.id === taskId) {
+                  if (item.scheduler_task?.id === taskId) {
                     return {
                       ...item,
-                      gantt_task: item.gantt_task ? {
-                        ...item.gantt_task,
+                      scheduler_task: item.scheduler_task ? {
+                        ...item.scheduler_task,
                         completed_at: null,
                       } : null,
                     };
@@ -373,7 +373,7 @@ export function EventScheduler({
       let itemFound: CotizacionItem | null = null;
       for (const cotizacion of localEventData.cotizaciones || []) {
         itemFound = cotizacion.cotizacion_items?.find(
-          (item) => item.gantt_task?.id === taskId
+          (item) => item.scheduler_task?.id === taskId
         ) || null;
         if (itemFound) break;
       }
@@ -419,14 +419,14 @@ export function EventScheduler({
             cotizaciones: prev.cotizaciones?.map(cotizacion => ({
               ...cotizacion,
               cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-                if (item.gantt_task?.id === taskId) {
+                if (item.scheduler_task?.id === taskId) {
                   return {
                     ...item,
-                    gantt_task: item.gantt_task ? {
-                      ...item.gantt_task,
+                    scheduler_task: item.scheduler_task ? {
+                      ...item.scheduler_task,
                       completed_at: isCompleted ? new Date().toISOString() : null,
                       status: isCompleted ? 'COMPLETED' : 'PENDING',
-                      progress_percent: isCompleted ? 100 : (item.gantt_task.progress_percent || 0),
+                      progress_percent: isCompleted ? 100 : (item.scheduler_task.progress_percent || 0),
                     } : null,
                   };
                 }
@@ -528,11 +528,11 @@ export function EventScheduler({
             cotizaciones: prev.cotizaciones?.map(cotizacion => ({
               ...cotizacion,
               cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-                if (item.gantt_task?.id === pendingTaskCompletion.taskId) {
+                if (item.scheduler_task?.id === pendingTaskCompletion.taskId) {
                   return {
                     ...item,
-                    gantt_task: item.gantt_task ? {
-                      ...item.gantt_task,
+                    scheduler_task: item.scheduler_task ? {
+                      ...item.scheduler_task,
                       completed_at: new Date().toISOString(),
                       status: 'COMPLETED',
                       progress_percent: 100,
@@ -589,11 +589,11 @@ export function EventScheduler({
           cotizaciones: prev.cotizaciones?.map(cotizacion => ({
             ...cotizacion,
             cotizacion_items: cotizacion.cotizacion_items?.map(item => {
-              if (item.gantt_task?.id === pendingTaskCompletion.taskId) {
+              if (item.scheduler_task?.id === pendingTaskCompletion.taskId) {
                 return {
                   ...item,
-                  gantt_task: item.gantt_task ? {
-                    ...item.gantt_task,
+                  scheduler_task: item.scheduler_task ? {
+                    ...item.scheduler_task,
                     completed_at: new Date().toISOString(),
                     status: 'COMPLETED',
                     progress_percent: 100,
@@ -623,7 +623,7 @@ export function EventScheduler({
 
   // Renderizar item en sidebar
   const renderSidebarItem = (item: CotizacionItem, metadata: ItemMetadata) => {
-    const isCompleted = !!item.gantt_task?.completed_at;
+    const isCompleted = !!item.scheduler_task?.completed_at;
 
     // Construir objeto crew member con category basado en tipo
     const assignedCrewMember = item.assigned_to_crew_member ? {

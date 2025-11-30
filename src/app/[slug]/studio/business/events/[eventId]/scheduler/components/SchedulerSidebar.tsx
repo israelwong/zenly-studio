@@ -47,7 +47,7 @@ function getInitials(name: string) {
 function SchedulerItem({ item, metadata, studioSlug, eventId, renderItem, onItemUpdate }: SchedulerItemProps) {
   // Hook de sincronización (optimista + servidor)
   const { localItem } = useSchedulerItemSync(item, onItemUpdate);
-  const isCompleted = !!localItem.gantt_task?.completed_at;
+  const isCompleted = !!localItem.scheduler_task?.completed_at;
 
   const DefaultItemRender = () => (
     <div className="w-full flex items-center gap-2">

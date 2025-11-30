@@ -62,10 +62,10 @@ export async function crearNominaDesdeTareaCompletada(
       });
     } else {
       // Obtener datos desde la base de datos (fallback)
-      const task = await prisma.studio_gantt_event_tasks.findFirst({
+      const task = await prisma.studio_scheduler_event_tasks.findFirst({
         where: {
           id: taskId,
-          gantt_instance: {
+          scheduler_instance: {
             event_id: eventId,
           },
         },
@@ -113,6 +113,16 @@ export async function crearNominaDesdeTareaCompletada(
       cantidad,
     });
 
+    // Calcular total y obtener nombre del personal (necesarios para la respuesta)
+    const costoTotal = costo * cantidad;
+
+    // Obtener nombre del personal asignado
+    const crewMember = await prisma.studio_crew_members.findUnique({
+      where: { id: personalId },
+      select: { name: true },
+    });
+    const personalNombre = crewMember?.name || 'Personal desconocido';
+
     // Verificar que no existe nómina previa para este item
     const nominaExistente = await prisma.studio_nominas.findFirst({
       where: {
@@ -132,50 +142,89 @@ export async function crearNominaDesdeTareaCompletada(
       // Ya existe nómina para este item, no crear duplicado
       return {
         success: true,
-        data: { nominaId: nominaExistente.id },
+        data: {
+          nominaId: nominaExistente.id,
+          personalNombre,
+          costoTotal
+        },
       };
     }
 
-    // Obtener studio_users.id del usuario autenticado que completó la tarea
-    // El personal_id ya está correctamente asignado
+    // Obtener studio_users.id del suscriptor autenticado que completó la tarea
+    // Nota: studio_users son los suscriptores con acceso al panel (autenticados)
+    // No confundir con studio_crew_members que son el personal operativo (sin autenticación por ahora)
     const supabase = await createClient();
     const { data: { user: authUser } } = await supabase.auth.getUser();
 
-    console.log('[PAYROLL] 🔍 Obteniendo usuario autenticado que completó la tarea:', {
+    console.log('[PAYROLL] 🔍 Obteniendo suscriptor autenticado que completó la tarea:', {
       authUserExists: !!authUser,
       authUserId: authUser?.id,
+      authUserEmail: authUser?.email,
     });
 
     let userId: string | null = null;
 
-    if (authUser) {
-      // Buscar platform_user_profiles del usuario autenticado
-      const platformUserProfile = await prisma.platform_user_profiles.findFirst({
+    if (authUser?.id) {
+      // Buscar studio_user_profiles del suscriptor autenticado
+      const studioUserProfile = await prisma.studio_user_profiles.findFirst({
         where: {
-          supabaseUserId: authUser.id,
+          supabase_id: authUser.id,
+          studio_id: studio.id,
+          is_active: true,
         },
-        select: { id: true },
+        select: { id: true, email: true, full_name: true },
       });
 
-      if (platformUserProfile) {
-        // Buscar studio_users del usuario autenticado
-        const studioUser = await prisma.studio_users.findFirst({
+      if (studioUserProfile) {
+        // Buscar o crear studio_users para este suscriptor
+        // studio_users vincula suscriptores con permisos en el panel
+        let studioUser = await prisma.studio_users.findFirst({
           where: {
             studio_id: studio.id,
-            platform_user_id: platformUserProfile.id,
+            full_name: studioUserProfile.full_name,
             is_active: true,
           },
           select: { id: true },
         });
 
-        if (studioUser) {
-          console.log('[PAYROLL] ✅ Usuario autenticado encontrado:', { userId: studioUser.id });
-          userId = studioUser.id;
+        // Si no existe el studio_user, crearlo automáticamente
+        if (!studioUser) {
+          console.log('[PAYROLL] ℹ️ Creando studio_user automáticamente para:', {
+            email: studioUserProfile.email,
+            fullName: studioUserProfile.full_name,
+          });
+
+          studioUser = await prisma.studio_users.create({
+            data: {
+              studio_id: studio.id,
+              full_name: studioUserProfile.full_name,
+              phone: null,
+              type: 'EMPLEADO', // Tipo para suscriptores (PersonnelType solo tiene EMPLEADO | PROVEEDOR)
+              role: 'owner', // Rol por defecto
+              status: 'active',
+              is_active: true,
+              platform_user_id: null, // Se vincula después si es necesario
+            },
+            select: { id: true },
+          });
+
+          console.log('[PAYROLL] ✅ studio_user creado:', { userId: studioUser.id });
         }
+
+        userId = studioUser.id;
+        console.log('[PAYROLL] ✅ Suscriptor encontrado (studio_user_profiles → studio_users):', {
+          userId: studioUser.id,
+          email: studioUserProfile.email,
+        });
+      } else {
+        console.log('[PAYROLL] ⚠️ No se encontró studio_user_profile para el usuario autenticado:', {
+          supabaseId: authUser.id,
+          studioId: studio.id,
+        });
       }
     }
 
-    // Fallback: si no se encuentra el usuario autenticado, usar el primer usuario activo del studio
+    // Fallback: usar el primer studio_user activo del studio
     if (!userId) {
       const fallbackUser = await prisma.studio_users.findFirst({
         where: {
@@ -187,7 +236,7 @@ export async function crearNominaDesdeTareaCompletada(
       });
 
       if (!fallbackUser) {
-        console.error('[PAYROLL] ❌ No se encontró ningún usuario activo en el studio:', {
+        console.error('[PAYROLL] ❌ No se encontró ningún studio_user activo:', {
           studioId: studio.id,
         });
         return {
@@ -196,19 +245,13 @@ export async function crearNominaDesdeTareaCompletada(
         };
       }
 
-      console.log('[PAYROLL] ⚠️ Usando usuario fallback (no se encontró usuario autenticado):', {
+      console.log('[PAYROLL] ⚠️ Usando studio_user fallback:', {
         userId: fallbackUser.id,
       });
       userId = fallbackUser.id;
     }
 
-    // Obtener nombre del personal asignado
-    const crewMember = await prisma.studio_crew_members.findUnique({
-      where: { id: personalId },
-      select: { name: true },
-    });
 
-    const personalNombre = crewMember?.name || 'Personal desconocido';
 
     // Crear nómina y servicio en transacción
     const resultado = await prisma.$transaction(async (tx) => {
@@ -216,7 +259,7 @@ export async function crearNominaDesdeTareaCompletada(
       // Obtener nombre de la tarea si no tenemos itemData
       let taskName = 'Tarea sin nombre';
       if (!itemData) {
-        const task = await tx.studio_gantt_event_tasks.findUnique({
+        const task = await tx.studio_scheduler_event_tasks.findUnique({
           where: { id: taskId },
           select: { name: true },
         });
@@ -315,10 +358,10 @@ export async function eliminarNominaDesdeTareaDesmarcada(
     }
 
     // Obtener tarea con item
-    const task = await prisma.studio_gantt_event_tasks.findFirst({
+    const task = await prisma.studio_scheduler_event_tasks.findFirst({
       where: {
         id: taskId,
-        gantt_instance: {
+        scheduler_instance: {
           event_id: eventId,
         },
       },

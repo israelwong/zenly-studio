@@ -28,19 +28,19 @@ export default function EventSchedulerPage() {
 
     const allItems = eventData.cotizaciones.flatMap(cot => cot.cotizacion_items || []);
     const total = allItems.length;
-    const itemsWithTasks = allItems.filter(item => item.gantt_task);
+    const itemsWithTasks = allItems.filter(item => item.scheduler_task);
     const unassigned = total - itemsWithTasks.length; // Items sin tarea asignada
 
     // Items con tarea pero sin crew member asignado
     const withoutCrew = itemsWithTasks.filter(item => {
-      const hasCompleted = !!item.gantt_task?.completed_at;
+      const hasCompleted = !!item.scheduler_task?.completed_at;
       const hasCrew = !!item.assigned_to_crew_member_id;
       return !hasCompleted && !hasCrew;
     }).length;
 
     // Items completados (completed_at puede ser Date o string ISO)
     const completed = itemsWithTasks.filter(item => {
-      const completedAt = item.gantt_task?.completed_at;
+      const completedAt = item.scheduler_task?.completed_at;
       return !!completedAt; // Funciona tanto para Date como para string ISO
     }).length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -54,10 +54,10 @@ export default function EventSchedulerPage() {
     let pending = 0;
 
     itemsWithTasks.forEach(item => {
-      if (item.gantt_task?.completed_at) return; // Ya completadas no cuentan
+      if (item.scheduler_task?.completed_at) return; // Ya completadas no cuentan
 
-      const startDate = new Date(item.gantt_task!.start_date);
-      const endDate = new Date(item.gantt_task!.end_date);
+      const startDate = new Date(item.scheduler_task!.start_date);
+      const endDate = new Date(item.scheduler_task!.end_date);
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(0, 0, 0, 0);
 
@@ -80,11 +80,11 @@ export default function EventSchedulerPage() {
 
       if (result.success && result.data) {
         setEventData(result.data);
-        // Inicializar dateRange si existe gantt configurado (solo la primera vez)
-        if (!dateRange && result.data.gantt?.start_date && result.data.gantt?.end_date) {
+        // Inicializar dateRange si existe scheduler configurado (solo la primera vez)
+        if (!dateRange && result.data.scheduler?.start_date && result.data.scheduler?.end_date) {
           setDateRange({
-            from: result.data.gantt.start_date,
-            to: result.data.gantt.end_date,
+            from: result.data.scheduler.start_date,
+            to: result.data.scheduler.end_date,
           });
         }
       } else {
@@ -267,11 +267,11 @@ export default function EventSchedulerPage() {
                       const result = await obtenerEventoDetalle(studioSlug, eventId);
                       if (result.success && result.data) {
                         setEventData(result.data);
-                        // Actualizar dateRange desde ganttInstance si existe
-                        if (result.data.gantt) {
+                        // Actualizar dateRange desde schedulerInstance si existe
+                        if (result.data.scheduler) {
                           setDateRange({
-                            from: result.data.gantt.start_date,
-                            to: result.data.gantt.end_date,
+                            from: result.data.scheduler.start_date,
+                            to: result.data.scheduler.end_date,
                           });
                         }
                       }
@@ -393,7 +393,7 @@ export default function EventSchedulerPage() {
               studioSlug={studioSlug}
               eventId={eventId}
               eventData={eventData}
-              ganttInstance={eventData.gantt || undefined}
+              schedulerInstance={eventData.scheduler || undefined}
               dateRange={dateRange}
               onDataChange={setEventData}
             />
