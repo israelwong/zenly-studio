@@ -72,6 +72,28 @@ npx tsx prisma/04-seed-promise-pipeline.ts demo-studio
 
 ---
 
+### 5. Seed Contratos (`05-seed-contratos.ts`)
+
+**Comando:** `npx tsx prisma/05-seed-contratos.ts`
+
+Crea plantillas de contratos por defecto para todos los studios activos.
+
+**Contenido:**
+- ✅ Plantilla "Contrato General" por defecto
+- ✅ Incluye estructura completa con variables dinámicas
+- ✅ 8 variables mapeadas: @nombre_cliente, @fecha_evento, etc.
+- ✅ Bloque especial [SERVICIOS_INCLUIDOS]
+
+**Uso:**
+
+```bash
+npx tsx prisma/05-seed-contratos.ts
+```
+
+**Nota:** Solo crea plantilla si el studio no tiene una por defecto.
+
+---
+
 ## 🔧 Uso Recomendado
 
 ### Para Desarrollo Completo
@@ -88,6 +110,9 @@ npm run db:seed-catalogo
 
 # 4. Crear pipeline de promesas (opcional)
 npm run db:seed-promise-pipeline
+
+# 5. Crear plantillas de contratos
+npx tsx prisma/05-seed-contratos.ts
 ```
 
 ### Para Reset Completo
@@ -145,9 +170,10 @@ prisma/
 ├── 02-seed-demo-users.ts      # Usuarios demo con auth
 ├── 03-seed-catalogo.ts        # Catálogo de servicios/productos
 ├── 04-seed-promise-pipeline.ts # Pipeline de promesas
+├── 05-seed-contratos.ts       # Plantillas de contratos
 └── README-seeds.md            # Este archivo
 ```
 
 ---
 
-**Última actualización: 2025-01-20**
+**Última actualización: 2025-12-01**
