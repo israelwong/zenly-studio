@@ -771,6 +771,8 @@ model studios {
   user_profiles              studio_user_profiles[]
   studio_users               studio_users[]
   zonas_trabajo              studio_zonas_trabajo[]
+  contract_templates         studio_contract_templates[]
+  event_contracts            studio_event_contracts[]
   plan                       platform_plans?                  @relation(fields: [plan_id], references: [id])
   subscriptions              subscriptions[]
   usage_tracking             usage_tracking[]
@@ -976,21 +978,22 @@ model studio_configuraciones {
 }
 
 model studio_event_types {
-  id              String                @id @default(cuid())
-  studio_id       String
-  name            String
-  status          String                @default("active")
-  order           Int                   @default(0)
-  created_at      DateTime              @default(now())
-  updated_at      DateTime              @updatedAt
-  marketing_leads marketing_leads[]
-  quotes          studio_cotizaciones[]
-  studio          studios               @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  events          studio_events[]
-  packages        studio_paquetes[]
-  portfolios      studio_portfolios[]
-  posts           studio_posts[]
-  promises        studio_promises[]
+  id                 String                      @id @default(cuid())
+  studio_id          String
+  name               String
+  status             String                      @default("active")
+  order              Int                         @default(0)
+  created_at         DateTime                    @default(now())
+  updated_at         DateTime                    @updatedAt
+  marketing_leads    marketing_leads[]
+  quotes             studio_cotizaciones[]
+  studio             studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  events             studio_events[]
+  packages           studio_paquetes[]
+  portfolios         studio_portfolios[]
+  posts              studio_posts[]
+  promises           studio_promises[]
+  contract_templates studio_contract_templates[]
 
   @@index([studio_id])
   @@index([studio_id, status])
@@ -1387,6 +1390,7 @@ model studio_events {
   timeline             studio_event_timeline[]
   client_portal_access studio_client_portal_access[]
   notifications        studio_notifications[]
+  contract             studio_event_contracts?
 
   @@index([contact_id])
   @@index([cotizacion_id])
@@ -1396,6 +1400,59 @@ model studio_events {
   @@index([stage_id])
   @@index([originated_from_lead_id])
   @@map("studio_eventos")
+}
+
+//! CONTRATOS
+
+model studio_contract_templates {
+  id            String   @id @default(cuid())
+  studio_id     String
+  name          String
+  slug          String
+  description   String?
+  event_type_id String?
+  content       String   @db.Text
+  is_active     Boolean  @default(true)
+  is_default    Boolean  @default(false)
+  version       Int      @default(1)
+  created_by    String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  studio          studios                  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  event_type      studio_event_types?      @relation(fields: [event_type_id], references: [id])
+  created_by_user studio_users?            @relation(fields: [created_by], references: [id])
+  contracts       studio_event_contracts[]
+
+  @@unique([studio_id, slug])
+  @@index([studio_id, is_active])
+  @@index([event_type_id])
+  @@index([studio_id, is_default])
+}
+
+model studio_event_contracts {
+  id                   String    @id @default(cuid())
+  studio_id            String
+  event_id             String    @unique
+  template_id          String?
+  content              String    @db.Text
+  status               String    @default("draft")
+  version              Int       @default(1)
+  signed_at            DateTime?
+  signed_by_client     Boolean   @default(false)
+  client_signature_url String?
+  created_by           String?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  studio          studios                    @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  event           studio_events              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  template        studio_contract_templates? @relation(fields: [template_id], references: [id])
+  created_by_user studio_users?              @relation(fields: [created_by], references: [id])
+
+  @@index([studio_id, status])
+  @@index([event_id])
+  @@index([template_id])
 }
 
 model studio_manager_pipeline_stages {
@@ -2567,28 +2624,30 @@ model studio_user_profiles {
 }
 
 model studio_users {
-  id                                           String                  @id @default(cuid())
+  id                                           String                      @id @default(cuid())
   studio_id                                    String
   phone                                        String?
   type                                         PersonnelType
-  role                                         String                  @default("user")
-  status                                       String                  @default("inactive")
-  created_at                                   DateTime                @default(now())
+  role                                         String                      @default("user")
+  status                                       String                      @default("inactive")
+  created_at                                   DateTime                    @default(now())
   full_name                                    String
-  is_active                                    Boolean                 @default(true)
+  is_active                                    Boolean                     @default(true)
   platform_user_id                             String?
-  updated_at                                   DateTime                @updatedAt
+  updated_at                                   DateTime                    @updatedAt
   agenda                                       studio_agenda[]
   eventos                                      studio_events[]
   gastos                                       studio_gastos[]
-  nominas_nominas_autorizado_porTostudio_users studio_nominas[]        @relation("nominas_autorizado_porTostudio_users")
-  nominas_nominas_pagado_porTostudio_users     studio_nominas[]        @relation("nominas_pagado_porTostudio_users")
-  nominas_nominas_userIdTostudio_users         studio_nominas[]        @relation("nominas_userIdTostudio_users")
+  nominas_nominas_autorizado_porTostudio_users studio_nominas[]            @relation("nominas_autorizado_porTostudio_users")
+  nominas_nominas_pagado_porTostudio_users     studio_nominas[]            @relation("nominas_pagado_porTostudio_users")
+  nominas_nominas_userIdTostudio_users         studio_nominas[]            @relation("nominas_userIdTostudio_users")
   pagos                                        studio_pagos[]
-  platform_user_profiles                       platform_user_profiles? @relation(fields: [platform_user_id], references: [id])
+  platform_user_profiles                       platform_user_profiles?     @relation(fields: [platform_user_id], references: [id])
   contact_logs                                 studio_contact_logs[]
   promise_logs                                 studio_promise_logs[]
-  studio                                       studios                 @relation(fields: [studio_id], references: [id])
+  created_contract_templates                   studio_contract_templates[]
+  created_event_contracts                      studio_event_contracts[]
+  studio                                       studios                     @relation(fields: [studio_id], references: [id])
 
   @@index([studio_id, status])
   @@index([type])
