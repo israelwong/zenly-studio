@@ -175,6 +175,7 @@ export async function crearPago(
         });
 
         revalidatePath(`/${validatedData.studio_slug}/studio/business/events`);
+        revalidatePath(`/${validatedData.studio_slug}/studio/business/finanzas`);
 
         const item: PaymentItem = {
             id: pago.id,
@@ -261,6 +262,7 @@ export async function actualizarPago(
         });
 
         revalidatePath(`/${validatedData.studio_slug}/studio/business/events`);
+        revalidatePath(`/${validatedData.studio_slug}/studio/business/finanzas`);
 
         const item: PaymentItem = {
             id: pago.id,
@@ -286,9 +288,9 @@ export async function actualizarPago(
 }
 
 /**
- * Eliminar pago
+ * Cancelar pago (mantiene historial cambiando status a 'cancelled')
  */
-export async function eliminarPago(
+export async function cancelarPago(
     studioSlug: string,
     pagoId: string
 ): Promise<{ success: boolean; error?: string }> {
@@ -306,9 +308,23 @@ export async function eliminarPago(
         const pago = await prisma.studio_pagos.findFirst({
             where: {
                 id: pagoId,
-                cotizaciones: {
-                    studio_id: studio.id,
-                },
+                OR: [
+                    {
+                        cotizaciones: {
+                            studio_id: studio.id,
+                        },
+                    },
+                    {
+                        promise: {
+                            studio_id: studio.id,
+                        },
+                    },
+                    {
+                        studio_users: {
+                            studio_id: studio.id,
+                        },
+                    },
+                ],
             },
         });
 
@@ -316,22 +332,42 @@ export async function eliminarPago(
             return { success: false, error: 'Pago no encontrado' };
         }
 
-        // Eliminar el pago
-        await prisma.studio_pagos.delete({
+        // Verificar que el pago no esté ya cancelado
+        if (pago.status === 'cancelled' || pago.status === 'cancelado') {
+            return { success: false, error: 'El pago ya está cancelado' };
+        }
+
+        // Cambiar status a 'cancelled' para mantener historial
+        await prisma.studio_pagos.update({
             where: { id: pagoId },
+            data: {
+                status: 'cancelled',
+            },
         });
 
         revalidatePath(`/${studioSlug}/studio/business/events`);
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
 
         return {
             success: true,
         };
     } catch (error) {
-        console.error('[PAYMENTS] Error eliminando pago:', error);
+        console.error('[PAYMENTS] Error cancelando pago:', error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : 'Error al eliminar pago',
+            error: error instanceof Error ? error.message : 'Error al cancelar pago',
         };
     }
+}
+
+/**
+ * Eliminar pago (DEPRECATED - usar cancelarPago para mantener historial)
+ */
+export async function eliminarPago(
+    studioSlug: string,
+    pagoId: string
+): Promise<{ success: boolean; error?: string }> {
+    // Por defecto, usar cancelación en lugar de eliminación
+    return cancelarPago(studioSlug, pagoId);
 }
 

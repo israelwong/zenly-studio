@@ -81,7 +81,7 @@ export function ZenDialog({
   const modalContent = (
     <>
       {/* Overlay separado */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/70 backdrop-blur-sm"
         style={{ zIndex: overlayZIndex }}
         onClick={(e) => {
@@ -91,83 +91,83 @@ export function ZenDialog({
         }}
       />
       {/* Contenido del modal */}
-      <div 
+      <div
         className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
         style={{ zIndex: contentZIndex }}
       >
-        <div 
+        <div
           className={cn(
-            'bg-zinc-900 rounded-lg shadow-xl w-full max-h-[90vh] overflow-y-auto relative pointer-events-auto',
+            'bg-zinc-900 rounded-lg shadow-xl w-full max-h-[90vh] flex flex-col relative pointer-events-auto',
             maxWidthClasses[maxWidth]
-          )} 
+          )}
           onClick={(e) => e.stopPropagation()}
         >
-        {/* Header */}
-        <ZenCardHeader className="flex items-center justify-between border-b border-zinc-700">
-          <div>
-            <ZenCardTitle className="text-xl font-semibold text-zinc-300">
-              {title}
-            </ZenCardTitle>
-            {description && (
-              <p className="text-sm text-zinc-400 mt-1">
-                {description}
-              </p>
-            )}
-          </div>
-          {showCloseButton && (
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-zinc-400 hover:text-zinc-300"
-            >
-              <X className="h-5 w-5" />
-            </ZenButton>
-          )}
-        </ZenCardHeader>
-
-        {/* Content */}
-        <ZenCardContent className="p-6 overflow-visible">
-          {children}
-        </ZenCardContent>
-
-        {/* Footer */}
-        {(onSave || onCancel || showDeleteButton) && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-700">
-            {/* Botón eliminar a la izquierda */}
-            {showDeleteButton && onDelete && (
-              <ZenButton
-                variant="ghost"
-                onClick={onDelete}
-                disabled={isLoading}
-                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-              >
-                {deleteLabel}
-              </ZenButton>
-            )}
-            {/* Botones de acción a la derecha */}
-            <div className="flex items-center gap-3 ml-auto">
-              {onCancel && (
-                <ZenButton
-                  variant="ghost"
-                  onClick={handleCancel}
-                  disabled={isLoading}
-                >
-                  {cancelLabel}
-                </ZenButton>
-              )}
-              {onSave && (
-                <ZenButton
-                  onClick={onSave}
-                  loading={isLoading}
-                  variant={saveVariant}
-                >
-                  {saveLabel}
-                </ZenButton>
+          {/* Header */}
+          <ZenCardHeader className="flex items-center justify-between border-b border-zinc-700">
+            <div>
+              <ZenCardTitle className="text-xl font-semibold text-zinc-300">
+                {title}
+              </ZenCardTitle>
+              {description && (
+                <p className="text-sm text-zinc-400 mt-1">
+                  {description}
+                </p>
               )}
             </div>
-          </div>
-        )}
+            {showCloseButton && (
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="text-zinc-400 hover:text-zinc-300"
+              >
+                <X className="h-5 w-5" />
+              </ZenButton>
+            )}
+          </ZenCardHeader>
+
+          {/* Content */}
+          <ZenCardContent className="p-6 overflow-visible flex-1 min-h-0">
+            {children}
+          </ZenCardContent>
+
+          {/* Footer */}
+          {(onSave || onCancel || showDeleteButton) && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-700">
+              {/* Botón eliminar a la izquierda */}
+              {showDeleteButton && onDelete && (
+                <ZenButton
+                  variant="ghost"
+                  onClick={onDelete}
+                  disabled={isLoading}
+                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                >
+                  {deleteLabel}
+                </ZenButton>
+              )}
+              {/* Botones de acción a la derecha */}
+              <div className="flex items-center gap-3 ml-auto">
+                {onCancel && (
+                  <ZenButton
+                    variant="ghost"
+                    onClick={handleCancel}
+                    disabled={isLoading}
+                  >
+                    {cancelLabel}
+                  </ZenButton>
+                )}
+                {onSave && (
+                  <ZenButton
+                    onClick={onSave}
+                    loading={isLoading}
+                    variant={saveVariant}
+                  >
+                    {saveLabel}
+                  </ZenButton>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -35,6 +35,18 @@ interface PendingItem {
     concepto: string;
     monto: number;
     fecha: Date;
+    personalName?: string | null;
+    // Campos adicionales para cotizaciones por cobrar
+    precioCotizacion?: number;
+    descuentoCotizacion?: number;
+    totalCotizacion?: number;
+    pagosRealizados?: number;
+    promiseId?: string;
+    promiseName?: string;
+    promiseEventDate?: Date | null;
+    promiseContactName?: string;
+    promiseContactEmail?: string | null;
+    promiseContactPhone?: string | null;
 }
 
 interface RecurringExpense {
@@ -335,6 +347,7 @@ export async function obtenerMovimientos(
 
         // Obtener pagos (ingresos)
         // Si payment_date es null, usar created_at para filtrar
+        // Excluir pagos cancelados (solo mostrar pagos con status 'paid' o 'completed')
         const pagos = await prisma.studio_pagos.findMany({
             where: {
                 AND: [
@@ -344,6 +357,10 @@ export async function obtenerMovimientos(
                             { promise: { studio_id: studioId } },
                             { cotizaciones: { studio_id: studioId } },
                         ],
+                    },
+                    {
+                        // Solo pagos pagados/completados (excluir cancelados)
+                        status: { in: ['paid', 'completed'] },
                     },
                     {
                         OR: [
@@ -377,11 +394,7 @@ export async function obtenerMovimientos(
                 transaction_category: true,
                 promise: {
                     select: {
-                        eventos: {
-                            select: {
-                                event_name: true,
-                            },
-                        },
+                        name: true,
                     },
                 },
             },
@@ -443,7 +456,7 @@ export async function obtenerMovimientos(
                 id: pago.id,
                 fecha: pago.payment_date ?? new Date(pago.created_at),
                 fuente: 'evento' as const,
-                concepto: pago.concept || pago.promise?.eventos?.event_name || 'Ingreso',
+                concepto: pago.concept || pago.promise?.name || 'Ingreso',
                 categoria: pago.transaction_category || 'Ingreso',
                 monto: pago.amount,
             })),
@@ -494,19 +507,26 @@ export async function obtenerPorCobrar(
         }
 
         // Obtener todas las promesas con sus cotizaciones
-        // Solo promesas con status "aprobada", "autorizada" o "approved"
-        // Solo cotizaciones con status "aprobada", "autorizada", "correcto" o "approved"
+        // Usar la misma lógica que obtenerKPIsFinancieros: buscar promesas que tengan cotizaciones aprobadas
+        // No filtrar por status de promesa, solo por cotizaciones aprobadas
         const promesas = await prisma.studio_promises.findMany({
             where: {
                 studio_id: studioId,
-                status: { in: ['aprobada', 'autorizada', 'approved'] },
+                quotes: {
+                    some: {
+                        status: { in: ['aprobada', 'autorizada', 'correcto', 'approved'] },
+                    },
+                },
             },
             select: {
                 id: true,
                 name: true,
+                event_date: true,
                 contact: {
                     select: {
-                        full_name: true,
+                        name: true,
+                        email: true,
+                        phone: true,
                     },
                 },
                 quotes: {
@@ -525,21 +545,35 @@ export async function obtenerPorCobrar(
             },
         });
 
-        // Obtener todos los pagos realizados para estas cotizaciones
+        // Obtener todos los pagos realizados para estas cotizaciones y promesas
+        // Los pagos pueden estar asociados a cotizaciones (cotizacion_id) o a promesas (promise_id)
         const cotizacionIds = promesas.flatMap(p => p.quotes.map(q => q.id));
+        const promiseIds = promesas.map(p => p.id);
+
         const pagosRealizados = await prisma.studio_pagos.findMany({
             where: {
-                cotizacion_id: { in: cotizacionIds },
+                OR: [
+                    {
+                        cotizacion_id: { in: cotizacionIds },
+                    },
+                    {
+                        promise_id: { in: promiseIds },
+                    },
+                ],
                 status: { in: ['paid', 'completed'] },
             },
             select: {
                 cotizacion_id: true,
+                promise_id: true,
                 amount: true,
             },
         });
 
         // Agrupar pagos por cotización
+        // Si un pago está asociado a una promesa, distribuirlo proporcionalmente entre sus cotizaciones
         const pagosPorCotizacion = new Map<string, number>();
+
+        // Primero, pagos directos a cotizaciones
         pagosRealizados.forEach(pago => {
             if (pago.cotizacion_id) {
                 const actual = pagosPorCotizacion.get(pago.cotizacion_id) || 0;
@@ -547,8 +581,42 @@ export async function obtenerPorCobrar(
             }
         });
 
+        // Luego, pagos asociados a promesas: distribuirlos proporcionalmente entre las cotizaciones de la promesa
+        const pagosPorPromesa = new Map<string, number>();
+        pagosRealizados.forEach(pago => {
+            if (pago.promise_id && !pago.cotizacion_id) {
+                const actual = pagosPorPromesa.get(pago.promise_id) || 0;
+                pagosPorPromesa.set(pago.promise_id, actual + pago.amount);
+            }
+        });
+
+        // Distribuir pagos de promesas proporcionalmente entre sus cotizaciones
+        for (const promesa of promesas) {
+            const pagoPromesa = pagosPorPromesa.get(promesa.id) || 0;
+            if (pagoPromesa > 0 && promesa.quotes.length > 0) {
+                // Calcular el total de todas las cotizaciones de la promesa
+                const totalPromesa = promesa.quotes.reduce((sum, q) => {
+                    return sum + (q.price - (q.discount || 0));
+                }, 0);
+
+                // Distribuir proporcionalmente
+                for (const cotizacion of promesa.quotes) {
+                    const totalCotizacion = cotizacion.price - (cotizacion.discount || 0);
+                    const proporcion = totalPromesa > 0 ? totalCotizacion / totalPromesa : 1 / promesa.quotes.length;
+                    const pagoAsignado = pagoPromesa * proporcion;
+
+                    const actual = pagosPorCotizacion.get(cotizacion.id) || 0;
+                    pagosPorCotizacion.set(cotizacion.id, actual + pagoAsignado);
+                }
+            }
+        }
+
         // Calcular pendiente por cotización
         const porCobrar: PendingItem[] = [];
+
+        console.log('[POR COBRAR] Promesas encontradas:', promesas.length);
+        console.log('[POR COBRAR] Total cotizaciones:', cotizacionIds.length);
+        console.log('[POR COBRAR] Total pagos encontrados:', pagosRealizados.length);
 
         for (const promesa of promesas) {
             for (const cotizacion of promesa.quotes) {
@@ -556,13 +624,25 @@ export async function obtenerPorCobrar(
                 const pagosDeEstaCotizacion = pagosPorCotizacion.get(cotizacion.id) || 0;
                 const pendiente = totalCotizacion - pagosDeEstaCotizacion;
 
+                console.log(`[POR COBRAR] Cotización ${cotizacion.id}: precio=${cotizacion.price}, descuento=${cotizacion.discount || 0}, total=${totalCotizacion}, pagos=${pagosDeEstaCotizacion}, pendiente=${pendiente}`);
+
                 // Solo agregar si hay pendiente por cobrar
                 if (pendiente > 0) {
                     porCobrar.push({
                         id: cotizacion.id,
-                        concepto: `${cotizacion.name || 'Cotización'} - ${promesa.name || promesa.contact.full_name || 'Promesa'}`,
+                        concepto: `${cotizacion.name || 'Cotización'} - ${promesa.name || promesa.contact?.name || 'Promesa'}`,
                         monto: pendiente,
                         fecha: cotizacion.created_at,
+                        precioCotizacion: cotizacion.price,
+                        descuentoCotizacion: cotizacion.discount || 0,
+                        totalCotizacion: totalCotizacion,
+                        pagosRealizados: pagosDeEstaCotizacion,
+                        promiseId: promesa.id,
+                        promiseName: promesa.name,
+                        promiseEventDate: promesa.event_date,
+                        promiseContactName: promesa.contact?.name || null,
+                        promiseContactEmail: promesa.contact?.email || null,
+                        promiseContactPhone: promesa.contact?.phone || null,
                     });
                 }
             }
@@ -570,6 +650,8 @@ export async function obtenerPorCobrar(
 
         // Ordenar por fecha descendente
         porCobrar.sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
+
+        console.log('[POR COBRAR] Total items por cobrar:', porCobrar.length);
 
         return {
             success: true,
@@ -622,6 +704,7 @@ export async function obtenerPorPagar(
             concepto: nomina.concept || `Nómina - ${nomina.personal?.name || 'Personal'}`,
             monto: nomina.net_amount,
             fecha: nomina.assignment_date,
+            personalName: nomina.personal?.name || null,
         }));
 
         return {

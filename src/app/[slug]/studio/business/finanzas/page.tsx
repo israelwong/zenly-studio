@@ -4,19 +4,18 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { DollarSign } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import { FinanceHeader } from './components/FinanceHeader';
 import { FinanceKPIs } from './components/FinanceKPIs';
-import { TransactionsTable } from './components/TransactionsTable';
-import { PendingSplitView } from './components/PendingSplitView';
-import { RecurringExpensesGrid } from './components/RecurringExpensesGrid';
+import { MovimientosContainer } from './components/MovimientosContainer';
+import { PorCobrarCard } from './components/PorCobrarCard';
+import { PorPagarCard } from './components/PorPagarCard';
+import { GastosRecurrentesCard } from './components/GastosRecurrentesCard';
 import {
     obtenerKPIsFinancieros,
     obtenerMovimientos,
     obtenerPorCobrar,
     obtenerPorPagar,
     obtenerGastosRecurrentes,
-    type FinanceKPIsDebug,
 } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 
 export default function FinanzasPage() {
@@ -33,7 +32,6 @@ export default function FinanzasPage() {
         porCobrar: 0,
         porPagar: 0,
     });
-    const [debugInfo, setDebugInfo] = useState<FinanceKPIsDebug | null>(null);
     const [transactions, setTransactions] = useState<Array<{
         id: string;
         fecha: Date;
@@ -47,12 +45,23 @@ export default function FinanzasPage() {
         concepto: string;
         monto: number;
         fecha: Date;
+        precioCotizacion?: number;
+        descuentoCotizacion?: number;
+        totalCotizacion?: number;
+        pagosRealizados?: number;
+        promiseId?: string;
+        promiseName?: string;
+        promiseEventDate?: Date | null;
+        promiseContactName?: string;
+        promiseContactEmail?: string | null;
+        promiseContactPhone?: string | null;
     }>>([]);
     const [porPagar, setPorPagar] = useState<Array<{
         id: string;
         concepto: string;
         monto: number;
         fecha: Date;
+        personalName?: string | null;
     }>>([]);
     const [recurringExpenses, setRecurringExpenses] = useState<Array<{
         id: string;
@@ -85,9 +94,6 @@ export default function FinanzasPage() {
 
                 if (kpisResult.success) {
                     setKpis(kpisResult.data);
-                    if (kpisResult.debug) {
-                        setDebugInfo(kpisResult.debug);
-                    }
                 } else if (!kpisResult.success) {
                     console.error('[FINANZAS UI] Error en KPIs:', kpisResult.error);
                 }
@@ -95,7 +101,10 @@ export default function FinanzasPage() {
                     setTransactions(transactionsResult.data);
                 }
                 if (porCobrarResult.success && porCobrarResult.data) {
+                    console.log('[FINANZAS UI] Por cobrar cargado:', porCobrarResult.data.length, 'items');
                     setPorCobrar(porCobrarResult.data);
+                } else if (!porCobrarResult.success) {
+                    console.error('[FINANZAS UI] Error en por cobrar:', porCobrarResult.error);
                 }
                 if (porPagarResult.success && porPagarResult.data) {
                     setPorPagar(porPagarResult.data);
@@ -206,53 +215,93 @@ export default function FinanzasPage() {
                                     porPagar={kpis.porPagar}
                                 />
 
-                                {/* Debug temporal - remover después */}
-                                <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono">
-                                    <p className="text-zinc-400 mb-2 font-bold">🔍 Debug Info:</p>
-                                    <div className="space-y-1 text-zinc-300">
-                                        <p>Por Cobrar: <span className="text-emerald-400">{kpis.porCobrar.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</span></p>
-                                        <p>Por Pagar: <span className="text-rose-400">{kpis.porPagar.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</span></p>
-                                        <p>Ingresos: {kpis.ingresos.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</p>
-                                        <p>Egresos: {kpis.egresos.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</p>
-                                        {debugInfo && (
-                                            <>
-                                                <p className="mt-2 text-zinc-500">Promesas encontradas: {debugInfo.promesasEncontradas}</p>
-                                                <p className="text-zinc-500">Cotizaciones encontradas: {debugInfo.cotizacionesEncontradas}</p>
-                                                <p className="text-zinc-500">Total cotizaciones: {debugInfo.totalCotizaciones?.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</p>
-                                                <p className="text-zinc-500">Total pagos: {debugInfo.totalPagos?.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</p>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-400px)] overflow-hidden">
+                                    {/* Columna 1: Movimientos */}
+                                    <div className="lg:col-span-1 h-full">
+                                        <MovimientosContainer
+                                            transactions={transactions}
+                                            studioSlug={studioSlug}
+                                            onRegistrarIngreso={handleRegistrarIngreso}
+                                            onRegistrarGasto={handleRegistrarGasto}
+                                            onCancelarPago={async (id) => {
+                                                try {
+                                                    const { cancelarPago } = await import('@/lib/actions/studio/business/events/payments.actions');
+                                                    const result = await cancelarPago(studioSlug, id);
 
-                                <Tabs defaultValue="movimientos" className="w-full">
-                                    <TabsList className="bg-zinc-900 border border-zinc-800">
-                                        <TabsTrigger value="movimientos">Movimientos</TabsTrigger>
-                                        <TabsTrigger value="pendientes">Pendientes</TabsTrigger>
-                                        <TabsTrigger value="gastos-fijos">Gastos Fijos</TabsTrigger>
-                                    </TabsList>
+                                                    if (!result.success) {
+                                                        console.error('Error cancelando pago:', result.error);
+                                                        return;
+                                                    }
 
-                                    <TabsContent value="movimientos" className="mt-6">
-                                        <TransactionsTable transactions={transactions} />
-                                    </TabsContent>
-
-                                    <TabsContent value="pendientes" className="mt-6">
-                                        <PendingSplitView
-                                            porCobrar={porCobrar}
-                                            porPagar={porPagar}
-                                            onRegistrarPago={handleRegistrarPago}
-                                            onMarcarPagado={handleMarcarPagado}
+                                                    // Recargar datos después de cancelar
+                                                    const [kpisResult, transactionsResult, porCobrarResult] = await Promise.all([
+                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                        obtenerMovimientos(studioSlug, currentMonth!),
+                                                        obtenerPorCobrar(studioSlug),
+                                                    ]);
+                                                    if (kpisResult.success) {
+                                                        setKpis(kpisResult.data);
+                                                    }
+                                                    if (transactionsResult.success && transactionsResult.data) {
+                                                        setTransactions(transactionsResult.data);
+                                                    }
+                                                    if (porCobrarResult.success && porCobrarResult.data) {
+                                                        setPorCobrar(porCobrarResult.data);
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error cancelando pago:', error);
+                                                }
+                                            }}
                                         />
-                                    </TabsContent>
+                                    </div>
 
-                                    <TabsContent value="gastos-fijos" className="mt-6">
-                                        <RecurringExpensesGrid
+                                    {/* Columna 2: Por Cobrar y Por Pagar */}
+                                    <div className="lg:col-span-1 h-full flex flex-col gap-6 overflow-hidden">
+                                        <div className="flex-1 min-h-0 flex flex-col">
+                                            <PorCobrarCard
+                                                porCobrar={porCobrar}
+                                                studioSlug={studioSlug}
+                                                onRegistrarPago={handleRegistrarPago}
+                                                onPagoRegistrado={async () => {
+                                                    // Recargar datos después de registrar pago
+                                                    try {
+                                                        const [kpisResult, transactionsResult, porCobrarResult] = await Promise.all([
+                                                            obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                            obtenerMovimientos(studioSlug, currentMonth!),
+                                                            obtenerPorCobrar(studioSlug),
+                                                        ]);
+                                                        if (kpisResult.success) {
+                                                            setKpis(kpisResult.data);
+                                                        }
+                                                        if (transactionsResult.success && transactionsResult.data) {
+                                                            setTransactions(transactionsResult.data);
+                                                        }
+                                                        if (porCobrarResult.success && porCobrarResult.data) {
+                                                            setPorCobrar(porCobrarResult.data);
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('Error recargando datos:', error);
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="flex-1 min-h-0 flex flex-col">
+                                            <PorPagarCard
+                                                porPagar={porPagar}
+                                                onMarcarPagado={handleMarcarPagado}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Columna 3: Gastos Recurrentes */}
+                                    <div className="lg:col-span-1 h-full">
+                                        <GastosRecurrentesCard
                                             expenses={recurringExpenses}
                                             onAddExpense={handleAddExpense}
                                             onEditExpense={handleEditExpense}
                                         />
-                                    </TabsContent>
-                                </Tabs>
+                                    </div>
+                                </div>
                             </>
                         )}
                     </div>

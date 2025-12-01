@@ -35,6 +35,14 @@ export interface ReceiptData {
     price?: number; // Precio base de la cotización
     discount?: number | null; // Descuento aplicado
   };
+  paymentHistory?: Array<{
+    id: string;
+    amount: number;
+    payment_method: string;
+    payment_date: Date;
+    concept: string;
+    description: string | null;
+  }>;
   event?: {
     name: string | null;
     event_date: Date | null;
@@ -101,9 +109,20 @@ export async function obtenerDatosComprobante(
               },
             },
             pagos: {
+              where: {
+                status: { in: ['paid', 'completed'] },
+              },
               select: {
                 id: true,
                 amount: true,
+                metodo_pago: true,
+                payment_date: true,
+                created_at: true,
+                concept: true,
+                description: true,
+              },
+              orderBy: {
+                payment_date: 'desc',
               },
             },
             promise: {
@@ -141,6 +160,16 @@ export async function obtenerDatosComprobante(
     const pagos = cotizacion.pagos.map(p => Number(p.amount));
     const paid = pagos.reduce((sum, amount) => sum + amount, 0);
     const pending = total - paid;
+
+    // Historial de pagos ordenado por fecha
+    const paymentHistory = cotizacion.pagos.map(pago => ({
+      id: pago.id,
+      amount: Number(pago.amount),
+      payment_method: pago.metodo_pago,
+      payment_date: pago.payment_date || pago.created_at,
+      concept: pago.concept,
+      description: pago.description,
+    }));
 
     // Datos del contacto
     const contact = cotizacion.contact ? {
@@ -189,6 +218,7 @@ export async function obtenerDatosComprobante(
           price: precioBase,
           discount: cotizacion.discount ? Number(cotizacion.discount) : null,
         },
+        paymentHistory,
         event: eventData,
       },
     };
