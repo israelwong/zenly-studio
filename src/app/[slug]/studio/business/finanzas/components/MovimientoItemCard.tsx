@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MoreVertical, FileText, X } from 'lucide-react';
+import { MoreVertical, FileText, X, Trash2 } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -14,6 +14,8 @@ import {
     ZenConfirmModal,
 } from '@/components/ui/zen';
 import { PaymentReceipt } from '@/components/shared/payments/PaymentReceipt';
+import { eliminarGastoOperativo } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 interface Transaction {
@@ -29,16 +31,20 @@ interface MovimientoItemCardProps {
     transaction: Transaction;
     studioSlug: string;
     onCancelarPago?: (id: string) => void;
+    onGastoEliminado?: () => void;
 }
 
 export function MovimientoItemCard({
     transaction,
     studioSlug,
     onCancelarPago,
+    onGastoEliminado,
 }: MovimientoItemCardProps) {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-MX', {
@@ -57,6 +63,7 @@ export function MovimientoItemCard({
     };
 
     const isIngreso = transaction.monto > 0;
+    const isEgresoOperativo = !isIngreso && transaction.fuente === 'operativo';
 
     const handleViewReceipt = () => {
         setIsReceiptModalOpen(true);
@@ -77,6 +84,29 @@ export function MovimientoItemCard({
             console.error('Error cancelando pago:', error);
         } finally {
             setIsCancelling(false);
+        }
+    };
+
+    const handleEliminarGastoClick = () => {
+        setShowDeleteConfirmModal(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        setIsDeleting(true);
+        try {
+            const result = await eliminarGastoOperativo(studioSlug, transaction.id);
+            if (result.success) {
+                toast.success('Gasto eliminado correctamente');
+                await onGastoEliminado?.();
+                setShowDeleteConfirmModal(false);
+            } else {
+                toast.error(result.error || 'Error al eliminar gasto');
+            }
+        } catch (error) {
+            console.error('Error eliminando gasto:', error);
+            toast.error('Error al eliminar gasto');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -120,9 +150,18 @@ export function MovimientoItemCard({
                                         Ver Comprobante
                                     </ZenDropdownMenuItem>
                                 )}
-                                {onCancelarPago && (
+                                {isEgresoOperativo && (
+                                    <ZenDropdownMenuItem
+                                        onClick={handleEliminarGastoClick}
+                                        className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        Eliminar Gasto
+                                    </ZenDropdownMenuItem>
+                                )}
+                                {onCancelarPago && isIngreso && (
                                     <>
-                                        {isIngreso && <ZenDropdownMenuSeparator />}
+                                        <ZenDropdownMenuSeparator />
                                         <ZenDropdownMenuItem
                                             onClick={handleCancelarClick}
                                             className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
@@ -149,6 +188,19 @@ export function MovimientoItemCard({
                 variant="destructive"
                 loading={isCancelling}
                 loadingText="Cancelando..."
+            />
+
+            <ZenConfirmModal
+                isOpen={showDeleteConfirmModal}
+                onClose={() => setShowDeleteConfirmModal(false)}
+                onConfirm={handleConfirmDelete}
+                title="¿Estás seguro de eliminar el gasto?"
+                description={`Esta acción eliminará permanentemente el gasto "${transaction.concepto}" por ${formatCurrency(Math.abs(transaction.monto))}. Esta acción no se puede deshacer.`}
+                confirmText="Sí, eliminar gasto"
+                cancelText="No, cancelar"
+                variant="destructive"
+                loading={isDeleting}
+                loadingText="Eliminando..."
             />
 
             {/* Modal de comprobante */}

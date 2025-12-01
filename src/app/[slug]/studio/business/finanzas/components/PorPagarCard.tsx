@@ -14,10 +14,12 @@ interface PendingItem {
 
 interface PorPagarCardProps {
     porPagar: PendingItem[];
+    studioSlug: string;
     onMarcarPagado: (id: string) => void;
+    onPagoConfirmado?: () => void;
 }
 
-export function PorPagarCard({ porPagar, onMarcarPagado }: PorPagarCardProps) {
+export function PorPagarCard({ porPagar, studioSlug, onMarcarPagado, onPagoConfirmado }: PorPagarCardProps) {
     return (
         <ZenCard variant="default" padding="none" className="h-full max-h-full flex flex-col overflow-hidden">
             <ZenCardHeader className="border-b border-zinc-800 flex-shrink-0 px-4 py-3">
@@ -44,7 +46,9 @@ export function PorPagarCard({ porPagar, onMarcarPagado }: PorPagarCardProps) {
                             <PorPagarItemCard
                                 key={item.id}
                                 item={item}
+                                studioSlug={studioSlug}
                                 onMarcarPagado={onMarcarPagado}
+                                onPagoConfirmado={onPagoConfirmado}
                             />
                         ))}
                     </div>

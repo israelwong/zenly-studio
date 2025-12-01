@@ -371,3 +371,134 @@ export async function eliminarPago(
     return cancelarPago(studioSlug, pagoId);
 }
 
+/**
+ * Schema para crear ingreso manual (sin cotización)
+ */
+const createManualIncomeSchema = z.object({
+    studio_slug: z.string().min(1),
+    amount: z.number().positive('El monto debe ser positivo'),
+    metodo_pago: z.string().min(1, 'Método de pago requerido'),
+    concept: z.string().min(1, 'Concepto requerido'),
+    description: z.string().optional(),
+    payment_date: z.date().optional(),
+});
+
+/**
+ * Crear ingreso manual (sin cotización ni promesa)
+ */
+export async function crearIngresoManual(
+    data: z.infer<typeof createManualIncomeSchema>
+): Promise<{ success: boolean; error?: string; data?: PaymentItem }> {
+    try {
+        const validatedData = createManualIncomeSchema.parse(data);
+
+        const studio = await prisma.studios.findUnique({
+            where: { slug: validatedData.studio_slug },
+            select: { id: true },
+        });
+
+        if (!studio) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        // Obtener usuario actual para asociar el pago al studio
+        const { createClient } = await import('@/lib/supabase/server');
+        const supabase = await createClient();
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+
+        if (!authUser?.id) {
+            return { success: false, error: 'Usuario no autenticado' };
+        }
+
+        // Buscar studio_user_profiles del suscriptor autenticado
+        const studioUserProfile = await prisma.studio_user_profiles.findFirst({
+            where: {
+                supabase_id: authUser.id,
+                studio_id: studio.id,
+                is_active: true,
+            },
+            select: { id: true, email: true, full_name: true },
+        });
+
+        if (!studioUserProfile) {
+            return { success: false, error: 'Usuario no encontrado en el studio' };
+        }
+
+        // Buscar o crear studio_users para este suscriptor
+        let studioUser = await prisma.studio_users.findFirst({
+            where: {
+                studio_id: studio.id,
+                full_name: studioUserProfile.full_name,
+                is_active: true,
+            },
+            select: { id: true },
+        });
+
+        // Si no existe el studio_user, crearlo automáticamente
+        if (!studioUser) {
+            studioUser = await prisma.studio_users.create({
+                data: {
+                    studio_id: studio.id,
+                    full_name: studioUserProfile.full_name,
+                    phone: null,
+                    type: 'EMPLEADO',
+                    role: 'owner',
+                    status: 'active',
+                    is_active: true,
+                    platform_user_id: null,
+                },
+                select: { id: true },
+            });
+        }
+
+        // Crear el pago sin cotización ni promesa, pero asociado a studio_users
+        const pago = await prisma.studio_pagos.create({
+            data: {
+                cotizacion_id: null,
+                promise_id: null,
+                user_id: studioUser.id,
+                amount: validatedData.amount,
+                metodo_pago: validatedData.metodo_pago,
+                concept: validatedData.concept,
+                description: validatedData.description || null,
+                payment_date: validatedData.payment_date || new Date(),
+                status: 'completed',
+                transaction_type: 'ingreso',
+                transaction_category: 'manual',
+            },
+            select: {
+                id: true,
+                amount: true,
+                metodo_pago: true,
+                payment_date: true,
+                concept: true,
+                description: true,
+                created_at: true,
+            },
+        });
+
+        revalidatePath(`/${validatedData.studio_slug}/studio/business/finanzas`);
+
+        const item: PaymentItem = {
+            id: pago.id,
+            amount: Number(pago.amount),
+            payment_method: pago.metodo_pago,
+            payment_date: pago.payment_date || pago.created_at,
+            concept: pago.concept,
+            description: pago.description,
+            created_at: pago.created_at,
+        };
+
+        return {
+            success: true,
+            data: item,
+        };
+    } catch (error) {
+        console.error('[PAYMENTS] Error creando ingreso manual:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al crear ingreso manual',
+        };
+    }
+}
+

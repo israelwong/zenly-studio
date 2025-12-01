@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { DollarSign } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
-import { FinanceHeader } from './components/FinanceHeader';
+import { DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { FinanceKPIs } from './components/FinanceKPIs';
-import { MovimientosContainer } from './components/MovimientosContainer';
+import { MovimientosCard } from './components/MovimientosCard';
 import { PorCobrarCard } from './components/PorCobrarCard';
 import { PorPagarCard } from './components/PorPagarCard';
 import { GastosRecurrentesCard } from './components/GastosRecurrentesCard';
@@ -157,15 +156,17 @@ export default function FinanzasPage() {
             <div className="space-y-8">
                 <ZenCard variant="default" padding="none">
                     <ZenCardHeader className="border-b border-zinc-800">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-green-600/20 rounded-lg">
-                                <DollarSign className="h-5 w-5 text-green-400" />
-                            </div>
-                            <div>
-                                <ZenCardTitle>Finanzas</ZenCardTitle>
-                                <ZenCardDescription>
-                                    Gestiona las finanzas de tu estudio
-                                </ZenCardDescription>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-green-600/20 rounded-lg">
+                                    <DollarSign className="h-5 w-5 text-green-400" />
+                                </div>
+                                <div>
+                                    <ZenCardTitle>Finanzas</ZenCardTitle>
+                                    <ZenCardDescription>
+                                        Gestiona las finanzas de tu estudio
+                                    </ZenCardDescription>
+                                </div>
                             </div>
                         </div>
                     </ZenCardHeader>
@@ -181,28 +182,61 @@ export default function FinanzasPage() {
         <div className="space-y-8">
             <ZenCard variant="default" padding="none">
                 <ZenCardHeader className="border-b border-zinc-800">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-600/20 rounded-lg">
-                            <DollarSign className="h-5 w-5 text-green-400" />
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-green-600/20 rounded-lg">
+                                <DollarSign className="h-5 w-5 text-green-400" />
+                            </div>
+                            <div>
+                                <ZenCardTitle>Finanzas</ZenCardTitle>
+                                <ZenCardDescription>
+                                    Gestiona las finanzas de tu estudio
+                                </ZenCardDescription>
+                            </div>
                         </div>
-                        <div>
-                            <ZenCardTitle>Finanzas</ZenCardTitle>
-                            <ZenCardDescription>
-                                Gestiona las finanzas de tu estudio
-                            </ZenCardDescription>
-                        </div>
+                        {currentMonth && (
+                            <div className="flex items-center gap-1">
+                                <ZenButton
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        const newDate = new Date(currentMonth);
+                                        newDate.setMonth(newDate.getMonth() - 1);
+                                        setCurrentMonth(newDate);
+                                    }}
+                                    aria-label="Mes anterior"
+                                    className="h-7 w-7 p-0"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </ZenButton>
+                                <div className="px-2 py-1 min-w-[140px] text-center">
+                                    <span className="text-sm font-semibold text-zinc-200 capitalize">
+                                        {currentMonth.toLocaleDateString('es-ES', {
+                                            month: 'long',
+                                            year: 'numeric',
+                                        }).replace(' de ', ' ')}
+                                    </span>
+                                </div>
+                                <ZenButton
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        const newDate = new Date(currentMonth);
+                                        newDate.setMonth(newDate.getMonth() + 1);
+                                        setCurrentMonth(newDate);
+                                    }}
+                                    aria-label="Mes siguiente"
+                                    className="h-7 w-7 p-0"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </ZenButton>
+                            </div>
+                        )}
                     </div>
                 </ZenCardHeader>
 
                 <ZenCardContent className="p-6">
                     <div className="space-y-6">
-                        <FinanceHeader
-                            currentMonth={currentMonth}
-                            onMonthChange={(date) => setCurrentMonth(date)}
-                            onRegistrarGasto={handleRegistrarGasto}
-                            onRegistrarIngreso={handleRegistrarIngreso}
-                        />
-
                         {loading ? (
                             <div className="h-96 bg-zinc-900/50 rounded-lg animate-pulse" />
                         ) : (
@@ -218,11 +252,45 @@ export default function FinanzasPage() {
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-400px)] overflow-hidden">
                                     {/* Columna 1: Movimientos */}
                                     <div className="lg:col-span-1 h-full">
-                                        <MovimientosContainer
+                                        <MovimientosCard
                                             transactions={transactions}
                                             studioSlug={studioSlug}
                                             onRegistrarIngreso={handleRegistrarIngreso}
                                             onRegistrarGasto={handleRegistrarGasto}
+                                            onMovimientoRegistrado={async () => {
+                                                // Recargar datos después de registrar movimiento
+                                                try {
+                                                    const [kpisResult, transactionsResult] = await Promise.all([
+                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                        obtenerMovimientos(studioSlug, currentMonth!),
+                                                    ]);
+                                                    if (kpisResult.success) {
+                                                        setKpis(kpisResult.data);
+                                                    }
+                                                    if (transactionsResult.success && transactionsResult.data) {
+                                                        setTransactions(transactionsResult.data);
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error recargando datos:', error);
+                                                }
+                                            }}
+                                            onGastoEliminado={async () => {
+                                                // Recargar datos después de eliminar gasto
+                                                try {
+                                                    const [kpisResult, transactionsResult] = await Promise.all([
+                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                        obtenerMovimientos(studioSlug, currentMonth!),
+                                                    ]);
+                                                    if (kpisResult.success) {
+                                                        setKpis(kpisResult.data);
+                                                    }
+                                                    if (transactionsResult.success && transactionsResult.data) {
+                                                        setTransactions(transactionsResult.data);
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error recargando datos:', error);
+                                                }
+                                            }}
                                             onCancelarPago={async (id) => {
                                                 try {
                                                     const { cancelarPago } = await import('@/lib/actions/studio/business/events/payments.actions');
@@ -288,7 +356,29 @@ export default function FinanzasPage() {
                                         <div className="flex-1 min-h-0 flex flex-col">
                                             <PorPagarCard
                                                 porPagar={porPagar}
+                                                studioSlug={studioSlug}
                                                 onMarcarPagado={handleMarcarPagado}
+                                                onPagoConfirmado={async () => {
+                                                    // Recargar datos después de confirmar pago
+                                                    try {
+                                                        const [kpisResult, transactionsResult, porPagarResult] = await Promise.all([
+                                                            obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                            obtenerMovimientos(studioSlug, currentMonth!),
+                                                            obtenerPorPagar(studioSlug),
+                                                        ]);
+                                                        if (kpisResult.success) {
+                                                            setKpis(kpisResult.data);
+                                                        }
+                                                        if (transactionsResult.success && transactionsResult.data) {
+                                                            setTransactions(transactionsResult.data);
+                                                        }
+                                                        if (porPagarResult.success && porPagarResult.data) {
+                                                            setPorPagar(porPagarResult.data);
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('Error recargando datos:', error);
+                                                    }
+                                                }}
                                             />
                                         </div>
                                     </div>

@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { revalidatePath } from 'next/cache';
 
 interface FinanceKPIs {
     ingresos: number;
@@ -36,6 +37,7 @@ interface PendingItem {
     monto: number;
     fecha: Date;
     personalName?: string | null;
+    isPaid?: boolean;
     // Campos adicionales para cotizaciones por cobrar
     precioCotizacion?: number;
     descuentoCotizacion?: number;
@@ -157,10 +159,25 @@ export async function obtenerKPIsFinancieros(
             where: {
                 studio_id: studioId,
                 status: 'pagado',
-                payment_date: {
-                    gte: start,
-                    lte: end,
-                },
+                OR: [
+                    {
+                        payment_date: {
+                            gte: start,
+                            lte: end,
+                        },
+                    },
+                    {
+                        AND: [
+                            { payment_date: null },
+                            {
+                                updated_at: {
+                                    gte: start,
+                                    lte: end,
+                                },
+                            },
+                        ],
+                    },
+                ],
             },
             _sum: {
                 net_amount: true,
@@ -404,18 +421,36 @@ export async function obtenerMovimientos(
             ],
         });
 
-        // Obtener nóminas (egresos)
+        // Obtener nóminas pagadas (egresos) del mes
+        // Incluir nóminas con status 'pagado' que fueron pagadas en el mes
         const nominas = await prisma.studio_nominas.findMany({
             where: {
                 studio_id: studioId,
-                payment_date: {
-                    gte: start,
-                    lte: end,
-                },
+                status: 'pagado',
+                OR: [
+                    {
+                        payment_date: {
+                            gte: start,
+                            lte: end,
+                        },
+                    },
+                    {
+                        AND: [
+                            { payment_date: null },
+                            {
+                                updated_at: {
+                                    gte: start,
+                                    lte: end,
+                                },
+                            },
+                        ],
+                    },
+                ],
             },
             select: {
                 id: true,
                 payment_date: true,
+                updated_at: true,
                 concept: true,
                 net_amount: true,
                 personal: {
@@ -424,9 +459,10 @@ export async function obtenerMovimientos(
                     },
                 },
             },
-            orderBy: {
-                payment_date: 'desc',
-            },
+            orderBy: [
+                { payment_date: 'desc' },
+                { updated_at: 'desc' },
+            ],
         });
 
         // Obtener gastos (egresos)
@@ -462,7 +498,7 @@ export async function obtenerMovimientos(
             })),
             ...nominas.map((nomina) => ({
                 id: nomina.id,
-                fecha: nomina.payment_date ?? nomina.assignment_date,
+                fecha: nomina.payment_date ?? nomina.updated_at ?? new Date(),
                 fuente: 'staff' as const,
                 concepto: nomina.concept || `Nómina - ${nomina.personal?.name || 'Personal'}`,
                 categoria: 'Nómina',
@@ -681,13 +717,13 @@ export async function obtenerPorPagar(
         const nominas = await prisma.studio_nominas.findMany({
             where: {
                 studio_id: studioId,
-                status: 'pendiente',
             },
             select: {
                 id: true,
                 concept: true,
                 net_amount: true,
                 assignment_date: true,
+                status: true,
                 personal: {
                     select: {
                         name: true,
@@ -699,13 +735,16 @@ export async function obtenerPorPagar(
             },
         });
 
-        const porPagar: PendingItem[] = nominas.map((nomina) => ({
-            id: nomina.id,
-            concepto: nomina.concept || `Nómina - ${nomina.personal?.name || 'Personal'}`,
-            monto: nomina.net_amount,
-            fecha: nomina.assignment_date,
-            personalName: nomina.personal?.name || null,
-        }));
+        const porPagar: PendingItem[] = nominas
+            .filter((nomina) => nomina.status === 'pendiente')
+            .map((nomina) => ({
+                id: nomina.id,
+                concepto: nomina.concept || `Nómina - ${nomina.personal?.name || 'Personal'}`,
+                monto: nomina.net_amount,
+                fecha: nomina.assignment_date,
+                personalName: nomina.personal?.name || null,
+                isPaid: nomina.status === 'pagado',
+            }));
 
         return {
             success: true,
@@ -767,6 +806,263 @@ export async function obtenerGastosRecurrentes(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error desconocido',
+        };
+    }
+}
+
+/**
+ * Crear gasto operativo manual
+ */
+export async function crearGastoOperativo(
+    studioSlug: string,
+    data: {
+        concept: string;
+        amount: number;
+        category: string;
+        date?: Date;
+        description?: string;
+    }
+): Promise<{ success: boolean; error?: string; data?: { id: string } }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        // Obtener usuario actual desde Supabase
+        const { createClient } = await import('@/lib/supabase/server');
+        const supabase = await createClient();
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+
+        if (!authUser?.id) {
+            return { success: false, error: 'Usuario no autenticado' };
+        }
+
+        // Buscar studio_user_profiles del suscriptor autenticado
+        const studioUserProfile = await prisma.studio_user_profiles.findFirst({
+            where: {
+                supabase_id: authUser.id,
+                studio_id: studioId,
+                is_active: true,
+            },
+            select: { id: true, email: true, full_name: true },
+        });
+
+        if (!studioUserProfile) {
+            return { success: false, error: 'Usuario no encontrado en el studio' };
+        }
+
+        // Buscar o crear studio_users para este suscriptor
+        let studioUser = await prisma.studio_users.findFirst({
+            where: {
+                studio_id: studioId,
+                full_name: studioUserProfile.full_name,
+                is_active: true,
+            },
+            select: { id: true },
+        });
+
+        // Si no existe el studio_user, crearlo automáticamente
+        if (!studioUser) {
+            studioUser = await prisma.studio_users.create({
+                data: {
+                    studio_id: studioId,
+                    full_name: studioUserProfile.full_name,
+                    phone: null,
+                    type: 'EMPLEADO',
+                    role: 'owner',
+                    status: 'active',
+                    is_active: true,
+                    platform_user_id: null,
+                },
+                select: { id: true },
+            });
+        }
+
+        const gasto = await prisma.studio_gastos.create({
+            data: {
+                studio_id: studioId,
+                user_id: studioUser.id,
+                concept: data.concept,
+                amount: data.amount,
+                category: data.category || 'Operativo',
+                date: data.date || new Date(),
+                description: data.description || null,
+                status: 'activo',
+            },
+            select: {
+                id: true,
+            },
+        });
+
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+
+        return {
+            success: true,
+            data: { id: gasto.id },
+        };
+    } catch (error) {
+        console.error('Error creando gasto operativo:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al crear gasto operativo',
+        };
+    }
+}
+
+/**
+ * Marcar nómina como pagada
+ */
+export async function marcarNominaPagada(
+    studioSlug: string,
+    nominaId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        // Verificar que la nómina existe y pertenece al studio
+        const nomina = await prisma.studio_nominas.findFirst({
+            where: {
+                id: nominaId,
+                studio_id: studioId,
+            },
+            select: {
+                id: true,
+                status: true,
+            },
+        });
+
+        if (!nomina) {
+            return { success: false, error: 'Nómina no encontrada' };
+        }
+
+        if (nomina.status === 'pagado') {
+            return { success: false, error: 'La nómina ya está marcada como pagada' };
+        }
+
+        // Obtener usuario actual para asociar el pago
+        const { createClient } = await import('@/lib/supabase/server');
+        const supabase = await createClient();
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+
+        if (!authUser?.id) {
+            return { success: false, error: 'Usuario no autenticado' };
+        }
+
+        // Buscar studio_user_profiles del suscriptor autenticado
+        const studioUserProfile = await prisma.studio_user_profiles.findFirst({
+            where: {
+                supabase_id: authUser.id,
+                studio_id: studioId,
+                is_active: true,
+            },
+            select: { id: true, email: true, full_name: true },
+        });
+
+        if (!studioUserProfile) {
+            return { success: false, error: 'Usuario no encontrado en el studio' };
+        }
+
+        // Buscar o crear studio_users para este suscriptor
+        let studioUser = await prisma.studio_users.findFirst({
+            where: {
+                studio_id: studioId,
+                full_name: studioUserProfile.full_name,
+                is_active: true,
+            },
+            select: { id: true },
+        });
+
+        if (!studioUser) {
+            studioUser = await prisma.studio_users.create({
+                data: {
+                    studio_id: studioId,
+                    full_name: studioUserProfile.full_name,
+                    phone: null,
+                    type: 'EMPLEADO',
+                    role: 'owner',
+                    status: 'active',
+                    is_active: true,
+                    platform_user_id: null,
+                },
+                select: { id: true },
+            });
+        }
+
+        // Actualizar el status a pagado y establecer payment_date
+        await prisma.studio_nominas.update({
+            where: {
+                id: nominaId,
+            },
+            data: {
+                status: 'pagado',
+                paid_by: studioUser.id,
+                payment_date: new Date(),
+            },
+        });
+
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+
+        return {
+            success: true,
+        };
+    } catch (error) {
+        console.error('Error marcando nómina como pagada:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al marcar nómina como pagada',
+        };
+    }
+}
+
+/**
+ * Eliminar gasto operativo
+ */
+export async function eliminarGastoOperativo(
+    studioSlug: string,
+    gastoId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        // Verificar que el gasto existe y pertenece al studio
+        const gasto = await prisma.studio_gastos.findFirst({
+            where: {
+                id: gastoId,
+                studio_id: studioId,
+            },
+            select: {
+                id: true,
+            },
+        });
+
+        if (!gasto) {
+            return { success: false, error: 'Gasto no encontrado' };
+        }
+
+        // Eliminar el gasto
+        await prisma.studio_gastos.delete({
+            where: {
+                id: gastoId,
+            },
+        });
+
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+
+        return {
+            success: true,
+        };
+    } catch (error) {
+        console.error('Error eliminando gasto operativo:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al eliminar gasto operativo',
         };
     }
 }

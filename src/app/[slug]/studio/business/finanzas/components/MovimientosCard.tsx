@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MoreVertical, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Plus, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -25,7 +25,7 @@ interface Transaction {
     monto: number;
 }
 
-interface MovimientosContainerProps {
+interface MovimientosCardProps {
     transactions: Transaction[];
     studioSlug: string;
     onRegistrarIngreso: () => void;
@@ -35,7 +35,7 @@ interface MovimientosContainerProps {
     onGastoEliminado?: () => void;
 }
 
-export function MovimientosContainer({
+export function MovimientosCard({
     transactions,
     studioSlug,
     onRegistrarIngreso,
@@ -43,7 +43,7 @@ export function MovimientosContainer({
     onCancelarPago,
     onMovimientoRegistrado,
     onGastoEliminado,
-}: MovimientosContainerProps) {
+}: MovimientosCardProps) {
     const [showIngresoModal, setShowIngresoModal] = useState(false);
     const [showGastoModal, setShowGastoModal] = useState(false);
 
@@ -68,7 +68,7 @@ export function MovimientosContainer({
                         <ZenDropdownMenu>
                             <ZenDropdownMenuTrigger asChild>
                                 <ZenButton variant="ghost" size="sm" className="h-7 w-7 p-0">
-                                    <MoreVertical className="h-4 w-4" />
+                                    <Plus className="h-4 w-4" />
                                 </ZenButton>
                             </ZenDropdownMenuTrigger>
                             <ZenDropdownMenuContent align="end">
