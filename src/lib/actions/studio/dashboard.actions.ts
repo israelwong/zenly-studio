@@ -17,7 +17,7 @@ export interface DashboardStudio {
   };
   _count: {
     eventos: number;
-    clientes: number;
+    contacts: number;
   };
 }
 
@@ -58,7 +58,7 @@ export async function obtenerDashboardStudio(studioSlug: string): Promise<Dashbo
         _count: {
           select: {
             eventos: true,
-            clientes: true,
+            contacts: true,
           },
         },
       },
@@ -124,22 +124,28 @@ export async function obtenerEventosRecientes(studioSlug: string): Promise<Dashb
 export async function obtenerClientesRecientes(studioSlug: string): Promise<DashboardCliente[]> {
   return await retryDatabaseOperation(async () => {
     try {
-      const clientes = await prisma.studio_clientes.findMany({
+      const contacts = await prisma.studio_contacts.findMany({
         where: {
           studio: { slug: studioSlug },
         },
         select: {
           id: true,
-          nombre: true,
+          name: true,
           email: true,
-          telefono: true,
+          phone: true,
           status: true,
         },
         orderBy: { created_at: "desc" },
         take: 5,
       });
 
-      return clientes;
+      return contacts.map(contact => ({
+        id: contact.id,
+        nombre: contact.name,
+        email: contact.email || "",
+        telefono: contact.phone,
+        status: contact.status,
+      }));
     } catch (error) {
       // En modo desarrollo, retornar array vacío si hay error
       console.log('No hay clientes disponibles en modo desarrollo');

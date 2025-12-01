@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { type DateRange } from 'react-day-picker';
 import { EventScheduler } from './EventScheduler';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
@@ -16,7 +16,7 @@ interface EventSchedulerViewProps {
   onDataChange?: (data: EventoDetalle) => void;
 }
 
-export function EventSchedulerView({
+export const EventSchedulerView = React.memo(function EventSchedulerView({
   studioSlug,
   eventId,
   eventData,
@@ -48,7 +48,7 @@ export function EventSchedulerView({
     }
   }, [studioSlug]);
 
-  // Calcular rango por defecto si no está configurado
+  // Calcular rango por defecto si no está configurado (solo una vez al montar)
   const defaultDateRange = useMemo(() => {
     // Prioridad: dateRange prop > schedulerInstance > fecha del evento
     if (propDateRange) return propDateRange;
@@ -70,10 +70,12 @@ export function EventSchedulerView({
     end.setDate(end.getDate() + 30); // 30 días después del evento
 
     return { from: start, to: end };
-  }, [propDateRange, schedulerInstance, eventData.event_date, eventData.promise?.event_date]);
+    // Solo recalcular si propDateRange cambia de undefined a definido o viceversa
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propDateRange?.from?.getTime(), propDateRange?.to?.getTime()]);
 
 
-  // Mostrar skeleton interno mientras carga secciones (mismo diseño que el scheduler)
+  // Mostrar skeleton interno mientras carga secciones (solo grid, sin stats)
   if (loadingSecciones) {
     return (
       <div className="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-950">
@@ -142,5 +144,16 @@ export function EventSchedulerView({
       <p className="text-zinc-600">No hay datos para mostrar en el scheduler</p>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Comparación personalizada: solo re-renderizar si cambian los datos relevantes
+  const prevFrom = prevProps.dateRange?.from?.getTime();
+  const prevTo = prevProps.dateRange?.to?.getTime();
+  const nextFrom = nextProps.dateRange?.from?.getTime();
+  const nextTo = nextProps.dateRange?.to?.getTime();
+
+  const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
+  const eventDataEqual = prevProps.eventData === nextProps.eventData;
+
+  return datesEqual && eventDataEqual;
+});
 

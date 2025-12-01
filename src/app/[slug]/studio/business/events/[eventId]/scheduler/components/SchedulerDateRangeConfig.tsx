@@ -11,17 +11,17 @@ import { es } from 'date-fns/locale';
 interface SchedulerDateRangeConfigProps {
   dateRange?: DateRange;
   onDateRangeChange: (range: DateRange | undefined) => void;
+  onValidate?: (range: DateRange | undefined) => boolean;
   studioSlug: string;
   eventId: string;
-  onSave?: () => void;
 }
 
 export function SchedulerDateRangeConfig({
   dateRange,
   onDateRangeChange,
+  onValidate,
   studioSlug,
   eventId,
-  onSave,
 }: SchedulerDateRangeConfigProps) {
   const [open, setOpen] = useState(false);
   const [tempRange, setTempRange] = useState<DateRange | undefined>(dateRange);
@@ -30,6 +30,13 @@ export function SchedulerDateRangeConfig({
   const handleApply = async () => {
     if (!tempRange?.from || !tempRange?.to) {
       return;
+    }
+
+    // Validar antes de guardar en BD
+    // Si falla validación, el modal se abre automáticamente en validateDateRangeChange
+    if (onValidate && !onValidate(tempRange)) {
+      setOpen(false); // Cerrar popover
+      return; // Bloquear guardado
     }
 
     setSaving(true);
@@ -41,11 +48,9 @@ export function SchedulerDateRangeConfig({
       });
 
       if (result.success) {
+        // Actualizar el rango local - esto actualizará el header y sincronizará el UI
         onDateRangeChange(tempRange);
         setOpen(false);
-        if (onSave) {
-          onSave();
-        }
       }
     } catch (error) {
       // Error manejado por toast en el componente
@@ -55,8 +60,8 @@ export function SchedulerDateRangeConfig({
   };
 
   return (
-    <Popover 
-      open={open} 
+    <Popover
+      open={open}
       onOpenChange={(isOpen) => {
         setOpen(isOpen);
         if (isOpen) {

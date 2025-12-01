@@ -74,6 +74,14 @@ export const SchedulerHeader = React.memo(({ dateRange }: SchedulerHeaderProps) 
       })}
     </div>
   );
+}, (prevProps, nextProps) => {
+  // Comparación personalizada: solo re-renderizar si las fechas cambian
+  const prevFrom = prevProps.dateRange?.from?.getTime();
+  const prevTo = prevProps.dateRange?.to?.getTime();
+  const nextFrom = nextProps.dateRange?.from?.getTime();
+  const nextTo = nextProps.dateRange?.to?.getTime();
+
+  return prevFrom === nextFrom && prevTo === nextTo;
 });
 
 SchedulerHeader.displayName = 'SchedulerHeader';

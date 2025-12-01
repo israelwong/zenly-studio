@@ -55,6 +55,18 @@ export const SchedulerTimeline = React.memo(({
       )}
     </div>
   );
+}, (prevProps, nextProps) => {
+  // Comparación personalizada: solo re-renderizar si cambian fechas o items
+  const prevFrom = prevProps.dateRange?.from?.getTime();
+  const prevTo = prevProps.dateRange?.to?.getTime();
+  const nextFrom = nextProps.dateRange?.from?.getTime();
+  const nextTo = nextProps.dateRange?.to?.getTime();
+
+  const datesEqual = prevFrom === nextFrom && prevTo === nextTo;
+  const itemsEqual = prevProps.itemsMap === nextProps.itemsMap;
+  const seccionesEqual = prevProps.secciones === nextProps.secciones;
+
+  return datesEqual && itemsEqual && seccionesEqual;
 });
 
 SchedulerTimeline.displayName = 'SchedulerTimeline';

@@ -3,6 +3,7 @@ export { SchedulerPanel } from './components/SchedulerPanel';
 export { SchedulerSidebar } from './components/SchedulerSidebar';
 export { EventScheduler } from './components/EventScheduler';
 export { EventSchedulerView } from './components/EventSchedulerView';
+export { SchedulerWrapper } from './components/SchedulerWrapper';
 export { SchedulerDateRangeConfig } from './components/SchedulerDateRangeConfig';
 export { SchedulerTimeline } from './components/SchedulerTimeline';
 export { SchedulerHeader } from './components/SchedulerHeader';
