@@ -3,7 +3,6 @@
 import React from 'react';
 import { AlignLeft, AlignCenter, AlignRight, Heading1, Heading3, Type, Quote, Plus, Minus, Bold, Italic } from 'lucide-react';
 import { TextBlockConfig, TextAlignment } from '@/types/content-blocks';
-import { ZenButton } from '@/components/ui/zen';
 
 interface RichTextBlockProps {
     config: Partial<TextBlockConfig>;
@@ -32,7 +31,7 @@ export function RichTextBlock({
     // Tamaños de fuente disponibles
     const fontSizeOptions: { value: FontSize; label: string }[] = [
         { value: 'sm', label: 'Pequeño' },
-        { value: 'base', label: 'Normal' },
+        { value: 'base', label: 'A' },
         { value: 'lg', label: 'Grande' },
         { value: 'xl', label: 'Extra Grande' },
         { value: '2xl', label: 'Muy Grande' },
@@ -225,7 +224,7 @@ export function RichTextBlock({
 
                 {/* Tamaño de fuente - Solo para 'text' y 'blockquote' */}
                 {showSizeAndFormatControls && (
-                    <div className="flex items-center gap-1 border-r border-zinc-700 pr-2">
+                    <div className="flex items-center gap-0.5 border-r border-zinc-700 pr-2">
                         <button
                             type="button"
                             data-internal-button="true"
@@ -238,13 +237,13 @@ export function RichTextBlock({
                                 e.nativeEvent.stopImmediatePropagation();
                             }}
                             onClick={() => handleFontSizeChange('decrease')}
-                            className="p-1.5 rounded text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                            className="p-1 rounded text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
                             title="Reducir tamaño"
                         >
-                            <Minus className="h-4 w-4" />
+                            <Minus className="h-3.5 w-3.5" />
                         </button>
-                        <span className="text-xs text-zinc-500 px-1 min-w-[3rem] text-center">
-                            {fontSizeOptions.find(f => f.value === fontSize)?.label || 'Normal'}
+                        <span className="text-xs text-zinc-500 px-0.5 min-w-[1.25rem] text-center">
+                            {fontSizeOptions.find(f => f.value === fontSize)?.label || 'A'}
                         </span>
                         <button
                             type="button"
@@ -258,17 +257,17 @@ export function RichTextBlock({
                                 e.nativeEvent.stopImmediatePropagation();
                             }}
                             onClick={() => handleFontSizeChange('increase')}
-                            className="p-1.5 rounded text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                            className="p-1 rounded text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
                             title="Aumentar tamaño"
                         >
-                            <Plus className="h-4 w-4" />
+                            <Plus className="h-3.5 w-3.5" />
                         </button>
                     </div>
                 )}
 
                 {/* Bold e Italic - Solo para 'text' y 'blockquote' */}
                 {showSizeAndFormatControls && (
-                    <div className="flex items-center gap-1 border-r border-zinc-700 pr-2">
+                    <div className="flex items-center gap-1 flex-shrink-0 border-r border-zinc-700 pr-2">
                         <button
                             type="button"
                             data-internal-button="true"
@@ -281,7 +280,7 @@ export function RichTextBlock({
                                 e.nativeEvent.stopImmediatePropagation();
                             }}
                             onClick={handleFontWeightToggle}
-                            className={`p-1.5 rounded transition-colors ${fontWeight === 'bold'
+                            className={`p-1.5 rounded transition-colors flex-shrink-0 ${fontWeight === 'bold'
                                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                                 : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
                                 }`}
@@ -301,7 +300,7 @@ export function RichTextBlock({
                                 e.nativeEvent.stopImmediatePropagation();
                             }}
                             onClick={handleItalicToggle}
-                            className={`p-1.5 rounded transition-colors ${italic
+                            className={`p-1.5 rounded transition-colors flex-shrink-0 ${italic
                                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                                 : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
                                 }`}
@@ -326,7 +325,7 @@ export function RichTextBlock({
                             e.nativeEvent.stopImmediatePropagation();
                         }}
                         onClick={() => handleAlignmentChange('left')}
-                        className={`p-1.5 rounded transition-colors ${alignment === 'left'
+                        className={`p-1.5 rounded transition-colors flex-shrink-0 ${alignment === 'left'
                             ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                             : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
                             }`}
@@ -346,7 +345,7 @@ export function RichTextBlock({
                             e.nativeEvent.stopImmediatePropagation();
                         }}
                         onClick={() => handleAlignmentChange('center')}
-                        className={`p-1.5 rounded transition-colors ${alignment === 'center'
+                        className={`p-1.5 rounded transition-colors flex-shrink-0 ${alignment === 'center'
                             ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                             : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
                             }`}
@@ -366,7 +365,7 @@ export function RichTextBlock({
                             e.nativeEvent.stopImmediatePropagation();
                         }}
                         onClick={() => handleAlignmentChange('right')}
-                        className={`p-1.5 rounded transition-colors ${alignment === 'right'
+                        className={`p-1.5 rounded transition-colors flex-shrink-0 ${alignment === 'right'
                             ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                             : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
                             }`}

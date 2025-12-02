@@ -140,6 +140,8 @@ export async function createOffer(
         description: offer.description,
         objective: offer.objective as "presencial" | "virtual",
         slug: offer.slug,
+        cover_media_url: offer.cover_media_url,
+        cover_media_type: offer.cover_media_type as "image" | "video" | null,
         is_active: offer.is_active,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
@@ -281,10 +283,11 @@ export async function updateOffer(
       if (validatedData.objective !== undefined)
         updateData.objective = validatedData.objective;
       if (validatedData.slug !== undefined) updateData.slug = validatedData.slug;
-      if (validatedData.cover_media_url !== undefined)
-        updateData.cover_media_url = validatedData.cover_media_url || null;
-      if (validatedData.cover_media_type !== undefined)
-        updateData.cover_media_type = validatedData.cover_media_type || null;
+      // Siempre incluir cover_media_url y cover_media_type si están presentes en validatedData
+      if ('cover_media_url' in validatedData)
+        updateData.cover_media_url = validatedData.cover_media_url ?? null;
+      if ('cover_media_type' in validatedData)
+        updateData.cover_media_type = validatedData.cover_media_type ?? null;
       if (validatedData.is_active !== undefined)
         updateData.is_active = validatedData.is_active;
 
@@ -343,6 +346,8 @@ export async function updateOffer(
         description: offer.description,
         objective: offer.objective as "presencial" | "virtual",
         slug: offer.slug,
+        cover_media_url: offer.cover_media_url,
+        cover_media_type: offer.cover_media_type as "image" | "video" | null,
         is_active: offer.is_active,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
@@ -443,6 +448,8 @@ export async function getOffer(
         description: offer.description,
         objective: offer.objective as "presencial" | "virtual",
         slug: offer.slug,
+        cover_media_url: offer.cover_media_url,
+        cover_media_type: offer.cover_media_type as "image" | "video" | null,
         is_active: offer.is_active,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
@@ -560,6 +567,8 @@ export async function getPublicOffer(
         description: offer.description,
         objective: offer.objective as "presencial" | "virtual",
         slug: offer.slug,
+        cover_media_url: offer.cover_media_url,
+        cover_media_type: offer.cover_media_type as "image" | "video" | null,
         is_active: offer.is_active,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
@@ -662,6 +671,8 @@ export async function listOffers(
             description: offer.description,
             objective: offer.objective as "presencial" | "virtual",
             slug: offer.slug,
+            cover_media_url: offer.cover_media_url,
+            cover_media_type: offer.cover_media_type as "image" | "video" | null,
             is_active: offer.is_active,
             created_at: offer.created_at,
             updated_at: offer.updated_at,
@@ -881,6 +892,8 @@ export async function duplicateOffer(
         description: duplicatedOffer.description,
         objective: duplicatedOffer.objective as "presencial" | "virtual",
         slug: duplicatedOffer.slug,
+        cover_media_url: duplicatedOffer.cover_media_url,
+        cover_media_type: duplicatedOffer.cover_media_type as "image" | "video" | null,
         is_active: duplicatedOffer.is_active,
         created_at: duplicatedOffer.created_at,
         updated_at: duplicatedOffer.updated_at,

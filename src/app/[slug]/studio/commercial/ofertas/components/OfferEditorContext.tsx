@@ -127,8 +127,8 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
       description: formData.description || undefined,
       objective: formData.objective,
       slug: formData.slug,
-      cover_media_url: formData.cover_media_url || undefined,
-      cover_media_type: formData.cover_media_type || undefined,
+      cover_media_url: formData.cover_media_url ?? null,
+      cover_media_type: formData.cover_media_type ?? null,
       is_active: formData.is_active,
       landing_page: {
         content_blocks: contentBlocks,

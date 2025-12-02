@@ -247,7 +247,7 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
             case 'hero':
                 // Convertir configuraciones antiguas a HeroConfig unificado
                 let heroConfig: HeroConfig = {};
-                
+
                 if (block.type === 'hero-contact') {
                     const oldConfig = block.config as HeroContactConfig;
                     heroConfig = {
@@ -317,7 +317,7 @@ export function BlockRenderer({ block, className = '' }: BlockRendererProps) {
 
             case 'separator':
                 const separatorConfig = (block.config || {}) as Partial<SeparatorBlockConfig>;
-                const separatorStyle = separatorConfig.style || 'solid';
+                const separatorStyle = separatorConfig.style || 'space';
                 const separatorHeight = separatorConfig.height ?? (separatorStyle === 'space' ? 24 : 0.5);
 
                 // En mobile preview siempre usar zinc-600 para líneas

@@ -160,7 +160,7 @@ export function LandingEditor({ studioSlug }: LandingEditorProps) {
         };
         break;
       case "separator":
-        config = { style: "solid", height: 0.5 };
+        config = { style: "space", height: 24 };
         break;
       case "media-gallery":
         config = {

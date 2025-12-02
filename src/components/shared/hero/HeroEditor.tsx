@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { Plus, X, AlignStartVertical, AlignVerticalDistributeCenter, AlignEndVertical, AlignEndHorizontal, AlignStartHorizontal, Square, RectangleVertical, Maximize2, Shrink, AlignVerticalJustifyCenter, Copy, ChevronUp, ChevronDown, Layers, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Maximize } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Plus, X, AlignStartVertical, AlignVerticalDistributeCenter, AlignEndVertical, AlignEndHorizontal, AlignStartHorizontal, Square, RectangleVertical, Maximize2, Shrink, AlignVerticalJustifyCenter, Copy, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Layers, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Maximize } from 'lucide-react';
 import { ZenInput, ZenTextarea, ZenSelect, ZenButton, ZenCard, ZenCardContent, ZenSwitch } from '@/components/ui/zen';
 import { HeroConfig, ButtonConfig, MediaItem } from '@/types/content-blocks';
 import { cn } from '@/lib/utils';
@@ -29,12 +29,77 @@ export default function HeroEditor({
     const [localConfig, setLocalConfig] = useState<HeroConfig>(config);
     const [localButtons, setLocalButtons] = useState<ButtonConfig[]>(config.buttons || []);
     const [activeTab, setActiveTab] = useState<'informacion' | 'apariencia' | 'botones' | 'fondo'>('informacion');
+    const tabsContainerRef = useRef<HTMLDivElement>(null);
+    const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+    const controlsContainerRefs = useRef<Record<number, HTMLDivElement | null>>({});
+    const [showLeftChevron, setShowLeftChevron] = useState<Record<number, boolean>>({});
+    const [showRightChevron, setShowRightChevron] = useState<Record<number, boolean>>({});
 
     // Sincronizar estado cuando cambia el config externo
     useEffect(() => {
         setLocalConfig(config);
         setLocalButtons(config.buttons || []);
     }, [config]);
+
+    // Función para verificar scroll y mostrar/ocultar chevrons
+    const checkScroll = useCallback((index: number) => {
+        const container = controlsContainerRefs.current[index];
+        if (!container) return;
+
+        const { scrollLeft, scrollWidth, clientWidth } = container;
+        const hasOverflow = scrollWidth > clientWidth;
+        const canScrollLeft = scrollLeft > 5; // Margen de 5px para evitar flickering
+        const canScrollRight = scrollLeft < scrollWidth - clientWidth - 5; // Margen de 5px
+
+        setShowLeftChevron(prev => ({ ...prev, [index]: hasOverflow && canScrollLeft }));
+        setShowRightChevron(prev => ({ ...prev, [index]: hasOverflow && canScrollRight }));
+    }, []);
+
+    // Verificar scroll inicial y cuando cambian los botones
+    useEffect(() => {
+        // Usar setTimeout para asegurar que el DOM esté actualizado
+        const timeoutId = setTimeout(() => {
+            localButtons.forEach((_, index) => {
+                const container = controlsContainerRefs.current[index];
+                if (container) {
+                    checkScroll(index);
+                }
+            });
+        }, 100);
+
+        const containers: Array<{ container: HTMLDivElement; handleScroll: () => void; handleResize: () => void; index: number }> = [];
+
+        localButtons.forEach((_, index) => {
+            const container = controlsContainerRefs.current[index];
+            if (container) {
+                const handleScroll = () => checkScroll(index);
+                const handleResize = () => checkScroll(index);
+                container.addEventListener('scroll', handleScroll);
+                window.addEventListener('resize', handleResize);
+                containers.push({ container, handleScroll, handleResize, index });
+            }
+        });
+
+        return () => {
+            clearTimeout(timeoutId);
+            containers.forEach(({ container, handleScroll, handleResize }) => {
+                container.removeEventListener('scroll', handleScroll);
+                window.removeEventListener('resize', handleResize);
+            });
+        };
+    }, [localButtons, checkScroll]);
+
+    // Función para hacer scroll
+    const scrollControls = useCallback((index: number, direction: 'left' | 'right') => {
+        const container = controlsContainerRefs.current[index];
+        if (!container) return;
+
+        const scrollAmount = 200;
+        container.scrollBy({
+            left: direction === 'left' ? -scrollAmount : scrollAmount,
+            behavior: 'smooth'
+        });
+    }, []);
 
     const updateConfig = useCallback((updates: Partial<HeroConfig>) => {
         const cleanedUpdates = { ...updates };
@@ -218,8 +283,8 @@ export default function HeroEditor({
 
 
     const linkTypeOptions = [
-        { value: 'internal', label: 'Enlace interno' },
-        { value: 'external', label: 'Abre nueva página' }
+        { value: 'internal', label: 'Interno' },
+        { value: 'external', label: 'Externo' }
     ];
 
     // Iconos SVG para borderRadius de botones
@@ -289,17 +354,39 @@ export default function HeroEditor({
         { id: 'fondo', label: 'Fondo' }
     ] as const;
 
+    // Scroll automático al tab activo
+    useEffect(() => {
+        const activeTabElement = tabRefs.current[activeTab];
+        const container = tabsContainerRef.current;
+
+        if (activeTabElement && container) {
+            const tabRect = activeTabElement.getBoundingClientRect();
+
+            // Calcular posición para centrar el tab activo
+            const scrollLeft = activeTabElement.offsetLeft - (container.offsetWidth / 2) + (tabRect.width / 2);
+
+            container.scrollTo({
+                left: scrollLeft,
+                behavior: 'smooth'
+            });
+        }
+    }, [activeTab]);
+
     return (
         <ZenCard padding="none">
-            <ZenCardContent className="space-y-4">
+            <ZenCardContent className="space-y-4 !px-4">
                 {/* Tabs Navigation */}
-                <div className="bg-zinc-800/50 p-1 rounded-lg flex gap-1 mt-3 mb-3">
+                <div
+                    ref={tabsContainerRef}
+                    className="bg-zinc-800/50 p-1 rounded-lg flex gap-1 mt-3 mb-3 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                >
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
+                            ref={(el) => { tabRefs.current[tab.id] = el; }}
                             onClick={() => setActiveTab(tab.id)}
                             className={cn(
-                                "flex-1 py-2 px-4 font-medium text-sm transition-all duration-200 rounded text-center",
+                                "flex-shrink-0 py-2 px-4 font-medium text-sm transition-all duration-200 rounded text-center whitespace-nowrap",
                                 activeTab === tab.id
                                     ? "bg-zinc-900 text-emerald-400 shadow-lg"
                                     : "text-zinc-400 hover:text-zinc-300"
@@ -742,7 +829,7 @@ export default function HeroEditor({
 
                                     <div className="grid grid-cols-3 gap-3">
                                         <div>
-                                            <label className="block text-xs text-zinc-400 mb-1">Tipo</label>
+                                            <label className="block text-xs text-zinc-400 mb-1">Enlace</label>
                                             <ZenSelect
                                                 value={button.linkType || 'internal'}
                                                 onValueChange={(value) => updateButton(index, {
@@ -789,10 +876,21 @@ export default function HeroEditor({
                                     </div>
 
                                     {/* Controles rápidos: Pulse, Borde, Esquinas, Sombra */}
-                                    <div className="p-2 border border-zinc-700 rounded-lg bg-zinc-800/30">
-                                        <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-2">
+                                    <div className="p-2 border border-zinc-700 rounded-lg bg-zinc-800/30 relative">
+                                        {/* Contenedor con scroll */}
+                                        <div
+                                            ref={(el) => {
+                                                controlsContainerRefs.current[index] = el;
+                                                if (el) {
+                                                    // Verificar desbordamiento después de que el DOM se actualice
+                                                    setTimeout(() => checkScroll(index), 0);
+                                                }
+                                            }}
+                                            className="flex items-start justify-between gap-2 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] min-h-[60px]"
+                                            onScroll={() => checkScroll(index)}
+                                        >
                                             {/* Pulse */}
-                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-1 sm:px-2 flex-1 sm:flex-initial">
+                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-2 flex-shrink-0">
                                                 <span className="text-xs text-zinc-400 font-medium h-4 flex items-center">Pulse</span>
                                                 <div className="flex items-center justify-center h-8">
                                                     <ZenSwitch
@@ -804,10 +902,10 @@ export default function HeroEditor({
                                             </div>
 
                                             {/* Separador */}
-                                            <div className="hidden sm:block h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
+                                            <div className="h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
 
                                             {/* Borde */}
-                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-1 sm:px-2 flex-1 sm:flex-initial">
+                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-2 flex-shrink-0">
                                                 <span className="text-xs text-zinc-400 font-medium h-4 flex items-center">Borde</span>
                                                 <div className="flex items-center justify-center h-8">
                                                     <button
@@ -827,10 +925,10 @@ export default function HeroEditor({
                                             </div>
 
                                             {/* Separador */}
-                                            <div className="hidden sm:block h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
+                                            <div className="h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
 
                                             {/* Sombra - Toggle y posición en la misma línea */}
-                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-1 sm:px-2 flex-1 sm:flex-initial">
+                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-2 flex-shrink-0">
                                                 <span className="text-xs text-zinc-400 font-medium h-4 flex items-center">Sombra</span>
                                                 <div className="flex items-center justify-center h-8 gap-1">
                                                     {/* Toggle On/Off */}
@@ -885,10 +983,10 @@ export default function HeroEditor({
                                             </div>
 
                                             {/* Separador */}
-                                            <div className="hidden sm:block h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
+                                            <div className="h-12 w-px bg-zinc-700/30 flex-shrink-0"></div>
 
                                             {/* Esquinas */}
-                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-1 sm:px-2 flex-1 sm:flex-initial">
+                                            <div className="flex flex-col items-center gap-1.5 min-h-[60px] justify-between px-2 flex-shrink-0">
                                                 <span className="text-xs text-zinc-400 font-medium h-4 flex items-center">Esquinas</span>
                                                 <div className="flex gap-0.5 items-center justify-center h-8">
                                                     {buttonBorderRadiusOptions.map((option) => {
@@ -914,6 +1012,36 @@ export default function HeroEditor({
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* Chevron izquierdo - superpuesto al borde del contenedor padre */}
+                                        {showLeftChevron[index] && (
+                                            <button
+                                                type="button"
+                                                onClick={() => scrollControls(index, 'left')}
+                                                className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-1.5 flex items-center justify-center text-zinc-300 hover:text-zinc-100 transition-colors rounded-full"
+                                                style={{
+                                                    background: 'radial-gradient(circle, rgba(39, 39, 42, 0.9) 0%, rgba(39, 39, 42, 0.7) 50%, transparent 100%)'
+                                                }}
+                                                title="Desplazar izquierda"
+                                            >
+                                                <ChevronLeft className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
+
+                                        {/* Chevron derecho - superpuesto al borde del contenedor padre */}
+                                        {showRightChevron[index] && (
+                                            <button
+                                                type="button"
+                                                onClick={() => scrollControls(index, 'right')}
+                                                className="absolute right-1 top-1/2 -translate-y-1/2 z-10 p-1.5 flex items-center justify-center text-zinc-300 hover:text-zinc-100 transition-colors rounded-full"
+                                                style={{
+                                                    background: 'radial-gradient(circle, rgba(39, 39, 42, 0.9) 0%, rgba(39, 39, 42, 0.7) 50%, transparent 100%)'
+                                                }}
+                                                title="Desplazar derecha"
+                                            >
+                                                <ChevronRight className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
                                     </div>
 
                                 </div>

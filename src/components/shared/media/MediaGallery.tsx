@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Grid3X3, RectangleHorizontal, LayoutGrid, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Grid3X3, RectangleHorizontal, LayoutGrid, Settings } from 'lucide-react';
 import { MediaItem, MediaMode, MediaBlockConfig } from '@/types/content-blocks';
 import { ImageGrid } from './ImageGrid';
 import { ImageCarousel } from './ImageCarousel';
@@ -98,7 +98,7 @@ export function MediaGallery({
         if (isEditable) {
             // Determinar aspectRatio apropiado para el slot
             let slotAspectRatio: 'square' | 'video' | 'portrait' | 'landscape' = 'square';
-            
+
             // Si el config tiene aspectRatio válido y no es 'auto', usarlo
             if (config.aspectRatio && config.aspectRatio !== 'auto') {
                 slotAspectRatio = config.aspectRatio as 'square' | 'video' | 'portrait' | 'landscape';
@@ -106,7 +106,7 @@ export function MediaGallery({
                 // En modo masonry, usar landscape para slot más grande
                 slotAspectRatio = 'landscape';
             }
-            
+
             return (
                 <ImageGrid
                     media={media}
@@ -209,7 +209,7 @@ export function MediaGallery({
             {media.length > 1 && (
                 <>
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm text-zinc-400 mr-2">Vista:</span>
+                        <span className="text-sm text-zinc-400">Vista:</span>
                         <ZenButton
                             variant={localMode === 'grid' ? 'primary' : 'outline'}
                             size="sm"
@@ -238,20 +238,15 @@ export function MediaGallery({
                             Carousel
                         </ZenButton>
 
-                        {/* Botón Ajustes */}
+                        {/* Botón Ajustes - solo icono */}
                         <ZenButton
                             variant="outline"
                             size="sm"
                             onClick={() => setShowAdvancedConfig(!showAdvancedConfig)}
-                            className="gap-2 ml-auto"
+                            className="ml-auto"
+                            title={showAdvancedConfig ? 'Ocultar ajustes' : 'Mostrar ajustes'}
                         >
                             <Settings className="h-4 w-4" />
-                            {showAdvancedConfig ? 'Ocultar' : 'Ajustes'}
-                            {showAdvancedConfig ? (
-                                <ChevronUp className="h-4 w-4" />
-                            ) : (
-                                <ChevronDown className="h-4 w-4" />
-                            )}
                         </ZenButton>
                     </div>
 

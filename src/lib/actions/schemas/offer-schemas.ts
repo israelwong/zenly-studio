@@ -41,8 +41,8 @@ export const CreateOfferSchema = z.object({
   description: z.string().max(500, 'La descripción es demasiado larga').optional().or(z.literal('')),
   objective: OfferObjectiveSchema,
   slug: z.string().min(1, 'El slug es requerido').max(100, 'El slug es demasiado largo'),
-  cover_media_url: z.string().optional().or(z.literal('')),
-  cover_media_type: z.enum(['image', 'video']).optional(),
+  cover_media_url: z.string().nullable().optional().or(z.literal('')),
+  cover_media_type: z.enum(['image', 'video']).nullable().optional(),
   is_active: z.boolean().default(true),
   landing_page: z.object({
     content_blocks: z.array(z.any()).default([]), // ContentBlock[] - validación más específica en el componente
