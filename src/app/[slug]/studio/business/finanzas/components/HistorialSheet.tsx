@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { History, ChevronLeft, ChevronRight, Download, FileText } from 'lucide-react';
+import { History, ChevronLeft, ChevronRight, Download, FileText, Calendar } from 'lucide-react';
 import {
     Sheet,
     SheetContent,
@@ -12,19 +12,13 @@ import {
 } from '@/components/ui/shadcn/sheet';
 import { ZenButton, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { ZenCalendar, type ZenCalendarProps } from '@/components/ui/zen';
+import { ZenCalendar } from '@/components/ui/zen';
 import { obtenerMovimientosPorRango, type Transaction } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { MovimientoItemCard } from './MovimientoItemCard';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { DateRange } from 'react-day-picker';
+import { DateRange, SelectRangeEventHandler } from 'react-day-picker';
 import { toast } from 'sonner';
-
-type ZenCalendarRangeProps = Omit<ZenCalendarProps, 'mode' | 'selected' | 'onSelect'> & {
-    mode: 'range';
-    selected?: DateRange;
-    onSelect?: (range: DateRange | undefined) => void;
-};
 
 interface HistorialSheetProps {
     open: boolean;
@@ -35,6 +29,7 @@ interface HistorialSheetProps {
 export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialSheetProps) {
     const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [tempRange, setTempRange] = useState<DateRange | undefined>(undefined);
     const [filterMode, setFilterMode] = useState<'month' | 'range'>('month');
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(false);
@@ -108,6 +103,20 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
         const newDate = new Date(currentMonth);
         newDate.setMonth(newDate.getMonth() + 1);
         setCurrentMonth(newDate);
+    };
+
+    const handleApplyDateRange = () => {
+        if (!tempRange?.from || !tempRange?.to) {
+            toast.error('Selecciona un rango de fechas válido');
+            return;
+        }
+        setDateRange(tempRange);
+        setCalendarOpen(false);
+    };
+
+    const handleCancelDateRange = () => {
+        setTempRange(dateRange);
+        setCalendarOpen(false);
     };
 
     const handleExportPDF = async () => {
@@ -296,36 +305,68 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
                                     </ZenButton>
                                 </div>
                             ) : (
-                                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                                <Popover
+                                    open={calendarOpen}
+                                    onOpenChange={(isOpen) => {
+                                        setCalendarOpen(isOpen);
+                                        if (isOpen) {
+                                            setTempRange(dateRange);
+                                        }
+                                    }}
+                                >
                                     <PopoverTrigger asChild>
                                         <ZenButton
                                             variant="outline"
                                             className="w-full justify-start"
-                                            icon={History}
+                                            icon={Calendar}
                                             iconPosition="left"
                                         >
-                                            {dateRange?.from && dateRange?.to
-                                                ? `${format(dateRange.from, 'dd/MM/yyyy', { locale: es })} - ${format(dateRange.to, 'dd/MM/yyyy', { locale: es })}`
-                                                : 'Seleccionar rango de fechas'}
+                                            {dateRange?.from ? (
+                                                dateRange.to ? (
+                                                    <>
+                                                        {format(dateRange.from, 'dd MMM', { locale: es })} -{' '}
+                                                        {format(dateRange.to, 'dd MMM', { locale: es })}
+                                                    </>
+                                                ) : (
+                                                    format(dateRange.from, 'dd MMM', { locale: es })
+                                                )
+                                            ) : (
+                                                'Seleccionar rango de fechas'
+                                            )}
                                         </ZenButton>
                                     </PopoverTrigger>
                                     <PopoverContent
                                         className="w-auto p-0 bg-zinc-900 border-zinc-700"
                                         align="start"
                                     >
-                                        <ZenCalendar
-                                            {...({
-                                                mode: 'range' as const,
-                                                selected: dateRange,
-                                                onSelect: (range) => {
-                                                    setDateRange(range);
-                                                    if (range?.from && range?.to) {
-                                                        setCalendarOpen(false);
-                                                    }
-                                                },
-                                                locale: es,
-                                            } as ZenCalendarRangeProps)}
-                                        />
+                                        <div className="p-3">
+                                            <ZenCalendar
+                                                mode="range"
+                                                defaultMonth={tempRange?.from || dateRange?.from}
+                                                numberOfMonths={3}
+                                                locale={es}
+                                                className="rounded-lg border shadow-sm"
+                                                {...(tempRange && { selected: tempRange })}
+                                                {...(setTempRange && { onSelect: setTempRange as SelectRangeEventHandler })}
+                                            />
+                                            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                                                <ZenButton
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleCancelDateRange}
+                                                >
+                                                    Cancelar
+                                                </ZenButton>
+                                                <ZenButton
+                                                    variant="primary"
+                                                    size="sm"
+                                                    onClick={handleApplyDateRange}
+                                                    disabled={!tempRange?.from || !tempRange?.to}
+                                                >
+                                                    Aplicar rango
+                                                </ZenButton>
+                                            </div>
+                                        </div>
                                     </PopoverContent>
                                 </Popover>
                             )}
