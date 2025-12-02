@@ -84,7 +84,7 @@ async function main() {
     console.log('  ✅ Planes con límites');
     console.log('  ✅ Demo Studio configurado');
     console.log('  ✅ Usuarios (usar seed-demo-users.ts)');
-    console.log('  ✅ Pipelines Marketing + Manager');
+    console.log('  ✅ Pipeline Manager');
     console.log('  ✅ Catálogo de servicios');
     console.log('  ✅ Tipos de evento');
     console.log('  ✅ Demo Lead asociado\n');
@@ -532,38 +532,6 @@ async function seedMetodosPagoBasicos(studio_id: string) {
 
 async function seedPipelines() {
     console.log('📊 Seeding pipelines V2.0...');
-
-    // MARKETING PIPELINE
-    const marketingStages = [
-        { slug: 'lead-nuevo', name: 'Lead Nuevo', stage_type: 'PROSPECTING' as const, color: '#3B82F6', order: 0 },
-        { slug: 'contactado', name: 'Contactado', stage_type: 'PROSPECTING' as const, color: '#8B5CF6', order: 1 },
-        { slug: 'calificado', name: 'Calificado', stage_type: 'QUALIFICATION' as const, color: '#10B981', order: 2 },
-        { slug: 'propuesta', name: 'Propuesta Enviada', stage_type: 'PROPOSAL' as const, color: '#F59E0B', order: 3 },
-        { slug: 'negociacion', name: 'Negociación', stage_type: 'PROPOSAL' as const, color: '#EF4444', order: 4 },
-        { slug: 'ganado', name: 'Ganado', stage_type: 'CONVERSION' as const, color: '#059669', order: 5, is_system: true },
-        { slug: 'perdido', name: 'Perdido', stage_type: 'CLOSED_LOST' as const, color: '#6B7280', order: 6, is_system: true },
-    ];
-
-    for (const stage of marketingStages) {
-        await prisma.marketing_pipeline_stages.upsert({
-            where: {
-                studio_id_slug: {
-                    studio_id: DEMO_STUDIO_ID,
-                    slug: stage.slug,
-                },
-            },
-            update: {},
-            create: {
-                studio_id: DEMO_STUDIO_ID,
-                ...stage,
-                is_active: true,
-                is_system: stage.is_system || false,
-                created_at: new Date(),
-                updated_at: new Date(),
-            },
-        });
-    }
-    console.log(`  ✅ Marketing Pipeline (${marketingStages.length} stages)`);
 
     // MANAGER PIPELINE - ACTUALIZADO V2.1 (Refactorización Events)
     const managerStages = [

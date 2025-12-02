@@ -137,9 +137,6 @@ model user_studio_roles {
   event_tasks               studio_event_tasks[]
   event_timeline            studio_event_timeline[]
   managed_events            studio_events[]                  @relation("EventProjectManager")
-  lead_activities           marketing_lead_activities[]
-  lead_notes                marketing_lead_notes[]
-  assigned_leads            marketing_leads[]
   studio                    studios                          @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   user                      users                            @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -725,8 +722,6 @@ model studios {
   facebook_pixel_id          String?
   zen_pixel_id               String?
   manager_pipeline_stages    studio_manager_pipeline_stages[]
-  marketing_leads            marketing_leads[]
-  marketing_pipeline_stages  marketing_pipeline_stages[]
   platform_campaigns         platform_campaigns[]
   platform_leads             platform_leads?
   platform_user_profiles     platform_user_profiles[]
@@ -759,6 +754,7 @@ model studios {
   phones                     studio_phones[]
   portfolio_media            studio_portfolio_media[]         @relation("portfolio_media")
   portfolios                 studio_portfolios[]
+  offer_media                studio_offer_media[]             @relation("offer_media")
   post_media                 studio_post_media[]              @relation("post_media")
   posts                      studio_posts[]
   revenue_transactions       studio_revenue_transactions[]
@@ -989,7 +985,6 @@ model studio_event_types {
   order              Int                         @default(0)
   created_at         DateTime                    @default(now())
   updated_at         DateTime                    @updatedAt
-  marketing_leads    marketing_leads[]
   quotes             studio_cotizaciones[]
   studio             studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   events             studio_events[]
@@ -1366,10 +1361,9 @@ model studio_events {
   updated_at    DateTime    @updatedAt
 
   // Campos operativos (de manager_events)
-  studio_manager_id       String?
-  started_at              DateTime?
-  completed_at            DateTime?
-  originated_from_lead_id String?   @unique
+  studio_manager_id String?
+  started_at        DateTime?
+  completed_at      DateTime?
 
   // Relaciones comerciales
   contact         studio_contacts                 @relation(fields: [contact_id], references: [id])
@@ -1380,7 +1374,6 @@ model studio_events {
   project_manager user_studio_roles?              @relation("EventProjectManager", fields: [studio_manager_id], references: [id])
   studio          studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   studio_users    studio_users?                   @relation(fields: [user_id], references: [id])
-  originated_lead marketing_leads?                @relation(fields: [originated_from_lead_id], references: [id])
 
   // Relaciones comerciales existentes
   agenda       studio_agenda[]
@@ -1403,7 +1396,6 @@ model studio_events {
   @@index([studio_id, status])
   @@index([promise_id])
   @@index([stage_id])
-  @@index([originated_from_lead_id])
   @@map("studio_eventos")
 }
 
@@ -1606,21 +1598,21 @@ model studio_scheduler_task_activity {
 
 //! BUSINESS (CREW)
 model studio_crew_members {
-  id              String       @id @default(cuid())
-  studio_id       String
-  name            String
-  email           String?
-  phone           String?
-  emergency_phone String?
-  tipo            PersonalType
-  status          String       @default("activo")
-  fixed_salary    Float?
-  salary_frequency String?     // weekly, biweekly, monthly (solo si fixed_salary existe)
-  variable_salary Float?
-  clabe_account   String?
-  order           Int?
-  created_at      DateTime     @default(now())
-  updated_at      DateTime     @updatedAt
+  id               String       @id @default(cuid())
+  studio_id        String
+  name             String
+  email            String?
+  phone            String?
+  emergency_phone  String?
+  tipo             PersonalType
+  status           String       @default("activo")
+  fixed_salary     Float?
+  salary_frequency String? // weekly, biweekly, monthly (solo si fixed_salary existe)
+  variable_salary  Float?
+  clabe_account    String?
+  order            Int?
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
 
   studio           studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   skills           studio_crew_member_skills[]
@@ -2240,126 +2232,6 @@ model studio_revenue_transactions {
 
 //! COMMERCIAL (MARKETING)
 
-model marketing_pipeline_stages {
-  id          String             @id @default(cuid())
-  studio_id   String
-  name        String
-  slug        String
-  description String?
-  color       String             @default("#3B82F6")
-  order       Int                @default(0)
-  stage_type  MarketingStageType
-  is_active   Boolean            @default(true)
-  is_system   Boolean            @default(false)
-  created_at  DateTime           @default(now())
-  updated_at  DateTime           @updatedAt
-  leads       marketing_leads[]
-  studio      studios            @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-
-  @@unique([studio_id, slug])
-  @@index([studio_id, is_active, order])
-}
-
-model marketing_leads {
-  id                    String                      @id @default(cuid())
-  studio_id             String
-  stage_id              String
-  contact_name          String
-  contact_email         String
-  contact_phone         String
-  event_type_id         String?
-  event_date            DateTime?
-  budget_range          String?
-  source_channel_id     String?
-  assigned_to_user_id   String?
-  priority              LeadPriority                @default(MEDIUM)
-  score                 Int?
-  last_contact_date     DateTime?
-  next_follow_up_date   DateTime?
-  contact_attempts      Int                         @default(0)
-  converted_to_event_id String?                     @unique
-  converted_at          DateTime?
-  conversion_value      Decimal?
-  is_active             Boolean                     @default(true)
-  lost_reason           String?
-  lost_at               DateTime?
-  created_at            DateTime                    @default(now())
-  updated_at            DateTime                    @updatedAt
-  converted_event       studio_events?
-  activities            marketing_lead_activities[]
-  notes                 marketing_lead_notes[]
-  assigned_to           user_studio_roles?          @relation(fields: [assigned_to_user_id], references: [id])
-  event_type            studio_event_types?         @relation(fields: [event_type_id], references: [id])
-  stage                 marketing_pipeline_stages   @relation(fields: [stage_id], references: [id])
-  studio                studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  quotes                marketing_quotes[]
-
-  @@index([studio_id, stage_id])
-  @@index([studio_id, is_active])
-  @@index([assigned_to_user_id])
-  @@index([converted_to_event_id])
-  @@index([event_date])
-  @@index([next_follow_up_date])
-}
-
-model marketing_lead_activities {
-  id           String            @id @default(cuid())
-  lead_id      String
-  user_id      String
-  type         ActivityType
-  subject      String
-  description  String?
-  outcome      String?
-  scheduled_at DateTime?
-  completed_at DateTime?
-  created_at   DateTime          @default(now())
-  lead         marketing_leads   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
-  user         user_studio_roles @relation(fields: [user_id], references: [id])
-
-  @@index([lead_id, created_at])
-  @@index([user_id])
-  @@index([scheduled_at])
-}
-
-model marketing_quotes {
-  id               String          @id @default(cuid())
-  lead_id          String
-  version          Int             @default(1)
-  quote_data       Json
-  total_amount     Decimal
-  discount_percent Decimal?        @default(0)
-  final_amount     Decimal
-  sent_at          DateTime?
-  viewed_at        DateTime?
-  view_count       Int             @default(0)
-  accepted_at      DateTime?
-  rejected_at      DateTime?
-  rejection_reason String?
-  expires_at       DateTime
-  is_active        Boolean         @default(true)
-  created_at       DateTime        @default(now())
-  updated_at       DateTime        @updatedAt
-  lead             marketing_leads @relation(fields: [lead_id], references: [id], onDelete: Cascade)
-
-  @@index([lead_id, version])
-  @@index([expires_at, is_active])
-}
-
-model marketing_lead_notes {
-  id         String            @id @default(cuid())
-  lead_id    String
-  user_id    String
-  content    String
-  is_pinned  Boolean           @default(false)
-  created_at DateTime          @default(now())
-  updated_at DateTime          @updatedAt
-  lead       marketing_leads   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
-  user       user_studio_roles @relation(fields: [user_id], references: [id])
-
-  @@index([lead_id, created_at])
-  @@index([is_pinned])
-}
-
 //! CONTENT (PORTFOLIOS)
 model studio_portfolios {
   id              String                            @id @default(cuid())
@@ -2684,22 +2556,24 @@ model studio_lead_forms {
 
 //! OFFERS
 model studio_offers {
-  id                String                      @id @default(cuid())
-  studio_id         String
-  name              String
-  description       String?
-  objective         String // 'presencial' | 'virtual'
-  slug              String
-  cover_media_url   String?
-  cover_media_type  String? // 'image' | 'video'
-  is_active         Boolean                     @default(true)
-  created_at        DateTime                    @default(now())
-  updated_at        DateTime                    @updatedAt
-  studio            studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  landing_page      studio_offer_landing_pages?
-  leadform          studio_offer_leadforms?
-  visits            studio_offer_visits[]
-  submissions       studio_offer_submissions[]
+  id               String                        @id @default(cuid())
+  studio_id        String
+  name             String
+  description      String?
+  objective        String // 'presencial' | 'virtual'
+  slug             String
+  cover_media_url  String?
+  cover_media_type String? // 'image' | 'video'
+  is_active        Boolean                       @default(true)
+  created_at       DateTime                      @default(now())
+  updated_at       DateTime                      @updatedAt
+  studio           studios                       @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  landing_page     studio_offer_landing_pages?
+  leadform         studio_offer_leadforms?
+  visits           studio_offer_visits[]
+  submissions      studio_offer_submissions[]
+  media            studio_offer_media[]          @relation("offer_media")
+  content_blocks   studio_offer_content_blocks[]
 
   @@unique([studio_id, slug])
   @@index([studio_id, is_active])
@@ -2707,31 +2581,30 @@ model studio_offers {
 }
 
 model studio_offer_landing_pages {
-  id             String        @id @default(cuid())
-  offer_id       String        @unique
-  content_blocks Json
-  cta_config     Json
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @updatedAt
-  offer          studio_offers @relation(fields: [offer_id], references: [id], onDelete: Cascade)
+  id         String        @id @default(cuid())
+  offer_id   String        @unique
+  cta_config Json
+  created_at DateTime      @default(now())
+  updated_at DateTime      @updatedAt
+  offer      studio_offers @relation(fields: [offer_id], references: [id], onDelete: Cascade)
 
   @@index([offer_id])
 }
 
 model studio_offer_leadforms {
-  id                      String        @id @default(cuid())
-  offer_id                String        @unique
-  title                   String?
-  description             String?
-  success_message         String        @default("¡Gracias! Nos pondremos en contacto pronto.")
-  success_redirect_url    String?
-  fields_config           Json
-  subject_options         Json? // Lista de opciones de asunto personalizable
-  enable_interest_date    Boolean       @default(false)
-  validate_with_calendar  Boolean       @default(false)
-  created_at              DateTime      @default(now())
-  updated_at              DateTime      @updatedAt
-  offer                   studio_offers @relation(fields: [offer_id], references: [id], onDelete: Cascade)
+  id                     String        @id @default(cuid())
+  offer_id               String        @unique
+  title                  String?
+  description            String?
+  success_message        String        @default("¡Gracias! Nos pondremos en contacto pronto.")
+  success_redirect_url   String?
+  fields_config          Json
+  subject_options        Json? // Lista de opciones de asunto personalizable
+  enable_interest_date   Boolean       @default(false)
+  validate_with_calendar Boolean       @default(false)
+  created_at             DateTime      @default(now())
+  updated_at             DateTime      @updatedAt
+  offer                  studio_offers @relation(fields: [offer_id], references: [id], onDelete: Cascade)
 
   @@index([offer_id])
 }
@@ -2778,6 +2651,65 @@ model studio_offer_submissions {
   @@index([offer_id, created_at])
   @@index([contact_id])
   @@index([visit_id])
+}
+
+model studio_offer_media {
+  id                  String                             @id @default(cuid())
+  offer_id            String
+  studio_id           String
+  file_url            String
+  file_type           String
+  filename            String
+  storage_bytes       BigInt
+  mime_type           String
+  dimensions          Json?
+  duration_seconds    Int?
+  display_order       Int                                @default(0)
+  alt_text            String?
+  thumbnail_url       String?
+  storage_path        String
+  created_at          DateTime                           @default(now())
+  updated_at          DateTime                           @updatedAt
+  content_block_media studio_offer_content_block_media[]
+  offer               studio_offers                      @relation("offer_media", fields: [offer_id], references: [id], onDelete: Cascade)
+  studio              studios                            @relation("offer_media", fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([offer_id])
+  @@index([studio_id])
+  @@index([display_order])
+  @@index([storage_bytes])
+}
+
+model studio_offer_content_blocks {
+  id           String                             @id @default(cuid())
+  offer_id     String
+  type         String
+  title        String?
+  description  String?
+  presentation String                             @default("block")
+  order        Int                                @default(0)
+  config       Json?
+  created_at   DateTime                           @default(now())
+  updated_at   DateTime                           @updatedAt
+  block_media  studio_offer_content_block_media[]
+  offer        studio_offers                      @relation(fields: [offer_id], references: [id], onDelete: Cascade)
+
+  @@index([offer_id, order])
+  @@index([type])
+}
+
+model studio_offer_content_block_media {
+  id               String                      @id @default(cuid())
+  content_block_id String
+  media_id         String
+  order            Int                         @default(0)
+  created_at       DateTime                    @default(now())
+  content_block    studio_offer_content_blocks @relation(fields: [content_block_id], references: [id], onDelete: Cascade)
+  media            studio_offer_media          @relation(fields: [media_id], references: [id], onDelete: Cascade)
+
+  @@unique([content_block_id, media_id])
+  @@index([content_block_id, order])
+  @@index([media_id])
 }
 
 model studio_client_portal_access {
@@ -2987,30 +2919,6 @@ enum LeadStatus {
   NEGOCIACION
   CONVERTIDO
   PERDIDO
-}
-
-enum MarketingStageType {
-  PROSPECTING
-  QUALIFICATION
-  PROPOSAL
-  CONVERSION
-  CLOSED_LOST
-}
-
-enum LeadPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-enum ActivityType {
-  CALL
-  EMAIL
-  MEETING
-  WHATSAPP
-  NOTE
-  TASK
 }
 
 enum ManagerStageType {

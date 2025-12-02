@@ -13,6 +13,7 @@ import type {
   OfferListResponse,
   StudioOffer,
 } from "@/types/offers";
+import { getOfferContentBlocks, batchUpdateOfferContentBlocks } from "./offer-content-blocks.actions";
 
 /**
  * Validar si un slug existe en el studio (excluyendo una oferta específica si se proporciona)
@@ -98,7 +99,6 @@ export async function createOffer(
           is_active: validatedData.is_active,
           landing_page: {
             create: {
-              content_blocks: validatedData.landing_page.content_blocks,
               cta_config: validatedData.landing_page.cta_config,
             },
           },
@@ -120,6 +120,18 @@ export async function createOffer(
           leadform: true,
         },
       });
+
+      // Guardar content blocks en las nuevas tablas
+      if (validatedData.landing_page.content_blocks && validatedData.landing_page.content_blocks.length > 0) {
+        const blocksResult = await batchUpdateOfferContentBlocks(
+          offer.id,
+          studio.id,
+          validatedData.landing_page.content_blocks
+        );
+        if (!blocksResult.success) {
+          console.error("Error saving content blocks:", blocksResult.error);
+        }
+      }
 
       const mappedOffer: StudioOffer = {
         id: offer.id,
@@ -279,7 +291,6 @@ export async function updateOffer(
       if (validatedData.landing_page) {
         updateData.landing_page = {
           update: {
-            content_blocks: validatedData.landing_page.content_blocks,
             cta_config: validatedData.landing_page.cta_config,
           },
         };
@@ -308,6 +319,22 @@ export async function updateOffer(
           leadform: true,
         },
       });
+
+      // Actualizar content blocks si se proporcionaron
+      if (validatedData.landing_page?.content_blocks) {
+        const blocksResult = await batchUpdateOfferContentBlocks(
+          offerId,
+          studio.id,
+          validatedData.landing_page.content_blocks
+        );
+        if (!blocksResult.success) {
+          console.error("Error updating content blocks:", blocksResult.error);
+        }
+      }
+
+      // Obtener content blocks desde las nuevas tablas
+      const contentBlocksResult = await getOfferContentBlocks(offerId);
+      const contentBlocks = contentBlocksResult.success ? contentBlocksResult.data || [] : [];
 
       const mappedOffer: StudioOffer = {
         id: offer.id,
@@ -405,6 +432,10 @@ export async function getOffer(
         return { success: false, error: "Oferta no encontrada" };
       }
 
+      // Obtener content blocks desde las nuevas tablas
+      const contentBlocksResult = await getOfferContentBlocks(offerId);
+      const contentBlocks = contentBlocksResult.success ? contentBlocksResult.data || [] : [];
+
       const mappedOffer: StudioOffer = {
         id: offer.id,
         studio_id: offer.studio_id,
@@ -419,7 +450,7 @@ export async function getOffer(
           ? {
             id: offer.landing_page.id,
             offer_id: offer.landing_page.offer_id,
-            content_blocks: offer.landing_page.content_blocks as unknown[],
+            content_blocks: contentBlocks,
             cta_config: offer.landing_page.cta_config as {
               buttons: Array<{
                 id: string;
@@ -518,6 +549,10 @@ export async function getPublicOffer(
         return { success: false, error: "Oferta no encontrada" };
       }
 
+      // Obtener content blocks desde las nuevas tablas
+      const contentBlocksResult = await getOfferContentBlocks(offer.id);
+      const contentBlocks = contentBlocksResult.success ? contentBlocksResult.data || [] : [];
+
       const mappedOffer: StudioOffer = {
         id: offer.id,
         studio_id: offer.studio_id,
@@ -532,7 +567,7 @@ export async function getPublicOffer(
           ? {
             id: offer.landing_page.id,
             offer_id: offer.landing_page.offer_id,
-            content_blocks: offer.landing_page.content_blocks as unknown[],
+            content_blocks: contentBlocks,
             cta_config: offer.landing_page.cta_config as {
               buttons: Array<{
                 id: string;
@@ -552,6 +587,7 @@ export async function getPublicOffer(
             offer_id: offer.leadform.offer_id,
             title: offer.leadform.title,
             description: offer.leadform.description,
+            success_message,
             success_message: offer.leadform.success_message,
             success_redirect_url: offer.leadform.success_redirect_url,
             fields_config: offer.leadform.fields_config as {
@@ -613,57 +649,65 @@ export async function listOffers(
         },
       });
 
-      const mappedOffers: StudioOffer[] = offers.map((offer) => ({
-        id: offer.id,
-        studio_id: offer.studio_id,
-        name: offer.name,
-        description: offer.description,
-        objective: offer.objective as "presencial" | "virtual",
-        slug: offer.slug,
-        is_active: offer.is_active,
-        created_at: offer.created_at,
-        updated_at: offer.updated_at,
-        landing_page: offer.landing_page
-          ? {
-            id: offer.landing_page.id,
-            offer_id: offer.landing_page.offer_id,
-            content_blocks: offer.landing_page.content_blocks as unknown[],
-            cta_config: offer.landing_page.cta_config as {
-              buttons: Array<{
-                id: string;
-                text: string;
-                variant: "primary" | "secondary" | "outline";
-                position: "top" | "middle" | "bottom" | "floating";
-                href?: string;
-              }>;
-            },
-            created_at: offer.landing_page.created_at,
-            updated_at: offer.landing_page.updated_at,
-          }
-          : undefined,
-        leadform: offer.leadform
-          ? {
-            id: offer.leadform.id,
-            offer_id: offer.leadform.offer_id,
-            title: offer.leadform.title,
-            description: offer.leadform.description,
-            success_message: offer.leadform.success_message,
-            success_redirect_url: offer.leadform.success_redirect_url,
-            fields_config: offer.leadform.fields_config as {
-              fields: Array<{
-                id: string;
-                type: string;
-                label: string;
-                required: boolean;
-                placeholder?: string;
-                options?: string[];
-              }>;
-            },
-            created_at: offer.leadform.created_at,
-            updated_at: offer.leadform.updated_at,
-          }
-          : undefined,
-      }));
+      // Obtener content blocks para cada oferta
+      const mappedOffers: StudioOffer[] = await Promise.all(
+        offers.map(async (offer) => {
+          const contentBlocksResult = await getOfferContentBlocks(offer.id);
+          const contentBlocks = contentBlocksResult.success ? contentBlocksResult.data || [] : [];
+
+          return {
+            id: offer.id,
+            studio_id: offer.studio_id,
+            name: offer.name,
+            description: offer.description,
+            objective: offer.objective as "presencial" | "virtual",
+            slug: offer.slug,
+            is_active: offer.is_active,
+            created_at: offer.created_at,
+            updated_at: offer.updated_at,
+            landing_page: offer.landing_page
+              ? {
+                id: offer.landing_page.id,
+                offer_id: offer.landing_page.offer_id,
+                content_blocks: contentBlocks,
+                cta_config: offer.landing_page.cta_config as {
+                  buttons: Array<{
+                    id: string;
+                    text: string;
+                    variant: "primary" | "secondary" | "outline";
+                    position: "top" | "middle" | "bottom" | "floating";
+                    href?: string;
+                  }>;
+                },
+                created_at: offer.landing_page.created_at,
+                updated_at: offer.landing_page.updated_at,
+              }
+              : undefined,
+            leadform: offer.leadform
+              ? {
+                id: offer.leadform.id,
+                offer_id: offer.leadform.offer_id,
+                title: offer.leadform.title,
+                description: offer.leadform.description,
+                success_message: offer.leadform.success_message,
+                success_redirect_url: offer.leadform.success_redirect_url,
+                fields_config: offer.leadform.fields_config as {
+                  fields: Array<{
+                    id: string;
+                    type: string;
+                    label: string;
+                    required: boolean;
+                    placeholder?: string;
+                    options?: string[];
+                  }>;
+                },
+                created_at: offer.leadform.created_at,
+                updated_at: offer.leadform.updated_at,
+              }
+              : undefined,
+          };
+        })
+      );
 
       return { success: true, data: mappedOffers };
     });
@@ -776,6 +820,10 @@ export async function duplicateOffer(
         newSlug = `${original.slug}-copia-${counter}`;
       }
 
+      // Obtener content blocks de la oferta original
+      const originalContentBlocksResult = await getOfferContentBlocks(original.id);
+      const originalContentBlocks = originalContentBlocksResult.success ? originalContentBlocksResult.data || [] : [];
+
       // Crear oferta duplicada
       const duplicatedOffer = await prisma.studio_offers.create({
         data: {
@@ -788,7 +836,6 @@ export async function duplicateOffer(
           landing_page: original.landing_page
             ? {
               create: {
-                content_blocks: original.landing_page.content_blocks,
                 cta_config: original.landing_page.cta_config,
               },
             }
@@ -811,6 +858,22 @@ export async function duplicateOffer(
         },
       });
 
+      // Copiar content blocks a la oferta duplicada
+      if (originalContentBlocks.length > 0) {
+        const blocksResult = await batchUpdateOfferContentBlocks(
+          duplicatedOffer.id,
+          studio.id,
+          originalContentBlocks.map(block => ({ ...block, id: undefined })) // Remover IDs para crear nuevos
+        );
+        if (!blocksResult.success) {
+          console.error("Error copying content blocks:", blocksResult.error);
+        }
+      }
+
+      // Obtener content blocks de la oferta duplicada
+      const duplicatedContentBlocksResult = await getOfferContentBlocks(duplicatedOffer.id);
+      const duplicatedContentBlocks = duplicatedContentBlocksResult.success ? duplicatedContentBlocksResult.data || [] : [];
+
       const mappedOffer: StudioOffer = {
         id: duplicatedOffer.id,
         studio_id: duplicatedOffer.studio_id,
@@ -825,7 +888,7 @@ export async function duplicateOffer(
           ? {
             id: duplicatedOffer.landing_page.id,
             offer_id: duplicatedOffer.landing_page.offer_id,
-            content_blocks: duplicatedOffer.landing_page.content_blocks as unknown[],
+            content_blocks: duplicatedContentBlocks,
             cta_config: duplicatedOffer.landing_page.cta_config as {
               buttons: Array<{
                 id: string;
