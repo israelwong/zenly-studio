@@ -234,7 +234,7 @@ export default function OfertasPage() {
                                             <TableRow
                                                 key={offer.id}
                                                 className="border-zinc-800 cursor-pointer hover:bg-zinc-900/50 transition-colors"
-                                                onClick={() => router.push(`/${studioSlug}/studio/commercial/ofertas/${offer.id}/editar`)}
+                                                onClick={() => router.push(`/${studioSlug}/studio/commercial/ofertas/${offer.id}`)}
                                             >
                                                 <TableCell className="font-medium text-zinc-100">
                                                     <div className="flex flex-col gap-1">

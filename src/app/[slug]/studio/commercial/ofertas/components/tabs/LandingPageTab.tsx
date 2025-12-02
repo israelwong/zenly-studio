@@ -16,7 +16,9 @@ export function LandingPageTab({ studioSlug }: LandingPageTabProps) {
       <div>
         <ZenCard>
           <ZenCardHeader>
-            <ZenCardTitle>Landing Page</ZenCardTitle>
+            <ZenCardTitle>
+              Landing Page <span className="text-xs font-normal text-zinc-600">(Paso 2 de 3)</span>
+            </ZenCardTitle>
           </ZenCardHeader>
           <ZenCardContent>
             <LandingEditor studioSlug={studioSlug} />

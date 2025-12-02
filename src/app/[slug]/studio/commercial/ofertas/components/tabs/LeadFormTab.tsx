@@ -16,7 +16,9 @@ export function LeadFormTab({ studioSlug }: LeadFormTabProps) {
       <div>
         <ZenCard>
           <ZenCardHeader>
-            <ZenCardTitle>Formulario de Contacto</ZenCardTitle>
+            <ZenCardTitle>
+              Formulario de Contacto <span className="text-xs font-normal text-zinc-600">(Paso 3 de 3)</span>
+            </ZenCardTitle>
           </ZenCardHeader>
           <ZenCardContent>
             <LeadFormEditor />

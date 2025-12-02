@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, BarChart3, Eye, MousePointerClick, TrendingUp } from 'lucide-react';
 import {
   ZenCard,
@@ -10,73 +10,16 @@ import {
   ZenCardTitle,
   ZenButton
 } from '@/components/ui/zen';
-import { getOffer } from '@/lib/actions/studio/offers/offers.actions';
-import { getOfferStats } from '@/lib/actions/studio/offers/offer-stats.actions';
 import type { StudioOffer, OfferStats } from '@/types/offers';
-import { toast } from 'sonner';
 
-export default function EstadisticasOfertaPage() {
-  const params = useParams();
+interface OfferStatsProps {
+  studioSlug: string;
+  offer: StudioOffer;
+  stats: OfferStats;
+}
+
+export function OfferStats({ studioSlug, offer, stats }: OfferStatsProps) {
   const router = useRouter();
-  const studioSlug = params.slug as string;
-  const offerId = params.offerId as string;
-
-  const [offer, setOffer] = useState<StudioOffer | null>(null);
-  const [stats, setStats] = useState<OfferStats | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [offerResult, statsResult] = await Promise.all([
-          getOffer(offerId, studioSlug),
-          getOfferStats({ offer_id: offerId }),
-        ]);
-
-        if (offerResult.success && offerResult.data) {
-          setOffer(offerResult.data);
-        } else {
-          toast.error(offerResult.error || 'Error al cargar la oferta');
-        }
-
-        if (statsResult.success && statsResult.data) {
-          setStats(statsResult.data);
-        } else {
-          toast.error(statsResult.error || 'Error al cargar las estadísticas');
-        }
-      } catch (error) {
-        console.error('[EstadisticasOfertaPage] Error:', error);
-        toast.error('Error al cargar los datos');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (offerId) {
-      loadData();
-    }
-  }, [offerId, studioSlug]);
-
-  if (loading) {
-    return (
-      <div className="w-full max-w-7xl mx-auto">
-        <div className="space-y-4">
-          <div className="h-12 bg-zinc-800/50 rounded-lg animate-pulse" />
-          <div className="h-64 bg-zinc-800/50 rounded-lg animate-pulse" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!offer || !stats) {
-    return (
-      <div className="w-full max-w-7xl mx-auto">
-        <div className="text-center py-12">
-          <p className="text-zinc-400">No se pudieron cargar los datos</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">

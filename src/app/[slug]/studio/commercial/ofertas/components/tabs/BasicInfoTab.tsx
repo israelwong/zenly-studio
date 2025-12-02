@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenSwitch } from "@/components/ui/zen";
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenSwitch, ZenButton } from "@/components/ui/zen";
 import { MobilePreviewOffer } from "@/app/[slug]/studio/components/MobilePreviewOffer";
 import { BasicInfoEditor } from "../editors/BasicInfoEditor";
 import { OfferCardPreview } from "../previews/OfferCardPreview";
@@ -12,9 +12,15 @@ interface BasicInfoTabProps {
   studioSlug: string;
   mode: "create" | "edit";
   offerId?: string;
+  onSave?: () => void;
+  onCancel?: () => void;
+  isSaving?: boolean;
+  savedOfferId?: string | null;
 }
 
-export function BasicInfoTab({ studioSlug, mode, offerId }: BasicInfoTabProps) {
+export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSaving, savedOfferId }: BasicInfoTabProps) {
+  // Usar savedOfferId si está disponible (después del primer guardado), sino offerId
+  const currentOfferId = savedOfferId || offerId;
   const { formData, updateFormData } = useOfferEditor();
 
   const [nameError, setNameError] = useState<string | null>(null);
@@ -35,10 +41,11 @@ export function BasicInfoTab({ studioSlug, mode, offerId }: BasicInfoTabProps) {
       setNameError(null);
 
       try {
+        // Excluir la oferta actual si estamos editando o si ya se guardó (tiene ID)
         const slugExists = await checkOfferSlugExists(
           studioSlug,
           formData.slug,
-          mode === "edit" ? offerId : undefined
+          currentOfferId || undefined
         );
 
         if (slugExists) {
@@ -62,7 +69,9 @@ export function BasicInfoTab({ studioSlug, mode, offerId }: BasicInfoTabProps) {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [formData.slug, studioSlug, mode, offerId]);
+  }, [formData.slug, studioSlug, currentOfferId]);
+
+  const showActionButtons = !savedOfferId && mode === "create";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -70,15 +79,9 @@ export function BasicInfoTab({ studioSlug, mode, offerId }: BasicInfoTabProps) {
       <div>
         <ZenCard>
           <ZenCardHeader>
-            <div className="flex items-center justify-between">
-              <ZenCardTitle>Información</ZenCardTitle>
-              <ZenSwitch
-                id="offer-active-switch"
-                checked={formData.is_active}
-                onCheckedChange={(checked) => updateFormData({ is_active: checked })}
-                label="Oferta Activa"
-              />
-            </div>
+            <ZenCardTitle>
+              Información <span className="text-xs font-normal text-zinc-600">(Paso 1 de 3)</span>
+            </ZenCardTitle>
           </ZenCardHeader>
           <ZenCardContent>
             <BasicInfoEditor
@@ -87,6 +90,27 @@ export function BasicInfoTab({ studioSlug, mode, offerId }: BasicInfoTabProps) {
               isValidatingSlug={isValidatingSlug}
               slugHint={slugHint}
             />
+
+            {/* Botones de acción solo antes de guardar */}
+            {showActionButtons && (
+              <div className="flex items-center gap-3 pt-6 mt-6 border-t border-zinc-800">
+                <ZenButton
+                  variant="ghost"
+                  onClick={onCancel}
+                  disabled={isSaving}
+                >
+                  Cancelar
+                </ZenButton>
+                <ZenButton
+                  onClick={onSave}
+                  loading={isSaving}
+                  disabled={isSaving}
+                  className="flex-1"
+                >
+                  Crear Oferta
+                </ZenButton>
+              </div>
+            )}
           </ZenCardContent>
         </ZenCard>
       </div>

@@ -255,14 +255,12 @@ export function LandingEditor({ studioSlug }: LandingEditorProps) {
               {contentBlocks.length}
             </span>
           </div>
-          {contentBlocks.length > 0 && (
-            <div className="flex items-center gap-2">
-              <HardDrive className="w-3 h-3 text-zinc-500" />
-              <span className="text-xs font-medium text-emerald-400">
-                {formatBytes(totalComponentsSize)}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <HardDrive className="w-3 h-3 text-zinc-500" />
+            <span className={`text-xs font-medium ${totalComponentsSize > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+              {formatBytes(totalComponentsSize)}
+            </span>
+          </div>
         </div>
         {contentBlocks.length > 0 && (
           <p className="text-xs text-zinc-500 mt-3 leading-relaxed">

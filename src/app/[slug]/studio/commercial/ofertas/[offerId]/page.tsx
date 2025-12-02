@@ -2,12 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { OfferEditor } from '../../components/OfferEditor';
+import { OfferEditor } from '../components/OfferEditor';
 import { getOffer } from '@/lib/actions/studio/offers/offers.actions';
 import type { StudioOffer } from '@/types/offers';
 import { toast } from 'sonner';
 
-export default function EditarOfertaPage() {
+export default function OfertaPage() {
   const params = useParams();
   const studioSlug = params.slug as string;
   const offerId = params.offerId as string;
@@ -26,7 +26,7 @@ export default function EditarOfertaPage() {
           toast.error(result.error || 'Error al cargar la oferta');
         }
       } catch (error) {
-        console.error('[EditarOfertaPage] Error:', error);
+        console.error('[OfertaPage] Error:', error);
         toast.error('Error al cargar la oferta');
       } finally {
         setLoading(false);
