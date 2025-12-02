@@ -342,15 +342,14 @@ export function ImageGrid({
                 }}
             >
                 <div
-                    className={`relative ${isEditable ? 'bg-zinc-800' : ''} ${borderStyleClass} overflow-hidden ${
-                        isEditable 
-                            ? 'aspect-square' 
-                            : configColumns === 1 
-                                ? '' // Si solo hay 1 item, no forzar aspecto - usar h-auto
-                                : (item.file_type === 'video' ? '' : aspectClass)
-                    } transition-all duration-200 ease-out ${isEditable
-                        ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg'
-                        : 'cursor-pointer hover:scale-[1.02] hover:shadow-lg'
+                    className={`relative ${isEditable ? 'bg-zinc-800' : ''} ${borderStyleClass} overflow-hidden ${isEditable
+                        ? 'aspect-square'
+                        : configColumns === 1
+                            ? '' // Si solo hay 1 item, no forzar aspecto - usar h-auto
+                            : (item.file_type === 'video' ? '' : aspectClass)
+                        } transition-all duration-200 ease-out ${isEditable
+                            ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg'
+                            : 'cursor-pointer hover:scale-[1.02] hover:shadow-lg'
                         } ${isDragging ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
                     style={item.file_type === 'video' && !isEditable ? (hasMultipleVideos ? { maxHeight: '400px', minHeight: '200px' } : {}) : {}}
                     onClick={!isEditable && configLightbox ? () => handleImageClick(index) : undefined}
@@ -489,7 +488,7 @@ export function ImageGrid({
                     onDragEnd={handleDragEnd}
                 >
                     <div
-                        className={`grid ${columnsClass} ${gapClass} ${configGap === 0 && media.length > 0 ? 'p-0' : 'p-4'} rounded-lg border-2 border-dashed transition-all duration-300 ease-out border-zinc-700 bg-zinc-800/30`}
+                        className={`grid ${columnsClass} ${gapClass} rounded-lg transition-all duration-300 ease-out`}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => {
                             e.preventDefault();

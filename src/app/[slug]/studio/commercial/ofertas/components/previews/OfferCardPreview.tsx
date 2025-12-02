@@ -69,23 +69,12 @@ export function OfferCardPreview({
             </div>
           )}
 
-          {/* Gradiente overlay inferior para descripción */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
-
-          {/* Descripción sobre la imagen (inferior) */}
-          {description && (
-            <div className="absolute bottom-0 left-0 right-0 p-4">
-              <p className="text-sm text-white/90 line-clamp-2 leading-relaxed font-medium">
-                {description}
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Footer minimalista con botón discreto */}
         <div className="px-4 py-3 border-t border-zinc-800/50">
           <button className="w-full flex items-center justify-between text-zinc-400 hover:text-emerald-400 transition-colors group">
-            <span className="text-sm font-medium">Más información</span>
+            <span className="text-sm font-medium">Ver oferta</span>
             <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>

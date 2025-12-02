@@ -1,5 +1,5 @@
 'use server'
-import prisma from '../../../prismaClient';
+import { prisma } from '@/lib/prisma';
 
 export async function obtenerEventoEtapas() {
     return await prisma.eventoEtapa.findMany({

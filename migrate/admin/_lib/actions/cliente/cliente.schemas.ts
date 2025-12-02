@@ -24,10 +24,14 @@ export const ActualizarClienteSchema = z.object({
     status: z.string(),
     canalId: z.string().nullable().transform(val => {
         // Convertir cadenas vacías, espacios en blanco, o valores inválidos a null
-        if (!val || val.trim() === '' || val === 'null' || val === 'undefined') {
+        if (val === null || val === undefined) {
             return null;
         }
-        return val.trim();
+        const trimmed = val.trim();
+        if (trimmed === '' || trimmed === 'null' || trimmed === 'undefined') {
+            return null;
+        }
+        return trimmed;
     })
 })
 

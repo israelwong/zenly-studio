@@ -2,7 +2,7 @@
 
 'use server'
 
-import prisma from '../../prismaClient';
+import { prisma } from '@/lib/prisma';
 import { AGENDA_STATUS } from '../../constants/status';
 import {
     AgendaCreateSchema,
@@ -173,7 +173,7 @@ export async function crearAgenda(data: AgendaCreateForm) {
                 concepto: validatedData.concepto || null,
                 agendaTipo: validatedData.agendaTipo,
                 eventoId: validatedData.eventoId,
-                ...(validatedData.userId ? { userId: validatedData.userId } : {}),
+                userId: validatedData.userId,
                 status: validatedData.status,
                 // id and updatedAt are omitted so Prisma will auto-generate them
             },
@@ -315,7 +315,7 @@ export async function obtenerAgendasPendientes() {
     try {
         const agendas = await prisma.agenda.findMany({
             where: {
-                status: 'pendiente'
+                status: AGENDA_STATUS.PENDIENTE
             },
             include: {
                 Evento: {

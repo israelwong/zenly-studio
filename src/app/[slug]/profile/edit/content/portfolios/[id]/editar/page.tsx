@@ -7,8 +7,13 @@ import { ContentBlock } from "@/types/content-blocks";
 // Tipo para el portfolio de la BD
 type DatabasePortfolio = NonNullable<Awaited<ReturnType<typeof getStudioPortfolioById>>['data']>;
 
-// Función para convertir portfolio de BD a PortfolioFormData
-function convertDatabasePortfolioToFormData(dbPortfolio: DatabasePortfolio): PortfolioFormData {
+// Tipo extendido que incluye published_at para determinar estado (mismo que PortfolioEditor)
+type PortfolioWithStatus = PortfolioFormData & {
+    published_at?: Date | null;
+};
+
+// Función para convertir portfolio de BD a PortfolioFormData con published_at
+function convertDatabasePortfolioToFormData(dbPortfolio: DatabasePortfolio): PortfolioWithStatus {
     // Mapear media items
     const media = dbPortfolio.media?.map(item => ({
         id: item.id,
@@ -45,7 +50,7 @@ function convertDatabasePortfolioToFormData(dbPortfolio: DatabasePortfolio): Por
         })) || [],
     })) || [];
 
-    return {
+    const formData = {
         id: dbPortfolio.id,
         title: dbPortfolio.title,
         slug: dbPortfolio.slug,
@@ -61,8 +66,10 @@ function convertDatabasePortfolioToFormData(dbPortfolio: DatabasePortfolio): Por
         is_published: dbPortfolio.is_published,
         content_blocks: contentBlocks,
         order: dbPortfolio.order,
-        published_at: dbPortfolio.published_at, // Incluir published_at para determinar estado
+        published_at: dbPortfolio.published_at ?? null,
     };
+
+    return formData as PortfolioWithStatus;
 }
 
 interface EditarPortfolioPageProps {

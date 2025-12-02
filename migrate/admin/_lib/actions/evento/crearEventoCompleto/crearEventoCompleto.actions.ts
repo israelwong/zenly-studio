@@ -1,6 +1,6 @@
 'use server'
 
-import prisma from '../../../prismaClient'
+import { prisma } from '@/lib/prisma';
 import { validarCondigoAutorizacion } from '../../configuracion/configuracion.actions'
 import { obtenerEtapa1 } from '../etapa/etapa.actions'
 import { EVENTO_STATUS, CLIENTE_STATUS, MANUAL_CREATION_FLOW } from '../../../constants/status'

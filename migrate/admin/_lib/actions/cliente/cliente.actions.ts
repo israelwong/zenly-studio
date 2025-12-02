@@ -1,5 +1,5 @@
 'use server'
-import prisma from '../../prismaClient';
+import { prisma } from '@/lib/prisma';
 import { Cliente } from "../../types";
 import {
     ActualizarClienteSchema,

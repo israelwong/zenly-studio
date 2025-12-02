@@ -1,6 +1,7 @@
 // Ruta: app/admin/_lib/actions/agenda/agenda.schemas.ts
 
 import { z } from 'zod';
+import { AGENDA_STATUS } from '../../constants/status';
 
 // Schema para crear una nueva agenda
 export const AgendaCreateSchema = z.object({
@@ -25,8 +26,15 @@ export const AgendaCreateSchema = z.object({
     userId: z.string()
         .min(1, 'Usuario requerido'),
 
-    status: z.enum(['pendiente', 'completado', 'cancelado'])
-        .default('pendiente'),
+    status: z.enum([
+        AGENDA_STATUS.POR_CONFIRMAR,
+        AGENDA_STATUS.PENDIENTE,
+        AGENDA_STATUS.CONFIRMADO,
+        AGENDA_STATUS.CANCELADO,
+        AGENDA_STATUS.COMPLETADO,
+        AGENDA_STATUS.REAGENDADO
+    ])
+        .default(AGENDA_STATUS.PENDIENTE),
 });
 
 // Schema para actualizar una agenda
@@ -37,7 +45,14 @@ export const AgendaUpdateSchema = AgendaCreateSchema.extend({
 // Schema para búsqueda de agenda
 export const AgendaBusquedaSchema = z.object({
     search: z.string().optional(),
-    status: z.enum(['pendiente', 'completado', 'cancelado']).optional(),
+    status: z.enum([
+        AGENDA_STATUS.POR_CONFIRMAR,
+        AGENDA_STATUS.PENDIENTE,
+        AGENDA_STATUS.CONFIRMADO,
+        AGENDA_STATUS.CANCELADO,
+        AGENDA_STATUS.COMPLETADO,
+        AGENDA_STATUS.REAGENDADO
+    ]).optional(),
     agendaTipo: z.enum(['Evento', 'Sesion', 'Cita virtual']).optional(),
     eventoId: z.string().optional(),
     fechaDesde: z.string().optional(),
@@ -49,7 +64,14 @@ export const AgendaBusquedaSchema = z.object({
 // Schema para cambiar status de agenda
 export const AgendaStatusSchema = z.object({
     id: z.string().min(1, 'ID requerido'),
-    status: z.enum(['pendiente', 'completado', 'cancelado']),
+    status: z.enum([
+        AGENDA_STATUS.POR_CONFIRMAR,
+        AGENDA_STATUS.PENDIENTE,
+        AGENDA_STATUS.CONFIRMADO,
+        AGENDA_STATUS.CANCELADO,
+        AGENDA_STATUS.COMPLETADO,
+        AGENDA_STATUS.REAGENDADO
+    ]),
 });
 
 // Tipos inferidos

@@ -1,5 +1,5 @@
 'use server'
-import prisma from '../../../prismaClient';
+import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 export async function actualizarCliente(clienteId: string, data: {

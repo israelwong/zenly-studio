@@ -1,5 +1,5 @@
 'use server'
-import prisma from '../../../prismaClient';
+import { prisma } from '@/lib/prisma';
 import { ClienteCompletoSchema } from './eventoDetalleCompleto.schemas';
 import { revalidatePath } from 'next/cache';
 

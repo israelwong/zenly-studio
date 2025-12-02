@@ -1,6 +1,6 @@
 'use server'
 import { ServicioGasto } from "../../types";
-import prisma from '../../prismaClient';
+import { prisma } from '@/lib/prisma';
 
 export async function obtenerGastosPorServicio(servicioId: string): Promise<ServicioGasto[]> {
     const gastos = await prisma.servicioGasto.findMany({

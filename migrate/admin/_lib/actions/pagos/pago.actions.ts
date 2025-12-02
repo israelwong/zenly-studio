@@ -2,7 +2,7 @@
 
 import { Pago } from "../../types";
 import { PAGO_STATUS } from '../../constants/status';
-import prisma from '../../prismaClient';
+import { prisma } from '@/lib/prisma';
 import { Agenda } from '../../types';
 import { crearAgendaEvento } from "../agenda";
 // import { enviarCorreoBienvenida, enviarCorreoPagoExitoso } from "../../correo.actions";

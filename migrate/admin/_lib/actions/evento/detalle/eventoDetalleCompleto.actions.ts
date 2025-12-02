@@ -1,5 +1,5 @@
 'use server'
-import prisma from '../../../prismaClient';
+import { prisma } from '@/lib/prisma';
 import { EventoDetalleCompletoSchema, EventoDetalleCompleto } from './eventoDetalleCompleto.schemas';
 
 export async function getEventoDetalleCompleto(eventoId: string): Promise<EventoDetalleCompleto | null> {

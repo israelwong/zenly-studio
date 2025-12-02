@@ -1,6 +1,6 @@
 'use server'
 
-import prisma from '../../prismaClient';
+import { prisma } from '@/lib/prisma';
 import { calcularPaquete, type ServicioCantidad } from '../pricing/calculos';
 import { obtenerConfiguracionActiva } from '../configuracion/configuracion.actions';
 import { obtenerServicio } from '../servicios/servicios.actions';

@@ -1,5 +1,5 @@
 'use server'
-import prisma from '../../prismaClient';
+import { prisma } from '@/lib/prisma';
 import { EventosConDetallesArraySchema, EventoConDetalles, EventosPorEtapaArraySchema, EventoPorEtapa } from './evento.schemas';
 import { EVENTO_STATUS } from '../../constants/status';
 
