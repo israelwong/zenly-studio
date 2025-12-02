@@ -19,6 +19,7 @@ interface CrewMember {
     is_primary: boolean;
   }>;
   fixed_salary: number | null;
+  salary_frequency?: string | null;
   variable_salary: number | null;
   account: {
     id: string;
@@ -57,6 +58,7 @@ export function CrewMemberFormModal({
       maxWidth="lg"
       showCloseButton={true}
       closeOnClickOutside={false}
+      zIndex={9999}
     >
       <CrewMemberForm
         studioSlug={studioSlug}

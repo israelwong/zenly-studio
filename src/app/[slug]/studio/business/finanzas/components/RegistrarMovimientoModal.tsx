@@ -19,6 +19,12 @@ interface RegistrarMovimientoModalProps {
     tipo: 'ingreso' | 'gasto';
     studioSlug: string;
     onSuccess?: () => void;
+    movimientoId?: string; // ID del movimiento a editar
+    initialData?: {
+        concepto: string;
+        monto: number;
+        metodoPago?: string; // Solo para ingresos
+    };
 }
 
 export function RegistrarMovimientoModal({
@@ -27,7 +33,10 @@ export function RegistrarMovimientoModal({
     tipo,
     studioSlug,
     onSuccess,
+    movimientoId,
+    initialData,
 }: RegistrarMovimientoModalProps) {
+    const isEditMode = !!movimientoId;
     const [concepto, setConcepto] = useState('');
     const [monto, setMonto] = useState('');
     const [metodoPago, setMetodoPago] = useState('');
@@ -40,6 +49,16 @@ export function RegistrarMovimientoModal({
     useEffect(() => {
         if (isOpen) {
             setInitialLoading(true);
+
+            // Si hay datos iniciales, cargarlos
+            if (initialData) {
+                setConcepto(initialData.concepto);
+                setMonto(initialData.monto.toString());
+                if (initialData.metodoPago) {
+                    setMetodoPago(initialData.metodoPago);
+                }
+            }
+
             if (tipo === 'ingreso') {
                 // Delay para mostrar skeleton antes de cargar métodos de pago
                 setTimeout(() => {
@@ -53,7 +72,7 @@ export function RegistrarMovimientoModal({
                 }, 600);
             }
         }
-    }, [isOpen, tipo, studioSlug]);
+    }, [isOpen, tipo, studioSlug, initialData]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -66,6 +85,51 @@ export function RegistrarMovimientoModal({
             setLoadingMetodos(true);
         }
     }, [isOpen]);
+
+    // Cargar datos del movimiento si estamos en modo edición
+    useEffect(() => {
+        if (isOpen && movimientoId && !initialData) {
+            loadMovimientoData();
+        }
+    }, [isOpen, movimientoId]);
+
+    const loadMovimientoData = async () => {
+        if (!movimientoId) return;
+
+        setInitialLoading(true);
+        try {
+            if (tipo === 'gasto') {
+                const { obtenerGastoOperativo } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+                const result = await obtenerGastoOperativo(studioSlug, movimientoId);
+                if (result.success && result.data) {
+                    setConcepto(result.data.concept);
+                    setMonto(result.data.amount.toString());
+                } else {
+                    toast.error(result.error || 'Error al cargar datos del gasto');
+                }
+            } else {
+                // Para ingresos, obtener el pago
+                const { obtenerPagoPorId } = await import('@/lib/actions/studio/business/events/payments.actions');
+                const result = await obtenerPagoPorId(studioSlug, movimientoId);
+                if (result.success && result.data) {
+                    setConcepto(result.data.concept || '');
+                    setMonto(result.data.amount.toString());
+                    // Cargar métodos de pago primero para poder establecer el método
+                    await loadMetodosPago();
+                    if (result.data.payment_method) {
+                        setMetodoPago(result.data.payment_method);
+                    }
+                } else {
+                    toast.error(result.error || 'Error al cargar datos del ingreso');
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando datos del movimiento:', error);
+            toast.error('Error al cargar datos del movimiento');
+        } finally {
+            setInitialLoading(false);
+        }
+    };
 
     const loadMetodosPago = async () => {
         setLoadingMetodos(true);
@@ -112,35 +176,75 @@ export function RegistrarMovimientoModal({
 
         try {
             if (tipo === 'ingreso') {
-                const result = await crearIngresoManual({
-                    studio_slug: studioSlug,
-                    amount: parseFloat(monto),
-                    metodo_pago: metodoPago,
-                    concept: concepto.trim(),
-                    payment_date: new Date(),
-                });
+                if (isEditMode && movimientoId) {
+                    // Actualizar ingreso existente
+                    const { actualizarPago } = await import('@/lib/actions/studio/business/events/payments.actions');
+                    const result = await actualizarPago({
+                        id: movimientoId,
+                        studio_slug: studioSlug,
+                        amount: parseFloat(monto),
+                        metodo_pago: metodoPago,
+                        concept: concepto.trim(),
+                    });
 
-                if (result.success) {
-                    toast.success('Ingreso registrado correctamente');
-                    await onSuccess?.();
-                    onClose();
+                    if (result.success) {
+                        toast.success('Ingreso actualizado correctamente');
+                        await onSuccess?.();
+                        onClose();
+                    } else {
+                        setError(result.error || 'Error al actualizar ingreso');
+                    }
                 } else {
-                    setError(result.error || 'Error al registrar ingreso');
+                    // Crear nuevo ingreso
+                    const result = await crearIngresoManual({
+                        studio_slug: studioSlug,
+                        amount: parseFloat(monto),
+                        metodo_pago: metodoPago,
+                        concept: concepto.trim(),
+                        payment_date: new Date(),
+                    });
+
+                    if (result.success) {
+                        toast.success('Ingreso registrado correctamente');
+                        await onSuccess?.();
+                        onClose();
+                    } else {
+                        setError(result.error || 'Error al registrar ingreso');
+                    }
                 }
             } else {
-                const result = await crearGastoOperativo(studioSlug, {
-                    concept: concepto.trim(),
-                    amount: parseFloat(monto),
-                    category: 'Operativo',
-                    date: new Date(),
-                });
+                if (isEditMode && movimientoId) {
+                    // Actualizar gasto existente
+                    const { actualizarGastoOperativo } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+                    const result = await actualizarGastoOperativo(studioSlug, movimientoId, {
+                        concept: concepto.trim(),
+                        amount: parseFloat(monto),
+                        category: 'Operativo',
+                    });
 
-                if (result.success) {
-                    toast.success('Gasto registrado correctamente');
-                    await onSuccess?.();
-                    onClose();
+                    if (result.success) {
+                        toast.success('Gasto actualizado correctamente');
+                        await onSuccess?.();
+                        onClose();
+                    } else {
+                        setError(result.error || 'Error al actualizar gasto');
+                    }
                 } else {
-                    setError(result.error || 'Error al registrar gasto');
+                    // Crear nuevo gasto
+                    const result = await crearGastoOperativo(studioSlug, {
+                        concept: concepto.trim(),
+                        amount: parseFloat(monto),
+                        category: 'Operativo',
+                        date: new Date(),
+                    });
+
+                    if (result.success) {
+                        toast.success('Gasto registrado correctamente');
+                        await onSuccess?.();
+                        onClose();
+                    } else {
+                        setError(result.error || 'Error al registrar gasto');
+                    }
                 }
             }
         } catch (err) {
@@ -155,10 +259,10 @@ export function RegistrarMovimientoModal({
         <ZenDialog
             isOpen={isOpen}
             onClose={onClose}
-            title={tipo === 'ingreso' ? 'Registrar Ingreso Manual' : 'Registrar Gasto Operativo'}
-            description={tipo === 'ingreso' ? 'Registra un ingreso manual sin asociación' : 'Registra un gasto operativo'}
+            title={isEditMode ? (tipo === 'ingreso' ? 'Editar Ingreso Manual' : 'Editar Gasto Operativo') : (tipo === 'ingreso' ? 'Registrar Ingreso Manual' : 'Registrar Gasto Operativo')}
+            description={isEditMode ? (tipo === 'ingreso' ? 'Edita los datos del ingreso manual' : 'Edita los datos del gasto operativo') : (tipo === 'ingreso' ? 'Registra un ingreso manual sin asociación' : 'Registra un gasto operativo')}
             onSave={handleSave}
-            saveLabel="Guardar"
+            saveLabel={isEditMode ? 'Actualizar' : 'Guardar'}
             saveVariant="primary"
             isLoading={loading}
             onCancel={onClose}

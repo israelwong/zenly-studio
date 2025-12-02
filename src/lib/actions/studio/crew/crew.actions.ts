@@ -54,6 +54,7 @@ export async function obtenerCrewMembers(studioSlug: string) {
         tipo: member.tipo,
         status: member.status,
         fixed_salary: member.fixed_salary ? Number(member.fixed_salary) : null,
+        salary_frequency: member.salary_frequency || null,
         variable_salary: member.variable_salary ? Number(member.variable_salary) : null,
         skills: member.skills.map((s) => ({
           id: s.skill.id,
@@ -153,6 +154,7 @@ export async function crearCrewMember(
         phone: validated.phone || null,
         tipo: validated.tipo,
         fixed_salary: validated.fixed_salary || null,
+        salary_frequency: validated.salary_frequency || null,
         variable_salary: validated.variable_salary || null,
         status: 'activo',
       },
@@ -231,6 +233,7 @@ export async function actualizarCrewMember(
       tipo: string;
       status?: string;
       fixed_salary: number | null;
+      salary_frequency: string | null;
       variable_salary: number | null;
     } = {
       name: validated.name,
@@ -238,6 +241,7 @@ export async function actualizarCrewMember(
       phone: validated.phone || null,
       tipo: validated.tipo,
       fixed_salary: validated.fixed_salary || null,
+      salary_frequency: validated.salary_frequency || null,
       variable_salary: validated.variable_salary || null,
     };
 
@@ -444,11 +448,17 @@ export async function eliminarCrewMember(
 }
 
 /**
- * Crear crew member rápido (solo nombre y tipo) - para uso desde modal rápido
+ * Crear crew member rápido (nombre, tipo y honorarios) - para uso desde modal rápido
  */
 export async function crearCrewMemberRapido(
   studioSlug: string,
-  data: { name: string; tipo: 'OPERATIVO' | 'ADMINISTRATIVO' | 'PROVEEDOR' }
+  data: {
+    name: string;
+    tipo: 'OPERATIVO' | 'ADMINISTRATIVO' | 'PROVEEDOR';
+    fixed_salary?: number | null;
+    variable_salary?: number | null;
+    salary_frequency?: string | null;
+  }
 ) {
   try {
     const studio = await prisma.studios.findUnique({
@@ -465,14 +475,49 @@ export async function crearCrewMemberRapido(
       return { success: false, error: 'El nombre debe tener al menos 2 caracteres' };
     }
 
-    // Crear crew member con datos mínimos
+    // Validar tipo de honorarios
+    if (data.fixed_salary !== undefined && data.fixed_salary !== null) {
+      if (data.fixed_salary <= 0) {
+        return { success: false, error: 'El monto del salario fijo debe ser mayor a 0' };
+      }
+      if (!data.salary_frequency) {
+        return { success: false, error: 'La frecuencia de pago es obligatoria para salario fijo' };
+      }
+      if (!['weekly', 'biweekly', 'monthly'].includes(data.salary_frequency)) {
+        return { success: false, error: 'Frecuencia de pago inválida' };
+      }
+    }
+
+    // Construir datos para crear
+    const createData: {
+      studio_id: string;
+      name: string;
+      tipo: 'OPERATIVO' | 'ADMINISTRATIVO' | 'PROVEEDOR';
+      status: string;
+      fixed_salary?: number | null;
+      variable_salary?: number | null;
+      salary_frequency?: string | null;
+    } = {
+      studio_id: studio.id,
+      name: data.name.trim(),
+      tipo: data.tipo,
+      status: 'activo',
+    };
+
+    // Agregar datos de honorarios según el tipo
+    if (data.fixed_salary !== undefined && data.fixed_salary !== null) {
+      createData.fixed_salary = data.fixed_salary;
+      createData.salary_frequency = data.salary_frequency || null;
+      createData.variable_salary = null;
+    } else {
+      createData.variable_salary = data.variable_salary !== undefined ? data.variable_salary : null;
+      createData.fixed_salary = null;
+      createData.salary_frequency = null;
+    }
+
+    // Crear crew member
     const crew = await prisma.studio_crew_members.create({
-      data: {
-        studio_id: studio.id,
-        name: data.name.trim(),
-        tipo: data.tipo,
-        status: 'activo',
-      },
+      data: createData,
       select: {
         id: true,
         name: true,
@@ -482,6 +527,7 @@ export async function crearCrewMemberRapido(
         status: true,
         fixed_salary: true,
         variable_salary: true,
+        salary_frequency: true,
       },
     });
 
@@ -505,6 +551,7 @@ export async function crearCrewMemberRapido(
         status: crew.status,
         fixed_salary: crew.fixed_salary ? Number(crew.fixed_salary) : null,
         variable_salary: crew.variable_salary ? Number(crew.variable_salary) : null,
+        salary_frequency: crew.salary_frequency,
       },
     };
   } catch (error) {

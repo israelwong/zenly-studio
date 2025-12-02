@@ -60,12 +60,25 @@ export function ZenDialog({
   zIndex = 10050
 }: ZenDialogProps) {
   const [mounted, setMounted] = React.useState(false);
+  const [isAnimating, setIsAnimating] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!isOpen || !mounted) return null;
+  React.useEffect(() => {
+    if (isOpen) {
+      setIsAnimating(true);
+    } else {
+      // Dar tiempo para la animación de salida
+      const timer = setTimeout(() => {
+        setIsAnimating(false);
+      }, 200); // Duración de la animación
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  if (!mounted || !isAnimating) return null;
 
   const handleCancel = () => {
     if (onCancel) {
@@ -80,20 +93,34 @@ export function ZenDialog({
 
   const modalContent = (
     <>
-      {/* Overlay separado */}
+      {/* Overlay separado - SIEMPRE bloquea clics */}
       <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm"
-        style={{ zIndex: overlayZIndex }}
+        className={cn(
+          "fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-200",
+          isOpen ? "opacity-100" : "opacity-0"
+        )}
+        style={{
+          zIndex: overlayZIndex,
+          pointerEvents: 'auto'
+        }}
         onClick={(e) => {
+          // Solo cerrar si closeOnClickOutside está habilitado
           if (closeOnClickOutside && e.target === e.currentTarget) {
             onClose();
           }
+          // Si no, simplemente bloquear el clic (no hacer nada)
         }}
       />
       {/* Contenido del modal */}
       <div
-        className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
-        style={{ zIndex: contentZIndex }}
+        className={cn(
+          "fixed inset-0 flex items-center justify-center p-4 transition-all duration-200",
+          isOpen ? "opacity-100 scale-100" : "opacity-0 scale-95"
+        )}
+        style={{
+          zIndex: contentZIndex,
+          pointerEvents: 'none'
+        }}
       >
         <div
           className={cn(
@@ -127,7 +154,7 @@ export function ZenDialog({
           </ZenCardHeader>
 
           {/* Content */}
-          <ZenCardContent className="p-6 overflow-visible flex-1 min-h-0">
+          <ZenCardContent className="p-6 overflow-y-auto flex-1 min-h-0" style={{ maxHeight: 'calc(90vh - 140px)' }}>
             {children}
           </ZenCardContent>
 

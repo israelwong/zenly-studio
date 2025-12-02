@@ -43,6 +43,70 @@ export interface PaymentListResponse {
 }
 
 /**
+ * Obtener pago por ID
+ */
+export async function obtenerPagoPorId(
+    studioSlug: string,
+    pagoId: string
+): Promise<{ success: boolean; data?: PaymentItem; error?: string }> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+
+        if (!studio) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        const pago = await prisma.studio_pagos.findFirst({
+            where: {
+                id: pagoId,
+                OR: [
+                    { cotizaciones: { studio_id: studio.id } },
+                    { promise: { studio_id: studio.id } },
+                    { studio_users: { studio_id: studio.id } },
+                ],
+            },
+            select: {
+                id: true,
+                amount: true,
+                metodo_pago: true,
+                payment_date: true,
+                concept: true,
+                description: true,
+                created_at: true,
+            },
+        });
+
+        if (!pago) {
+            return { success: false, error: 'Pago no encontrado' };
+        }
+
+        const item: PaymentItem = {
+            id: pago.id,
+            amount: Number(pago.amount),
+            payment_method: pago.metodo_pago,
+            payment_date: pago.payment_date || pago.created_at,
+            concept: pago.concept,
+            description: pago.description,
+            created_at: pago.created_at,
+        };
+
+        return {
+            success: true,
+            data: item,
+        };
+    } catch (error) {
+        console.error('[PAYMENTS] Error obteniendo pago:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al obtener pago',
+        };
+    }
+}
+
+/**
  * Obtener pagos por cotización
  */
 export async function obtenerPagosPorCotizacion(

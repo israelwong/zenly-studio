@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Edit, Trash2, MoreVertical, Phone, Mail } from 'lucide-react';
+import { Edit, Trash2, MoreVertical, Phone, Mail, Calendar, DollarSign } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { ZenButton, ZenCard, ZenCardContent, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { eliminarCrewMember, checkCrewMemberAssociations } from '@/lib/actions/studio/crew';
@@ -26,6 +26,7 @@ interface CrewMemberCardProps {
     status: string;
     skills: Skill[];
     fixed_salary: number | null;
+    salary_frequency?: string | null;
     variable_salary: number | null;
     account: {
       id: string;
@@ -203,6 +204,41 @@ export function CrewMemberCard({
                 </div>
               )}
             </div>
+
+            {/* Salario */}
+            {(member.fixed_salary || member.variable_salary) && (
+              <div className="mt-2 flex items-center gap-2 text-sm">
+                <DollarSign className="h-4 w-4 text-emerald-400" />
+                <span className="text-zinc-300 font-medium">
+                  {member.fixed_salary
+                    ? new Intl.NumberFormat('es-MX', {
+                      style: 'currency',
+                      currency: 'MXN',
+                    }).format(member.fixed_salary)
+                    : member.variable_salary
+                      ? new Intl.NumberFormat('es-MX', {
+                        style: 'currency',
+                        currency: 'MXN',
+                      }).format(member.variable_salary)
+                      : ''}
+                </span>
+                {member.fixed_salary && member.salary_frequency && (
+                  <div className="flex items-center gap-1 text-xs text-zinc-500">
+                    <Calendar className="h-3 w-3" />
+                    <span>
+                      {member.salary_frequency === 'weekly'
+                        ? 'Semanal'
+                        : member.salary_frequency === 'biweekly'
+                          ? 'Quincenal'
+                          : 'Mensual'}
+                    </span>
+                  </div>
+                )}
+                {member.variable_salary && (
+                  <span className="text-xs text-zinc-500">Variable</span>
+                )}
+              </div>
+            )}
 
             {/* Status Cuenta */}
             {member.account && (

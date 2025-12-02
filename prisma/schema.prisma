@@ -1615,6 +1615,7 @@ model studio_crew_members {
   tipo            PersonalType
   status          String       @default("activo")
   fixed_salary    Float?
+  salary_frequency String?     // weekly, biweekly, monthly (solo si fixed_salary existe)
   variable_salary Float?
   clabe_account   String?
   order           Int?

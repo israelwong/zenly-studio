@@ -27,6 +27,7 @@ Implementar un sistema completo de gestión de contratos para eventos, con plant
    - Relaciones: studio, event, template, created_by_user
 
 **Relaciones agregadas:**
+
 - `studio_events.contract` → `studio_event_contracts`
 - `studio_event_types.contract_templates` → `studio_contract_templates[]`
 - `studios.contract_templates` → `studio_contract_templates[]`
@@ -56,6 +57,7 @@ Implementar un sistema completo de gestión de contratos para eventos, con plant
 **Archivo:** `src/lib/actions/studio/business/contracts/templates.actions.ts`
 
 **Funciones implementadas:**
+
 - ✅ `getContractTemplates` - Listar plantillas con filtros
 - ✅ `getContractTemplate` - Obtener una plantilla
 - ✅ `getDefaultContractTemplate` - Plantilla por defecto o por tipo de evento
@@ -66,6 +68,7 @@ Implementar un sistema completo de gestión de contratos para eventos, con plant
 - ✅ `duplicateContractTemplate` - Clonar plantilla
 
 **Características:**
+
 - Generación automática de slug desde nombre
 - Solo una plantilla puede ser `is_default` por studio
 - No permite desactivar la única plantilla activa
@@ -90,6 +93,7 @@ Implementar un sistema completo de gestión de contratos para eventos, con plant
    - ✅ `renderServiciosBlock` - Renderizar bloque especial `[SERVICIOS_INCLUIDOS]`
 
 **Variables soportadas:**
+
 - `@nombre_cliente` → Nombre del contacto
 - `@fecha_evento` → Fecha formateada en español
 - `@tipo_evento` → Tipo de evento
@@ -156,6 +160,7 @@ Implementar un sistema completo de gestión de contratos para eventos, con plant
    - Versión visible en header
 
 **Archivo adicional:**
+
 - `default-template.ts` - Template HTML por defecto con estructura completa
 
 ---
@@ -177,6 +182,7 @@ Implementar un sistema completo de gestión de contratos para eventos, con plant
    - Preview renderizado con datos reales
 
 **Flujo de usuario:**
+
 ```
 Sin contrato
   └─ [Generar Contrato] → Genera desde plantilla por defecto
@@ -191,10 +197,12 @@ Sin contrato
 ## 📊 Estadísticas de Implementación
 
 **Commits realizados:**
+
 - 8 commits en rama `251201-studio-contratos`
 - ~3,500 líneas de código agregadas
 
 **Archivos creados:**
+
 - 2 modelos Prisma
 - 3 archivos de server actions
 - 5 archivos de tipos y schemas
@@ -203,6 +211,7 @@ Sin contrato
 - 1 archivo de documentación
 
 **Archivos modificados:**
+
 - `prisma/schema.prisma`
 - `src/components/ui/zen/index.ts`
 - `src/app/[slug]/studio/business/events/[eventId]/page.tsx`
@@ -259,23 +268,27 @@ Evento con cambios (precio, servicios, fecha)
 ## 🎨 Características de UX
 
 ### Vista Previa vs Código
+
 - **Vista Previa:** HTML renderizado con estilos Tailwind prose
 - **Código:** Editor de texto plano para edición directa
 - Toggle rápido entre ambas vistas
 
 ### Variables Dinámicas
+
 - Panel lateral siempre visible
 - Click para copiar o insertar
 - Feedback visual (checkmark)
 - Tooltips con ejemplos
 
 ### Validaciones
+
 - Nombre único por studio
 - No eliminar última plantilla activa
 - Verificar cotización autorizada antes de generar
 - Longitud máxima: 50,000 caracteres
 
 ### Estados del Contrato
+
 - `draft` - Borrador editable
 - `published` - Publicado (para futuro: enviar a cliente)
 - `signed` - Firmado (para futuro: firma digital)
@@ -447,11 +460,13 @@ Antes de mergear a `main`:
 ## 📚 Recursos
 
 **Documentos relacionados:**
+
 - `/docs/ANALISIS_CONTRATOS.md` - Análisis completo del sistema
 - `/prisma/schema.prisma` - Modelos de base de datos
 - `/src/types/contracts.ts` - Tipos TypeScript
 
 **Referencias externas:**
+
 - [TipTap Documentation](https://tiptap.dev/)
 - [React-PDF Documentation](https://react-pdf.org/)
 - [Tailwind Prose Plugin](https://tailwindcss.com/docs/typography-plugin)

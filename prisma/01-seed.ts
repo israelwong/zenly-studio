@@ -218,6 +218,13 @@ async function seedAcquisitionChannels() {
             icon: 'globe',
             order: 4,
         },
+        {
+            name: 'Leadform',
+            description: 'Leads capturados desde formularios de ofertas comerciales',
+            color: '#EC4899',
+            icon: 'file-text',
+            order: 5,
+        },
     ];
 
     for (const channel of channels) {

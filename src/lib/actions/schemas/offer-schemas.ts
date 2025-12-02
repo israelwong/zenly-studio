@@ -1,0 +1,111 @@
+import { z } from 'zod';
+
+// =============================================================================
+// SCHEMAS PARA GESTIÓN DE OFERTAS COMERCIALES
+// =============================================================================
+
+// Enum para objetivo de oferta
+export const OfferObjectiveSchema = z.enum(['presencial', 'virtual']);
+
+// Schema para campos personalizados del leadform
+export const LeadFormFieldSchema = z.object({
+  id: z.string(),
+  type: z.enum(['text', 'email', 'phone', 'textarea', 'select', 'date']),
+  label: z.string().min(1, 'La etiqueta es requerida'),
+  required: z.boolean().default(false),
+  placeholder: z.string().optional(),
+  options: z.array(z.string()).optional(), // para select
+});
+
+// Schema para configuración de CTAs
+export const CTAButtonSchema = z.object({
+  id: z.string(),
+  text: z.string().min(1, 'El texto del botón es requerido'),
+  variant: z.enum(['primary', 'secondary', 'outline']).default('primary'),
+  position: z.enum(['top', 'middle', 'bottom', 'floating']).default('bottom'),
+  href: z.string().optional(), // siempre será /offer/[offerId]/leadform
+});
+
+export const CTAConfigSchema = z.object({
+  buttons: z.array(CTAButtonSchema).default([]),
+});
+
+// Schema para configuración de campos del leadform
+export const LeadFormFieldsConfigSchema = z.object({
+  fields: z.array(LeadFormFieldSchema).default([]),
+});
+
+// Schema para crear/actualizar oferta
+export const CreateOfferSchema = z.object({
+  name: z.string().min(1, 'El nombre es requerido').max(100, 'El nombre es demasiado largo'),
+  description: z.string().max(500, 'La descripción es demasiado larga').optional().or(z.literal('')),
+  objective: OfferObjectiveSchema,
+  slug: z.string().min(1, 'El slug es requerido').max(100, 'El slug es demasiado largo'),
+  is_active: z.boolean().default(true),
+  landing_page: z.object({
+    content_blocks: z.array(z.any()).default([]), // ContentBlock[] - validación más específica en el componente
+    cta_config: CTAConfigSchema,
+  }),
+  leadform: z.object({
+    title: z.string().max(200, 'El título es demasiado largo').optional().or(z.literal('')),
+    description: z.string().max(1000, 'La descripción es demasiado larga').optional().or(z.literal('')),
+    success_message: z.string().max(500, 'El mensaje es demasiado largo').default('¡Gracias! Nos pondremos en contacto pronto.'),
+    success_redirect_url: z.string().url('URL inválida').optional().or(z.literal('')),
+    fields_config: LeadFormFieldsConfigSchema,
+  }),
+});
+
+export const UpdateOfferSchema = CreateOfferSchema.partial().extend({
+  id: z.string().min(1, 'El ID es requerido'),
+});
+
+// Schema para envío de leadform
+export const SubmitLeadFormSchema = z.object({
+  offer_id: z.string().min(1, 'El ID de la oferta es requerido'),
+  name: z.string().min(1, 'El nombre es requerido').max(100, 'El nombre es demasiado largo'),
+  phone: z.string().min(10, 'El teléfono debe tener al menos 10 dígitos'),
+  email: z.string().email('Email inválido').optional().or(z.literal('')),
+  // Campos personalizados adicionales
+  custom_fields: z.record(z.any()).optional(),
+  // UTM parameters
+  utm_source: z.string().optional(),
+  utm_medium: z.string().optional(),
+  utm_campaign: z.string().optional(),
+  utm_term: z.string().optional(),
+  utm_content: z.string().optional(),
+  // Session tracking
+  session_id: z.string().optional(),
+});
+
+// Schema para registrar visita
+export const TrackVisitSchema = z.object({
+  offer_id: z.string().min(1, 'El ID de la oferta es requerido'),
+  visit_type: z.enum(['landing', 'leadform']),
+  referrer: z.string().optional(),
+  utm_source: z.string().optional(),
+  utm_medium: z.string().optional(),
+  utm_campaign: z.string().optional(),
+  utm_term: z.string().optional(),
+  utm_content: z.string().optional(),
+  session_id: z.string().optional(),
+});
+
+// Schema para obtener estadísticas
+export const GetOfferStatsSchema = z.object({
+  offer_id: z.string().min(1, 'El ID de la oferta es requerido'),
+  start_date: z.date().optional(),
+  end_date: z.date().optional(),
+  group_by: z.enum(['day', 'week', 'month']).optional(),
+});
+
+// Types exportados
+export type OfferObjective = z.infer<typeof OfferObjectiveSchema>;
+export type LeadFormField = z.infer<typeof LeadFormFieldSchema>;
+export type CTAButton = z.infer<typeof CTAButtonSchema>;
+export type CTAConfig = z.infer<typeof CTAConfigSchema>;
+export type LeadFormFieldsConfig = z.infer<typeof LeadFormFieldsConfigSchema>;
+export type CreateOfferData = z.infer<typeof CreateOfferSchema>;
+export type UpdateOfferData = z.infer<typeof UpdateOfferSchema>;
+export type SubmitLeadFormData = z.infer<typeof SubmitLeadFormSchema>;
+export type TrackVisitData = z.infer<typeof TrackVisitSchema>;
+export type GetOfferStatsData = z.infer<typeof GetOfferStatsSchema>;

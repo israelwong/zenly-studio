@@ -240,7 +240,106 @@ export default function FinanzasPage() {
                 <ZenCardContent className="p-6">
                     <div className="space-y-6">
                         {loading ? (
-                            <div className="h-96 bg-zinc-900/50 rounded-lg animate-pulse" />
+                            <>
+                                {/* KPIs Skeleton */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                    {[1, 2, 3, 4].map((i) => (
+                                        <div key={i} className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1 space-y-2">
+                                                    <div className="h-3 bg-zinc-700/50 rounded w-24 animate-pulse" />
+                                                    <div className="h-7 bg-zinc-700/50 rounded w-32 animate-pulse" />
+                                                </div>
+                                                <div className="h-9 w-9 bg-zinc-700/50 rounded-lg animate-pulse" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Grid de 3 columnas Skeleton */}
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-400px)] overflow-hidden">
+                                    {/* Columna 1: Movimientos */}
+                                    <div className="lg:col-span-1 h-full">
+                                        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
+                                            <div className="border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
+                                                <div className="h-4 bg-zinc-700/50 rounded w-32 animate-pulse" />
+                                                <div className="h-7 w-7 bg-zinc-700/50 rounded animate-pulse" />
+                                            </div>
+                                            <div className="p-4 flex-1 overflow-auto space-y-3">
+                                                {[1, 2, 3, 4, 5].map((i) => (
+                                                    <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="h-3 bg-zinc-700/50 rounded w-24 animate-pulse" />
+                                                            <div className="h-4 bg-zinc-700/50 rounded w-20 animate-pulse" />
+                                                        </div>
+                                                        <div className="h-3 bg-zinc-700/40 rounded w-32 animate-pulse" />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Columna 2: Por Cobrar y Por Pagar */}
+                                    <div className="lg:col-span-1 h-full flex flex-col gap-6 overflow-hidden">
+                                        {/* Por Cobrar Skeleton */}
+                                        <div className="flex-1 min-h-0 flex flex-col">
+                                            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
+                                                <div className="border-b border-zinc-800 px-4 py-3">
+                                                    <div className="h-4 bg-zinc-700/50 rounded w-28 animate-pulse" />
+                                                </div>
+                                                <div className="p-4 flex-1 overflow-auto space-y-3">
+                                                    {[1, 2, 3].map((i) => (
+                                                        <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
+                                                            <div className="h-3 bg-zinc-700/50 rounded w-32 animate-pulse" />
+                                                            <div className="h-4 bg-zinc-700/50 rounded w-24 animate-pulse" />
+                                                            <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {/* Por Pagar Skeleton */}
+                                        <div className="flex-1 min-h-0 flex flex-col">
+                                            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
+                                                <div className="border-b border-zinc-800 px-4 py-3">
+                                                    <div className="h-4 bg-zinc-700/50 rounded w-24 animate-pulse" />
+                                                </div>
+                                                <div className="p-4 flex-1 overflow-auto space-y-3">
+                                                    {[1, 2, 3].map((i) => (
+                                                        <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
+                                                            <div className="h-3 bg-zinc-700/50 rounded w-28 animate-pulse" />
+                                                            <div className="h-4 bg-zinc-700/50 rounded w-20 animate-pulse" />
+                                                            <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Columna 3: Gastos Recurrentes */}
+                                    <div className="lg:col-span-1 h-full">
+                                        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg h-full flex flex-col">
+                                            <div className="border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
+                                                <div className="h-4 bg-zinc-700/50 rounded w-36 animate-pulse" />
+                                                <div className="h-7 w-7 bg-zinc-700/50 rounded animate-pulse" />
+                                            </div>
+                                            <div className="p-4 flex-1 overflow-auto space-y-3">
+                                                {[1, 2, 3, 4].map((i) => (
+                                                    <div key={i} className="bg-zinc-800/20 border border-zinc-700/30 rounded-lg p-3 space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="h-3 bg-zinc-700/50 rounded w-28 animate-pulse" />
+                                                            <div className="h-4 bg-zinc-700/50 rounded w-16 animate-pulse" />
+                                                        </div>
+                                                        <div className="h-2 bg-zinc-700/40 rounded w-20 animate-pulse" />
+                                                        <div className="h-2 bg-zinc-700/40 rounded w-full animate-pulse" />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
                         ) : (
                             <>
                                 <FinanceKPIs
@@ -278,6 +377,44 @@ export default function FinanzasPage() {
                                             }}
                                             onGastoEliminado={async () => {
                                                 // Recargar datos después de eliminar gasto
+                                                try {
+                                                    const [kpisResult, transactionsResult] = await Promise.all([
+                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                        obtenerMovimientos(studioSlug, currentMonth!),
+                                                    ]);
+                                                    if (kpisResult.success) {
+                                                        setKpis(kpisResult.data);
+                                                    }
+                                                    if (transactionsResult.success && transactionsResult.data) {
+                                                        setTransactions(transactionsResult.data);
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error recargando datos:', error);
+                                                }
+                                            }}
+                                            onNominaCancelada={async () => {
+                                                // Recargar datos después de cancelar nómina
+                                                try {
+                                                    const [kpisResult, transactionsResult, porPagarResult] = await Promise.all([
+                                                        obtenerKPIsFinancieros(studioSlug, currentMonth!),
+                                                        obtenerMovimientos(studioSlug, currentMonth!),
+                                                        obtenerPorPagar(studioSlug),
+                                                    ]);
+                                                    if (kpisResult.success) {
+                                                        setKpis(kpisResult.data);
+                                                    }
+                                                    if (transactionsResult.success && transactionsResult.data) {
+                                                        setTransactions(transactionsResult.data);
+                                                    }
+                                                    if (porPagarResult.success && porPagarResult.data) {
+                                                        setPorPagar(porPagarResult.data);
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error recargando datos:', error);
+                                                }
+                                            }}
+                                            onGastoEditado={async () => {
+                                                // Recargar datos después de editar gasto
                                                 try {
                                                     const [kpisResult, transactionsResult] = await Promise.all([
                                                         obtenerKPIsFinancieros(studioSlug, currentMonth!),

@@ -33,6 +33,13 @@ export const CrewMemberCreateSchema = z.object({
     ])
     .optional(),
 
+  salary_frequency: z
+    .enum(['weekly', 'biweekly', 'monthly'], {
+      errorMap: () => ({ message: 'Frecuencia inválida' }),
+    })
+    .optional()
+    .nullable(),
+
   variable_salary: z
     .union([
       z.number().positive('El salario variable debe ser mayor a 0'),
@@ -84,6 +91,13 @@ export const CrewMemberUpdateSchema = z.object({
       z.null(),
     ])
     .optional(),
+
+  salary_frequency: z
+    .enum(['weekly', 'biweekly', 'monthly'], {
+      errorMap: () => ({ message: 'Frecuencia inválida' }),
+    })
+    .optional()
+    .nullable(),
 
   variable_salary: z
     .union([

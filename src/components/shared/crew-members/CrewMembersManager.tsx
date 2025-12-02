@@ -34,6 +34,7 @@ interface CrewMember {
     is_primary: boolean;
   }>;
   fixed_salary: number | null;
+  salary_frequency?: string | null;
   variable_salary: number | null;
   account: {
     id: string;
@@ -97,12 +98,10 @@ export function CrewMembersManager({
   };
 
   const handleCloseModal = useCallback(() => {
-    // Usar setTimeout para evitar que el Sheet se cierre durante la transición
-    setTimeout(() => {
-      setFormModalOpen(false);
-      formModalOpenRef.current = false;
-      setEditingMember(null);
-    }, 100);
+    // Cerrar inmediatamente para sincronizar con el cierre del modal
+    setFormModalOpen(false);
+    formModalOpenRef.current = false;
+    setEditingMember(null);
   }, []);
 
 
@@ -254,15 +253,25 @@ export function CrewMembersManager({
 
   return (
     <>
+      {/* Overlay custom del Sheet - solo visible cuando el modal NO está abierto */}
+      {isOpen && !formModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[49] animate-in fade-in-0"
+          onClick={onClose}
+        />
+      )}
+
       {/* SHEET: LISTA DE PERSONAL */}
-      <Sheet open={isOpen} onOpenChange={handleSheetOpenChange}>
+      <Sheet open={isOpen} onOpenChange={handleSheetOpenChange} modal={false}>
         <SheetContent
           side="right"
           className="w-full sm:max-w-2xl bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
+          showOverlay={false}
           onInteractOutside={(e) => {
-            // Prevenir que el Sheet se cierre cuando se interactúa con el modal
+            // Cuando el modal está abierto, no prevenir eventos para que los inputs funcionen
+            // El dialog maneja su propia interacción y el Sheet no se cerrará por handleSheetOpenChange
             if (formModalOpen) {
-              e.preventDefault();
+              return;
             }
           }}
           onEscapeKeyDown={(e) => {
@@ -330,8 +339,8 @@ export function CrewMembersManager({
 
             {/* LISTA DE PERSONAL */}
             {loading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
                   <CrewMemberCardSkeleton key={i} />
                 ))}
               </div>

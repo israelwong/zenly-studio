@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Settings2, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings2, Trash2, Calendar, CheckCircle2 } from 'lucide-react';
 import { ZenButton, ZenInput, ZenSelect, ZenSwitch, ZenConfirmModal } from '@/components/ui/zen';
 import { crearCrewMember, actualizarCrewMember, eliminarCrewMember, checkCrewMemberAssociations } from '@/lib/actions/studio/crew';
 import { toast } from 'sonner';
 import { SkillsInput } from './SkillsInput';
 import { CrewSkillsManageModal } from './CrewSkillsManageModal';
 import { PersonalType } from '@prisma/client';
+import { cn } from '@/lib/utils';
 
 interface CrewMemberFormProps {
   studioSlug: string;
@@ -19,6 +20,7 @@ interface CrewMemberFormProps {
     tipo: string;
     status?: string;
     fixed_salary: number | null;
+    salary_frequency?: string | null;
     variable_salary: number | null;
     skills: Array<{ id: string; name: string; is_primary: boolean }>;
   } | null;
@@ -49,6 +51,7 @@ export function CrewMemberForm({
       setFormData((prev) => ({
         ...prev,
         variable_salary: '',
+        salary_frequency: prev.salary_frequency || 'monthly', // Mantener o establecer default
       }));
       if (errors.variable_salary) {
         setErrors((prev) => {
@@ -61,6 +64,7 @@ export function CrewMemberForm({
       setFormData((prev) => ({
         ...prev,
         fixed_salary: '',
+        salary_frequency: '', // Limpiar frecuencia si no es fijo
       }));
       if (errors.fixed_salary) {
         setErrors((prev) => {
@@ -73,16 +77,68 @@ export function CrewMemberForm({
   };
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
 
-  const [formData, setFormData] = useState({
-    name: initialMember?.name || '',
-    email: initialMember?.email || '',
-    phone: initialMember?.phone || '',
-    tipo: (initialMember?.tipo as PersonalType) || 'OPERATIVO',
-    status: initialMember?.status || 'activo',
-    fixed_salary: initialMember?.fixed_salary?.toString() || '',
-    variable_salary: initialMember?.variable_salary?.toString() || '',
-    skill_ids: initialMember?.skills.map((s) => s.id) || [],
-  });
+  // Función helper para inicializar formData
+  const getInitialFormData = () => {
+    if (!initialMember) {
+      return {
+        name: '',
+        email: '',
+        phone: '',
+        tipo: 'OPERATIVO' as PersonalType,
+        status: 'activo',
+        fixed_salary: '',
+        salary_frequency: 'monthly',
+        variable_salary: '',
+        skill_ids: [] as string[],
+      };
+    }
+    return {
+      name: initialMember.name || '',
+      email: initialMember.email ?? '',
+      phone: initialMember.phone ?? '', // null/undefined -> ''
+      tipo: (initialMember.tipo as PersonalType) || 'OPERATIVO',
+      status: initialMember.status || 'activo',
+      fixed_salary: initialMember.fixed_salary?.toString() || '',
+      salary_frequency: initialMember.salary_frequency || 'monthly',
+      variable_salary: initialMember.variable_salary?.toString() || '',
+      skill_ids: initialMember.skills?.map((s) => s.id) || [],
+    };
+  };
+
+  const [formData, setFormData] = useState(getInitialFormData());
+
+  // Actualizar formData cuando initialMember cambia (para edición)
+  useEffect(() => {
+    if (initialMember) {
+      setFormData({
+        name: initialMember.name || '',
+        email: initialMember.email ?? '',
+        phone: initialMember.phone ?? '', // null/undefined -> ''
+        tipo: (initialMember.tipo as PersonalType) || 'OPERATIVO',
+        status: initialMember.status || 'activo',
+        fixed_salary: initialMember.fixed_salary?.toString() || '',
+        salary_frequency: initialMember.salary_frequency || 'monthly',
+        variable_salary: initialMember.variable_salary?.toString() || '',
+        skill_ids: initialMember.skills?.map((s) => s.id) || [],
+      });
+      setSalaryType(initialMember.fixed_salary ? 'fixed' : 'variable');
+    } else {
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        tipo: 'OPERATIVO',
+        status: 'activo',
+        fixed_salary: '',
+        salary_frequency: 'monthly',
+        variable_salary: '',
+        skill_ids: [],
+      });
+      setSalaryType('variable');
+    }
+    // Limpiar errores al cambiar de miembro
+    setErrors({});
+  }, [initialMember?.id]); // Solo cuando cambia el ID del miembro
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -194,12 +250,15 @@ export function CrewMemberForm({
     }
     if (salaryType === 'fixed') {
       if (!formData.fixed_salary.trim()) {
-        newErrors.fixed_salary = 'El monto mensual es obligatorio';
+        newErrors.fixed_salary = 'El monto es obligatorio';
       } else {
         const fixedValue = parseFloat(formData.fixed_salary);
         if (isNaN(fixedValue) || fixedValue <= 0) {
-          newErrors.fixed_salary = 'El monto mensual debe ser mayor a 0';
+          newErrors.fixed_salary = 'El monto debe ser mayor a 0';
         }
+      }
+      if (!formData.salary_frequency) {
+        newErrors.salary_frequency = 'La frecuencia de pago es obligatoria';
       }
     }
     // Para honorarios variables, el monto es opcional (se calcula según presupuesto)
@@ -225,18 +284,20 @@ export function CrewMemberForm({
         skill_ids: formData.skill_ids,
       };
 
-      // Si es salario fijo, establecer fixed_salary y limpiar variable_salary
+      // Si es salario fijo, establecer fixed_salary, salary_frequency y limpiar variable_salary
       if (salaryType === 'fixed') {
         const fixedValue = parseFloat(formData.fixed_salary);
         payload.fixed_salary = fixedValue;
+        payload.salary_frequency = formData.salary_frequency || 'monthly';
         payload.variable_salary = null;
       } else {
-        // Si es variable, establecer variable_salary y limpiar fixed_salary
+        // Si es variable, establecer variable_salary y limpiar fixed_salary y salary_frequency
         const variableValue = formData.variable_salary
           ? parseFloat(formData.variable_salary)
           : null;
         payload.variable_salary = variableValue;
         payload.fixed_salary = null;
+        payload.salary_frequency = null;
       }
 
       let result;
@@ -390,7 +451,7 @@ export function CrewMemberForm({
                 Salario Fijo
               </label>
               <p className="text-xs text-zinc-400">
-                Ingresa un monto fijo que recibirá por mes
+                Ingresa un monto fijo con frecuencia configurable (semanal, quincenal o mensual)
               </p>
             </div>
           </div>
@@ -399,22 +460,144 @@ export function CrewMemberForm({
 
       {/* Salario Fijo - Solo si selecciona fijo */}
       {salaryType === 'fixed' && (
-        <div>
-          <label className="block text-sm font-medium text-zinc-200 mb-2">
-            Monto Mensual *
-          </label>
-          <ZenInput
-            name="fixed_salary"
-            type="number"
-            value={formData.fixed_salary}
-            onChange={handleChange}
-            placeholder="15000"
-            min="0"
-            step="0.01"
-            required
-            error={errors.fixed_salary}
-          />
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium text-zinc-200 mb-2">
+              Monto *
+            </label>
+            <ZenInput
+              name="fixed_salary"
+              type="number"
+              value={formData.fixed_salary}
+              onChange={handleChange}
+              placeholder="15000"
+              min="0"
+              step="0.01"
+              required
+              error={errors.fixed_salary}
+            />
+          </div>
+
+          {/* Selector de Frecuencia */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-300 pb-2">
+              Frecuencia de Pago *
+            </label>
+            {errors.salary_frequency && (
+              <p className="text-xs text-red-400 -mt-1 mb-1">{errors.salary_frequency}</p>
+            )}
+            <div className="space-y-2">
+              <label
+                htmlFor="frequency-weekly"
+                className={cn(
+                  'relative flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all',
+                  formData.salary_frequency === 'weekly'
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                )}
+              >
+                <input
+                  type="radio"
+                  id="frequency-weekly"
+                  name="salary_frequency"
+                  value="weekly"
+                  checked={formData.salary_frequency === 'weekly'}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, salary_frequency: e.target.value }))}
+                  className="sr-only"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Calendar className={cn(
+                      'h-4 w-4 flex-shrink-0',
+                      formData.salary_frequency === 'weekly' ? 'text-emerald-400' : 'text-zinc-400'
+                    )} />
+                    <span className={cn(
+                      'text-sm font-medium',
+                      formData.salary_frequency === 'weekly' ? 'text-emerald-200' : 'text-zinc-300'
+                    )}>
+                      Semanal
+                    </span>
+                    {formData.salary_frequency === 'weekly' && (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 ml-auto flex-shrink-0" />
+                    )}
+                  </div>
+                </div>
+              </label>
+              <label
+                htmlFor="frequency-biweekly"
+                className={cn(
+                  'relative flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all',
+                  formData.salary_frequency === 'biweekly'
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                )}
+              >
+                <input
+                  type="radio"
+                  id="frequency-biweekly"
+                  name="salary_frequency"
+                  value="biweekly"
+                  checked={formData.salary_frequency === 'biweekly'}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, salary_frequency: e.target.value }))}
+                  className="sr-only"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Calendar className={cn(
+                      'h-4 w-4 flex-shrink-0',
+                      formData.salary_frequency === 'biweekly' ? 'text-emerald-400' : 'text-zinc-400'
+                    )} />
+                    <span className={cn(
+                      'text-sm font-medium',
+                      formData.salary_frequency === 'biweekly' ? 'text-emerald-200' : 'text-zinc-300'
+                    )}>
+                      Quincenal
+                    </span>
+                    {formData.salary_frequency === 'biweekly' && (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 ml-auto flex-shrink-0" />
+                    )}
+                  </div>
+                </div>
+              </label>
+              <label
+                htmlFor="frequency-monthly"
+                className={cn(
+                  'relative flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all',
+                  formData.salary_frequency === 'monthly'
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                )}
+              >
+                <input
+                  type="radio"
+                  id="frequency-monthly"
+                  name="salary_frequency"
+                  value="monthly"
+                  checked={formData.salary_frequency === 'monthly'}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, salary_frequency: e.target.value }))}
+                  className="sr-only"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Calendar className={cn(
+                      'h-4 w-4 flex-shrink-0',
+                      formData.salary_frequency === 'monthly' ? 'text-emerald-400' : 'text-zinc-400'
+                    )} />
+                    <span className={cn(
+                      'text-sm font-medium',
+                      formData.salary_frequency === 'monthly' ? 'text-emerald-200' : 'text-zinc-300'
+                    )}>
+                      Mensual
+                    </span>
+                    {formData.salary_frequency === 'monthly' && (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 ml-auto flex-shrink-0" />
+                    )}
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Skills */}

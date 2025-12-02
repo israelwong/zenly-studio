@@ -10,6 +10,7 @@ import { useZenMagicChat } from './ZenMagic';
 import { useContactsSheet } from '@/components/shared/contacts/ContactsSheetContext';
 import { AgendaUnifiedSheet } from '@/components/shared/agenda';
 import { ContactsSheet } from '@/components/shared/contacts';
+import { CrewMembersManager } from '@/components/shared/crew-members';
 
 interface StudioLayoutWrapperProps {
   studioSlug: string;
@@ -24,6 +25,7 @@ export function StudioLayoutWrapper({
   const { isOpen: contactsOpen, openContactsSheet, closeContactsSheet, initialContactId } = useContactsSheet();
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [crewSheetOpen, setCrewSheetOpen] = useState(false);
 
   const handleAgendaClick = () => {
     setAgendaOpen(true);
@@ -35,6 +37,10 @@ export function StudioLayoutWrapper({
 
   const handleMagicClick = () => {
     toggleChat();
+  };
+
+  const handlePersonalClick = () => {
+    setCrewSheetOpen(true);
   };
 
   return (
@@ -55,6 +61,7 @@ export function StudioLayoutWrapper({
           onAgendaClick={handleAgendaClick}
           onContactsClick={handleContactsClick}
           onMagicClick={handleMagicClick}
+          onPersonalClick={handlePersonalClick}
           open={commandOpen}
           onOpenChange={setCommandOpen}
         />
@@ -66,6 +73,7 @@ export function StudioLayoutWrapper({
         onAgendaClick={handleAgendaClick}
         onContactsClick={handleContactsClick}
         onMagicClick={handleMagicClick}
+        onPersonalClick={handlePersonalClick}
       />
 
       {/* ZEN Magic Chat (siempre al final) */}
@@ -88,6 +96,14 @@ export function StudioLayoutWrapper({
         }}
         studioSlug={studioSlug}
         initialContactId={initialContactId}
+      />
+
+      {/* Sheet de Personal */}
+      <CrewMembersManager
+        studioSlug={studioSlug}
+        isOpen={crewSheetOpen}
+        onClose={() => setCrewSheetOpen(false)}
+        mode="manage"
       />
     </div>
   );

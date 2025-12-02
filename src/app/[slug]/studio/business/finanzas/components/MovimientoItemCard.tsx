@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MoreVertical, FileText, X, Trash2 } from 'lucide-react';
+import { MoreVertical, FileText, X, Trash2, Edit } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/zen';
 import { PaymentReceipt } from '@/components/shared/payments/PaymentReceipt';
 import { eliminarGastoOperativo } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
+import { RegistrarMovimientoModal } from './RegistrarMovimientoModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,8 @@ interface Transaction {
     concepto: string;
     categoria: string;
     monto: number;
+    nominaId?: string; // ID de la nómina si viene de "Por Pagar"
+    isGastoOperativo?: boolean; // Si es gasto operativo personalizado
 }
 
 interface MovimientoItemCardProps {
@@ -32,6 +35,8 @@ interface MovimientoItemCardProps {
     studioSlug: string;
     onCancelarPago?: (id: string) => void;
     onGastoEliminado?: () => void;
+    onNominaCancelada?: () => void;
+    onGastoEditado?: () => void;
 }
 
 export function MovimientoItemCard({
@@ -39,12 +44,17 @@ export function MovimientoItemCard({
     studioSlug,
     onCancelarPago,
     onGastoEliminado,
+    onNominaCancelada,
+    onGastoEditado,
 }: MovimientoItemCardProps) {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+    const [showCancelNominaModal, setShowCancelNominaModal] = useState(false);
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isCancellingNomina, setIsCancellingNomina] = useState(false);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-MX', {
@@ -64,6 +74,10 @@ export function MovimientoItemCard({
 
     const isIngreso = transaction.monto > 0;
     const isEgresoOperativo = !isIngreso && transaction.fuente === 'operativo';
+    const isNominaPagada = !isIngreso && transaction.fuente === 'staff' && transaction.nominaId;
+    const isGastoPersonalizado = transaction.isGastoOperativo && transaction.fuente === 'operativo';
+    // Ingresos manuales son aquellos que no tienen cotización asociada (transaction_category === 'manual')
+    const isIngresoPersonalizado = isIngreso && transaction.categoria === 'manual';
 
     const handleViewReceipt = () => {
         setIsReceiptModalOpen(true);
@@ -110,6 +124,36 @@ export function MovimientoItemCard({
         }
     };
 
+    const handleEditarGastoClick = () => {
+        setIsEditModalOpen(true);
+    };
+
+    const handleCancelarNominaClick = () => {
+        setShowCancelNominaModal(true);
+    };
+
+    const handleConfirmCancelNomina = async () => {
+        if (!transaction.nominaId) return;
+
+        setIsCancellingNomina(true);
+        try {
+            const { cancelarNominaPagada } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+            const result = await cancelarNominaPagada(studioSlug, transaction.nominaId);
+            if (result.success) {
+                toast.success('Nómina cancelada. Se ha agregado nuevamente a "Por Pagar"');
+                await onNominaCancelada?.();
+                setShowCancelNominaModal(false);
+            } else {
+                toast.error(result.error || 'Error al cancelar nómina');
+            }
+        } catch (error) {
+            console.error('Error cancelando nómina:', error);
+            toast.error('Error al cancelar nómina');
+        } finally {
+            setIsCancellingNomina(false);
+        }
+    };
+
     return (
         <>
             <ZenCard variant="default" padding="sm" className="hover:border-zinc-700 transition-colors">
@@ -142,15 +186,44 @@ export function MovimientoItemCard({
                             </ZenDropdownMenuTrigger>
                             <ZenDropdownMenuContent align="end">
                                 {isIngreso && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleViewReceipt}
-                                        className="gap-2"
-                                    >
-                                        <FileText className="h-4 w-4" />
-                                        Ver Comprobante
-                                    </ZenDropdownMenuItem>
+                                    <>
+                                        <ZenDropdownMenuItem
+                                            onClick={handleViewReceipt}
+                                            className="gap-2"
+                                        >
+                                            <FileText className="h-4 w-4" />
+                                            Ver Comprobante
+                                        </ZenDropdownMenuItem>
+                                        {isIngresoPersonalizado && (
+                                            <ZenDropdownMenuItem
+                                                onClick={handleEditarGastoClick}
+                                                className="gap-2"
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                                Editar
+                                            </ZenDropdownMenuItem>
+                                        )}
+                                    </>
                                 )}
-                                {isEgresoOperativo && (
+                                {isGastoPersonalizado && (
+                                    <>
+                                        <ZenDropdownMenuItem
+                                            onClick={handleEditarGastoClick}
+                                            className="gap-2"
+                                        >
+                                            <Edit className="h-4 w-4" />
+                                            Editar
+                                        </ZenDropdownMenuItem>
+                                        <ZenDropdownMenuItem
+                                            onClick={handleEliminarGastoClick}
+                                            className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            Eliminar Gasto
+                                        </ZenDropdownMenuItem>
+                                    </>
+                                )}
+                                {isEgresoOperativo && !isGastoPersonalizado && (
                                     <ZenDropdownMenuItem
                                         onClick={handleEliminarGastoClick}
                                         className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
@@ -158,6 +231,18 @@ export function MovimientoItemCard({
                                         <Trash2 className="h-4 w-4" />
                                         Eliminar Gasto
                                     </ZenDropdownMenuItem>
+                                )}
+                                {isNominaPagada && (
+                                    <>
+                                        <ZenDropdownMenuSeparator />
+                                        <ZenDropdownMenuItem
+                                            onClick={handleCancelarNominaClick}
+                                            className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                                        >
+                                            <X className="h-4 w-4" />
+                                            Cancelar
+                                        </ZenDropdownMenuItem>
+                                    </>
                                 )}
                                 {onCancelarPago && isIngreso && (
                                     <>
@@ -203,6 +288,19 @@ export function MovimientoItemCard({
                 loadingText="Eliminando..."
             />
 
+            <ZenConfirmModal
+                isOpen={showCancelNominaModal}
+                onClose={() => setShowCancelNominaModal(false)}
+                onConfirm={handleConfirmCancelNomina}
+                title="¿Cancelar nómina pagada?"
+                description={`Esta acción cancelará el pago de la nómina "${transaction.concepto}" por ${formatCurrency(Math.abs(transaction.monto))}. La nómina será cancelada pero se agregará nuevamente a "Por Pagar" con estado pendiente.`}
+                confirmText="Sí, cancelar nómina"
+                cancelText="No, mantener"
+                variant="destructive"
+                loading={isCancellingNomina}
+                loadingText="Cancelando..."
+            />
+
             {/* Modal de comprobante */}
             {isReceiptModalOpen && (
                 <PaymentReceipt
@@ -210,6 +308,26 @@ export function MovimientoItemCard({
                     onClose={() => setIsReceiptModalOpen(false)}
                     studioSlug={studioSlug}
                     paymentId={transaction.id}
+                />
+            )}
+
+            {/* Modal de edición */}
+            {isEditModalOpen && (
+                <RegistrarMovimientoModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    tipo={isIngreso ? 'ingreso' : 'gasto'}
+                    studioSlug={studioSlug}
+                    movimientoId={transaction.id}
+                    initialData={{
+                        concepto: transaction.concepto,
+                        monto: Math.abs(transaction.monto),
+                        metodoPago: undefined, // Se cargará desde el pago si es ingreso
+                    }}
+                    onSuccess={async () => {
+                        await onGastoEditado?.();
+                        setIsEditModalOpen(false);
+                    }}
                 />
             )}
         </>

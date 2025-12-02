@@ -16,6 +16,10 @@ interface RecurringExpense {
     isActive: boolean;
     frequency?: string;
     description?: string | null;
+    pagosMesActual?: number;
+    totalPagosEsperados?: number;
+    isCrewMember?: boolean;
+    crewMemberId?: string;
 }
 
 interface GastosRecurrentesCardProps {

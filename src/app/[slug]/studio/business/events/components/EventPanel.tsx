@@ -5,6 +5,7 @@ import { ContactEventInfoCard } from '@/components/shared/contact-info';
 import { EventCotizacionesCard } from './EventCotizacionesCard';
 import { EventPaymentsCard } from './EventPaymentsCard';
 import { EventAgendamiento } from './EventAgendamiento';
+import { EventDeliverablesCard } from './EventDeliverablesCard';
 
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
@@ -113,6 +114,11 @@ export function EventPanel({
             onPaymentAdded={onEventUpdated}
           />
 
+          <EventDeliverablesCard
+            studioSlug={studioSlug}
+            eventId={eventId}
+            onUpdated={onEventUpdated}
+          />
 
         </div>
       </div>

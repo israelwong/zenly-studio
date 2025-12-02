@@ -23,6 +23,8 @@ interface Transaction {
     concepto: string;
     categoria: string;
     monto: number;
+    nominaId?: string;
+    isGastoOperativo?: boolean;
 }
 
 interface MovimientosCardProps {
@@ -33,6 +35,8 @@ interface MovimientosCardProps {
     onCancelarPago?: (id: string) => void;
     onMovimientoRegistrado?: () => void;
     onGastoEliminado?: () => void;
+    onNominaCancelada?: () => void;
+    onGastoEditado?: () => void;
 }
 
 export function MovimientosCard({
@@ -43,6 +47,8 @@ export function MovimientosCard({
     onCancelarPago,
     onMovimientoRegistrado,
     onGastoEliminado,
+    onNominaCancelada,
+    onGastoEditado,
 }: MovimientosCardProps) {
     const [showIngresoModal, setShowIngresoModal] = useState(false);
     const [showGastoModal, setShowGastoModal] = useState(false);
@@ -98,6 +104,8 @@ export function MovimientosCard({
                                     studioSlug={studioSlug}
                                     onCancelarPago={onCancelarPago}
                                     onGastoEliminado={onGastoEliminado}
+                                    onNominaCancelada={onNominaCancelada}
+                                    onGastoEditado={onGastoEditado}
                                 />
                             ))}
                         </div>

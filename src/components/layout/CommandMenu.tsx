@@ -36,6 +36,7 @@ interface CommandMenuProps {
   onAgendaClick: () => void;
   onContactsClick: () => void;
   onMagicClick: () => void;
+  onPersonalClick: () => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -45,6 +46,7 @@ export function CommandMenu({
   onAgendaClick,
   onContactsClick,
   onMagicClick,
+  onPersonalClick,
   open: controlledOpen,
   onOpenChange,
 }: CommandMenuProps) {
@@ -133,7 +135,10 @@ export function CommandMenu({
         {
           label: 'Personal',
           icon: Users,
-          href: `/${studioSlug}/studio/business/personal`,
+          action: () => {
+            onPersonalClick();
+            setOpen(false);
+          },
         },
         {
           label: 'Contratos',

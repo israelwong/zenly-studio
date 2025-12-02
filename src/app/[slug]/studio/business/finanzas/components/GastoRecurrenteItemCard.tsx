@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ZenCard, ZenCardContent, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
-import { Calendar } from 'lucide-react';
+import { Calendar, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface GastoRecurrente {
@@ -16,6 +16,8 @@ interface GastoRecurrente {
     description?: string | null;
     pagosMesActual?: number;
     totalPagosEsperados?: number;
+    isCrewMember?: boolean;
+    crewMemberId?: string;
 }
 
 interface GastoRecurrenteItemCardProps {
@@ -89,13 +91,18 @@ export function GastoRecurrenteItemCard({
 
     return (
         <>
-            <ZenCard variant="default" padding="sm" className="hover:border-zinc-700 transition-colors">
+            <ZenCard variant="default" padding="sm" className={expense.isCrewMember ? "hover:border-emerald-700 transition-colors border-emerald-500/20" : "hover:border-zinc-700 transition-colors"}>
                 <ZenCardContent className="p-0">
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-zinc-200 mb-0.5 truncate">
-                                {expense.name}
-                            </p>
+                            <div className="flex items-center gap-2 mb-0.5">
+                                {expense.isCrewMember && (
+                                    <User className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
+                                )}
+                                <p className="text-sm font-medium text-zinc-200 truncate">
+                                    {expense.name}
+                                </p>
+                            </div>
                             {expense.description && (
                                 <p className="text-xs text-zinc-500 mb-1 truncate">
                                     {expense.description}
@@ -108,7 +115,8 @@ export function GastoRecurrenteItemCard({
                                 <div className="flex items-center gap-1 text-xs text-zinc-500">
                                     <Calendar className="h-3 w-3" />
                                     <span>
-                                        {getFrequencyLabel(expense.frequency)} - Día {expense.chargeDay}
+                                        {getFrequencyLabel(expense.frequency)}
+                                        {!expense.isCrewMember && ` - Día ${expense.chargeDay}`}
                                     </span>
                                 </div>
                             </div>

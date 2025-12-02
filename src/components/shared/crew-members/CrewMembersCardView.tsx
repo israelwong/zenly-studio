@@ -26,6 +26,7 @@ interface CrewMember {
   status: string;
   skills: Skill[];
   fixed_salary: number | null;
+  salary_frequency?: string | null;
   variable_salary: number | null;
   account: {
     id: string;

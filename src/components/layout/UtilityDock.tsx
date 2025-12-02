@@ -18,6 +18,7 @@ interface UtilityDockProps {
   onAgendaClick: () => void;
   onContactsClick: () => void;
   onMagicClick: () => void;
+  onPersonalClick: () => void;
 }
 
 export function UtilityDock({
@@ -25,7 +26,9 @@ export function UtilityDock({
   onAgendaClick,
   onContactsClick,
   onMagicClick,
+  onPersonalClick,
 }: UtilityDockProps) {
+
   const dockItems: DockItem[] = [
     {
       id: 'agenda',
@@ -43,7 +46,7 @@ export function UtilityDock({
       id: 'personal',
       icon: Users,
       label: 'Personal',
-      href: `/${studioSlug}/studio/business/personal`,
+      action: onPersonalClick,
     },
     {
       id: 'contratos',
