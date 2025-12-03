@@ -94,7 +94,7 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
     success_message: initialOffer?.leadform?.success_message || "¡Gracias! Nos pondremos en contacto pronto.",
     success_redirect_url: initialOffer?.leadform?.success_redirect_url || "",
     subject_options: (initialOffer?.leadform?.subject_options as string[]) || [],
-    use_event_types: initialOffer?.leadform?.use_event_types || false,
+    use_event_types: initialOffer?.leadform?.use_event_types ?? true, // Default: usar tipos de evento
     selected_event_type_ids: (initialOffer?.leadform?.selected_event_type_ids as string[]) || [],
     show_packages_after_submit: initialOffer?.leadform?.show_packages_after_submit || false,
     email_required: (initialOffer?.leadform?.email_required as boolean) || false,
@@ -157,6 +157,9 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
         success_redirect_url: leadformData.success_redirect_url || undefined,
         fields_config: leadformData.fields_config,
         subject_options: leadformData.subject_options,
+        use_event_types: leadformData.use_event_types,
+        selected_event_type_ids: leadformData.selected_event_type_ids,
+        show_packages_after_submit: leadformData.show_packages_after_submit,
         email_required: leadformData.email_required,
         enable_interest_date: leadformData.enable_interest_date,
         validate_with_calendar: leadformData.validate_with_calendar,

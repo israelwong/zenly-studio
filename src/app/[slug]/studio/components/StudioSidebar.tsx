@@ -11,8 +11,8 @@ import { LogoutButton } from '@/components/auth/logout-button';
 import { useStudioData } from '@/hooks/useStudioData';
 import {
     File,
-    Briefcase, Users, Sparkles, Mail, ImageIcon, FileText,
-    UserCog, DollarSign, Megaphone
+    Briefcase, Users, Sparkles, Mail, FileText,
+    UserCog, DollarSign, Megaphone, ShoppingBagIcon,
 } from 'lucide-react';
 
 interface StudioSidebarProps {
@@ -32,12 +32,13 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             title: 'Business',
             icon: Briefcase,
             items: [
-                // { id: 'conversations', name: 'Conversations', href: `/commercial/conversations`, icon: MessageSquare },
-                { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
-                { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
+                { id: 'ofertas', name: 'Offers', href: `/commercial/ofertas`, icon: Megaphone },
+                { id: 'catalogo', name: 'Catalog', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
+                { id: 'promises', name: 'Promises', href: `/commercial/promises`, icon: File },
                 { id: 'events', name: 'Events', href: `/business/events`, icon: FileText },
+                { id: 'finanzas', name: 'Finances', href: `/business/finanzas`, icon: DollarSign },
+                // { id: 'conversations', name: 'Conversations', href: `/commercial/conversations`, icon: MessageSquare },
                 // { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
-                { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
                 // { id: 'magic', name: 'Asistente IA', href: `/magic`, icon: Sparkles },
             ],
         },
