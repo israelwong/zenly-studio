@@ -42,7 +42,7 @@ export function EventTypesManager({
           const typesWithPackages = activeTypes
             .filter(t => (t.paquetes?.length || 0) > 0)
             .map(t => t.id);
-          
+
           if (typesWithPackages.length > 0) {
             onChange(typesWithPackages);
           }
@@ -146,8 +146,8 @@ export function EventTypesManager({
               key={type.id}
               onClick={() => handleToggle(type.id)}
               className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${isSelected
-                  ? "bg-emerald-500/10 border-emerald-500/30"
-                  : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
+                ? "bg-emerald-500/10 border-emerald-500/30"
+                : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
                 }`}
             >
               <label className="flex items-center gap-3 flex-1 cursor-pointer">
