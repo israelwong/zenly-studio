@@ -164,7 +164,7 @@ export async function getPromises(
 
     const promises: PromiseWithContact[] = contacts.map((contact) => {
       const latestPromise = contact.promises[0];
-      
+
       // Mapear tags activos
       const tags = latestPromise?.tags
         ?.filter((pt) => pt.tag.is_active)
@@ -356,9 +356,9 @@ export async function createPromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-        email: contact.email,
-        avatar_url: contact.avatar_url,
-        status: contact.status,
+      email: contact.email,
+      avatar_url: contact.avatar_url,
+      status: contact.status,
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       interested_dates: promise.tentative_dates
@@ -378,7 +378,7 @@ export async function createPromise(
     // Crear notificación
     try {
       // Usar la primera fecha de tentative_dates si está disponible, o defined_date si existe
-      const eventDate = promise.defined_date?.toISOString() || 
+      const eventDate = promise.defined_date?.toISOString() ||
         (promise.tentative_dates && Array.isArray(promise.tentative_dates) && promise.tentative_dates.length > 0
           ? promise.tentative_dates[0]
           : null);
@@ -662,9 +662,9 @@ export async function updatePromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-        email: contact.email,
-        avatar_url: contact.avatar_url,
-        status: contact.status,
+      email: contact.email,
+      avatar_url: contact.avatar_url,
+      status: contact.status,
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       interested_dates: promise.tentative_dates
@@ -763,11 +763,11 @@ export async function movePromise(
       where: { id: validatedData.new_stage_id },
       select: { name: true, slug: true },
     });
-    
+
     if (!newStage) {
       return { success: false, error: 'Etapa destino no encontrada' };
     }
-    
+
     const newStageName = newStage.name;
     const newStageSlug = newStage.slug;
 
@@ -841,9 +841,9 @@ export async function movePromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-        email: contact.email,
-        avatar_url: contact.avatar_url,
-        status: contact.status,
+      email: contact.email,
+      avatar_url: contact.avatar_url,
+      status: contact.status,
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       interested_dates: promise.tentative_dates
@@ -979,9 +979,9 @@ export async function archivePromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-        email: contact.email,
-        avatar_url: contact.avatar_url,
-        status: contact.status,
+      email: contact.email,
+      avatar_url: contact.avatar_url,
+      status: contact.status,
       event_type_id: updatedPromise.event_type_id,
       event_name: updatedPromise.name || null,
       interested_dates: updatedPromise.tentative_dates
@@ -1111,9 +1111,9 @@ export async function unarchivePromise(
       studio_id: contact.studio_id,
       name: contact.name,
       phone: contact.phone,
-        email: contact.email,
-        avatar_url: contact.avatar_url,
-        status: contact.status,
+      email: contact.email,
+      avatar_url: contact.avatar_url,
+      status: contact.status,
       event_type_id: updatedPromise.event_type_id,
       event_name: updatedPromise.name || null,
       interested_dates: updatedPromise.tentative_dates

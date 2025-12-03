@@ -46,7 +46,7 @@ export default function PromisesPage() {
     setIsDeleting(true);
     try {
       const result = await deleteTestPromises(studioSlug);
-      
+
       if (result.success) {
         toast.success(`${result.deleted || 0} promesa(s) de prueba eliminadas`);
         setTestPromisesCount(0);
@@ -116,7 +116,7 @@ export default function PromisesPage() {
                       Tienes {testPromisesCount} promesa{testPromisesCount > 1 ? 's' : ''} de prueba
                     </h4>
                     <p className="text-xs text-amber-400/70 mt-1">
-                      Estas promesas se crearon desde el preview del editor de ofertas. 
+                      Estas promesas se crearon desde el preview del editor de ofertas.
                       Puedes eliminarlas cuando estés listo para trabajar solo con datos reales.
                     </p>
                   </div>

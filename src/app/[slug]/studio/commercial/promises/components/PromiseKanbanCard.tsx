@@ -225,8 +225,8 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
                                 <h3 className="font-medium text-white text-sm leading-tight truncate">{promise.name}</h3>
                                 {/* Badge de prueba */}
                                 {promise.is_test && (
-                                    <ZenBadge 
-                                        variant="outline" 
+                                    <ZenBadge
+                                        variant="outline"
                                         className="text-amber-400 border-amber-400/50 bg-amber-400/10 flex-shrink-0"
                                     >
                                         <Flask className="h-3 w-3 mr-1" />
