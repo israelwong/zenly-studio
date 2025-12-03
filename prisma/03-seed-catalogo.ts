@@ -82,14 +82,27 @@ export async function seedStudioCatalog(studioId: string) {
     console.log('🧹 Limpiando tablas existentes...');
 
     // Eliminar en orden correcto para respetar foreign keys
+    // 1. Primero eliminar items de paquetes (tienen FK a studio_items)
+    await prisma.studio_paquete_items.deleteMany({
+        where: {
+            paquetes: {
+                studio_id: studioId
+            }
+        }
+    });
+
+    // 2. Luego eliminar los items
     await prisma.studio_items.deleteMany({
         where: { studio_id: studioId }
     });
 
+    // 3. Eliminar relaciones de secciones-categorías
     await prisma.studio_section_categories.deleteMany({});
 
+    // 4. Eliminar categorías
     await prisma.studio_service_categories.deleteMany({});
 
+    // 5. Finalmente eliminar secciones
     await prisma.studio_service_sections.deleteMany({});
 
     console.log('✅ Tablas limpiadas exitosamente');
