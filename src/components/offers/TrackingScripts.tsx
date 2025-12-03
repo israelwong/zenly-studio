@@ -15,7 +15,6 @@ interface WindowWithFbq extends Window {
 interface TrackingScriptsProps {
   gtmId?: string | null;
   facebookPixelId?: string | null;
-  zenPixelId?: string | null;
   // Eventos personalizados para ofertas
   customEvents?: {
     eventName: string;
@@ -24,13 +23,12 @@ interface TrackingScriptsProps {
 }
 
 /**
- * Componente para inyectar scripts de tracking (GTM, Facebook Pixel, Zen Pixel)
+ * Componente para inyectar scripts de tracking (GTM, Facebook Pixel)
  * Se propaga automáticamente a todas las rutas públicas del estudio
  */
 export function TrackingScripts({
   gtmId,
   facebookPixelId,
-  zenPixelId,
   customEvents = [],
 }: TrackingScriptsProps) {
   useEffect(() => {
@@ -102,20 +100,6 @@ export function TrackingScripts({
               'https://connect.facebook.net/en_US/fbevents.js');
               fbq('init', '${facebookPixelId}');
               fbq('track', 'PageView');
-            `,
-          }}
-        />
-      )}
-
-      {/* Zen Pixel (preparado para futuro) */}
-      {zenPixelId && (
-        <Script
-          id="zen-pixel"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Zen Pixel - Preparado para implementación futura
-              console.log('Zen Pixel ID: ${zenPixelId}');
             `,
           }}
         />

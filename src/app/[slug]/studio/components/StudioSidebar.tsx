@@ -12,7 +12,9 @@ import { useStudioData } from '@/hooks/useStudioData';
 import {
     File,
     Briefcase, Users, Sparkles, Mail, FileText,
-    UserCog, DollarSign, Megaphone, ShoppingBagIcon,
+    UserCog, DollarSign, Megaphone, ShoppingBagIcon, Plug, Settings,
+    Home,
+    CreditCard,
 } from 'lucide-react';
 
 interface StudioSidebarProps {
@@ -32,29 +34,41 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             title: 'Business',
             icon: Briefcase,
             items: [
+                { id: 'dashboard', name: 'Dashboard', href: `/commercial/dashboard`, icon: Home },
                 { id: 'ofertas', name: 'Offers', href: `/commercial/ofertas`, icon: Megaphone },
-                { id: 'catalogo', name: 'Catalog', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
                 { id: 'promises', name: 'Promises', href: `/commercial/promises`, icon: File },
                 { id: 'events', name: 'Events', href: `/business/events`, icon: FileText },
                 { id: 'finanzas', name: 'Finances', href: `/business/finanzas`, icon: DollarSign },
-                // { id: 'conversations', name: 'Conversations', href: `/commercial/conversations`, icon: MessageSquare },
                 // { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
-                // { id: 'magic', name: 'Asistente IA', href: `/magic`, icon: Sparkles },
             ],
         },
 
         // (Pago - Monetización)
+        // {
+        //     id: 'revenues',
+        //     title: 'Revenues',
+        //     icon: Users,
+        //     items: [
+        //         { id: 'planning', name: 'Planning', href: `/business/planning`, icon: FileText },
+        //         { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
+        //         // { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
+        //     ],
+        // },
+
+        // Configuración
         {
-            id: 'revenues',
-            title: 'Revenues',
-            icon: Users,
+            id: 'settings',
+            title: 'Config',
+            icon: Settings,
             items: [
-                { id: 'planning', name: 'Planning', href: `/business/planning`, icon: FileText },
-                { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
-                // { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
+                // { id: 'conversations', name: 'Conversations', href: `/commercial/conversations`, icon: MessageSquare },
+                { id: 'catalogo', name: 'Catalog', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
+                { id: 'payment', name: 'Payment', href: `/commercial/payment`, icon: CreditCard },
+                { id: 'magic', name: 'Magic IA', href: `/magic`, icon: Sparkles },
+                { id: 'integraciones', name: 'Integrations', href: `/business/integraciones/tracking`, icon: Plug },
+                { id: 'contracts', name: 'Contracts', href: `/commercial/contracts`, icon: FileText },
             ],
         },
-
 
     ];
 

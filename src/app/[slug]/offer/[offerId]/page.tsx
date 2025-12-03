@@ -39,7 +39,6 @@ export default async function PublicOfferPage({
       select: {
         gtm_id: true,
         facebook_pixel_id: true,
-        zen_pixel_id: true,
       },
     });
 
@@ -55,7 +54,6 @@ export default async function PublicOfferPage({
         <TrackingScripts
           gtmId={studio?.gtm_id || undefined}
           facebookPixelId={studio?.facebook_pixel_id || undefined}
-          zenPixelId={studio?.zen_pixel_id || undefined}
           customEvents={[
             {
               eventName: "offer_landing_view",

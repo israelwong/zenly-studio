@@ -38,7 +38,6 @@ export default async function PublicOfferLeadFormPage({
       select: {
         gtm_id: true,
         facebook_pixel_id: true,
-        zen_pixel_id: true,
       },
     });
 
@@ -54,7 +53,6 @@ export default async function PublicOfferLeadFormPage({
         <TrackingScripts
           gtmId={studio?.gtm_id || undefined}
           facebookPixelId={studio?.facebook_pixel_id || undefined}
-          zenPixelId={studio?.zen_pixel_id || undefined}
           customEvents={[
             {
               eventName: "offer_leadform_view",
