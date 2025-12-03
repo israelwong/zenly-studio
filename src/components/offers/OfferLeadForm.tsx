@@ -53,13 +53,10 @@ interface OfferLeadFormProps {
   successMessage: string;
   successRedirectUrl?: string | null;
   fieldsConfig: LeadFormFieldsConfig;
-  subjectOptions?: string[]; // LEGACY: si use_event_types = false
-  useEventTypes?: boolean; // Si true: renderizar tipos de evento
-  selectedEventTypeIds?: string[]; // IDs de tipos seleccionados
+  selectedEventTypeIds?: string[]; // IDs de tipos de evento seleccionados
   enableInterestDate?: boolean;
   validateWithCalendar?: boolean;
   emailRequired?: boolean;
-  // enableAttachments?: boolean; // Feature pendiente
   coverUrl?: string | null;
   coverType?: string | null;
   isPreview?: boolean;
@@ -78,13 +75,10 @@ export function OfferLeadForm({
   successMessage,
   successRedirectUrl,
   fieldsConfig,
-  subjectOptions,
-  useEventTypes = false,
   selectedEventTypeIds = [],
   enableInterestDate,
   validateWithCalendar = false,
   emailRequired = false,
-  // enableAttachments = false, // Feature pendiente
   coverUrl,
   coverType,
   isPreview = false,
@@ -103,9 +97,9 @@ export function OfferLeadForm({
   // Verificar si viene de éxito
   const isSuccess = searchParams.get("success") === "true";
 
-  // Cargar tipos de evento si se usa useEventTypes
+  // Cargar tipos de evento seleccionados
   useEffect(() => {
-    if (useEventTypes && selectedEventTypeIds && selectedEventTypeIds.length > 0) {
+    if (selectedEventTypeIds && selectedEventTypeIds.length > 0) {
       const loadEventTypes = async () => {
         try {
           const { obtenerTiposEvento } = await import("@/lib/actions/studio/negocio/tipos-evento.actions");
@@ -121,7 +115,7 @@ export function OfferLeadForm({
       };
       loadEventTypes();
     }
-  }, [useEventTypes, selectedEventTypeIds, studioSlug]);
+  }, [selectedEventTypeIds, studioSlug]);
 
   useEffect(() => {
     // Registrar visita al cargar el leadform
@@ -203,26 +197,15 @@ export function OfferLeadForm({
     },
   ];
 
-  // Agregar campo de asunto/tipo de evento
-  if (useEventTypes && selectedEventTypeIds && selectedEventTypeIds.length > 0) {
-    // NUEVO: Usar tipos de evento
+  // Agregar campo de tipo de evento (si hay tipos seleccionados)
+  if (selectedEventTypeIds && selectedEventTypeIds.length > 0 && eventTypes.length > 0) {
     basicFields.push({
       id: "event_type_id",
       type: "select",
       label: "¿Qué tipo de evento te interesa?",
       required: true,
       placeholder: "Selecciona un tipo de evento",
-      options: eventTypes.map(t => t.nombre), // Display labels
-    });
-  } else if (subjectOptions && subjectOptions.length > 0) {
-    // LEGACY: Asuntos personalizados
-    basicFields.push({
-      id: "subject",
-      type: "select",
-      label: "Asunto",
-      required: true,
-      placeholder: "",
-      options: subjectOptions,
+      options: eventTypes.map(t => t.nombre),
     });
   }
 
@@ -347,10 +330,9 @@ export function OfferLeadForm({
         }
       });
 
-      // Mapear event_type_id si se seleccionó un tipo de evento
+      // Mapear event_type_id (formData contiene el nombre, necesitamos el ID)
       let eventTypeId: string | undefined;
-      if (useEventTypes && formData.event_type_id) {
-        // formData.event_type_id contiene el nombre seleccionado, buscar el ID
+      if (formData.event_type_id) {
         const selectedType = eventTypes.find(t => t.nombre === formData.event_type_id);
         eventTypeId = selectedType?.id;
       }
@@ -360,8 +342,7 @@ export function OfferLeadForm({
         name: formData.name,
         phone: formData.phone,
         email: formData.email || "",
-        event_type_id: eventTypeId, // ✅ NUEVO
-        subject: formData.subject, // ✅ LEGACY
+        event_type_id: eventTypeId,
         custom_fields: customFields,
         utm_source: urlParams.get("utm_source") || undefined,
         utm_medium: urlParams.get("utm_medium") || undefined,

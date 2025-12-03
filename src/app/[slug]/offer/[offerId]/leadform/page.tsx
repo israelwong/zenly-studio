@@ -85,8 +85,6 @@ export default async function PublicOfferLeadFormPage({
           successMessage={offer.leadform.success_message}
           successRedirectUrl={offer.leadform.success_redirect_url || undefined}
           fieldsConfig={offer.leadform.fields_config}
-          subjectOptions={offer.leadform.subject_options}
-          useEventTypes={offer.leadform.use_event_types}
           selectedEventTypeIds={offer.leadform.selected_event_type_ids}
           enableInterestDate={offer.leadform.enable_interest_date}
           validateWithCalendar={offer.leadform.validate_with_calendar}
