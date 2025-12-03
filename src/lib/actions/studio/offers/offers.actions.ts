@@ -654,9 +654,10 @@ export async function listOffers(
           landing_page: true,
           leadform: true,
         },
-        orderBy: {
-          created_at: "desc",
-        },
+        orderBy: [
+          { order: "asc" },
+          { created_at: "desc" },
+        ],
       });
 
       // Obtener content blocks para cada oferta
@@ -1007,5 +1008,78 @@ export async function duplicateOffer(
       return { success: false, error: error.message };
     }
     return { success: false, error: "Error al duplicar la oferta" };
+  }
+}
+
+/**
+ * Obtener studio ID por slug (helper para componentes)
+ */
+export async function getStudioIdBySlug(studioSlug: string): Promise<string | null> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    return studio?.id || null;
+  } catch (error) {
+    console.error("[getStudioIdBySlug] Error:", error);
+    return null;
+  }
+}
+
+/**
+ * Reordenar ofertas
+ */
+export async function reorderOffers(
+  studioSlug: string,
+  offerIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return await retryDatabaseOperation(async () => {
+      const studio = await prisma.studios.findUnique({
+        where: { slug: studioSlug },
+        select: { id: true },
+      });
+
+      if (!studio) {
+        return { success: false, error: "Estudio no encontrado" };
+      }
+
+      if (!offerIds || offerIds.length === 0) {
+        return { success: false, error: "No hay ofertas para reordenar" };
+      }
+
+      // Verificar que todas las ofertas existan y pertenezcan al studio
+      const existingOffers = await prisma.studio_offers.findMany({
+        where: {
+          id: { in: offerIds },
+          studio_id: studio.id,
+        },
+        select: { id: true },
+      });
+
+      if (existingOffers.length !== offerIds.length) {
+        return { success: false, error: "Algunas ofertas no fueron encontradas" };
+      }
+
+      // Actualizar el orden de cada oferta usando transacción
+      await prisma.$transaction(
+        offerIds.map((id, index) =>
+          prisma.studio_offers.update({
+            where: { id },
+            data: { order: index },
+          })
+        )
+      );
+
+      return { success: true };
+    });
+  } catch (error) {
+    console.error("[reorderOffers] Error:", error);
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: "Error al reordenar las ofertas" };
   }
 }

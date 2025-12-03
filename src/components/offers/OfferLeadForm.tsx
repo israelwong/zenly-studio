@@ -14,12 +14,14 @@
  */
 
 import { useEffect, useState } from "react";
-import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from "@/components/ui/zen";
+import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from "@/components/ui/zen";
 import { submitOfferLeadform } from "@/lib/actions/studio/offers/offer-submissions.actions";
 import { trackOfferVisit } from "@/lib/actions/studio/offers/offer-visits.actions";
+import { checkDateAvailability } from "@/lib/actions/studio/offers/offer-availability.actions";
 import { LeadFormFieldsConfig, LeadFormField } from "@/lib/actions/schemas/offer-schemas";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 // Tipos para objetos globales de tracking
 interface WindowWithDataLayer extends Window {
@@ -34,6 +36,7 @@ interface OfferLeadFormProps {
   studioSlug: string;
   offerId: string;
   offerSlug: string;
+  studioId: string;
   title?: string | null;
   description?: string | null;
   successMessage: string;
@@ -41,6 +44,7 @@ interface OfferLeadFormProps {
   fieldsConfig: LeadFormFieldsConfig;
   subjectOptions?: string[];
   enableInterestDate?: boolean;
+  validateWithCalendar?: boolean;
   isPreview?: boolean;
 }
 
@@ -51,6 +55,7 @@ export function OfferLeadForm({
   studioSlug,
   offerId,
   offerSlug,
+  studioId,
   title,
   description,
   successMessage,
@@ -58,6 +63,7 @@ export function OfferLeadForm({
   fieldsConfig,
   subjectOptions,
   enableInterestDate,
+  validateWithCalendar = false,
   isPreview = false,
 }: OfferLeadFormProps) {
   const router = useRouter();
@@ -65,6 +71,10 @@ export function OfferLeadForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [dateAvailability, setDateAvailability] = useState<{
+    checking: boolean;
+    available: boolean | null;
+  }>({ checking: false, available: null });
 
   // Verificar si viene de éxito
   const isSuccess = searchParams.get("success") === "true";
@@ -175,8 +185,9 @@ export function OfferLeadForm({
   // Combinar campos básicos con personalizados
   const allFields = [...basicFields, ...(fieldsConfig.fields || [])];
 
-  const handleInputChange = (fieldId: string, value: string) => {
+  const handleInputChange = async (fieldId: string, value: string) => {
     setFormData((prev) => ({ ...prev, [fieldId]: value }));
+
     // Limpiar error del campo
     if (errors[fieldId]) {
       setErrors((prev) => {
@@ -184,6 +195,31 @@ export function OfferLeadForm({
         delete newErrors[fieldId];
         return newErrors;
       });
+    }
+
+    // Validar disponibilidad de fecha si aplica
+    if (
+      fieldId === "interest_date" &&
+      value &&
+      enableInterestDate &&
+      validateWithCalendar &&
+      !isPreview
+    ) {
+      setDateAvailability({ checking: true, available: null });
+
+      const result = await checkDateAvailability({
+        studio_id: studioId,
+        date: value,
+      });
+
+      if (result.success && result.data) {
+        setDateAvailability({
+          checking: false,
+          available: result.data.available,
+        });
+      } else {
+        setDateAvailability({ checking: false, available: null });
+      }
     }
   };
 
@@ -210,6 +246,16 @@ export function OfferLeadForm({
         if (!phoneRegex.test(value.replace(/\D/g, ""))) {
           newErrors[field.id] = "Teléfono debe tener al menos 10 dígitos";
         }
+      }
+
+      // Validar fecha de interés con agenda
+      if (
+        field.id === "interest_date" &&
+        value &&
+        validateWithCalendar &&
+        dateAvailability.available === false
+      ) {
+        newErrors[field.id] = "Esta fecha no está disponible";
       }
     });
 
@@ -360,6 +406,30 @@ export function OfferLeadForm({
                   required={field.required}
                   error={errors[field.id]}
                 />
+
+                {/* Badge de disponibilidad para fecha de interés */}
+                {field.id === "interest_date" &&
+                  formData[field.id] &&
+                  validateWithCalendar &&
+                  !isPreview && (
+                    <div className="mt-2">
+                      {dateAvailability.checking ? (
+                        <ZenBadge variant="secondary" size="sm">
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Verificando...
+                        </ZenBadge>
+                      ) : dateAvailability.available === true ? (
+                        <ZenBadge variant="success" size="sm">
+                          ✓ Fecha disponible
+                        </ZenBadge>
+                      ) : dateAvailability.available === false ? (
+                        <ZenBadge variant="destructive" size="sm">
+                          ✗ Fecha no disponible
+                        </ZenBadge>
+                      ) : null}
+                    </div>
+                  )}
+
                 {field.type === "select" && field.options && (
                   <select
                     className="mt-2 w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300"
@@ -392,7 +462,14 @@ export function OfferLeadForm({
               type="submit"
               className="w-full"
               loading={isSubmitting}
-              disabled={isSubmitting}
+              disabled={
+                isSubmitting ||
+                dateAvailability.checking ||
+                (validateWithCalendar &&
+                  enableInterestDate &&
+                  formData.interest_date &&
+                  dateAvailability.available === false)
+              }
             >
               Enviar solicitud
             </ZenButton>

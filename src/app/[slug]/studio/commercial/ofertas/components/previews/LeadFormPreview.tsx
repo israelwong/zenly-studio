@@ -5,6 +5,7 @@ import { useOfferEditor } from "../OfferEditorContext";
 
 interface LeadFormPreviewProps {
   studioSlug: string;
+  studioId: string;
 }
 
 /**
@@ -16,13 +17,14 @@ interface LeadFormPreviewProps {
  * 
  * Ver: docs/arquitectura-componentes-publicos.md
  */
-export function LeadFormPreview({ studioSlug }: LeadFormPreviewProps) {
+export function LeadFormPreview({ studioSlug, studioId }: LeadFormPreviewProps) {
   const { formData, leadformData } = useOfferEditor();
 
   return (
     <div className="bg-zinc-950 min-h-screen p-4">
       <OfferLeadForm
         studioSlug={studioSlug}
+        studioId={studioId}
         offerId="preview"
         offerSlug={formData.slug || "preview"}
         title={leadformData.title}
@@ -32,6 +34,7 @@ export function LeadFormPreview({ studioSlug }: LeadFormPreviewProps) {
         fieldsConfig={leadformData.fields_config}
         subjectOptions={leadformData.subject_options}
         enableInterestDate={leadformData.enable_interest_date}
+        validateWithCalendar={leadformData.validate_with_calendar}
         isPreview={true}
       />
     </div>

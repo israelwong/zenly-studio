@@ -42,9 +42,9 @@ export interface StudioOfferLeadform {
   success_message: string;
   success_redirect_url: string | null;
   fields_config: LeadFormFieldsConfig;
-  subject_options?: unknown;
-  enable_interest_date?: unknown;
-  validate_with_calendar?: unknown;
+  subject_options?: string[];
+  enable_interest_date?: boolean;
+  validate_with_calendar?: boolean;
   created_at: Date;
   updated_at: Date;
 }

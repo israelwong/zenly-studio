@@ -7,13 +7,9 @@ import {
   ZenSwitch,
   ZenButton,
   ZenBadge,
-  ZenCard,
-  ZenCardContent,
-  ZenCardHeader,
-  ZenCardTitle,
 } from "@/components/ui/zen";
 import { useOfferEditor } from "../OfferEditorContext";
-import { Plus, X, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { LeadFormField } from "@/lib/actions/schemas/offer-schemas";
 import { toast } from "sonner";
 import cuid from "cuid";
@@ -21,14 +17,14 @@ import cuid from "cuid";
 export function LeadFormEditor() {
   const { leadformData, updateLeadformData } = useOfferEditor();
 
-  const [showAddFieldModal, setShowAddFieldModal] = useState(false);
-  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
   const [newField, setNewField] = useState<Partial<LeadFormField>>({
     type: "text",
     label: "",
     required: false,
   });
   const [newSubject, setNewSubject] = useState("");
+  const [showFieldForm, setShowFieldForm] = useState(false);
+  const [showSubjectForm, setShowSubjectForm] = useState(false);
 
   const handleAddField = () => {
     if (!newField.label || !newField.type) {
@@ -52,7 +48,7 @@ export function LeadFormEditor() {
     });
 
     setNewField({ type: "text", label: "", required: false });
-    setShowAddFieldModal(false);
+    setShowFieldForm(false);
     toast.success("Campo agregado");
   };
 
@@ -82,7 +78,7 @@ export function LeadFormEditor() {
     });
 
     setNewSubject("");
-    setShowAddSubjectModal(false);
+    setShowSubjectForm(false);
     toast.success("Opción de asunto agregada");
   };
 
@@ -129,27 +125,17 @@ export function LeadFormEditor() {
 
       {/* Asunto personalizable */}
       <div className="border-t border-zinc-800 pt-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm font-medium text-zinc-300">
-              Opciones de Asunto
-            </h3>
-            <p className="text-xs text-zinc-500 mt-1">
-              El usuario podrá seleccionar el motivo de su consulta
-            </p>
-          </div>
-          <ZenButton
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAddSubjectModal(true)}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Agregar
-          </ZenButton>
+        <div className="mb-3">
+          <h3 className="text-sm font-medium text-zinc-300">
+            Opciones de Asunto
+          </h3>
+          <p className="text-xs text-zinc-500 mt-1">
+            El usuario podrá seleccionar el motivo de su consulta
+          </p>
         </div>
 
-        {leadformData.subject_options && leadformData.subject_options.length > 0 ? (
-          <div className="space-y-2">
+        {leadformData.subject_options && leadformData.subject_options.length > 0 && (
+          <div className="space-y-2 mb-3">
             {leadformData.subject_options.map((subject, index) => (
               <div
                 key={index}
@@ -167,10 +153,41 @@ export function LeadFormEditor() {
               </div>
             ))}
           </div>
+        )}
+
+        {!showSubjectForm ? (
+          <ZenButton
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSubjectForm(true)}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Agregar Opción
+          </ZenButton>
         ) : (
-          <p className="text-sm text-zinc-600 italic">
-            No hay opciones de asunto configuradas
-          </p>
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-3">
+            <ZenInput
+              label="Opción de asunto"
+              value={newSubject}
+              onChange={(e) => setNewSubject(e.target.value)}
+              placeholder="Ej: Cotización de sesión"
+            />
+            <div className="flex gap-2">
+              <ZenButton onClick={handleAddSubject} size="sm">
+                Agregar
+              </ZenButton>
+              <ZenButton
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowSubjectForm(false);
+                  setNewSubject("");
+                }}
+              >
+                Cancelar
+              </ZenButton>
+            </div>
+          </div>
         )}
       </div>
 
@@ -210,22 +227,17 @@ export function LeadFormEditor() {
 
       {/* Campos personalizados */}
       <div className="border-t border-zinc-800 pt-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="mb-3">
           <h3 className="text-sm font-medium text-zinc-300">
             Campos Personalizados
           </h3>
-          <ZenButton
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAddFieldModal(true)}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Agregar Campo
-          </ZenButton>
+          <p className="text-xs text-zinc-500 mt-1">
+            Agrega campos adicionales según tus necesidades
+          </p>
         </div>
 
-        {leadformData.fields_config.fields.length > 0 ? (
-          <div className="space-y-2">
+        {leadformData.fields_config.fields.length > 0 && (
+          <div className="space-y-2 mb-3">
             {leadformData.fields_config.fields.map((field) => (
               <div
                 key={field.id}
@@ -257,10 +269,111 @@ export function LeadFormEditor() {
               </div>
             ))}
           </div>
+        )}
+
+        {!showFieldForm ? (
+          <ZenButton
+            variant="outline"
+            size="sm"
+            onClick={() => setShowFieldForm(true)}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Agregar Campo
+          </ZenButton>
         ) : (
-          <p className="text-sm text-zinc-600 italic">
-            No hay campos personalizados
-          </p>
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
+                Tipo de Campo
+              </label>
+              <select
+                value={newField.type}
+                onChange={(e) =>
+                  setNewField((prev) => ({
+                    ...prev,
+                    type: e.target.value as LeadFormField["type"],
+                  }))
+                }
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300"
+              >
+                <option value="text">Texto</option>
+                <option value="textarea">Área de Texto</option>
+                <option value="email">Email</option>
+                <option value="phone">Teléfono</option>
+                <option value="select">Select</option>
+                <option value="date">Fecha</option>
+              </select>
+            </div>
+
+            <ZenInput
+              label="Etiqueta"
+              value={newField.label || ""}
+              onChange={(e) =>
+                setNewField((prev) => ({ ...prev, label: e.target.value }))
+              }
+              placeholder="Ej: Mensaje adicional"
+            />
+
+            <ZenInput
+              label="Placeholder (opcional)"
+              value={newField.placeholder || ""}
+              onChange={(e) =>
+                setNewField((prev) => ({
+                  ...prev,
+                  placeholder: e.target.value,
+                }))
+              }
+              placeholder="Texto de ayuda"
+            />
+
+            {newField.type === "select" && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Opciones (una por línea)
+                </label>
+                <textarea
+                  value={newField.options?.join("\n") || ""}
+                  onChange={(e) =>
+                    setNewField((prev) => ({
+                      ...prev,
+                      options: e.target.value
+                        .split("\n")
+                        .filter((opt) => opt.trim()),
+                    }))
+                  }
+                  className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300"
+                  rows={4}
+                  placeholder="Opción 1&#10;Opción 2&#10;Opción 3"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <ZenSwitch
+                checked={newField.required || false}
+                onCheckedChange={(checked) =>
+                  setNewField((prev) => ({ ...prev, required: checked }))
+                }
+                label="Campo Requerido"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <ZenButton onClick={handleAddField} size="sm">
+                Agregar Campo
+              </ZenButton>
+              <ZenButton
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowFieldForm(false);
+                  setNewField({ type: "text", label: "", required: false });
+                }}
+              >
+                Cancelar
+              </ZenButton>
+            </div>
+          </div>
         )}
       </div>
 
@@ -284,169 +397,6 @@ export function LeadFormEditor() {
           placeholder="https://..."
         />
       </div>
-
-      {/* Modal Agregar Campo */}
-      {showAddFieldModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <ZenCard className="max-w-md w-full mx-4">
-            <ZenCardHeader>
-              <div className="flex items-center justify-between">
-                <ZenCardTitle>Agregar Campo</ZenCardTitle>
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowAddFieldModal(false);
-                    setNewField({ type: "text", label: "", required: false });
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </ZenButton>
-              </div>
-            </ZenCardHeader>
-            <ZenCardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Tipo de Campo
-                </label>
-                <select
-                  value={newField.type}
-                  onChange={(e) =>
-                    setNewField((prev) => ({
-                      ...prev,
-                      type: e.target.value as LeadFormField["type"],
-                    }))
-                  }
-                  className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300"
-                >
-                  <option value="text">Texto</option>
-                  <option value="textarea">Área de Texto</option>
-                  <option value="email">Email</option>
-                  <option value="phone">Teléfono</option>
-                  <option value="select">Select</option>
-                  <option value="date">Fecha</option>
-                </select>
-              </div>
-
-              <ZenInput
-                label="Etiqueta"
-                value={newField.label || ""}
-                onChange={(e) =>
-                  setNewField((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Ej: Mensaje adicional"
-                required
-              />
-
-              <ZenInput
-                label="Placeholder (opcional)"
-                value={newField.placeholder || ""}
-                onChange={(e) =>
-                  setNewField((prev) => ({
-                    ...prev,
-                    placeholder: e.target.value,
-                  }))
-                }
-                placeholder="Texto de ayuda"
-              />
-
-              {newField.type === "select" && (
-                <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-2">
-                    Opciones (una por línea)
-                  </label>
-                  <textarea
-                    value={newField.options?.join("\n") || ""}
-                    onChange={(e) =>
-                      setNewField((prev) => ({
-                        ...prev,
-                        options: e.target.value
-                          .split("\n")
-                          .filter((opt) => opt.trim()),
-                      }))
-                    }
-                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300"
-                    rows={4}
-                    placeholder="Opción 1&#10;Opción 2&#10;Opción 3"
-                  />
-                </div>
-              )}
-
-              <div className="flex items-center gap-3">
-                <ZenSwitch
-                  checked={newField.required || false}
-                  onCheckedChange={(checked) =>
-                    setNewField((prev) => ({ ...prev, required: checked }))
-                  }
-                  label="Campo Requerido"
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <ZenButton onClick={handleAddField} className="flex-1">
-                  Agregar Campo
-                </ZenButton>
-                <ZenButton
-                  variant="outline"
-                  onClick={() => {
-                    setShowAddFieldModal(false);
-                    setNewField({ type: "text", label: "", required: false });
-                  }}
-                >
-                  Cancelar
-                </ZenButton>
-              </div>
-            </ZenCardContent>
-          </ZenCard>
-        </div>
-      )}
-
-      {/* Modal Agregar Asunto */}
-      {showAddSubjectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <ZenCard className="max-w-md w-full mx-4">
-            <ZenCardHeader>
-              <div className="flex items-center justify-between">
-                <ZenCardTitle>Agregar Opción de Asunto</ZenCardTitle>
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowAddSubjectModal(false);
-                    setNewSubject("");
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </ZenButton>
-              </div>
-            </ZenCardHeader>
-            <ZenCardContent className="space-y-4">
-              <ZenInput
-                label="Opción de asunto"
-                value={newSubject}
-                onChange={(e) => setNewSubject(e.target.value)}
-                placeholder="Ej: Cotización de sesión"
-                required
-              />
-
-              <div className="flex gap-3">
-                <ZenButton onClick={handleAddSubject} className="flex-1">
-                  Agregar
-                </ZenButton>
-                <ZenButton
-                  variant="outline"
-                  onClick={() => {
-                    setShowAddSubjectModal(false);
-                    setNewSubject("");
-                  }}
-                >
-                  Cancelar
-                </ZenButton>
-              </div>
-            </ZenCardContent>
-          </ZenCard>
-        </div>
-      )}
     </div>
   );
 }

@@ -2567,6 +2567,7 @@ model studio_offers {
   is_active        Boolean                       @default(true)
   created_at       DateTime                      @default(now())
   updated_at       DateTime                      @updatedAt
+  order            Int?                           @default(0)
   studio           studios                       @relation(fields: [studio_id], references: [id], onDelete: Cascade)
   landing_page     studio_offer_landing_pages?
   leadform         studio_offer_leadforms?

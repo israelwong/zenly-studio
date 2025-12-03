@@ -10,7 +10,10 @@ export default function NuevaOfertaPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto">
-      <OfferEditor studioSlug={studioSlug} mode="create" />
+      <OfferEditor
+        studioSlug={studioSlug}
+        mode="create"
+      />
     </div>
   );
 }

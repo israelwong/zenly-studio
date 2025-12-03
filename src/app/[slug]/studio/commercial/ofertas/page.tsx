@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Megaphone, Plus, FileText, Copy, Trash2, Eye } from 'lucide-react';
+import Image from 'next/image';
+import { Megaphone, Plus, Copy, Trash2, GripVertical, MoreVertical, Edit } from 'lucide-react';
 import {
     ZenCard,
     ZenCardContent,
@@ -14,6 +15,13 @@ import {
     ZenConfirmModal
 } from '@/components/ui/zen';
 import {
+    ZenDropdownMenu,
+    ZenDropdownMenuTrigger,
+    ZenDropdownMenuContent,
+    ZenDropdownMenuItem,
+    ZenDropdownMenuSeparator,
+} from '@/components/ui/zen/overlays/ZenDropdownMenu';
+import {
     Table,
     TableBody,
     TableCell,
@@ -21,10 +29,176 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/shadcn/table';
-import { listOffers, deleteOffer, duplicateOffer } from '@/lib/actions/studio/offers/offers.actions';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { listOffers, deleteOffer, duplicateOffer, reorderOffers } from '@/lib/actions/studio/offers/offers.actions';
 import { getOfferStats } from '@/lib/actions/studio/offers/offer-stats.actions';
 import type { StudioOffer } from '@/types/offers';
 import { toast } from 'sonner';
+
+interface SortableOfferRowProps {
+    offer: StudioOffer;
+    stats: {
+        total_visits: number;
+        total_leadform_visits: number;
+        total_submissions: number;
+        conversion_rate: number;
+    };
+    studioSlug: string;
+    onEdit: (offerId: string) => void;
+    onDuplicate: (offerId: string) => void;
+    onDelete: (offerId: string) => void;
+    isDuplicating: boolean;
+}
+
+function SortableOfferRow({
+    offer,
+    stats,
+    studioSlug,
+    onEdit,
+    onDuplicate,
+    onDelete,
+    isDuplicating,
+}: SortableOfferRowProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: offer.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+    };
+
+    const noConvertidos = Math.max(0, stats.total_leadform_visits - stats.total_submissions);
+
+    return (
+        <TableRow
+            ref={setNodeRef}
+            style={style}
+            className="border-zinc-800 cursor-pointer hover:bg-zinc-900/50 transition-colors"
+            onClick={() => onEdit(offer.id)}
+        >
+            <TableCell className="w-12" onClick={(e) => e.stopPropagation()}>
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className="cursor-grab active:cursor-grabbing flex items-center justify-center"
+                >
+                    <GripVertical className="h-4 w-4 text-zinc-500" />
+                </div>
+            </TableCell>
+            <TableCell className="font-medium text-zinc-100">
+                <div className="flex items-center gap-3">
+                    <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
+                        {offer.cover_media_url ? (
+                            offer.cover_media_type === 'video' ? (
+                                <video
+                                    src={offer.cover_media_url}
+                                    className="w-full h-full object-cover"
+                                    muted
+                                    playsInline
+                                />
+                            ) : (
+                                <Image
+                                    src={offer.cover_media_url}
+                                    alt={offer.name}
+                                    fill
+                                    className="object-cover"
+                                    sizes="48px"
+                                    unoptimized
+                                />
+                            )
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                                <Megaphone className="h-5 w-5 text-zinc-600" />
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-1 min-w-0">
+                        <span className="truncate">{offer.name}</span>
+                        {offer.description && (
+                            <span className="text-xs text-zinc-500 line-clamp-1 truncate">
+                                {offer.description}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </TableCell>
+            <TableCell className="text-center text-zinc-300">
+                {stats.total_visits}
+            </TableCell>
+            <TableCell className="text-center text-zinc-300">
+                {noConvertidos}
+            </TableCell>
+            <TableCell className="text-center text-zinc-300">
+                {stats.total_submissions}
+            </TableCell>
+            <TableCell className="text-center">
+                <ZenBadge
+                    variant={offer.is_active ? 'success' : 'secondary'}
+                    size="sm"
+                >
+                    {offer.is_active ? 'Activa' : 'Inactiva'}
+                </ZenBadge>
+            </TableCell>
+            <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                        <ZenButton
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-200"
+                        >
+                            <MoreVertical className="h-4 w-4" />
+                        </ZenButton>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end">
+                        <ZenDropdownMenuItem onClick={() => onEdit(offer.id)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Editar
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuItem
+                            onClick={() => onDuplicate(offer.id)}
+                            disabled={isDuplicating}
+                        >
+                            <Copy className="h-4 w-4 mr-2" />
+                            Duplicar
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuSeparator />
+                        <ZenDropdownMenuItem
+                            onClick={() => onDelete(offer.id)}
+                            className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                        </ZenDropdownMenuItem>
+                    </ZenDropdownMenuContent>
+                </ZenDropdownMenu>
+            </TableCell>
+        </TableRow>
+    );
+}
 
 export default function OfertasPage() {
     const params = useParams();
@@ -37,12 +211,20 @@ export default function OfertasPage() {
     const [offerToDelete, setOfferToDelete] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [duplicatingOfferId, setDuplicatingOfferId] = useState<string | null>(null);
+    const [isReordering, setIsReordering] = useState(false);
     const [stats, setStats] = useState<Record<string, {
         total_visits: number;
         total_leadform_visits: number;
         total_submissions: number;
         conversion_rate: number;
     }>>({});
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
 
     useEffect(() => {
         loadOffers();
@@ -125,8 +307,11 @@ export default function OfertasPage() {
         }
     };
 
-    const handleDuplicate = async (offerId: string, e: React.MouseEvent) => {
-        e.stopPropagation();
+    const handleEdit = (offerId: string) => {
+        router.push(`/${studioSlug}/studio/commercial/ofertas/${offerId}`);
+    };
+
+    const handleDuplicate = async (offerId: string) => {
         setDuplicatingOfferId(offerId);
         try {
             const result = await duplicateOffer(offerId, studioSlug);
@@ -145,11 +330,46 @@ export default function OfertasPage() {
         }
     };
 
-    const handleLeadformClick = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        toast.info('Funcionalidad de Leadform pendiente de implementación');
+    const handleDeleteClick = (offerId: string) => {
+        setOfferToDelete(offerId);
+        setShowDeleteModal(true);
     };
 
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (isReordering || !over || active.id === over.id) {
+            return;
+        }
+
+        const oldIndex = offers.findIndex((offer) => offer.id === active.id);
+        const newIndex = offers.findIndex((offer) => offer.id === over.id);
+
+        if (oldIndex === -1 || newIndex === -1) {
+            return;
+        }
+
+        const newOffers = arrayMove(offers, oldIndex, newIndex);
+
+        try {
+            setIsReordering(true);
+            setOffers(newOffers);
+
+            const offerIds = newOffers.map((offer) => offer.id);
+            const result = await reorderOffers(studioSlug, offerIds);
+
+            if (!result.success) {
+                toast.error(result.error || 'Error al reordenar las ofertas');
+                await loadOffers();
+            }
+        } catch (error) {
+            console.error('[OfertasPage] Error reordenando ofertas:', error);
+            toast.error('Error al reordenar las ofertas');
+            await loadOffers();
+        } finally {
+            setIsReordering(false);
+        }
+    };
 
     return (
         <div className="w-full max-w-7xl mx-auto">
@@ -167,19 +387,10 @@ export default function OfertasPage() {
                                 </ZenCardDescription>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <ZenButton
-                                variant="outline"
-                                onClick={handleLeadformClick}
-                            >
-                                <FileText className="h-4 w-4 mr-2" />
-                                Leadform
-                            </ZenButton>
-                            <ZenButton onClick={() => router.push(`/${studioSlug}/studio/commercial/ofertas/nuevo`)}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Nueva Oferta
-                            </ZenButton>
-                        </div>
+                        <ZenButton onClick={() => router.push(`/${studioSlug}/studio/commercial/ofertas/nuevo`)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Nueva Oferta
+                        </ZenButton>
                     </div>
                 </ZenCardHeader>
 
@@ -207,94 +418,62 @@ export default function OfertasPage() {
                             </ZenButton>
                         </div>
                     ) : (
-                        <div className="rounded-lg border border-zinc-800 overflow-hidden">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="border-zinc-800 hover:bg-transparent">
-                                        <TableHead className="text-zinc-400 font-medium">Oferta</TableHead>
-                                        <TableHead className="text-zinc-400 font-medium text-center">Visitas</TableHead>
-                                        <TableHead className="text-zinc-400 font-medium text-center">Carrito Olvidado</TableHead>
-                                        <TableHead className="text-zinc-400 font-medium text-center">Conversiones</TableHead>
-                                        <TableHead className="text-zinc-400 font-medium text-center">Estatus</TableHead>
-                                        <TableHead className="text-zinc-400 font-medium text-center w-24">Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {offers.map((offer) => {
-                                        const offerStats = stats[offer.id] || {
-                                            total_visits: 0,
-                                            total_leadform_visits: 0,
-                                            total_submissions: 0,
-                                            conversion_rate: 0,
-                                        };
+                        <div className="rounded-lg border border-zinc-800 overflow-hidden relative">
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleDragEnd}
+                            >
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="border-zinc-800 hover:bg-transparent">
+                                            <TableHead className="text-zinc-400 font-medium w-12"></TableHead>
+                                            <TableHead className="text-zinc-400 font-medium">Oferta</TableHead>
+                                            <TableHead className="text-zinc-400 font-medium text-center">Visitas</TableHead>
+                                            <TableHead className="text-zinc-400 font-medium text-center">No convertidos</TableHead>
+                                            <TableHead className="text-zinc-400 font-medium text-center">Conversiones</TableHead>
+                                            <TableHead className="text-zinc-400 font-medium text-center">Estatus</TableHead>
+                                            <TableHead className="text-zinc-400 font-medium text-center w-12"></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        <SortableContext
+                                            items={offers.map((offer) => offer.id)}
+                                            strategy={verticalListSortingStrategy}
+                                        >
+                                            {offers.map((offer) => {
+                                                const offerStats = stats[offer.id] || {
+                                                    total_visits: 0,
+                                                    total_leadform_visits: 0,
+                                                    total_submissions: 0,
+                                                    conversion_rate: 0,
+                                                };
 
-                                        const carritoOlvidado = Math.max(0, offerStats.total_leadform_visits - offerStats.total_submissions);
-
-                                        return (
-                                            <TableRow
-                                                key={offer.id}
-                                                className="border-zinc-800 cursor-pointer hover:bg-zinc-900/50 transition-colors"
-                                                onClick={() => router.push(`/${studioSlug}/studio/commercial/ofertas/${offer.id}`)}
-                                            >
-                                                <TableCell className="font-medium text-zinc-100">
-                                                    <div className="flex flex-col gap-1">
-                                                        <span>{offer.name}</span>
-                                                        {offer.description && (
-                                                            <span className="text-xs text-zinc-500 line-clamp-1">
-                                                                {offer.description}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-center text-zinc-300">
-                                                    {offerStats.total_visits}
-                                                </TableCell>
-                                                <TableCell className="text-center text-zinc-300">
-                                                    {carritoOlvidado}
-                                                </TableCell>
-                                                <TableCell className="text-center text-zinc-300">
-                                                    {offerStats.total_submissions}
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    <ZenBadge
-                                                        variant={offer.is_active ? 'success' : 'secondary'}
-                                                        size="sm"
-                                                    >
-                                                        {offer.is_active ? 'Activa' : 'Inactiva'}
-                                                    </ZenBadge>
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    <div className="flex items-center justify-center gap-1">
-                                                        <ZenButton
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => handleDuplicate(offer.id, e)}
-                                                            disabled={duplicatingOfferId === offer.id}
-                                                            className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-200"
-                                                            title="Duplicar oferta"
-                                                        >
-                                                            <Copy className="h-4 w-4" />
-                                                        </ZenButton>
-                                                        <ZenButton
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setOfferToDelete(offer.id);
-                                                                setShowDeleteModal(true);
-                                                            }}
-                                                            className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-950/20"
-                                                            title="Eliminar oferta"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </ZenButton>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
+                                                return (
+                                                    <SortableOfferRow
+                                                        key={offer.id}
+                                                        offer={offer}
+                                                        stats={offerStats}
+                                                        studioSlug={studioSlug}
+                                                        onEdit={handleEdit}
+                                                        onDuplicate={handleDuplicate}
+                                                        onDelete={handleDeleteClick}
+                                                        isDuplicating={duplicatingOfferId === offer.id}
+                                                    />
+                                                );
+                                            })}
+                                        </SortableContext>
+                                    </TableBody>
+                                </Table>
+                            </DndContext>
+                            {isReordering && (
+                                <div className="absolute inset-0 bg-zinc-900/50 flex items-center justify-center z-10 rounded-lg">
+                                    <div className="flex items-center gap-2 text-zinc-300">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                        <span className="text-sm">Actualizando orden...</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </ZenCardContent>

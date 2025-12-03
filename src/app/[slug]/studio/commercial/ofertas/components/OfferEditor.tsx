@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, FileText, Layout, MessageSquare, MoreVertical, Trash2, HardDrive } from "lucide-react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { ArrowLeft, FileText, Layout, MessageSquare, MoreVertical, Trash2, HardDrive, Save } from "lucide-react";
 import {
   ZenButton,
   ZenSwitch,
@@ -12,7 +12,7 @@ import {
   ZenDropdownMenuItem,
   ZenConfirmModal
 } from "@/components/ui/zen";
-import { OfferEditorProvider, useOfferEditor } from "./OfferEditorContext";
+import { OfferEditorProvider, useOfferEditor, type OfferEditorTab } from "./OfferEditorContext";
 import { BasicInfoTab } from "./tabs/BasicInfoTab";
 import { LandingPageTab } from "./tabs/LandingPageTab";
 import { LeadFormTab } from "./tabs/LeadFormTab";
@@ -26,12 +26,15 @@ import type { ContentBlock } from "@/types/content-blocks";
 
 interface OfferEditorProps {
   studioSlug: string;
+  studioId?: string;
   mode: "create" | "edit";
   offer?: StudioOffer;
 }
 
-function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
+function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { activeTab, setActiveTab, isSaving, setIsSaving, formData, contentBlocks, updateFormData, updateContentBlocks, getOfferData, savedOfferId, setSavedOfferId } = useOfferEditor();
   const { triggerRefresh } = useStorageRefresh(studioSlug);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -40,15 +43,150 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
   const [currentMode, setCurrentMode] = useState<"create" | "edit">(mode);
   const [currentOffer, setCurrentOffer] = useState<StudioOffer | undefined>(offer);
 
+  // Estado para detectar cambios sin guardar
+  const [isDirty, setIsDirty] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [pendingTab, setPendingTab] = useState<OfferEditorTab | null>(null);
+  const [initialData, setInitialData] = useState<string>("");
+  const [pendingNavigation, setPendingNavigation] = useState<'back' | null>(null);
+
   // Sincronizar currentOffer y currentMode cuando cambian los props
   useEffect(() => {
     if (offer) {
       setCurrentOffer(offer);
       setCurrentMode("edit");
+      // Guardar snapshot inicial para detectar cambios
+      const initialSnapshot = JSON.stringify({
+        formData,
+        contentBlocks,
+      });
+      setInitialData(initialSnapshot);
+      setIsDirty(false);
     } else {
       setCurrentMode("create");
     }
   }, [offer]);
+
+  // Leer tab desde URL al cargar
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && (tab === 'basic' || tab === 'landing' || tab === 'leadform')) {
+      setActiveTab(tab);
+    }
+  }, [searchParams, setActiveTab]);
+
+  // Detectar cambios en los datos
+  useEffect(() => {
+    if (!initialData || currentMode === "create") return;
+
+    const currentSnapshot = JSON.stringify({
+      formData,
+      contentBlocks,
+    });
+
+    setIsDirty(currentSnapshot !== initialData);
+  }, [formData, contentBlocks, initialData, currentMode]);
+
+  // Prevenir cerrar ventana con cambios sin guardar
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty && currentMode === "edit") {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty, currentMode]);
+
+  // Función para cambiar tab y actualizar URL
+  const handleTabChange = (tab: OfferEditorTab) => {
+    // Si hay cambios sin guardar, mostrar modal
+    if (isDirty && currentMode === "edit") {
+      setPendingTab(tab);
+      setShowUnsavedModal(true);
+      return;
+    }
+
+    // Si no hay cambios, cambiar directamente
+    setActiveTab(tab);
+
+    // Actualizar URL sin recargar página
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  // Confirmar cambio de tab sin guardar
+  const handleDiscardChanges = () => {
+    if (pendingTab) {
+      // Resetear datos al estado inicial
+      setIsDirty(false);
+      setShowUnsavedModal(false);
+
+      // Cambiar tab
+      setActiveTab(pendingTab);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', pendingTab);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+
+      setPendingTab(null);
+
+      // Recargar datos originales
+      if (currentOffer) {
+        const initialSnapshot = JSON.stringify({
+          formData,
+          contentBlocks,
+        });
+        setInitialData(initialSnapshot);
+      }
+    } else if (pendingNavigation === 'back') {
+      // Navegación hacia atrás
+      setIsDirty(false);
+      setShowUnsavedModal(false);
+      setPendingNavigation(null);
+      router.back();
+    }
+  };
+
+  // Guardar y cambiar tab
+  const handleSaveAndChangeTab = async () => {
+    if (pendingTab) {
+      await handleSave();
+      setShowUnsavedModal(false);
+
+      // Cambiar tab después de guardar
+      setActiveTab(pendingTab);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', pendingTab);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+
+      setPendingTab(null);
+    } else if (pendingNavigation === 'back') {
+      await handleSave();
+      setShowUnsavedModal(false);
+      setPendingNavigation(null);
+      router.back();
+    }
+  };
+
+  // Manejar botón volver con protección
+  const handleBack = () => {
+    if (isDirty && currentMode === "edit") {
+      setPendingNavigation('back');
+      setShowUnsavedModal(true);
+      return;
+    }
+
+    // Si está editando una nueva oferta guardada, volver
+    if (currentMode === "edit" && currentOffer && savedOfferId) {
+      router.push(`/${studioSlug}/studio/commercial/ofertas`);
+    } else {
+      // Si está creando nueva oferta sin guardar, regresar
+      router.back();
+    }
+  };
 
   // Obtener tamaño de la portada si existe
   useEffect(() => {
@@ -123,6 +261,13 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
           if (result.data.landing_page?.content_blocks) {
             updateContentBlocks(result.data.landing_page.content_blocks as ContentBlock[]);
           }
+          // Resetear estado de cambios
+          const newSnapshot = JSON.stringify({
+            formData,
+            contentBlocks,
+          });
+          setInitialData(newSnapshot);
+          setIsDirty(false);
         } else {
           toast.error(result.error || "Error al actualizar la oferta");
         }
@@ -140,8 +285,16 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
           // Actualizar estado local sin recargar la página
           setCurrentOffer(result.data);
           setCurrentMode("edit");
-          // Actualizar URL sin recargar la página completa
-          window.history.pushState({}, '', `/${studioSlug}/studio/commercial/ofertas/${result.data.id}`);
+          // Actualizar URL sin recargar la página completa (mantener tab actual)
+          const currentTab = searchParams.get('tab') || 'basic';
+          window.history.pushState({}, '', `/${studioSlug}/studio/commercial/ofertas/${result.data.id}?tab=${currentTab}`);
+          // Inicializar snapshot para modo edit
+          const newSnapshot = JSON.stringify({
+            formData,
+            contentBlocks,
+          });
+          setInitialData(newSnapshot);
+          setIsDirty(false);
         } else {
           toast.error(result.error || "Error al crear la oferta");
         }
@@ -187,15 +340,7 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
         <div className="flex items-center gap-4">
           <ZenButton
             variant="ghost"
-            onClick={() => {
-              if (currentMode === "edit" || savedOfferId) {
-                // Si está en modo edición o ya tiene oferta guardada, ir a la lista
-                router.push(`/${studioSlug}/studio/commercial/ofertas`);
-              } else {
-                // Si está creando nueva oferta sin guardar, regresar
-                router.back();
-              }
-            }}
+            onClick={handleBack}
           >
             <ArrowLeft className="h-4 w-4" />
           </ZenButton>
@@ -235,15 +380,17 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
                   onCheckedChange={(checked) => updateFormData({ is_active: checked })}
                 />
               </div>
-              {/* Línea divisoria */}
-              <div className="h-8 w-px bg-zinc-800 mx-2"></div>
-              <ZenButton
-                onClick={handleSave}
-                loading={isSaving}
-                disabled={isSaving}
-              >
-                Actualizar Oferta
-              </ZenButton>
+              {/* Badge de estado sin guardar */}
+              {isDirty && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </span>
+                  <span className="text-xs font-medium text-amber-400">Sin guardar</span>
+                </div>
+              )}
+              {/* Menú de opciones */}
               <ZenDropdownMenu>
                 <ZenDropdownMenuTrigger asChild>
                   <ZenButton variant="ghost" size="sm" className="h-9 w-9 p-0">
@@ -251,6 +398,14 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
                   </ZenButton>
                 </ZenDropdownMenuTrigger>
                 <ZenDropdownMenuContent align="end">
+                  <ZenDropdownMenuItem
+                    onClick={handleSave}
+                    disabled={isSaving || !isDirty}
+                    className="gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSaving ? 'Guardando...' : 'Guardar cambios'}
+                  </ZenDropdownMenuItem>
                   <ZenDropdownMenuItem
                     onClick={() => setShowDeleteModal(true)}
                     className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
@@ -279,7 +434,7 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
                 key={tab.id}
                 onClick={() => {
                   if (!isDisabled) {
-                    setActiveTab(tab.id);
+                    handleTabChange(tab.id);
                   }
                 }}
                 disabled={isDisabled}
@@ -320,7 +475,12 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
         />
       )}
       {activeTab === "landing" && <LandingPageTab studioSlug={studioSlug} />}
-      {activeTab === "leadform" && <LeadFormTab studioSlug={studioSlug} />}
+      {activeTab === "leadform" && (
+        <LeadFormTab
+          studioSlug={studioSlug}
+          studioId={studioId || offer?.studio_id || ""}
+        />
+      )}
 
       {/* Modal de confirmación para eliminar */}
       <ZenConfirmModal
@@ -334,6 +494,23 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
         variant="destructive"
         loading={isDeleting}
       />
+
+      {/* Modal de cambios sin guardar */}
+      <ZenConfirmModal
+        isOpen={showUnsavedModal}
+        onClose={handleDiscardChanges}
+        onConfirm={handleSaveAndChangeTab}
+        title="Cambios sin guardar"
+        description={
+          pendingNavigation === 'back'
+            ? "Tienes cambios sin guardar. ¿Deseas guardarlos antes de salir?"
+            : `Tienes cambios sin guardar en la pestaña "${tabs.find(t => t.id === activeTab)?.label}". ¿Deseas guardarlos antes de continuar?`
+        }
+        confirmText="Guardar y continuar"
+        cancelText="Descartar cambios"
+        variant="default"
+        loading={isSaving}
+      />
     </div>
   );
 }
@@ -341,7 +518,10 @@ function OfferEditorContent({ studioSlug, mode, offer }: OfferEditorProps) {
 export function OfferEditor(props: OfferEditorProps) {
   return (
     <OfferEditorProvider initialOffer={props.offer}>
-      <OfferEditorContent {...props} />
+      <OfferEditorContent
+        {...props}
+        studioId={props.studioId || props.offer?.studio_id}
+      />
     </OfferEditorProvider>
   );
 }
