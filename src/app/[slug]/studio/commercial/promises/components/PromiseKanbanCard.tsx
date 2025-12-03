@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone } from 'lucide-react';
+import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, Flask } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
-import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge } from '@/components/ui/zen';
 import { getPromiseTagsByPromiseId, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -221,7 +221,19 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
 
                         {/* Nombre, Teléfono y Tipo de evento */}
                         <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-white text-sm leading-tight truncate">{promise.name}</h3>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-medium text-white text-sm leading-tight truncate">{promise.name}</h3>
+                                {/* Badge de prueba */}
+                                {promise.is_test && (
+                                    <ZenBadge 
+                                        variant="outline" 
+                                        className="text-amber-400 border-amber-400/50 bg-amber-400/10 flex-shrink-0"
+                                    >
+                                        <Flask className="h-3 w-3 mr-1" />
+                                        PRUEBA
+                                    </ZenBadge>
+                                )}
+                            </div>
                             {promise.phone && (
                                 <div className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5">
                                     <Phone className="h-3 w-3 flex-shrink-0" />

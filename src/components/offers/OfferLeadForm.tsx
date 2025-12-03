@@ -350,6 +350,7 @@ export function OfferLeadForm({
         utm_term: urlParams.get("utm_term") || undefined,
         utm_content: urlParams.get("utm_content") || undefined,
         session_id: sessionId || undefined,
+        is_test: isPreview, // ✅ Marcar como prueba si viene del preview
       });
 
       if (!result.success) {

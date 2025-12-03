@@ -196,6 +196,7 @@ export async function getPromises(
           : null,
         defined_date: latestPromise?.defined_date || null,
         promise_pipeline_stage_id: latestPromise?.pipeline_stage_id || null,
+        is_test: latestPromise?.is_test || false, // ✅ Incluir flag de prueba
         created_at: contact.created_at,
         updated_at: latestPromise?.updated_at || contact.updated_at,
         event_type: latestPromise?.event_type || null,
@@ -364,6 +365,7 @@ export async function createPromise(
         ? (promise.tentative_dates as string[])
         : null,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
+      is_test: promise.is_test, // ✅ Incluir flag de prueba
       created_at: contact.created_at,
       updated_at: contact.updated_at,
       event_type: promise.event_type,
@@ -669,6 +671,7 @@ export async function updatePromise(
         ? (promise.tentative_dates as string[])
         : null,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
+      is_test: promise.is_test, // ✅ Incluir flag de prueba
       created_at: contact.created_at,
       updated_at: contact.updated_at,
       event_type: promise.event_type,
@@ -847,6 +850,7 @@ export async function movePromise(
         ? (promise.tentative_dates as string[])
         : null,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
+      is_test: promise.is_test, // ✅ Incluir flag de prueba
       created_at: contact.created_at,
       updated_at: contact.updated_at,
       event_type: promise.event_type,
