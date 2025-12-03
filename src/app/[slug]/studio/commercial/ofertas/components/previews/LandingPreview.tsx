@@ -10,30 +10,28 @@ interface LandingPreviewProps {
 /**
  * Preview del landing page usando el componente real público
  * Garantiza consistencia 1:1 con la vista real
+ * 
+ * ⚠️ TODO: Eliminar este wrapper cuando se migre a arquitectura unificada
+ * El componente OfferLandingSection debería usarse directamente en LandingPageTab
+ * 
+ * Ver: docs/arquitectura-componentes-publicos.md
  */
 export function LandingPreview({ studioSlug }: LandingPreviewProps) {
   const { formData, contentBlocks } = useOfferEditor();
 
-  // CTA por defecto para preview
-  const defaultCTA = {
-    buttons: [
-      {
-        id: "cta-1",
-        text: "Solicitar información",
-        variant: "primary" as const,
-        position: "bottom" as const,
-      },
-    ],
+  // CTA vacío para preview - sin botones hardcodeados
+  const emptyCTA = {
+    buttons: [],
   };
 
   return (
-    <div className="bg-zinc-950 rounded-lg overflow-hidden border border-zinc-800">
+    <div className="overflow-hidden p-0.5">
       <OfferLandingPage
         studioSlug={studioSlug}
         offerId="preview"
         offerSlug={formData.slug || "preview"}
         contentBlocks={contentBlocks}
-        ctaConfig={defaultCTA}
+        ctaConfig={emptyCTA}
         onTrackView={() => { }} // No track en preview
       />
     </div>

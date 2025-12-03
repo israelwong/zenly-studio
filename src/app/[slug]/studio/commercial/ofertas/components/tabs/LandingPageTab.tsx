@@ -37,6 +37,7 @@ export function LandingPageTab({ studioSlug }: LandingPageTabProps) {
             onClose={() => { }}
             isEditMode={true}
             hidePortfolioHeader={true}
+            hideHeader={true}
           >
             <div className="h-full overflow-auto">
               <LandingPreview studioSlug={studioSlug} />

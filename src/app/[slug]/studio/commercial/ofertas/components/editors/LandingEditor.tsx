@@ -6,8 +6,6 @@ import { ContentBlocksEditor } from "@/components/content-blocks";
 import { CategorizedComponentSelector, ComponentOption } from "@/app/[slug]/profile/edit/content/portfolios/components/CategorizedComponentSelector";
 import { useOfferEditor } from "../OfferEditorContext";
 import { ContentBlock } from "@/types/content-blocks";
-import { HardDrive } from "lucide-react";
-import { calculateTotalStorage, formatBytes } from "@/lib/utils/storage";
 
 interface LandingEditorProps {
   studioSlug: string;
@@ -121,7 +119,7 @@ function InjectAddButtons({
 }
 
 export function LandingEditor({ studioSlug }: LandingEditorProps) {
-  const { contentBlocks, updateContentBlocks } = useOfferEditor();
+  const { contentBlocks, updateContentBlocks, formData, offerId } = useOfferEditor();
 
   const [showComponentSelector, setShowComponentSelector] = useState(false);
   const [insertAtIndex, setInsertAtIndex] = useState<number | undefined>(undefined);
@@ -139,11 +137,6 @@ export function LandingEditor({ studioSlug }: LandingEditorProps) {
     }
   }, []);
 
-  // Calcular tamaño total de todos los componentes
-  const totalComponentsSize = useMemo(() => {
-    const allMedia = contentBlocks.flatMap(block => block.media || []);
-    return calculateTotalStorage(allMedia);
-  }, [contentBlocks]);
 
   const handleAddComponentFromSelector = (component: ComponentOption) => {
     const generateId = () => `block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -255,12 +248,6 @@ export function LandingEditor({ studioSlug }: LandingEditorProps) {
               {contentBlocks.length}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <HardDrive className="w-3 h-3 text-zinc-500" />
-            <span className={`text-xs font-medium ${totalComponentsSize > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
-              {formatBytes(totalComponentsSize)}
-            </span>
-          </div>
         </div>
         {contentBlocks.length > 0 && (
           <p className="text-xs text-zinc-500 mt-3 leading-relaxed">
@@ -322,6 +309,11 @@ export function LandingEditor({ studioSlug }: LandingEditorProps) {
             setShowComponentSelector(true);
           }}
           onDragStateChange={handleDragStateChange}
+          heroContext="offer"
+          heroContextData={{
+            offerSlug: formData.slug,
+            offerId: offerId
+          }}
         />
 
         {/* Inyectar botones después de cada bloque usando useEffect - Solo si hay componentes */}

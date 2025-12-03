@@ -28,6 +28,15 @@ interface OfferLandingPageProps {
 
 /**
  * Componente de landing page pública para ofertas
+ * 
+ * ⚠️ TODO: Migrar a components/sections/offers/OfferLandingSection.tsx
+ * cuando se agreguen más secciones públicas (pagos, calendario)
+ * 
+ * Este componente debe ser reutilizable en:
+ * - Vista pública: /[slug]/offer/[offerId]
+ * - Vista editor: /[slug]/studio/commercial/ofertas (preview)
+ * 
+ * Ver: docs/arquitectura-componentes-publicos.md
  */
 export function OfferLandingPage({
   studioSlug,
@@ -99,7 +108,7 @@ export function OfferLandingPage({
   const leadformUrl = `/${studioSlug}/offer/${offerSlug}/leadform`;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen text-zinc-100">
       {/* Renderizar content blocks */}
       <div className="space-y-0">
         {contentBlocks

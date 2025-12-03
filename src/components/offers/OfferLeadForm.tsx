@@ -1,5 +1,18 @@
 "use client";
 
+/**
+ * Componente de formulario de contacto para ofertas
+ * 
+ * ⚠️ TODO: Migrar a components/sections/offers/OfferLeadFormSection.tsx
+ * cuando se agreguen más secciones públicas (pagos, calendario)
+ * 
+ * Este componente debe ser reutilizable en:
+ * - Vista pública: /[slug]/offer/[offerId]/leadform
+ * - Vista editor: /[slug]/studio/commercial/ofertas (preview)
+ * 
+ * Ver: docs/arquitectura-componentes-publicos.md
+ */
+
 import { useEffect, useState } from "react";
 import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from "@/components/ui/zen";
 import { submitOfferLeadform } from "@/lib/actions/studio/offers/offer-submissions.actions";

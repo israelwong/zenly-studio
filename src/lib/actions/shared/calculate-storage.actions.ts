@@ -7,10 +7,10 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabaseAdmin = supabaseUrl && supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-  })
-  : null;
+    ? createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    })
+    : null;
 
 const BUCKET_NAME = 'Studio';
 
@@ -33,6 +33,7 @@ export interface StorageStats {
     postsGlobalBytes: number;
     portfoliosGlobalBytes: number;
     paquetesGlobalBytes: number;
+    offersGlobalBytes: number;
     contactosAvatarsBytes: number;
 }
 
@@ -120,6 +121,79 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
         console.log('🔍 calculateStorageCompleto: Paquetes con cover:', paquetes.filter(p => p.cover_storage_bytes).length);
         console.log('🔍 calculateStorageCompleto: Total paquetes bytes:', totalPaquetesBytes);
 
+        // Obtener multimedia de ofertas (content blocks)
+        const offersMedia = await prisma.studio_offer_media.findMany({
+            where: { studio_id: studio.id },
+            select: { storage_bytes: true },
+        });
+
+        const totalOffersMediaBytes = offersMedia.reduce(
+            (sum: number, m: { storage_bytes: bigint }) => sum + Number(m.storage_bytes),
+            0
+        );
+
+        // Obtener portadas de ofertas y calcular su tamaño desde Supabase Storage
+        const offers = await prisma.studio_offers.findMany({
+            where: { studio_id: studio.id },
+            select: { cover_media_url: true },
+        });
+
+        let totalOffersCoverBytes = 0;
+        if (supabaseAdmin && offers.length > 0) {
+            try {
+                // Función helper para extraer path de URL
+                const getPathFromUrl = (url: string): string | null => {
+                    try {
+                        const urlObj = new URL(url);
+                        const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/public\/media\/(.+)/);
+                        return pathMatch ? pathMatch[1] : null;
+                    } catch {
+                        return null;
+                    }
+                };
+
+                for (const offer of offers) {
+                    if (!offer.cover_media_url) continue;
+
+                    const coverPath = getPathFromUrl(offer.cover_media_url);
+                    if (!coverPath) continue;
+
+                    try {
+                        // Obtener información del archivo desde Supabase Storage
+                        const pathParts = coverPath.split('/');
+                        const fileName = pathParts.pop();
+                        const folderPath = pathParts.join('/');
+
+                        const { data: files, error } = await supabaseAdmin.storage
+                            .from(BUCKET_NAME)
+                            .list(folderPath || '', {
+                                search: fileName || '',
+                                limit: 1,
+                            });
+
+                        if (!error && files && files.length > 0) {
+                            const fileInfo = files[0];
+                            if (fileInfo.metadata?.size) {
+                                totalOffersCoverBytes += parseInt(fileInfo.metadata.size, 10);
+                            }
+                        }
+                    } catch (err) {
+                        console.warn(`[calculateStorageCompleto] Error obteniendo tamaño de portada ${offer.cover_media_url}:`, err);
+                    }
+                }
+            } catch (error) {
+                console.warn('[calculateStorageCompleto] Error calculando storage de portadas de ofertas:', error);
+            }
+        }
+
+        const totalOffersBytes = totalOffersMediaBytes + totalOffersCoverBytes;
+
+        console.log('🔍 calculateStorageCompleto: Ofertas media encontrados:', offersMedia.length);
+        console.log('🔍 calculateStorageCompleto: Ofertas con portada:', offers.filter(o => o.cover_media_url).length);
+        console.log('🔍 calculateStorageCompleto: Total ofertas media bytes:', totalOffersMediaBytes);
+        console.log('🔍 calculateStorageCompleto: Total ofertas portadas bytes:', totalOffersCoverBytes);
+        console.log('🔍 calculateStorageCompleto: Total ofertas bytes:', totalOffersBytes);
+
         // Calcular storage de avatares de contactos desde Supabase Storage
         let totalContactosAvatarsBytes = 0;
         if (supabaseAdmin) {
@@ -131,7 +205,7 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
 
                 if (studioSlugData?.slug) {
                     const contactosAvatarsPath = `studios/${studioSlugData.slug}/clientes/contactos-avatars`;
-                    
+
                     // Listar archivos recursivamente
                     const listFilesRecursive = async (path: string): Promise<number> => {
                         let totalBytes = 0;
@@ -162,7 +236,7 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
                                         .list(filePath, {
                                             limit: 1
                                         });
-                                    
+
                                     if (fileInfo && fileInfo[0]?.metadata?.size) {
                                         totalBytes += parseInt(fileInfo[0].metadata.size, 10);
                                     } else if (file.metadata?.size) {
@@ -236,7 +310,7 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
         }
 
         const sections = Array.from(sectionMap.values());
-        const totalBytes = totalCategoryBytes + totalItemBytes + totalPostsBytes + totalPortfoliosBytes + totalPaquetesBytes + totalContactosAvatarsBytes;
+        const totalBytes = totalCategoryBytes + totalItemBytes + totalPostsBytes + totalPortfoliosBytes + totalPaquetesBytes + totalOffersBytes + totalContactosAvatarsBytes;
 
         // Actualizar studio_storage_usage
         await prisma.studio_storage_usage.upsert({
@@ -272,6 +346,7 @@ export async function calcularStorageCompleto(studioSlug: string): Promise<{
                 postsGlobalBytes: totalPostsBytes,
                 portfoliosGlobalBytes: totalPortfoliosBytes,
                 paquetesGlobalBytes: totalPaquetesBytes,
+                offersGlobalBytes: totalOffersBytes,
                 contactosAvatarsBytes: totalContactosAvatarsBytes,
             },
         };

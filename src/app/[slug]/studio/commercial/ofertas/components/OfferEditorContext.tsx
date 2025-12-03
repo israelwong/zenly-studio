@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { ContentBlock } from "@/types/content-blocks";
-import { CreateOfferData, LeadFormField } from "@/lib/actions/schemas/offer-schemas";
+import { CreateOfferData, UpdateOfferData, LeadFormField } from "@/lib/actions/schemas/offer-schemas";
 import type { StudioOffer } from "@/types/offers";
 
 // Tipos
@@ -36,6 +36,8 @@ interface OfferEditorContextType {
   formData: OfferFormData;
   contentBlocks: ContentBlock[];
   leadformData: LeadFormData;
+  offerId?: string; // ID de la oferta (solo en modo edición)
+  savedOfferId?: string | null; // ID de la oferta guardada (para modo create)
 
   // Estado
   activeTab: OfferEditorTab;
@@ -48,6 +50,7 @@ interface OfferEditorContextType {
   updateLeadformData: (data: Partial<LeadFormData>) => void;
   setActiveTab: (tab: OfferEditorTab) => void;
   setIsSaving: (saving: boolean) => void;
+  setSavedOfferId: (id: string | null) => void;
 
   // Helpers
   getOfferData: () => CreateOfferData;
@@ -97,6 +100,7 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
   const [activeTab, setActiveTab] = useState<OfferEditorTab>("basic");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedOfferId, setSavedOfferId] = useState<string | null>(initialOffer?.id || null);
 
   // Actions
   const updateFormData = useCallback((data: Partial<OfferFormData>) => {
@@ -121,8 +125,8 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
   }, []);
 
   // Helper para obtener datos completos para guardar
-  const getOfferData = useCallback((): CreateOfferData => {
-    return {
+  const getOfferData = useCallback((): CreateOfferData | UpdateOfferData => {
+    const baseData = {
       name: formData.name,
       description: formData.description || undefined,
       objective: formData.objective,
@@ -147,12 +151,24 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
         validate_with_calendar: leadformData.validate_with_calendar,
       },
     };
-  }, [formData, contentBlocks, leadformData]);
+
+    // Si hay offerId, incluir id para UpdateOfferData
+    if (initialOffer?.id) {
+      return {
+        ...baseData,
+        id: initialOffer.id,
+      };
+    }
+
+    return baseData;
+  }, [formData, contentBlocks, leadformData, initialOffer?.id]);
 
   const value: OfferEditorContextType = {
     formData,
     contentBlocks,
     leadformData,
+    offerId: initialOffer?.id,
+    savedOfferId,
     activeTab,
     isDirty,
     isSaving,
@@ -161,6 +177,7 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
     updateLeadformData,
     setActiveTab,
     setIsSaving,
+    setSavedOfferId,
     getOfferData,
   };
 

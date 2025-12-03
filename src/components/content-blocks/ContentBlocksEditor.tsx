@@ -766,17 +766,12 @@ export function ContentBlocksEditor({
                 storage_bytes: file.size
             }));
 
-            // Actualizar el bloque específico usando onBlocksChange con función para obtener estado más reciente
-            onBlocksChange((prevBlocks: ContentBlock[]) => {
-                const block = prevBlocks.find(b => b.id === blockId);
-                if (block) {
-                    const updatedMedia = [...(block.media || []), ...mediaItems];
-                    return prevBlocks.map(b =>
-                        b.id === blockId ? { ...b, media: updatedMedia } : b
-                    );
-                }
-                return prevBlocks;
-            });
+            // Actualizar el bloque específico con los nuevos media items
+            const block = blocks.find(b => b.id === blockId);
+            if (block) {
+                const updatedMedia = [...(block.media || []), ...mediaItems];
+                handleUpdateBlock(blockId, { media: updatedMedia });
+            }
 
             toast.success(`${files.length} archivo(s) subido(s) correctamente`);
         } catch (error) {
@@ -786,7 +781,7 @@ export function ContentBlocksEditor({
             // Desactivar estado de carga
             setBlockUploading(blockId, false);
         }
-    }, [uploadFiles, studioSlug, onBlocksChange, setBlockUploading]);
+    }, [uploadFiles, studioSlug, blocks, handleUpdateBlock, setBlockUploading]);
 
     return (
         <div className={`space-y-4 ${className}`}>
@@ -1135,23 +1130,17 @@ function SortableBlock({
                     isEditable={true}
                     lightbox={true}
                     onDrop={(files) => onDropFiles(files, block.id)}
-                    onUploadClick={async () => {
+                    onUploadClick={() => {
                         // Crear input file temporal para trigger upload
                         const input = document.createElement('input');
                         input.type = 'file';
                         input.multiple = true;
                         input.accept = 'image/*,video/*';
-                        input.onchange = async (e) => {
+                        input.onchange = (e) => {
                             const files = Array.from((e.target as HTMLInputElement).files || []);
                             if (files.length > 0) {
-                                try {
-                                    await onDropFiles(files, block.id);
-                                } catch (error) {
-                                    console.error('Error uploading files:', error);
-                                }
+                                onDropFiles(files, block.id);
                             }
-                            // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
-                            input.value = '';
                         };
                         input.click();
                     }}
@@ -1176,23 +1165,17 @@ function SortableBlock({
                     isEditable={true}
                     lightbox={true}
                     onDrop={(files) => onDropFiles(files, block.id)}
-                    onUploadClick={async () => {
+                    onUploadClick={() => {
                         // Crear input file temporal para trigger upload
                         const input = document.createElement('input');
                         input.type = 'file';
                         input.multiple = true;
                         input.accept = 'image/*,video/*';
-                        input.onchange = async (e) => {
+                        input.onchange = (e) => {
                             const files = Array.from((e.target as HTMLInputElement).files || []);
                             if (files.length > 0) {
-                                try {
-                                    await onDropFiles(files, block.id);
-                                } catch (error) {
-                                    console.error('Error uploading files:', error);
-                                }
+                                onDropFiles(files, block.id);
                             }
-                            // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
-                            input.value = '';
                         };
                         input.click();
                     }}

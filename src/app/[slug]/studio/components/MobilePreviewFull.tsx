@@ -20,6 +20,8 @@ interface MobilePreviewFullProps {
     isEditMode?: boolean;
     // Ocultar header del portfolio (título y categoría) cuando está en modo preview del editor
     hidePortfolioHeader?: boolean;
+    // Ocultar header completo (regresar y compartir) - para landing pages
+    hideHeader?: boolean;
 }
 
 /**
@@ -34,7 +36,8 @@ export function MobilePreviewFull({
     onClose,
     onBack,
     isEditMode = false,
-    hidePortfolioHeader = false
+    hidePortfolioHeader = false,
+    hideHeader = false
 }: MobilePreviewFullProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -43,34 +46,36 @@ export function MobilePreviewFull({
             {/* Simulador de móvil con proporciones reales */}
             <div className="bg-zinc-900 border border-zinc-700 rounded-3xl shadow-2xl w-[375px] h-[812px] flex flex-col relative overflow-hidden">
                 {/* Header simple - fijo con bordes redondeados */}
-                <div className="flex-shrink-0 rounded-t-3xl bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3">
-                    <div className="flex items-center justify-between">
-                        {/* Botón de regresar */}
-                        <ZenButton
-                            variant="ghost"
-                            size="sm"
-                            onClick={isEditMode ? undefined : (onBack || onClose)}
-                            disabled={isEditMode}
-                            className="p-2 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <ArrowLeft className="h-5 w-5 text-zinc-300" /> Regresar
-                        </ZenButton>
+                {!hideHeader && (
+                    <div className="flex-shrink-0 rounded-t-3xl bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3">
+                        <div className="flex items-center justify-between">
+                            {/* Botón de regresar */}
+                            <ZenButton
+                                variant="ghost"
+                                size="sm"
+                                onClick={isEditMode ? undefined : (onBack || onClose)}
+                                disabled={isEditMode}
+                                className="p-2 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <ArrowLeft className="h-5 w-5 text-zinc-300" /> Regresar
+                            </ZenButton>
 
-                        {/* Icono de compartir */}
-                        <ZenButton
-                            variant="ghost"
-                            size="sm"
-                            onClick={isEditMode ? undefined : () => {
-                                // TODO: Implementar funcionalidad de compartir
-                                console.log('Compartir post');
-                            }}
-                            disabled={isEditMode}
-                            className="p-2 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <Share2 className="h-5 w-5 text-zinc-300" />
-                        </ZenButton>
+                            {/* Icono de compartir */}
+                            <ZenButton
+                                variant="ghost"
+                                size="sm"
+                                onClick={isEditMode ? undefined : () => {
+                                    // TODO: Implementar funcionalidad de compartir
+                                    console.log('Compartir post');
+                                }}
+                                disabled={isEditMode}
+                                className="p-2 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Share2 className="h-5 w-5 text-zinc-300" />
+                            </ZenButton>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Contenido con scroll interno */}
                 <div

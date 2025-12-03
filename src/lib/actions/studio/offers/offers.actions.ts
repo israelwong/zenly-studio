@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import { retryDatabaseOperation } from "@/lib/actions/utils/database-retry";
 import {
   CreateOfferSchema,
@@ -740,6 +741,7 @@ export async function deleteOffer(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     return await retryDatabaseOperation(async () => {
+      const supabase = await createClient();
       const studio = await prisma.studios.findUnique({
         where: { slug: studioSlug },
         select: { id: true },
@@ -754,12 +756,70 @@ export async function deleteOffer(
           id: offerId,
           studio_id: studio.id,
         },
+        select: {
+          id: true,
+          cover_media_url: true,
+        },
       });
 
       if (!offer) {
         return { success: false, error: "Oferta no encontrada" };
       }
 
+      // Obtener todos los media asociados antes de eliminar
+      const allMedia = await prisma.studio_offer_media.findMany({
+        where: { offer_id: offerId },
+        select: {
+          storage_path: true,
+          thumbnail_url: true,
+        },
+      });
+
+      // Preparar paths para eliminar de Supabase Storage
+      const pathsToDelete: string[] = [];
+
+      // Agregar portada si existe (extraer path de la URL)
+      if (offer.cover_media_url) {
+        try {
+          const coverUrl = new URL(offer.cover_media_url);
+          const coverPath = coverUrl.pathname.split('/storage/v1/object/public/media/')[1];
+          if (coverPath) {
+            pathsToDelete.push(coverPath);
+            // Si es imagen, también puede tener thumbnail
+            if (coverPath.includes('/images/')) {
+              const thumbPath = coverPath.replace('/images/', '/thumbnails/');
+              pathsToDelete.push(thumbPath);
+            }
+          }
+        } catch (err) {
+          console.warn('[deleteOffer] No se pudo extraer el path de la portada:', err);
+        }
+      }
+
+      // Agregar todos los media de los content blocks (usar storage_path directamente)
+      for (const media of allMedia) {
+        if (media.storage_path) {
+          pathsToDelete.push(media.storage_path);
+          // Si tiene thumbnail, agregarlo también
+          if (media.thumbnail_url && media.storage_path.includes('/images/')) {
+            const thumbPath = media.storage_path.replace('/images/', '/thumbnails/');
+            pathsToDelete.push(thumbPath);
+          }
+        }
+      }
+
+      // Eliminar archivos físicos de Supabase Storage
+      if (pathsToDelete.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from("media")
+          .remove(pathsToDelete);
+
+        if (storageError) {
+          console.warn("[deleteOffer] Error eliminando archivos de storage (continuando):", storageError);
+        }
+      }
+
+      // Eliminar registro de la oferta (los media se eliminarán por CASCADE)
       await prisma.studio_offers.delete({
         where: { id: offerId },
       });

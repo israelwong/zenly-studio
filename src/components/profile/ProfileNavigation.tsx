@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Home, Grid3X3, Phone, Package, HelpCircle } from 'lucide-react';
+import { Home, Grid3X3, Phone, HelpCircle } from 'lucide-react';
 
 interface ProfileNavigationProps {
     activeSection?: string;
@@ -18,7 +18,7 @@ export function ProfileNavigation({ activeSection }: ProfileNavigationProps) {
     const navItems = [
         { id: 'inicio', label: 'Inicio', icon: Home },
         { id: 'portafolio', label: 'Portafolio', icon: Grid3X3 },
-        { id: 'paquetes', label: 'Paquetes', icon: Package },
+        // { id: 'paquetes', label: 'Paquetes', icon: Package },
         { id: 'contacto', label: 'Contacto', icon: Phone },
         { id: 'faq', label: 'FAQ', icon: HelpCircle }
     ];

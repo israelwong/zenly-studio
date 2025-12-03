@@ -6,6 +6,7 @@ import { useOfferEditor } from "../OfferEditorContext";
 import { ObjectiveRadio } from "./ObjectiveRadio";
 import { Loader2 } from "lucide-react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import { toast } from "sonner";
 import { CoverDropzone } from "@/components/shared/CoverDropzone";
 
@@ -14,6 +15,7 @@ interface BasicInfoEditorProps {
   nameError: string | null;
   isValidatingSlug: boolean;
   slugHint: string | null;
+  mode?: "create" | "edit";
 }
 
 // Helper para generar slug desde nombre
@@ -31,11 +33,14 @@ export function BasicInfoEditor({
   nameError,
   isValidatingSlug,
   slugHint,
+  mode = "create",
 }: BasicInfoEditorProps) {
   const { formData, updateFormData } = useOfferEditor();
   const { uploadFiles } = useMediaUpload();
+  const { triggerRefresh } = useStorageRefresh(studioSlug);
 
   const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [coverFileSize, setCoverFileSize] = useState<number | null>(null);
 
   // Auto-generar slug cuando cambia el nombre
   useEffect(() => {
@@ -65,10 +70,17 @@ export function BasicInfoEditor({
       );
 
       if (uploadedFiles.length > 0) {
+        const fileSize = uploadedFiles[0].size || file.size;
+        setCoverFileSize(fileSize);
+
         updateFormData({
           cover_media_url: uploadedFiles[0].url,
           cover_media_type: isVideo ? "video" : "image",
         });
+
+        // Actualizar storage global
+        triggerRefresh();
+
         toast.success("Portada subida correctamente");
       }
     } catch (error) {
@@ -84,8 +96,32 @@ export function BasicInfoEditor({
       cover_media_url: null,
       cover_media_type: null,
     });
+    setCoverFileSize(null);
+    // Actualizar storage global al eliminar
+    triggerRefresh();
     toast.success("Portada eliminada");
   };
+
+  // Obtener tamaño del archivo si hay portada pero no tenemos el tamaño
+  useEffect(() => {
+    if (formData.cover_media_url && !coverFileSize) {
+      // Intentar obtener el tamaño mediante HEAD request
+      const fetchFileSize = async () => {
+        try {
+          const response = await fetch(formData.cover_media_url!, { method: 'HEAD' });
+          const contentLength = response.headers.get('content-length');
+          if (contentLength) {
+            setCoverFileSize(parseInt(contentLength, 10));
+          }
+        } catch (err) {
+          console.warn('No se pudo obtener el tamaño del archivo:', err);
+        }
+      };
+      fetchFileSize();
+    } else if (!formData.cover_media_url) {
+      setCoverFileSize(null);
+    }
+  }, [formData.cover_media_url, coverFileSize]);
 
   return (
     <div className="space-y-4">
@@ -123,9 +159,7 @@ export function BasicInfoEditor({
         placeholder="Notas internas sobre la oferta. Esta descripción no aparecerá en la publicación pública."
         rows={3}
       />
-      <p className="text-xs text-zinc-500 mt-1">
-        Solo para uso interno, no se mostrará públicamente
-      </p>
+
 
       {/* Portada Multimedia */}
       <div>
@@ -138,11 +172,12 @@ export function BasicInfoEditor({
           onDropFiles={handleCoverUpload}
           onRemoveMedia={handleRemoveCover}
           isUploading={isUploadingCover}
-          variant="large"
+          variant="compact"
           aspectRatio="video"
           helpText="Recomendado: 1920x1080px"
           placeholderText="Arrastra una imagen o video, o haz clic para seleccionar"
           showHelpText={true}
+          showFileSize={false}
         />
         <p className="text-xs text-zinc-500 mt-2">
           Esta imagen/video se mostrará en el feed público de tu perfil

@@ -95,6 +95,7 @@ export interface ButtonConfig {
     pulse?: boolean; // Deprecated - usar buttonEffect
     buttonEffect?: 'none' | 'pulse' | 'border-spin' | 'radial-glow';
     linkType?: 'internal' | 'external';
+    internalLinkType?: 'custom' | 'offer-leadform' | 'portfolio' | 'contact'; // Tipo específico de enlace interno
     className?: string;
 }
 

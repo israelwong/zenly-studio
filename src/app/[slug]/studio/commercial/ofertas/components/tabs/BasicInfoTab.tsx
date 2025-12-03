@@ -89,28 +89,49 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
               nameError={nameError}
               isValidatingSlug={isValidatingSlug}
               slugHint={slugHint}
+              mode={mode}
             />
 
-            {/* Botones de acción solo antes de guardar */}
-            {showActionButtons && (
-              <div className="flex items-center gap-3 pt-6 mt-6 border-t border-zinc-800">
-                <ZenButton
-                  variant="ghost"
-                  onClick={onCancel}
-                  disabled={isSaving}
-                >
-                  Cancelar
-                </ZenButton>
-                <ZenButton
-                  onClick={onSave}
-                  loading={isSaving}
-                  disabled={isSaving}
-                  className="flex-1"
-                >
-                  Crear Oferta
-                </ZenButton>
-              </div>
-            )}
+            {/* Botones de acción */}
+            <div className="flex items-center gap-3 pt-6 mt-6 border-t border-zinc-800">
+              {mode === "create" && showActionButtons ? (
+                <>
+                  <ZenButton
+                    variant="ghost"
+                    onClick={onCancel}
+                    disabled={isSaving}
+                  >
+                    Cancelar
+                  </ZenButton>
+                  <ZenButton
+                    onClick={onSave}
+                    loading={isSaving}
+                    disabled={isSaving}
+                    className="flex-1"
+                  >
+                    Crear Oferta
+                  </ZenButton>
+                </>
+              ) : mode === "edit" ? (
+                <>
+                  <ZenButton
+                    variant="ghost"
+                    onClick={onCancel}
+                    disabled={isSaving}
+                  >
+                    Cancelar
+                  </ZenButton>
+                  <ZenButton
+                    onClick={onSave}
+                    loading={isSaving}
+                    disabled={isSaving || !!nameError}
+                    className="flex-1"
+                  >
+                    Actualizar Oferta
+                  </ZenButton>
+                </>
+              ) : null}
+            </div>
           </ZenCardContent>
         </ZenCard>
       </div>

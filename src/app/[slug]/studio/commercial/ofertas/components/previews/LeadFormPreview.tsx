@@ -10,6 +10,11 @@ interface LeadFormPreviewProps {
 /**
  * Preview del leadform usando el componente real público
  * isPreview=true deshabilita el submit real
+ * 
+ * ⚠️ TODO: Eliminar este wrapper cuando se migre a arquitectura unificada
+ * El componente OfferLeadFormSection debería usarse directamente en LeadFormTab
+ * 
+ * Ver: docs/arquitectura-componentes-publicos.md
  */
 export function LeadFormPreview({ studioSlug }: LeadFormPreviewProps) {
   const { formData, leadformData } = useOfferEditor();
