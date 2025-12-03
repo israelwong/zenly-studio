@@ -34,7 +34,19 @@ export function EventTypesManager({
     try {
       const result = await obtenerTiposEvento(studioSlug);
       if (result.success && result.data) {
-        setEventTypes(result.data.filter(t => t.status === "active"));
+        const activeTypes = result.data.filter(t => t.status === "active");
+        setEventTypes(activeTypes);
+
+        // Auto-seleccionar tipos que tienen paquetes (solo si no hay selección previa)
+        if (selectedTypes.length === 0) {
+          const typesWithPackages = activeTypes
+            .filter(t => (t.paquetes?.length || 0) > 0)
+            .map(t => t.id);
+          
+          if (typesWithPackages.length > 0) {
+            onChange(typesWithPackages);
+          }
+        }
       } else {
         toast.error(result.error || "Error al cargar tipos de evento");
       }
