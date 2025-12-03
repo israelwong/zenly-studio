@@ -51,6 +51,12 @@ export {
 export { ZenHeader } from './layout/ZenHeader';
 
 // =============================================================================
+// NAVIGATION COMPONENTS (DISPONIBLES)
+// =============================================================================
+export { ZenTabs } from './navigation/ZenTabs';
+export type { ZenTabsProps, ZenTab } from './navigation/ZenTabs';
+
+// =============================================================================
 // OVERLAYS COMPONENTS (DISPONIBLES)
 // =============================================================================
 export { ZenConfirmModal } from './overlays/ZenConfirmModal';
