@@ -104,13 +104,27 @@ export function LeadFormEditor() {
           placeholder="Solicita información"
         />
 
-        <ZenTextarea
-          label="Descripción"
-          value={leadformData.description}
-          onChange={(e) => updateLeadformData({ description: e.target.value })}
-          placeholder="Completa el formulario para obtener más información"
-          rows={2}
-        />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-zinc-300">
+              Descripción
+            </label>
+            <span className="text-xs text-zinc-500">
+              {leadformData.description?.length || 0}/120
+            </span>
+          </div>
+          <ZenTextarea
+            value={leadformData.description}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value.length <= 120) {
+                updateLeadformData({ description: value });
+              }
+            }}
+            placeholder="Completa el formulario para obtener más información"
+            rows={2}
+          />
+        </div>
       </div>
 
       {/* Personalización del formulario */}
