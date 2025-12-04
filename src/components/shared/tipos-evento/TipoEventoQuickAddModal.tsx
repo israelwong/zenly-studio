@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ZenDialog, ZenInput, ZenButton } from "@/components/ui/zen";
+import { ZenInput, ZenButton } from "@/components/ui/zen";
 import { crearTipoEvento, actualizarTipoEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 import type { TipoEventoData } from "@/lib/actions/schemas/tipos-evento-schemas";
 import { toast } from "sonner";
@@ -39,7 +39,7 @@ export function TipoEventoQuickAddModal({
 
     try {
       let result;
-      
+
       if (isEditMode && tipoEvento) {
         // Actualizar tipo existente
         result = await actualizarTipoEvento(studioSlug, tipoEvento.id, {
@@ -73,45 +73,45 @@ export function TipoEventoQuickAddModal({
     onClose();
   };
 
+  if (!isOpen) return null;
+
   return (
-    <ZenDialog open={isOpen} onOpenChange={handleClose}>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl max-w-md w-full p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">
-            {isEditMode ? 'Editar' : 'Agregar'} Tipo de Evento
-          </h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl max-w-md w-full p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">
+          {isEditMode ? 'Editar' : 'Agregar'} Tipo de Evento
+        </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <ZenInput
-              label="Nombre del tipo de evento"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej: Boda, XV Años, Corporativo"
-              error={error}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <ZenInput
+            label="Nombre del tipo de evento"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Ej: Boda, XV Años, Corporativo"
+            error={error}
+            disabled={loading}
+            autoFocus
+          />
+
+          <div className="flex items-center gap-2 justify-end">
+            <ZenButton
+              type="button"
+              variant="outline"
+              onClick={handleClose}
               disabled={loading}
-              autoFocus
-            />
-
-            <div className="flex items-center gap-2 justify-end">
-              <ZenButton
-                type="button"
-                variant="outline"
-                onClick={handleClose}
-                disabled={loading}
-              >
-                Cancelar
-              </ZenButton>
-              <ZenButton
-                type="submit"
-                loading={loading}
-                disabled={!nombre.trim() || loading}
-              >
-                {isEditMode ? 'Actualizar' : 'Crear'}
-              </ZenButton>
-            </div>
-          </form>
-        </div>
+            >
+              Cancelar
+            </ZenButton>
+            <ZenButton
+              type="submit"
+              loading={loading}
+              disabled={!nombre.trim() || loading}
+            >
+              {isEditMode ? 'Actualizar' : 'Crear'}
+            </ZenButton>
+          </div>
+        </form>
       </div>
-    </ZenDialog>
+    </div>
   );
 }
