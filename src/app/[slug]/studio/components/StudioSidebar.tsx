@@ -69,7 +69,7 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
                 { id: 'magic', name: 'Magic IA', href: `/magic`, icon: Sparkles },
                 { id: 'integraciones', name: 'Integrations', href: `/business/integraciones/tracking`, icon: Plug },
                 { id: 'contracts', name: 'Contracts', href: `/commercial/contracts`, icon: FileText },
-                { id: 'business', name: 'Business Info', href: `/business/identity`, icon: Briefcase },
+                { id: 'identity', name: 'Identity', href: `/business/identity`, icon: Briefcase },
             ],
         },
 

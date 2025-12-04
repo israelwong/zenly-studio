@@ -42,10 +42,10 @@ export function ProfileEditorSidebar({ className, studioSlug }: ProfileEditorSid
             title: 'Configuración',
             icon: Star,
             items: [
-                { id: 'identity', name: 'Identidad', href: `/studio/business/identity`, icon: Star },
-                { id: 'social', name: 'Redes Sociales', href: `/studio/business/social`, icon: Share2 },
-                { id: 'contact', name: 'Contacto', href: `/studio/business/contact/telefonos`, icon: Phone },
-                { id: 'zones', name: 'Zonas de Trabajo', href: `/studio/business/zones`, icon: MapPin },
+                { id: 'brand', name: 'Marca', href: `/studio/business/identity?tab=brand`, icon: Star },
+                { id: 'social', name: 'Redes Sociales', href: `/studio/business/identity?tab=social`, icon: Share2 },
+                { id: 'contact', name: 'Contacto', href: `/studio/business/identity?tab=contact`, icon: Phone },
+                { id: 'zones', name: 'Zonas de Trabajo', href: `/studio/business/identity?tab=zones`, icon: MapPin },
             ],
         },
     ];
