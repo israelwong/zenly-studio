@@ -26,8 +26,11 @@ export function UbicacionSection({
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
+    // Asegurar que data tenga valores por defecto
+    const ubicacionData = data || { direccion: '', google_maps_url: '' };
+
     const handleInputChange = (field: keyof UbicacionData, value: string) => {
-        onLocalUpdate({ [field]: value });
+        onLocalUpdate?.({ [field]: value });
     };
 
     const handleSave = async () => {
@@ -38,8 +41,8 @@ export function UbicacionSection({
 
         try {
             const resultado = await actualizarUbicacion(studioSlug, {
-                direccion: data.direccion || undefined,
-                google_maps_url: data.google_maps_url || undefined,
+                direccion: ubicacionData.direccion || undefined,
+                google_maps_url: ubicacionData.google_maps_url || undefined,
             });
 
             if (resultado.success) {
@@ -82,7 +85,7 @@ export function UbicacionSection({
 
                     <ZenTextarea
                         label="Dirección"
-                        value={data.direccion || ''}
+                        value={ubicacionData.direccion || ''}
                         onChange={(e) => handleInputChange('direccion', e.target.value)}
                         placeholder="Dirección completa de tu estudio"
                         rows={3}
@@ -92,17 +95,17 @@ export function UbicacionSection({
 
                     <ZenInput
                         label="Enlace de Google Maps (Opcional)"
-                        value={data.google_maps_url || ''}
+                        value={ubicacionData.google_maps_url || ''}
                         onChange={(e) => handleInputChange('google_maps_url', e.target.value)}
                         placeholder="https://maps.google.com/..."
                         disabled={loading}
                         hint="Enlace directo a tu ubicación en Google Maps"
                     />
 
-                    {data.google_maps_url && (
+                    {ubicacionData.google_maps_url && (
                         <div className="mt-2">
                             <a
-                                href={data.google_maps_url}
+                                href={ubicacionData.google_maps_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-sm text-blue-400 hover:text-blue-300 underline"
