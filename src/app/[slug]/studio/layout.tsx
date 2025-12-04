@@ -4,7 +4,7 @@ import { ZenMagicChatProvider } from './components/ZenMagic';
 import { ContactsSheetProvider } from '@/components/shared/contacts/ContactsSheetContext';
 import { SessionTimeoutProvider } from '@/components/providers/SessionTimeoutProvider';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
-import { StudioInitializer } from '@/components/studio/StudioInitializer';
+import { StudioInitializer } from './components/StudioInitializer';
 import { Toaster } from 'sonner';
 import { StudioLayoutWrapper } from './components/StudioLayoutWrapper';
 
