@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenSwitch, ZenButton } from "@/components/ui/zen";
-import { MobilePreviewOffer } from "@/app/[slug]/studio/components/MobilePreviewOffer";
+import { MobilePreviewOffer } from "@/components/previews";
 import { BasicInfoEditor } from "../editors/BasicInfoEditor";
-import { OfferCardPreview } from "../previews/OfferCardPreview";
+import { OfferCardPreview } from "@/components/previews";
 import { useOfferEditor } from "../OfferEditorContext";
 import { checkOfferSlugExists } from "@/lib/actions/studio/offers/offers.actions";
 

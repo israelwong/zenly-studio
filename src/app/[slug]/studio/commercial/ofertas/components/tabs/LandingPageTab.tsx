@@ -1,15 +1,23 @@
 "use client";
 
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from "@/components/ui/zen";
-import { MobilePreviewFull } from "@/app/[slug]/studio/components/MobilePreviewFull";
+import { MobilePreviewFull } from "@/components/previews";
 import { LandingEditor } from "../editors/LandingEditor";
-import { LandingPreview } from "../previews/LandingPreview";
+import { OfferLandingPage } from "@/components/offers/OfferLandingPage";
+import { useOfferEditor } from "../OfferEditorContext";
 
 interface LandingPageTabProps {
   studioSlug: string;
 }
 
 export function LandingPageTab({ studioSlug }: LandingPageTabProps) {
+  const { formData, contentBlocks } = useOfferEditor();
+
+  // CTA vacío para preview - sin botones hardcodeados
+  const emptyCTA = {
+    buttons: [],
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Col 1: Editor */}
@@ -40,7 +48,16 @@ export function LandingPageTab({ studioSlug }: LandingPageTabProps) {
             hideHeader={true}
           >
             <div className="h-full overflow-auto">
-              <LandingPreview studioSlug={studioSlug} />
+              <div className="overflow-hidden p-0.5">
+                <OfferLandingPage
+                  studioSlug={studioSlug}
+                  offerId="preview"
+                  offerSlug={formData.slug || "preview"}
+                  contentBlocks={contentBlocks}
+                  ctaConfig={emptyCTA}
+                  onTrackView={() => { }} // No track en preview
+                />
+              </div>
             </div>
           </MobilePreviewFull>
         </div>

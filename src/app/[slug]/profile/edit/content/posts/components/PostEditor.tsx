@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ZenButton, ZenInput, ZenTextarea, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenBadge, ZenSwitch } from "@/components/ui/zen";
 import { Star } from "lucide-react";
-import { MobilePreviewFull } from "@/app/[slug]/studio/components/MobilePreviewFull";
+import { MobilePreviewFull } from "@/components/previews";
 import { ImageGrid } from "@/components/shared/media";
 import { MediaItem } from "@/types/content-blocks";
 import { obtenerIdentidadStudio } from "@/lib/actions/studio/profile/identidad";

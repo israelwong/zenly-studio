@@ -66,7 +66,6 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             items: [
                 // { id: 'conversations', name: 'Conversations', href: `/commercial/conversations`, icon: MessageSquare },
                 { id: 'catalogo', name: 'Catalog', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
-                { id: 'payment', name: 'Payment', href: `/commercial/payment`, icon: CreditCard },
                 { id: 'magic', name: 'Magic IA', href: `/magic`, icon: Sparkles },
                 { id: 'integraciones', name: 'Integrations', href: `/business/integraciones/tracking`, icon: Plug },
                 { id: 'contracts', name: 'Contracts', href: `/commercial/contracts`, icon: FileText },

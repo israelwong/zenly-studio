@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from "@/components/ui/zen";
-import { MobilePreviewFull } from "@/app/[slug]/studio/components/MobilePreviewFull";
+import { MobilePreviewFull } from "@/components/previews";
 import { LeadFormEditor } from "../editors/LeadFormEditor";
-import { LeadFormPreview } from "../previews/LeadFormPreview";
+import { OfferLeadForm } from "@/components/offers/OfferLeadForm";
+import { useOfferEditor } from "../OfferEditorContext";
 import { getStudioIdBySlug } from "@/lib/actions/studio/offers/offers.actions";
 
 interface LeadFormTabProps {
@@ -14,6 +15,7 @@ interface LeadFormTabProps {
 
 export function LeadFormTab({ studioSlug, studioId: initialStudioId }: LeadFormTabProps) {
   const [studioId, setStudioId] = useState<string>(initialStudioId || "");
+  const { formData, leadformData } = useOfferEditor();
 
   useEffect(() => {
     if (!initialStudioId) {
@@ -26,6 +28,7 @@ export function LeadFormTab({ studioSlug, studioId: initialStudioId }: LeadFormT
       loadStudioId();
     }
   }, [studioSlug, initialStudioId]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Col 1: Editor */}
@@ -55,7 +58,24 @@ export function LeadFormTab({ studioSlug, studioId: initialStudioId }: LeadFormT
             hidePortfolioHeader={true}
           >
             <div className="h-full overflow-auto">
-              <LeadFormPreview studioSlug={studioSlug} studioId={studioId} />
+              <OfferLeadForm
+                studioSlug={studioSlug}
+                studioId={studioId}
+                offerId="preview"
+                offerSlug={formData.slug || "preview"}
+                title={leadformData.title}
+                description={leadformData.description}
+                successMessage={leadformData.success_message}
+                successRedirectUrl={leadformData.success_redirect_url}
+                fieldsConfig={leadformData.fields_config}
+                selectedEventTypeIds={leadformData.selected_event_type_ids}
+                enableInterestDate={leadformData.enable_interest_date}
+                validateWithCalendar={leadformData.validate_with_calendar}
+                emailRequired={leadformData.email_required}
+                coverUrl={formData.cover_media_url}
+                coverType={formData.cover_media_type}
+                isPreview={true}
+              />
             </div>
           </MobilePreviewFull>
         </div>
