@@ -4,8 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { getBuilderData } from '@/lib/actions/studio/builder-data.actions';
 import { BuilderProfileData } from '@/types/builder-profile';
-import { ZenCard, ZenCardContent } from '@/components/ui/zen';
+import { SectionLayout } from '@/app/[slug]/studio/components/SectionLayout';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { Briefcase } from 'lucide-react';
 
 // Tabs components
 import { BrandTab } from './tabs/BrandTab';
@@ -20,10 +22,10 @@ export default function IdentityPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const studioSlug = params.slug as string;
-    
+
     const [builderData, setBuilderData] = useState<BuilderProfileData | null>(null);
     const [loading, setLoading] = useState(true);
-    
+
     // Get tab from URL or default to 'brand'
     const currentTab = (searchParams.get('tab') as TabValue) || 'brand';
 
@@ -50,14 +52,39 @@ export default function IdentityPage() {
         router.push(`/studio/business/identity?tab=${value}`);
     };
 
-    return (
-        <div className="container mx-auto p-6 space-y-6">
-            <div className="space-y-2">
-                <h1 className="text-3xl font-bold text-white">Identidad del Negocio</h1>
-                <p className="text-zinc-400">Configura la información de tu estudio fotográfico</p>
-            </div>
+    // Preview data para SectionLayout
+    const previewData = builderData ? {
+        studio_name: builderData.studio.studio_name,
+        slogan: builderData.studio.slogan,
+        logo_url: builderData.studio.logo_url,
+        social_media: builderData.social_media,
+        phones: builderData.phones,
+        schedules: builderData.schedules,
+        addresses: builderData.addresses,
+        coverage_zones: builderData.coverage_zones,
+    } : null;
 
+    return (
+        <SectionLayout 
+            section="identity" 
+            studioSlug={studioSlug} 
+            data={previewData as unknown as Record<string, unknown>} 
+            loading={loading}
+        >
             <ZenCard variant="default" padding="none">
+                <ZenCardHeader className="border-b border-zinc-800">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-600/20 rounded-lg">
+                            <Briefcase className="h-5 w-5 text-blue-400" />
+                        </div>
+                        <div>
+                            <ZenCardTitle>Identidad del Negocio</ZenCardTitle>
+                            <ZenCardDescription>
+                                Configura la información de tu estudio fotográfico
+                            </ZenCardDescription>
+                        </div>
+                    </div>
+                </ZenCardHeader>
                 <ZenCardContent className="p-6">
                     <Tabs value={currentTab} onValueChange={handleTabChange}>
                         <TabsList className="grid w-full grid-cols-4 mb-6">
@@ -68,36 +95,36 @@ export default function IdentityPage() {
                         </TabsList>
 
                         <TabsContent value="brand">
-                            <BrandTab 
-                                builderData={builderData} 
-                                loading={loading} 
+                            <BrandTab
+                                builderData={builderData}
+                                loading={loading}
                                 studioSlug={studioSlug}
                                 onUpdate={setBuilderData}
                             />
                         </TabsContent>
 
                         <TabsContent value="social">
-                            <SocialTab 
-                                builderData={builderData} 
-                                loading={loading} 
+                            <SocialTab
+                                builderData={builderData}
+                                loading={loading}
                                 studioSlug={studioSlug}
                                 onUpdate={setBuilderData}
                             />
                         </TabsContent>
 
                         <TabsContent value="contact">
-                            <ContactTab 
-                                builderData={builderData} 
-                                loading={loading} 
+                            <ContactTab
+                                builderData={builderData}
+                                loading={loading}
                                 studioSlug={studioSlug}
                                 onUpdate={setBuilderData}
                             />
                         </TabsContent>
 
                         <TabsContent value="zones">
-                            <ZonesTab 
-                                builderData={builderData} 
-                                loading={loading} 
+                            <ZonesTab
+                                builderData={builderData}
+                                loading={loading}
                                 studioSlug={studioSlug}
                                 onUpdate={setBuilderData}
                             />
@@ -105,6 +132,6 @@ export default function IdentityPage() {
                     </Tabs>
                 </ZenCardContent>
             </ZenCard>
-        </div>
+        </SectionLayout>
     );
 }
