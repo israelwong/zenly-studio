@@ -9,9 +9,10 @@ interface SocialTabProps {
     loading: boolean;
     studioSlug: string;
     onUpdate: (data: BuilderProfileData | null) => void;
+    onDataChange?: () => Promise<void>;
 }
 
-export function SocialTab({ builderData, loading, studioSlug }: SocialTabProps) {
+export function SocialTab({ builderData, loading, studioSlug, onDataChange }: SocialTabProps) {
     
     if (loading) {
         return (
@@ -26,6 +27,7 @@ export function SocialTab({ builderData, loading, studioSlug }: SocialTabProps) 
         <SocialSection
             studioSlug={studioSlug}
             redesSociales={builderData?.social_media || []}
+            onDataChange={onDataChange}
         />
     );
 }

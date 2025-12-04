@@ -52,6 +52,18 @@ export default function IdentityPage() {
         router.push(`/${studioSlug}/studio/business/identity?tab=${value}`);
     };
 
+    // Función para refrescar datos después de cambios
+    const handleDataRefresh = async () => {
+        try {
+            const result = await getBuilderData(studioSlug);
+            if (result.success && result.data) {
+                setBuilderData(result.data);
+            }
+        } catch (error) {
+            console.error('Error refreshing data:', error);
+        }
+    };
+
     // Preview data para SectionLayout
     const previewData = builderData ? {
         studio_name: builderData.studio.studio_name,
@@ -70,7 +82,7 @@ export default function IdentityPage() {
             studioSlug={studioSlug}
             data={previewData as unknown as Record<string, unknown>}
             loading={loading}
-            activeIdentityTab={currentTab}
+            activeIdentityTab="contact"
         >
             <ZenCard variant="default" padding="none">
                 <ZenCardHeader className="border-b border-zinc-800">
@@ -121,6 +133,7 @@ export default function IdentityPage() {
                                 loading={loading}
                                 studioSlug={studioSlug}
                                 onUpdate={setBuilderData}
+                                onDataChange={handleDataRefresh}
                             />
                         </TabsContent>
 
@@ -130,6 +143,7 @@ export default function IdentityPage() {
                                 loading={loading}
                                 studioSlug={studioSlug}
                                 onUpdate={setBuilderData}
+                                onDataChange={handleDataRefresh}
                             />
                         </TabsContent>
 
@@ -139,6 +153,7 @@ export default function IdentityPage() {
                                 loading={loading}
                                 studioSlug={studioSlug}
                                 onUpdate={setBuilderData}
+                                onDataChange={handleDataRefresh}
                             />
                         </TabsContent>
 
@@ -148,6 +163,7 @@ export default function IdentityPage() {
                                 loading={loading}
                                 studioSlug={studioSlug}
                                 onUpdate={setBuilderData}
+                                onDataChange={handleDataRefresh}
                             />
                         </TabsContent>
                     </Tabs>

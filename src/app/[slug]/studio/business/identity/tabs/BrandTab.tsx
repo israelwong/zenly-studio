@@ -11,6 +11,7 @@ interface BrandTabProps {
     loading: boolean;
     studioSlug: string;
     onUpdate: (data: BuilderProfileData | null) => void;
+    onDataChange?: () => Promise<void>;
 }
 
 export function BrandTab({ builderData, loading, studioSlug, onUpdate }: BrandTabProps) {

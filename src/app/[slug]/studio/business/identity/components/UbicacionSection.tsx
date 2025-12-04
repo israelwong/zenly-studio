@@ -13,13 +13,15 @@ interface UbicacionSectionProps {
     onLocalUpdate?: (data: Partial<UbicacionData>) => void;
     studioSlug: string;
     loading?: boolean;
+    onDataChange?: () => Promise<void>;
 }
 
 export function UbicacionSection({
     ubicacion: data,
     onLocalUpdate,
     studioSlug,
-    loading = false
+    loading = false,
+    onDataChange
 }: UbicacionSectionProps) {
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
@@ -43,6 +45,7 @@ export function UbicacionSection({
             if (resultado.success) {
                 setSaveSuccess(true);
                 toast.success('Ubicación guardada correctamente');
+                await onDataChange?.();
                 setTimeout(() => setSaveSuccess(false), 2000);
             } else {
                 throw new Error(resultado.error || 'Error al guardar');

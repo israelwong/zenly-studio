@@ -28,6 +28,7 @@ interface ZonasTrabajoSectionProps {
     zonasCobertura?: ZonaTrabajo[]; // Data from parent (builder-profile)
     onLocalUpdate?: (data: Partial<{ zonas_trabajo: ZonaTrabajo[] }>) => void;
     loading?: boolean;
+    onDataChange?: () => Promise<void>;
 }
 
 interface SortableZonaItemProps {
@@ -116,6 +117,7 @@ export function ZonasTrabajoSection({ studioSlug, zonasCobertura = [], onLocalUp
                     setZonasTrabajo(updated);
                     onLocalUpdate?.({ zonas_trabajo: updated });
                     toast.success('Zona actualizada exitosamente');
+                    await onDataChange?.();
                 } else {
                     toast.error(result.error || 'Error al actualizar la zona');
                     return;
@@ -148,6 +150,7 @@ export function ZonasTrabajoSection({ studioSlug, zonasCobertura = [], onLocalUp
                 setZonasTrabajo(updated);
                 onLocalUpdate({ zonas_trabajo: updated });
                 toast.success('Zona eliminada exitosamente');
+                await onDataChange?.();
             } else {
                 toast.error(result.error || 'Error al eliminar la zona');
             }
@@ -181,6 +184,7 @@ export function ZonasTrabajoSection({ studioSlug, zonasCobertura = [], onLocalUp
                 const result = await reordenarZonasTrabajo(studioSlug, zonasOrdenadas);
                 if (result.success) {
                     toast.success('Orden actualizado exitosamente');
+                    await onDataChange?.();
                 } else {
                     toast.error(result.error || 'Error al actualizar orden');
                     // Revertir cambios locales si falla

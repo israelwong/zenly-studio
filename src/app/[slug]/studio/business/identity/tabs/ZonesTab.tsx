@@ -9,9 +9,10 @@ interface ZonesTabProps {
     loading: boolean;
     studioSlug: string;
     onUpdate: (data: BuilderProfileData | null) => void;
+    onDataChange?: () => Promise<void>;
 }
 
-export function ZonesTab({ builderData, loading, studioSlug }: ZonesTabProps) {
+export function ZonesTab({ builderData, loading, studioSlug, onDataChange }: ZonesTabProps) {
     
     if (loading) {
         return (
@@ -26,6 +27,7 @@ export function ZonesTab({ builderData, loading, studioSlug }: ZonesTabProps) {
         <ZonasTrabajoSection
             studioSlug={studioSlug}
             zonasCobertura={builderData?.coverage_zones || []}
+            onDataChange={onDataChange}
         />
     );
 }

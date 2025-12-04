@@ -30,6 +30,7 @@ interface TelefonosSectionProps {
     onLocalUpdate?: (data: Partial<{ telefonos: Telefono[] }>) => void;
     studioSlug: string;
     loading?: boolean;
+    onDataChange?: () => Promise<void>;
 }
 
 interface SortableTelefonoItemProps {
@@ -133,7 +134,7 @@ function SortableTelefonoItem({ telefono, onToggle, onEdit, onDelete }: Sortable
     );
 }
 
-export function TelefonosSection({ telefonos: initialTelefonos = [], onLocalUpdate, studioSlug, loading = false }: TelefonosSectionProps) {
+export function TelefonosSection({ telefonos: initialTelefonos = [], onLocalUpdate, studioSlug, loading = false, onDataChange }: TelefonosSectionProps) {
     const [telefonos, setTelefonos] = useState<Telefono[]>(initialTelefonos || []);
     const [telefonoModal, setTelefonoModal] = useState<{ open: boolean; telefono?: Telefono }>({ open: false });
     const [isReorderingTelefonos, setIsReorderingTelefonos] = useState(false);
@@ -165,6 +166,7 @@ export function TelefonosSection({ telefonos: initialTelefonos = [], onLocalUpda
                 setTelefonos(updated);
                 onLocalUpdate?.({ telefonos: updated });
                 toast.success('Teléfono actualizado exitosamente');
+                await onDataChange?.();
             } else {
                 // Crear nuevo teléfono
                 const nuevoTelefono = await crearTelefono(studioSlug, {
@@ -202,6 +204,7 @@ export function TelefonosSection({ telefonos: initialTelefonos = [], onLocalUpda
             setTelefonos(updated);
             onLocalUpdate({ telefonos: updated });
             toast.success('Teléfono eliminado exitosamente');
+            await onDataChange?.();
         } catch (error) {
             console.error('Error deleting telefono:', error);
             toast.error('Error al eliminar teléfono');
@@ -223,6 +226,7 @@ export function TelefonosSection({ telefonos: initialTelefonos = [], onLocalUpda
                 setTelefonos(updated);
                 onLocalUpdate?.({ telefonos: updated });
                 toast.success(`Teléfono ${is_active ? 'activado' : 'desactivado'} exitosamente`);
+                await onDataChange?.();
             }
         } catch (error) {
             console.error('Error toggling telefono:', error);
@@ -243,6 +247,7 @@ export function TelefonosSection({ telefonos: initialTelefonos = [], onLocalUpda
             setTelefonos(reorderedTelefonos);
             onLocalUpdate({ telefonos: reorderedTelefonos });
             toast.success('Orden actualizado exitosamente');
+            await onDataChange?.();
         } catch (error) {
             console.error('Error reordering telefonos:', error);
             toast.error('Error al actualizar orden');

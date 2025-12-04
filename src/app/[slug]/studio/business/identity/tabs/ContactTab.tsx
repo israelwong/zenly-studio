@@ -12,9 +12,10 @@ interface ContactTabProps {
     loading: boolean;
     studioSlug: string;
     onUpdate: (data: BuilderProfileData | null) => void;
+    onDataChange: () => Promise<void>;
 }
 
-export function ContactTab({ builderData, loading, studioSlug }: ContactTabProps) {
+export function ContactTab({ builderData, loading, studioSlug, onDataChange }: ContactTabProps) {
     
     if (loading) {
         return (
@@ -53,6 +54,7 @@ export function ContactTab({ builderData, loading, studioSlug }: ContactTabProps
                     <TelefonosSection
                         studioSlug={studioSlug}
                         telefonos={builderData?.phones || []}
+                        onDataChange={onDataChange}
                     />
                 </TabsContent>
 
@@ -60,6 +62,7 @@ export function ContactTab({ builderData, loading, studioSlug }: ContactTabProps
                     <HorariosSection
                         studioSlug={studioSlug}
                         horarios={builderData?.schedules || []}
+                        onDataChange={onDataChange}
                     />
                 </TabsContent>
 
@@ -67,6 +70,7 @@ export function ContactTab({ builderData, loading, studioSlug }: ContactTabProps
                     <UbicacionSection
                         studioSlug={studioSlug}
                         ubicacion={builderData?.addresses?.[0] || null}
+                        onDataChange={onDataChange}
                     />
                 </TabsContent>
             </Tabs>

@@ -14,7 +14,7 @@ interface HorariosSectionProps {
     loading?: boolean;
 }
 
-export function HorariosSection({ studioSlug, horarios: initialHorarios = [], onLocalUpdate, loading = false }: HorariosSectionProps) {
+export function HorariosSection({ studioSlug, horarios: initialHorarios = [], onLocalUpdate, loading = false, onDataChange }: HorariosSectionProps) {
     const [horarios, setHorarios] = useState<Horario[]>(initialHorarios || []);
     const [loadingHorarios, setLoadingHorarios] = useState(false);
     const isInitialMount = useRef(true);
@@ -49,6 +49,7 @@ export function HorariosSection({ studioSlug, horarios: initialHorarios = [], on
                     // Solo mostrar toast si realmente se inicializaron horarios
                     if (wasInitialized) {
                         toast.success('Horarios inicializados. Recarga la página.');
+            await onDataChange?.();
                     }
                 } catch (error) {
                     console.error('Error initializing horarios:', error);
@@ -96,6 +97,7 @@ export function HorariosSection({ studioSlug, horarios: initialHorarios = [], on
             });
 
             toast.success('Horario actualizado exitosamente');
+            await onDataChange?.();
         } catch (error) {
             console.error('Error updating horario:', error);
             toast.error('Error al actualizar horario');
@@ -127,6 +129,7 @@ export function HorariosSection({ studioSlug, horarios: initialHorarios = [], on
             });
 
             toast.success(`Horario ${cerrado ? 'desactivado' : 'activado'} exitosamente`);
+            await onDataChange?.();
         } catch (error) {
             console.error('Error toggling horario:', error);
             toast.error('Error al cambiar estado del horario');

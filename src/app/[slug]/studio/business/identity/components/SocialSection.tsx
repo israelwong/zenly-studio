@@ -41,7 +41,7 @@ interface SocialSectionProps {
     loading?: boolean;
 }
 
-export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoading = false }: SocialSectionProps) {
+export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoading = false, onDataChange }: SocialSectionProps) {
     const [redes, setRedes] = useState<RedSocial[]>([]);
     const [plataformas, setPlataformas] = useState<Plataforma[]>([]);
     const [loading, setLoading] = useState(true);
@@ -185,6 +185,7 @@ export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoadi
                 const updatedRedes = redes.filter(red => red.id !== id);
                 setRedes(updatedRedes);
                 toast.success("Red social eliminada");
+                await onDataChange?.();
                 // Convertir a formato esperado por FooterPreview
                 const redesFormateadas = updatedRedes.map(red => ({
                     plataforma: red.plataforma?.slug || red.plataformaId || 'unknown',
@@ -241,6 +242,7 @@ export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoadi
                     );
                     setRedes(updatedRedes);
                     toast.success("Red social actualizada");
+                    await onDataChange?.();
                     // Convertir a formato esperado por FooterPreview
                     const redesFormateadas = updatedRedes
                         .filter(red => red.activo)
@@ -285,6 +287,7 @@ export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoadi
                     const updatedRedes = [...redes, nuevaRed];
                     setRedes(updatedRedes);
                     toast.success("Red social agregada");
+                    await onDataChange?.();
                     // Convertir a formato esperado por FooterPreview
                     const redesFormateadas = updatedRedes
                         .filter(red => red.activo)
