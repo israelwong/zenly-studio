@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ZenDialog, ZenInput, ZenButton } from "@/components/ui/zen";
-import { crearTipoEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
+import { crearTipoEvento, actualizarTipoEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 import type { TipoEventoData } from "@/lib/actions/schemas/tipos-evento-schemas";
 import { toast } from "sonner";
 
@@ -11,6 +11,7 @@ interface TipoEventoQuickAddModalProps {
   onClose: () => void;
   onSuccess: (newTipoEvento: TipoEventoData) => void;
   studioSlug: string;
+  tipoEvento?: TipoEventoData; // Para edición
 }
 
 export function TipoEventoQuickAddModal({
@@ -18,10 +19,12 @@ export function TipoEventoQuickAddModal({
   onClose,
   onSuccess,
   studioSlug,
+  tipoEvento,
 }: TipoEventoQuickAddModalProps) {
   const [loading, setLoading] = useState(false);
-  const [nombre, setNombre] = useState("");
+  const [nombre, setNombre] = useState(tipoEvento?.nombre || "");
   const [error, setError] = useState("");
+  const isEditMode = !!tipoEvento;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,20 +38,30 @@ export function TipoEventoQuickAddModal({
     setError("");
 
     try {
-      const result = await crearTipoEvento(studioSlug, {
-        nombre: nombre.trim(),
-        status: "active",
-      });
+      let result;
+      
+      if (isEditMode && tipoEvento) {
+        // Actualizar tipo existente
+        result = await actualizarTipoEvento(studioSlug, tipoEvento.id, {
+          nombre: nombre.trim(),
+        });
+      } else {
+        // Crear nuevo tipo
+        result = await crearTipoEvento(studioSlug, {
+          nombre: nombre.trim(),
+          status: "active",
+        });
+      }
 
       if (result.success && result.data) {
         onSuccess(result.data);
         handleClose();
       } else {
-        setError(result.error || "Error al crear tipo de evento");
+        setError(result.error || `Error al ${isEditMode ? 'actualizar' : 'crear'} tipo de evento`);
       }
     } catch (err) {
-      console.error("Error creating event type:", err);
-      setError("Error inesperado al crear tipo de evento");
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} event type:`, err);
+      setError(`Error inesperado al ${isEditMode ? 'actualizar' : 'crear'} tipo de evento`);
     } finally {
       setLoading(false);
     }
@@ -65,7 +78,7 @@ export function TipoEventoQuickAddModal({
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl max-w-md w-full p-6">
           <h2 className="text-lg font-semibold text-white mb-4">
-            Agregar Tipo de Evento
+            {isEditMode ? 'Editar' : 'Agregar'} Tipo de Evento
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -93,7 +106,7 @@ export function TipoEventoQuickAddModal({
                 loading={loading}
                 disabled={!nombre.trim() || loading}
               >
-                Crear
+                {isEditMode ? 'Actualizar' : 'Crear'}
               </ZenButton>
             </div>
           </form>
