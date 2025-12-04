@@ -4,14 +4,13 @@ import React from 'react';
 import { TelefonosSection } from '../components/TelefonosSection';
 import { HorariosSection } from '../components/HorariosSection';
 import { UbicacionSection } from '../components/UbicacionSection';
+import { ZonasTrabajoSection } from '../components/ZonasTrabajoSection';
 import { BuilderProfileData } from '@/types/builder-profile';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 
 interface ContactTabProps {
     builderData: BuilderProfileData | null;
     loading: boolean;
     studioSlug: string;
-    onUpdate: (data: BuilderProfileData | null) => void;
     onDataChange: () => Promise<void>;
 }
 
@@ -20,60 +19,52 @@ export function ContactTab({ builderData, loading, studioSlug, onDataChange }: C
     if (loading) {
         return (
             <div className="space-y-6">
-                <div className="h-12 bg-zinc-800/50 rounded-lg animate-pulse"></div>
-                <div className="h-12 bg-zinc-800/50 rounded-lg animate-pulse"></div>
+                <div className="h-[300px] bg-zinc-800/50 rounded-lg animate-pulse"></div>
+                <div className="h-[300px] bg-zinc-800/50 rounded-lg animate-pulse"></div>
+                <div className="h-[300px] bg-zinc-800/50 rounded-lg animate-pulse"></div>
+                <div className="h-[300px] bg-zinc-800/50 rounded-lg animate-pulse"></div>
             </div>
         );
     }
 
+    // Map phones data to Telefono type
+    const telefonosData = builderData?.contactInfo?.phones?.map(phone => ({
+        id: phone.id,
+        numero: phone.number,
+        tipo: (phone.type === 'WHATSAPP' ? 'whatsapp' :
+            phone.type === 'LLAMADAS' ? 'llamadas' : 'ambos') as 'llamadas' | 'whatsapp' | 'ambos',
+        etiqueta: phone.label || undefined,
+        is_active: phone.is_active
+    })) || [];
+
     return (
         <div className="space-y-6">
-            <Tabs defaultValue="phones">
-                <TabsList className="grid w-full grid-cols-3 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-                    <TabsTrigger
-                        value="phones"
-                        className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-zinc-400 hover:text-white transition-colors"
-                    >
-                        Teléfonos
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="schedule"
-                        className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-zinc-400 hover:text-white transition-colors"
-                    >
-                        Horarios
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="location"
-                        className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-zinc-400 hover:text-white transition-colors"
-                    >
-                        Ubicación
-                    </TabsTrigger>
-                </TabsList>
+            <TelefonosSection
+                studioSlug={studioSlug}
+                telefonos={telefonosData}
+                onDataChange={onDataChange}
+            />
 
-                <TabsContent value="phones" className="mt-6">
-                    <TelefonosSection
-                        studioSlug={studioSlug}
-                        telefonos={builderData?.phones || []}
-                        onDataChange={onDataChange}
-                    />
-                </TabsContent>
+            <HorariosSection
+                studioSlug={studioSlug}
+                horarios={builderData?.contactInfo?.horarios || []}
+                onDataChange={onDataChange}
+            />
 
-                <TabsContent value="schedule" className="mt-6">
-                    <HorariosSection
-                        studioSlug={studioSlug}
-                        horarios={builderData?.schedules || []}
-                        onDataChange={onDataChange}
-                    />
-                </TabsContent>
+            <UbicacionSection
+                studioSlug={studioSlug}
+                ubicacion={{
+                    direccion: builderData?.studio?.address || null,
+                    google_maps_url: builderData?.studio?.maps_url || null,
+                }}
+                onDataChange={onDataChange}
+            />
 
-                <TabsContent value="location" className="mt-6">
-                    <UbicacionSection
-                        studioSlug={studioSlug}
-                        ubicacion={builderData?.addresses?.[0] || null}
-                        onDataChange={onDataChange}
-                    />
-                </TabsContent>
-            </Tabs>
+            <ZonasTrabajoSection
+                studioSlug={studioSlug}
+                zonasCobertura={builderData?.studio?.zonas_trabajo || []}
+                onDataChange={onDataChange}
+            />
         </div>
     );
 }

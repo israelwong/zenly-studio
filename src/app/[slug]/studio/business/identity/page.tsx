@@ -13,9 +13,8 @@ import { Briefcase } from 'lucide-react';
 import { BrandTab } from './tabs/BrandTab';
 import { SocialTab } from './tabs/SocialTab';
 import { ContactTab } from './tabs/ContactTab';
-import { ZonesTab } from './tabs/ZonesTab';
 
-type TabValue = 'brand' | 'social' | 'contact' | 'zones';
+type TabValue = 'brand' | 'social' | 'contact';
 
 export default function IdentityPage() {
     const params = useParams();
@@ -64,16 +63,44 @@ export default function IdentityPage() {
         }
     };
 
-    // Preview data para SectionLayout
+    // Función para actualización optimista (compatibilidad con tabs)
+    const handleUpdate = (updaterOrData: BuilderProfileData | null | ((prev: BuilderProfileData | null) => BuilderProfileData | null)) => {
+        if (typeof updaterOrData === 'function') {
+            setBuilderData(prev => (updaterOrData as (prev: BuilderProfileData | null) => BuilderProfileData | null)(prev));
+        } else {
+            setBuilderData(updaterOrData);
+        }
+    };
+
+    // Preview data para SectionLayout - estructura compatible con ProfileContent
     const previewData = builderData ? {
-        studio_name: builderData.studio.studio_name,
-        slogan: builderData.studio.slogan,
-        logo_url: builderData.studio.logo_url,
-        social_media: builderData.social_media,
-        phones: builderData.phones,
-        schedules: builderData.schedules,
-        addresses: builderData.addresses,
-        coverage_zones: builderData.coverage_zones,
+        studio: {
+            id: builderData.studio.id,
+            studio_name: builderData.studio.studio_name,
+            presentation: builderData.studio.presentation,
+            keywords: builderData.studio.keywords,
+            logo_url: builderData.studio.logo_url,
+            slogan: builderData.studio.slogan,
+            website: builderData.studio.website,
+            address: builderData.studio.address,
+            plan_id: builderData.studio.plan_id,
+            plan: builderData.studio.plan,
+            zonas_trabajo: builderData.studio.zonas_trabajo,
+        },
+        contactInfo: {
+            phones: builderData.contactInfo.phones,
+            address: builderData.contactInfo.address,
+            website: builderData.contactInfo.website,
+            google_maps_url: builderData.studio.maps_url,
+            horarios: builderData.contactInfo.horarios,
+        },
+        redes_sociales: builderData.socialNetworks.map(network => ({
+            id: network.id,
+            url: network.url,
+            plataforma: network.platform?.name || null,
+            platform: network.platform,
+            order: network.order,
+        })),
     } : null;
 
     return (
@@ -100,7 +127,7 @@ export default function IdentityPage() {
                 </ZenCardHeader>
                 <ZenCardContent className="p-6">
                     <Tabs value={currentTab} onValueChange={handleTabChange}>
-                        <TabsList className="grid w-full grid-cols-4 mb-6 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                        <TabsList className="grid w-full grid-cols-3 mb-6 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
                             <TabsTrigger
                                 value="brand"
                                 className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-zinc-400 hover:text-white transition-colors"
@@ -119,12 +146,6 @@ export default function IdentityPage() {
                             >
                                 Contact
                             </TabsTrigger>
-                            <TabsTrigger
-                                value="zones"
-                                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-zinc-400 hover:text-white transition-colors"
-                            >
-                                Work zones
-                            </TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="brand">
@@ -132,7 +153,7 @@ export default function IdentityPage() {
                                 builderData={builderData}
                                 loading={loading}
                                 studioSlug={studioSlug}
-                                onUpdate={setBuilderData}
+                                onUpdate={handleUpdate}
                                 onDataChange={handleDataRefresh}
                             />
                         </TabsContent>
@@ -142,7 +163,7 @@ export default function IdentityPage() {
                                 builderData={builderData}
                                 loading={loading}
                                 studioSlug={studioSlug}
-                                onUpdate={setBuilderData}
+                                onUpdate={handleUpdate}
                                 onDataChange={handleDataRefresh}
                             />
                         </TabsContent>
@@ -152,17 +173,6 @@ export default function IdentityPage() {
                                 builderData={builderData}
                                 loading={loading}
                                 studioSlug={studioSlug}
-                                onUpdate={setBuilderData}
-                                onDataChange={handleDataRefresh}
-                            />
-                        </TabsContent>
-
-                        <TabsContent value="zones">
-                            <ZonesTab
-                                builderData={builderData}
-                                loading={loading}
-                                studioSlug={studioSlug}
-                                onUpdate={setBuilderData}
                                 onDataChange={handleDataRefresh}
                             />
                         </TabsContent>

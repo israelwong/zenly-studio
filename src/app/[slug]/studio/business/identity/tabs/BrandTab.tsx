@@ -10,7 +10,7 @@ interface BrandTabProps {
     builderData: BuilderProfileData | null;
     loading: boolean;
     studioSlug: string;
-    onUpdate: (data: BuilderProfileData | null) => void;
+    onUpdate: (updater: (prev: BuilderProfileData | null) => BuilderProfileData | null) => void;
     onDataChange?: () => Promise<void>;
 }
 
