@@ -1,0 +1,22 @@
+# Dependencias
+node_modules/
+
+# Build y cache de Next.js
+.next/
+dist/
+build/
+
+# Git
+.git/
+
+# Archivos temporales y logs
+*.log
+*.tsbuildinfo
+
+# Variables de entorno
+.env*
+!.env.example
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

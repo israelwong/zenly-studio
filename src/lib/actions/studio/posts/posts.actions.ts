@@ -264,9 +264,35 @@ export async function getStudioPostById(postId: string) {
                         id: true,
                         slug: true,
                         studio_name: true,
+                        phones: {
+                            where: {
+                                type: 'WHATSAPP',
+                                is_active: true
+                            },
+                            select: {
+                                number: true
+                            },
+                            take: 1
+                        }
                     },
                 },
-                media: { orderBy: { display_order: 'asc' } },
+                media: {
+                    select: {
+                        id: true,
+                        file_url: true,
+                        file_type: true,
+                        filename: true,
+                        storage_bytes: true,
+                        mime_type: true,
+                        dimensions: true,
+                        duration_seconds: true,
+                        display_order: true,
+                        alt_text: true,
+                        thumbnail_url: true,
+                        storage_path: true,
+                    },
+                    orderBy: { display_order: 'asc' }
+                },
             },
         });
 
@@ -274,7 +300,16 @@ export async function getStudioPostById(postId: string) {
             return { success: false, error: "Post no encontrado" };
         }
 
-        const convertedPost = convertPrismaPostToStudioPost(post);
+        const convertedPost = {
+            ...convertPrismaPostToStudioPost(post),
+            cta_enabled: false,
+            cta_action: '',
+            cta_text: '',
+            studio: {
+                studio_name: post.studio.studio_name,
+                whatsapp_number: post.studio.phones?.[0]?.number || null,
+            }
+        };
 
         return { success: true, data: convertedPost };
     } catch (error) {

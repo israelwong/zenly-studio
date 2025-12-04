@@ -1,14 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
 import { ZenButton } from "@/components/ui/zen";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Play, 
-  Heart, 
-  Share2, 
+import {
+  Heart,
+  Share2,
   MessageCircle,
   Calendar,
   MapPin,
@@ -17,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { MediaItem } from "@/lib/actions/schemas/post-schemas";
+import { ImageCarousel } from "@/components/shared/media";
 
 interface PostRendererProps {
   post: {
@@ -41,23 +37,8 @@ interface PostRendererProps {
 }
 
 export function PostRenderer({ post, studioSlug }: PostRendererProps) {
-  const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-
   const media = Array.isArray(post.media) ? post.media : [];
-  const currentMedia = media[currentMediaIndex];
-
-  const nextMedia = () => {
-    if (currentMediaIndex < media.length - 1) {
-      setCurrentMediaIndex(currentMediaIndex + 1);
-    }
-  };
-
-  const prevMedia = () => {
-    if (currentMediaIndex > 0) {
-      setCurrentMediaIndex(currentMediaIndex - 1);
-    }
-  };
+  const hasMultipleMedia = media.length > 1;
 
   const handleCTAClick = () => {
     if (!post.cta_enabled) return;
@@ -77,11 +58,9 @@ export function PostRenderer({ post, studioSlug }: PostRendererProps) {
         }
         break;
       case "lead_form":
-        // TODO: Abrir formulario de leads
         toast.info("Formulario de contacto (por implementar)");
         break;
       case "calendar":
-        // TODO: Abrir calendario de citas
         toast.info("Sistema de citas (por implementar)");
         break;
       default:
@@ -101,7 +80,6 @@ export function PostRenderer({ post, studioSlug }: PostRendererProps) {
         console.log("Error sharing:", error);
       }
     } else {
-      // Fallback: copiar URL al clipboard
       await navigator.clipboard.writeText(window.location.href);
       toast.success("URL copiada al portapapeles");
     }
@@ -137,71 +115,21 @@ export function PostRenderer({ post, studioSlug }: PostRendererProps) {
       </div>
 
       {/* Media */}
-      <div className="relative aspect-square bg-zinc-800">
-        {currentMedia ? (
-          <>
-            {currentMedia.type === "image" ? (
-              <Image
-                src={currentMedia.url}
-                alt={post.title || "Post"}
-                fill
-                className="object-cover"
-                priority
-              />
-            ) : (
-              <div className="w-full h-full relative">
-                <video
-                  src={currentMedia.url}
-                  className="w-full h-full object-cover"
-                  controls
-                  poster={currentMedia.thumbnail_url}
-                />
-              </div>
-            )}
-
-            {/* Navigation Arrows */}
-            {media.length > 1 && (
-              <>
-                {currentMediaIndex > 0 && (
-                  <button
-                    onClick={prevMedia}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-sm rounded-full hover:bg-black/70 transition-colors"
-                  >
-                    <ChevronLeft className="w-6 h-6 text-white" />
-                  </button>
-                )}
-                {currentMediaIndex < media.length - 1 && (
-                  <button
-                    onClick={nextMedia}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 backdrop-blur-sm rounded-full hover:bg-black/70 transition-colors"
-                  >
-                    <ChevronRight className="w-6 h-6 text-white" />
-                  </button>
-                )}
-              </>
-            )}
-
-            {/* Media Indicators */}
-            {media.length > 1 && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
-                {media.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentMediaIndex(index)}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      index === currentMediaIndex ? "bg-white" : "bg-white/50"
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-zinc-500">
-            <Calendar className="w-16 h-16" />
-          </div>
-        )}
-      </div>
+      {media.length > 0 ? (
+        <div className="relative w-full">
+          <ImageCarousel
+            media={media}
+            showArrows={hasMultipleMedia}
+            showDots={hasMultipleMedia}
+            autoplay={0}
+            className="aspect-square"
+          />
+        </div>
+      ) : (
+        <div className="w-full aspect-square bg-zinc-800 flex items-center justify-center">
+          <Calendar className="w-16 h-16 text-zinc-500" />
+        </div>
+      )}
 
       {/* Content */}
       <div className="p-4 space-y-4">
@@ -234,7 +162,7 @@ export function PostRenderer({ post, studioSlug }: PostRendererProps) {
             </h2>
           )}
           {post.caption && (
-            <p className="text-zinc-300 leading-relaxed">
+            <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap">
               {post.caption}
             </p>
           )}
@@ -246,7 +174,7 @@ export function PostRenderer({ post, studioSlug }: PostRendererProps) {
             {post.tags.map((tag: string, index: number) => (
               <span
                 key={index}
-                className="px-2 py-1 bg-zinc-800 text-zinc-300 text-xs rounded-full"
+                className="text-zinc-500 text-sm"
               >
                 #{tag}
               </span>
@@ -262,42 +190,47 @@ export function PostRenderer({ post, studioSlug }: PostRendererProps) {
           </div>
         )}
 
-        {/* CTA */}
-        {post.cta_enabled && (
-          <div className="pt-4 border-t border-zinc-800">
+        {/* CTA Button */}
+        {post.cta_enabled && post.cta_text && (
+          <div className="pt-4">
             <ZenButton
               onClick={handleCTAClick}
-              className="w-full gap-2"
+              className="w-full"
               size="lg"
             >
-              {post.cta_action === "whatsapp" && <Phone className="w-5 h-5" />}
-              {post.cta_action === "lead_form" && <ExternalLink className="w-5 h-5" />}
-              {post.cta_action === "calendar" && <Calendar className="w-5 h-5" />}
+              {post.cta_action === "whatsapp" && <Phone className="w-5 h-5 mr-2" />}
+              {post.cta_action === "calendar" && <Calendar className="w-5 h-5 mr-2" />}
+              {post.cta_action === "lead_form" && <MessageCircle className="w-5 h-5 mr-2" />}
               {post.cta_text}
             </ZenButton>
           </div>
         )}
 
         {/* Studio Info */}
-        <div className="pt-4 border-t border-zinc-800">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center">
-              <span className="text-zinc-300 font-semibold text-lg">
-                {post.studio.studio_name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-zinc-100">
-                {post.studio.studio_name}
-              </h3>
-              <p className="text-sm text-zinc-400">
-                Fotógrafo profesional
-              </p>
-            </div>
-            <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors">
-              Seguir
-            </button>
-          </div>
+        <div className="pt-4 border-t border-zinc-800 space-y-3">
+          <h3 className="font-semibold text-zinc-100">
+            {post.studio.studio_name}
+          </h3>
+
+          {post.studio.whatsapp_number && (
+            <a
+              href={`https://wa.me/${post.studio.whatsapp_number}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
+            >
+              <Phone className="w-4 h-4" />
+              Contactar por WhatsApp
+            </a>
+          )}
+
+          <a
+            href={`/${studioSlug}`}
+            className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Ver perfil completo
+          </a>
         </div>
       </div>
     </div>

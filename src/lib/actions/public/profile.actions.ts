@@ -135,6 +135,32 @@ export async function getStudioProfileBySlug(
                             orden: true,
                         },
                         orderBy: { orden: 'asc' }
+                    },
+                    posts: {
+                        where: { is_published: true },
+                        select: {
+                            id: true,
+                            title: true,
+                            caption: true,
+                            tags: true,
+                            is_featured: true,
+                            is_published: true,
+                            published_at: true,
+                            created_at: true,
+                            media: {
+                                select: {
+                                    id: true,
+                                    file_url: true,
+                                    file_type: true,
+                                    filename: true,
+                                    thumbnail_url: true,
+                                    display_order: true,
+                                },
+                                orderBy: { display_order: 'asc' }
+                            }
+                        },
+                        orderBy: { created_at: 'desc' },
+                        take: 50
                     }
                 }
             });
@@ -196,6 +222,7 @@ export async function getStudioProfileBySlug(
                 })),
                 address: studio.address,
                 website: studio.website,
+                email: null, // TODO: Add email field to database schema
                 google_maps_url: null, // TODO: Add google_maps_url field to database schema
                 horarios: studio.business_hours?.map(horario => ({
                     id: horario.id,
@@ -330,6 +357,26 @@ export async function getStudioProfileBySlug(
                 cover_url_type: typeof p.cover_url,
             })));
 
+            // Mapear posts
+            const posts = studio.posts.map(post => ({
+                id: post.id,
+                title: post.title,
+                caption: post.caption,
+                tags: post.tags || [],
+                media: post.media.map(media => ({
+                    id: media.id,
+                    file_url: media.file_url,
+                    file_type: media.file_type as 'image' | 'video',
+                    filename: media.filename,
+                    thumbnail_url: media.thumbnail_url || undefined,
+                    display_order: media.display_order,
+                })),
+                is_published: post.is_published,
+                is_featured: post.is_featured,
+                published_at: post.published_at,
+                created_at: post.created_at,
+            }));
+
             const profileDataRaw = {
                 studio: studioProfile,
                 socialNetworks,
@@ -337,6 +384,7 @@ export async function getStudioProfileBySlug(
                 items,
                 portfolios,
                 paquetes: publicPaquetes,
+                posts,
             };
 
             // Debug: Verificar datos antes de validar con Zod

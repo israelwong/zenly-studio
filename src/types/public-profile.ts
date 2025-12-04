@@ -125,6 +125,25 @@ export enum ProfileTab {
     INFO = 'info'
 }
 
+export interface PublicPost {
+    id: string;
+    title?: string | null;
+    caption: string | null;
+    tags?: string[];
+    media: Array<{
+        id: string;
+        file_url: string;
+        file_type: 'image' | 'video';
+        filename: string;
+        thumbnail_url?: string;
+        display_order: number;
+    }>;
+    is_published: boolean;
+    is_featured: boolean;
+    published_at: Date | null;
+    created_at?: Date;
+}
+
 export interface PublicProfileData {
     studio: PublicStudioProfile;
     socialNetworks: PublicSocialNetwork[];
@@ -132,6 +151,7 @@ export interface PublicProfileData {
     items: PublicCatalogItem[];
     portfolios: PublicPortfolio[];
     paquetes: PublicPaquete[];
+    posts: PublicPost[];
 }
 
 // Stats for hardcoded demo values

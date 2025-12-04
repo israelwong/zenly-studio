@@ -12,6 +12,7 @@ interface ProfileHeaderProps {
     };
     loading?: boolean;
     studioSlug?: string;
+    showEditButton?: boolean; // Control para mostrar botón editar
 }
 
 /**
@@ -22,7 +23,7 @@ interface ProfileHeaderProps {
  * - Builder preview (header sticky)
  * - Perfil público (header completo)
  */
-export function ProfileHeader({ data, loading = false, studioSlug }: ProfileHeaderProps) {
+export function ProfileHeader({ data, loading = false, studioSlug, showEditButton = true }: ProfileHeaderProps) {
     const studioData = data || {};
 
     // Solo mostrar header si hay datos reales o está cargando
@@ -76,9 +77,9 @@ export function ProfileHeader({ data, loading = false, studioSlug }: ProfileHead
                     </div>
                 </div>
 
-                {/* Columna 2: Botón Editar (si es dueño) */}
+                {/* Columna 2: Botón Editar (si es dueño y showEditButton es true) */}
                 <div className="flex justify-end items-center">
-                    {studioSlug && <PublicProfileEditButton studioSlug={studioSlug} />}
+                    {showEditButton && studioSlug && <PublicProfileEditButton studioSlug={studioSlug} />}
                 </div>
             </div>
         </div>

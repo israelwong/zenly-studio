@@ -35,7 +35,7 @@ const adapter = new PrismaPg(pgPool);
 const prisma = globalThis.__prisma || new PrismaClient({
   adapter,
   // Configuración optimizada para producción
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  log: ['error'], // Solo errores para mejor rendimiento
   errorFormat: 'pretty',
 });
 

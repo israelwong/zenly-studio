@@ -100,10 +100,7 @@ export function MobilePreviewFull({
 
                         {/* Footer dentro del contenido */}
                         <div className="mt-4">
-                            <ProfileFooter
-                                data={data}
-                                loading={loading}
-                            />
+                            <ProfileFooter />
                         </div>
                     </div>
                 </div>

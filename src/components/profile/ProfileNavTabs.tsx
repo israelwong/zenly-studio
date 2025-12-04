@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Home, Folder, Phone, HelpCircle } from 'lucide-react';
 
 interface ProfileNavTabsProps {
     activeTab: string;
@@ -9,7 +10,7 @@ interface ProfileNavTabsProps {
 
 /**
  * ProfileNavTabs - Componente para navegación de tabs del perfil público
- * Versión compacta sin iconos
+ * Estilo pill buttons con iconos, sin líneas, bg blur
  * 
  * Usado en:
  * - Perfil público (navegación de tabs)
@@ -17,35 +18,34 @@ interface ProfileNavTabsProps {
  */
 export function ProfileNavTabs({ activeTab, onTabChange }: ProfileNavTabsProps) {
     const tabs = [
-        { id: 'inicio', label: 'Inicio' },
-        { id: 'portafolio', label: 'Portafolio' },
-        { id: 'contacto', label: 'Contacto' },
-        { id: 'faq', label: 'FAQ' },
+        { id: 'inicio', label: 'Inicio', icon: Home },
+        { id: 'portafolio', label: 'Portafolio', icon: Folder },
+        { id: 'contacto', label: 'Contacto', icon: Phone },
+        { id: 'faq', label: 'FAQ', icon: HelpCircle },
     ];
 
     return (
-        <div className="border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-lg">
-            <nav className="flex">
+        <div className="bg-zinc-900/50 backdrop-blur-lg p-2">
+            <nav className="flex gap-2">
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
+                    const Icon = tab.icon;
 
                     return (
                         <button
                             key={tab.id}
                             onClick={() => onTabChange(tab.id)}
                             className={`
-                                relative flex-1 py-3 text-xs font-medium
+                                flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-medium
                                 transition-all duration-200
                                 ${isActive
-                                    ? 'text-white'
-                                    : 'text-zinc-500 hover:text-zinc-300'
+                                    ? 'bg-zinc-800/80 text-zinc-300 backdrop-blur-lg'
+                                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
                                 }
                             `}
                         >
-                            {tab.label}
-                            {isActive && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
-                            )}
+                            <Icon className="h-4 w-4" />
+                            {isActive && <span>{tab.label}</span>}
                         </button>
                     );
                 })}

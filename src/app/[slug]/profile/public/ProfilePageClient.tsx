@@ -2,9 +2,16 @@
 
 import React, { useState } from 'react';
 import { PublicProfileData } from '@/types/public-profile';
-import { ProfileHeader, ProfileNavTabs, ProfileCTA, ProfileAIChat, ProfileFooter, FaqSection } from '@/components/profile';
+import {
+    ProfileHeader,
+    ProfileNavTabs,
+    ProfileFooter,
+    ZenCreditsCard,
+    BusinessPresentationCard,
+    PromotionsCard,
+    MobilePromotionsSection
+} from '@/components/profile';
 import { ProfileContentView } from './ProfileContentView';
-import { isProPlan } from '@/lib/utils/profile-utils';
 
 interface ProfilePageClientProps {
     profileData: PublicProfileData;
@@ -13,31 +20,21 @@ interface ProfilePageClientProps {
 
 /**
  * ProfilePageClient - Main client component for public profile
- * Manages tab state and 3-column responsive layout
- * Mobile-first design that expands to desktop
+ * Nueva estructura unificada responsive: mobile-first con 2 columnas en desktop
  */
 export function ProfilePageClient({ profileData, studioSlug }: ProfilePageClientProps) {
     const [activeTab, setActiveTab] = useState<string>('inicio');
 
-    const { studio } = profileData;
-    const isPro = isProPlan(studio.plan?.slug);
+    const { studio, paquetes } = profileData;
 
-    // FAQ data (puede venir en studio.faq aunque no esté en el tipo)
-    const faqData = (studio as unknown as { faq?: Array<{ id: string; pregunta: string; respuesta: string; orden: number; is_active: boolean }> }).faq;
-
-    // Debug: Verificar datos en ProfilePageClient
-    console.log('🔍 ProfilePageClient Debug:');
-    console.log('  - profileData:', profileData);
-    console.log('  - studio:', studio);
-    console.log('  - studio.zonas_trabajo:', studio?.zonas_trabajo);
-    console.log('  - studio.zonas_trabajo type:', typeof studio?.zonas_trabajo);
-    console.log('  - studio.zonas_trabajo is array:', Array.isArray(studio?.zonas_trabajo));
+    const handleViewAllPackages = () => {
+        setActiveTab('paquetes');
+    };
 
     return (
         <div className="min-h-screen bg-zinc-950">
-            {/* Mobile Layout (default) */}
-            <div className="lg:hidden">
-                {/* Profile Header */}
+            {/* Header - Compartido sticky */}
+            <header className="sticky top-0 z-50">
                 <ProfileHeader
                     data={{
                         studio_name: studio.studio_name,
@@ -45,84 +42,61 @@ export function ProfilePageClient({ profileData, studioSlug }: ProfilePageClient
                         logo_url: studio.logo_url
                     }}
                     studioSlug={studioSlug}
+                    showEditButton={true}
                 />
+            </header>
 
-                {/* Navigation Tabs */}
-                <ProfileNavTabs
-                    activeTab={activeTab}
-                    onTabChange={setActiveTab}
-                />
-
-                {/* Content View */}
-                <ProfileContentView
-                    activeTab={activeTab}
-                    profileData={profileData}
-                />
-
-                {/* FAQ Section - Persistente antes del footer */}
-                {faqData && Array.isArray(faqData) && faqData.length > 0 && (
-                    <div className="mt-6">
-                        <FaqSection
-                            faq={faqData}
-                            loading={false}
+            {/* Main Content - Responsive Grid con max-width centrado en desktop */}
+            {/* Columnas con ancho mobile-friendly: ~430px cada una */}
+            <main className="w-full mx-auto max-w-[920px]">
+                <div className="grid grid-cols-1 lg:grid-cols-[430px_430px] gap-4 p-4 lg:p-6 lg:justify-center">
+                    {/* Col 1: Main content */}
+                    <div className="space-y-4 bg-zinc-900/50 rounded-lg border border-zinc-800/20 overflow-hidden">
+                        {/* Navigation Tabs */}
+                        <ProfileNavTabs
+                            activeTab={activeTab}
+                            onTabChange={setActiveTab}
                         />
-                    </div>
-                )}
 
-                {/* Footer */}
-                <ProfileFooter />
-            </div>
+                        {/* Content View */}
+                        <ProfileContentView
+                            activeTab={activeTab}
+                            profileData={profileData}
+                        />
 
-            {/* Desktop Layout (3 columns) */}
-            <div className="hidden lg:grid lg:grid-cols-[400px_1fr_380px] lg:gap-6 lg:p-6">
-                {/* Column 1: Profile Content */}
-                <div className="space-y-6">
-                    {/* Profile Header */}
-                    <ProfileHeader
-                        data={{
-                            studio_name: studio.studio_name,
-                            slogan: studio.slogan,
-                            logo_url: studio.logo_url
-                        }}
-                        studioSlug={studioSlug}
-                    />
-
-                    {/* Navigation Tabs */}
-                    <ProfileNavTabs
-                        activeTab={activeTab}
-                        onTabChange={setActiveTab}
-                    />
-
-                    {/* Content View */}
-                    <ProfileContentView
-                        activeTab={activeTab}
-                        profileData={profileData}
-                    />
-
-                    {/* FAQ Section - Persistente antes del footer */}
-                    {faqData && Array.isArray(faqData) && faqData.length > 0 && (
-                        <div className="mt-6">
-                            <FaqSection
-                                faq={faqData}
-                                loading={false}
+                        {/* Mobile-only: Promociones inline */}
+                        <div className="lg:hidden">
+                            <MobilePromotionsSection
+                                paquetes={paquetes}
+                                activeTab={activeTab}
                             />
                         </div>
-                    )}
+                    </div>
 
-                    {/* Footer */}
-                    <ProfileFooter />
-                </div>
+                    {/* Col 2: Sidebar (solo desktop) */}
+                    <aside className="hidden lg:block space-y-4 lg:sticky lg:top-24 lg:h-fit">
+                        {/* Card Promociones */}
+                        <PromotionsCard
+                            paquetes={paquetes}
+                            onViewAll={handleViewAllPackages}
+                        />
 
-                {/* Column 2: Hero CTA (sticky) */}
-                <div className="lg:sticky lg:top-6 lg:h-fit">
-                    <ProfileCTA />
-                </div>
+                        {/* Card Presentación del Negocio */}
+                        <BusinessPresentationCard
+                            presentation={studio.presentation || undefined}
+                            studioName={studio.studio_name}
+                        />
 
-                {/* Column 3: AI Chat (sticky) */}
-                <div className="lg:sticky lg:top-6 lg:h-fit">
-                    <ProfileAIChat isProPlan={isPro} />
+                        {/* Card Créditos ZEN */}
+                        <ZenCreditsCard />
+                    </aside>
                 </div>
-            </div>
+            </main>
+
+            {/* Mobile-only: Footer */}
+            <footer className="lg:hidden">
+                <ProfileFooter />
+            </footer>
         </div>
     );
 }

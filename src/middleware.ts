@@ -225,7 +225,10 @@ export async function middleware(request: NextRequest) {
     // - /[slug]/studio (panel privado del studio)  
     // - /[slug]/client (portal de clientes)
     // - /[slug]/preview (preview de promesas - pública)
-    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/client') || subPath.startsWith('/preview')) {
+    // - /[slug]/post (posts públicos)
+    // - /[slug]/profile (perfil público)
+    // - /[slug]/offer (ofertas públicas)
+    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/client') || subPath.startsWith('/preview') || subPath.startsWith('/post') || subPath.startsWith('/profile') || subPath.startsWith('/offer')) {
       return NextResponse.next();
     }
 

@@ -90,6 +90,7 @@ export const PublicContactInfoSchema = z.object({
     })),
     address: z.string().nullable(),
     website: z.string().nullable(),
+    email: z.string().nullable(),
     google_maps_url: z.string().nullable(),
     horarios: z.array(z.object({
         id: z.string(),
@@ -100,6 +101,25 @@ export const PublicContactInfoSchema = z.object({
     })),
 });
 
+export const PublicPostSchema = z.object({
+    id: z.string(),
+    title: z.string().nullable().optional(),
+    caption: z.string().nullable(),
+    tags: z.array(z.string()).optional(),
+    media: z.array(z.object({
+        id: z.string(),
+        file_url: z.string(),
+        file_type: z.enum(['image', 'video']),
+        filename: z.string(),
+        thumbnail_url: z.string().optional(),
+        display_order: z.number(),
+    })),
+    is_published: z.boolean(),
+    is_featured: z.boolean(),
+    published_at: z.date().nullable(),
+    created_at: z.date().optional(),
+});
+
 export const PublicProfileDataSchema = z.object({
     studio: PublicStudioProfileSchema,
     socialNetworks: z.array(PublicSocialNetworkSchema),
@@ -107,6 +127,7 @@ export const PublicProfileDataSchema = z.object({
     items: z.array(PublicCatalogItemSchema),
     portfolios: z.array(PublicPortfolioSchema),
     paquetes: z.array(PublicPaqueteSchema),
+    posts: z.array(PublicPostSchema),
 });
 
 // Input schemas for server actions

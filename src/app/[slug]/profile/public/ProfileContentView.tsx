@@ -14,23 +14,14 @@ interface ProfileContentViewProps {
  * Handles tab switching logic
  */
 export function ProfileContentView({ activeTab, profileData }: ProfileContentViewProps) {
-    const { studio, socialNetworks, contactInfo, items, portfolios } = profileData;
-
-    // Debug: Verificar datos en ProfileContentView
-    console.log('🔍 ProfileContentView Debug:');
-    console.log('  - activeTab:', activeTab);
-    console.log('  - profileData:', profileData);
-    console.log('  - studio:', studio);
-    console.log('  - studio.zonas_trabajo:', studio?.zonas_trabajo);
-    console.log('  - studio.zonas_trabajo type:', typeof studio?.zonas_trabajo);
-    console.log('  - studio.zonas_trabajo is array:', Array.isArray(studio?.zonas_trabajo));
+    const { studio, contactInfo, portfolios, posts, paquetes } = profileData;
 
     switch (activeTab) {
         case 'inicio':
             return (
                 <ProfileContent
                     variant="inicio"
-                    data={{ posts: profileData.posts || [] }}
+                    data={{ posts: posts || [] }}
                 />
             );
 
@@ -46,7 +37,7 @@ export function ProfileContentView({ activeTab, profileData }: ProfileContentVie
             return (
                 <ProfileContent
                     variant="paquetes"
-                    data={{ paquetes: profileData.paquetes || [] }}
+                    data={{ paquetes: paquetes || [] }}
                 />
             );
 
@@ -54,7 +45,7 @@ export function ProfileContentView({ activeTab, profileData }: ProfileContentVie
             return (
                 <ProfileContent
                     variant="faq"
-                    data={{ faq: profileData.studio.faq || [] }}
+                    data={{ faq: (studio as unknown as { faq?: Array<{ id: string; pregunta: string; respuesta: string; orden: number; is_active: boolean }> }).faq || [] }}
                 />
             );
 

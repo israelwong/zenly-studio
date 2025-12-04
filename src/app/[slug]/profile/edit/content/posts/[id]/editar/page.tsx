@@ -11,7 +11,7 @@ type DatabasePost = NonNullable<Awaited<ReturnType<typeof getStudioPostById>>['d
 function convertDatabasePostToFormData(dbPost: DatabasePost): PostFormData {
     return {
         id: dbPost.id,
-        title: dbPost.title,
+        title: dbPost.title ?? '',
         caption: dbPost.caption,
         media: dbPost.media || [], // Incluir media items con todos los campos del schema
         cover_index: dbPost.cover_index,

@@ -64,12 +64,11 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             title: 'Config',
             icon: Settings,
             items: [
-                // { id: 'conversations', name: 'Conversations', href: `/commercial/conversations`, icon: MessageSquare },
+                { id: 'identity', name: 'Identity', href: `/business/identity`, icon: Briefcase },
                 { id: 'catalogo', name: 'Catalog', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
-                { id: 'magic', name: 'Magic IA', href: `/magic`, icon: Sparkles },
+                // { id: 'magic', name: 'Magic IA', href: `/magic`, icon: Sparkles },
                 { id: 'integraciones', name: 'Integrations', href: `/business/integraciones/tracking`, icon: Plug },
                 { id: 'contracts', name: 'Contracts', href: `/commercial/contracts`, icon: FileText },
-                { id: 'identity', name: 'Identity', href: `/business/identity`, icon: Briefcase },
             ],
         },
 

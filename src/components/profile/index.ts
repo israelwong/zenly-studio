@@ -24,6 +24,14 @@ export { FaqSection as ProfileFAQ } from './sections';
 export { ProfileCTA } from './ProfileCTA';
 export { ProfileAIChat } from './ProfileAIChat';
 
+// Card Components (new)
+export { ZenCreditsCard } from './cards/ZenCreditsCard';
+export { BusinessPresentationCard } from './cards/BusinessPresentationCard';
+export { PromotionsCard } from './cards/PromotionsCard';
+
+// Mobile Components (new)
+export { MobilePromotionsSection } from './mobile/MobilePromotionsSection';
+
 // Content Components (from sections)
 export {
     MainSection,
