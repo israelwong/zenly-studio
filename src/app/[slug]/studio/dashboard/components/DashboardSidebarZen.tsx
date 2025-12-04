@@ -145,7 +145,7 @@ export async function DashboardSidebarZen({ className, studioSlug }: DashboardSi
                         </ActiveLink>
                     </ZenSidebarMenuItem>
                     <ZenSidebarMenuItem>
-                        <ActiveLink href={`/${studioSlug}/studio/configuracion`}>
+                        <ActiveLink href={`/${studioSlug}/studio/account/perfil`}>
                             <Settings className="w-4 h-4" />
                             <span>Configuración</span>
                         </ActiveLink>
