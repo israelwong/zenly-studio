@@ -7,7 +7,7 @@ import { MobilePreviewFull } from "@/components/previews";
 import { ImageGrid } from "@/components/shared/media";
 import { MediaItem } from "@/types/content-blocks";
 import { obtenerIdentidadStudio } from "@/lib/actions/studio/profile/identidad";
-import { getStudioPostsBySlug, createStudioPostBySlug, updateStudioPost } from "@/lib/actions/studio/posts";
+import { getStudioPostsBySlug, createStudioPostBySlug, updateStudioPost, checkPostSlugExists } from "@/lib/actions/studio/posts";
 import { PostFormData, MediaItem as PostMediaItem } from "@/lib/actions/schemas/post-schemas";
 import { useTempCuid } from "@/hooks/useTempCuid";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import cuid from "cuid";
 import { calculateTotalStorage, formatBytes } from "@/lib/utils/storage";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
+import { generateSlug } from "@/lib/utils/slug-utils";
 
 interface PostEditorProps {
     studioSlug: string;
@@ -64,9 +65,10 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
     const { uploadFiles, isUploading } = useMediaUpload();
     const { triggerRefresh } = useStorageRefresh(studioSlug);
 
-    // Estado del formulario simplificado
-    const [formData, setFormData] = useState<{ title: string; caption: string; tags: string[]; media: PostMediaItem[]; is_published: boolean; is_featured: boolean }>({
+    // Estado del formulario con slug
+    const [formData, setFormData] = useState<{ title: string; slug: string; caption: string; tags: string[]; media: PostMediaItem[]; is_published: boolean; is_featured: boolean }>({
         title: post?.title || "",
+        slug: post?.slug || generateSlug(post?.title || ""),
         caption: post?.caption || "",
         tags: post?.tags || [],
         media: post?.media || [],
@@ -86,9 +88,82 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
     const [isSaving, setIsSaving] = useState(false);
     const [isMediaUploading, setIsMediaUploading] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
-    
-    // Usar el slug real del post (viene de la BD)
-    const postSlug = mode === "edit" && post?.slug ? post.slug : "";
+    const [titleError, setTitleError] = useState<string | null>(null);
+    const [slugHint, setSlugHint] = useState<string | null>(null);
+    const [isValidatingSlug, setIsValidatingSlug] = useState(false);
+
+    // Usar slug del formData directamente
+    const postSlug = formData.slug;
+
+    // Generar slug automáticamente cuando cambia el título
+    useEffect(() => {
+        if (formData.title) {
+            const expectedSlug = generateSlug(formData.title);
+            // Actualizar slug si está vacío o si coincide con el generado desde el título actual
+            if (!formData.slug || formData.slug === expectedSlug || formData.slug === generateSlug(post?.title || "")) {
+                if (expectedSlug !== formData.slug) {
+                    setFormData(prev => ({
+                        ...prev,
+                        slug: expectedSlug
+                    }));
+                }
+            }
+        }
+    }, [formData.title, formData.slug, mode, post?.title]);
+
+    // Validar slug único cuando cambia
+    useEffect(() => {
+        const validateSlug = async () => {
+            if (!formData.slug || !formData.slug.trim()) {
+                setTitleError(null);
+                setSlugHint(null);
+                setIsValidatingSlug(false);
+                return;
+            }
+
+            // Solo validar si el slug es diferente al original (o si es creación)
+            const currentSlug = post?.slug || "";
+            if (mode === "edit" && formData.slug === currentSlug) {
+                setTitleError(null);
+                setSlugHint(`Slug: ${formData.slug}`);
+                setIsValidatingSlug(false);
+                return;
+            }
+
+            setIsValidatingSlug(true);
+            setTitleError(null);
+            setSlugHint(null);
+
+            try {
+                const slugExists = await checkPostSlugExists(
+                    studioSlug,
+                    formData.slug,
+                    mode === "edit" ? post?.id : undefined
+                );
+
+                if (slugExists) {
+                    setTitleError("Ya existe un post con este título");
+                    setSlugHint(null);
+                } else {
+                    setTitleError(null);
+                    setSlugHint(`Slug: ${formData.slug}`);
+                }
+            } catch (error) {
+                console.error("Error validating slug:", error);
+                setTitleError(null);
+                setSlugHint(null);
+            } finally {
+                setIsValidatingSlug(false);
+            }
+        };
+
+        // Debounce para evitar demasiadas llamadas
+        const timeoutId = setTimeout(() => {
+            validateSlug();
+        }, 500);
+
+        return () => clearTimeout(timeoutId);
+    }, [formData.slug, formData.title, studioSlug, mode, post?.slug, post?.id]);
 
     // Cargar datos del estudio para preview
     useEffect(() => {
@@ -306,6 +381,17 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                 toast.error("El título es obligatorio");
                 return;
             }
+
+            if (!formData.slug || !formData.slug.trim()) {
+                toast.error("El slug es requerido");
+                return;
+            }
+
+            if (titleError) {
+                toast.error(titleError);
+                return;
+            }
+
             if (!formData.media || formData.media.length === 0) {
                 toast.error("Agrega al menos una imagen o video");
                 return;
@@ -314,6 +400,7 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
             // Preparar datos para guardar con ordenamiento preservado
             const postData: PostFormData = {
                 id: post?.id || tempCuid,
+                slug: formData.slug,
                 title: formData.title,
                 caption: formData.caption || null,
                 media: formData.media.map((item, index) => ({
@@ -427,48 +514,56 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                                 <ZenInput
                                     label="Título"
                                     value={formData.title || ""}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                                    onChange={(e) => setFormData(prev => ({
+                                        ...prev,
+                                        title: e.target.value,
+                                        slug: generateSlug(e.target.value)
+                                    }))}
                                     placeholder="Título del post"
                                     required
+                                    error={titleError || undefined}
                                 />
-                                
-                                {/* Mostrar slug generado y botón copiar (solo en modo edición) */}
-                                {mode === "edit" && postSlug && (
+
+                                {/* Mostrar slug con validación */}
+                                {postSlug && (
                                     <div className="flex items-center gap-2">
                                         <p className="text-xs text-zinc-500">
-                                            URL: <span className="text-zinc-400 font-mono">/{studioSlug}/post/{postSlug}</span>
+                                            URL: <span className="text-zinc-400 font-mono">
+                                                /{studioSlug}/post/{postSlug}
+                                            </span>
                                         </p>
-                                        <ZenButton
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 px-2"
-                                            onClick={async () => {
-                                                const postUrl = `${window.location.origin}/${studioSlug}/post/${postSlug}`;
-                                                try {
-                                                    await navigator.clipboard.writeText(postUrl);
-                                                    setLinkCopied(true);
-                                                    toast.success("Link copiado al portapapeles");
-                                                    setTimeout(() => setLinkCopied(false), 2000);
-                                                } catch {
-                                                    toast.error("Error al copiar el link");
-                                                }
-                                            }}
-                                        >
-                                            {linkCopied ? (
-                                                <Check className="w-3 h-3" />
-                                            ) : (
-                                                <Copy className="w-3 h-3" />
-                                            )}
-                                        </ZenButton>
+                                        {isValidatingSlug && (
+                                            <span className="text-xs text-zinc-500">Validando...</span>
+                                        )}
+                                        {!isValidatingSlug && slugHint && !titleError && (
+                                            <span className="text-xs text-emerald-500">✓ Disponible</span>
+                                        )}
+                                        {postSlug && !titleError && (
+                                            <ZenButton
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 px-2"
+                                                onClick={async () => {
+                                                    const postUrl = `${window.location.origin}/${studioSlug}/post/${postSlug}`;
+                                                    try {
+                                                        await navigator.clipboard.writeText(postUrl);
+                                                        setLinkCopied(true);
+                                                        toast.success("Link copiado al portapapeles");
+                                                        setTimeout(() => setLinkCopied(false), 2000);
+                                                    } catch {
+                                                        toast.error("Error al copiar el link");
+                                                    }
+                                                }}
+                                            >
+                                                {linkCopied ? (
+                                                    <Check className="w-3 h-3" />
+                                                ) : (
+                                                    <Copy className="w-3 h-3" />
+                                                )}
+                                            </ZenButton>
+                                        )}
                                     </div>
-                                )}
-                                
-                                {/* Mensaje para modo creación */}
-                                {mode === "create" && (
-                                    <p className="text-xs text-zinc-500">
-                                        La URL pública se generará automáticamente al guardar
-                                    </p>
                                 )}
                             </div>
 
@@ -568,7 +663,7 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                                     onClick={handleSave}
                                     className="flex-1"
                                     loading={isSaving}
-                                    disabled={isSaving}
+                                    disabled={isSaving || isValidatingSlug || !!titleError}
                                 >
                                     {mode === "create" ? "Crear Post" : "Actualizar Post"}
                                 </ZenButton>
@@ -580,6 +675,15 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
                                     Cancelar
                                 </ZenButton>
                             </div>
+
+                            {/* Mensaje de ayuda si hay error */}
+                            {titleError && (
+                                <div className="pt-2">
+                                    <p className="text-xs text-red-400">
+                                        {titleError}
+                                    </p>
+                                </div>
+                            )}
                         </ZenCardContent>
                     </ZenCard>
                 </div>

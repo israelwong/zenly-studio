@@ -62,15 +62,7 @@ interface PreviewData {
     google_maps_url?: string;
 }
 
-// Helper para generar slug desde título
-function generateSlug(title: string): string {
-    return title
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
-}
+import { generateSlug } from "@/lib/utils/slug-utils";
 
 // Helper para determinar estado del portfolio
 function getPortfolioStatus(portfolio: { is_published: boolean; published_at: Date | null }): "draft" | "published" | "unpublished" {
@@ -1290,99 +1282,132 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                             {/* Botones */}
                             {mode === "create" ? (
                                 // Modo CREAR
-                                <div className="flex gap-3 pt-4">
-                                    <ZenButton
-                                        onClick={() => handleSave(true)}
-                                        className="flex-1"
-                                        loading={isSaving}
-                                        disabled={isSaving}
-                                    >
-                                        Publicar ahora
-                                    </ZenButton>
-                                    <ZenButton
-                                        variant="outline"
-                                        onClick={() => handleSave(false)}
-                                        loading={isSaving}
-                                        disabled={isSaving}
-                                    >
-                                        Guardar como borrador
-                                    </ZenButton>
-                                    <ZenButton
-                                        variant="outline"
-                                        onClick={handleCancel}
-                                        disabled={isSaving}
-                                    >
-                                        Cancelar
-                                    </ZenButton>
-                                </div>
+                                <>
+                                    <div className="flex gap-3 pt-4">
+                                        <ZenButton
+                                            onClick={() => handleSave(true)}
+                                            className="flex-1"
+                                            loading={isSaving}
+                                            disabled={isSaving || isValidatingSlug || !!titleError}
+                                        >
+                                            Publicar ahora
+                                        </ZenButton>
+                                        <ZenButton
+                                            variant="outline"
+                                            onClick={() => handleSave(false)}
+                                            loading={isSaving}
+                                            disabled={isSaving || isValidatingSlug || !!titleError}
+                                        >
+                                            Guardar como borrador
+                                        </ZenButton>
+                                        <ZenButton
+                                            variant="outline"
+                                            onClick={handleCancel}
+                                            disabled={isSaving}
+                                        >
+                                            Cancelar
+                                        </ZenButton>
+                                    </div>
+
+                                    {/* Mensaje de ayuda si hay error */}
+                                    {titleError && (
+                                        <div className="pt-2 text-center">
+                                            <p className="text-xs text-red-400">
+                                                {titleError}
+                                            </p>
+                                        </div>
+                                    )}
+                                </>
                             ) : isDraft ? (
                                 // Modo EDITAR - Borrador
                                 // El switch controla si publicar o mantener como borrador
-                                <div className="flex items-center gap-3 pt-4">
-                                    <div className="flex gap-3 flex-1">
+                                <>
+                                    <div className="flex items-center gap-3 pt-4">
+                                        <div className="flex gap-3 flex-1">
+                                            <ZenButton
+                                                onClick={() => handleSave(formData.is_published)}
+                                                className="flex-1"
+                                                loading={isSaving}
+                                                disabled={isSaving || isValidatingSlug || !!titleError}
+                                            >
+                                                {formData.is_published ? "Publicar ahora" : "Actualizar borrador"}
+                                            </ZenButton>
+                                            <ZenButton
+                                                variant="outline"
+                                                onClick={() => setShowPublishModal(true)}
+                                                disabled={isSaving || isValidatingSlug || !!titleError}
+                                            >
+                                                Publicar portfolio
+                                            </ZenButton>
+                                            <ZenButton
+                                                variant="outline"
+                                                onClick={handleCancel}
+                                                disabled={isSaving}
+                                            >
+                                                Cancelar
+                                            </ZenButton>
+                                        </div>
                                         <ZenButton
-                                            onClick={() => handleSave(formData.is_published)}
-                                            className="flex-1"
-                                            loading={isSaving}
-                                            disabled={isSaving}
-                                        >
-                                            {formData.is_published ? "Publicar ahora" : "Actualizar borrador"}
-                                        </ZenButton>
-                                        <ZenButton
+                                            type="button"
                                             variant="outline"
-                                            onClick={() => setShowPublishModal(true)}
-                                            disabled={isSaving}
+                                            onClick={() => setShowDeleteModal(true)}
+                                            disabled={isSaving || isDeleting}
+                                            className="text-red-400 hover:text-red-300 hover:bg-red-950/20 border-red-800/50"
                                         >
-                                            Publicar portfolio
-                                        </ZenButton>
-                                        <ZenButton
-                                            variant="outline"
-                                            onClick={handleCancel}
-                                            disabled={isSaving}
-                                        >
-                                            Cancelar
+                                            <Trash2 className="h-4 w-4" />
                                         </ZenButton>
                                     </div>
-                                    <ZenButton
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => setShowDeleteModal(true)}
-                                        disabled={isSaving || isDeleting}
-                                        className="text-red-400 hover:text-red-300 hover:bg-red-950/20 border-red-800/50"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </ZenButton>
-                                </div>
+
+                                    {/* Mensaje de ayuda si hay error */}
+                                    {titleError && (
+                                        <div className="pt-2 text-center">
+                                            <p className="text-xs text-red-400">
+                                                {titleError}
+                                            </p>
+                                        </div>
+                                    )}
+                                </>
                             ) : (
                                 // Modo EDITAR - Publicado/Despublicado
-                                <div className="flex items-center gap-3 pt-4">
-                                    <div className="flex gap-3 flex-1">
+                                <>
+                                    <div className="flex items-center gap-3 pt-4">
+                                        <div className="flex gap-3 flex-1">
+                                            <ZenButton
+                                                onClick={() => handleSave(formData.is_published)}
+                                                className="flex-1"
+                                                loading={isSaving}
+                                                disabled={isSaving || isValidatingSlug || !!titleError}
+                                            >
+                                                Actualizar Portfolio
+                                            </ZenButton>
+                                            <ZenButton
+                                                variant="outline"
+                                                onClick={handleCancel}
+                                                disabled={isSaving}
+                                            >
+                                                Cancelar
+                                            </ZenButton>
+                                        </div>
                                         <ZenButton
-                                            onClick={() => handleSave(formData.is_published)}
-                                            className="flex-1"
-                                            loading={isSaving}
-                                            disabled={isSaving}
-                                        >
-                                            Actualizar Portfolio
-                                        </ZenButton>
-                                        <ZenButton
+                                            type="button"
                                             variant="outline"
-                                            onClick={handleCancel}
-                                            disabled={isSaving}
+                                            onClick={() => setShowDeleteModal(true)}
+                                            disabled={isSaving || isDeleting}
+                                            className="text-red-400 hover:text-red-300 hover:bg-red-950/20 border-red-800/50"
                                         >
-                                            Cancelar
+                                            <Trash2 className="h-4 w-4" />
                                         </ZenButton>
                                     </div>
-                                    <ZenButton
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => setShowDeleteModal(true)}
-                                        disabled={isSaving || isDeleting}
-                                        className="text-red-400 hover:text-red-300 hover:bg-red-950/20 border-red-800/50"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </ZenButton>
-                                </div>
+
+                                    {/* Mensaje de ayuda si hay error */}
+                                    {titleError && (
+                                        <div className="pt-2 text-center">
+                                            <p className="text-xs text-red-400">
+                                                {titleError}
+                                            </p>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </ZenCardContent>
                     </ZenCard>

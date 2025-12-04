@@ -10,7 +10,7 @@ import {
     type MediaItem,
 } from "@/lib/actions/schemas/post-schemas";
 import { StudioPost } from "@/types/studio-posts";
-import { generatePostSlug } from "@/lib/utils/slug-generator";
+import { generateSlug, generateUniqueSlug } from "@/lib/utils/slug-utils";
 
 // Tipo específico para el resultado de posts
 type PostsResult =
@@ -118,6 +118,64 @@ function convertPrismaPostToStudioPost(
     };
 }
 
+/**
+ * Valida si un slug existe en el studio (excluyendo un post específico si se proporciona)
+ * Función pública para validación en tiempo real desde el frontend
+ */
+export async function checkPostSlugExists(studioSlug: string, slug: string, excludePostId?: string): Promise<boolean> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
+        });
+
+        if (!studio) {
+            return false;
+        }
+
+        const existing = await prisma.studio_posts.findUnique({
+            where: {
+                studio_id_slug: {
+                    studio_id: studio.id,
+                    slug: slug,
+                },
+            },
+            select: { id: true },
+        });
+
+        // Si no existe, o si existe pero es el mismo post que estamos editando, no hay conflicto
+        return !!(existing && (!excludePostId || existing.id !== excludePostId));
+    } catch (error) {
+        console.error('Error checking post slug:', error);
+        return false;
+    }
+}
+
+/**
+ * Helper interno para generar slug único verificando en BD
+ * Usa la utilidad compartida generateUniqueSlug
+ */
+async function generateUniquePostSlug(studioId: string, baseSlug: string, excludePostId?: string): Promise<string> {
+    // Crear función de verificación específica para posts
+    const checkExists = async (slug: string): Promise<boolean> => {
+        const existing = await prisma.studio_posts.findUnique({
+            where: {
+                studio_id_slug: {
+                    studio_id: studioId,
+                    slug: slug,
+                },
+            },
+            select: { id: true },
+        });
+
+        // Retorna true si existe Y no es el post que estamos editando
+        return !!(existing && (!excludePostId || existing.id !== excludePostId));
+    };
+
+    // Usar la utilidad compartida
+    return await generateUniqueSlug(baseSlug, checkExists);
+}
+
 // CREATE
 export async function createStudioPost(studioId: string, data: PostFormData) {
     try {
@@ -125,14 +183,14 @@ export async function createStudioPost(studioId: string, data: PostFormData) {
 
         // Crear post con transacción para manejar media
         const post = await prisma.$transaction(async (tx) => {
-            // Crear post base con ID temporal para generar slug
-            const tempId = crypto.randomUUID();
-            const slug = generatePostSlug(validatedData.title || 'post', tempId);
+            // Generar slug desde título y verificar unicidad
+            const baseSlug = generateSlug(validatedData.title || 'post');
+            const uniqueSlug = await generateUniquePostSlug(studioId, baseSlug);
 
             const newPost = await tx.studio_posts.create({
                 data: {
                     studio_id: studioId,
-                    slug: slug,
+                    slug: uniqueSlug,
                     title: validatedData.title,
                     caption: validatedData.caption,
                     cover_index: validatedData.cover_index,
@@ -405,9 +463,25 @@ export async function updateStudioPost(
 
         // Actualizar con transacción para manejar media
         const post = await prisma.$transaction(async (tx) => {
+            // Obtener post y studio info primero
+            const existingPost = await tx.studio_posts.findUnique({
+                where: { id: postId },
+                select: {
+                    studio_id: true,
+                    slug: true,
+                    is_published: true,
+                    is_featured: true
+                },
+            });
+
+            if (!existingPost) {
+                throw new Error("Post no encontrado");
+            }
+
             // Construir objeto de actualización solo con campos definidos
             const updateData: {
                 title?: string;
+                slug?: string;
                 caption?: string | null;
                 cover_index?: number;
                 event_type_id?: string | null;
@@ -427,11 +501,13 @@ export async function updateStudioPost(
             if (validatedData.event_type_id !== undefined) updateData.event_type_id = validatedData.event_type_id ?? null;
             if (validatedData.tags !== undefined) updateData.tags = validatedData.tags;
 
-            // Verificar estado actual del post para aplicar lógica de destacado
-            const currentPost = await tx.studio_posts.findUnique({
-                where: { id: postId },
-                select: { is_published: true, is_featured: true },
-            });
+            // Actualizar slug si viene en los datos y es diferente al actual
+            if (validatedData.slug !== undefined && validatedData.slug !== existingPost.slug) {
+                // Generar slug único si el proporcionado ya existe
+                const baseSlug = validatedData.slug;
+                const uniqueSlug = await generateUniquePostSlug(existingPost.studio_id, baseSlug, postId);
+                updateData.slug = uniqueSlug;
+            }
 
             // Solo actualizar is_featured si se proporciona explícitamente en data
             // Si se destaca un post no publicado, publicarlo automáticamente
@@ -439,7 +515,7 @@ export async function updateStudioPost(
                 updateData.is_featured = data.is_featured;
 
                 // Si se destaca un post no publicado, publicarlo automáticamente
-                if (data.is_featured && !currentPost?.is_published) {
+                if (data.is_featured && !existingPost.is_published) {
                     updateData.is_published = true;
                     updateData.published_at = new Date();
                 }
@@ -451,19 +527,9 @@ export async function updateStudioPost(
                 updateData.is_published = data.is_published;
                 updateData.published_at = data.is_published ? new Date() : null;
                 // Si se despublica y está destacado, quitar también el destacado
-                if (!data.is_published && currentPost?.is_featured) {
+                if (!data.is_published && existingPost.is_featured) {
                     updateData.is_featured = false;
                 }
-            }
-
-            // Obtener studio_id para operaciones de media
-            const existingPost = await tx.studio_posts.findUnique({
-                where: { id: postId },
-                select: { studio_id: true },
-            });
-
-            if (!existingPost) {
-                throw new Error("Post no encontrado");
             }
 
             // Actualizar post
