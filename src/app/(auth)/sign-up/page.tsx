@@ -1,4 +1,4 @@
-import { SignupFormWithRole } from '@/components/signup-form-with-role'
+import { SignupFormWithRole } from '@/components/auth/signup-form-with-role'
 
 export default function Page() {
   return (
