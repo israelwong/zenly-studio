@@ -24,9 +24,9 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 
 interface ZonasTrabajoSectionProps {
-    studioId: string;
-    zonas: ZonaTrabajo[]; // Data from parent (builder-profile)
-    onLocalUpdate: (data: Partial<{ zonas_trabajo: ZonaTrabajo[] }>) => void;
+    studioSlug: string;
+    zonasCobertura?: ZonaTrabajo[]; // Data from parent (builder-profile)
+    onLocalUpdate?: (data: Partial<{ zonas_trabajo: ZonaTrabajo[] }>) => void;
     loading?: boolean;
 }
 
@@ -86,8 +86,8 @@ function SortableZonaItem({ zona, onEdit, onDelete }: SortableZonaItemProps) {
     );
 }
 
-export function ZonasTrabajoSection({ studioId, zonas: initialZonas, onLocalUpdate, loading = false }: ZonasTrabajoSectionProps) {
-    const [zonasTrabajo, setZonasTrabajo] = useState<ZonaTrabajo[]>(initialZonas);
+export function ZonasTrabajoSection({ studioSlug, zonasCobertura = [], onLocalUpdate, loading = false }: ZonasTrabajoSectionProps) {
+    const [zonasTrabajo, setZonasTrabajo] = useState<ZonaTrabajo[]>(zonasCobertura || []);
     const [loadingZonas, setLoadingZonas] = useState(false);
     const [isReorderingZonas, setIsReorderingZonas] = useState(false);
     const [zonaModal, setZonaModal] = useState<{ open: boolean; zona?: ZonaTrabajo }>({ open: false });
@@ -101,18 +101,20 @@ export function ZonasTrabajoSection({ studioId, zonas: initialZonas, onLocalUpda
 
     // Sync with parent data
     useEffect(() => {
-        setZonasTrabajo(initialZonas);
-    }, [initialZonas]);
+        if (zonasCobertura) {
+            setZonasTrabajo(zonasCobertura);
+        }
+    }, [zonasCobertura]);
 
     const handleZonaSave = async (zona: ZonaTrabajo) => {
         try {
             if (zona.id) {
                 // Actualizar zona existente
-                const result = await actualizarZonaTrabajo(studioId, zona.id, { nombre: zona.nombre });
+                const result = await actualizarZonaTrabajo(studioSlug, zona.id, { nombre: zona.nombre });
                 if (result.success && result.zona) {
                     const updated = zonasTrabajo.map(z => z.id === zona.id ? result.zona : z);
                     setZonasTrabajo(updated);
-                    onLocalUpdate({ zonas_trabajo: updated });
+                    onLocalUpdate?.({ zonas_trabajo: updated });
                     toast.success('Zona actualizada exitosamente');
                 } else {
                     toast.error(result.error || 'Error al actualizar la zona');
@@ -120,11 +122,11 @@ export function ZonasTrabajoSection({ studioId, zonas: initialZonas, onLocalUpda
                 }
             } else {
                 // Crear nueva zona
-                const result = await crearZonaTrabajo(studioId, { nombre: zona.nombre });
+                const result = await crearZonaTrabajo(studioSlug, { nombre: zona.nombre });
                 if (result.success && result.zona) {
                     const updated = [...zonasTrabajo, result.zona];
                     setZonasTrabajo(updated);
-                    onLocalUpdate({ zonas_trabajo: updated });
+                    onLocalUpdate?.({ zonas_trabajo: updated });
                     toast.success('Zona creada exitosamente');
                 } else {
                     toast.error(result.error || 'Error al crear la zona');
@@ -140,7 +142,7 @@ export function ZonasTrabajoSection({ studioId, zonas: initialZonas, onLocalUpda
 
     const handleZonaDelete = async (zonaId: string) => {
         try {
-            const result = await eliminarZonaTrabajo(studioId, zonaId);
+            const result = await eliminarZonaTrabajo(studioSlug, zonaId);
             if (result.success) {
                 const updated = zonasTrabajo.filter(z => z.id !== zonaId);
                 setZonasTrabajo(updated);
@@ -176,7 +178,7 @@ export function ZonasTrabajoSection({ studioId, zonas: initialZonas, onLocalUpda
                     orden: index
                 }));
 
-                const result = await reordenarZonasTrabajo(studioId, zonasOrdenadas);
+                const result = await reordenarZonasTrabajo(studioSlug, zonasOrdenadas);
                 if (result.success) {
                     toast.success('Orden actualizado exitosamente');
                 } else {

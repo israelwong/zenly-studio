@@ -26,8 +26,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 interface TelefonosSectionProps {
-    telefonos: Telefono[];
-    onLocalUpdate: (data: Partial<{ telefonos: Telefono[] }>) => void;
+    telefonos?: Telefono[];
+    onLocalUpdate?: (data: Partial<{ telefonos: Telefono[] }>) => void;
     studioSlug: string;
     loading?: boolean;
 }
@@ -133,8 +133,8 @@ function SortableTelefonoItem({ telefono, onToggle, onEdit, onDelete }: Sortable
     );
 }
 
-export function TelefonosSection({ telefonos: initialTelefonos, onLocalUpdate, studioSlug, loading = false }: TelefonosSectionProps) {
-    const [telefonos, setTelefonos] = useState<Telefono[]>(initialTelefonos);
+export function TelefonosSection({ telefonos: initialTelefonos = [], onLocalUpdate, studioSlug, loading = false }: TelefonosSectionProps) {
+    const [telefonos, setTelefonos] = useState<Telefono[]>(initialTelefonos || []);
     const [telefonoModal, setTelefonoModal] = useState<{ open: boolean; telefono?: Telefono }>({ open: false });
     const [isReorderingTelefonos, setIsReorderingTelefonos] = useState(false);
 
@@ -163,7 +163,7 @@ export function TelefonosSection({ telefonos: initialTelefonos, onLocalUpdate, s
                 });
                 const updated = telefonos.map(t => t.id === telefono.id ? telefono : t);
                 setTelefonos(updated);
-                onLocalUpdate({ telefonos: updated });
+                onLocalUpdate?.({ telefonos: updated });
                 toast.success('Teléfono actualizado exitosamente');
             } else {
                 // Crear nuevo teléfono
@@ -184,7 +184,7 @@ export function TelefonosSection({ telefonos: initialTelefonos, onLocalUpdate, s
                     is_active: nuevoTelefono.is_active
                 }];
                 setTelefonos(updated);
-                onLocalUpdate({ telefonos: updated }); // cspell:ignore telefonos
+                onLocalUpdate?.({ telefonos: updated }); // cspell:ignore telefonos
                 toast.success('Teléfono agregado exitosamente');
             }
         } catch (error) {
@@ -221,7 +221,7 @@ export function TelefonosSection({ telefonos: initialTelefonos, onLocalUpdate, s
                 });
                 const updated = telefonos.map(t => t.id === id ? { ...t, is_active } : t);
                 setTelefonos(updated);
-                onLocalUpdate({ telefonos: updated });
+                onLocalUpdate?.({ telefonos: updated });
                 toast.success(`Teléfono ${is_active ? 'activado' : 'desactivado'} exitosamente`);
             }
         } catch (error) {

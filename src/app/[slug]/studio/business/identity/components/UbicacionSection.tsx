@@ -9,14 +9,14 @@ import { actualizarUbicacion } from '@/lib/actions/studio/profile/ubicacion';
 import { toast } from 'sonner';
 
 interface UbicacionSectionProps {
-    data: UbicacionData;
-    onLocalUpdate: (data: Partial<UbicacionData>) => void;
+    ubicacion?: UbicacionData | null;
+    onLocalUpdate?: (data: Partial<UbicacionData>) => void;
     studioSlug: string;
     loading?: boolean;
 }
 
 export function UbicacionSection({
-    data,
+    ubicacion: data,
     onLocalUpdate,
     studioSlug,
     loading = false

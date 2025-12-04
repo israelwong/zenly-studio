@@ -9,13 +9,13 @@ import { toast } from 'sonner';
 
 interface HorariosSectionProps {
     studioSlug: string;
-    horarios: Horario[]; // Data from parent (builder-profile)
-    onLocalUpdate: (data: Partial<{ horarios: Horario[] }>) => void;
+    horarios?: Horario[]; // Data from parent (builder-profile)
+    onLocalUpdate?: (data: Partial<{ horarios: Horario[] }>) => void;
     loading?: boolean;
 }
 
-export function HorariosSection({ studioSlug, horarios: initialHorarios, onLocalUpdate, loading = false }: HorariosSectionProps) {
-    const [horarios, setHorarios] = useState<Horario[]>(initialHorarios);
+export function HorariosSection({ studioSlug, horarios: initialHorarios = [], onLocalUpdate, loading = false }: HorariosSectionProps) {
+    const [horarios, setHorarios] = useState<Horario[]>(initialHorarios || []);
     const [loadingHorarios, setLoadingHorarios] = useState(false);
     const isInitialMount = useRef(true);
     const hasInitialized = useRef(false);
@@ -82,7 +82,7 @@ export function HorariosSection({ studioSlug, horarios: initialHorarios, onLocal
                     : h
             );
             setHorarios(updated);
-            onLocalUpdate({ horarios: updated });
+            onLocalUpdate?.({ horarios: updated });
 
             // Llamar Server Action
             await actualizarHorario(studioSlug, id, {
@@ -117,7 +117,7 @@ export function HorariosSection({ studioSlug, horarios: initialHorarios, onLocal
                 h.id === id ? { ...h, cerrado } : h
             );
             setHorarios(updated);
-            onLocalUpdate({ horarios: updated });
+            onLocalUpdate?.({ horarios: updated });
 
             // Llamar Server Action
             await toggleHorarioEstado(studioSlug, id, {

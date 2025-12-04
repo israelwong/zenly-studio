@@ -89,7 +89,7 @@ export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoadi
                             plataforma: red.plataforma?.slug || red.plataformaId || 'unknown',
                             url: red.url
                         }));
-                    onLocalUpdate({ redes_sociales: redesActivas } as Partial<IdentidadData>);
+                    onLocalUpdate?.({ redes_sociales: redesActivas } as Partial<IdentidadData>);
                 }
 
                 // Cargar plataformas disponibles
@@ -156,7 +156,7 @@ export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoadi
                             plataforma: red.plataforma?.slug || red.plataformaId || 'unknown',
                             url: red.url
                         }));
-                    onLocalUpdate({ redes_sociales: redesFormateadas } as Partial<IdentidadData>);
+                    onLocalUpdate?.({ redes_sociales: redesFormateadas } as Partial<IdentidadData>);
                 } else {
                     throw new Error(result.error);
                 }
@@ -248,7 +248,7 @@ export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoadi
                             plataforma: red.plataforma?.slug || red.plataformaId || 'unknown',
                             url: red.url
                         }));
-                    onLocalUpdate({ redes_sociales: redesFormateadas } as Partial<IdentidadData>);
+                    onLocalUpdate?.({ redes_sociales: redesFormateadas } as Partial<IdentidadData>);
                 } else {
                     throw new Error(result.error);
                 }
@@ -292,7 +292,7 @@ export function SocialSection({ studioSlug, onLocalUpdate, loading: initialLoadi
                             plataforma: red.plataforma?.slug || red.plataformaId || 'unknown',
                             url: red.url
                         }));
-                    onLocalUpdate({ redes_sociales: redesFormateadas } as Partial<IdentidadData>);
+                    onLocalUpdate?.({ redes_sociales: redesFormateadas } as Partial<IdentidadData>);
                 } else {
                     throw new Error(result.error || 'Error desconocido');
                 }
