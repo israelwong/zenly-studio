@@ -87,24 +87,8 @@ export function PostEditor({ studioSlug, mode, post }: PostEditorProps) {
     const [isMediaUploading, setIsMediaUploading] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     
-    // Calcular slug desde el título o post existente
-    const postSlug = useMemo(() => {
-        if (mode === "edit" && post?.id) {
-            // En modo edición, usar el ID del post para generar el slug
-            // El formato es: titulo-normalizado-abc123 (primeros 6 chars del ID)
-            const titlePart = formData.title
-                .toLowerCase()
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .replace(/[^a-z0-9]+/g, "-")
-                .replace(/(^-|-$)/g, "")
-                .substring(0, 60)
-                .replace(/-+$/, "");
-            const suffix = post.id.substring(0, 6);
-            return titlePart || "post" ? `${titlePart || "post"}-${suffix}` : "";
-        }
-        return ""; // En modo creación no hay slug hasta guardar
-    }, [formData.title, post?.id, mode]);
+    // Usar el slug real del post (viene de la BD)
+    const postSlug = mode === "edit" && post?.slug ? post.slug : "";
 
     // Cargar datos del estudio para preview
     useEffect(() => {

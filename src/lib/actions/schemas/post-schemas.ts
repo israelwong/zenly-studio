@@ -28,6 +28,7 @@ export type MediaItem = z.infer<typeof mediaItemSchema>;
 // Create/Update Post Schema
 export const postFormSchema = z.object({
     id: z.string().optional(),
+    slug: z.string().optional(),
     title: z.string().min(1, "El título es obligatorio").max(200),
     caption: z.string().max(2000).optional().nullable(),
     media: z.array(mediaItemSchema).min(1, "Agrega al menos una foto o video"),
