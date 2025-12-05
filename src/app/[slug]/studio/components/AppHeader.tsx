@@ -41,24 +41,27 @@ export function AppHeader({ studioSlug, onCommandOpen }: AppHeaderProps) {
                     <Menu className="h-5 w-5" />
                 </ZenButton>
 
-                {/* ZEN Logo + Brand */}
-                <Link
-                    href="/"
-                    className="flex items-center gap-2 flex-shrink-0 hover:opacity-80 transition-opacity"
-                >
+                {/* ZEN Logo + Brand (no clickeable) */}
+                <div className="flex items-center gap-2 flex-shrink-0">
                     <div className="flex items-center justify-center w-7 h-7 rounded-md bg-gradient-to-br from-emerald-500 to-emerald-600">
                         <Zap className="w-4 h-4 text-white" />
                     </div>
                     <span className="font-bold text-white text-sm hidden sm:inline">ZEN</span>
-                </Link>
+                </div>
 
                 {/* Divider */}
                 <div className="h-6 w-px bg-zinc-700 flex-shrink-0 hidden sm:block" />
 
-                {/* Studio Name */}
-                <span className="text-sm font-medium text-zinc-300 truncate hidden sm:inline">
-                    {identidadData?.studio_name || studioSlug}
-                </span>
+                {/* Studio Name + Plan Badge */}
+                <div className="flex items-center gap-2 flex-shrink-0 hidden sm:flex">
+                    <span className="text-sm font-medium text-zinc-300 truncate">
+                        {identidadData?.studio_name || studioSlug}
+                    </span>
+                    {/* Plan Badge */}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        PRO
+                    </span>
+                </div>
 
                 {/* Breadcrumb - Hidden on mobile */}
                 <div className="hidden md:block ml-4">

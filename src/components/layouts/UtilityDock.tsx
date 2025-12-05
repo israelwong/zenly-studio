@@ -92,7 +92,7 @@ export function UtilityDock({
   };
 
   return (
-    <aside className="w-12 flex-shrink-0 border-l border-zinc-800 bg-zinc-950/50 flex flex-col items-center py-4 gap-2 z-20">
+    <aside className="w-12 flex-shrink-0 border-l border-zinc-800 bg-zinc-950/50 flex flex-col items-center pt-4 gap-2 z-20">
       {dockItems.map(renderItem)}
     </aside>
   );
