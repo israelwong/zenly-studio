@@ -6,16 +6,16 @@ import { LayoutDashboard, BarChart3, TrendingUp } from 'lucide-react';
 import { ZenCard } from '@/components/ui/zen';
 
 interface DashboardPageProps {
-    params: {
+    params: Promise<{
         slug: string;
-    };
+    }>;
 }
 
 async function DashboardContent({ studioSlug }: { studioSlug: string }) {
     // Obtener studio profile
-    const studioProfile = await getStudioProfileBySlug(studioSlug);
-    
-    if (!studioProfile) {
+    const studioProfile = await getStudioProfileBySlug({ slug: studioSlug });
+
+    if (!studioProfile || !studioProfile.studio) {
         return (
             <div className="text-center py-12">
                 <p className="text-zinc-400">Error al cargar el studio</p>
@@ -77,7 +77,7 @@ async function DashboardContent({ studioSlug }: { studioSlug: string }) {
                         Contenido Más Popular
                     </h3>
                 </div>
-                <TopContentList 
+                <TopContentList
                     posts={topContentResult.data.posts}
                     studioSlug={studioSlug}
                 />
@@ -87,7 +87,7 @@ async function DashboardContent({ studioSlug }: { studioSlug: string }) {
 }
 
 export default async function DashboardPage({ params }: DashboardPageProps) {
-    const { slug } = params;
+    const { slug } = await params;
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
