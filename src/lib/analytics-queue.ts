@@ -110,11 +110,18 @@ class AnalyticsQueue {
             });
 
             console.log(`[AnalyticsQueue] Flushed ${eventsToSend.length} events`);
-        } catch (error) {
+        } catch (error: any) {
             console.error('[AnalyticsQueue] Failed to flush events:', error);
 
-            // Re-queue eventos fallidos (con límite para evitar loop infinito)
-            if (eventsToSend.length < 100) {
+            // Si es error de foreign key, NO re-encolar (datos inválidos)
+            if (error?.code === 'P2003') {
+                console.warn('[AnalyticsQueue] Foreign key constraint error - dropping invalid events');
+                console.debug('[AnalyticsQueue] Invalid studio_ids:', 
+                    [...new Set(eventsToSend.map(e => e.studio_id))].join(', ')
+                );
+            } 
+            // Para otros errores, re-queue con límite
+            else if (eventsToSend.length < 100) {
                 console.log(`[AnalyticsQueue] Re-queuing ${eventsToSend.length} failed events`);
                 this.queue.unshift(...eventsToSend);
             } else {

@@ -60,6 +60,12 @@ const DEDUPE_WINDOW = 3000; // 3 segundos
  */
 export async function trackContentEvent(input: TrackEventInput) {
   try {
+    // Validar que studio_id existe (prevenir foreign key constraint)
+    if (!input.studioId || input.studioId.trim() === '') {
+      console.debug('[Analytics] Invalid studioId, skipping');
+      return { success: false, error: 'Invalid studioId' };
+    }
+
     const headersList = await headers();
 
     // Obtener contexto del request
