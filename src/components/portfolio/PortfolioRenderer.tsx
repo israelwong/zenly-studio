@@ -34,24 +34,6 @@ export function PortfolioRenderer({
     // Ordenar items por orden
     const sortedItems = [...portfolio.items].sort((a, b) => a.order - b.order);
 
-    // Debug: Log items para verificar estructura
-    React.useEffect(() => {
-        console.log('📸 [PortfolioRenderer] Portfolio items:', {
-            total: portfolio.items.length,
-            sortedTotal: sortedItems.length,
-            firstItem: sortedItems[0],
-            items: sortedItems.map(item => ({
-                id: item.id,
-                title: item.title,
-                type: item.item_type,
-                hasImage: !!item.image_url,
-                hasVideo: !!item.video_url,
-                imageUrl: item.image_url,
-                videoUrl: item.video_url
-            }))
-        });
-    }, [portfolio.items, sortedItems]);
-
     const handleMediaClick = (itemId: string) => {
         trackMediaClick(itemId);
     };

@@ -10,7 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  Link2
+  Link2,
+  X
 } from "lucide-react";
 import { toast } from "sonner";
 import { MediaItem } from "@/lib/actions/schemas/post-schemas";
@@ -186,9 +187,10 @@ export function PostRenderer({ post, studioSlug, onNext, onPrev, hasNext, hasPre
             {onClose && (
               <button
                 onClick={onClose}
-                className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors px-2"
+                className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+                aria-label="Cerrar"
               >
-                Cerrar
+                <X className="w-5 h-5" />
               </button>
             )}
           </div>
@@ -252,8 +254,8 @@ export function PostRenderer({ post, studioSlug, onNext, onPrev, hasNext, hasPre
           <button
             onClick={handleCopyLink}
             className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-full transition-colors ${linkCopied
-                ? 'text-emerald-400 bg-emerald-950/50'
-                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
+              ? 'text-emerald-400 bg-emerald-950/50'
+              : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
               }`}
           >
             <Link2 className="w-4 h-4" />

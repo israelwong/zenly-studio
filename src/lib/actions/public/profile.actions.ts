@@ -113,9 +113,15 @@ export async function getStudioProfileBySlug(
                             title: true,
                             slug: true,
                             description: true,
+                            caption: true,
                             cover_image_url: true,
                             category: true,
                             order: true,
+                            is_featured: true,
+                            published_at: true,
+                            view_count: true,
+                            cover_index: true,
+                            tags: true,
                             items: {
                                 select: {
                                     id: true,
@@ -127,6 +133,51 @@ export async function getStudioProfileBySlug(
                                     order: true,
                                 },
                                 orderBy: { order: 'asc' }
+                            },
+                            media: {
+                                select: {
+                                    id: true,
+                                    file_url: true,
+                                    file_type: true,
+                                    filename: true,
+                                    thumbnail_url: true,
+                                    display_order: true,
+                                },
+                                orderBy: { display_order: 'asc' }
+                            },
+                            content_blocks: {
+                                select: {
+                                    id: true,
+                                    type: true,
+                                    title: true,
+                                    description: true,
+                                    presentation: true,
+                                    config: true,
+                                    order: true,
+                                    block_media: {
+                                        select: {
+                                            id: true,
+                                            order: true,
+                                            media: {
+                                                select: {
+                                                    id: true,
+                                                    file_url: true,
+                                                    file_type: true,
+                                                    filename: true,
+                                                    thumbnail_url: true,
+                                                }
+                                            }
+                                        },
+                                        orderBy: { order: 'asc' }
+                                    }
+                                },
+                                orderBy: { order: 'asc' }
+                            },
+                            event_type: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                }
                             }
                         },
                         orderBy: { order: 'asc' }
@@ -244,26 +295,73 @@ export async function getStudioProfileBySlug(
                 order: item.order,
             }));
 
-            const portfolios: PublicPortfolio[] = studio.portfolios.map(portfolio => ({
-                id: portfolio.id,
-                title: portfolio.title,
-                slug: portfolio.slug,
-                description: portfolio.description,
-                cover_image_url: portfolio.cover_image_url,
-                category: portfolio.category,
-                order: portfolio.order,
-                items: portfolio.items
-                    .filter(item => item.title !== null)
-                    .map(item => ({
+            const portfolios: PublicPortfolio[] = studio.portfolios.map(portfolio => {
+                // Mapear media para PortfolioDetailSection
+                const portfolioMedia = portfolio.media.map(item => ({
+                    id: item.id,
+                    file_url: item.file_url,
+                    file_type: item.file_type as 'image' | 'video',
+                    filename: item.filename,
+                    thumbnail_url: item.thumbnail_url || undefined,
+                    display_order: item.display_order,
+                }));
+
+                // Mapear content_blocks
+                const contentBlocks = portfolio.content_blocks.map(block => ({
+                    id: block.id,
+                    type: block.type as 'image' | 'gallery' | 'video' | 'text' | 'grid' | 'slider' | 'hero-contact' | 'hero-image' | 'hero-video' | 'hero-text' | 'hero' | 'separator' | 'media-gallery',
+                    title: block.title || undefined,
+                    description: block.description || undefined,
+                    presentation: block.presentation as 'block' | 'fullwidth',
+                    config: block.config || undefined,
+                    order: block.order,
+                    media: block.block_media.map(bm => ({
+                        id: bm.media.id,
+                        file_url: bm.media.file_url,
+                        file_type: bm.media.file_type as 'image' | 'video',
+                        filename: bm.media.filename,
+                        storage_path: '',
+                        thumbnail_url: bm.media.thumbnail_url || undefined,
+                        display_order: bm.order,
+                    })),
+                }));
+
+                // Priorizar items (estructura nueva) sobre media (legacy) - para compatibilidad
+                const portfolioItems = portfolio.items.length > 0
+                    ? portfolio.items.map(item => ({
                         id: item.id,
-                        title: item.title as string,
+                        title: item.title || 'Sin título',
                         description: item.description,
                         image_url: item.image_url,
                         video_url: item.video_url,
                         item_type: item.item_type as 'PHOTO' | 'VIDEO',
                         order: item.order,
-                    })),
-            }));
+                    }))
+                    : [];
+
+                return {
+                    id: portfolio.id,
+                    title: portfolio.title,
+                    slug: portfolio.slug,
+                    description: portfolio.description,
+                    caption: portfolio.caption,
+                    cover_image_url: portfolio.cover_image_url,
+                    category: portfolio.category,
+                    order: portfolio.order,
+                    is_featured: portfolio.is_featured,
+                    published_at: portfolio.published_at,
+                    view_count: portfolio.view_count,
+                    cover_index: portfolio.cover_index,
+                    tags: portfolio.tags || [],
+                    items: portfolioItems,
+                    media: portfolioMedia,
+                    content_blocks: contentBlocks,
+                    event_type: portfolio.event_type ? {
+                        id: portfolio.event_type.id,
+                        nombre: portfolio.event_type.name,
+                    } : null,
+                };
+            });
 
             // Obtener paquetes del estudio
             const paquetes = await prisma.studio_paquetes.findMany({

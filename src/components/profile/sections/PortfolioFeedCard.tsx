@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { ZenCard, ZenCardContent, ZenCardTitle } from '@/components/ui/zen';
 import { Image as ImageIcon, Eye } from 'lucide-react';
+import { PortfolioCardMenu } from './PortfolioCardMenu';
 
 interface PortfolioFeedCardProps {
     portfolio: {
@@ -16,6 +17,7 @@ interface PortfolioFeedCardProps {
         cover_image_url?: string | null;
         items: Array<{ id: string }>;
         view_count?: number;
+        is_published?: boolean;
     };
     onPortfolioClick?: (portfolioSlug: string) => void;
 }
@@ -48,10 +50,25 @@ export function PortfolioFeedCard({ portfolio, onPortfolioClick }: PortfolioFeed
 
     return (
         <ZenCard
-            className="overflow-hidden cursor-pointer hover:border-zinc-700 transition-all duration-300 group"
+            className="cursor-pointer hover:border-zinc-700 transition-all duration-300 group overflow-hidden"
             onClick={handleClick}
         >
             <div className="flex flex-col">
+                {/* Header: Title + Menu - Arriba de la imagen */}
+                <div className="p-4 pb-3 flex items-center justify-between gap-2 relative z-10">
+                    <h3 className="text-base font-semibold text-white group-hover:text-emerald-400 transition-colors flex-1 truncate">
+                        {portfolio.title}
+                    </h3>
+
+                    {/* Menú contextual - Solo si está autenticado */}
+                    <PortfolioCardMenu
+                        portfolioId={portfolio.id}
+                        portfolioSlug={portfolio.slug}
+                        studioSlug={studioSlug}
+                        isPublished={portfolio.is_published ?? true}
+                    />
+                </div>
+
                 {/* Cover Image - Full width aspect-video */}
                 <div className="relative w-full aspect-video bg-zinc-800 overflow-hidden">
                     {portfolio.cover_image_url ? (
@@ -70,14 +87,9 @@ export function PortfolioFeedCard({ portfolio, onPortfolioClick }: PortfolioFeed
                     )}
                 </div>
 
-                {/* Content */}
-                <ZenCardContent className="p-6">
+                {/* Content - Category y Stats */}
+                <ZenCardContent className="p-4 pt-3">
                     <div className="space-y-2">
-                        {/* Title */}
-                        <ZenCardTitle className="text-xl font-semibold text-white group-hover:text-emerald-400 transition-colors">
-                            {portfolio.title}
-                        </ZenCardTitle>
-
                         {/* Category */}
                         {portfolio.category && (
                             <p className="text-sm text-zinc-400">
@@ -86,7 +98,7 @@ export function PortfolioFeedCard({ portfolio, onPortfolioClick }: PortfolioFeed
                         )}
 
                         {/* Footer: Item count + Stats */}
-                        <div className="flex items-center justify-between pt-2">
+                        <div className="flex items-center justify-between pt-1">
                             {/* Item count */}
                             <p className="text-xs text-zinc-500">
                                 {portfolio.items.length} {portfolio.items.length === 1 ? 'elemento' : 'elementos'}

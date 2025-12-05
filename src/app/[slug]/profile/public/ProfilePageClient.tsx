@@ -187,18 +187,6 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
     const hasNextPortfolio = currentPortfolioIndex >= 0 && currentPortfolioIndex < portfolios.length - 1;
     const hasPrevPortfolio = currentPortfolioIndex > 0;
 
-    // Debug: Log portfolio seleccionado
-    React.useEffect(() => {
-        if (selectedPortfolio) {
-            console.log('🎨 [ProfilePageClient] Portfolio seleccionado:', {
-                title: selectedPortfolio.title,
-                slug: selectedPortfolio.slug,
-                itemsCount: selectedPortfolio.items?.length || 0,
-                items: selectedPortfolio.items
-            });
-        }
-    }, [selectedPortfolio]);
-
     return (
         <div className="min-h-screen bg-zinc-950">
             {/* Header - Compartido sticky */}

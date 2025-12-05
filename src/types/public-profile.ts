@@ -4,6 +4,8 @@
 // Types for public-facing studio profile pages
 // Used in /[slug] route for public studio profiles
 
+import { ContentBlock } from './content-blocks';
+
 export interface PublicZonaTrabajo {
     id: string;
     nombre: string;
@@ -90,11 +92,29 @@ export interface PublicPortfolio {
     title: string;
     slug: string;
     description: string | null;
+    caption?: string | null;
     cover_image_url: string | null;
     category: string | null;
     tags?: string[];
     order: number;
+    is_featured?: boolean;
+    published_at?: Date | null;
+    view_count?: number;
+    cover_index?: number;
     items: PublicPortfolioItem[];
+    media?: Array<{
+        id: string;
+        file_url: string;
+        file_type: 'image' | 'video';
+        filename: string;
+        thumbnail_url?: string;
+        display_order: number;
+    }>;
+    content_blocks?: ContentBlock[];
+    event_type?: {
+        id: string;
+        nombre: string;
+    } | null;
 }
 
 export interface PublicHorario {

@@ -5,6 +5,7 @@
 // Used in server actions for data validation
 
 import { z } from 'zod';
+import { ComponentType } from '@/types/content-blocks';
 
 // Base schemas
 export const PublicStudioProfileSchema = z.object({
@@ -49,8 +50,8 @@ export const PublicPortfolioItemSchema = z.object({
     id: z.string(),
     title: z.string(),
     description: z.string().nullable(),
-    image_url: z.string().nullable(),
-    video_url: z.string().nullable(),
+    image_url: z.string().optional(),
+    video_url: z.string().optional(),
     item_type: z.enum(['PHOTO', 'VIDEO']),
     order: z.number(),
 });
@@ -60,10 +61,47 @@ export const PublicPortfolioSchema = z.object({
     title: z.string(),
     slug: z.string(),
     description: z.string().nullable(),
+    caption: z.string().nullable(),
     cover_image_url: z.string().nullable(),
     category: z.string().nullable(),
     order: z.number(),
+    is_featured: z.boolean(),
+    published_at: z.date().nullable(),
+    view_count: z.number(),
+    cover_index: z.number(),
+    tags: z.array(z.string()),
     items: z.array(PublicPortfolioItemSchema),
+    media: z.array(z.object({
+        id: z.string(),
+        file_url: z.string(),
+        file_type: z.enum(['image', 'video']),
+        filename: z.string(),
+        thumbnail_url: z.string().optional(),
+        display_order: z.number(),
+    })),
+    content_blocks: z.array(z.object({
+        id: z.string(),
+        type: z.enum(['image', 'gallery', 'video', 'text', 'grid', 'slider', 'hero-contact', 'hero-image', 'hero-video', 'hero-text', 'hero', 'separator', 'media-gallery'] as const),
+        title: z.string().nullable().optional(),
+        description: z.string().nullable().optional(),
+        presentation: z.enum(['block', 'fullwidth'] as const),
+        config: z.any().optional(),
+        order: z.number(),
+        media: z.array(z.object({
+            id: z.string(),
+            file_url: z.string(),
+            file_type: z.enum(['image', 'video'] as const),
+            filename: z.string(),
+            storage_path: z.string().optional(),
+            storage_bytes: z.number().optional(),
+            thumbnail_url: z.string().nullable().optional(),
+            display_order: z.number().optional(),
+        })),
+    })),
+    event_type: z.object({
+        id: z.string(),
+        nombre: z.string(),
+    }).nullable(),
 });
 
 export const PublicPaqueteSchema = z.object({

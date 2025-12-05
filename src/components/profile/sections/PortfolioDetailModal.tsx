@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Eye, Link2 } from 'lucide-react';
-import { PortfolioRenderer } from '@/components/portfolio/PortfolioRenderer';
+import { ChevronLeft, ChevronRight, Link2, X } from 'lucide-react';
+import { PortfolioDetailSection } from './PortfolioDetailSection';
 import { PublicPortfolio } from '@/types/public-profile';
+import { ContentBlock } from '@/types/content-blocks';
 import { useContentAnalytics, useTimeTracking, useScrollTracking } from '@/hooks/useContentAnalytics';
 
 interface PortfolioDetailModalProps {
@@ -25,7 +26,6 @@ interface PortfolioDetailModalProps {
  */
 export function PortfolioDetailModal({
     portfolio,
-    studioSlug,
     studioId,
     ownerUserId,
     isOpen,
@@ -61,7 +61,7 @@ export function PortfolioDetailModal({
         contentType: 'PORTFOLIO',
         contentId: portfolio?.id || '',
         ownerUserId,
-        elementRef: contentRef
+        elementRef: contentRef as React.RefObject<HTMLElement>
     });
 
     // Track modal open/close
@@ -137,9 +137,11 @@ export function PortfolioDetailModal({
                     {/* Header - Fixed con backdrop-blur */}
                     <div className="shrink-0 bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800/50 p-4">
                         <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                                <h1 className="font-semibold text-zinc-100 text-lg truncate">
-                                    {portfolio.title}
+                            <div className="flex-1 min-w-0 mr-3">
+                                <h1 className="font-semibold text-zinc-100 text-lg">
+                                    {portfolio.title.length > 20
+                                        ? `${portfolio.title.slice(0, 20)}...`
+                                        : portfolio.title}
                                 </h1>
                                 {portfolio.category && (
                                     <p className="text-xs text-zinc-400">
@@ -192,9 +194,10 @@ export function PortfolioDetailModal({
                                 {/* Close button */}
                                 <button
                                     onClick={handleClose}
-                                    className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors px-2"
+                                    className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+                                    aria-label="Cerrar"
                                 >
-                                    Cerrar
+                                    <X className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
@@ -203,13 +206,23 @@ export function PortfolioDetailModal({
                     {/* Content - Con scroll interno */}
                     <div
                         ref={contentRef}
-                        className="flex-1 overflow-y-auto overflow-x-hidden"
+                        className="flex-1 overflow-y-auto overflow-x-hidden p-4"
                     >
-                        <PortfolioRenderer
-                            portfolio={portfolio}
-                            studioSlug={studioSlug}
-                            studioId={studioId}
-                            ownerUserId={ownerUserId}
+                        <PortfolioDetailSection
+                            portfolio={{
+                                ...portfolio,
+                                caption: portfolio.caption || null,
+                                tags: portfolio.tags || [],
+                                is_featured: portfolio.is_featured || false,
+                                is_published: true,
+                                published_at: portfolio.published_at || null,
+                                view_count: portfolio.view_count || 0,
+                                media: portfolio.media || [],
+                                cover_index: portfolio.cover_index || 0,
+                                content_blocks: (portfolio.content_blocks || []) as ContentBlock[],
+                                event_type: portfolio.event_type || null
+                            }}
+                            hideHeader={true}
                         />
                     </div>
 
