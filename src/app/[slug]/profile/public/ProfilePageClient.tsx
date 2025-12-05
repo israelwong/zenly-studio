@@ -150,6 +150,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
                                 activeTab={activeTab}
                                 profileData={profileData}
                                 onPostClick={handlePostClick}
+                                studioId={studio.id}
                             />
 
                             {/* Mobile-only: Promociones inline */}
@@ -168,6 +169,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
                         <OffersCard
                             offers={offers}
                             studioSlug={studioSlug}
+                            studioId={studio.id}
                         />
 
                         {/* Card Presentación del Negocio */}

@@ -60,7 +60,7 @@ const DEDUPE_WINDOW = 3000; // 3 segundos
  */
 export async function trackContentEvent(input: TrackEventInput) {
   try {
-    const headersList = headers();
+    const headersList = await headers();
 
     // Obtener contexto del request
     const ip_address = headersList.get('x-forwarded-for')?.split(',')[0] ||

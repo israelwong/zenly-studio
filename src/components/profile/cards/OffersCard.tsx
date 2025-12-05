@@ -17,6 +17,7 @@ interface PublicOffer {
 interface OffersCardProps {
     offers: PublicOffer[];
     studioSlug: string;
+    studioId?: string;
 }
 
 /**
@@ -27,10 +28,7 @@ interface OffersCardProps {
  * - SIDEBAR_VIEW: Trackea cuando oferta es visible ≥50% durante ≥1s
  * - OFFER_CLICK: Trackea cuando hacen click
  */
-export function OffersCard({ offers, studioSlug }: OffersCardProps) {
-    const params = useParams();
-    const studioId = params?.slug as string;
-
+export function OffersCard({ offers, studioSlug, studioId }: OffersCardProps) {
     // No mostrar card si no hay ofertas
     if (!offers || offers.length === 0) {
         return null;
@@ -62,7 +60,7 @@ export function OffersCard({ offers, studioSlug }: OffersCardProps) {
                     <OfferCardWithTracking
                         key={offer.id}
                         offer={offer}
-                        studioId={studioId}
+                        studioId={studioId || ''}
                         studioSlug={studioSlug}
                     />
                 ))}

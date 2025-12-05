@@ -9,6 +9,7 @@ interface ProfileContentViewProps {
     activeTab: string;
     profileData: PublicProfileData;
     onPostClick?: (postSlug: string) => void;
+    studioId?: string;
 }
 
 /**
@@ -16,7 +17,7 @@ interface ProfileContentViewProps {
  * Renders the appropriate view based on active tab
  * Handles tab switching logic and post modal
  */
-export function ProfileContentView({ activeTab, profileData, onPostClick }: ProfileContentViewProps) {
+export function ProfileContentView({ activeTab, profileData, onPostClick, studioId }: ProfileContentViewProps) {
     const { studio, contactInfo, portfolios, posts, paquetes } = profileData;
 
     switch (activeTab) {
@@ -26,6 +27,7 @@ export function ProfileContentView({ activeTab, profileData, onPostClick }: Prof
                     variant="inicio"
                     data={{ posts: posts || [] }}
                     onPostClick={onPostClick}
+                    studioId={studioId}
                 />
             );
 
