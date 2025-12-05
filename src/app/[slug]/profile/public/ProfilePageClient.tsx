@@ -15,6 +15,7 @@ import {
 } from '@/components/profile';
 import { PostDetailModal } from '@/components/profile/sections/PostDetailModal';
 import { PortfolioDetailModal } from '@/components/profile/sections/PortfolioDetailModal';
+import { SearchCommandPalette } from '@/components/profile/SearchCommandPalette';
 import { ProfileContentView } from './ProfileContentView';
 
 interface PublicOffer {
@@ -29,7 +30,7 @@ interface PublicOffer {
 interface ProfilePageClientProps {
     profileData: PublicProfileData;
     studioSlug: string;
-    offers: PublicOffer[];
+    offers?: PublicOffer[];
 }
 
 /**
@@ -37,14 +38,28 @@ interface ProfilePageClientProps {
  * Nueva estructura unificada responsive: mobile-first con 2 columnas en desktop
  * Maneja modals de post y portfolio con query params
  */
-export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePageClientProps) {
+export function ProfilePageClient({ profileData, studioSlug, offers = [] }: ProfilePageClientProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<string>('inicio');
     const [selectedPostSlug, setSelectedPostSlug] = useState<string | null>(null);
     const [selectedPortfolioSlug, setSelectedPortfolioSlug] = useState<string | null>(null);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
 
     const { studio, paquetes, posts, portfolios } = profileData;
+
+    // Keyboard shortcut para abrir buscador (Cmd+K / Ctrl+K)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setIsSearchOpen(true);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // Sincronizar query params con modals y tab
     useEffect(() => {
@@ -213,6 +228,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
                             <ProfileNavTabs
                                 activeTab={activeTab}
                                 onTabChange={handleTabChange}
+                                onSearchClick={() => setIsSearchOpen(true)}
                             />
                         </div>
 
@@ -291,6 +307,20 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
                 onPrev={handlePrevPortfolio}
                 hasNext={hasNextPortfolio}
                 hasPrev={hasPrevPortfolio}
+            />
+
+            {/* Search Command Palette */}
+            <SearchCommandPalette
+                isOpen={isSearchOpen}
+                onClose={() => setIsSearchOpen(false)}
+                posts={posts}
+                portfolios={portfolios}
+                offers={offers}
+                onSelectPost={handlePostClick}
+                onSelectPortfolio={handlePortfolioClick}
+                onSelectOffer={(slug) => {
+                    window.location.href = `/${studioSlug}/offer/${slug}`;
+                }}
             />
         </div>
     );

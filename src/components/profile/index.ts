@@ -14,6 +14,7 @@ export { PublicProfileEditButton } from './PublicProfileEditButton';
 export { ProfileNavTabs } from './ProfileNavTabs';
 export { ProfileContent } from './ProfileContent';
 export { ProfileFooter } from './ProfileFooter';
+export { SearchCommandPalette } from './SearchCommandPalette';
 // ProfileFAQ deprecated - usar FaqSection desde sections
 export { FaqSection as ProfileFAQ } from './sections';
 
