@@ -776,6 +776,7 @@ model studios {
   contract_templates         studio_contract_templates[]
   event_contracts            studio_event_contracts[]
   offers                     studio_offers[]
+  content_analytics          studio_content_analytics[]
   plan                       platform_plans?                  @relation(fields: [plan_id], references: [id])
   subscriptions              subscriptions[]
   usage_tracking             usage_tracking[]
@@ -3024,4 +3025,91 @@ enum TaskAction {
 enum PortfolioItemType {
   PHOTO
   VIDEO
+}
+
+//! ANALYTICS
+
+model studio_content_analytics {
+  id            String              @id @default(cuid())
+  studio_id     String
+  
+  // Entidad relacionada (polimórfica)
+  content_type  ContentType         // POST | PORTFOLIO | OFFER | PACKAGE
+  content_id    String              // ID del post/portfolio/offer/paquete
+  
+  // Tipo de evento
+  event_type    AnalyticsEventType
+  
+  // Contexto del usuario
+  user_id       String?             // Si está autenticado
+  ip_address    String?             // IP anónima para uniqueness
+  user_agent    String?             // Browser/device info
+  session_id    String?             // Para agrupar sesión
+  
+  // Contexto de origen
+  referrer      String?             // URL de origen
+  utm_source    String?
+  utm_medium    String?
+  utm_campaign  String?
+  utm_term      String?
+  utm_content   String?
+  
+  // Metadata adicional (JSON flexible)
+  metadata      Json?               // Ej: { "media_id": "xxx", "cta_type": "whatsapp" }
+  
+  // Timestamps
+  created_at    DateTime            @default(now())
+  
+  // Relaciones
+  studio        studios             @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  
+  // Índices optimizados
+  @@index([studio_id, content_type, content_id, event_type])
+  @@index([content_type, content_id, created_at])
+  @@index([studio_id, created_at])
+  @@index([event_type, created_at])
+  @@index([session_id])
+}
+
+enum ContentType {
+  POST
+  PORTFOLIO
+  OFFER
+  PACKAGE
+}
+
+enum AnalyticsEventType {
+  // Vistas
+  PAGE_VIEW       // Página dedicada cargada
+  FEED_VIEW       // Renderizado en feed/listado
+  
+  // Interacciones básicas
+  MODAL_OPEN      // Click para abrir modal/detalle
+  MODAL_CLOSE     // Cerrar modal
+  
+  // Navegación
+  NEXT_CONTENT    // Navegar al siguiente
+  PREV_CONTENT    // Navegar al anterior
+  
+  // Compartir
+  LINK_COPY       // Copiar link para compartir
+  SHARE_CLICK     // Click en botón de compartir
+  
+  // Media
+  MEDIA_CLICK     // Click en imagen/video
+  MEDIA_VIEW      // Ver media en lightbox
+  CAROUSEL_NEXT   // Siguiente en carousel
+  CAROUSEL_PREV   // Anterior en carousel
+  
+  // CTAs y conversiones
+  CTA_CLICK       // Click en CTA principal
+  WHATSAPP_CLICK  // Click en WhatsApp
+  FORM_VIEW       // Ver formulario (offers)
+  FORM_SUBMIT     // Enviar formulario (offers)
+  
+  // Engagement
+  SCROLL_50       // Scroll 50% del contenido
+  SCROLL_100      // Scroll 100% del contenido
+  TIME_30S        // Tiempo en página > 30s
+  TIME_60S        // Tiempo en página > 60s
 }
