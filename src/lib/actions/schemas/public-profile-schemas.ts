@@ -113,6 +113,7 @@ export const PublicPostSchema = z.object({
         file_url: z.string(),
         file_type: z.enum(['image', 'video']),
         filename: z.string(),
+        storage_path: z.string(),
         thumbnail_url: z.string().optional(),
         display_order: z.number(),
     })),

@@ -137,6 +137,7 @@ export interface PublicPost {
         file_url: string;
         file_type: 'image' | 'video';
         filename: string;
+        storage_path: string;
         thumbnail_url?: string;
         display_order: number;
     }>;

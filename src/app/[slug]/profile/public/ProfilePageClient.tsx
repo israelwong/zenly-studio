@@ -46,10 +46,16 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
 
     const { studio, paquetes, posts, portfolios } = profileData;
 
-    // Sincronizar query params con modals
+    // Sincronizar query params con modals y tab
     useEffect(() => {
         const postParam = searchParams.get('post');
         const portfolioParam = searchParams.get('portfolio');
+        const sectionParam = searchParams.get('section');
+
+        // Sincronizar tab desde URL
+        if (sectionParam && ['inicio', 'portafolio', 'contacto', 'faq'].includes(sectionParam)) {
+            setActiveTab(sectionParam);
+        }
 
         if (postParam) {
             setSelectedPostSlug(postParam);
@@ -63,16 +69,40 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
         }
     }, [searchParams]);
 
+    // Helper para construir URL con section
+    const buildUrl = (params: { post?: string; portfolio?: string; tab?: string }) => {
+        const urlParams = new URLSearchParams();
+
+        if (params.tab && params.tab !== 'inicio') {
+            urlParams.set('section', params.tab);
+        }
+        if (params.post) {
+            urlParams.set('post', params.post);
+        }
+        if (params.portfolio) {
+            urlParams.set('portfolio', params.portfolio);
+        }
+
+        const queryString = urlParams.toString();
+        return `/${studioSlug}${queryString ? `?${queryString}` : ''}`;
+    };
+
+    // Handler para cambio de tab
+    const handleTabChange = (tab: string) => {
+        setActiveTab(tab);
+        router.push(buildUrl({ tab }), { scroll: false });
+    };
+
     // Handlers para modal
     const handlePostClick = (postSlug: string) => {
         setSelectedPostSlug(postSlug);
-        router.push(`/${studioSlug}?post=${postSlug}`, { scroll: false });
+        router.push(buildUrl({ post: postSlug, tab: activeTab }), { scroll: false });
     };
 
     const handleCloseModal = () => {
         setSelectedPostSlug(null);
         setSelectedPortfolioSlug(null);
-        router.push(`/${studioSlug}`, { scroll: false });
+        router.push(buildUrl({ tab: activeTab }), { scroll: false });
     };
 
     const handleNextPost = () => {
@@ -81,7 +111,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
         if (currentIndex >= 0 && currentIndex < publishedPosts.length - 1) {
             const nextSlug = publishedPosts[currentIndex + 1].slug;
             setSelectedPostSlug(nextSlug);
-            router.push(`/${studioSlug}?post=${nextSlug}`, { scroll: false });
+            router.push(buildUrl({ post: nextSlug, tab: activeTab }), { scroll: false });
         }
     };
 
@@ -91,14 +121,14 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
         if (currentIndex > 0) {
             const prevSlug = publishedPosts[currentIndex - 1].slug;
             setSelectedPostSlug(prevSlug);
-            router.push(`/${studioSlug}?post=${prevSlug}`, { scroll: false });
+            router.push(buildUrl({ post: prevSlug, tab: activeTab }), { scroll: false });
         }
     };
 
     // Handlers para modal de portfolio
     const handlePortfolioClick = (portfolioSlug: string) => {
         setSelectedPortfolioSlug(portfolioSlug);
-        router.push(`/${studioSlug}?portfolio=${portfolioSlug}`, { scroll: false });
+        router.push(buildUrl({ portfolio: portfolioSlug, tab: activeTab }), { scroll: false });
     };
 
     const handleNextPortfolio = () => {
@@ -107,7 +137,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
         if (currentIndex >= 0 && currentIndex < portfolios.length - 1) {
             const nextSlug = portfolios[currentIndex + 1].slug;
             setSelectedPortfolioSlug(nextSlug);
-            router.push(`/${studioSlug}?portfolio=${nextSlug}`, { scroll: false });
+            router.push(buildUrl({ portfolio: nextSlug, tab: activeTab }), { scroll: false });
         }
     };
 
@@ -117,7 +147,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
         if (currentIndex > 0) {
             const prevSlug = portfolios[currentIndex - 1].slug;
             setSelectedPortfolioSlug(prevSlug);
-            router.push(`/${studioSlug}?portfolio=${prevSlug}`, { scroll: false });
+            router.push(buildUrl({ portfolio: prevSlug, tab: activeTab }), { scroll: false });
         }
     };
 
@@ -157,6 +187,18 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
     const hasNextPortfolio = currentPortfolioIndex >= 0 && currentPortfolioIndex < portfolios.length - 1;
     const hasPrevPortfolio = currentPortfolioIndex > 0;
 
+    // Debug: Log portfolio seleccionado
+    React.useEffect(() => {
+        if (selectedPortfolio) {
+            console.log('🎨 [ProfilePageClient] Portfolio seleccionado:', {
+                title: selectedPortfolio.title,
+                slug: selectedPortfolio.slug,
+                itemsCount: selectedPortfolio.items?.length || 0,
+                items: selectedPortfolio.items
+            });
+        }
+    }, [selectedPortfolio]);
+
     return (
         <div className="min-h-screen bg-zinc-950">
             {/* Header - Compartido sticky */}
@@ -182,7 +224,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
                         <div className="sticky top-[72px] z-20 bg-zinc-900/50 backdrop-blur-lg rounded-lg border border-zinc-800/20">
                             <ProfileNavTabs
                                 activeTab={activeTab}
-                                onTabChange={setActiveTab}
+                                onTabChange={handleTabChange}
                             />
                         </div>
 
