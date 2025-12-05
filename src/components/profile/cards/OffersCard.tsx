@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, Plus } from 'lucide-react';
 import { OfferCardWithTracking } from './OfferCardWithTracking';
 import { useParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PublicOffer {
     id: string;
@@ -30,6 +31,8 @@ interface OffersCardProps {
  * - OFFER_CLICK: Trackea cuando hacen click
  */
 export function OffersCard({ offers, studioSlug, studioId, ownerUserId }: OffersCardProps) {
+    const { user } = useAuth();
+
     // No mostrar card si no hay ofertas
     if (!offers || offers.length === 0) {
         return null;
@@ -37,6 +40,10 @@ export function OffersCard({ offers, studioSlug, studioId, ownerUserId }: Offers
 
     // Mostrar máximo 3 ofertas
     const displayOffers = offers.slice(0, 3);
+
+    const handleCreateOffer = () => {
+        window.open(`/${studioSlug}/studio/commercial/ofertas/nuevo`, '_blank');
+    };
 
     return (
         <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 space-y-4">
@@ -48,11 +55,20 @@ export function OffersCard({ offers, studioSlug, studioId, ownerUserId }: Offers
                         Ofertas Especiales
                     </h3>
                 </div>
-                {offers.length > 1 && (
+                {user ? (
+                    <button
+                        onClick={handleCreateOffer}
+                        className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded transition-colors"
+                        aria-label="Crear oferta"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        Crear
+                    </button>
+                ) : offers.length > 1 ? (
                     <span className="text-xs text-zinc-400">
                         {offers.length} {offers.length === 1 ? 'oferta' : 'ofertas'}
                     </span>
-                )}
+                ) : null}
             </div>
 
             {/* Content */}
@@ -64,6 +80,7 @@ export function OffersCard({ offers, studioSlug, studioId, ownerUserId }: Offers
                         studioId={studioId || ''}
                         studioSlug={studioSlug}
                         ownerUserId={ownerUserId}
+                        showMenu={!!user}
                     />
                 ))}
             </div>

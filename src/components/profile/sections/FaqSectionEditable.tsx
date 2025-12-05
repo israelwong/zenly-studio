@@ -248,7 +248,7 @@ export function FaqSectionEditable({ faq, studioSlug, isAuthenticated }: FaqSect
                                                 <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
                                             )}
                                         </button>
-                                        
+
                                         {isAuthenticated && (
                                             <div className="flex items-center gap-1 pr-2">
                                                 <button

@@ -3,6 +3,7 @@
 import React from 'react';
 import { PublicProfileData } from '@/types/public-profile';
 import { ProfileContent } from '@/components/profile';
+import { ArchivedContent } from '@/components/profile/sections/ArchivedContent';
 // PostGridView, ShopView, and InfoView are now handled by ProfileContent component
 
 interface ProfileContentViewProps {
@@ -74,6 +75,33 @@ export function ProfileContentView({ activeTab, profileData, onPostClick, onPort
                         contactInfo
                     }}
                 />
+            );
+
+        case 'archivados':
+            return studioSlug ? (
+                <ArchivedContent
+                    studioSlug={studioSlug}
+                    onPostClick={onPostClick}
+                    onPortfolioClick={onPortfolioClick}
+                    onPostRestored={(postId) => {
+                        // Callback para actualizar estado local
+                        if (typeof window !== 'undefined') {
+                            const win = window as typeof window & { __handleArchivedPostRestore?: (id: string) => void };
+                            win.__handleArchivedPostRestore?.(postId);
+                        }
+                    }}
+                    onPortfolioRestored={(portfolioId) => {
+                        // Callback para actualizar estado local
+                        if (typeof window !== 'undefined') {
+                            const win = window as typeof window & { __handleArchivedPortfolioRestore?: (id: string) => void };
+                            win.__handleArchivedPortfolioRestore?.(portfolioId);
+                        }
+                    }}
+                />
+            ) : (
+                <div className="text-center py-20 text-zinc-400">
+                    Error: Studio slug no disponible
+                </div>
             );
 
         default:

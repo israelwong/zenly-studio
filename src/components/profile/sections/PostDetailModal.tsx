@@ -41,6 +41,8 @@ interface PostDetailModalProps {
     onPrev?: () => void;
     hasNext?: boolean;
     hasPrev?: boolean;
+    isArchived?: boolean;
+    onRestore?: () => void;
 }
 
 /**
@@ -58,7 +60,9 @@ export function PostDetailModal({
     onNext,
     onPrev,
     hasNext = false,
-    hasPrev = false
+    hasPrev = false,
+    isArchived = false,
+    onRestore
 }: PostDetailModalProps) {
     // Manejar ESC para cerrar
     useEffect(() => {
@@ -137,6 +141,8 @@ export function PostDetailModal({
                         hasNext={hasNext}
                         hasPrev={hasPrev}
                         onClose={onClose}
+                        isArchived={isArchived}
+                        onRestore={onRestore}
                     />
 
                     {/* Footer con botón cerrar discreto - Menos alto */}

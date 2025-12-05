@@ -9,6 +9,7 @@ import { createStudioPostBySlug, updateStudioPost, checkPostSlugExists, getStudi
 import { PostFormData, MediaItem as PostMediaItem } from "@/lib/actions/schemas/post-schemas";
 import { useTempCuid } from "@/hooks/useTempCuid";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { useVideoThumbnailGenerator } from "@/hooks/useVideoThumbnailGenerator";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import { toast } from "sonner";
 import { generateSlug } from "@/lib/utils/slug-utils";
@@ -34,6 +35,7 @@ export function PostEditorSheet({
 }: PostEditorSheetProps) {
     const tempCuid = useTempCuid();
     const { uploadFiles, isUploading } = useMediaUpload();
+    const { generateMissingThumbnails, isGenerating: isGeneratingThumbnails } = useVideoThumbnailGenerator();
     const { triggerRefresh } = useStorageRefresh(studioSlug);
 
     // Estado del formulario
@@ -70,15 +72,22 @@ export function PostEditorSheet({
                 try {
                     setIsLoadingPost(true);
                     const result = await getStudioPostById(postId);
-                    
+
                     if (result.success && result.data) {
                         const post = result.data;
+
+                        // Generar thumbnails para videos que no los tienen
+                        const mediaWithThumbnails = await generateMissingThumbnails(
+                            post.media || [],
+                            studioSlug
+                        );
+
                         setFormData({
                             title: post.title || "",
                             slug: post.slug || "",
                             caption: post.caption || "",
                             tags: post.tags || [],
-                            media: post.media || [],
+                            media: mediaWithThumbnails,
                             is_published: post.is_published ?? true,
                             is_featured: post.is_featured ?? false,
                         });
@@ -97,7 +106,7 @@ export function PostEditorSheet({
         };
 
         loadPost();
-    }, [mode, postId, isOpen, onClose]);
+    }, [mode, postId, isOpen, onClose, generateMissingThumbnails, studioSlug]);
 
     // Reset form cuando se cierra
     useEffect(() => {
@@ -221,7 +230,7 @@ export function PostEditorSheet({
                     duration_seconds: undefined,
                     display_order: formData.media.length + index,
                     alt_text: undefined,
-                    thumbnail_url: undefined,
+                    thumbnail_url: uploadedFile.thumbnailUrl,
                 } as PostMediaItem;
             });
 
@@ -385,21 +394,21 @@ export function PostEditorSheet({
             />
 
             {/* Sheet */}
-            <div className="fixed top-0 right-0 h-full w-full sm:w-[600px] bg-zinc-900 border-l border-zinc-800 z-50 overflow-y-auto shadow-2xl">
+            <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-50 overflow-y-auto shadow-2xl">
                 {/* Header */}
-                <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-6 py-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-xl font-semibold text-zinc-100">
+                <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-lg sm:text-xl font-semibold text-zinc-100 truncate">
                                 {mode === "create" ? "Nuevo Post" : "Editar Post"}
                             </h2>
-                            <p className="text-sm text-zinc-400 mt-0.5">
+                            <p className="text-xs sm:text-sm text-zinc-400 mt-0.5 truncate">
                                 {mode === "create" ? "Crea una nueva publicación" : "Modifica tu publicación"}
                             </p>
                         </div>
                         <button
                             onClick={onClose}
-                            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+                            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors shrink-0"
                             aria-label="Cerrar"
                         >
                             <X className="w-5 h-5 text-zinc-400" />
@@ -408,14 +417,52 @@ export function PostEditorSheet({
                 </div>
 
                 {/* Content */}
-                {isLoadingPost ? (
-                    <div className="flex items-center justify-center h-96">
-                        <div className="text-zinc-400">Cargando...</div>
+                {isLoadingPost || isGeneratingThumbnails ? (
+                    <div className="p-4 sm:p-6 space-y-6">
+                        {/* Skeleton para controles superiores */}
+                        <div className="flex items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+                            <div className="h-6 w-24 bg-zinc-800 rounded animate-pulse" />
+                            <div className="h-8 w-28 bg-zinc-800 rounded animate-pulse" />
+                        </div>
+
+                        {/* Skeleton para título */}
+                        <div className="space-y-2">
+                            <div className="h-4 w-16 bg-zinc-800 rounded animate-pulse" />
+                            <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
+                        </div>
+
+                        {/* Skeleton para slug */}
+                        <div className="space-y-2">
+                            <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
+                            <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
+                        </div>
+
+                        {/* Skeleton para descripción */}
+                        <div className="space-y-2">
+                            <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
+                            <div className="h-32 w-full bg-zinc-800 rounded animate-pulse" />
+                        </div>
+
+                        {/* Skeleton para multimedia */}
+                        <div className="space-y-2">
+                            <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="aspect-square bg-zinc-800 rounded animate-pulse" />
+                                <div className="aspect-square bg-zinc-800 rounded animate-pulse" />
+                                <div className="aspect-square bg-zinc-800 rounded animate-pulse" />
+                            </div>
+                        </div>
+
+                        {/* Skeleton para palabras clave */}
+                        <div className="space-y-2">
+                            <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+                            <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
+                        </div>
                     </div>
                 ) : (
-                    <div className="p-6 space-y-6">
+                    <div className="p-4 sm:p-6 space-y-6">
                         {/* Controles superiores */}
-                        <div className="flex items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 pb-4 border-b border-zinc-800">
                             <ZenSwitch
                                 checked={formData.is_published}
                                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_published: checked }))}
@@ -426,7 +473,7 @@ export function PostEditorSheet({
                                 variant={formData.is_featured ? undefined : "outline"}
                                 size="sm"
                                 onClick={() => setFormData(prev => ({ ...prev, is_featured: !prev.is_featured }))}
-                                className={`rounded-full ${formData.is_featured ? "bg-amber-500 hover:bg-amber-600 text-black border-amber-500" : ""}`}
+                                className={`rounded-full w-full sm:w-auto ${formData.is_featured ? "bg-amber-500 hover:bg-amber-600 text-black border-amber-500" : ""}`}
                             >
                                 <Star className={`w-4 h-4 mr-1.5 ${formData.is_featured ? 'fill-current' : ''}`} />
                                 Destacar
@@ -449,41 +496,43 @@ export function PostEditorSheet({
 
                             {/* URL Preview */}
                             {formData.slug && (
-                                <div className="flex items-center gap-2">
-                                    <p className="text-xs text-zinc-500">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                    <p className="text-xs text-zinc-500 break-all">
                                         URL: <span className="text-zinc-400 font-mono">
                                             /{studioSlug}/post/{formData.slug}
                                         </span>
                                     </p>
-                                    {isValidatingSlug && (
-                                        <span className="text-xs text-zinc-500">Validando...</span>
-                                    )}
-                                    {!isValidatingSlug && formData.slug && !titleError && (
-                                        <span className="text-xs text-emerald-500">✓ Disponible</span>
-                                    )}
-                                    {formData.slug && !titleError && (
-                                        <button
-                                            type="button"
-                                            onClick={async () => {
-                                                const postUrl = `${window.location.origin}/${studioSlug}/post/${formData.slug}`;
-                                                try {
-                                                    await navigator.clipboard.writeText(postUrl);
-                                                    setLinkCopied(true);
-                                                    toast.success("Link copiado");
-                                                    setTimeout(() => setLinkCopied(false), 2000);
-                                                } catch {
-                                                    toast.error("Error al copiar");
-                                                }
-                                            }}
-                                            className="p-1 hover:bg-zinc-800 rounded transition-colors"
-                                        >
-                                            {linkCopied ? (
-                                                <Check className="w-3 h-3 text-emerald-500" />
-                                            ) : (
-                                                <Copy className="w-3 h-3 text-zinc-400" />
-                                            )}
-                                        </button>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                        {isValidatingSlug && (
+                                            <span className="text-xs text-zinc-500">Validando...</span>
+                                        )}
+                                        {!isValidatingSlug && formData.slug && !titleError && (
+                                            <span className="text-xs text-emerald-500">✓ Disponible</span>
+                                        )}
+                                        {formData.slug && !titleError && (
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    const postUrl = `${window.location.origin}/${studioSlug}/post/${formData.slug}`;
+                                                    try {
+                                                        await navigator.clipboard.writeText(postUrl);
+                                                        setLinkCopied(true);
+                                                        toast.success("Link copiado");
+                                                        setTimeout(() => setLinkCopied(false), 2000);
+                                                    } catch {
+                                                        toast.error("Error al copiar");
+                                                    }
+                                                }}
+                                                className="p-1 hover:bg-zinc-800 rounded transition-colors"
+                                            >
+                                                {linkCopied ? (
+                                                    <Check className="w-3 h-3 text-emerald-500" />
+                                                ) : (
+                                                    <Copy className="w-3 h-3 text-zinc-400" />
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -511,8 +560,8 @@ export function PostEditorSheet({
                             </div>
                             <ImageGrid
                                 media={formData.media as MediaItem[]}
-                                columns={2}
-                                gap={3}
+                                columns={3}
+                                gap={2}
                                 showDeleteButtons={true}
                                 onDelete={handleDeleteMedia}
                                 onReorder={handleReorderMedia}
@@ -529,7 +578,7 @@ export function PostEditorSheet({
                             <label className="block text-sm font-medium text-zinc-300 mb-2">
                                 Palabras clave
                             </label>
-                            <div className="flex gap-2">
+                            <div className="flex items-end gap-2">
                                 <div className="flex-1">
                                     <ZenInput
                                         value={tagInput}
@@ -548,7 +597,8 @@ export function PostEditorSheet({
                                     type="button"
                                     onClick={handleAddTag}
                                     variant="outline"
-                                    className="px-3"
+                                    size="default"
+                                    className="h-10 px-3 shrink-0"
                                 >
                                     <Plus className="h-4 w-4" />
                                 </ZenButton>
@@ -580,13 +630,13 @@ export function PostEditorSheet({
                 )}
 
                 {/* Footer */}
-                <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-6 py-4">
-                    <div className="flex gap-3">
+                <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-4 sm:px-6 py-3 sm:py-4">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                         <ZenButton
                             onClick={handleSave}
-                            className="flex-1"
+                            className="flex-1 w-full"
                             loading={isSaving}
-                            disabled={isSaving || isValidatingSlug || !!titleError || isLoadingPost}
+                            disabled={isSaving || isValidatingSlug || !!titleError || isLoadingPost || isGeneratingThumbnails}
                         >
                             {mode === "create" ? "Crear Post" : "Actualizar"}
                         </ZenButton>
@@ -594,6 +644,7 @@ export function PostEditorSheet({
                             variant="outline"
                             onClick={onClose}
                             disabled={isSaving}
+                            className="w-full sm:w-auto"
                         >
                             Cancelar
                         </ZenButton>

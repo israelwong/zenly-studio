@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { optimizeImage, analyzeVideo, validateFileSize, formatBytes } from '@/lib/utils/image-optimizer';
+import { generateVideoThumbnail, optimizeVideoThumbnail } from '@/lib/utils/video-thumbnail';
 import { deleteFileStorage } from '@/lib/actions/shared/media.actions';
 import { toast } from 'sonner';
 
@@ -12,6 +13,7 @@ interface UploadedFile {
   isUploading?: boolean;
   originalSize?: number;
   compressionRatio?: number;
+  thumbnailUrl?: string;
 }
 
 // Supabase client para uploads directo
@@ -81,6 +83,7 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
             let fileToUpload = file;
             let originalSize = file.size;
             let compressionRatio = 0;
+            let thumbnailUrl: string | undefined;
 
             // Optimizar si es imagen
             if (file.type.startsWith('image/')) {
@@ -98,6 +101,42 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
               }
             } else if (file.type.startsWith('video/')) {
               await analyzeVideo(file);
+
+              // Generar thumbnail del video
+              try {
+                toast.info(`Generando thumbnail de ${file.name}...`);
+                const thumbnail = await generateVideoThumbnail(file);
+                const optimizedThumbnail = await optimizeVideoThumbnail(thumbnail);
+
+                // Subir thumbnail
+                const thumbPath = generateSupabasePath(
+                  studioSlug,
+                  category,
+                  subcategory ? `${subcategory}/thumbnails` : 'thumbnails',
+                  thumbnail.name
+                );
+
+                const { data: thumbData, error: thumbError } = await supabase.storage
+                  .from(BUCKET_NAME)
+                  .upload(thumbPath, optimizedThumbnail, {
+                    cacheControl: '3600',
+                    upsert: true,
+                    contentType: 'image/jpeg',
+                  });
+
+                if (!thumbError && thumbData?.path) {
+                  const { data: { publicUrl: thumbPublicUrl } } = supabase.storage
+                    .from(BUCKET_NAME)
+                    .getPublicUrl(thumbData.path);
+
+                  thumbnailUrl = `${thumbPublicUrl}?t=${Date.now()}`;
+                  toast.success(`Thumbnail generado para ${file.name}`);
+                } else {
+                  console.warn('No se pudo subir thumbnail:', thumbError);
+                }
+              } catch (error) {
+                console.warn(`No se pudo generar thumbnail para ${file.name}:`, error);
+              }
             }
 
             // Generar ruta
@@ -148,6 +187,7 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
               size: finalSize,
               originalSize: originalSize !== finalSize ? originalSize : undefined,
               compressionRatio: compressionRatio > 0 ? compressionRatio : undefined,
+              thumbnailUrl,
             });
 
             // Notificar cambio de tamaño

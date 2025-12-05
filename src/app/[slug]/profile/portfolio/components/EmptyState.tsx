@@ -25,7 +25,7 @@ export function EmptyState({ studioSlug }: EmptyStateProps) {
             </p>
 
             {studioSlug && (
-                <Link href={`/${studioSlug}/profile/edit/content/portfolios/nuevo`}>
+                <Link href={`/${studioSlug}/profile/portfolio/nuevo`}>
                     <ZenButton className="gap-2">
                         <Plus className="w-4 h-4" />
                         Crear mi primer portfolio

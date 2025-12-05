@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Home, Folder, Phone, HelpCircle, Search } from 'lucide-react';
+import { Home, Folder, Phone, HelpCircle, Search, Archive } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProfileNavTabsProps {
     activeTab: string;
@@ -18,12 +19,19 @@ interface ProfileNavTabsProps {
  * - Preview del builder
  */
 export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick }: ProfileNavTabsProps) {
-    const tabs = [
+    const { user } = useAuth();
+
+    const baseTabs = [
         { id: 'inicio', label: 'Inicio', icon: Home },
         { id: 'portafolio', label: 'Portafolio', icon: Folder },
         { id: 'contacto', label: 'Contacto', icon: Phone },
         { id: 'faq', label: 'FAQ', icon: HelpCircle },
     ];
+
+    // Agregar tab "Archivados" solo si usuario autenticado
+    const tabs = user
+        ? [...baseTabs, { id: 'archivados', label: 'Archivados', icon: Archive }]
+        : baseTabs;
 
     return (
         <div className="p-2">

@@ -15,6 +15,7 @@ export { ProfileNavTabs } from './ProfileNavTabs';
 export { ProfileContent } from './ProfileContent';
 export { ProfileFooter } from './ProfileFooter';
 export { SearchCommandPalette } from './SearchCommandPalette';
+export { MediaDisplay } from './MediaDisplay';
 // ProfileFAQ deprecated - usar FaqSection desde sections
 export { FaqSection as ProfileFAQ } from './sections';
 

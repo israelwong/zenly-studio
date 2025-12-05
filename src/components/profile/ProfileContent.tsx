@@ -162,12 +162,12 @@ export function ProfileContent({
             orden: number;
             is_active: boolean;
         }> || [];
-        
+
         // Si está autenticado y tiene studioSlug, usar versión editable
         if (user && studioSlug) {
             return <FaqSectionEditable faq={faq} studioSlug={studioSlug} isAuthenticated={true} />;
         }
-        
+
         return <FaqSection faq={faq} loading={loading} />;
     }
 

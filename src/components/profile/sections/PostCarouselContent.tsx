@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import Image from 'next/image';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { MediaItem } from '@/types/content-blocks';
 import Glide from '@glidejs/glide';
 import '@glidejs/glide/dist/css/glide.core.min.css';
@@ -10,6 +8,7 @@ import '@glidejs/glide/dist/css/glide.theme.min.css';
 import Lightbox from "yet-another-react-lightbox";
 import Video from "yet-another-react-lightbox/plugins/video";
 import "yet-another-react-lightbox/styles.css";
+import { MediaDisplay } from '../MediaDisplay';
 
 interface PostMedia {
     id: string;
@@ -31,7 +30,6 @@ interface PostCarouselContentProps {
 export function PostCarouselContent({ media }: PostCarouselContentProps) {
     const glideRef = useRef<HTMLDivElement>(null);
     const glideInstanceRef = useRef<Glide | null>(null);
-    const videoRefsRef = useRef<Map<number, HTMLVideoElement>>(new Map());
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
 
@@ -45,15 +43,6 @@ export function PostCarouselContent({ media }: PostCarouselContentProps) {
         storage_path: item.file_url,
         display_order: item.display_order,
     }));
-
-    // Obtener referencias de videos desde VideoPostCarousel
-    const setVideoRef = (index: number) => (video: HTMLVideoElement | null) => {
-        if (video) {
-            videoRefsRef.current.set(index, video);
-        } else {
-            videoRefsRef.current.delete(index);
-        }
-    };
 
     // Preparar slides para lightbox
     const lightboxSlides = mediaItems.map(item => {
@@ -158,44 +147,16 @@ export function PostCarouselContent({ media }: PostCarouselContentProps) {
                                         className="relative w-full h-full cursor-pointer overflow-hidden"
                                         onClick={() => handleImageClick(index)}
                                     >
-                                        {item.file_type === 'video' ? (
-                                            <video
-                                                ref={(el) => {
-                                                    setVideoRef(index)(el);
-                                                    if (el) {
-                                                        el.addEventListener('play', () => {
-                                                            // Pausar otros videos cuando este se reproduce
-                                                            videoRefsRef.current.forEach((vid, idx) => {
-                                                                if (vid && idx !== index) {
-                                                                    vid.pause();
-                                                                }
-                                                            });
-                                                        });
-                                                    }
-                                                }}
-                                                src={item.file_url}
-                                                poster={item.thumbnail_url}
-                                                className="w-full h-full object-cover"
-                                                controls
-                                                autoPlay
-                                                muted
-                                                playsInline
-                                                loop
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleImageClick(index);
-                                                }}
-                                            />
-                                        ) : (
-                                            <Image
-                                                src={item.file_url}
-                                                alt={item.filename}
-                                                fill
-                                                className="object-cover"
-                                                sizes="(max-width: 768px) 100vw, 80vw"
-                                                priority={index === 0}
-                                            />
-                                        )}
+                                        <MediaDisplay
+                                            src={item.file_url}
+                                            alt={item.filename}
+                                            fileType={item.file_type}
+                                            thumbnailUrl={item.thumbnail_url}
+                                            fill
+                                            className="object-cover"
+                                            sizes="(max-width: 768px) 100vw, 80vw"
+                                            priority={index === 0}
+                                        />
                                     </div>
                                 </li>
                             ))}

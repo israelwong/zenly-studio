@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { CaptionWithLinks } from '@/app/[slug]/profile/edit/content/posts/components/CaptionWithLinks';
+import { CaptionWithLinks } from '@/components/shared/CaptionWithLinks';
 import { ImageCarousel } from '@/components/shared/media';
 import { MediaItem } from '@/types/content-blocks';
 import Lightbox from "yet-another-react-lightbox";

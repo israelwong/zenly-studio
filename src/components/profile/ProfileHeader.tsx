@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { Plus, LogOut, LayoutDashboard, UserPlus, LogIn } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { PublicProfileEditButton } from './PublicProfileEditButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { logout } from '@/lib/actions/auth/logout.action';
 import { clearRememberMePreference } from '@/lib/supabase/storage-adapter';
@@ -17,7 +16,6 @@ interface ProfileHeaderProps {
     };
     loading?: boolean;
     studioSlug?: string;
-    showEditButton?: boolean; // Control para mostrar botón editar
     onCreatePost?: () => void; // Callback para abrir sheet de crear post
 }
 
@@ -29,7 +27,7 @@ interface ProfileHeaderProps {
  * - Builder preview (header sticky)
  * - Perfil público (header completo)
  */
-export function ProfileHeader({ data, loading = false, studioSlug, showEditButton = true, onCreatePost }: ProfileHeaderProps) {
+export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost }: ProfileHeaderProps) {
     const router = useRouter();
     const { user } = useAuth();
     const studioData = data || {};
@@ -165,9 +163,6 @@ export function ProfileHeader({ data, loading = false, studioSlug, showEditButto
                                         </button>
                                     </>
                                 )}
-
-                                {/* Botón Editar */}
-                                {showEditButton && studioSlug && <PublicProfileEditButton studioSlug={studioSlug} />}
 
                                 {/* Botón Cerrar Sesión */}
                                 <button

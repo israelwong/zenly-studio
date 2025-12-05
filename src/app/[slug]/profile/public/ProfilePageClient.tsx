@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { PublicProfileData } from '@/types/public-profile';
 import {
     ProfileHeader,
@@ -51,6 +52,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
 
     const { studio, paquetes, posts, portfolios } = profileData;
 
+
     // Keyboard shortcut para abrir buscador (Cmd+K / Ctrl+K)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -71,7 +73,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
         const sectionParam = searchParams.get('section');
 
         // Sincronizar tab desde URL
-        if (sectionParam && ['inicio', 'portafolio', 'contacto', 'faq'].includes(sectionParam)) {
+        if (sectionParam && ['inicio', 'portafolio', 'contacto', 'faq', 'archivados'].includes(sectionParam)) {
             setActiveTab(sectionParam);
         }
 
@@ -185,7 +187,11 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
     }, [posts]);
 
     // Preparar post con info del studio para el modal
-    const selectedPost = publishedPosts.find(p => p.slug === selectedPostSlug);
+    // Buscar en todos los posts (incluyendo archivados si el usuario es owner)
+    const selectedPost = selectedPostSlug
+        ? posts?.find(p => p.slug === selectedPostSlug)
+        : null;
+
     const selectedPostWithStudio = selectedPost ? {
         ...selectedPost,
         studio: {
@@ -200,7 +206,10 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
     const hasPrevPost = currentPostIndex > 0;
 
     // Preparar portfolio seleccionado con info de disponibilidad de navegación
-    const selectedPortfolio = portfolios.find(p => p.slug === selectedPortfolioSlug);
+    // Buscar en todos los portfolios (incluyendo archivados) si hay slug seleccionado
+    const selectedPortfolio = selectedPortfolioSlug
+        ? portfolios?.find(p => p.slug === selectedPortfolioSlug)
+        : null;
     const currentPortfolioIndex = portfolios.findIndex(p => p.slug === selectedPortfolioSlug);
     const hasNextPortfolio = currentPortfolioIndex >= 0 && currentPortfolioIndex < portfolios.length - 1;
     const hasPrevPortfolio = currentPortfolioIndex > 0;
@@ -216,7 +225,6 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                         logo_url: studio.logo_url
                     }}
                     studioSlug={studioSlug}
-                    showEditButton={true}
                     onCreatePost={() => {
                         setEditingPostId(undefined);
                         setIsPostEditorOpen(true);
@@ -305,6 +313,24 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                 onPrev={handlePrevPost}
                 hasNext={hasNextPost}
                 hasPrev={hasPrevPost}
+                isArchived={selectedPost?.is_published === false}
+                onRestore={selectedPost?.is_published === false ? async () => {
+                    // Importar y llamar restorePost
+                    const { restorePost } = await import('@/lib/actions/studio/archive.actions');
+                    const result = await restorePost(selectedPost.id, studioSlug);
+                    if (result.success) {
+                        // Actualizar estado local de ArchivedContent
+                        if (typeof window !== 'undefined') {
+                            const win = window as typeof window & { __handleArchivedPostRestore?: (id: string) => void };
+                            win.__handleArchivedPostRestore?.(selectedPost.id);
+                        }
+                        toast.success('Post restaurado exitosamente');
+                        handleCloseModal();
+                        setTimeout(() => router.refresh(), 300);
+                    } else {
+                        toast.error(result.error || 'Error al restaurar');
+                    }
+                } : undefined}
             />
 
             {/* Portfolio Detail Modal */}

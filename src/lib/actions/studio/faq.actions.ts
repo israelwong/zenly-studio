@@ -77,7 +77,7 @@ export async function createFAQ(studioSlug: string, data: { pregunta: string; re
         });
 
         revalidatePath(`/${studioSlug}`);
-        
+
         return {
             success: true,
             data: faq
@@ -106,7 +106,7 @@ export async function updateFAQ(faqId: string, studioSlug: string, data: { pregu
         });
 
         revalidatePath(`/${studioSlug}`);
-        
+
         return {
             success: true,
             data: faq
@@ -130,7 +130,7 @@ export async function deleteFAQ(faqId: string, studioSlug: string) {
         });
 
         revalidatePath(`/${studioSlug}`);
-        
+
         return { success: true };
     } catch (error) {
         console.error("Error deleting FAQ:", error);
@@ -157,7 +157,7 @@ export async function reorderFAQs(studioSlug: string, faqIds: string[]) {
         );
 
         revalidatePath(`/${studioSlug}`);
-        
+
         return { success: true };
     } catch (error) {
         console.error("Error reordering FAQs:", error);

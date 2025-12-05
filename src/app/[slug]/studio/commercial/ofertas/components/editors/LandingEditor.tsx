@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { ZenButton } from "@/components/ui/zen";
 import { ContentBlocksEditor } from "@/components/shared/content-blocks";
-import { CategorizedComponentSelector, ComponentOption } from "@/app/[slug]/profile/edit/content/portfolios/components/CategorizedComponentSelector";
+import { CategorizedComponentSelector, ComponentOption } from "@/app/[slug]/profile/portfolio/components/CategorizedComponentSelector";
 import { useOfferEditor } from "../OfferEditorContext";
 import { ContentBlock } from "@/types/content-blocks";
 

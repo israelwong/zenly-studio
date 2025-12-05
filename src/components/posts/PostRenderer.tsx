@@ -11,7 +11,8 @@ import {
   ChevronRight,
   Eye,
   Link2,
-  X
+  X,
+  RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
 import { MediaItem } from "@/lib/actions/schemas/post-schemas";
@@ -28,6 +29,7 @@ interface PostRendererProps {
     view_count: number;
     tags: string[];
     event_type: { id: string; name: string } | null;
+    is_published?: boolean;
     cta_enabled: boolean;
     cta_action: string;
     cta_text: string;
@@ -43,9 +45,11 @@ interface PostRendererProps {
   hasNext?: boolean;
   hasPrev?: boolean;
   onClose?: () => void;
+  isArchived?: boolean;
+  onRestore?: () => void;
 }
 
-export function PostRenderer({ post, studioSlug, onNext, onPrev, hasNext, hasPrev, onClose }: PostRendererProps) {
+export function PostRenderer({ post, studioSlug, onNext, onPrev, hasNext, hasPrev, onClose, isArchived = false, onRestore }: PostRendererProps) {
   const [linkCopied, setLinkCopied] = React.useState(false);
 
   // Filtrar media que tenga id definido (requerido por ImageCarousel)
@@ -250,17 +254,27 @@ export function PostRenderer({ post, studioSlug, onNext, onPrev, hasNext, hasPre
             <span>{post.view_count} vistas</span>
           </div>
 
-          {/* Copiar link */}
-          <button
-            onClick={handleCopyLink}
-            className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-full transition-colors ${linkCopied
-              ? 'text-emerald-400 bg-emerald-950/50'
-              : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
-              }`}
-          >
-            <Link2 className="w-4 h-4" />
-            {linkCopied ? 'Link copiado' : 'Copiar link'}
-          </button>
+          {/* Botón condicional: Restaurar o Copiar link */}
+          {isArchived && onRestore ? (
+            <button
+              onClick={onRestore}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-full transition-colors text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Restaurar
+            </button>
+          ) : (
+            <button
+              onClick={handleCopyLink}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-full transition-colors ${linkCopied
+                ? 'text-emerald-400 bg-emerald-950/50'
+                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
+                }`}
+            >
+              <Link2 className="w-4 h-4" />
+              {linkCopied ? 'Link copiado' : 'Copiar link'}
+            </button>
+          )}
         </div>
 
         {/* Title and Caption */}

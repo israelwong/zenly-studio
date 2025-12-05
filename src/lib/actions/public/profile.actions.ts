@@ -14,6 +14,7 @@ import {
     PublicPortfolio
 } from "@/types/public-profile";
 import { PublicProfileDataSchema } from "@/lib/actions/schemas/public-profile-schemas";
+import { getCurrentUser } from "@/lib/auth/user-utils";
 
 /**
  * Get complete public studio profile by slug
@@ -27,8 +28,34 @@ export async function getStudioProfileBySlug(
         const validatedInput = GetStudioProfileInputSchema.parse(input);
         const { slug } = validatedInput;
 
+        // Check if user is owner (to include archived posts)
+        const currentUser = await getCurrentUser();
+        const userId = currentUser?.id || null;
 
         return await retryDatabaseOperation(async () => {
+            // First, get studio to check ownership
+            const studioCheck = await prisma.studios.findUnique({
+                where: { slug, is_active: true },
+                select: {
+                    id: true,
+                    studio_users: {
+                        where: { role: 'owner', is_active: true },
+                        select: { platform_user_id: true },
+                        take: 1
+                    }
+                }
+            });
+
+            if (!studioCheck) {
+                return {
+                    success: false,
+                    error: 'Studio not found'
+                };
+            }
+
+            const ownerId = studioCheck.studio_users[0]?.platform_user_id || null;
+            const isOwner = userId === ownerId;
+
             // Single query to get all profile data
             const studio = await prisma.studios.findUnique({
                 where: {
@@ -197,7 +224,7 @@ export async function getStudioProfileBySlug(
                         orderBy: { orden: 'asc' }
                     },
                     posts: {
-                        where: { is_published: true },
+                        where: isOwner ? {} : { is_published: true },
                         select: {
                             id: true,
                             slug: true,
@@ -461,4 +488,3 @@ export async function getStudioProfileBySlug(
         };
     }
 }
-

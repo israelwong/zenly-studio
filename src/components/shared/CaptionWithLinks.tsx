@@ -55,9 +55,8 @@ export function CaptionWithLinks({ caption, className = "" }: CaptionWithLinksPr
     const finalClassName = className ? className : defaultColor;
 
     return (
-        <div className={`leading-relaxed whitespace-pre-wrap font-light break-words overflow-wrap-anywhere ${finalClassName}`}>
+        <div className={`leading-relaxed whitespace-pre-wrap font-light wrap-break-word overflow-wrap-anywhere ${finalClassName}`}>
             {renderContent()}
         </div>
     );
 }
-

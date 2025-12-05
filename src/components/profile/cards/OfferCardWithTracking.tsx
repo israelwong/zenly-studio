@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useContentAnalytics } from '@/hooks/useContentAnalytics';
+import { OfferCardMenu } from './OfferCardMenu';
 
 interface PublicOffer {
     id: string;
@@ -17,6 +18,7 @@ interface OfferCardWithTrackingProps {
     studioId: string;
     studioSlug: string;
     ownerUserId?: string | null;
+    showMenu?: boolean;
 }
 
 /**
@@ -35,7 +37,8 @@ export function OfferCardWithTracking({
     offer,
     studioId,
     studioSlug,
-    ownerUserId
+    ownerUserId,
+    showMenu = false
 }: OfferCardWithTrackingProps) {
     const cardRef = useRef<HTMLDivElement>(null);
     const hasTrackedView = useRef(false);
@@ -98,7 +101,17 @@ export function OfferCardWithTracking({
     };
 
     return (
-        <div ref={cardRef}>
+        <div ref={cardRef} className="relative">
+            {/* Menu contextual */}
+            {showMenu && (
+                <div className="absolute top-2 right-2 z-10">
+                    <OfferCardMenu
+                        offerId={offer.id}
+                        studioSlug={studioSlug}
+                    />
+                </div>
+            )}
+
             <a
                 href={`/${studioSlug}/offer/${offer.slug}`}
                 onClick={handleClick}

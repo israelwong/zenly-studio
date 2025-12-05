@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LogOut, CreditCard, UserCircle, LayoutDashboard, Shield, Eye, Edit, Wallet } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { LogOut, CreditCard, UserCircle, Shield, Eye, Plus, FolderOpen } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { logout } from "@/lib/actions/auth/logout.action";
@@ -34,7 +33,6 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [imageError, setImageError] = useState(false);
-    const pathname = usePathname();
 
     // Escuchar cambios en el avatar
     const avatarRefreshTrigger = useAvatarRefreshListener();
@@ -53,7 +51,7 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
                 const authUser = studioSlug
                     ? await getCurrentUserClient(studioSlug)
                     : await getCurrentUserClient();
-                    
+
                 if (authUser) {
                     const avatarUrl = authUser.profile.avatarUrl && authUser.profile.avatarUrl.trim() !== ''
                         ? authUser.profile.avatarUrl
@@ -89,7 +87,7 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
         try {
             // Limpiar preferencia rememberMe al cerrar sesión explícitamente
             clearRememberMePreference();
-            
+
             await logout();
         } catch (error) {
             console.error("Error al cerrar sesión:", error);
@@ -128,23 +126,14 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
         .slice(0, 2);
 
     // Determinar rutas basadas en la ruta actual
-    const isInConfiguracion = pathname.includes('/configuracion');
-    const isInProfileEdit = pathname.includes('/profile/edit');
-    const isInStudio = pathname.includes('/studio');
     const basePath = studioSlug ? `/${studioSlug}/studio` : '';
-    const profilePath = studioSlug ? `/${studioSlug}/profile/edit` : '';
 
     // Rutas del menú
     const menuRoutes = {
-        editorPerfil: profilePath,
         verPerfilPublico: studioSlug ? `/${studioSlug}` : '',
-        studio: `${basePath}/dashboard`,
         perfil: `${basePath}/account/perfil`,
         seguridad: `${basePath}/account/seguridad`,
         suscripcion: `${basePath}/account/suscripcion`,
-        builder: `${basePath}/builder`,
-        configuracion: isInConfiguracion ? `${basePath}/dashboard` : `${basePath}/configuracion`,
-        metodosPago: `${basePath}/business/pagos`
     };
 
     return (
@@ -193,42 +182,24 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
                 {studioSlug && (
                     <>
                         <div className="px-2 py-1.5">
-                            <div className="text-xs font-medium text-zinc-400">Perfil Público</div>
+                            <div className="text-xs font-medium text-zinc-400">Perfil público</div>
                         </div>
-                        {!isInProfileEdit && (
-                            <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                                <Link href={menuRoutes.editorPerfil}>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    <span>Editor de Perfil</span>
-                                </Link>
-                            </ZenDropdownMenuItem>
-                        )}
                         <ZenDropdownMenuItem className="cursor-pointer" asChild>
                             <Link href={menuRoutes.verPerfilPublico} target="_blank" rel="noopener noreferrer">
                                 <Eye className="mr-2 h-4 w-4" />
-                                <span>Ver Perfil Público</span>
-                            </Link>
-                        </ZenDropdownMenuItem>
-                        <ZenDropdownMenuSeparator />
-                    </>
-                )}
-
-                {/* Studio */}
-                {studioSlug && (
-                    <>
-                        <div className="px-2 py-1.5">
-                            <div className="text-xs font-medium text-zinc-400">Studio</div>
-                        </div>
-                        <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                            <Link href={menuRoutes.studio}>
-                                <LayoutDashboard className="mr-2 h-4 w-4" />
-                                <span>Dashboard</span>
+                                <span>Visitar</span>
                             </Link>
                         </ZenDropdownMenuItem>
                         <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                            <Link href={menuRoutes.metodosPago}>
-                                <Wallet className="mr-2 h-4 w-4" />
-                                <span>Métodos de Pago</span>
+                            <Link href={`/${studioSlug}/profile/post`} target="_blank" rel="noopener noreferrer">
+                                <Plus className="mr-2 h-4 w-4" />
+                                <span>Crear post</span>
+                            </Link>
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuItem className="cursor-pointer" asChild>
+                            <Link href={`/${studioSlug}/profile/portfolio/nuevo`} target="_blank" rel="noopener noreferrer">
+                                <FolderOpen className="mr-2 h-4 w-4" />
+                                <span>Crear portafolio</span>
                             </Link>
                         </ZenDropdownMenuItem>
                         <ZenDropdownMenuSeparator />

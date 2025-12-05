@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { CaptionWithLinks } from '@/app/[slug]/profile/edit/content/posts/components/CaptionWithLinks';
+import { CaptionWithLinks } from '@/components/shared/CaptionWithLinks';
 import { PostCarouselContent } from './PostCarouselContent';
 import { PostCardMenu } from './PostCardMenu';
 import Lightbox from "yet-another-react-lightbox";
@@ -50,7 +50,13 @@ export function PostFeedCard({ post, onPostClick, onEditPost }: PostFeedCardProp
     const studioSlug = params?.slug as string;
     const { user } = useAuth();
     const [lightboxOpen, setLightboxOpen] = useState(false);
+    const [isClient, setIsClient] = useState(false);
     const firstMedia = post.media?.[0];
+
+    // Evitar hydration mismatch - solo calcular tiempo en cliente
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
 
     // Formatear números grandes
     const formatCount = (count: number): string => {
@@ -81,8 +87,10 @@ export function PostFeedCard({ post, onPostClick, onEditPost }: PostFeedCardProp
     };
 
     const relativeTime = useMemo(() => {
+        // Solo calcular en cliente para evitar hydration mismatch
+        if (!isClient) return '';
         return getRelativeTime(post.published_at);
-    }, [post.published_at]);
+    }, [post.published_at, isClient]);
 
     // Helpers para verificar valores vacíos
     const hasCaption = post.caption && post.caption.trim().length > 0;
@@ -132,7 +140,7 @@ export function PostFeedCard({ post, onPostClick, onEditPost }: PostFeedCardProp
                             {post.title}
                         </h3>
                     )}
-                    {post.published_at && (
+                    {post.published_at && isClient && relativeTime && (
                         <span className="text-zinc-500 text-xs">
                             {relativeTime}
                         </span>

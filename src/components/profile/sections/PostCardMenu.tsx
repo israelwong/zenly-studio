@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MoreVertical, Edit, Archive, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { archivePost, deletePost } from '@/lib/actions/studio/archive.actions';
 
 interface PostCardMenuProps {
     postId: string;
@@ -46,11 +47,25 @@ export function PostCardMenu({ postId, postSlug, studioSlug, isPublished, onEdit
     const handleArchiveConfirm = async () => {
         setIsArchiving(true);
         try {
-            // TODO: Implementar acción de archivar
-            toast.success('Post archivado correctamente');
-            setShowArchiveModal(false);
-            router.refresh();
+            const result = await archivePost(postId, studioSlug);
+
+            if (result.success) {
+                setShowArchiveModal(false);
+                setIsOpen(false);
+
+                toast.success('Post archivado', {
+                    description: 'El post ya no es visible en tu perfil público'
+                });
+
+                // Esperar un poco antes de refresh para que el toast se vea
+                setTimeout(() => {
+                    router.refresh();
+                }, 500);
+            } else {
+                toast.error(result.error || 'Error al archivar el post');
+            }
         } catch (error) {
+            console.error('Error archiving post:', error);
             toast.error('Error al archivar el post');
         } finally {
             setIsArchiving(false);
@@ -60,11 +75,24 @@ export function PostCardMenu({ postId, postSlug, studioSlug, isPublished, onEdit
     const handleDeleteConfirm = async () => {
         setIsDeleting(true);
         try {
-            // TODO: Implementar acción de eliminar
-            toast.success('Post eliminado correctamente');
-            setShowDeleteModal(false);
-            router.refresh();
+            const result = await deletePost(postId, studioSlug);
+
+            if (result.success) {
+                toast.success('Post eliminado correctamente', {
+                    description: 'El post ha sido eliminado permanentemente'
+                });
+                setShowDeleteModal(false);
+                setIsOpen(false);
+
+                // Esperar un poco antes de refresh para que el toast se vea
+                setTimeout(() => {
+                    router.refresh();
+                }, 500);
+            } else {
+                toast.error(result.error || 'Error al eliminar el post');
+            }
         } catch (error) {
+            console.error('Error deleting post:', error);
             toast.error('Error al eliminar el post');
         } finally {
             setIsDeleting(false);
