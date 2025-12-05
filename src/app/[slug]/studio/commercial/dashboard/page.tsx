@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { getStudioBySlug } from '@/lib/actions/studio/business/identity/identity.actions';
+import { getStudioProfileBySlug } from '@/lib/actions/public/profile.actions';
 import { getStudioAnalyticsSummary, getTopContent } from '@/lib/actions/studio/analytics/analytics-dashboard.actions';
 import { AnalyticsOverviewCards, TopContentList, AnalyticsSkeleton } from './components';
 import { LayoutDashboard, BarChart3, TrendingUp } from 'lucide-react';
@@ -12,10 +12,10 @@ interface DashboardPageProps {
 }
 
 async function DashboardContent({ studioSlug }: { studioSlug: string }) {
-    // Obtener studio ID
-    const studioResult = await getStudioBySlug(studioSlug);
+    // Obtener studio profile
+    const studioProfile = await getStudioProfileBySlug(studioSlug);
     
-    if (!studioResult.success || !studioResult.data) {
+    if (!studioProfile) {
         return (
             <div className="text-center py-12">
                 <p className="text-zinc-400">Error al cargar el studio</p>
@@ -23,7 +23,7 @@ async function DashboardContent({ studioSlug }: { studioSlug: string }) {
         );
     }
 
-    const studio = studioResult.data;
+    const studio = studioProfile.studio;
 
     // Obtener datos de analytics
     const [summaryResult, topContentResult] = await Promise.all([
