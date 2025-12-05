@@ -9,6 +9,7 @@ import { z } from 'zod';
 // Base schemas
 export const PublicStudioProfileSchema = z.object({
     id: z.string(),
+    owner_id: z.string().nullable().optional(),
     studio_name: z.string(),
     presentation: z.string().nullable(),
     keywords: z.string().nullable(),

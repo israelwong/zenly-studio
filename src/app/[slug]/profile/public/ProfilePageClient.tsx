@@ -151,6 +151,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
                                 profileData={profileData}
                                 onPostClick={handlePostClick}
                                 studioId={studio.id}
+                                ownerUserId={studio.owner_id}
                             />
 
                             {/* Mobile-only: Promociones inline */}
@@ -170,6 +171,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
                             offers={offers}
                             studioSlug={studioSlug}
                             studioId={studio.id}
+                            ownerUserId={studio.owner_id}
                         />
 
                         {/* Card Presentación del Negocio */}

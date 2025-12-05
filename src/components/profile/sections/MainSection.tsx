@@ -28,6 +28,7 @@ interface MainSectionProps {
     posts: PublicPost[];
     onPostClick?: (postSlug: string) => void;
     studioId?: string;
+    ownerUserId?: string | null;
 }
 
 /**
@@ -40,7 +41,7 @@ interface MainSectionProps {
  * - Tracking automático de FEED_VIEW con Intersection Observer
  * - Solo trackea posts visibles ≥50% durante ≥1s
  */
-export function MainSection({ posts, onPostClick, studioId }: MainSectionProps) {
+export function MainSection({ posts, onPostClick, studioId, ownerUserId }: MainSectionProps) {
     // Filtrar solo posts publicados
     const publishedPosts = posts.filter(post => post.is_published);
 
@@ -90,6 +91,7 @@ export function MainSection({ posts, onPostClick, studioId }: MainSectionProps) 
                         <PostFeedCardWithTracking 
                             post={post} 
                             studioId={studioId || ''}
+                            ownerUserId={ownerUserId}
                             onPostClick={onPostClick} 
                         />
                     </div>

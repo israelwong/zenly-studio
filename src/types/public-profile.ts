@@ -12,6 +12,7 @@ export interface PublicZonaTrabajo {
 
 export interface PublicStudioProfile {
     id: string;
+    owner_id?: string | null; // platform_user_id del owner
     studio_name: string;
     presentation: string | null;
     keywords: string | null;

@@ -16,6 +16,7 @@ interface OfferCardWithTrackingProps {
     offer: PublicOffer;
     studioId: string;
     studioSlug: string;
+    ownerUserId?: string | null;
 }
 
 /**
@@ -33,7 +34,8 @@ interface OfferCardWithTrackingProps {
 export function OfferCardWithTracking({
     offer,
     studioId,
-    studioSlug
+    studioSlug,
+    ownerUserId
 }: OfferCardWithTrackingProps) {
     const cardRef = useRef<HTMLDivElement>(null);
     const hasTrackedView = useRef(false);
@@ -43,6 +45,7 @@ export function OfferCardWithTracking({
         studioId,
         contentType: 'OFFER',
         contentId: offer.id,
+        ownerUserId,
     });
 
     // Intersection Observer para SIDEBAR_VIEW

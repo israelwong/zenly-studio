@@ -27,6 +27,7 @@ interface PostFeedCardWithTrackingProps {
         view_count?: number;
     };
     studioId: string;
+    ownerUserId?: string | null;
     onPostClick?: (postSlug: string) => void;
 }
 
@@ -42,6 +43,7 @@ interface PostFeedCardWithTrackingProps {
 export function PostFeedCardWithTracking({ 
     post, 
     studioId,
+    ownerUserId,
     onPostClick 
 }: PostFeedCardWithTrackingProps) {
     const cardRef = useRef<HTMLDivElement>(null);
@@ -52,6 +54,7 @@ export function PostFeedCardWithTracking({
         studioId,
         contentType: 'POST',
         contentId: post.id,
+        ownerUserId,
     });
 
     useEffect(() => {

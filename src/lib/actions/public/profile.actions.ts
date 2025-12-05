@@ -45,6 +45,16 @@ export async function getStudioProfileBySlug(
                     website: true,
                     address: true,
                     plan_id: true,
+                    studio_users: {
+                        where: {
+                            type: 'owner',
+                            is_active: true
+                        },
+                        select: {
+                            platform_user_id: true
+                        },
+                        take: 1
+                    },
                     social_networks: {
                         where: { is_active: true },
                         include: {
@@ -178,6 +188,7 @@ export async function getStudioProfileBySlug(
             // Transform data to match our types
             const studioProfile: PublicStudioProfile = {
                 id: studio.id,
+                owner_id: studio.studio_users?.[0]?.platform_user_id || null,
                 studio_name: studio.studio_name,
                 presentation: studio.presentation,
                 keywords: studio.keywords,

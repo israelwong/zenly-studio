@@ -7,6 +7,7 @@ interface UseContentAnalyticsProps {
   contentType: ContentType;
   contentId: string;
   sessionId?: string;
+  ownerUserId?: string | null; // platform_user_id del owner para excluir tracking
 }
 
 /**
@@ -17,7 +18,8 @@ export function useContentAnalytics({
   studioId,
   contentType,
   contentId,
-  sessionId
+  sessionId,
+  ownerUserId
 }: UseContentAnalyticsProps) {
   const { user } = useAuth();
   const trackedEventsRef = useRef<Set<string>>(new Set());
@@ -25,11 +27,18 @@ export function useContentAnalytics({
   /**
    * Trackear un evento (non-blocking)
    * Se ejecuta en background sin esperar respuesta
+   * NO trackea si el usuario es el dueño del estudio
    */
   const track = useCallback(async (
     eventType: AnalyticsEventType,
     metadata?: Record<string, unknown>
   ) => {
+    // Excluir tracking del dueño del estudio
+    if (user?.id && ownerUserId && user.id === ownerUserId) {
+      console.debug('[Analytics] Skipping tracking - studio owner');
+      return;
+    }
+
     // Ejecutar en background sin bloquear UI
     trackContentEvent({
       studioId,
@@ -43,7 +52,7 @@ export function useContentAnalytics({
       // Log silencioso - no interrumpir experiencia del usuario
       console.debug('[Analytics] Failed to track event:', eventType, err);
     });
-  }, [studioId, contentType, contentId, user?.id, sessionId]);
+  }, [studioId, contentType, contentId, user?.id, sessionId, ownerUserId]);
 
   /**
    * Trackear un evento solo una vez por sesión/montaje
@@ -98,9 +107,10 @@ export function useTimeTracking({
   studioId,
   contentType,
   contentId,
-  sessionId
+  sessionId,
+  ownerUserId
 }: UseContentAnalyticsProps) {
-  const { track } = useContentAnalytics({ studioId, contentType, contentId, sessionId });
+  const { track } = useContentAnalytics({ studioId, contentType, contentId, sessionId, ownerUserId });
   const tracked30sRef = useRef(false);
   const tracked60sRef = useRef(false);
 
@@ -137,9 +147,10 @@ export function useScrollTracking({
   contentType,
   contentId,
   sessionId,
+  ownerUserId,
   elementRef
 }: UseContentAnalyticsProps & { elementRef: React.RefObject<HTMLElement> }) {
-  const { track } = useContentAnalytics({ studioId, contentType, contentId, sessionId });
+  const { track } = useContentAnalytics({ studioId, contentType, contentId, sessionId, ownerUserId });
   const tracked50Ref = useRef(false);
   const tracked100Ref = useRef(false);
 
