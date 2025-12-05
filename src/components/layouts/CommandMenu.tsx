@@ -115,7 +115,7 @@ export function CommandMenu({
         {
           label: 'Dashboard',
           icon: Home,
-          href: `/${studioSlug}/studio/dashboard`,
+          href: `/${studioSlug}/studio/commercial/dashboard`,
         },
         {
           label: 'Business',
@@ -158,7 +158,7 @@ export function CommandMenu({
         {
           label: 'Analytics',
           icon: BarChart3,
-          href: `/${studioSlug}/studio/dashboard/finanzas`,
+          href: `/${studioSlug}/studio/commercial/dashboard`,
         },
       ],
     },
