@@ -13,6 +13,7 @@ interface ProfileContentViewProps {
     onEditPost?: (postId: string) => void;
     studioId?: string;
     ownerUserId?: string | null;
+    studioSlug?: string;
 }
 
 /**
@@ -20,7 +21,7 @@ interface ProfileContentViewProps {
  * Renders the appropriate view based on active tab
  * Handles tab switching logic and post/portfolio modals
  */
-export function ProfileContentView({ activeTab, profileData, onPostClick, onPortfolioClick, onEditPost, studioId, ownerUserId }: ProfileContentViewProps) {
+export function ProfileContentView({ activeTab, profileData, onPostClick, onPortfolioClick, onEditPost, studioId, ownerUserId, studioSlug }: ProfileContentViewProps) {
     const { studio, contactInfo, portfolios, posts, paquetes } = profileData;
 
     switch (activeTab) {
@@ -60,6 +61,7 @@ export function ProfileContentView({ activeTab, profileData, onPostClick, onPort
                 <ProfileContent
                     variant="faq"
                     data={{ faq: (studio as unknown as { faq?: Array<{ id: string; pregunta: string; respuesta: string; orden: number; is_active: boolean }> }).faq || [] }}
+                    studioSlug={studioSlug}
                 />
             );
 

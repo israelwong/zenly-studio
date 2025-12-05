@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { MainSection, PortfolioSection, PortfolioDetailSection, PostSection, PostDetailSection, ContactSection, PaquetesSection, FaqSection } from './sections';
+import { MainSection, PortfolioSection, PortfolioDetailSection, PostSection, PostDetailSection, ContactSection, PaquetesSection, FaqSection, FaqSectionEditable } from './sections';
 import { PublicPortfolio, PublicStudioProfile, PublicContactInfo, PublicPaquete } from '@/types/public-profile';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProfileContentProps {
     variant?: 'skeleton' | 'inicio' | 'posts' | 'post-detail' | 'portfolio' | 'portfolio-detail' | 'info' | 'paquetes' | 'faq';
@@ -14,6 +15,7 @@ interface ProfileContentProps {
     onEditPost?: (postId: string) => void;
     studioId?: string;
     ownerUserId?: string | null;
+    studioSlug?: string; // Para FAQs editables
 }
 
 /**
@@ -33,8 +35,10 @@ export function ProfileContent({
     onPortfolioClick,
     onEditPost,
     studioId,
-    ownerUserId
+    ownerUserId,
+    studioSlug
 }: ProfileContentProps) {
+    const { user } = useAuth();
     // Skeleton loading state
     if (loading) {
         return (
@@ -158,6 +162,12 @@ export function ProfileContent({
             orden: number;
             is_active: boolean;
         }> || [];
+        
+        // Si está autenticado y tiene studioSlug, usar versión editable
+        if (user && studioSlug) {
+            return <FaqSectionEditable faq={faq} studioSlug={studioSlug} isAuthenticated={true} />;
+        }
+        
         return <FaqSection faq={faq} loading={loading} />;
     }
 

@@ -30,6 +30,7 @@ export { InfiniteScrollTrigger } from './InfiniteScrollTrigger';
 export { PaquetesSection } from './PaquetesSection';
 export { ContactSection } from './ContactSection';
 export { FaqSection } from './FaqSection';
+export { FaqSectionEditable } from './FaqSectionEditable';
 
 // Secciones adicionales
 export { PaymentsSection } from './PaymentsSection';

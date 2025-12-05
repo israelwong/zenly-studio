@@ -252,6 +252,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                                 }}
                                 studioId={studio.id}
                                 ownerUserId={studio.owner_id}
+                                studioSlug={studioSlug}
                             />
 
                             {/* Mobile-only: Promociones inline */}
