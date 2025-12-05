@@ -23,6 +23,7 @@ export { FaqSection as ProfileFAQ } from './sections';
 // Advanced Components
 export { ProfileCTA } from './ProfileCTA';
 export { ProfileAIChat } from './ProfileAIChat';
+export { QuickActions } from './QuickActions';
 
 // Card Components (new)
 export { ZenCreditsCard } from './cards/ZenCreditsCard';

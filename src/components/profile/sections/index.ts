@@ -19,6 +19,7 @@ export { PostSection } from './PostSection';
 export { PostDetailSection } from './PostDetailSection';
 export { PostDetailModal } from './PostDetailModal';
 export { PostFeedCard } from './PostFeedCard';
+export { PostCardMenu } from './PostCardMenu';
 export { PostCarouselContent } from './PostCarouselContent';
 export { PaquetesSection } from './PaquetesSection';
 export { ContactSection } from './ContactSection';

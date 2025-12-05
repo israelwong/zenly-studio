@@ -3,11 +3,13 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { CaptionWithLinks } from '@/app/[slug]/profile/edit/content/posts/components/CaptionWithLinks';
 import { PostCarouselContent } from './PostCarouselContent';
+import { PostCardMenu } from './PostCardMenu';
 import Lightbox from "yet-another-react-lightbox";
 import Video from "yet-another-react-lightbox/plugins/video";
-import { Star } from "lucide-react";
+import { Star, Eye, MousePointerClick } from "lucide-react";
 import "yet-another-react-lightbox/styles.css";
 
 interface PostMedia {
@@ -45,8 +47,16 @@ interface PostFeedCardProps {
 export function PostFeedCard({ post, onPostClick }: PostFeedCardProps) {
     const params = useParams();
     const studioSlug = params?.slug as string;
+    const { user } = useAuth();
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const firstMedia = post.media?.[0];
+
+    // Formatear números grandes
+    const formatCount = (count: number): string => {
+        if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+        if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+        return count.toString();
+    };
 
     // Función para calcular tiempo relativo
     const getRelativeTime = (date: Date | null): string => {
@@ -113,23 +123,33 @@ export function PostFeedCard({ post, onPostClick }: PostFeedCardProps) {
 
     return (
         <div className="space-y-3">
-            {/* Encabezado minimalista: título, tiempo y estrella si destacado */}
-            <div className="flex items-center gap-2 flex-wrap">
-                {hasTitle && (
-                    <h3 className="text-zinc-300 font-medium text-sm">
-                        {post.title}
-                    </h3>
-                )}
-                {post.published_at && (
-                    <span className="text-zinc-500 text-xs">
-                        {relativeTime}
-                    </span>
-                )}
-                {post.is_featured && (
-                    <span className="flex items-center" title="Post destacado">
-                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                    </span>
-                )}
+            {/* Encabezado: título, tiempo, estrella y menú contextual */}
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap flex-1">
+                    {hasTitle && (
+                        <h3 className="text-zinc-300 font-medium text-sm">
+                            {post.title}
+                        </h3>
+                    )}
+                    {post.published_at && (
+                        <span className="text-zinc-500 text-xs">
+                            {relativeTime}
+                        </span>
+                    )}
+                    {post.is_featured && (
+                        <span className="flex items-center" title="Post destacado">
+                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                        </span>
+                    )}
+                </div>
+
+                {/* Menú contextual - Solo si está autenticado */}
+                <PostCardMenu
+                    postId={post.id}
+                    postSlug={post.slug}
+                    studioSlug={studioSlug}
+                    isPublished={post.is_published}
+                />
             </div>
 
             {/* Descripción con links, sin saltos de línea, truncada - clickeable para abrir modal */}
@@ -243,6 +263,25 @@ export function PostFeedCard({ post, onPostClick }: PostFeedCardProps) {
                             #{tag}
                         </span>
                     ))}
+                </div>
+            )}
+
+            {/* Footer con analytics - Solo visible si usuario autenticado */}
+            {user && (
+                <div className="flex items-center gap-4 pt-2 border-t border-zinc-800/50">
+                    {/* Vistas */}
+                    <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>{formatCount(post.view_count || 0)}</span>
+                        <span className="text-zinc-600">vistas</span>
+                    </div>
+
+                    {/* Clics - TODO: Implementar tracking */}
+                    <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
+                        <MousePointerClick className="w-3.5 h-3.5" />
+                        <span>0</span>
+                        <span className="text-zinc-600">clics</span>
+                    </div>
                 </div>
             )}
         </div>

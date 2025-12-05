@@ -10,7 +10,8 @@ import {
     ZenCreditsCard,
     BusinessPresentationCard,
     OffersCard,
-    MobilePromotionsSection
+    MobilePromotionsSection,
+    QuickActions
 } from '@/components/profile';
 import { PostDetailModal } from '@/components/profile/sections/PostDetailModal';
 import { ProfileContentView } from './ProfileContentView';
@@ -185,6 +186,9 @@ export function ProfilePageClient({ profileData, studioSlug, offers }: ProfilePa
             <footer className="lg:hidden">
                 <ProfileFooter />
             </footer>
+
+            {/* Quick Actions FAB - Solo mobile */}
+            <QuickActions studioSlug={studioSlug} />
 
             {/* Post Detail Modal */}
             <PostDetailModal

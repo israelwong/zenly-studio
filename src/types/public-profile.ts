@@ -143,6 +143,7 @@ export interface PublicPost {
     is_featured: boolean;
     published_at: Date | null;
     created_at?: Date;
+    view_count?: number;
 }
 
 export interface PublicProfileData {

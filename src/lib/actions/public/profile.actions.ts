@@ -147,6 +147,7 @@ export async function getStudioProfileBySlug(
                             is_published: true,
                             published_at: true,
                             created_at: true,
+                            view_count: true,
                             media: {
                                 select: {
                                     id: true,
@@ -312,6 +313,7 @@ export async function getStudioProfileBySlug(
                 is_featured: post.is_featured,
                 published_at: post.published_at,
                 created_at: post.created_at,
+                view_count: post.view_count,
             }));
 
             const profileDataRaw = {

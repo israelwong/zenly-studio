@@ -2,7 +2,10 @@
 
 import React from 'react';
 import Image from 'next/image';
+import { Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { PublicProfileEditButton } from './PublicProfileEditButton';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProfileHeaderProps {
     data?: {
@@ -24,6 +27,8 @@ interface ProfileHeaderProps {
  * - Perfil público (header completo)
  */
 export function ProfileHeader({ data, loading = false, studioSlug, showEditButton = true }: ProfileHeaderProps) {
+    const router = useRouter();
+    const { user } = useAuth();
     const studioData = data || {};
 
     // Solo mostrar header si hay datos reales o está cargando
@@ -32,6 +37,18 @@ export function ProfileHeader({ data, loading = false, studioSlug, showEditButto
     if (!hasData) {
         return null;
     }
+
+    const handleNewPost = () => {
+        if (studioSlug) {
+            router.push(`/${studioSlug}/profile/edit/content/posts/nuevo`);
+        }
+    };
+
+    const handleNewPortfolio = () => {
+        if (studioSlug) {
+            router.push(`/${studioSlug}/profile/edit/content/portfolios/nuevo`);
+        }
+    };
 
     return (
         <div className="sticky top-0 z-10 bg-zinc-900/50 backdrop-blur-lg w-full">
@@ -78,8 +95,36 @@ export function ProfileHeader({ data, loading = false, studioSlug, showEditButto
                         </div>
                     </div>
 
-                    {/* Columna 2: Botón Editar (si es dueño y showEditButton es true) */}
-                    <div className="flex justify-end items-center">
+                    {/* Columna 2: Quick Actions + Botón Editar */}
+                    <div className="flex items-center gap-2">
+                        {/* Quick Actions - Solo si está autenticado */}
+                        {user && studioSlug && (
+                            <>
+                                {/* Desktop: Botones separados */}
+                                <div className="hidden sm:flex items-center gap-2">
+                                    <button
+                                        onClick={handleNewPost}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-md transition-colors"
+                                        aria-label="Crear post"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        Post
+                                    </button>
+                                    <button
+                                        onClick={handleNewPortfolio}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-md transition-colors"
+                                        aria-label="Crear portfolio"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        Portfolio
+                                    </button>
+                                </div>
+
+                                {/* Mobile: Solo FAB flotante (se mantiene en QuickActions) */}
+                            </>
+                        )}
+
+                        {/* Botón Editar */}
                         {showEditButton && studioSlug && <PublicProfileEditButton studioSlug={studioSlug} />}
                     </div>
                 </div>

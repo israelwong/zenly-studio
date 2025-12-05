@@ -119,6 +119,7 @@ export const PublicPostSchema = z.object({
     is_featured: z.boolean(),
     published_at: z.date().nullable(),
     created_at: z.date().optional(),
+    view_count: z.number().optional(),
 });
 
 export const PublicProfileDataSchema = z.object({
