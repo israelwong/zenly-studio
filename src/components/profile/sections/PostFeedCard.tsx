@@ -34,6 +34,7 @@ interface PostFeedCardProps {
         published_at: Date | null;
     };
     onPostClick?: (postSlug: string) => void;
+    onEditPost?: (postId: string) => void; // Callback para editar post
 }
 
 /**
@@ -44,7 +45,7 @@ interface PostFeedCardProps {
  * - Galería con carousel y lightbox completo
  * - Click en caption abre modal de post detalle
  */
-export function PostFeedCard({ post, onPostClick }: PostFeedCardProps) {
+export function PostFeedCard({ post, onPostClick, onEditPost }: PostFeedCardProps) {
     const params = useParams();
     const studioSlug = params?.slug as string;
     const { user } = useAuth();
@@ -149,6 +150,7 @@ export function PostFeedCard({ post, onPostClick }: PostFeedCardProps) {
                     postSlug={post.slug}
                     studioSlug={studioSlug}
                     isPublished={post.is_published}
+                    onEdit={onEditPost}
                 />
             </div>
 

@@ -11,6 +11,7 @@ interface PostCardMenuProps {
     postSlug: string;
     studioSlug: string;
     isPublished: boolean;
+    onEdit?: (postId: string) => void; // Callback para abrir sheet de edición
 }
 
 /**
@@ -18,7 +19,7 @@ interface PostCardMenuProps {
  * Solo visible si el usuario está autenticado
  * Acciones: Editar, Archivar, Eliminar
  */
-export function PostCardMenu({ postId, postSlug, studioSlug, isPublished }: PostCardMenuProps) {
+export function PostCardMenu({ postId, postSlug, studioSlug, isPublished, onEdit }: PostCardMenuProps) {
     const router = useRouter();
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
@@ -33,7 +34,12 @@ export function PostCardMenu({ postId, postSlug, studioSlug, isPublished }: Post
     }
 
     const handleEdit = () => {
-        router.push(`/${studioSlug}/profile/edit/content/posts/${postId}/editar`);
+        if (onEdit) {
+            onEdit(postId);
+        } else {
+            // Fallback a ruta antigua si no hay callback
+            router.push(`/${studioSlug}/profile/edit/content/posts/${postId}/editar`);
+        }
         setIsOpen(false);
     };
 

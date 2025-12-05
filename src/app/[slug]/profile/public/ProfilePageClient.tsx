@@ -246,6 +246,10 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                                 profileData={profileData}
                                 onPostClick={handlePostClick}
                                 onPortfolioClick={handlePortfolioClick}
+                                onEditPost={(postId) => {
+                                    setEditingPostId(postId);
+                                    setIsPostEditorOpen(true);
+                                }}
                                 studioId={studio.id}
                                 ownerUserId={studio.owner_id}
                             />

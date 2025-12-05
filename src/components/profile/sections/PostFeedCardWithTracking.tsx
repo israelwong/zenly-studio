@@ -29,6 +29,7 @@ interface PostFeedCardWithTrackingProps {
     studioId: string;
     ownerUserId?: string | null;
     onPostClick?: (postSlug: string) => void;
+    onEditPost?: (postId: string) => void;
 }
 
 /**
@@ -44,7 +45,8 @@ export function PostFeedCardWithTracking({
     post,
     studioId,
     ownerUserId,
-    onPostClick
+    onPostClick,
+    onEditPost
 }: PostFeedCardWithTrackingProps) {
     const cardRef = useRef<HTMLDivElement>(null);
     const hasTrackedView = useRef(false);
@@ -105,6 +107,7 @@ export function PostFeedCardWithTracking({
             <PostFeedCard
                 post={post}
                 onPostClick={onPostClick}
+                onEditPost={onEditPost}
             />
         </div>
     );

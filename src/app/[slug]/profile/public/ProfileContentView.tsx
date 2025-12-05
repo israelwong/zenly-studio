@@ -10,6 +10,7 @@ interface ProfileContentViewProps {
     profileData: PublicProfileData;
     onPostClick?: (postSlug: string) => void;
     onPortfolioClick?: (portfolioSlug: string) => void;
+    onEditPost?: (postId: string) => void;
     studioId?: string;
     ownerUserId?: string | null;
 }
@@ -19,7 +20,7 @@ interface ProfileContentViewProps {
  * Renders the appropriate view based on active tab
  * Handles tab switching logic and post/portfolio modals
  */
-export function ProfileContentView({ activeTab, profileData, onPostClick, onPortfolioClick, studioId, ownerUserId }: ProfileContentViewProps) {
+export function ProfileContentView({ activeTab, profileData, onPostClick, onPortfolioClick, onEditPost, studioId, ownerUserId }: ProfileContentViewProps) {
     const { studio, contactInfo, portfolios, posts, paquetes } = profileData;
 
     switch (activeTab) {
@@ -29,6 +30,7 @@ export function ProfileContentView({ activeTab, profileData, onPostClick, onPort
                     variant="inicio"
                     data={{ posts: posts || [] }}
                     onPostClick={onPostClick}
+                    onEditPost={onEditPost}
                     studioId={studioId}
                     ownerUserId={ownerUserId}
                 />
