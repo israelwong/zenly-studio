@@ -45,36 +45,41 @@ export function StudioLayoutWrapper({
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* COLUMNA 1: Sidebar Izquierdo (Navegación) */}
-      <StudioSidebar studioSlug={studioSlug} />
+      {/* AppHeader - Fixed top, full width, above everything */}
+      <AppHeader studioSlug={studioSlug} onCommandOpen={() => setCommandOpen(true)} />
 
-      {/* COLUMNA 2: Área de Trabajo (Main) */}
-      <main className="flex-1 flex flex-col min-w-0 relative overflow-hidden">
-        <AppHeader studioSlug={studioSlug} onCommandOpen={() => setCommandOpen(true)} />
-        <div className="flex-1 overflow-y-auto bg-zinc-900/40">
-          <div className="mx-auto max-w-7xl p-4 md:p-6 lg:p-8">
-            {children}
+      {/* Container with top padding for fixed header */}
+      <div className="flex flex-1 pt-14"> {/* pt-14 = h-14 del header */}
+        {/* COLUMNA 1: Sidebar Izquierdo (Navegación) */}
+        <StudioSidebar studioSlug={studioSlug} />
+
+        {/* COLUMNA 2: Área de Trabajo (Main) */}
+        <main className="flex-1 flex flex-col min-w-0 relative overflow-hidden">
+          <div className="flex-1 overflow-y-auto bg-zinc-900/40">
+            <div className="mx-auto max-w-7xl p-4 md:p-6 lg:p-8">
+              {children}
+            </div>
           </div>
-        </div>
-        <CommandMenu
+          <CommandMenu
+            studioSlug={studioSlug}
+            onAgendaClick={handleAgendaClick}
+            onContactsClick={handleContactsClick}
+            onMagicClick={handleMagicClick}
+            onPersonalClick={handlePersonalClick}
+            open={commandOpen}
+            onOpenChange={setCommandOpen}
+          />
+        </main>
+
+        {/* COLUMNA 3: Utility Dock (Herramientas) */}
+        <UtilityDock
           studioSlug={studioSlug}
           onAgendaClick={handleAgendaClick}
           onContactsClick={handleContactsClick}
           onMagicClick={handleMagicClick}
           onPersonalClick={handlePersonalClick}
-          open={commandOpen}
-          onOpenChange={setCommandOpen}
         />
-      </main>
-
-      {/* COLUMNA 3: Utility Dock (Herramientas) */}
-      <UtilityDock
-        studioSlug={studioSlug}
-        onAgendaClick={handleAgendaClick}
-        onContactsClick={handleContactsClick}
-        onMagicClick={handleMagicClick}
-        onPersonalClick={handlePersonalClick}
-      />
+      </div>
 
       {/* ZEN Magic Chat (siempre al final) */}
       <ZenMagicChatWrapper studioSlug={studioSlug} />

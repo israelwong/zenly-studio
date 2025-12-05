@@ -5,10 +5,8 @@ import {
     ZenSidebar, ZenSidebarContent, ZenSidebarFooter, ZenSidebarMenu,
     ZenSidebarMenuItem, useZenSidebar
 } from '@/components/ui/zen';
-import { SidebarHeader } from '@/components/shared/sidebar';
 import { ActiveLink } from './ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
-import { useStudioData } from '@/hooks/useStudioData';
 import {
     File,
     Briefcase, Users, Sparkles, Mail, FileText,
@@ -71,21 +69,6 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
 
     ];
 
-
-    // Obtener datos del studio desde la base de datos
-    const { identidadData } = useStudioData({ studioSlug });
-
-    // Preparar datos del studio para SidebarHeader
-    const studio = identidadData ? {
-        id: identidadData.id,
-        studio_name: identidadData.studio_name,
-        slug: identidadData.slug
-    } : {
-        id: '',
-        studio_name: 'Cargando...',
-        slug: studioSlug
-    };
-
     // Componente para grupo de menú sin colapsable
     const MenuGroup = ({ group, children }: {
         group: { id: string; title: string; icon: React.ComponentType<{ className?: string }> },
@@ -108,11 +91,8 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
 
     return (
         <ZenSidebar className={`${className} ${isOpen ? '' : 'hidden lg:block'} !w-60 lg:!w-60 sm:!w-60`}>
-
-            <SidebarHeader studioData={studio} onToggleSidebar={toggleSidebar} />
-
             <ZenSidebarContent className="px-4">
-                <ZenSidebarMenu className="pt-3">
+                <ZenSidebarMenu className="pt-4">
                     {/* Sección Studio */}
                     {builderNavItems.map(group => (
                         <MenuGroup key={group.id} group={group}>
