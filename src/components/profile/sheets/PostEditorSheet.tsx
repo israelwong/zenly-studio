@@ -1,65 +1,50 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { 
-    ZenButton, 
-    ZenInput, 
-    ZenTextarea, 
-    ZenBadge, 
-    ZenSwitch
-} from "@/components/ui/zen";
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription
-} from "@/components/ui/shadcn/sheet";
-import { Star, Plus, X, Copy, Check, ImagePlus } from "lucide-react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { X, Plus, Star, Check, Copy } from "lucide-react";
+import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenSwitch } from "@/components/ui/zen";
 import { ImageGrid } from "@/components/shared/media";
 import { MediaItem } from "@/types/content-blocks";
-import { createStudioPostBySlug, updateStudioPost, checkPostSlugExists, getStudioPostBySlug } from "@/lib/actions/studio/posts";
+import { createStudioPostBySlug, updateStudioPost, checkPostSlugExists, getStudioPostById } from "@/lib/actions/studio/posts";
 import { PostFormData, MediaItem as PostMediaItem } from "@/lib/actions/schemas/post-schemas";
 import { useTempCuid } from "@/hooks/useTempCuid";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { toast } from "sonner";
-import cuid from "cuid";
-import { calculateTotalStorage, formatBytes } from "@/lib/utils/storage";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
+import { toast } from "sonner";
 import { generateSlug } from "@/lib/utils/slug-utils";
-import { useRouter } from "next/navigation";
+import { calculateTotalStorage, formatBytes } from "@/lib/utils/storage";
+import cuid from "cuid";
 
 interface PostEditorSheetProps {
     isOpen: boolean;
     onClose: () => void;
     studioSlug: string;
     mode: "create" | "edit";
-    postId?: string; // Para modo edición
-    onSuccess?: () => void; // Callback después de guardar exitosamente
+    postId?: string;
+    onSuccess?: () => void;
 }
 
-export function PostEditorSheet({ 
-    isOpen, 
-    onClose, 
-    studioSlug, 
+export function PostEditorSheet({
+    isOpen,
+    onClose,
+    studioSlug,
     mode,
     postId,
-    onSuccess 
+    onSuccess
 }: PostEditorSheetProps) {
-    const router = useRouter();
     const tempCuid = useTempCuid();
     const { uploadFiles, isUploading } = useMediaUpload();
     const { triggerRefresh } = useStorageRefresh(studioSlug);
 
     // Estado del formulario
-    const [formData, setFormData] = useState<{ 
-        title: string; 
-        slug: string; 
-        caption: string; 
-        tags: string[]; 
-        media: PostMediaItem[]; 
-        is_published: boolean; 
-        is_featured: boolean 
+    const [formData, setFormData] = useState<{
+        title: string;
+        slug: string;
+        caption: string;
+        tags: string[];
+        media: PostMediaItem[];
+        is_published: boolean;
+        is_featured: boolean;
     }>({
         title: "",
         slug: "",
@@ -73,18 +58,19 @@ export function PostEditorSheet({
     const [tagInput, setTagInput] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isMediaUploading, setIsMediaUploading] = useState(false);
+    const [isLoadingPost, setIsLoadingPost] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [titleError, setTitleError] = useState<string | null>(null);
     const [isValidatingSlug, setIsValidatingSlug] = useState(false);
-    const [isLoadingPost, setIsLoadingPost] = useState(false);
 
     // Cargar post si es modo edición
     useEffect(() => {
         const loadPost = async () => {
             if (mode === "edit" && postId && isOpen) {
-                setIsLoadingPost(true);
                 try {
-                    const result = await getStudioPostBySlug(studioSlug, postId);
+                    setIsLoadingPost(true);
+                    const result = await getStudioPostById(postId);
+                    
                     if (result.success && result.data) {
                         const post = result.data;
                         setFormData({
@@ -96,10 +82,14 @@ export function PostEditorSheet({
                             is_published: post.is_published ?? true,
                             is_featured: post.is_featured ?? false,
                         });
+                    } else {
+                        toast.error("No se pudo cargar el post");
+                        onClose();
                     }
                 } catch (error) {
                     console.error("Error loading post:", error);
                     toast.error("Error al cargar el post");
+                    onClose();
                 } finally {
                     setIsLoadingPost(false);
                 }
@@ -107,9 +97,9 @@ export function PostEditorSheet({
         };
 
         loadPost();
-    }, [mode, postId, studioSlug, isOpen]);
+    }, [mode, postId, isOpen, onClose]);
 
-    // Reset form al cerrar
+    // Reset form cuando se cierra
     useEffect(() => {
         if (!isOpen) {
             setFormData({
@@ -123,24 +113,20 @@ export function PostEditorSheet({
             });
             setTagInput("");
             setTitleError(null);
+            setIsValidatingSlug(false);
             setLinkCopied(false);
         }
     }, [isOpen]);
 
-    // Generar slug automáticamente cuando cambia el título
+    // Generar slug automáticamente
     useEffect(() => {
-        if (formData.title) {
-            const expectedSlug = generateSlug(formData.title);
-            if (!formData.slug || mode === "create") {
-                setFormData(prev => ({
-                    ...prev,
-                    slug: expectedSlug
-                }));
-            }
+        if (formData.title && mode === "create") {
+            const newSlug = generateSlug(formData.title);
+            setFormData(prev => ({ ...prev, slug: newSlug }));
         }
     }, [formData.title, mode]);
 
-    // Validar slug único cuando cambia
+    // Validar slug único
     useEffect(() => {
         const validateSlug = async () => {
             if (!formData.slug || !formData.slug.trim()) {
@@ -179,7 +165,7 @@ export function PostEditorSheet({
         return () => clearTimeout(timeoutId);
     }, [formData.slug, studioSlug, mode, postId]);
 
-    // Helper para obtener dimensions de una imagen
+    // Helper para obtener dimensions de imagen
     const getImageDimensions = (file: File): Promise<{ width: number; height: number } | undefined> => {
         return new Promise((resolve) => {
             if (!file.type.startsWith('image/')) {
@@ -246,7 +232,7 @@ export function PostEditorSheet({
                 media: [...prev.media, ...mediaItems]
             }));
 
-            toast.success(`${files.length} archivo(s) subido(s) correctamente`);
+            toast.success(`${files.length} archivo(s) subido(s)`);
         } catch (error) {
             console.error('Error uploading files:', error);
             toast.error('Error al subir archivos');
@@ -255,6 +241,7 @@ export function PostEditorSheet({
         }
     }, [uploadFiles, studioSlug, formData.media.length]);
 
+    // Manejar eliminación de media
     const handleDeleteMedia = useCallback((mediaId: string) => {
         setFormData(prev => ({
             ...prev,
@@ -262,6 +249,7 @@ export function PostEditorSheet({
         }));
     }, []);
 
+    // Manejar reordenamiento de media
     const handleReorderMedia = useCallback((reorderedMedia: MediaItem[]) => {
         const convertedMedia: PostMediaItem[] = reorderedMedia.map((item, index) => ({
             ...item as PostMediaItem,
@@ -273,6 +261,7 @@ export function PostEditorSheet({
         }));
     }, []);
 
+    // Manejar click de upload
     const handleUploadClick = useCallback(() => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -287,6 +276,7 @@ export function PostEditorSheet({
         input.click();
     }, [handleDropFiles]);
 
+    // Manejar agregar tag
     const handleAddTag = useCallback(() => {
         const trimmedTag = tagInput.trim();
         if (trimmedTag && !formData.tags.includes(trimmedTag)) {
@@ -300,6 +290,7 @@ export function PostEditorSheet({
         }
     }, [tagInput, formData.tags]);
 
+    // Manejar eliminar tag
     const handleRemoveTag = useCallback((index: number) => {
         setFormData(prev => ({
             ...prev,
@@ -311,6 +302,7 @@ export function PostEditorSheet({
         try {
             setIsSaving(true);
 
+            // Validación
             if (!formData.title || formData.title.trim() === "") {
                 toast.error("El título es obligatorio");
                 return;
@@ -331,6 +323,7 @@ export function PostEditorSheet({
                 return;
             }
 
+            // Preparar datos
             const postData: PostFormData = {
                 id: postId || tempCuid,
                 slug: formData.slug,
@@ -360,55 +353,68 @@ export function PostEditorSheet({
             }
 
             if (result.success) {
-                toast.success(mode === "create" ? "Post creado exitosamente" : "Post actualizado exitosamente");
+                toast.success(mode === "create" ? "Post creado" : "Post actualizado");
                 triggerRefresh();
-                
-                // Llamar callback de éxito y cerrar sheet
-                if (onSuccess) {
-                    onSuccess();
-                }
-                
-                // Refrescar la página actual para mostrar cambios
-                router.refresh();
+                onSuccess?.();
                 onClose();
             } else {
-                toast.error(result.error || "Error al guardar el post");
+                toast.error(result.error || "Error al guardar");
             }
 
         } catch (error) {
             console.error("Error saving post:", error);
-            toast.error(error instanceof Error ? error.message : "Error al guardar el post");
+            toast.error("Error al guardar el post");
         } finally {
             setIsSaving(false);
         }
     };
 
+    // Calcular tamaño total
     const postSize = useMemo(() => {
         return calculateTotalStorage(formData.media);
     }, [formData.media]);
 
-    return (
-        <Sheet open={isOpen} onOpenChange={onClose}>
-            <SheetContent 
-                side="right" 
-                className="w-full sm:max-w-2xl overflow-y-auto"
-            >
-                <SheetHeader>
-                    <SheetTitle>
-                        {mode === "create" ? "Nuevo Post" : "Editar Post"}
-                    </SheetTitle>
-                    <SheetDescription>
-                        {mode === "create" ? "Crea una nueva publicación" : "Modifica tu publicación"}
-                    </SheetDescription>
-                </SheetHeader>
+    if (!isOpen) return null;
 
+    return (
+        <>
+            {/* Overlay */}
+            <div
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300"
+                onClick={onClose}
+            />
+
+            {/* Sheet */}
+            <div className="fixed top-0 right-0 h-full w-full sm:w-[600px] bg-zinc-900 border-l border-zinc-800 z-50 overflow-y-auto shadow-2xl">
+                {/* Header */}
+                <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-6 py-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-xl font-semibold text-zinc-100">
+                                {mode === "create" ? "Nuevo Post" : "Editar Post"}
+                            </h2>
+                            <p className="text-sm text-zinc-400 mt-0.5">
+                                {mode === "create" ? "Crea una nueva publicación" : "Modifica tu publicación"}
+                            </p>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+                            aria-label="Cerrar"
+                        >
+                            <X className="w-5 h-5 text-zinc-400" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Content */}
                 {isLoadingPost ? (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="text-zinc-400">Cargando post...</div>
+                    <div className="flex items-center justify-center h-96">
+                        <div className="text-zinc-400">Cargando...</div>
                     </div>
                 ) : (
-                    <div className="space-y-6 mt-6">
-                        {/* Header Controls */}
+                    <div className="p-6 space-y-6">
+                        {/* Controles superiores */}
                         <div className="flex items-center justify-between gap-4 pb-4 border-b border-zinc-800">
                             <ZenSwitch
                                 checked={formData.is_published}
@@ -431,20 +437,19 @@ export function PostEditorSheet({
                         <div className="space-y-2">
                             <ZenInput
                                 label="Título"
-                                value={formData.title || ""}
+                                value={formData.title}
                                 onChange={(e) => setFormData(prev => ({
                                     ...prev,
-                                    title: e.target.value,
-                                    slug: generateSlug(e.target.value)
+                                    title: e.target.value
                                 }))}
                                 placeholder="Título del post"
                                 required
                                 error={titleError || undefined}
                             />
 
-                            {/* Mostrar slug con validación */}
+                            {/* URL Preview */}
                             {formData.slug && (
-                                <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-2">
                                     <p className="text-xs text-zinc-500">
                                         URL: <span className="text-zinc-400 font-mono">
                                             /{studioSlug}/post/{formData.slug}
@@ -453,48 +458,46 @@ export function PostEditorSheet({
                                     {isValidatingSlug && (
                                         <span className="text-xs text-zinc-500">Validando...</span>
                                     )}
-                                    {!isValidatingSlug && !titleError && (
+                                    {!isValidatingSlug && formData.slug && !titleError && (
                                         <span className="text-xs text-emerald-500">✓ Disponible</span>
                                     )}
                                     {formData.slug && !titleError && (
-                                        <ZenButton
+                                        <button
                                             type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 px-2"
                                             onClick={async () => {
                                                 const postUrl = `${window.location.origin}/${studioSlug}/post/${formData.slug}`;
                                                 try {
                                                     await navigator.clipboard.writeText(postUrl);
                                                     setLinkCopied(true);
-                                                    toast.success("Link copiado al portapapeles");
+                                                    toast.success("Link copiado");
                                                     setTimeout(() => setLinkCopied(false), 2000);
                                                 } catch {
-                                                    toast.error("Error al copiar el link");
+                                                    toast.error("Error al copiar");
                                                 }
                                             }}
+                                            className="p-1 hover:bg-zinc-800 rounded transition-colors"
                                         >
                                             {linkCopied ? (
-                                                <Check className="w-3 h-3" />
+                                                <Check className="w-3 h-3 text-emerald-500" />
                                             ) : (
-                                                <Copy className="w-3 h-3" />
+                                                <Copy className="w-3 h-3 text-zinc-400" />
                                             )}
-                                        </ZenButton>
+                                        </button>
                                     )}
                                 </div>
                             )}
                         </div>
 
-                        {/* Descripción */}
+                        {/* Caption */}
                         <ZenTextarea
                             label="Descripción"
-                            value={formData.caption || ""}
+                            value={formData.caption}
                             onChange={(e) => setFormData(prev => ({ ...prev, caption: e.target.value }))}
-                            placeholder="Escribe una descripción... Los enlaces se convertirán automáticamente en links"
+                            placeholder="Escribe una descripción..."
                             rows={4}
                         />
 
-                        {/* Multimedia */}
+                        {/* Media */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <label className="block text-sm font-medium text-zinc-300">
@@ -502,14 +505,14 @@ export function PostEditorSheet({
                                 </label>
                                 {postSize > 0 && (
                                     <span className="text-xs text-zinc-400">
-                                        Tamaño: <span className="text-zinc-300 font-medium">{formatBytes(postSize)}</span>
+                                        {formatBytes(postSize)}
                                     </span>
                                 )}
                             </div>
                             <ImageGrid
                                 media={formData.media as MediaItem[]}
                                 columns={2}
-                                gap={4}
+                                gap={3}
                                 showDeleteButtons={true}
                                 onDelete={handleDeleteMedia}
                                 onReorder={handleReorderMedia}
@@ -521,12 +524,12 @@ export function PostEditorSheet({
                             />
                         </div>
 
-                        {/* Palabras clave */}
+                        {/* Tags */}
                         <div>
                             <label className="block text-sm font-medium text-zinc-300 mb-2">
                                 Palabras clave
                             </label>
-                            <div className="flex gap-2 w-full items-center">
+                            <div className="flex gap-2">
                                 <div className="flex-1">
                                     <ZenInput
                                         value={tagInput}
@@ -537,7 +540,7 @@ export function PostEditorSheet({
                                                 handleAddTag();
                                             }
                                         }}
-                                        placeholder="Presiona Enter"
+                                        placeholder="Escribe y presiona Enter"
                                         label=""
                                     />
                                 </div>
@@ -551,6 +554,7 @@ export function PostEditorSheet({
                                 </ZenButton>
                             </div>
 
+                            {/* Tags list */}
                             {formData.tags.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-3">
                                     {formData.tags.map((tag, index) => (
@@ -572,28 +576,30 @@ export function PostEditorSheet({
                                 </div>
                             )}
                         </div>
-
-                        {/* Botones */}
-                        <div className="flex gap-3 pt-4 sticky bottom-0 bg-zinc-900 pb-4 border-t border-zinc-800">
-                            <ZenButton
-                                onClick={handleSave}
-                                className="flex-1"
-                                loading={isSaving}
-                                disabled={isSaving || isValidatingSlug || !!titleError}
-                            >
-                                {mode === "create" ? "Crear Post" : "Actualizar"}
-                            </ZenButton>
-                            <ZenButton
-                                variant="outline"
-                                onClick={onClose}
-                                disabled={isSaving}
-                            >
-                                Cancelar
-                            </ZenButton>
-                        </div>
                     </div>
                 )}
-            </SheetContent>
-        </Sheet>
+
+                {/* Footer */}
+                <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-6 py-4">
+                    <div className="flex gap-3">
+                        <ZenButton
+                            onClick={handleSave}
+                            className="flex-1"
+                            loading={isSaving}
+                            disabled={isSaving || isValidatingSlug || !!titleError || isLoadingPost}
+                        >
+                            {mode === "create" ? "Crear Post" : "Actualizar"}
+                        </ZenButton>
+                        <ZenButton
+                            variant="outline"
+                            onClick={onClose}
+                            disabled={isSaving}
+                        >
+                            Cancelar
+                        </ZenButton>
+                    </div>
+                </div>
+            </div>
+        </>
     );
 }
