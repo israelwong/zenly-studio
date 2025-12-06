@@ -19,6 +19,7 @@ export { SeparadorZen } from './SeparadorZen';
 export { ZenTextarea } from './forms/ZenTextarea';
 export { ZenSelect } from './forms/ZenSelect';
 export { ZenSwitch } from './forms/ZenSwitch';
+export { ZenCheckbox } from './forms/ZenCheckbox';
 
 // =============================================================================
 // MEDIA COMPONENTS (DISPONIBLES)
@@ -112,6 +113,7 @@ export type { ZenCalendarProps } from './base/ZenCalendar';
 export type { ZenTextareaProps } from './forms/ZenTextarea';
 export type { ZenSelectProps, ZenSelectOption } from './forms/ZenSelect';
 export type { ZenSwitchProps } from './forms/ZenSwitch';
+export type { ZenCheckboxProps } from './forms/ZenCheckbox';
 export type { SeparadorZenProps } from './SeparadorZen';
 
 // =============================================================================

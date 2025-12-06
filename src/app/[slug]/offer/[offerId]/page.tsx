@@ -125,9 +125,9 @@ export default async function PublicOfferPage({
           <div className="min-h-screen relative">
 
             {/* Header sticky fixed en top */}
-            <div className="fixed top-0 left-0 right-0 z-50 md:top-5 px-4 md:px-0">
+            <div className="fixed top-4 left-0 right-0 z-50 md:top-5 px-4 md:px-0">
               <div className="max-w-md mx-auto">
-                <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/60 backdrop-blur-md border-b border-zinc-800/30 shadow-lg shadow-zinc-950/10 md:rounded-xl">
+                <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/60 backdrop-blur-md border-b border-zinc-800/30 shadow-lg shadow-zinc-950/10 rounded-xl">
                   {/* Logo + Info */}
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 bg-zinc-800/80 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-zinc-700/50">
@@ -168,9 +168,9 @@ export default async function PublicOfferPage({
             </div>
 
             {/* Container mobile centrado con padding-top para header */}
-            <div className="max-w-md mx-auto min-h-screen md:py-8 pt-[57px] px-4 md:px-0">
+            <div className="max-w-md mx-auto min-h-screen pt-[81px] px-4 md:px-0 md:py-24">
               {/* Wrapper con scroll y glassmorphism */}
-              <div className="min-h-[calc(100vh-57px)] bg-zinc-950/50 backdrop-blur-md md:rounded-xl">
+              <div className="min-h-[calc(100vh-81px)] bg-zinc-950/50 backdrop-blur-md rounded-xl mb-4 md:mb-0 overflow-hidden">
                 {/* Content */}
                 <OfferLandingPage
                   studioSlug={slug}
