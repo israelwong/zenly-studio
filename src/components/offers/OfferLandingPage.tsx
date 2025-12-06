@@ -108,56 +108,65 @@ export function OfferLandingPage({
   const leadformUrl = `/${studioSlug}/offer/${offerSlug}/leadform`;
 
   return (
-    <div className="min-h-screen text-zinc-100 bg-zinc-950">
-      {/* Container centrado con ancho mobile-friendly */}
-      <div className="max-w-md mx-auto">
-        {/* Renderizar content blocks */}
-        <div className="space-y-0">
-          {contentBlocks
-            .sort((a, b) => (a.order || 0) - (b.order || 0))
-            .map((block, index) => {
-              // Insertar CTAs según configuración
-              const shouldShowCTAsBefore =
-                ctaConfig.buttons.some(
-                  (btn) => btn.position === "top" && index === 0
-                ) ||
-                ctaConfig.buttons.some(
-                  (btn) => btn.position === "middle" && index === Math.floor(contentBlocks.length / 2)
-                );
+    <div className="text-zinc-100">
+      {/* Renderizar content blocks */}
+      <div className="space-y-0">
+        {contentBlocks
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map((block, index) => {
+            // Insertar CTAs según configuración
+            const shouldShowCTAsBefore =
+              ctaConfig.buttons.some(
+                (btn) => btn.position === "top" && index === 0
+              ) ||
+              ctaConfig.buttons.some(
+                (btn) => btn.position === "middle" && index === Math.floor(contentBlocks.length / 2)
+              );
 
-              return (
-                <div key={block.id}>
-                  {shouldShowCTAsBefore && (
-                    <CTASection
-                      buttons={ctaConfig.buttons.filter(
-                        (btn) =>
-                          btn.position === "top" ||
-                          (btn.position === "middle" &&
-                            index === Math.floor(contentBlocks.length / 2))
-                      )}
-                      leadformUrl={leadformUrl}
-                      studioSlug={studioSlug}
-                      offerId={offerId}
-                    />
-                  )}
+            // Determinar si el bloque es fullwidth (carousel/hero)
+            const isFullWidth =
+              (block.type === 'gallery' || block.type === 'media-gallery') &&
+              (block.config as { mode?: string })?.mode === 'slide' ||
+              block.type === 'hero' ||
+              block.type === 'hero-image' ||
+              block.type === 'hero-video' ||
+              block.type === 'hero-text' ||
+              block.type === 'hero-contact';
+
+            return (
+              <div key={block.id}>
+                {shouldShowCTAsBefore && (
+                  <CTASection
+                    buttons={ctaConfig.buttons.filter(
+                      (btn) =>
+                        btn.position === "top" ||
+                        (btn.position === "middle" &&
+                          index === Math.floor(contentBlocks.length / 2))
+                    )}
+                    leadformUrl={leadformUrl}
+                    studioSlug={studioSlug}
+                    offerId={offerId}
+                  />
+                )}
+                <div className={isFullWidth ? '' : 'px-4'}>
                   <BlockRenderer block={block} />
                 </div>
-              );
-            })}
-        </div>
-
-        {/* CTAs al final */}
-        {ctaConfig.buttons.some((btn) => btn.position === "bottom") && (
-          <CTASection
-            buttons={ctaConfig.buttons.filter((btn) => btn.position === "bottom")}
-            leadformUrl={leadformUrl}
-            studioSlug={studioSlug}
-            offerId={offerId}
-          />
-        )}
+              </div>
+            );
+          })}
       </div>
 
-      {/* CTA flotante - fuera del container centrado */}
+      {/* CTAs al final */}
+      {ctaConfig.buttons.some((btn) => btn.position === "bottom") && (
+        <CTASection
+          buttons={ctaConfig.buttons.filter((btn) => btn.position === "bottom")}
+          leadformUrl={leadformUrl}
+          studioSlug={studioSlug}
+          offerId={offerId}
+        />
+      )}
+
+      {/* CTA flotante */}
       {ctaConfig.buttons.some((btn) => btn.position === "floating") && (
         <div className="fixed bottom-6 right-6 z-50">
           <CTASection
