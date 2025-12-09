@@ -175,6 +175,16 @@ export function ProfileContent({
     if (variant === 'info') {
         const studio = data?.studio as PublicStudioProfile;
         const contactInfo = data?.contactInfo as PublicContactInfo;
+        const socialNetworks = data?.socialNetworks as Array<{
+            id: string;
+            url: string;
+            platform: {
+                id: string;
+                name: string;
+                icon: string | null;
+            } | null;
+            order: number;
+        }> || [];
 
         if (!studio || !contactInfo) {
             return (
@@ -189,7 +199,7 @@ export function ProfileContent({
             );
         }
 
-        return <ContactSection studio={studio} contactInfo={contactInfo} studioSlug={studioSlug || ''} />;
+        return <ContactSection studio={studio} contactInfo={contactInfo} socialNetworks={socialNetworks} studioSlug={studioSlug || ''} />;
     }
 
     // Default fallback

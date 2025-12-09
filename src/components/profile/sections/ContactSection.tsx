@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Phone, Globe, Mail, Hash, MapPin, Clock, ExternalLink, Edit2 } from 'lucide-react';
+import { Phone, Globe, Mail, Hash, MapPin, Clock, ExternalLink, Edit2, Share2 } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import InstagramIcon from '@/components/ui/icons/InstagramIcon';
@@ -21,7 +21,8 @@ import {
     EditPhoneModal,
     EditContactInfoModal,
     EditScheduleModal,
-    EditKeywordsModal
+    EditKeywordsModal,
+    EditSocialNetworksModal
 } from '@/components/shared/contact-modals';
 
 interface Horario {
@@ -39,6 +40,16 @@ interface HorarioAgrupado {
 interface InfoViewProps {
     studio: PublicStudioProfile;
     contactInfo: PublicContactInfo;
+    socialNetworks: Array<{
+        id: string;
+        url: string;
+        platform: {
+            id: string;
+            name: string;
+            icon: string | null;
+        } | null;
+        order: number;
+    }>;
     studioSlug: string;
 }
 
@@ -53,7 +64,7 @@ interface PhoneOption {
  * Uses ZenButton and ZenCard from ZEN Design System
  * Shows contact actions, location, and social links
  */
-export function ContactSection({ studio, contactInfo, studioSlug }: InfoViewProps) {
+export function ContactSection({ studio, contactInfo, socialNetworks, studioSlug }: InfoViewProps) {
     const { user } = useAuth();
     const router = useRouter();
     const [phoneModal, setPhoneModal] = useState<{ open: boolean; phones: PhoneOption[]; action: 'call' | 'whatsapp' } | null>(null);
@@ -66,6 +77,7 @@ export function ContactSection({ studio, contactInfo, studioSlug }: InfoViewProp
     const [editAddressOpen, setEditAddressOpen] = useState(false);
     const [editScheduleOpen, setEditScheduleOpen] = useState(false);
     const [editKeywordsOpen, setEditKeywordsOpen] = useState(false);
+    const [editSocialNetworksOpen, setEditSocialNetworksOpen] = useState(false);
 
     // Verificar si el usuario es el dueño del estudio
     const isOwner = user?.id === studio.owner_id;
@@ -497,7 +509,7 @@ export function ContactSection({ studio, contactInfo, studioSlug }: InfoViewProp
                                     <div className="flex-1 space-y-2.5">
                                         {horariosAgrupados.map((grupo, index) => (
                                             <div key={index} className="flex items-center gap-3">
-                                                <div className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500/50" />
+                                                <div className="shrink-0 w-2 h-2 rounded-full bg-emerald-500/50" />
                                                 <div className="flex-1 flex items-baseline justify-between gap-3">
                                                     <span className="text-sm text-zinc-200 font-medium">
                                                         {grupo.dias}
@@ -593,6 +605,65 @@ export function ContactSection({ studio, contactInfo, studioSlug }: InfoViewProp
                                 }}
                                 className="absolute top-1/2 -translate-y-1/2 right-1 p-2 rounded-md bg-emerald-600/10 text-emerald-400 opacity-0 group-hover/item:opacity-100 md:group-hover/item:opacity-100 transition-all duration-200 hover:bg-emerald-600/20 hover:scale-110"
                                 aria-label="Editar palabras clave"
+                            >
+                                <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+                </>
+            )}
+
+            {/* Redes sociales */}
+            {(socialNetworks.length > 0 || isOwner) && (
+                <>
+                    <div className="border-t border-zinc-800/50" />
+                    <div
+                        className={`relative rounded-lg p-3 -mx-3 transition-all duration-200 group/item ${isOwner
+                            ? 'hover:bg-zinc-900/30 hover:border hover:border-emerald-600/30'
+                            : ''
+                            }`}
+                        onClick={isOwner && socialNetworks.length === 0 ? () => setEditSocialNetworksOpen(true) : undefined}
+                    >
+                        {socialNetworks.length > 0 ? (
+                            <div className="flex items-start gap-3">
+                                <Share2 className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
+                                <div className="flex flex-wrap gap-3">
+                                    {socialNetworks.map((network) => (
+                                        <a
+                                            key={network.id}
+                                            href={network.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-2 px-3 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all duration-200 hover:scale-105"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {network.platform?.icon && (
+                                                <span className="text-lg">{network.platform.icon}</span>
+                                            )}
+                                            <span className="text-sm text-zinc-300">
+                                                {network.platform?.name || 'Red social'}
+                                            </span>
+                                            <ExternalLink className="w-3 h-3 text-zinc-500" />
+                                        </a>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : isOwner ? (
+                            <div className="flex items-center gap-3 cursor-pointer">
+                                <Share2 className="w-5 h-5 text-zinc-600" />
+                                <span className="text-sm text-zinc-500 italic">
+                                    Agrega tus redes sociales
+                                </span>
+                            </div>
+                        ) : null}
+                        {isOwner && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditSocialNetworksOpen(true);
+                                }}
+                                className="absolute top-1/2 -translate-y-1/2 right-1 p-2 rounded-md bg-emerald-600/10 text-emerald-400 opacity-0 group-hover/item:opacity-100 md:group-hover/item:opacity-100 transition-all duration-200 hover:bg-emerald-600/20 hover:scale-110"
+                                aria-label="Editar redes sociales"
                             >
                                 <Edit2 className="w-3.5 h-3.5" />
                             </button>
@@ -705,6 +776,13 @@ export function ContactSection({ studio, contactInfo, studioSlug }: InfoViewProp
                         onClose={() => setEditKeywordsOpen(false)}
                         studioSlug={studioSlug}
                         currentValue={studio.keywords}
+                        onSuccess={handleDataRefresh}
+                    />
+
+                    <EditSocialNetworksModal
+                        isOpen={editSocialNetworksOpen}
+                        onClose={() => setEditSocialNetworksOpen(false)}
+                        studioSlug={studioSlug}
                         onSuccess={handleDataRefresh}
                     />
                 </>
