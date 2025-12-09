@@ -518,6 +518,7 @@ export async function crearRedSocial(studioSlug: string, data: {
         });
 
         revalidatePath(`/${studioSlug}/studio/profile/identidad`);
+        revalidatePath(`/${studioSlug}`); // Revalidate public profile
         return { success: true, data: redSocial };
     } catch (error) {
         console.error('Error creando red social:', error);
@@ -557,6 +558,7 @@ export async function actualizarRedSocial(studioSlug: string, redSocialId: strin
         });
 
         revalidatePath(`/${studioSlug}/studio/profile/identidad`);
+        revalidatePath(`/${studioSlug}`); // Revalidate public profile
         return { success: true, data: redSocial };
     } catch (error) {
         console.error('Error actualizando red social:', error);
@@ -584,6 +586,7 @@ export async function eliminarRedSocial(studioSlug: string, redSocialId: string)
         });
 
         revalidatePath(`/${studioSlug}/studio/profile/identidad`);
+        revalidatePath(`/${studioSlug}`); // Revalidate public profile
         return { success: true };
     } catch (error) {
         console.error('Error eliminando red social:', error);

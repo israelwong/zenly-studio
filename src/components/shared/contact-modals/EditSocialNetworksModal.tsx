@@ -2,52 +2,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
-import { ZenButton, ZenInput } from '@/components/ui/zen';
-import { Plus, X, GripVertical } from 'lucide-react';
+import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
+import { X, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     obtenerRedesSocialesStudio,
-    obtenerPlataformasDisponibles,
     crearRedSocial,
     actualizarRedSocial,
     eliminarRedSocial,
-    reordenarRedesSociales,
-    toggleRedSocialEstado
 } from '@/lib/actions/studio/profile/identidad';
-import {
-    DndContext,
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent,
-} from '@dnd-kit/core';
-import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-
-interface Plataforma {
-    id: string;
-    name: string;
-    slug: string;
-    icon: string | null;
-    color: string | null;
-}
-
-interface RedSocial {
-    id: string;
-    studio_id: string;
-    plataformaId: string | null;
-    url: string;
-    activo: boolean;
-    plataforma: Plataforma | null;
-}
+import InstagramIcon from '@/components/ui/icons/InstagramIcon';
+import FacebookIcon from '@/components/ui/icons/FacebookIcon';
+import TikTokIcon from '@/components/ui/icons/TikTokIcon';
+import YouTubeIcon from '@/components/ui/icons/YouTubeIcon';
+import LinkedInIcon from '@/components/ui/icons/LinkedInIcon';
 
 interface EditSocialNetworksModalProps {
     isOpen: boolean;
@@ -56,91 +24,44 @@ interface EditSocialNetworksModalProps {
     onSuccess?: () => void;
 }
 
-function SortableItem({ red, onToggle, onEdit, onDelete }: {
-    red: RedSocial;
-    onToggle: (id: string, estado: boolean) => Promise<void>;
-    onEdit: (red: RedSocial) => void;
-    onDelete: (id: string) => Promise<void>;
-}) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-    } = useSortable({ id: red.id });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-    };
-
-    const [isToggling, setIsToggling] = useState(false);
-
-    const handleToggle = async () => {
-        setIsToggling(true);
-        await onToggle(red.id, !red.activo);
-        setIsToggling(false);
-    };
-
-    return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            className="flex items-center gap-3 p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg group hover:border-zinc-700 transition-colors"
-        >
-            <button
-                {...attributes}
-                {...listeners}
-                className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 transition-colors"
-            >
-                <GripVertical className="w-5 h-5" />
-            </button>
-
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                    {red.plataforma?.icon && (
-                        <span className="text-lg">{red.plataforma.icon}</span>
-                    )}
-                    <span className="text-sm font-medium text-zinc-300">
-                        {red.plataforma?.name || 'Red social'}
-                    </span>
-                </div>
-                <p className="text-xs text-zinc-500 truncate">{red.url}</p>
-            </div>
-
-            <div className="flex items-center gap-2">
-                <button
-                    onClick={handleToggle}
-                    disabled={isToggling}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        red.activo ? 'bg-emerald-600' : 'bg-zinc-700'
-                    } ${isToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                    <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            red.activo ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                    />
-                </button>
-
-                <button
-                    onClick={() => onEdit(red)}
-                    className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors"
-                >
-                    Editar
-                </button>
-
-                <button
-                    onClick={() => onDelete(red.id)}
-                    className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors"
-                >
-                    <X className="w-4 h-4" />
-                </button>
-            </div>
-        </div>
-    );
-}
+// Redes sociales permitidas (hardcoded, orden fijo)
+const REDES_PRINCIPALES = [
+    {
+        slug: 'instagram',
+        name: 'Instagram',
+        icon: InstagramIcon,
+        placeholder: 'usuario (sin @)',
+        baseUrl: 'https://instagram.com/'
+    },
+    {
+        slug: 'facebook',
+        name: 'Facebook',
+        icon: FacebookIcon,
+        placeholder: 'usuario o página',
+        baseUrl: 'https://facebook.com/'
+    },
+    {
+        slug: 'tiktok',
+        name: 'TikTok',
+        icon: TikTokIcon,
+        placeholder: 'usuario (sin @)',
+        baseUrl: 'https://tiktok.com/@'
+    },
+    {
+        slug: 'youtube',
+        name: 'YouTube',
+        icon: YouTubeIcon,
+        placeholder: 'nombre del canal (sin @)',
+        baseUrl: 'https://youtube.com/@'
+    },
+    {
+        slug: 'linkedin',
+        name: 'LinkedIn',
+        icon: LinkedInIcon,
+        placeholder: 'usuario',
+        baseUrl: 'https://linkedin.com/in/'
+    },
+];
 
 export function EditSocialNetworksModal({
     isOpen,
@@ -148,23 +69,12 @@ export function EditSocialNetworksModal({
     studioSlug,
     onSuccess
 }: EditSocialNetworksModalProps) {
-    const [redes, setRedes] = useState<RedSocial[]>([]);
-    const [plataformas, setPlataformas] = useState<Plataforma[]>([]);
+    const [redes, setRedes] = useState<Record<string, { id: string; url: string; platformId: string }>>({});
     const [loading, setLoading] = useState(true);
-    const [showAddForm, setShowAddForm] = useState(false);
-    const [editingRed, setEditingRed] = useState<RedSocial | null>(null);
-    const [formData, setFormData] = useState({
-        plataformaId: '',
-        url: ''
-    });
-    const [saving, setSaving] = useState(false);
-
-    const sensors = useSensors(
-        useSensor(PointerSensor),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
-    );
+    const [saving, setSaving] = useState<string | null>(null);
+    const [plataformaIds, setPlataformaIds] = useState<Record<string, string>>({});
+    const [editingValues, setEditingValues] = useState<Record<string, string>>({});
+    const [confirmDelete, setConfirmDelete] = useState<{ slug: string; name: string } | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -176,35 +86,45 @@ export function EditSocialNetworksModal({
         try {
             setLoading(true);
 
+            // Cargar redes existentes del studio
             const redesResult = await obtenerRedesSocialesStudio(studioSlug);
             if (Array.isArray(redesResult)) {
-                const redesFormateadas = redesResult.map((red) => ({
-                    id: red.id,
-                    studio_id: red.studio_id,
-                    plataformaId: red.platform_id,
-                    url: red.url,
-                    activo: red.is_active,
-                    plataforma: red.platform ? {
-                        id: red.platform.id,
-                        name: red.platform.name,
-                        slug: red.platform.slug,
-                        icon: red.platform.icon,
-                        color: red.platform.color,
-                    } : null
-                }));
-                setRedes(redesFormateadas);
+                const redesMap: Record<string, { id: string; url: string; platformId: string }> = {};
+                const platformIds: Record<string, string> = {};
+                const initialValues: Record<string, string> = {};
+
+                redesResult.forEach((red) => {
+                    if (red.platform?.slug) {
+                        redesMap[red.platform.slug] = {
+                            id: red.id,
+                            url: red.url,
+                            platformId: red.platform_id || ''
+                        };
+                        platformIds[red.platform.slug] = red.platform.id;
+
+                        // Extraer solo el username para el input
+                        const redConfig = REDES_PRINCIPALES.find(r => r.slug === red.platform?.slug);
+                        const displayValue = red.url
+                            .replace(redConfig?.baseUrl || '', '')
+                            .replace('www.', '');
+                        initialValues[red.platform.slug] = displayValue;
+                    }
+                });
+
+                setRedes(redesMap);
+                setPlataformaIds(platformIds);
+                setEditingValues(initialValues);
             }
 
+            // Cargar IDs de plataformas para crear nuevas
+            const { obtenerPlataformasDisponibles } = await import('@/lib/actions/studio/profile/identidad');
             const plataformasResult = await obtenerPlataformasDisponibles();
             if (plataformasResult.success && plataformasResult.data) {
-                const plataformasFormateadas = plataformasResult.data.map((p) => ({
-                    id: p.id,
-                    name: p.name,
-                    slug: p.slug,
-                    icon: p.icon,
-                    color: p.color,
-                }));
-                setPlataformas(plataformasFormateadas);
+                const ids: Record<string, string> = {};
+                plataformasResult.data.forEach((p) => {
+                    ids[p.slug] = p.id;
+                });
+                setPlataformaIds(prev => ({ ...prev, ...ids }));
             }
         } catch (error) {
             console.error('Error loading social networks:', error);
@@ -214,90 +134,115 @@ export function EditSocialNetworksModal({
         }
     };
 
-    const handleDragEnd = async (event: DragEndEvent) => {
-        const { active, over } = event;
+    const handleSave = async (slug: string, value: string) => {
+        const trimmedValue = value.trim();
 
-        if (!over || active.id === over.id) return;
-
-        const oldIndex = redes.findIndex((r) => r.id === active.id);
-        const newIndex = redes.findIndex((r) => r.id === over.id);
-
-        const newOrder = arrayMove(redes, oldIndex, newIndex);
-        setRedes(newOrder);
-
-        try {
-            const ordenIds = newOrder.map((red) => red.id);
-            const result = await reordenarRedesSociales(studioSlug, ordenIds);
-            if (!result.success) {
-                toast.error('Error al reordenar');
-                setRedes(redes);
+        // Si está vacío y existe, eliminar
+        if (!trimmedValue && redes[slug]) {
+            setSaving(slug);
+            const result = await eliminarRedSocial(studioSlug, redes[slug].id);
+            if (result.success) {
+                const newRedes = { ...redes };
+                delete newRedes[slug];
+                setRedes(newRedes);
+                toast.success('Red social eliminada');
+                onSuccess?.();
+            } else {
+                toast.error('Error al eliminar');
             }
-        } catch (error) {
-            console.error('Error reordering:', error);
-            toast.error('Error al reordenar');
-            setRedes(redes);
-        }
-    };
-
-    const handleToggle = async (id: string, nuevoEstado: boolean) => {
-        const result = await toggleRedSocialEstado(studioSlug, id, nuevoEstado);
-        if (result.success) {
-            setRedes(redes.map(r => r.id === id ? { ...r, activo: nuevoEstado } : r));
-            toast.success(nuevoEstado ? 'Red social activada' : 'Red social desactivada');
-        } else {
-            toast.error('Error al cambiar estado');
-        }
-    };
-
-    const handleEdit = (red: RedSocial) => {
-        setEditingRed(red);
-        setFormData({
-            plataformaId: red.plataformaId || '',
-            url: red.url
-        });
-        setShowAddForm(true);
-    };
-
-    const handleDelete = async (id: string) => {
-        if (!confirm('¿Eliminar esta red social?')) return;
-
-        const result = await eliminarRedSocial(studioSlug, id);
-        if (result.success) {
-            setRedes(redes.filter(r => r.id !== id));
-            toast.success('Red social eliminada');
-            onSuccess?.();
-        } else {
-            toast.error('Error al eliminar');
-        }
-    };
-
-    const handleSubmit = async () => {
-        if (!formData.plataformaId || !formData.url) {
-            toast.error('Completa todos los campos');
+            setSaving(null);
             return;
         }
 
-        setSaving(true);
+        // Si está vacío y no existe, no hacer nada
+        if (!trimmedValue) return;
+
+        // Construir URL completa
+        const redConfig = REDES_PRINCIPALES.find(r => r.slug === slug);
+        let fullUrl = trimmedValue;
+
+        // Si el usuario pegó una URL completa, extraer el username
+        if (trimmedValue.startsWith('http')) {
+            try {
+                const url = new URL(trimmedValue);
+                // Extraer el username de la URL
+                // Ejemplo: https://www.facebook.com/prosocialmx → prosocialmx
+                // Ejemplo: https://instagram.com/usuario → usuario
+                const pathParts = url.pathname.split('/').filter(p => p);
+                const username = pathParts[0] || '';
+
+                // Si encontramos username, construir URL limpia
+                if (username) {
+                    fullUrl = `${redConfig?.baseUrl}${username}`;
+                } else {
+                    fullUrl = trimmedValue; // Usar URL original si no encontramos username
+                }
+            } catch {
+                // Si falla el parsing, asumir que es username
+                fullUrl = `${redConfig?.baseUrl}${trimmedValue}`;
+            }
+        } else {
+            // Es solo username, construir URL completa
+            fullUrl = `${redConfig?.baseUrl}${trimmedValue}`;
+        }
+
+        setSaving(slug);
+
         try {
-            if (editingRed) {
-                const result = await actualizarRedSocial(studioSlug, editingRed.id, formData);
+            if (redes[slug]) {
+                // Actualizar existente
+                const result = await actualizarRedSocial(studioSlug, redes[slug].id, {
+                    platform_id: redes[slug].platformId,
+                    url: fullUrl
+                });
                 if (result.success) {
-                    toast.success('Red social actualizada');
-                    await loadData();
-                    setShowAddForm(false);
-                    setEditingRed(null);
-                    setFormData({ plataformaId: '', url: '' });
+                    setRedes({
+                        ...redes,
+                        [slug]: { ...redes[slug], url: fullUrl }
+                    });
+                    // Actualizar valor de edición con el username limpio
+                    setEditingValues({
+                        ...editingValues,
+                        [slug]: trimmedValue.startsWith('http')
+                            ? new URL(trimmedValue).pathname.split('/').filter(p => p)[0] || trimmedValue
+                            : trimmedValue
+                    });
+                    toast.success('Actualizado');
                     onSuccess?.();
                 } else {
                     toast.error(result.error || 'Error al actualizar');
                 }
             } else {
-                const result = await crearRedSocial(studioSlug, formData);
-                if (result.success) {
+                // Crear nuevo
+                const platformId = plataformaIds[slug];
+                if (!platformId) {
+                    toast.error('Plataforma no encontrada');
+                    setSaving(null);
+                    return;
+                }
+
+                const result = await crearRedSocial(studioSlug, {
+                    platform_id: platformId,
+                    url: fullUrl
+                });
+
+                if (result.success && result.data) {
+                    setRedes({
+                        ...redes,
+                        [slug]: {
+                            id: result.data.id,
+                            url: fullUrl,
+                            platformId: platformId
+                        }
+                    });
+                    // Actualizar valor de edición con el username limpio
+                    setEditingValues({
+                        ...editingValues,
+                        [slug]: trimmedValue.startsWith('http')
+                            ? new URL(trimmedValue).pathname.split('/').filter(p => p)[0] || trimmedValue
+                            : trimmedValue
+                    });
                     toast.success('Red social agregada');
-                    await loadData();
-                    setShowAddForm(false);
-                    setFormData({ plataformaId: '', url: '' });
                     onSuccess?.();
                 } else {
                     toast.error(result.error || 'Error al crear');
@@ -307,119 +252,145 @@ export function EditSocialNetworksModal({
             console.error('Error saving:', error);
             toast.error('Error al guardar');
         } finally {
-            setSaving(false);
+            setSaving(null);
         }
     };
 
-    const handleCancel = () => {
-        setShowAddForm(false);
-        setEditingRed(null);
-        setFormData({ plataformaId: '', url: '' });
+    const handleDeleteClick = (slug: string) => {
+        const redConfig = REDES_PRINCIPALES.find(r => r.slug === slug);
+        if (!redes[slug] || !redConfig) return;
+
+        setConfirmDelete({ slug, name: redConfig.name });
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!confirmDelete) return;
+
+        const { slug } = confirmDelete;
+
+        // Marcar como guardando ANTES de cerrar el modal
+        setSaving(slug);
+
+        try {
+            const result = await eliminarRedSocial(studioSlug, redes[slug].id);
+
+            if (result.success) {
+                // Actualizar estado de redes
+                const newRedes = { ...redes };
+                delete newRedes[slug];
+                setRedes(newRedes);
+
+                // Limpiar el input
+                const newValues = { ...editingValues };
+                delete newValues[slug];
+                setEditingValues(newValues);
+
+                toast.success('Red social eliminada');
+                onSuccess?.();
+            } else {
+                toast.error('Error al eliminar');
+            }
+        } catch (error) {
+            console.error('Error deleting social network:', error);
+            toast.error('Error al eliminar');
+        } finally {
+            // Cerrar modal y limpiar estados al final
+            setSaving(null);
+            setConfirmDelete(null);
+        }
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Redes sociales</DialogTitle>
+                    <DialogTitle className="text-lg">Redes sociales</DialogTitle>
                 </DialogHeader>
 
-                <div className="space-y-4 mt-4">
+                <div className="space-y-2 mt-6">
                     {loading ? (
-                        <div className="text-center py-8 text-zinc-500">
-                            Cargando...
-                        </div>
+                        <div className="text-center py-12 text-zinc-500 text-sm">Cargando...</div>
                     ) : (
-                        <>
-                            {showAddForm ? (
-                                <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-zinc-400 mb-2">
-                                            Plataforma
-                                        </label>
-                                        <select
-                                            value={formData.plataformaId}
-                                            onChange={(e) => setFormData({ ...formData, plataformaId: e.target.value })}
-                                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                        >
-                                            <option value="">Selecciona una plataforma</option>
-                                            {plataformas.map((p) => (
-                                                <option key={p.id} value={p.id}>
-                                                    {p.icon} {p.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
+                        REDES_PRINCIPALES.map((red) => {
+                            const existing = redes[red.slug];
+                            const isSaving = saving === red.slug;
+                            const displayValue = editingValues[red.slug] || '';
+                            const IconComponent = red.icon;
 
-                                    <ZenInput
-                                        label="URL"
-                                        value={formData.url}
-                                        onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                                        placeholder="https://..."
-                                        required
-                                    />
-
-                                    <div className="flex gap-2">
-                                        <ZenButton
-                                            onClick={handleSubmit}
-                                            loading={saving}
-                                            disabled={saving}
-                                        >
-                                            {editingRed ? 'Actualizar' : 'Agregar'}
-                                        </ZenButton>
-                                        <ZenButton
-                                            variant="ghost"
-                                            onClick={handleCancel}
-                                            disabled={saving}
-                                        >
-                                            Cancelar
-                                        </ZenButton>
-                                    </div>
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={() => setShowAddForm(true)}
-                                    className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-zinc-800 rounded-lg text-zinc-500 hover:border-emerald-600 hover:text-emerald-500 transition-colors"
+                            return (
+                                <div
+                                    key={red.slug}
+                                    className="group relative"
                                 >
-                                    <Plus className="w-5 h-5" />
-                                    <span>Agregar red social</span>
-                                </button>
-                            )}
+                                    <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors">
+                                        <IconComponent className="w-4 h-4 shrink-0 text-zinc-500" />
 
-                            {redes.length > 0 && (
-                                <div className="space-y-2">
-                                    <DndContext
-                                        sensors={sensors}
-                                        collisionDetection={closestCenter}
-                                        onDragEnd={handleDragEnd}
-                                    >
-                                        <SortableContext
-                                            items={redes.map(r => r.id)}
-                                            strategy={verticalListSortingStrategy}
-                                        >
-                                            {redes.map((red) => (
-                                                <SortableItem
-                                                    key={red.id}
-                                                    red={red}
-                                                    onToggle={handleToggle}
-                                                    onEdit={handleEdit}
-                                                    onDelete={handleDelete}
-                                                />
-                                            ))}
-                                        </SortableContext>
-                                    </DndContext>
-                                </div>
-                            )}
+                                        <input
+                                            type="text"
+                                            placeholder={red.name}
+                                            value={displayValue}
+                                            onChange={(e) => setEditingValues({ ...editingValues, [red.slug]: e.target.value })}
+                                            onBlur={(e) => handleSave(red.slug, e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.currentTarget.blur();
+                                                }
+                                            }}
+                                            disabled={isSaving}
+                                            className="flex-1 min-w-0 bg-transparent text-sm text-zinc-300 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
+                                        />
 
-                            {redes.length === 0 && !showAddForm && (
-                                <div className="text-center py-8 text-zinc-500">
-                                    No hay redes sociales agregadas
+                                        {isSaving ? (
+                                            <div className="w-4 h-4 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin" />
+                                        ) : existing ? (
+                                            <div className="flex items-center gap-1">
+                                                <a
+                                                    href={existing.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-1 text-zinc-400 hover:text-emerald-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Ver perfil"
+                                                >
+                                                    <ExternalLink className="w-3.5 h-3.5" />
+                                                </a>
+                                                <button
+                                                    onClick={() => handleDeleteClick(red.slug)}
+                                                    className="p-1 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Eliminar"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ) : null}
+                                    </div>
                                 </div>
-                            )}
-                        </>
+                            );
+                        })
                     )}
                 </div>
+
+                <p className="mt-6 text-xs text-zinc-500 text-center">
+                    Escribe tu usuario o pega la URL completa
+                </p>
             </DialogContent>
+
+            {/* Confirm Delete Modal */}
+            <ZenConfirmModal
+                isOpen={!!confirmDelete}
+                onClose={() => setConfirmDelete(null)}
+                onConfirm={handleConfirmDelete}
+                title="Eliminar red social"
+                description={
+                    confirmDelete
+                        ? `¿Estás seguro de eliminar ${confirmDelete.name}? Esta acción no se puede deshacer.`
+                        : ''
+                }
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="destructive"
+                loading={saving === confirmDelete?.slug}
+                loadingText="Eliminando..."
+            />
         </Dialog>
     );
 }

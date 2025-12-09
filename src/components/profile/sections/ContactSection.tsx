@@ -628,24 +628,32 @@ export function ContactSection({ studio, contactInfo, socialNetworks, studioSlug
                             <div className="flex items-start gap-3">
                                 <Share2 className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
                                 <div className="flex flex-wrap gap-3">
-                                    {socialNetworks.map((network) => (
-                                        <a
-                                            key={network.id}
-                                            href={network.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-2 px-3 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all duration-200 hover:scale-105"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {network.platform?.icon && (
-                                                <span className="text-lg">{network.platform.icon}</span>
-                                            )}
-                                            <span className="text-sm text-zinc-300">
-                                                {network.platform?.name || 'Red social'}
-                                            </span>
-                                            <ExternalLink className="w-3 h-3 text-zinc-500" />
-                                        </a>
-                                    ))}
+                                    {socialNetworks.map((network) => {
+                                        const platformName = network.platform?.name?.toLowerCase() || '';
+
+                                        return (
+                                            <a
+                                                key={network.id}
+                                                href={network.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-2 px-3 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all duration-200 hover:scale-105"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {platformName.includes('instagram') && <InstagramIcon className="w-4 h-4 text-zinc-400" />}
+                                                {platformName.includes('facebook') && <FacebookIcon className="w-4 h-4 text-zinc-400" />}
+                                                {platformName.includes('tiktok') && <TikTokIcon className="w-4 h-4 text-zinc-400" />}
+                                                {platformName.includes('youtube') && <YouTubeIcon className="w-4 h-4 text-zinc-400" />}
+                                                {platformName.includes('linkedin') && <LinkedInIcon className="w-4 h-4 text-zinc-400" />}
+                                                {platformName.includes('threads') && <ThreadsIcon className="w-4 h-4 text-zinc-400" />}
+                                                {platformName.includes('spotify') && <SpotifyIcon className="w-4 h-4 text-zinc-400" />}
+                                                <span className="text-sm text-zinc-300">
+                                                    {network.platform?.name || 'Red social'}
+                                                </span>
+                                                <ExternalLink className="w-3 h-3 text-zinc-500" />
+                                            </a>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ) : isOwner ? (

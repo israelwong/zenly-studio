@@ -23,7 +23,7 @@ interface ProfileContentViewProps {
  * Handles tab switching logic and post/portfolio modals
  */
 export function ProfileContentView({ activeTab, profileData, onPostClick, onPortfolioClick, onEditPost, studioId, ownerUserId, studioSlug }: ProfileContentViewProps) {
-    const { studio, contactInfo, portfolios, posts, paquetes } = profileData;
+    const { studio, contactInfo, socialNetworks, portfolios, posts, paquetes } = profileData;
 
     switch (activeTab) {
         case 'inicio':
@@ -72,7 +72,8 @@ export function ProfileContentView({ activeTab, profileData, onPostClick, onPort
                     variant="info"
                     data={{
                         studio,
-                        contactInfo
+                        contactInfo,
+                        socialNetworks
                     }}
                     studioSlug={studioSlug}
                 />

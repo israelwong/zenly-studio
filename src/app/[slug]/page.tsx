@@ -62,6 +62,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
                 no_incluye: paquete.no_incluye ?? undefined,
                 condiciones: paquete.condiciones ?? undefined
             })),
+            socialNetworks: profileData.socialNetworks,
             contactInfo: {
                 ...profileData.contactInfo,
                 horarios: (profileData as { contactInfo?: { horarios?: import('@/types/public-profile').PublicHorario[] } }).contactInfo?.horarios || []
