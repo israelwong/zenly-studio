@@ -2244,33 +2244,34 @@ model studio_revenue_transactions {
 
 //! CONTENT (PORTFOLIOS)
 model studio_portfolios {
-  id              String                            @id @default(cuid())
-  studio_id       String
-  title           String
-  slug            String
-  description     String?
-  cover_image_url String?
-  category        String?
-  order           Int                               @default(0)
-  is_published    Boolean                           @default(false)
-  view_count      Int                               @default(0)
-  created_at      DateTime                          @default(now())
-  updated_at      DateTime                          @updatedAt
-  caption         String?
-  cover_index     Int                               @default(0)
-  cta_action      String                            @default("whatsapp")
-  cta_enabled     Boolean                           @default(true)
-  cta_link        String?
-  cta_text        String                            @default("Cotiza tu evento")
-  event_type_id   String?
-  is_featured     Boolean                           @default(false)
-  published_at    DateTime?
-  tags            String[]                          @default([])
-  content_blocks  studio_portfolio_content_blocks[]
-  items           studio_portfolio_items[]
-  media           studio_portfolio_media[]          @relation("portfolio_media")
-  event_type      studio_event_types?               @relation(fields: [event_type_id], references: [id])
-  studio          studios                           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  id                    String                            @id @default(cuid())
+  studio_id             String
+  title                 String
+  slug                  String
+  description           String?
+  cover_image_url       String?
+  cover_storage_bytes   BigInt?
+  category              String?
+  order                 Int                               @default(0)
+  is_published          Boolean                           @default(false)
+  view_count            Int                               @default(0)
+  created_at            DateTime                          @default(now())
+  updated_at            DateTime                          @updatedAt
+  caption               String?
+  cover_index           Int                               @default(0)
+  cta_action            String                            @default("whatsapp")
+  cta_enabled           Boolean                           @default(true)
+  cta_link              String?
+  cta_text              String                            @default("Cotiza tu evento")
+  event_type_id         String?
+  is_featured           Boolean                           @default(false)
+  published_at          DateTime?
+  tags                  String[]                          @default([])
+  content_blocks        studio_portfolio_content_blocks[]
+  items                 studio_portfolio_items[]
+  media                 studio_portfolio_media[]          @relation("portfolio_media")
+  event_type            studio_event_types?               @relation(fields: [event_type_id], references: [id])
+  studio                studios                           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@unique([studio_id, slug])
   @@index([studio_id, is_published, published_at])

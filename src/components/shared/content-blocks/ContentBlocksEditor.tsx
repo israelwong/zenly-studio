@@ -756,6 +756,12 @@ export function ContentBlocksEditor({
 
             const uploadedFiles = await uploadFiles(files, studioSlug, 'posts', 'content');
 
+            // Validar que uploadedFiles sea un array
+            if (!Array.isArray(uploadedFiles)) {
+                console.error('uploadedFiles no es un array:', uploadedFiles);
+                throw new Error('Respuesta inválida del servidor');
+            }
+
             // Convertir UploadedFile a MediaItem
             const mediaItems: MediaItem[] = uploadedFiles.map((file) => ({
                 id: file.id,
@@ -773,7 +779,7 @@ export function ContentBlocksEditor({
                 handleUpdateBlock(blockId, { media: updatedMedia });
             }
 
-            toast.success(`${files.length} archivo(s) subido(s) correctamente`);
+            // No mostrar toast aquí - useMediaUpload ya maneja todos los mensajes
         } catch (error) {
             console.error('Error uploading files:', error);
             toast.error('Error al subir archivos');

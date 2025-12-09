@@ -98,6 +98,7 @@ export interface PublicPortfolio {
     tags?: string[];
     order: number;
     is_featured?: boolean;
+    is_published?: boolean;
     published_at?: Date | null;
     view_count?: number;
     cover_index?: number;

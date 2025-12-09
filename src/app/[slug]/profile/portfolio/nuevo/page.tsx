@@ -1,4 +1,4 @@
-import { PortfolioEditor } from "../components/PortfolioEditor";
+import { PortfolioEditor } from "../components/PortfolioEditorWrapper";
 
 interface NuevoPortfolioPageProps {
     params: Promise<{

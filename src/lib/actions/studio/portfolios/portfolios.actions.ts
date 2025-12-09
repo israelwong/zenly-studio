@@ -166,6 +166,13 @@ export async function createStudioPortfolio(studioId: string, data: PortfolioFor
                 }
             }
 
+            // Obtener el siguiente order disponible
+            const maxOrder = await tx.studio_portfolios.aggregate({
+                where: { studio_id: studioId },
+                _max: { order: true }
+            });
+            const nextOrder = (maxOrder._max.order ?? -1) + 1;
+
             // Crear portfolio base
             const newPortfolio = await tx.studio_portfolios.create({
                 data: {
@@ -175,6 +182,7 @@ export async function createStudioPortfolio(studioId: string, data: PortfolioFor
                     description: validatedData.description || null,
                     caption: validatedData.caption || null,
                     cover_image_url: validatedData.cover_image_url || null,
+                    cover_storage_bytes: validatedData.cover_storage_bytes ? BigInt(validatedData.cover_storage_bytes) : null,
                     cover_index: validatedData.cover_index,
                     category: validatedData.category || null,
                     event_type_id: validatedData.event_type_id || null,
@@ -182,7 +190,7 @@ export async function createStudioPortfolio(studioId: string, data: PortfolioFor
                     is_featured: validatedData.is_featured || false,
                     is_published: validatedData.is_published || false,
                     published_at: validatedData.is_published ? new Date() : null,
-                    order: validatedData.order || 0,
+                    order: nextOrder,
                 },
                 include: {
                     event_type: { select: { id: true, name: true } },
@@ -543,7 +551,7 @@ export async function updateStudioPortfolio(
         // Si se actualiza el slug, validar que sea único (excluyendo el portfolio actual)
         let finalSlug = validatedData.slug;
         if (validatedData.slug) {
-            finalSlug = await generateUniqueSlug(portfolioWithStudio.studio_id, validatedData.slug, portfolioId);
+            finalSlug = await generateUniquePortfolioSlug(portfolioWithStudio.studio_id, validatedData.slug, portfolioId);
         }
 
         // Aumentar timeout de transacción para portfolios complejos con muchos bloques
@@ -589,6 +597,7 @@ export async function updateStudioPortfolio(
                     description: validatedData.description ?? undefined,
                     caption: validatedData.caption ?? undefined,
                     cover_image_url: validatedData.cover_image_url ?? undefined,
+                    cover_storage_bytes: validatedData.cover_storage_bytes ? BigInt(validatedData.cover_storage_bytes) : undefined,
                     cover_index: validatedData.cover_index,
                     category: validatedData.category ?? undefined,
                     event_type_id: validatedData.event_type_id ?? undefined,
@@ -871,6 +880,237 @@ export async function incrementPortfolioViewCount(portfolioId: string) {
     } catch (error) {
         console.error("Error incrementing view count:", error);
         return { success: false };
+    }
+}
+
+// REORDER PORTFOLIOS - Actualizar orden basado en posición visual
+export async function reorderPortfolios(studioSlug: string, portfolioIds: string[]) {
+    'use server';
+    try {
+        console.log('[reorderPortfolios] Reordenando:', { studioSlug, portfolioIds });
+
+        // Obtener studio
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
+        });
+
+        if (!studio) {
+            return { success: false, error: "Studio no encontrado" };
+        }
+
+        // Actualizar order de cada portfolio según su índice en el array
+        await prisma.$transaction(
+            portfolioIds.map((id, index) =>
+                prisma.studio_portfolios.update({
+                    where: { id },
+                    data: { order: index }
+                })
+            )
+        );
+
+        console.log('[reorderPortfolios] Reorden exitoso');
+        revalidatePath(`/${studioSlug}?section=portafolio`);
+
+        return { success: true };
+    } catch (error) {
+        console.error("[reorderPortfolios] Error:", error);
+        return { success: false, error: "Error al reordenar portfolios" };
+    }
+}
+
+// DUPLICATE PORTFOLIO - Duplicar un portfolio existente
+export async function duplicatePortfolio(portfolioId: string, studioSlug: string) {
+    'use server';
+    try {
+        console.log('[duplicatePortfolio] Iniciando duplicación:', { portfolioId, studioSlug });
+
+        // Obtener studio
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
+        });
+
+        if (!studio) {
+            return { success: false, error: "Studio no encontrado" };
+        }
+
+        // Obtener portfolio original con todo su contenido
+        const original = await prisma.studio_portfolios.findUnique({
+            where: { id: portfolioId },
+            include: {
+                media: true,
+                content_blocks: {
+                    include: {
+                        block_media: {
+                            orderBy: { order: 'asc' }
+                        }
+                    },
+                    orderBy: { order: 'asc' }
+                },
+                items: {
+                    orderBy: { order: 'asc' }
+                }
+            }
+        });
+
+        if (!original || original.studio_id !== studio.id) {
+            return { success: false, error: "Portfolio no encontrado" };
+        }
+
+        // Buscar el último número de copia para este portfolio
+        const existingCopies = await prisma.studio_portfolios.findMany({
+            where: {
+                studio_id: studio.id,
+                OR: [
+                    { title: `${original.title} (Copia)` },
+                    { title: { startsWith: `${original.title} (Copia ` } }
+                ]
+            },
+            select: { title: true }
+        });
+
+        // Determinar el siguiente número de copia
+        let copyNumber = 1;
+        let newTitle = `${original.title} (Copia)`;
+
+        if (existingCopies.length > 0) {
+            // Extraer números de las copias existentes
+            const copyNumbers = existingCopies
+                .map(p => {
+                    const match = p.title.match(/\(Copia (\d+)\)$/);
+                    return match ? parseInt(match[1]) : 0;
+                })
+                .filter(n => n > 0);
+
+            if (copyNumbers.length > 0) {
+                copyNumber = Math.max(...copyNumbers) + 1;
+            } else if (existingCopies.some(p => p.title === `${original.title} (Copia)`)) {
+                copyNumber = 1;
+            }
+
+            newTitle = `${original.title} (Copia ${copyNumber})`;
+        }
+
+        // Generar slug único basado en el nuevo título
+        const baseSlug = newTitle.toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        const uniqueSlug = await generateUniquePortfolioSlug(studio.id, baseSlug);
+
+        // Obtener el siguiente order
+        const maxOrder = await prisma.studio_portfolios.aggregate({
+            where: { studio_id: studio.id },
+            _max: { order: true }
+        });
+        const nextOrder = (maxOrder._max.order ?? -1) + 1;
+
+        // Crear portfolio duplicado con transacción
+        const duplicate = await prisma.$transaction(async (tx) => {
+            // Crear portfolio base
+            const newPortfolio = await tx.studio_portfolios.create({
+                data: {
+                    studio_id: studio.id,
+                    title: newTitle,
+                    slug: uniqueSlug,
+                    description: original.description,
+                    caption: original.caption,
+                    cover_image_url: original.cover_image_url,
+                    cover_storage_bytes: original.cover_storage_bytes,
+                    cover_index: original.cover_index,
+                    category: original.category,
+                    event_type_id: original.event_type_id,
+                    tags: original.tags,
+                    is_featured: false, // Copia no es featured por defecto
+                    is_published: false, // Copia como borrador
+                    order: nextOrder,
+                    cta_enabled: original.cta_enabled,
+                    cta_text: original.cta_text,
+                    cta_link: original.cta_link,
+                    cta_action: original.cta_action,
+                }
+            });
+
+            // Duplicar media y crear mapa de IDs viejos → nuevos
+            const mediaIdMap = new Map<string, string>();
+            if (original.media.length > 0) {
+                for (const item of original.media) {
+                    const newMedia = await tx.studio_portfolio_media.create({
+                        data: {
+                            portfolio_id: newPortfolio.id,
+                            studio_id: studio.id,
+                            file_url: item.file_url,
+                            file_type: item.file_type,
+                            filename: item.filename,
+                            storage_path: item.storage_path,
+                            storage_bytes: item.storage_bytes,
+                            mime_type: item.mime_type,
+                            dimensions: item.dimensions,
+                            duration_seconds: item.duration_seconds,
+                            display_order: item.display_order,
+                            alt_text: item.alt_text,
+                            thumbnail_url: item.thumbnail_url,
+                        }
+                    });
+                    mediaIdMap.set(item.id, newMedia.id);
+                }
+            }
+
+            // Duplicar content blocks con sus relaciones block_media
+            if (original.content_blocks.length > 0) {
+                for (const block of original.content_blocks) {
+                    const newBlock = await tx.studio_portfolio_content_blocks.create({
+                        data: {
+                            portfolio_id: newPortfolio.id,
+                            type: block.type,
+                            title: block.title,
+                            description: block.description,
+                            presentation: block.presentation,
+                            order: block.order,
+                            config: block.config,
+                        }
+                    });
+
+                    // Duplicar block_media con los nuevos IDs
+                    if (block.block_media.length > 0) {
+                        await tx.studio_portfolio_content_block_media.createMany({
+                            data: block.block_media.map(bm => ({
+                                content_block_id: newBlock.id,
+                                media_id: mediaIdMap.get(bm.media_id) || bm.media_id,
+                                order: bm.order,
+                            }))
+                        });
+                    }
+                }
+            }
+
+            // Duplicar items (si existen, aunque es legacy)
+            if (original.items.length > 0) {
+                await tx.studio_portfolio_items.createMany({
+                    data: original.items.map(item => ({
+                        portfolio_id: newPortfolio.id,
+                        title: item.title,
+                        description: item.description,
+                        image_url: item.image_url,
+                        video_url: item.video_url,
+                        item_type: item.item_type,
+                        order: item.order,
+                    }))
+                });
+            }
+
+            return newPortfolio;
+        });
+
+        console.log('[duplicatePortfolio] Duplicación exitosa:', duplicate.id);
+        revalidatePath(`/${studioSlug}?section=portafolio`);
+
+        return { success: true, data: duplicate };
+    } catch (error) {
+        console.error("[duplicatePortfolio] Error:", error);
+        return { success: false, error: "Error al duplicar portfolio" };
     }
 }
 

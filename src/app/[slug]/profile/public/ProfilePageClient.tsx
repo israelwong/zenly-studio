@@ -43,7 +43,10 @@ interface ProfilePageClientProps {
 export function ProfilePageClient({ profileData, studioSlug, offers = [] }: ProfilePageClientProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [activeTab, setActiveTab] = useState<string>('inicio');
+
+    // Inicializar con el section param desde URL para evitar parpadeo
+    const initialTab = searchParams.get('section') || 'inicio';
+    const [activeTab, setActiveTab] = useState<string>(initialTab);
     const [selectedPostSlug, setSelectedPostSlug] = useState<string | null>(null);
     const [selectedPortfolioSlug, setSelectedPortfolioSlug] = useState<string | null>(null);
     const [isSearchOpen, setIsSearchOpen] = useState(false);

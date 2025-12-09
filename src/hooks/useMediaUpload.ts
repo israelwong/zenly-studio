@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, createElement } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { optimizeImage, analyzeVideo, validateFileSize, formatBytes } from '@/lib/utils/image-optimizer';
 import { generateVideoThumbnail, optimizeVideoThumbnail } from '@/lib/utils/video-thumbnail';
 import { deleteFileStorage } from '@/lib/actions/shared/media.actions';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 interface UploadedFile {
   id: string;
@@ -69,6 +70,16 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
 
       setIsUploading(true);
       const uploadedFiles: UploadedFile[] = [];
+      const totalFiles = files.length;
+      const batchToastId = `upload-batch-${Date.now()}`;
+      let uploadedCount = 0;
+
+      // Toast inicial con estilo success y spinner verde
+      toast.success(`Subiendo 0 de ${totalFiles} archivo${totalFiles > 1 ? 's' : ''}...`, {
+        id: batchToastId,
+        icon: createElement(Loader2, { className: "h-4 w-4 animate-spin text-emerald-500" }),
+        duration: Infinity // No auto-dismiss mientras sube
+      });
 
       try {
         for (const file of files) {
@@ -92,10 +103,6 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
                 fileToUpload = optimized.optimizedFile;
                 originalSize = optimized.originalSize;
                 compressionRatio = optimized.compressionRatio;
-
-                toast.success(
-                  `${file.name}: Comprimido ${compressionRatio}% (${formatBytes(optimized.optimizedSize)})`
-                );
               } catch (error) {
                 console.warn(`No se pudo optimizar ${file.name}, usando original:`, error);
               }
@@ -104,7 +111,6 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
 
               // Generar thumbnail del video
               try {
-                toast.info(`Generando thumbnail de ${file.name}...`);
                 const thumbnail = await generateVideoThumbnail(file);
                 const optimizedThumbnail = await optimizeVideoThumbnail(thumbnail);
 
@@ -130,7 +136,6 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
                     .getPublicUrl(thumbData.path);
 
                   thumbnailUrl = `${thumbPublicUrl}?t=${Date.now()}`;
-                  toast.success(`Thumbnail generado para ${file.name}`);
                 } else {
                   console.warn('No se pudo subir thumbnail:', thumbError);
                 }
@@ -195,13 +200,37 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
               onMediaSizeChange(finalSize, 'add');
             }
 
-            toast.success(`${file.name} subido correctamente`);
+            // Actualizar contador y toast
+            uploadedCount++;
+            toast.success(`Subiendo ${uploadedCount} de ${totalFiles} archivo${totalFiles > 1 ? 's' : ''}...`, {
+              id: batchToastId,
+              icon: createElement(Loader2, { className: "h-4 w-4 animate-spin text-emerald-500" }),
+              duration: Infinity
+            });
           } catch (error) {
-            toast.error(`Error subiendo ${file.name}`);
-            console.error(error);
+            console.error(`Error subiendo ${file.name}:`, error);
+            // Continuar con los demás archivos sin mostrar error individual
           }
         }
+
+        // Toast final - con icono de check y duración normal
+        if (uploadedFiles.length > 0) {
+          toast.success(
+            `${uploadedFiles.length} archivo${uploadedFiles.length > 1 ? 's subidos' : ' subido'} correctamente`,
+            {
+              id: batchToastId,
+              duration: 4000 // Auto-dismiss después de 4s
+            }
+          );
+        } else {
+          toast.error('No se pudo subir ningún archivo', { id: batchToastId });
+        }
+
         return uploadedFiles;
+      } catch (error) {
+        console.error('Error en uploadFiles:', error);
+        toast.error('Error al subir archivos', { id: batchToastId });
+        return [];
       } finally {
         setIsUploading(false);
       }

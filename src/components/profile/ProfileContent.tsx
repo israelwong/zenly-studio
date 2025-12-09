@@ -125,7 +125,7 @@ export function ProfileContent({
     // Portfolio content
     if (variant === 'portfolio') {
         const portfolios = data?.portfolios as PublicPortfolio[] || [];
-        return <PortfolioSection portfolios={portfolios} onPortfolioClick={onPortfolioClick} studioId={studioId} ownerUserId={ownerUserId} />;
+        return <PortfolioSection portfolios={portfolios} onPortfolioClick={onPortfolioClick} studioId={studioId} ownerUserId={ownerUserId} currentUserId={user?.id || null} />;
     }
 
     // Portfolio detail content (para editor)

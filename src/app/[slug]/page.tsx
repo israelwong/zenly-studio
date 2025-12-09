@@ -42,6 +42,15 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
                 cost: (item as { price?: number }).price || 0,
                 order: item.order
             })),
+            portfolios: profileData.portfolios.map(portfolio => {
+                console.log('[page.tsx] Mapping portfolio:', portfolio.title, 'is_published:', portfolio.is_published, 'type:', typeof portfolio.is_published);
+                return {
+                    ...portfolio,
+                    is_published: portfolio.is_published,
+                    is_featured: portfolio.is_featured,
+                    view_count: portfolio.view_count ?? 0,
+                };
+            }),
             paquetes: profileData.paquetes.map(paquete => ({
                 id: paquete.id,
                 nombre: paquete.nombre,

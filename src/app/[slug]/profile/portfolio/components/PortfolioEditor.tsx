@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenSwitch, ZenBadge, ZenTagModal } from "@/components/ui/zen";
+import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenConfirmModal, ZenSwitch, ZenBadge, ZenTagModal, ZenTextarea, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from "@/components/ui/zen";
 import { MobilePreviewFull } from "@/components/previews";
 import { ContentBlocksEditor } from "@/components/shared/content-blocks";
 import { ContentBlock } from "@/types/content-blocks";
 import { CategorizedComponentSelector, ComponentOption } from "./CategorizedComponentSelector";
+import { TipoEventoSelector } from "@/components/shared/tipos-evento";
 import { obtenerIdentidadStudio } from "@/lib/actions/studio/profile/identidad";
 import {
     getStudioPortfoliosBySlug,
@@ -17,7 +18,7 @@ import {
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
 import { useTempCuid } from "@/hooks/useTempCuid";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, X, Star, Upload, HardDrive, Loader2, Copy, Check, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, X, Upload, HardDrive, Loader2, Copy, Check, Trash2, MoreVertical, Share2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import cuid from "cuid";
 import Image from "next/image";
@@ -208,19 +209,26 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
     const tempCuid = useTempCuid();
 
     // Estado del formulario
-    const [formData, setFormData] = useState<PortfolioFormData>({
-        id: portfolio?.id || tempCuid, // Usar CUID temporal para nuevos portfolios
-        title: portfolio?.title || "",
-        slug: portfolio?.slug || generateSlug(portfolio?.title || ""),
-        description: portfolio?.description || "",
-        cover_image_url: portfolio?.cover_image_url || null,
-        media: portfolio?.media || [],
-        cover_index: portfolio?.cover_index || 0,
-        tags: portfolio?.tags || [],
-        is_featured: portfolio?.is_featured || false,
-        is_published: portfolio?.is_published ?? false,
-        content_blocks: portfolio?.content_blocks || [],
-        order: portfolio?.order || 0,
+    const [formData, setFormData] = useState<PortfolioFormData>(() => {
+        const baseData = {
+            id: portfolio?.id || tempCuid,
+            title: portfolio?.title || "",
+            slug: portfolio?.slug || generateSlug(portfolio?.title || ""),
+            description: portfolio?.description || "",
+            caption: portfolio?.caption || null,
+            cover_image_url: portfolio?.cover_image_url || null,
+            cover_storage_bytes: portfolio?.cover_storage_bytes ? Number(portfolio.cover_storage_bytes) : null,
+            cover_index: portfolio?.cover_index ?? 0,
+            category: portfolio?.category || null,
+            event_type_id: portfolio?.event_type_id || null,
+            tags: portfolio?.tags ?? [],
+            is_featured: portfolio?.is_featured ?? false,
+            is_published: portfolio?.is_published ?? false,
+            media: portfolio?.media ?? [],
+            content_blocks: portfolio?.content_blocks ?? [],
+            order: portfolio?.order ?? 0,
+        };
+        return baseData as PortfolioFormData;
     });
 
     // Estado para bloques de contenido - Asegurar que todos tengan IDs
@@ -408,8 +416,14 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
     // Calcular tamaño total de todos los componentes
     const totalComponentsSize = useMemo(() => {
         const allMedia = contentBlocks.flatMap(block => block.media || []);
-        return calculateTotalStorage(allMedia);
-    }, [contentBlocks]);
+        const total = calculateTotalStorage(allMedia);
+        console.log('💾 Storage calculation:', {
+            coverSize: formData.cover_storage_bytes,
+            componentsSize: total,
+            totalSize: Number(formData.cover_storage_bytes || 0) + total
+        });
+        return total;
+    }, [contentBlocks, formData.cover_storage_bytes]);
 
     // Crear preview data con portfolio temporal usando useMemo para evitar loops
     const finalPreviewData = useMemo(() => {
@@ -604,7 +618,11 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                 slug: formData.slug || generateSlug(formData.title || ""),
             };
 
-            console.log("Guardando portfolio con datos:", portfolioData);
+            console.log("💾 Guardando portfolio con datos:", {
+                cover_image_url: portfolioData.cover_image_url,
+                cover_storage_bytes: portfolioData.cover_storage_bytes,
+                title: portfolioData.title
+            });
 
             // Guardar usando server actions
             let result;
@@ -663,8 +681,8 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                 setShowPublishModal(false);
             }
 
-            // Redirigir a la lista de portfolios
-            router.push(`/${studioSlug}/profile/edit/content/portfolios`);
+            // Redirigir al perfil público con sección portafolio
+            router.push(`/${studioSlug}?section=portafolio`);
 
         } catch (error) {
             console.error("Error saving portfolio:", error);
@@ -856,9 +874,15 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
         try {
             const uploadedFiles = await uploadFiles([imageFile], studioSlug, 'portfolios', 'covers');
             if (uploadedFiles.length > 0) {
+                console.log('📸 Cover uploaded:', {
+                    url: uploadedFiles[0].url,
+                    size: uploadedFiles[0].size,
+                    fileName: uploadedFiles[0].fileName
+                });
                 setFormData(prev => ({
                     ...prev,
-                    cover_image_url: uploadedFiles[0].url
+                    cover_image_url: uploadedFiles[0].url,
+                    cover_storage_bytes: uploadedFiles[0].size
                 }));
                 toast.success('Carátula subida correctamente');
             }
@@ -905,212 +929,279 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
     const handleRemoveCover = () => {
         setFormData(prev => ({
             ...prev,
-            cover_image_url: null
+            cover_image_url: null,
+            cover_storage_bytes: null
         }));
         toast.success('Carátula eliminada');
     };
 
     return (
         <div className="space-y-6">
-            {/* Header con botón de regresar */}
-            <div className="flex items-center gap-4">
-                <ZenButton variant="ghost" onClick={handleBack} className="gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Regresar
-                </ZenButton>
-                <div>
-                    <h1 className="text-2xl font-bold text-zinc-100">
-                        {mode === "create" ? "Nuevo Portfolio" : "Editar Portfolio"}
-                    </h1>
-                    <p className="text-zinc-400">
-                        {mode === "create" ? "Crea un nuevo portfolio" : "Modifica tu portfolio"}
-                    </p>
+            {/* Header con botón de regresar y acciones */}
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <ZenButton variant="ghost" onClick={handleBack} className="gap-2">
+                        <ArrowLeft className="h-4 w-4" />
+                        Regresar
+                    </ZenButton>
+                    <div>
+                        <h1 className="text-2xl font-bold text-zinc-100">
+                            {mode === "create" ? "Nuevo Portfolio" : "Editar Portfolio"}
+                        </h1>
+                        <p className="text-zinc-400">
+                            {mode === "create" ? "Crea un nuevo portfolio" : "Modifica tu portfolio"}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Botones de acción en el header */}
+                <div className="flex items-center gap-3">
+                    <ZenButton
+                        variant="outline"
+                        onClick={handleCancel}
+                        disabled={isSaving}
+                    >
+                        Cancelar
+                    </ZenButton>
+                    <ZenButton
+                        onClick={() => handleSave(formData.is_published)}
+                        loading={isSaving}
+                        disabled={isSaving || isValidatingSlug || !!titleError}
+                    >
+                        {mode === "create"
+                            ? (formData.is_published ? "Publicar ahora" : "Guardar borrador")
+                            : (isDraft
+                                ? (formData.is_published ? "Publicar ahora" : "Actualizar borrador")
+                                : "Actualizar Portfolio"
+                            )
+                        }
+                    </ZenButton>
+
+                    {/* Menú de opciones - Solo en modo editar */}
+                    {mode === "edit" && (
+                        <ZenDropdownMenu>
+                            <ZenDropdownMenuTrigger asChild>
+                                <ZenButton
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={isSaving || isDeleting}
+                                >
+                                    <MoreVertical className="h-4 w-4" />
+                                </ZenButton>
+                            </ZenDropdownMenuTrigger>
+                            <ZenDropdownMenuContent align="end" className="w-48">
+                                <ZenDropdownMenuItem
+                                    onClick={async () => {
+                                        if (!formData.slug) return;
+                                        const portfolioUrl = `${window.location.origin}/${studioSlug}/portfolios/${formData.slug}`;
+                                        try {
+                                            await navigator.clipboard.writeText(portfolioUrl);
+                                            setLinkCopied(true);
+                                            toast.success("Link copiado al portapapeles");
+                                            setTimeout(() => setLinkCopied(false), 2000);
+                                        } catch {
+                                            toast.error("Error al copiar el link");
+                                        }
+                                    }}
+                                    disabled={!formData.slug}
+                                >
+                                    <Share2 className="h-4 w-4 mr-2" />
+                                    {linkCopied ? "¡Copiado!" : "Copiar link público"}
+                                </ZenDropdownMenuItem>
+                                <ZenDropdownMenuSeparator />
+                                <ZenDropdownMenuItem
+                                    onClick={() => setShowDeleteModal(true)}
+                                    className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                                >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Eliminar portfolio
+                                </ZenDropdownMenuItem>
+                            </ZenDropdownMenuContent>
+                        </ZenDropdownMenu>
+                    )}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Panel de Edición */}
                 <div className="space-y-6">
                     <ZenCard>
                         <ZenCardHeader>
-                            <div className="flex items-center justify-between">
-                                <ZenCardTitle>
-                                    {mode === "create" ? "Crear Nuevo Portfolio" : "Editar Portfolio"}
-                                </ZenCardTitle>
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <ZenCardTitle>
+                                        {mode === "create" ? "Nuevo Portfolio" : "Tu Portafolio"}
+                                    </ZenCardTitle>
 
-                                <div className="flex items-center gap-4">
-                                    {/* Badge de Estado - Solo si NO está publicado */}
-                                    {!isPublished && (
-                                        <ZenBadge
-                                            variant={isDraft ? "secondary" : "success"}
-                                            className="capitalize rounded-full"
-                                        >
-                                            {isDraft ? "Borrador" : "Despublicado"}
-                                        </ZenBadge>
-                                    )}
+                                    <div className="flex items-center gap-4">
+                                        {/* Switch de Publicado */}
+                                        <ZenSwitch
+                                            checked={formData.is_published || pendingPublishSwitch}
+                                            disabled={isSaving || isDeleting}
+                                            onCheckedChange={(checked) => {
+                                                if (isSaving || isDeleting) return;
+                                                if (mode === "edit" && isDraft && checked && !formData.is_published) {
+                                                    setPendingPublishSwitch(true);
+                                                    setShowPublishModal(true);
+                                                } else {
+                                                    setPendingPublishSwitch(false);
+                                                    handleInputChange("is_published", checked);
+                                                }
+                                            }}
+                                            label="Publicado"
+                                        />
+                                    </div>
+                                </div>
 
-                                    {/* Botón de Destacar */}
-                                    <ZenButton
-                                        type="button"
-                                        variant={formData.is_featured ? undefined : "outline"}
-                                        size="sm"
-                                        onClick={() => handleInputChange("is_featured", !formData.is_featured)}
-                                        className={`rounded-full gap-2 transition-all ${formData.is_featured
-                                            ? "bg-amber-500 hover:bg-amber-600 text-black border-amber-500"
-                                            : ""
-                                            }`}
-                                    >
-                                        <Star className={`h-4 w-4 ${formData.is_featured ? 'fill-current' : ''}`} />
-                                        Destacar
-                                    </ZenButton>
+                                {/* Información de almacenamiento total */}
+                                <div className="flex items-center gap-3 text-xs text-zinc-500">
+                                    <span>
+                                        {formData.cover_storage_bytes && Number(formData.cover_storage_bytes) > 0 ? 'Portada + ' : ''}
+                                        {contentBlocks.length} componente{contentBlocks.length !== 1 ? 's' : ''}
+                                    </span>
+                                    <span>•</span>
+                                    <div className="flex items-center gap-2">
+                                        <HardDrive className="w-3 h-3 text-zinc-500" />
+                                        <span className="text-xs font-medium text-emerald-400">
+                                            {formatBytes(Number(formData.cover_storage_bytes || 0) + totalComponentsSize)}
+                                        </span>
+                                    </div>
+                                    <span>almacenados</span>
                                 </div>
                             </div>
                         </ZenCardHeader>
 
                         <ZenCardContent className="space-y-4">
-                            {/* Layout 3 columnas: Portada | Título y Slug */}
-                            <div className="grid grid-cols-3 gap-4">
-                                {/* Columna 1: Portada */}
-                                <div className="space-y-2">
-
-                                    {formData.cover_image_url ? (
-                                        <div className="relative group">
-                                            <div className="aspect-square relative bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700">
-                                                <Image
-                                                    src={formData.cover_image_url}
-                                                    alt="Carátula del portfolio"
-                                                    fill
-                                                    className="object-cover"
-                                                />
-                                                <button
-                                                    onClick={handleRemoveCover}
-                                                    className="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <label className="block">
-                                            <div
-                                                className={`aspect-square border-2 border-dashed rounded-lg transition-colors cursor-pointer flex items-center justify-center bg-zinc-800/30 ${isDragOverCover
-                                                    ? 'border-emerald-500 bg-emerald-500/10'
-                                                    : 'border-zinc-700 hover:border-emerald-500'
-                                                    }`}
-                                                onDragOver={handleCoverDragOver}
-                                                onDragLeave={handleCoverDragLeave}
-                                                onDrop={handleCoverDrop}
-                                            >
-                                                {isUploadingCover ? (
-                                                    <div className="flex flex-col items-center gap-2">
-                                                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent"></div>
-                                                        <span className="text-sm text-zinc-400">Subiendo...</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex flex-col items-center gap-2 text-zinc-400">
-                                                        <Upload className="h-8 w-8" />
-                                                        <span className="text-xs text-center px-2">Haz clic para subir o arrastra una imagen de portada</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={handleCoverFileInput}
-                                                className="hidden"
-                                                disabled={isUploadingCover}
-                                            />
-                                        </label>
+                            {/* Título y descripción */}
+                            <div className="space-y-4">
+                                {/* Título */}
+                                <div>
+                                    <ZenInput
+                                        label="Título"
+                                        value={formData.title || ""}
+                                        onChange={(e) => handleInputChange("title", e.target.value)}
+                                        placeholder="Título del portfolio"
+                                        error={titleError ?? undefined}
+                                    />
+                                    {/* Indicador de validación y hint */}
+                                    {isValidatingSlug && !titleError && (
+                                        <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            Validando disponibilidad...
+                                        </p>
+                                    )}
+                                    {slugHint && !isValidatingSlug && !titleError && (
+                                        <p className="text-xs text-emerald-400 mt-1">
+                                            {slugHint}
+                                        </p>
                                     )}
                                 </div>
 
-                                {/* Columnas 2-3: Título y Slug */}
-                                <div className="col-span-2 space-y-4">
-                                    {/* Título */}
-                                    <div>
-                                        <ZenInput
-                                            label="Título"
-                                            value={formData.title || ""}
-                                            onChange={(e) => handleInputChange("title", e.target.value)}
-                                            placeholder="Título del portfolio"
-                                            error={titleError ?? undefined}
-                                        />
-                                        {/* Indicador de validación y hint */}
-                                        {isValidatingSlug && !titleError && (
-                                            <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                Validando disponibilidad...
-                                            </p>
-                                        )}
-                                        {slugHint && !isValidatingSlug && !titleError && (
-                                            <p className="text-xs text-emerald-400 mt-1">
-                                                {slugHint}
-                                            </p>
+                                {/* Descripción breve */}
+                                <div>
+                                    <ZenTextarea
+                                        label="Descripción breve"
+                                        value={formData.description || ""}
+                                        onChange={(e) => handleInputChange("description", e.target.value)}
+                                        placeholder="Descripción del portfolio (máx. 100 caracteres)"
+                                        rows={2}
+                                        maxLength={100}
+                                    />
+                                </div>
+
+                                {/* Portada - Versión compacta lado a lado */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium text-zinc-300">
+                                            Imagen de Portada
+                                        </label>
+                                        {formData.cover_storage_bytes && Number(formData.cover_storage_bytes) > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                <HardDrive className="w-3 h-3 text-zinc-500" />
+                                                <span className="text-xs font-medium text-emerald-400">
+                                                    {formatBytes(Number(formData.cover_storage_bytes))}
+                                                </span>
+                                            </div>
                                         )}
                                     </div>
 
-                                    {/* Controles de publicación y link */}
-                                    <div className="flex items-center justify-between gap-4 p-4 border border-zinc-800 rounded-md bg-zinc-900/50">
-                                        {/* Switch Publicado */}
-                                        <div className="flex items-center gap-3">
-                                            <ZenSwitch
-                                                checked={formData.is_published || pendingPublishSwitch}
-                                                disabled={isSaving || isDeleting}
-                                                onCheckedChange={(checked) => {
-                                                    // No permitir cambios si se está guardando
-                                                    if (isSaving || isDeleting) return;
+                                    <div className="border border-zinc-800 rounded-lg p-3 bg-zinc-900/50">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {/* Preview */}
+                                            {formData.cover_image_url ? (
+                                                <div className="relative group">
+                                                    <div className="relative aspect-video bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700">
+                                                        <Image
+                                                            src={formData.cover_image_url}
+                                                            alt="Portada del portfolio"
+                                                            fill
+                                                            className="object-cover"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleRemoveCover}
+                                                            className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="aspect-video bg-zinc-800/50 rounded-lg border border-zinc-800 flex items-center justify-center">
+                                                    <span className="text-xs text-zinc-600">Vista previa</span>
+                                                </div>
+                                            )}
 
-                                                    // Si estamos en modo borrador y se activa, mostrar modal
-                                                    if (isDraft && mode === "edit" && checked && !formData.is_published) {
-                                                        // Activar visualmente el switch pero esperar confirmación
-                                                        setPendingPublishSwitch(true);
-                                                        setShowPublishModal(true);
-                                                    } else {
-                                                        // Si se desactiva o no es borrador, cambiar directamente
-                                                        setPendingPublishSwitch(false);
-                                                        handleInputChange("is_published", checked);
-                                                    }
-                                                }}
-                                                label="Publicado"
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center gap-3">
-                                            {/* Botón Copiar Link */}
-                                            {formData.slug && (
-                                                <ZenButton
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={async () => {
-                                                        const portfolioUrl = `${window.location.origin}/${studioSlug}/portfolios/${formData.slug}`;
-                                                        try {
-                                                            await navigator.clipboard.writeText(portfolioUrl);
-                                                            setLinkCopied(true);
-                                                            toast.success("Link copiado al portapapeles");
-                                                            setTimeout(() => setLinkCopied(false), 2000);
-                                                        } catch {
-                                                            toast.error("Error al copiar el link");
-                                                        }
-                                                    }}
-                                                    className="gap-2"
+                                            {/* Drop zone */}
+                                            <label className="block">
+                                                <div
+                                                    className={`aspect-video border-2 border-dashed rounded-lg transition-colors cursor-pointer flex flex-col items-center justify-center gap-2 ${isDragOverCover
+                                                        ? 'border-emerald-500 bg-emerald-500/10'
+                                                        : 'border-zinc-700 hover:border-emerald-500 bg-zinc-800/30'
+                                                        }`}
+                                                    onDragOver={handleCoverDragOver}
+                                                    onDragLeave={handleCoverDragLeave}
+                                                    onDrop={handleCoverDrop}
                                                 >
-                                                    {linkCopied ? (
+                                                    {isUploadingCover ? (
                                                         <>
-                                                            <Check className="h-4 w-4" />
-                                                            Copiado
+                                                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-emerald-400 border-t-transparent"></div>
+                                                            <span className="text-xs text-zinc-400">Subiendo...</span>
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <Copy className="h-4 w-4" />
-                                                            Copiar link
+                                                            <Upload className="h-5 w-5 text-zinc-400" />
+                                                            <span className="text-xs text-zinc-400 text-center px-2">
+                                                                {formData.cover_image_url ? 'Cambiar imagen' : 'Arrastra o haz clic'}
+                                                            </span>
                                                         </>
                                                     )}
-                                                </ZenButton>
-                                            )}
+                                                </div>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleCoverFileInput}
+                                                    className="hidden"
+                                                    disabled={isUploadingCover}
+                                                />
+                                            </label>
                                         </div>
                                     </div>
+
+                                    <p className="text-xs text-zinc-500">
+                                        Imagen que se mostrará en la vista previa del portfolio
+                                    </p>
                                 </div>
+
+                                {/* Divisor */}
+                                <div className="border-t border-zinc-800"></div>
+
+                                {/* Tipo de Evento */}
+                                <TipoEventoSelector
+                                    studioSlug={studioSlug}
+                                    selectedEventTypeId={formData.event_type_id || null}
+                                    onChange={(eventTypeId) => handleInputChange("event_type_id", eventTypeId)}
+                                />
                             </div>
 
                             {/* Sistema de Bloques de Contenido */}
@@ -1233,11 +1324,8 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                                 onSelect={handleAddComponentFromSelector}
                             />
 
-                            {/* Divisor inferior */}
-                            <div className="border-t border-dotted border-zinc-800 my-8" />
-
                             {/* Palabras Clave */}
-                            <div className="space-y-4 p-4 border border-zinc-800 rounded-md">
+                            <div className="space-y-4 p-4 border border-zinc-800 rounded-md mt-6">
                                 <div className="flex items-center justify-between mb-3">
                                     <label className="block text-sm font-medium text-zinc-300">
                                         Palabras Clave
@@ -1279,135 +1367,19 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                                 </p>
                             </div>
 
-                            {/* Botones */}
-                            {mode === "create" ? (
-                                // Modo CREAR
-                                <>
-                                    <div className="flex gap-3 pt-4">
-                                        <ZenButton
-                                            onClick={() => handleSave(true)}
-                                            className="flex-1"
-                                            loading={isSaving}
-                                            disabled={isSaving || isValidatingSlug || !!titleError}
-                                        >
-                                            Publicar ahora
-                                        </ZenButton>
-                                        <ZenButton
-                                            variant="outline"
-                                            onClick={() => handleSave(false)}
-                                            loading={isSaving}
-                                            disabled={isSaving || isValidatingSlug || !!titleError}
-                                        >
-                                            Guardar como borrador
-                                        </ZenButton>
-                                        <ZenButton
-                                            variant="outline"
-                                            onClick={handleCancel}
-                                            disabled={isSaving}
-                                        >
-                                            Cancelar
-                                        </ZenButton>
-                                    </div>
-
-                                    {/* Mensaje de ayuda si hay error */}
-                                    {titleError && (
-                                        <div className="pt-2 text-center">
-                                            <p className="text-xs text-red-400">
-                                                {titleError}
-                                            </p>
-                                        </div>
-                                    )}
-                                </>
-                            ) : isDraft ? (
-                                // Modo EDITAR - Borrador
-                                // El switch controla si publicar o mantener como borrador
-                                <>
-                                    <div className="flex items-center gap-3 pt-4">
-                                        <div className="flex gap-3 flex-1">
-                                            <ZenButton
-                                                onClick={() => handleSave(formData.is_published)}
-                                                className="flex-1"
-                                                loading={isSaving}
-                                                disabled={isSaving || isValidatingSlug || !!titleError}
-                                            >
-                                                {formData.is_published ? "Publicar ahora" : "Actualizar borrador"}
-                                            </ZenButton>
-                                            <ZenButton
-                                                variant="outline"
-                                                onClick={() => setShowPublishModal(true)}
-                                                disabled={isSaving || isValidatingSlug || !!titleError}
-                                            >
-                                                Publicar portfolio
-                                            </ZenButton>
-                                            <ZenButton
-                                                variant="outline"
-                                                onClick={handleCancel}
-                                                disabled={isSaving}
-                                            >
-                                                Cancelar
-                                            </ZenButton>
-                                        </div>
-                                        <ZenButton
-                                            type="button"
-                                            variant="outline"
-                                            onClick={() => setShowDeleteModal(true)}
-                                            disabled={isSaving || isDeleting}
-                                            className="text-red-400 hover:text-red-300 hover:bg-red-950/20 border-red-800/50"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </ZenButton>
-                                    </div>
-
-                                    {/* Mensaje de ayuda si hay error */}
-                                    {titleError && (
-                                        <div className="pt-2 text-center">
-                                            <p className="text-xs text-red-400">
-                                                {titleError}
-                                            </p>
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                // Modo EDITAR - Publicado/Despublicado
-                                <>
-                                    <div className="flex items-center gap-3 pt-4">
-                                        <div className="flex gap-3 flex-1">
-                                            <ZenButton
-                                                onClick={() => handleSave(formData.is_published)}
-                                                className="flex-1"
-                                                loading={isSaving}
-                                                disabled={isSaving || isValidatingSlug || !!titleError}
-                                            >
-                                                Actualizar Portfolio
-                                            </ZenButton>
-                                            <ZenButton
-                                                variant="outline"
-                                                onClick={handleCancel}
-                                                disabled={isSaving}
-                                            >
-                                                Cancelar
-                                            </ZenButton>
-                                        </div>
-                                        <ZenButton
-                                            type="button"
-                                            variant="outline"
-                                            onClick={() => setShowDeleteModal(true)}
-                                            disabled={isSaving || isDeleting}
-                                            className="text-red-400 hover:text-red-300 hover:bg-red-950/20 border-red-800/50"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </ZenButton>
-                                    </div>
-
-                                    {/* Mensaje de ayuda si hay error */}
-                                    {titleError && (
-                                        <div className="pt-2 text-center">
-                                            <p className="text-xs text-red-400">
-                                                {titleError}
-                                            </p>
-                                        </div>
-                                    )}
-                                </>
+                            {/* Botón Guardar como borrador - Solo en modo create */}
+                            {mode === "create" && (
+                                <div className="pt-4">
+                                    <ZenButton
+                                        variant="outline"
+                                        onClick={() => handleSave(false)}
+                                        loading={isSaving}
+                                        disabled={isSaving || isValidatingSlug || !!titleError}
+                                        className="w-full"
+                                    >
+                                        Guardar como borrador
+                                    </ZenButton>
+                                </div>
                             )}
                         </ZenCardContent>
                     </ZenCard>
@@ -1500,7 +1472,7 @@ export function PortfolioEditor({ studioSlug, mode, portfolio }: PortfolioEditor
                         const result = await deleteStudioPortfolio(portfolio.id);
                         if (result.success) {
                             toast.success("Portfolio eliminado exitosamente");
-                            router.push(`/${studioSlug}/profile/edit/content/portfolios`);
+                            router.push(`/${studioSlug}?section=portafolio`);
                         } else {
                             toast.error(result.error || "Error al eliminar portfolio");
                             setIsDeleting(false);

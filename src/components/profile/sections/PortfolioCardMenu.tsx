@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { MoreVertical, Edit, Copy, Archive, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { archivePortfolio, deletePortfolio } from '@/lib/actions/studio/archive.actions';
+import { duplicatePortfolio } from '@/lib/actions/studio/portfolios/portfolios.actions';
 
 interface PortfolioCardMenuProps {
     portfolioId: string;
@@ -21,12 +23,25 @@ interface PortfolioCardMenuProps {
 export function PortfolioCardMenu({ portfolioId, portfolioSlug, studioSlug, isPublished }: PortfolioCardMenuProps) {
     const router = useRouter();
     const { user } = useAuth();
+    const buttonRef = useRef<HTMLButtonElement>(null);
     const [isOpen, setIsOpen] = useState(false);
+    const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isArchiving, setIsArchiving] = useState(false);
     const [isDuplicating, setIsDuplicating] = useState(false);
+
+    // Calcular posición del menú cuando se abre
+    useEffect(() => {
+        if (isOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setMenuPosition({
+                top: rect.bottom + 4,
+                right: window.innerWidth - rect.right
+            });
+        }
+    }, [isOpen]);
 
     // No mostrar si no hay usuario
     if (!user) {
@@ -41,11 +56,17 @@ export function PortfolioCardMenu({ portfolioId, portfolioSlug, studioSlug, isPu
     const handleDuplicate = async () => {
         setIsDuplicating(true);
         try {
-            // TODO: Implementar acción de duplicar
-            toast.success('Portfolio duplicado correctamente');
-            setIsOpen(false);
-            router.refresh();
+            const result = await duplicatePortfolio(portfolioId, studioSlug);
+
+            if (result.success) {
+                toast.success('Portfolio duplicado correctamente como borrador');
+                setIsOpen(false);
+                router.refresh();
+            } else {
+                toast.error(result.error || 'Error al duplicar el portfolio');
+            }
         } catch (error) {
+            console.error('[PortfolioCardMenu] Error duplicating:', error);
             toast.error('Error al duplicar el portfolio');
         } finally {
             setIsDuplicating(false);
@@ -55,11 +76,17 @@ export function PortfolioCardMenu({ portfolioId, portfolioSlug, studioSlug, isPu
     const handleArchiveConfirm = async () => {
         setIsArchiving(true);
         try {
-            // TODO: Implementar acción de archivar
-            toast.success('Portfolio archivado correctamente');
-            setShowArchiveModal(false);
-            router.refresh();
+            const result = await archivePortfolio(portfolioId, studioSlug);
+
+            if (result.success) {
+                toast.success('Portfolio archivado correctamente');
+                setShowArchiveModal(false);
+                router.refresh();
+            } else {
+                toast.error(result.error || 'Error al archivar el portfolio');
+            }
         } catch (error) {
+            console.error('[PortfolioCardMenu] Error archiving:', error);
             toast.error('Error al archivar el portfolio');
         } finally {
             setIsArchiving(false);
@@ -69,11 +96,17 @@ export function PortfolioCardMenu({ portfolioId, portfolioSlug, studioSlug, isPu
     const handleDeleteConfirm = async () => {
         setIsDeleting(true);
         try {
-            // TODO: Implementar acción de eliminar
-            toast.success('Portfolio eliminado correctamente');
-            setShowDeleteModal(false);
-            router.refresh();
+            const result = await deletePortfolio(portfolioId, studioSlug);
+
+            if (result.success) {
+                toast.success('Portfolio eliminado correctamente');
+                setShowDeleteModal(false);
+                router.refresh();
+            } else {
+                toast.error(result.error || 'Error al eliminar el portfolio');
+            }
         } catch (error) {
+            console.error('[PortfolioCardMenu] Error deleting:', error);
             toast.error('Error al eliminar el portfolio');
         } finally {
             setIsDeleting(false);
@@ -83,89 +116,92 @@ export function PortfolioCardMenu({ portfolioId, portfolioSlug, studioSlug, isPu
     return (
         <>
             {/* Botón del menú */}
-            <div className="relative">
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setIsOpen(!isOpen);
-                    }}
-                    className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-                    aria-label="Opciones"
-                >
-                    <MoreVertical className="w-4 h-4" />
-                </button>
+            <button
+                ref={buttonRef}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setIsOpen(!isOpen);
+                }}
+                className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                aria-label="Opciones"
+            >
+                <MoreVertical className="w-4 h-4" />
+            </button>
 
-                {/* Dropdown Menu */}
-                {isOpen && (
-                    <>
-                        {/* Overlay para cerrar */}
-                        <div
-                            className="fixed inset-0 z-20"
+            {/* Dropdown Menu con Portal-like behavior */}
+            {isOpen && (
+                <>
+                    {/* Overlay para cerrar */}
+                    <div
+                        className="fixed inset-0 z-40"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsOpen(false);
+                        }}
+                    />
+
+                    {/* Menu - Fixed positioning para evitar recortes */}
+                    <div
+                        className="fixed z-50 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden"
+                        style={{
+                            top: `${menuPosition.top}px`,
+                            right: `${menuPosition.right}px`,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Editar */}
+                        <button
                             onClick={(e) => {
                                 e.stopPropagation();
+                                handleEdit();
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+                        >
+                            <Edit className="w-4 h-4" />
+                            Editar
+                        </button>
+
+                        {/* Duplicar */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicate();
+                            }}
+                            disabled={isDuplicating}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                        >
+                            <Copy className="w-4 h-4" />
+                            {isDuplicating ? 'Duplicando...' : 'Duplicar'}
+                        </button>
+
+                        {/* Archivar */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowArchiveModal(true);
                                 setIsOpen(false);
                             }}
-                        />
-
-                        {/* Menu */}
-                        <div
-                            className="absolute right-0 top-8 z-30 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden"
-                            onClick={(e) => e.stopPropagation()}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
                         >
-                            {/* Editar */}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEdit();
-                                }}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
-                            >
-                                <Edit className="w-4 h-4" />
-                                Editar
-                            </button>
+                            <Archive className="w-4 h-4" />
+                            Archivar
+                        </button>
 
-                            {/* Duplicar */}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDuplicate();
-                                }}
-                                disabled={isDuplicating}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
-                            >
-                                <Copy className="w-4 h-4" />
-                                {isDuplicating ? 'Duplicando...' : 'Duplicar'}
-                            </button>
-
-                            {/* Archivar */}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowArchiveModal(true);
-                                    setIsOpen(false);
-                                }}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
-                            >
-                                <Archive className="w-4 h-4" />
-                                Archivar
-                            </button>
-
-                            {/* Eliminar */}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowDeleteModal(true);
-                                    setIsOpen(false);
-                                }}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-950/20 transition-colors"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                                Eliminar
-                            </button>
-                        </div>
-                    </>
-                )}
-            </div>
+                        {/* Eliminar */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDeleteModal(true);
+                                setIsOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-950/20 transition-colors"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Eliminar
+                        </button>
+                    </div>
+                </>
+            )}
 
             {/* Modal de confirmación - Archivar */}
             {showArchiveModal && (

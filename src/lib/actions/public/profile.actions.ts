@@ -134,7 +134,7 @@ export async function getStudioProfileBySlug(
                         orderBy: { order: 'asc' }
                     },
                     portfolios: {
-                        where: { is_published: true },
+                        where: isOwner ? {} : { is_published: true },
                         select: {
                             id: true,
                             title: true,
@@ -145,10 +145,17 @@ export async function getStudioProfileBySlug(
                             category: true,
                             order: true,
                             is_featured: true,
+                            is_published: true,
                             published_at: true,
                             view_count: true,
                             cover_index: true,
                             tags: true,
+                            event_type: {
+                                select: {
+                                    id: true,
+                                    name: true
+                                }
+                            },
                             items: {
                                 select: {
                                     id: true,
@@ -199,12 +206,6 @@ export async function getStudioProfileBySlug(
                                     }
                                 },
                                 orderBy: { order: 'asc' }
-                            },
-                            event_type: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                }
                             }
                         },
                         orderBy: { order: 'asc' }
@@ -323,6 +324,9 @@ export async function getStudioProfileBySlug(
             }));
 
             const portfolios: PublicPortfolio[] = studio.portfolios.map(portfolio => {
+                // Debug: Log is_published
+                console.log('[profile.actions] Portfolio:', portfolio.title, 'is_published:', portfolio.is_published);
+
                 // Mapear media para PortfolioDetailSection
                 const portfolioMedia = portfolio.media.map(item => ({
                     id: item.id,
@@ -376,6 +380,7 @@ export async function getStudioProfileBySlug(
                     category: portfolio.category,
                     order: portfolio.order,
                     is_featured: portfolio.is_featured,
+                    is_published: portfolio.is_published,
                     published_at: portfolio.published_at,
                     view_count: portfolio.view_count,
                     cover_index: portfolio.cover_index,

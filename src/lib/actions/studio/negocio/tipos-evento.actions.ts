@@ -161,6 +161,7 @@ export async function crearTipoEvento(
  * Actualizar un tipo de evento
  */
 export async function actualizarTipoEvento(
+    studioSlug: string,
     tipoId: string,
     data: unknown
 ): Promise<ActionResponse<TipoEventoData>> {

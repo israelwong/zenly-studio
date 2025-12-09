@@ -34,22 +34,23 @@ export const portfolioFormSchema = z.object({
     description: z.string().max(2000).optional().nullable(),
     caption: z.string().max(2000).optional().nullable(), // Descripción con soporte para links
     cover_image_url: z.string().url().optional().nullable(),
+    cover_storage_bytes: z.number().optional().nullable(),
     cover_index: z.number().min(0).default(0),
-    
+
     // Clasificación
     category: z.enum(["portfolio", "blog", "promo"]).optional().nullable(),
     event_type_id: z.string().cuid().optional().nullable(),
     tags: z.array(z.string()).default([]),
-    
+
     // Visibilidad
     is_featured: z.boolean().default(false),
     is_published: z.boolean().default(false),
-    
+
     // Media y Content Blocks
     // Media es opcional si hay content_blocks con media
     media: z.array(mediaItemSchema).optional().default([]),
     content_blocks: z.array(z.any()).optional().default([]), // ContentBlock[] - validación más flexible
-    
+
     // Orden
     order: z.number().default(0),
 });

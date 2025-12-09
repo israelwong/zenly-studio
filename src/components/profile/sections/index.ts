@@ -17,7 +17,6 @@ export { PortfolioSection } from './PortfolioSection';
 export { PortfolioDetailSection } from './PortfolioDetailSection';
 export { PortfolioDetailModal } from './PortfolioDetailModal';
 export { PortfolioFeedCard } from './PortfolioFeedCard';
-export { PortfolioFeedCardWithTracking } from './PortfolioFeedCardWithTracking';
 export { PostSection } from './PostSection';
 export { PostDetailSection } from './PostDetailSection';
 export { PostDetailModal } from './PostDetailModal';

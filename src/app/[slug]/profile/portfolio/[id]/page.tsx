@@ -1,4 +1,4 @@
-import { PortfolioEditor } from "../components/PortfolioEditor";
+import { PortfolioEditor } from "../components/PortfolioEditorWrapper";
 import { getStudioPortfolioById } from "@/lib/actions/studio/portfolios/portfolios.actions";
 import { notFound } from "next/navigation";
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
@@ -57,6 +57,7 @@ function convertDatabasePortfolioToFormData(dbPortfolio: DatabasePortfolio): Por
         description: dbPortfolio.description || "",
         caption: dbPortfolio.caption || "",
         cover_image_url: dbPortfolio.cover_image_url || null,
+        cover_storage_bytes: dbPortfolio.cover_storage_bytes ? Number(dbPortfolio.cover_storage_bytes) : null,
         media,
         cover_index: dbPortfolio.cover_index,
         category: dbPortfolio.category as "portfolio" | "blog" | "promo" | null,

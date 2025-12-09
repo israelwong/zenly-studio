@@ -66,6 +66,7 @@ export const PublicPortfolioSchema = z.object({
     category: z.string().nullable(),
     order: z.number(),
     is_featured: z.boolean(),
+    is_published: z.boolean().optional(),
     published_at: z.date().nullable(),
     view_count: z.number(),
     cover_index: z.number(),
