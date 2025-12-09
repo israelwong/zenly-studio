@@ -72,6 +72,8 @@ export async function getStudioProfileBySlug(
                     slogan: true,
                     website: true,
                     address: true,
+                    email: true,
+                    maps_url: true,
                     plan_id: true,
                     user_profiles: {
                         where: {
@@ -300,8 +302,8 @@ export async function getStudioProfileBySlug(
                 })),
                 address: studio.address,
                 website: studio.website,
-                email: null, // TODO: Add email field to database schema
-                google_maps_url: null, // TODO: Add google_maps_url field to database schema
+                email: studio.email,
+                google_maps_url: studio.maps_url,
                 horarios: studio.business_hours?.map(horario => ({
                     id: horario.id,
                     dia: horario.day_of_week,
