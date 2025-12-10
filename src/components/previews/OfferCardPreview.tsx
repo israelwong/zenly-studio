@@ -21,7 +21,7 @@ export function OfferCardPreview({
   coverMediaType,
 }: OfferCardPreviewProps) {
   return (
-    <div className="pt-4">
+    <div className="w-full">
       {/* Card Principal - Solo imagen/video */}
       <div className="bg-zinc-900/50 rounded-2xl overflow-hidden border border-zinc-800/50 backdrop-blur-sm">
         {/* Cover Media - Full card con aspect ratio natural */}
@@ -49,7 +49,7 @@ export function OfferCardPreview({
               )}
             </>
           ) : (
-            <div className="w-full aspect-[4/3] flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+            <div className="w-full aspect-4/3 flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
               <div className="text-center space-y-2">
                 <svg
                   className="w-12 h-12 mx-auto text-zinc-600"
@@ -79,11 +79,6 @@ export function OfferCardPreview({
           </button>
         </div>
       </div>
-
-      {/* Hint text */}
-      <p className="text-xs text-zinc-500 text-center px-4 mt-3">
-        Vista previa de cómo se verá en tu feed público
-      </p>
     </div>
   );
 }

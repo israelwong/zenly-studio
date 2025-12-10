@@ -47,7 +47,6 @@ export const CreateOfferSchema = z.object({
   start_date: z.date().nullable().optional(),
   end_date: z.date().nullable().optional(),
   business_term_id: z.string().nullable().optional(), // Condición comercial especial
-  override_standard_terms: z.boolean().default(false), // Ocultar condiciones estándar
   landing_page: z.object({
     content_blocks: z.array(z.any()).default([]), // ContentBlock[] - validación más específica en el componente
     cta_config: CTAConfigSchema,

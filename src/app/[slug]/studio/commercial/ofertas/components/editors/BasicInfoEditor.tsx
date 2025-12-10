@@ -400,7 +400,6 @@ export function BasicInfoEditor({
               if (!checked) {
                 updateFormData({
                   business_term_id: null,
-                  override_standard_terms: false,
                 });
               } else {
                 // Cargar condiciones comerciales al activar
@@ -519,27 +518,6 @@ export function BasicInfoEditor({
                     Crear condición especial
                   </ZenButton>
                 </div>
-
-                {/* Checkbox Ocultar Condiciones Estándar */}
-                {businessTerms.filter(t => t.type === 'offer').length > 0 && (
-                  <div className="flex items-start gap-3 pt-2 border-t border-zinc-800">
-                    <input
-                      type="checkbox"
-                      id="override-standard"
-                      checked={formData.override_standard_terms}
-                      onChange={(e) => updateFormData({ override_standard_terms: e.target.checked })}
-                      className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0"
-                    />
-                    <div className="flex-1">
-                      <label htmlFor="override-standard" className="text-sm font-medium text-zinc-300 cursor-pointer">
-                        Ocultar condiciones estándar
-                      </label>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        Solo se mostrarán las condiciones especiales en la vista pública
-                      </p>
-                    </div>
-                  </div>
-                )}
 
                 {/* Info */}
                 <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">

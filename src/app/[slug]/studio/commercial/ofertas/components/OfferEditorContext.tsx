@@ -20,7 +20,6 @@ interface OfferFormData {
   start_date: Date | null;
   end_date: Date | null;
   business_term_id: string | null; // Condición comercial especial
-  override_standard_terms: boolean; // Ocultar condiciones estándar
 }
 
 interface LeadFormData {
@@ -86,8 +85,7 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
     has_date_range: initialOffer?.has_date_range ?? false,
     start_date: initialOffer?.start_date ? new Date(initialOffer.start_date) : null,
     end_date: initialOffer?.end_date ? new Date(initialOffer.end_date) : null,
-    business_term_id: (initialOffer as any)?.business_term_id || null,
-    override_standard_terms: (initialOffer as any)?.override_standard_terms ?? false,
+    business_term_id: initialOffer?.business_term_id || null,
   });
 
   // Estado para landing page
@@ -158,7 +156,6 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
       start_date: formData.start_date,
       end_date: formData.end_date,
       business_term_id: formData.business_term_id,
-      override_standard_terms: formData.override_standard_terms,
       landing_page: {
         content_blocks: contentBlocks,
         cta_config: {

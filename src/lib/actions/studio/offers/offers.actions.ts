@@ -142,12 +142,22 @@ export async function createOffer(
         }
       }
 
+      // Asociar business_term si se proporcionó
+      if (validatedData.business_term_id) {
+        await prisma.studio_condiciones_comerciales.update({
+          where: { id: validatedData.business_term_id },
+          data: {
+            offer_id: offer.id,
+            type: 'offer',
+          },
+        });
+      }
+
       const mappedOffer: StudioOffer = {
         id: offer.id,
         studio_id: offer.studio_id,
         name: offer.name,
         description: offer.description,
-        objective: offer.objective as "presencial" | "virtual",
         slug: offer.slug,
         cover_media_url: offer.cover_media_url,
         cover_media_type: offer.cover_media_type as "image" | "video" | null,
@@ -158,6 +168,7 @@ export async function createOffer(
         end_date: offer.end_date,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
+        business_term_id: validatedData.business_term_id || null,
         landing_page: offer.landing_page
           ? {
             id: offer.landing_page.id,
@@ -272,7 +283,6 @@ export async function updateOffer(
       const updateData: {
         name?: string;
         description?: string | null;
-        objective?: string;
         slug?: string;
         cover_media_url?: string | null;
         cover_media_type?: string | null;
@@ -304,8 +314,6 @@ export async function updateOffer(
       if (validatedData.name !== undefined) updateData.name = validatedData.name;
       if (validatedData.description !== undefined)
         updateData.description = validatedData.description || null;
-      if (validatedData.objective !== undefined)
-        updateData.objective = validatedData.objective;
       if (validatedData.slug !== undefined) updateData.slug = validatedData.slug;
       // Siempre incluir cover_media_url y cover_media_type si están presentes en validatedData
       if ('cover_media_url' in validatedData)
@@ -356,8 +364,41 @@ export async function updateOffer(
         include: {
           landing_page: true,
           leadform: true,
+          business_term: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              discount_percentage: true,
+              advance_percentage: true,
+              type: true,
+              override_standard: true,
+            },
+          },
         },
       });
+
+      // Manejar business_term_id
+      if ('business_term_id' in validatedData) {
+        const businessTermId = validatedData.business_term_id;
+
+        // Primero, desasociar cualquier condición comercial existente de esta oferta
+        await prisma.studio_condiciones_comerciales.updateMany({
+          where: { offer_id: offerId },
+          data: { offer_id: null },
+        });
+
+        // Si hay un business_term_id, asociarlo a esta oferta
+        if (businessTermId) {
+          await prisma.studio_condiciones_comerciales.update({
+            where: { id: businessTermId },
+            data: {
+              offer_id: offerId,
+              type: 'offer',
+            },
+          });
+        }
+      }
 
       // Actualizar content blocks si se proporcionaron
       if (validatedData.landing_page?.content_blocks) {
@@ -380,7 +421,6 @@ export async function updateOffer(
         studio_id: offer.studio_id,
         name: offer.name,
         description: offer.description,
-        objective: offer.objective as "presencial" | "virtual",
         slug: offer.slug,
         cover_media_url: offer.cover_media_url,
         cover_media_type: offer.cover_media_type as "image" | "video" | null,
@@ -391,6 +431,16 @@ export async function updateOffer(
         end_date: offer.end_date,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
+        business_term_id: offer.business_term?.id || null,
+        business_term: offer.business_term ? {
+          id: offer.business_term.id,
+          name: offer.business_term.name,
+          description: offer.business_term.description,
+          discount_percentage: offer.business_term.discount_percentage,
+          advance_percentage: offer.business_term.advance_percentage,
+          type: offer.business_term.type as 'standard' | 'offer',
+          override_standard: offer.business_term.override_standard,
+        } : undefined,
         landing_page: offer.landing_page
           ? {
             id: offer.landing_page.id,
@@ -477,6 +527,17 @@ export async function getOffer(
         include: {
           landing_page: true,
           leadform: true,
+          business_term: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              discount_percentage: true,
+              advance_percentage: true,
+              type: true,
+              override_standard: true,
+            },
+          },
         },
       });
 
@@ -493,7 +554,6 @@ export async function getOffer(
         studio_id: offer.studio_id,
         name: offer.name,
         description: offer.description,
-        objective: offer.objective as "presencial" | "virtual",
         slug: offer.slug,
         cover_media_url: offer.cover_media_url,
         cover_media_type: offer.cover_media_type as "image" | "video" | null,
@@ -504,6 +564,16 @@ export async function getOffer(
         is_active: offer.is_active,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
+        business_term_id: offer.business_term?.id || null,
+        business_term: offer.business_term ? {
+          id: offer.business_term.id,
+          name: offer.business_term.name,
+          description: offer.business_term.description,
+          discount_percentage: offer.business_term.discount_percentage,
+          advance_percentage: offer.business_term.advance_percentage,
+          type: offer.business_term.type as 'standard' | 'offer',
+          override_standard: offer.business_term.override_standard,
+        } : undefined,
         landing_page: offer.landing_page
           ? {
             id: offer.landing_page.id,

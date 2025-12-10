@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
-import { ProfileHeader, ProfileNavTabs, ProfileFooter } from '@/components/profile';
+import React from 'react';
 
 interface MobilePreviewOfferProps {
   children?: React.ReactNode;
@@ -11,46 +10,18 @@ interface MobilePreviewOfferProps {
 
 /**
  * MobilePreviewOffer - Preview móvil específico para ofertas
- * Con header, navigation (tab inicio activo) y footer
+ * Muestra solo la card de oferta sin header ni navegación
  */
 export function MobilePreviewOffer({
   children,
-  data,
-  loading = false,
 }: MobilePreviewOfferProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
   return (
     <div className="w-full max-w-sm mx-auto relative">
       {/* Simulador de móvil con proporciones reales */}
       <div className="bg-zinc-900 border border-zinc-700 rounded-3xl shadow-2xl w-[375px] h-[812px] flex flex-col relative overflow-hidden">
-        {/* Header Sticky con logo y nombre */}
-        <div className="flex-shrink-0">
-          <ProfileHeader data={data} loading={loading} />
-        </div>
-
-        {/* Navigation debajo del header */}
-        <div className="flex-shrink-0">
-          <ProfileNavTabs activeTab="inicio" onTabChange={() => {}} />
-        </div>
-
-        {/* Contenido con scroll interno */}
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto"
-          style={{
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#71717a transparent',
-          }}
-        >
-          <div className="px-4 pb-4">
-            {children}
-
-            {/* Footer dentro del contenido scrolleable */}
-            <div className="mt-6">
-              <ProfileFooter data={data} loading={loading} />
-            </div>
-          </div>
+        {/* Contenido desde arriba con scroll */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {children}
         </div>
       </div>
     </div>

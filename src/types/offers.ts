@@ -23,9 +23,10 @@ export interface StudioOffer {
   end_date?: Date | null;
   created_at: Date;
   updated_at: Date;
+  business_term_id?: string | null; // ID de condición comercial
   landing_page?: StudioOfferLandingPage;
   leadform?: StudioOfferLeadform;
-  business_term?: StudioBusinessTerm; // Condición comercial asociada
+  business_term?: StudioBusinessTerm; // Condición comercial asociada (populated)
 }
 
 export interface StudioBusinessTerm {
