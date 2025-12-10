@@ -131,7 +131,9 @@ export function OfferLandingPage({
               block.type === 'hero-image' ||
               block.type === 'hero-video' ||
               block.type === 'hero-text' ||
-              block.type === 'hero-contact';
+              block.type === 'hero-contact' ||
+              block.type === 'hero-offer' ||
+              block.type === 'hero-portfolio';
 
             return (
               <div key={block.id}>

@@ -167,8 +167,8 @@ export default function HeroOfferComponent({
         ? `${containerStyleClasses.wrapped} ${borderRadiusClasses[borderRadius]}`
         : '';
 
-    // Padding uniforme: mismo valor para todos los lados (p-3)
-    const contentPaddingClass = 'p-3';
+    // Padding: siempre px-4 para el texto, fullscreen no necesita padding vertical extra
+    const contentPaddingClass = 'px-4';
 
     // Efecto parallax mejorado para mobile preview
     useEffect(() => {
@@ -444,7 +444,8 @@ export default function HeroOfferComponent({
                 horizontalJustifyClasses[textAlignment]
             )}>
                 <div className={cn(
-                    "max-w-3xl w-full",
+                    "w-full",
+                    containerStyle === 'wrapped' ? "max-w-3xl" : "",
                     contentPaddingClass,
                     textAlignmentClasses[textAlignment]
                 )}>

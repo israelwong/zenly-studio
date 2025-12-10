@@ -18,43 +18,61 @@ interface CategorizedComponentSelectorProps {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (component: ComponentOption) => void;
+    context?: 'portfolio' | 'offer'; // Contexto para determinar tipo de hero
 }
 
-const COMPONENTS: ComponentOption[] = [
-    {
-        type: 'text',
-        label: 'Texto',
-        icon: Type,
-        description: 'Bloque de texto con formato completo',
-    },
-    {
-        type: 'separator',
-        label: 'Separador',
-        icon: Minus,
-        description: 'Espacio o línea divisoria',
-    },
-    {
-        type: 'media-gallery',
-        mode: 'grid',
-        mediaType: 'images',
-        label: 'Multimedia',
-        icon: ImageIcon,
-        description: 'Sube una o más fotos y videos y personaliza cómo se ven',
-    },
-    {
-        type: 'hero-portfolio',
-        label: 'Hero Portfolio',
-        icon: Sparkles,
-        description: 'Hero con imagen o video de fondo, título y descripción (sin botones)',
-    },
-];
+// Función para obtener componentes según contexto
+const getComponents = (context: 'portfolio' | 'offer' = 'portfolio'): ComponentOption[] => {
+    const baseComponents: ComponentOption[] = [
+        {
+            type: 'text',
+            label: 'Texto',
+            icon: Type,
+            description: 'Bloque de texto con formato completo',
+        },
+        {
+            type: 'separator',
+            label: 'Separador',
+            icon: Minus,
+            description: 'Espacio o línea divisoria',
+        },
+        {
+            type: 'media-gallery',
+            mode: 'grid',
+            mediaType: 'images',
+            label: 'Multimedia',
+            icon: ImageIcon,
+            description: 'Sube una o más fotos y videos y personaliza cómo se ven',
+        },
+    ];
+
+    // Hero según contexto
+    const heroComponent: ComponentOption = context === 'offer'
+        ? {
+            type: 'hero-offer',
+            label: 'Hero Offer',
+            icon: Sparkles,
+            description: 'Hero con imagen de fondo, título, descripción y botones CTA',
+        }
+        : {
+            type: 'hero-portfolio',
+            label: 'Hero Portfolio',
+            icon: Sparkles,
+            description: 'Hero con imagen de fondo, título y descripción (sin botones)',
+        };
+
+    return [...baseComponents, heroComponent];
+};
 
 export function CategorizedComponentSelector({
     isOpen,
     onClose,
     onSelect,
+    context = 'portfolio',
 }: CategorizedComponentSelectorProps) {
     if (!isOpen) return null;
+
+    const COMPONENTS = getComponents(context);
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

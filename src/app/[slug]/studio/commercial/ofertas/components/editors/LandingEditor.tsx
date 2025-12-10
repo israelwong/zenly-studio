@@ -186,11 +186,20 @@ export function LandingEditor({ studioSlug, offerSlug, offerId }: LandingEditorP
       case "hero-video":
       case "hero-text":
       case "hero-contact":
+      case "hero-offer":
         config = {
           title: "Tu Título Aquí",
-          subtitle: "Subtítulo Impactante",
+          subtitle: "SUBTÍTULO IMPACTANTE",
           description: "Descripción que cautive a tus prospectos",
-          buttons: [
+          buttons: component.type === "hero-offer" ? [
+            {
+              text: "Solicitar información",
+              href: `/${studioSlug}/offer/${offerId}/leadform`,
+              variant: "primary",
+              linkType: "internal",
+              internalLinkType: "offer-leadform",
+            },
+          ] : [
             {
               text: "Solicitar información",
               href: "#",
@@ -207,6 +216,8 @@ export function LandingEditor({ studioSlug, offerSlug, offerId }: LandingEditorP
           autoPlay: component.type === "hero-video" ? true : undefined,
           muted: component.type === "hero-video" ? true : undefined,
           loop: component.type === "hero-video" ? true : undefined,
+          offerSlug: offerId,
+          offerId: offerId,
         };
         break;
       default:
@@ -338,6 +349,7 @@ export function LandingEditor({ studioSlug, offerSlug, offerId }: LandingEditorP
           setInsertAtIndex(undefined);
         }}
         onSelect={handleAddComponentFromSelector}
+        context="offer"
       />
     </div>
   );

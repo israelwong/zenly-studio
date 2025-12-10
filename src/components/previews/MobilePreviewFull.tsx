@@ -47,7 +47,7 @@ export function MobilePreviewFull({
             <div className="bg-zinc-900 border border-zinc-700 rounded-3xl shadow-2xl w-[375px] h-[812px] flex flex-col relative overflow-hidden">
                 {/* Header simple - fijo con bordes redondeados */}
                 {!hideHeader && (
-                    <div className="flex-shrink-0 rounded-t-3xl bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3">
+                    <div className="shrink-0 rounded-t-3xl bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3">
                         <div className="flex items-center justify-between">
                             {/* Botón de regresar */}
                             <ZenButton
@@ -86,23 +86,24 @@ export function MobilePreviewFull({
                         scrollbarColor: '#71717a transparent'
                     }}
                 >
-                    <div className="p-5">
-                        {!children && (
+                    {/* Si hay children custom (landing page), sin padding ni footer. Si no, con padding para ProfileContent */}
+                    {children ? (
+                        children
+                    ) : (
+                        <div className="p-5">
                             <ProfileContent
                                 variant={contentVariant}
                                 data={data}
                                 loading={loading}
                                 hidePortfolioHeader={hidePortfolioHeader}
                             />
-                        )}
 
-                        {children}
-
-                        {/* Footer dentro del contenido */}
-                        <div className="mt-4">
-                            <ProfileFooter />
+                            {/* Footer dentro del contenido */}
+                            <div className="mt-4">
+                                <ProfileFooter />
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>
