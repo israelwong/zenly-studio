@@ -1811,12 +1811,18 @@ model studio_condiciones_comerciales {
   discount_percentage                 Float?
   name                                String
   order                               Int?                                         @default(0)
+  type                                String                                       @default("standard") // "standard" | "offer"
+  offer_id                            String?                                      @unique // Asociación a oferta si type="offer"
+  override_standard                   Boolean                                      @default(false) // Oculta condiciones estándar
   studio                              studios                                      @relation(fields: [studio_id], references: [id])
   condiciones_comerciales_metodo_pago studio_condiciones_comerciales_metodo_pago[]
   cotizaciones                        studio_cotizaciones[]
   pagos                               studio_pagos[]
+  offer                               studio_offers?                               @relation(fields: [offer_id], references: [id], onDelete: SetNull)
 
   @@index([studio_id])
+  @@index([studio_id, type])
+  @@index([offer_id])
 }
 
 model studio_terminos_condiciones {
@@ -2571,29 +2577,29 @@ model studio_lead_forms {
 
 //! OFFERS
 model studio_offers {
-  id                String                        @id @default(cuid())
-  studio_id         String
-  name              String
-  description       String?
-  objective         String // 'presencial' | 'virtual'
-  slug              String
-  cover_media_url   String?
-  cover_media_type  String? // 'image' | 'video'
-  is_active         Boolean                       @default(true)
-  is_permanent      Boolean                       @default(false) // Si true: oferta siempre disponible
-  has_date_range    Boolean                       @default(false) // Si true: temporalidad definida
-  start_date        DateTime? // Fecha inicio (si has_date_range = true)
-  end_date          DateTime? // Fecha fin (si has_date_range = true)
-  created_at        DateTime                      @default(now())
-  updated_at        DateTime                      @updatedAt
-  order             Int?                          @default(0)
-  studio            studios                       @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  landing_page      studio_offer_landing_pages?
-  leadform          studio_offer_leadforms?
-  visits            studio_offer_visits[]
-  submissions       studio_offer_submissions[]
-  media             studio_offer_media[]          @relation("offer_media")
-  content_blocks    studio_offer_content_blocks[]
+  id                     String                              @id @default(cuid())
+  studio_id              String
+  name                   String
+  description            String?
+  slug                   String
+  cover_media_url        String?
+  cover_media_type       String? // 'image' | 'video'
+  is_active              Boolean                             @default(true)
+  is_permanent           Boolean                             @default(false) // Si true: oferta siempre disponible
+  has_date_range         Boolean                             @default(false) // Si true: temporalidad definida
+  start_date             DateTime? // Fecha inicio (si has_date_range = true)
+  end_date               DateTime? // Fecha fin (si has_date_range = true)
+  created_at             DateTime                            @default(now())
+  updated_at             DateTime                            @updatedAt
+  order                  Int?                                @default(0)
+  studio                 studios                             @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  landing_page           studio_offer_landing_pages?
+  leadform               studio_offer_leadforms?
+  visits                 studio_offer_visits[]
+  submissions            studio_offer_submissions[]
+  media                  studio_offer_media[]                @relation("offer_media")
+  content_blocks         studio_offer_content_blocks[]
+  business_term          studio_condiciones_comerciales?
 
   @@unique([studio_id, slug])
   @@index([studio_id, is_active])

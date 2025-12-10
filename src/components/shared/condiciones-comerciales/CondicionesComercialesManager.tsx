@@ -43,6 +43,9 @@ interface CondicionComercial {
   advance_percentage: number | null;
   status: string;
   order: number | null;
+  type?: string;
+  offer_id?: string | null;
+  override_standard?: boolean;
 }
 
 interface CondicionesComercialesManagerProps {
@@ -50,6 +53,11 @@ interface CondicionesComercialesManagerProps {
   isOpen: boolean;
   onClose: () => void;
   onRefresh?: () => void;
+  context?: {
+    type: 'offer';
+    offerId: string;
+    offerName: string;
+  };
 }
 
 interface SortableCondicionItemProps {
@@ -111,9 +119,16 @@ function SortableCondicionItem({
             <GripVertical className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <h4 className={`font-semibold ${isActive ? 'text-white' : 'text-zinc-400'}`}>
-              {condicion.name}
-            </h4>
+            <div className="flex items-center gap-2">
+              <h4 className={`font-semibold ${isActive ? 'text-white' : 'text-zinc-400'}`}>
+                {condicion.name}
+              </h4>
+              {condicion.type === 'offer' && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">
+                  OFERTA
+                </span>
+              )}
+            </div>
             {condicion.description && (
               <p className={`text-sm mt-1 ${isActive ? 'text-zinc-400' : 'text-zinc-500'}`}>
                 {condicion.description}
@@ -172,6 +187,7 @@ export function CondicionesComercialesManager({
   isOpen,
   onClose,
   onRefresh,
+  context,
 }: CondicionesComercialesManagerProps) {
   const [condiciones, setCondiciones] = useState<CondicionComercial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -672,10 +688,12 @@ export function CondicionesComercialesManager({
       } satisfies CondicionComercialForm;
 
       let result;
+      const actionContext = context ? { offerId: context.offerId, type: context.type } : undefined;
+
       if (editingId) {
-        result = await actualizarCondicionComercial(studioSlug, editingId, data);
+        result = await actualizarCondicionComercial(studioSlug, editingId, data, actionContext);
       } else {
-        result = await crearCondicionComercial(studioSlug, data);
+        result = await crearCondicionComercial(studioSlug, data, actionContext);
       }
 
       if (result.success && result.data) {
@@ -741,6 +759,21 @@ export function CondicionesComercialesManager({
         description="Crea y gestiona condiciones comerciales reutilizables"
         maxWidth="xl"
       >
+        {/* Banner de contexto de oferta */}
+        {context && (
+          <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+            <div className="flex items-center gap-2 text-purple-300">
+              <span className="text-lg">📦</span>
+              <div>
+                <p className="text-sm font-medium">Condiciones para oferta específica</p>
+                <p className="text-xs text-purple-400 mt-0.5">
+                  {context.offerName}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showForm ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <ZenInput

@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ShoppingBag, Package, Percent } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton, ZenDialog, ZenTabs } from '@/components/ui/zen';
-import { CatalogoTab, UtilidadForm } from './components';
+import { CatalogoTab } from './components';
+import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
 import { PaquetesTab } from './paquetes/components';
 
 export default function CatalogoPage() {

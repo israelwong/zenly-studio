@@ -11,7 +11,6 @@ export type OfferEditorTab = "basic" | "landing" | "leadform";
 interface OfferFormData {
   name: string;
   description: string;
-  objective: "presencial" | "virtual";
   slug: string;
   cover_media_url: string | null;
   cover_media_type: "image" | "video" | null;
@@ -20,6 +19,8 @@ interface OfferFormData {
   has_date_range: boolean;
   start_date: Date | null;
   end_date: Date | null;
+  business_term_id: string | null; // Condición comercial especial
+  override_standard_terms: boolean; // Ocultar condiciones estándar
 }
 
 interface LeadFormData {
@@ -77,7 +78,6 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
   const [formData, setFormData] = useState<OfferFormData>({
     name: initialOffer?.name || "",
     description: initialOffer?.description || "",
-    objective: (initialOffer?.objective || "presencial") as "presencial" | "virtual",
     slug: initialOffer?.slug || "",
     cover_media_url: initialOffer?.cover_media_url || null,
     cover_media_type: initialOffer?.cover_media_type as "image" | "video" | null || null,
@@ -86,6 +86,8 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
     has_date_range: initialOffer?.has_date_range ?? false,
     start_date: initialOffer?.start_date ? new Date(initialOffer.start_date) : null,
     end_date: initialOffer?.end_date ? new Date(initialOffer.end_date) : null,
+    business_term_id: (initialOffer as any)?.business_term_id || null,
+    override_standard_terms: (initialOffer as any)?.override_standard_terms ?? false,
   });
 
   // Estado para landing page
@@ -147,7 +149,6 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
     const baseData = {
       name: formData.name,
       description: formData.description || undefined,
-      objective: formData.objective,
       slug: formData.slug,
       cover_media_url: formData.cover_media_url ?? null,
       cover_media_type: formData.cover_media_type ?? null,
@@ -156,6 +157,8 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
       has_date_range: formData.has_date_range,
       start_date: formData.start_date,
       end_date: formData.end_date,
+      business_term_id: formData.business_term_id,
+      override_standard_terms: formData.override_standard_terms,
       landing_page: {
         content_blocks: contentBlocks,
         cta_config: {

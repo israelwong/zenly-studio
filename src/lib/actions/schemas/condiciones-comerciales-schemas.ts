@@ -13,6 +13,11 @@ export const CondicionComercialSchema = z.object({
 
     status: z.enum(['active', 'inactive']),
     orden: z.number(),
+
+    // Nuevos campos para ofertas
+    type: z.enum(['standard', 'offer']).default('standard'),
+    offer_id: z.string().nullable().optional(),
+    override_standard: z.boolean().default(false),
 });
 
 // Schema con validaciones personalizadas que requiere sobreprecio

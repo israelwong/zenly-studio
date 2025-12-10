@@ -1,6 +1,5 @@
 import { ContentBlock } from './content-blocks';
 import type {
-  OfferObjective,
   CTAConfig,
   LeadFormFieldsConfig,
 } from '@/lib/actions/schemas/offer-schemas';
@@ -14,7 +13,6 @@ export interface StudioOffer {
   studio_id: string;
   name: string;
   description: string | null;
-  objective: OfferObjective;
   slug: string;
   cover_media_url?: string | null;
   cover_media_type?: string | null;
@@ -27,6 +25,17 @@ export interface StudioOffer {
   updated_at: Date;
   landing_page?: StudioOfferLandingPage;
   leadform?: StudioOfferLeadform;
+  business_term?: StudioBusinessTerm; // Condición comercial asociada
+}
+
+export interface StudioBusinessTerm {
+  id: string;
+  name: string;
+  description: string | null;
+  discount_percentage: number | null;
+  advance_percentage: number | null;
+  type: 'standard' | 'offer';
+  override_standard: boolean;
 }
 
 export interface StudioOfferLandingPage {

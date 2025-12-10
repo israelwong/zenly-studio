@@ -4,9 +4,6 @@ import { z } from 'zod';
 // SCHEMAS PARA GESTIÓN DE OFERTAS COMERCIALES
 // =============================================================================
 
-// Enum para objetivo de oferta
-export const OfferObjectiveSchema = z.enum(['presencial', 'virtual']);
-
 // Schema para campos personalizados del leadform
 export const LeadFormFieldSchema = z.object({
   id: z.string(),
@@ -41,7 +38,6 @@ export const LeadFormFieldsConfigSchema = z.object({
 export const CreateOfferSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido').max(100, 'El nombre es demasiado largo'),
   description: z.string().max(500, 'La descripción es demasiado larga').optional().or(z.literal('')),
-  objective: OfferObjectiveSchema,
   slug: z.string().min(1, 'El slug es requerido').max(100, 'El slug es demasiado largo'),
   cover_media_url: z.string().nullable().optional().or(z.literal('')),
   cover_media_type: z.enum(['image', 'video']).nullable().optional(),
@@ -50,6 +46,8 @@ export const CreateOfferSchema = z.object({
   has_date_range: z.boolean().default(false),
   start_date: z.date().nullable().optional(),
   end_date: z.date().nullable().optional(),
+  business_term_id: z.string().nullable().optional(), // Condición comercial especial
+  override_standard_terms: z.boolean().default(false), // Ocultar condiciones estándar
   landing_page: z.object({
     content_blocks: z.array(z.any()).default([]), // ContentBlock[] - validación más específica en el componente
     cta_config: CTAConfigSchema,
@@ -120,7 +118,6 @@ export const GetOfferStatsSchema = z.object({
 });
 
 // Types exportados
-export type OfferObjective = z.infer<typeof OfferObjectiveSchema>;
 export type LeadFormField = z.infer<typeof LeadFormFieldSchema>;
 export type CTAButton = z.infer<typeof CTAButtonSchema>;
 export type CTAConfig = z.infer<typeof CTAConfigSchema>;

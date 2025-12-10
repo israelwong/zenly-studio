@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { ZenInput, ZenTextarea, ZenSwitch, ZenCalendar, ZenButton } from "@/components/ui/zen";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/shadcn/popover";
 import { useOfferEditor } from "../OfferEditorContext";
-import { ObjectiveRadio } from "./ObjectiveRadio";
-import { Loader2, Calendar } from "lucide-react";
+import { CondicionRadioCard } from "./CondicionRadioCard";
+import { Loader2, Calendar, Plus } from "lucide-react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import { toast } from "sonner";
@@ -13,6 +13,10 @@ import { CoverDropzone } from "@/components/shared/CoverDropzone";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { obtenerTodasCondicionesComerciales } from "@/lib/actions/studio/config/condiciones-comerciales.actions";
+import { CondicionesComercialesManager } from "@/components/shared/condiciones-comerciales/CondicionesComercialesManager";
+import { CrearCondicionComercialModal } from "@/components/shared/condiciones-comerciales/CrearCondicionComercialModal";
+import { Settings } from "lucide-react";
 
 interface BasicInfoEditorProps {
   studioSlug: string;
@@ -39,12 +43,24 @@ export function BasicInfoEditor({
   slugHint,
   mode = "create",
 }: BasicInfoEditorProps) {
-  const { formData, updateFormData } = useOfferEditor();
+  const { formData, updateFormData, savedOfferId, offerId } = useOfferEditor();
   const { uploadFiles } = useMediaUpload();
   const { triggerRefresh } = useStorageRefresh(studioSlug);
 
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [coverFileSize, setCoverFileSize] = useState<number | null>(null);
+  const [businessTerms, setBusinessTerms] = useState<Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    discount_percentage: number | null;
+    advance_percentage: number | null;
+    type: 'standard' | 'offer';
+  }>>([]);
+  const [loadingTerms, setLoadingTerms] = useState(false);
+  const [showBusinessTerms, setShowBusinessTerms] = useState(!!formData.business_term_id);
+  const [showCondicionesModal, setShowCondicionesModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     if (formData.start_date && formData.end_date) {
       return {
@@ -56,6 +72,13 @@ export function BasicInfoEditor({
   });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>(dateRange);
+
+  // Cargar condiciones comerciales si ya hay una seleccionada (modo edición)
+  useEffect(() => {
+    if (formData.business_term_id && businessTerms.length === 0 && !loadingTerms) {
+      loadBusinessTerms();
+    }
+  }, [formData.business_term_id]);
 
   // Auto-generar slug cuando cambia el nombre
   useEffect(() => {
@@ -197,25 +220,6 @@ export function BasicInfoEditor({
         <p className="text-xs text-zinc-500 mt-2">
           Esta imagen/video se mostrará en el feed público de tu perfil
         </p>
-      </div>
-
-      {/* Objetivo - Radio Buttons */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-300 mb-3">
-          Objetivo de la Oferta <span className="text-red-400">*</span>
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <ObjectiveRadio
-            value="presencial"
-            checked={formData.objective === "presencial"}
-            onChange={(value) => updateFormData({ objective: value })}
-          />
-          <ObjectiveRadio
-            value="virtual"
-            checked={formData.objective === "virtual"}
-            onChange={(value) => updateFormData({ objective: value })}
-          />
-        </div>
       </div>
 
       {/* Disponibilidad */}
@@ -371,6 +375,244 @@ export function BasicInfoEditor({
           </p>
         )}
       </div>
+
+      {/* Condiciones Comerciales Especiales */}
+      <div className="space-y-4 border-t border-zinc-800 pt-4">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium text-zinc-300">Condiciones Comerciales</h3>
+        </div>
+
+        {/* Toggle Aplicar Condiciones Especiales */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5 flex-1">
+            <label htmlFor="has-special-terms" className="text-sm font-medium text-zinc-300">
+              Aplicar condiciones especiales
+            </label>
+            <p className="text-xs text-zinc-500">
+              Descuentos o bonos exclusivos para esta oferta
+            </p>
+          </div>
+          <ZenSwitch
+            id="has-special-terms"
+            checked={showBusinessTerms}
+            onCheckedChange={(checked) => {
+              setShowBusinessTerms(checked);
+              if (!checked) {
+                updateFormData({
+                  business_term_id: null,
+                  override_standard_terms: false,
+                });
+              } else {
+                // Cargar condiciones comerciales al activar
+                loadBusinessTerms();
+              }
+            }}
+          />
+        </div>
+
+        {/* Selector de Condición Comercial */}
+        {showBusinessTerms && (
+          <div className="space-y-5 pl-4 border-l-2 border-emerald-500/30">
+            {loadingTerms ? (
+              <div className="flex items-center gap-2 text-sm text-zinc-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Cargando condiciones...
+              </div>
+            ) : businessTerms.length === 0 ? (
+              <div className="space-y-3">
+                <p className="text-xs text-amber-400">
+                  No hay condiciones comerciales disponibles.
+                </p>
+                <ZenButton
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCreateModal(true)}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Crear primera condición
+                </ZenButton>
+              </div>
+            ) : (
+              <>
+                {/* Condiciones Estándar */}
+                {businessTerms.filter(t => t.type === 'standard').length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                        Condiciones Estándar
+                      </h4>
+                      <ZenButton
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowCondicionesModal(true)}
+                        className="h-6 text-xs"
+                      >
+                        <Settings className="h-3 w-3 mr-1" />
+                        Gestionar
+                      </ZenButton>
+                    </div>
+                    <div className="space-y-2">
+                      {businessTerms
+                        .filter(t => t.type === 'standard')
+                        .map((term) => (
+                          <CondicionRadioCard
+                            key={term.id}
+                            id={term.id}
+                            name={term.name}
+                            description={term.description}
+                            discount_percentage={term.discount_percentage}
+                            advance_percentage={term.advance_percentage}
+                            type={term.type}
+                            selected={formData.business_term_id === term.id}
+                            onChange={(id) => updateFormData({ business_term_id: id })}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Condiciones Especiales (Oferta) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                      Condiciones Especiales
+                      <span className="ml-2 text-[10px] text-zinc-500 font-normal normal-case">(Esta oferta)</span>
+                    </h4>
+                  </div>
+
+                  {businessTerms.filter(t => t.type === 'offer').length > 0 ? (
+                    <div className="space-y-2">
+                      {businessTerms
+                        .filter(t => t.type === 'offer')
+                        .map((term) => (
+                          <CondicionRadioCard
+                            key={term.id}
+                            id={term.id}
+                            name={term.name}
+                            description={term.description}
+                            discount_percentage={term.discount_percentage}
+                            advance_percentage={term.advance_percentage}
+                            type={term.type}
+                            selected={formData.business_term_id === term.id}
+                            onChange={(id) => updateFormData({ business_term_id: id })}
+                          />
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500">
+                      No hay condiciones especiales para esta oferta.
+                    </p>
+                  )}
+
+                  {/* Botón Crear Condición Especial */}
+                  <ZenButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCreateModal(true)}
+                    className="w-full"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Crear condición especial
+                  </ZenButton>
+                </div>
+
+                {/* Checkbox Ocultar Condiciones Estándar */}
+                {businessTerms.filter(t => t.type === 'offer').length > 0 && (
+                  <div className="flex items-start gap-3 pt-2 border-t border-zinc-800">
+                    <input
+                      type="checkbox"
+                      id="override-standard"
+                      checked={formData.override_standard_terms}
+                      onChange={(e) => updateFormData({ override_standard_terms: e.target.checked })}
+                      className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="override-standard" className="text-sm font-medium text-zinc-300 cursor-pointer">
+                        Ocultar condiciones estándar
+                      </label>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Solo se mostrarán las condiciones especiales en la vista pública
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Info */}
+                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <p className="text-xs text-blue-300">
+                    💡 Las condiciones seleccionadas se mostrarán en los paquetes y cotizaciones asociadas a esta oferta.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Modal de Gestión Completa (Manager) */}
+      {showCondicionesModal && (savedOfferId || offerId) && (
+        <CondicionesComercialesManager
+          studioSlug={studioSlug}
+          isOpen={showCondicionesModal}
+          onClose={() => setShowCondicionesModal(false)}
+          onRefresh={() => {
+            loadBusinessTerms();
+          }}
+          context={{
+            type: 'offer',
+            offerId: (savedOfferId || offerId) as string,
+            offerName: formData.name || 'Nueva oferta'
+          }}
+        />
+      )}
+
+      {/* Modal de Creación Simple */}
+      {showCreateModal && (savedOfferId || offerId) && (
+        <CrearCondicionComercialModal
+          studioSlug={studioSlug}
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => {
+            loadBusinessTerms();
+          }}
+          context={{
+            type: 'offer',
+            offerId: (savedOfferId || offerId) as string,
+            offerName: formData.name || 'Nueva oferta'
+          }}
+        />
+      )}
     </div>
   );
+
+  async function loadBusinessTerms() {
+    setLoadingTerms(true);
+    try {
+      const result = await obtenerTodasCondicionesComerciales(studioSlug);
+      if (result.success && result.data) {
+        const activeTerms = result.data
+          .filter(t => t.status === "active")
+          .map(t => ({
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            discount_percentage: t.discount_percentage,
+            advance_percentage: t.advance_percentage,
+            type: (t.type || 'standard') as 'standard' | 'offer',
+          }));
+        setBusinessTerms(activeTerms);
+      } else {
+        toast.error("Error al cargar condiciones comerciales");
+      }
+    } catch (error) {
+      console.error("Error loading business terms:", error);
+      toast.error("Error al cargar condiciones comerciales");
+    } finally {
+      setLoadingTerms(false);
+    }
+  }
 }

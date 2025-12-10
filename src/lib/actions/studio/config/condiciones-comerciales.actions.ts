@@ -108,7 +108,11 @@ export async function obtenerCondicionComercial(studioSlug: string, condicionId:
 }
 
 // Crear nueva condición comercial
-export async function crearCondicionComercial(studioSlug: string, data: CondicionComercialForm) {
+export async function crearCondicionComercial(
+    studioSlug: string,
+    data: CondicionComercialForm,
+    context?: { offerId: string; type: 'offer' }
+) {
     try {
         const validationResult = CondicionComercialSchema.safeParse(data);
 
@@ -153,6 +157,9 @@ export async function crearCondicionComercial(studioSlug: string, data: Condicio
             advance_percentage: validationResult.data.porcentaje_anticipo ? parseFloat(validationResult.data.porcentaje_anticipo) : null,
             status: validationResult.data.status,
             order: validationResult.data.orden || 0,
+            type: context?.type === 'offer' ? 'offer' : validationResult.data.type || 'standard',
+            offer_id: context?.offerId || validationResult.data.offer_id || null,
+            override_standard: validationResult.data.override_standard || false,
             updated_at: new Date(),
         };
 
@@ -176,7 +183,12 @@ export async function crearCondicionComercial(studioSlug: string, data: Condicio
 }
 
 // Actualizar condición comercial
-export async function actualizarCondicionComercial(studioSlug: string, condicionId: string, data: CondicionComercialForm) {
+export async function actualizarCondicionComercial(
+    studioSlug: string,
+    condicionId: string,
+    data: CondicionComercialForm,
+    context?: { offerId: string; type: 'offer' }
+) {
     try {
         const validationResult = CondicionComercialSchema.safeParse(data);
 
@@ -236,6 +248,9 @@ export async function actualizarCondicionComercial(studioSlug: string, condicion
             advance_percentage: validationResult.data.porcentaje_anticipo ? parseFloat(validationResult.data.porcentaje_anticipo) : null,
             status: validationResult.data.status,
             order: validationResult.data.orden || 0,
+            type: context?.type === 'offer' ? 'offer' : validationResult.data.type || condicionExistente.type || 'standard',
+            offer_id: context?.offerId || validationResult.data.offer_id || condicionExistente.offer_id,
+            override_standard: validationResult.data.override_standard ?? condicionExistente.override_standard ?? false,
             updated_at: new Date(),
         };
 
