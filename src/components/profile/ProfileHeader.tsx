@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { logout } from '@/lib/actions/auth/logout.action';
 import { clearRememberMePreference } from '@/lib/supabase/storage-adapter';
 import { EditStudioNameModal, EditSloganModal, EditLogoModal } from './modals';
+import { useDynamicFavicon } from '@/hooks/useDynamicFavicon';
 
 interface ProfileHeaderProps {
     data?: {
@@ -67,6 +68,9 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
 
     // Estado para manejar error de carga de imagen
     const [imageError, setImageError] = useState(false);
+
+    // Actualizar favicon dinámicamente cuando cambia el logo
+    useDynamicFavicon(studioData.logo_url);
 
     // Resetear error de imagen cuando cambia la URL
     React.useEffect(() => {

@@ -4,6 +4,7 @@ import { getStudioProfileBySlug } from '@/lib/actions/public/profile.actions';
 import { getPublicActiveOffers } from '@/lib/actions/studio/offers/offers.actions';
 import { ProfilePageClient } from './profile/public/ProfilePageClient';
 import { Metadata } from 'next';
+import type { PublicProfileData } from '@/types/public-profile';
 
 interface PublicProfilePageProps {
     params: Promise<{ slug: string }>;
@@ -32,42 +33,17 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
         const offersResult = await getPublicActiveOffers(slug);
         const offers = offersResult.success && offersResult.data ? offersResult.data : [];
 
-        // Map items to include required properties
-        const mappedProfileData = {
+        // Map items para incluir propiedades requeridas
+        const mappedProfileData: PublicProfileData = {
             ...profileData,
             items: profileData.items.map(item => ({
                 id: item.id,
                 name: item.name,
                 type: 'SERVICIO' as const,
-                cost: (item as { price?: number }).price || 0,
+                cost: item.price || 0,
                 order: item.order
-            })),
-            portfolios: profileData.portfolios.map(portfolio => ({
-                ...portfolio,
-                is_published: portfolio.is_published,
-                is_featured: portfolio.is_featured,
-                view_count: portfolio.view_count ?? 0,
-            })),
-            paquetes: profileData.paquetes.map(paquete => ({
-                id: paquete.id,
-                nombre: paquete.nombre,
-                precio: paquete.precio,
-                order: paquete.order,
-                descripcion: paquete.descripcion ?? undefined,
-                tipo_evento: paquete.tipo_evento ?? undefined,
-                tipo_evento_order: paquete.tipo_evento_order ?? undefined,
-                cover_url: paquete.cover_url ?? undefined,
-                duracion_horas: paquete.duracion_horas ?? undefined,
-                incluye: paquete.incluye ?? undefined,
-                no_incluye: paquete.no_incluye ?? undefined,
-                condiciones: paquete.condiciones ?? undefined
-            })),
-            socialNetworks: profileData.socialNetworks,
-            contactInfo: {
-                ...profileData.contactInfo,
-                horarios: (profileData as { contactInfo?: { horarios?: import('@/types/public-profile').PublicHorario[] } }).contactInfo?.horarios || []
-            }
-        };
+            }))
+        } as PublicProfileData;
 
         return (
             <ProfilePageClient
@@ -83,7 +59,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 }
 
 /**
- * Generate metadata for SEO
+ * Generate metadata for SEO and favicon dinámico
  */
 export async function generateMetadata({ params }: PublicProfilePageProps): Promise<Metadata> {
     const { slug } = await params;
@@ -102,10 +78,24 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
         const title = `${studio.studio_name}${studio.slogan ? ` - ${studio.slogan}` : ''}`;
         const description = studio.presentation || `Perfil profesional de ${studio.studio_name}`;
 
+        // Configurar favicon dinámico usando el logo del studio
+        const icons = studio.logo_url ? {
+            icon: [
+                { url: studio.logo_url, type: 'image/png' },
+                { url: studio.logo_url, sizes: '32x32', type: 'image/png' },
+                { url: studio.logo_url, sizes: '16x16', type: 'image/png' },
+            ],
+            apple: [
+                { url: studio.logo_url, sizes: '180x180', type: 'image/png' },
+            ],
+            shortcut: studio.logo_url,
+        } : undefined;
+
         return {
             title,
             description,
             keywords: studio.keywords || undefined,
+            icons, // ← Favicon dinámico
             openGraph: {
                 title,
                 description,

@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ImageIcon } from 'lucide-react';
 import { AvatarManager } from '@/components/shared/avatar';
 import { updateStudioLogo } from '@/lib/actions/studio/profile/identidad/identidad.actions';
+import { updateFavicon } from '@/hooks/useDynamicFavicon';
 
 interface EditLogoModalProps {
     isOpen: boolean;
@@ -39,6 +40,9 @@ export function EditLogoModal({
         const result = await updateStudioLogo(studioSlug, { logo_url: logoUrl });
 
         if (result.success) {
+            // Actualizar favicon inmediatamente (antes de cerrar modal)
+            updateFavicon(logoUrl);
+
             // Cerrar modal PRIMERO, luego refrescar
             onClose();
 
