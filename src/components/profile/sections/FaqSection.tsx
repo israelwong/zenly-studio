@@ -144,7 +144,7 @@ export function FaqSection({
 
     if (loading) {
         return (
-            <div className="px-6 py-6 space-y-3">
+            <div className="px-8 py-6 space-y-3">
                 {[1, 2, 3].map((i) => (
                     <div key={i} className="border border-zinc-800 rounded-lg p-4">
                         <div className="h-4 bg-zinc-700 rounded animate-pulse w-3/4"></div>
@@ -157,10 +157,10 @@ export function FaqSection({
     if (!activeFAQ.length && !isOwner) return null;
 
     return (
-        <div className="px-6 py-6 space-y-4">
+        <div className="px-8 py-6 space-y-4">
             {/* Formulario crear */}
             {isCreating && (
-                <div className="rounded-lg p-4 -mx-4 border border-purple-500/50 bg-zinc-900/50 space-y-3">
+                <div className="rounded-lg p-4 -mx-6 border border-purple-500/50 bg-zinc-900/50 space-y-3">
                     <ZenInput
                         label="Pregunta"
                         value={editData.pregunta}
@@ -202,7 +202,7 @@ export function FaqSection({
 
             {/* Empty state */}
             {!activeFAQ.length && isOwner && !isCreating && (
-                <div className="rounded-lg p-6 -mx-4 border border-dashed border-purple-600/30 bg-purple-600/5 text-center">
+                <div className="rounded-lg p-6 -mx-6 border border-dashed border-purple-600/30 bg-purple-600/5 text-center">
                     <p className="text-sm text-zinc-400 mb-3">
                         Responde las dudas más comunes de tus clientes
                     </p>
@@ -229,7 +229,7 @@ export function FaqSection({
                             // Modo edición
                             if (isEditing) {
                                 return (
-                                    <div key={faqItem.id} className="rounded-lg p-4 -mx-4 border border-purple-500/50 bg-zinc-800/30 space-y-3">
+                                    <div key={faqItem.id} className="rounded-lg p-4 -mx-6 border border-purple-500/50 bg-zinc-800/30 space-y-3">
                                         <ZenInput
                                             label="Pregunta"
                                             value={editData.pregunta}
@@ -272,45 +272,49 @@ export function FaqSection({
                             return (
                                 <div
                                     key={faqItem.id}
-                                    className={`relative group rounded-lg -mx-4 border border-zinc-800 overflow-hidden transition-all duration-200 ${isOwner ? 'hover:border-purple-600/30' : ''}`}
+                                    className={`relative group rounded-lg -mx-6 border border-zinc-800 overflow-hidden transition-all duration-200 ${isOwner ? 'hover:border-purple-600/30' : ''}`}
                                 >
                                     <button
                                         onClick={() => toggleItem(faqItem.id)}
                                         className="w-full flex items-center justify-between gap-3 p-4 bg-zinc-800/30 hover:bg-zinc-800/50 text-left transition-colors"
                                     >
-                                        <span className={`font-medium text-sm ${isOpen ? 'text-purple-300' : 'text-white'}`}>
+                                        <span className={`flex-1 font-medium text-sm truncate ${isOpen ? 'text-purple-300' : 'text-white'}`}>
                                             {faqItem.pregunta}
                                         </span>
-                                        <div className={`shrink-0 rounded-full p-1 transition-all ${isOpen ? 'bg-purple-600/20 text-purple-400' : 'bg-zinc-700/50 text-zinc-500'}`}>
-                                            {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {/* Botones edición - izquierda del chevron */}
+                                            {isOwner && (
+                                                <div className="flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleEdit(faqItem);
+                                                        }}
+                                                        className="p-1.5 rounded-md bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 transition-all"
+                                                        aria-label="Editar"
+                                                    >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteClick(faqItem.id, faqItem.pregunta);
+                                                        }}
+                                                        className="p-1.5 rounded-md bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-all"
+                                                        aria-label="Eliminar"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Chevron */}
+                                            <div className={`rounded-full p-1 transition-all ${isOpen ? 'bg-purple-600/20 text-purple-400' : 'bg-zinc-700/50 text-zinc-500'}`}>
+                                                {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                            </div>
                                         </div>
                                     </button>
-
-                                    {/* Botones edición - hover desktop, visible mobile */}
-                                    {isOwner && !isOpen && (
-                                        <div className="absolute top-2 right-14 flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleEdit(faqItem);
-                                                }}
-                                                className="p-1.5 rounded-md bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 transition-all"
-                                                aria-label="Editar"
-                                            >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteClick(faqItem.id, faqItem.pregunta);
-                                                }}
-                                                className="p-1.5 rounded-md bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-all"
-                                                aria-label="Eliminar"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    )}
 
                                     {/* Respuesta */}
                                     {isOpen && (
@@ -318,24 +322,6 @@ export function FaqSection({
                                             <p className="text-zinc-300 leading-relaxed text-sm whitespace-pre-wrap">
                                                 {faqItem.respuesta}
                                             </p>
-                                            {isOwner && (
-                                                <div className="flex gap-2 mt-4 pt-3 border-t border-zinc-800/50">
-                                                    <button
-                                                        onClick={() => handleEdit(faqItem)}
-                                                        className="px-3 py-1.5 rounded-md bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 text-xs font-medium transition-all flex items-center gap-1.5"
-                                                    >
-                                                        <Edit2 className="w-3 h-3" />
-                                                        Editar
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteClick(faqItem.id, faqItem.pregunta)}
-                                                        className="px-3 py-1.5 rounded-md bg-red-600/10 hover:bg-red-600/20 text-red-400 text-xs font-medium transition-all flex items-center gap-1.5"
-                                                    >
-                                                        <Trash2 className="w-3 h-3" />
-                                                        Eliminar
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -346,7 +332,7 @@ export function FaqSection({
                     {isOwner && !isCreating && activeFAQ.length > 0 && (
                         <button
                             onClick={handleCreate}
-                            className="w-full py-2.5 rounded-lg -mx-4 border border-dashed border-purple-600/30 bg-purple-600/5 hover:bg-purple-600/10 text-purple-400 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                            className="w-full py-2.5 rounded-lg -mx-6 border border-dashed border-purple-600/30 bg-purple-600/5 hover:bg-purple-600/10 text-purple-400 text-sm font-medium transition-colors flex items-center justify-center gap-2"
                         >
                             <Plus className="w-4 h-4" />
                             Agregar pregunta
