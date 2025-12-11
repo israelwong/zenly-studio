@@ -274,33 +274,29 @@ export function FaqSection({
                                     key={faqItem.id}
                                     className={`relative group rounded-lg -mx-6 border border-zinc-800 overflow-hidden transition-all duration-200 ${isOwner ? 'hover:border-purple-600/30' : ''}`}
                                 >
-                                    <button
-                                        onClick={() => toggleItem(faqItem.id)}
-                                        className="w-full flex items-center justify-between gap-3 p-4 bg-zinc-800/30 hover:bg-zinc-800/50 text-left transition-colors"
-                                    >
-                                        <span className={`flex-1 font-medium text-sm truncate ${isOpen ? 'text-purple-300' : 'text-white'}`}>
-                                            {faqItem.pregunta}
-                                        </span>
+                                    <div className="flex items-center justify-between gap-3 p-4 bg-zinc-800/30 hover:bg-zinc-800/50 transition-colors">
+                                        <button
+                                            onClick={() => toggleItem(faqItem.id)}
+                                            className="flex-1 text-left min-w-0"
+                                        >
+                                            <span className={`font-medium text-sm truncate block ${isOpen ? 'text-purple-300' : 'text-white'}`}>
+                                                {faqItem.pregunta}
+                                            </span>
+                                        </button>
 
                                         <div className="flex items-center gap-1 shrink-0">
                                             {/* Botones edición - izquierda del chevron */}
                                             {isOwner && (
                                                 <div className="flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                                                     <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleEdit(faqItem);
-                                                        }}
+                                                        onClick={() => handleEdit(faqItem)}
                                                         className="p-1.5 rounded-md bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 transition-all"
                                                         aria-label="Editar"
                                                     >
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteClick(faqItem.id, faqItem.pregunta);
-                                                        }}
+                                                        onClick={() => handleDeleteClick(faqItem.id, faqItem.pregunta)}
                                                         className="p-1.5 rounded-md bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-all"
                                                         aria-label="Eliminar"
                                                     >
@@ -310,11 +306,15 @@ export function FaqSection({
                                             )}
 
                                             {/* Chevron */}
-                                            <div className={`rounded-full p-1 transition-all ${isOpen ? 'bg-purple-600/20 text-purple-400' : 'bg-zinc-700/50 text-zinc-500'}`}>
+                                            <button
+                                                onClick={() => toggleItem(faqItem.id)}
+                                                className={`rounded-full p-1 transition-all ${isOpen ? 'bg-purple-600/20 text-purple-400' : 'bg-zinc-700/50 text-zinc-500'}`}
+                                                aria-label={isOpen ? 'Cerrar' : 'Abrir'}
+                                            >
                                                 {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                            </div>
+                                            </button>
                                         </div>
-                                    </button>
+                                    </div>
 
                                     {/* Respuesta */}
                                     {isOpen && (
@@ -332,7 +332,7 @@ export function FaqSection({
                     {isOwner && !isCreating && activeFAQ.length > 0 && (
                         <button
                             onClick={handleCreate}
-                            className="w-full py-2.5 rounded-lg -mx-6 border border-dashed border-purple-600/30 bg-purple-600/5 hover:bg-purple-600/10 text-purple-400 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                            className="w-full py-2.5 rounded-lg border border-dashed border-purple-600/30 bg-purple-600/5 hover:bg-purple-600/10 text-purple-400 text-sm font-medium transition-colors flex items-center justify-center gap-2"
                         >
                             <Plus className="w-4 h-4" />
                             Agregar pregunta
