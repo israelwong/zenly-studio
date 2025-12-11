@@ -64,6 +64,51 @@ export function PostEditorSheet({
     const [linkCopied, setLinkCopied] = useState(false);
     const [titleError, setTitleError] = useState<string | null>(null);
     const [isValidatingSlug, setIsValidatingSlug] = useState(false);
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+    // Generar slug automáticamente SIEMPRE cuando cambia el título
+    useEffect(() => {
+        if (formData.title) {
+            const newSlug = generateSlug(formData.title);
+            if (newSlug !== formData.slug) {
+                setFormData(prev => ({ ...prev, slug: newSlug }));
+            }
+        }
+    }, [formData.title]);
+
+    // Validar disponibilidad del slug (solo después de la carga inicial)
+    useEffect(() => {
+        // No validar durante la carga inicial del post
+        if (isInitialLoad) {
+            return;
+        }
+
+        const validateSlug = async () => {
+            if (!formData.slug || formData.slug.length < 3) {
+                setTitleError(null);
+                return;
+            }
+
+            setIsValidatingSlug(true);
+
+            try {
+                const exists = await checkPostSlugExists(studioSlug, formData.slug, mode === "edit" ? postId : undefined);
+
+                if (exists) {
+                    setTitleError("Este título ya está en uso. Por favor, elige otro.");
+                } else {
+                    setTitleError(null);
+                }
+            } catch (error) {
+                console.error("Error validating slug:", error);
+            } finally {
+                setIsValidatingSlug(false);
+            }
+        };
+
+        const debounceTimer = setTimeout(validateSlug, 500);
+        return () => clearTimeout(debounceTimer);
+    }, [formData.slug, studioSlug, mode, postId, isInitialLoad]);
 
     // Cargar post si es modo edición
     useEffect(() => {
@@ -77,20 +122,27 @@ export function PostEditorSheet({
                         const post = result.data;
 
                         // Generar thumbnails para videos que no los tienen
+                        const postMediaItems = (post.media || []).map(item => ({
+                            ...item,
+                            storage_path: item.storage_path || item.file_url,
+                        })) as MediaItem[];
+
                         const mediaWithThumbnails = await generateMissingThumbnails(
-                            post.media || [],
+                            postMediaItems,
                             studioSlug
                         );
 
                         setFormData({
                             title: post.title || "",
-                            slug: post.slug || "",
+                            slug: generateSlug(post.title || ""), // Generar slug desde el título, no usar el de DB
                             caption: post.caption || "",
                             tags: post.tags || [],
-                            media: mediaWithThumbnails,
+                            media: mediaWithThumbnails as PostMediaItem[],
                             is_published: post.is_published ?? true,
                             is_featured: post.is_featured ?? false,
                         });
+                        // Marcar que terminó la carga inicial después de un pequeño delay
+                        setTimeout(() => setIsInitialLoad(false), 100);
                     } else {
                         toast.error("No se pudo cargar el post");
                         onClose();
@@ -124,8 +176,16 @@ export function PostEditorSheet({
             setTitleError(null);
             setIsValidatingSlug(false);
             setLinkCopied(false);
+            setIsInitialLoad(true);
         }
     }, [isOpen]);
+
+    // Marcar que no es carga inicial cuando se abre en modo crear
+    useEffect(() => {
+        if (isOpen && mode === "create") {
+            setIsInitialLoad(false);
+        }
+    }, [isOpen, mode]);
 
     // Generar slug automáticamente
     useEffect(() => {
@@ -597,7 +657,7 @@ export function PostEditorSheet({
                                     type="button"
                                     onClick={handleAddTag}
                                     variant="outline"
-                                    size="default"
+                                    size="md"
                                     className="h-10 px-3 shrink-0"
                                 >
                                     <Plus className="h-4 w-4" />

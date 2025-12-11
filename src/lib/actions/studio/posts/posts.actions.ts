@@ -501,11 +501,16 @@ export async function updateStudioPost(
             if (validatedData.event_type_id !== undefined) updateData.event_type_id = validatedData.event_type_id ?? null;
             if (validatedData.tags !== undefined) updateData.tags = validatedData.tags;
 
-            // Actualizar slug si viene en los datos y es diferente al actual
-            if (validatedData.slug !== undefined && validatedData.slug !== existingPost.slug) {
-                // Generar slug único si el proporcionado ya existe
-                const baseSlug = validatedData.slug;
-                const uniqueSlug = await generateUniquePostSlug(existingPost.studio_id, baseSlug, postId);
+            // Actualizar slug automáticamente si cambia el título
+            if (validatedData.title !== undefined) {
+                const newSlug = generateSlug(validatedData.title);
+                if (newSlug !== existingPost.slug) {
+                    const uniqueSlug = await generateUniquePostSlug(existingPost.studio_id, newSlug, postId);
+                    updateData.slug = uniqueSlug;
+                }
+            } else if (validatedData.slug !== undefined && validatedData.slug !== existingPost.slug) {
+                // Si se proporciona slug explícitamente (sin cambiar título)
+                const uniqueSlug = await generateUniquePostSlug(existingPost.studio_id, validatedData.slug, postId);
                 updateData.slug = uniqueSlug;
             }
 

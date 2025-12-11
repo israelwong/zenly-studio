@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Plus, LogOut, LayoutDashboard, UserPlus, LogIn, Pencil } from 'lucide-react';
+import { Plus, LogOut, LayoutDashboard, UserPlus, LogIn, Pencil, Menu } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { logout } from '@/lib/actions/auth/logout.action';
 import { clearRememberMePreference } from '@/lib/supabase/storage-adapter';
 import { EditStudioNameModal, EditSloganModal, EditLogoModal } from './modals';
+import { MobileActionsSheet } from './MobileActionsSheet';
 import { useDynamicFavicon } from '@/hooks/useDynamicFavicon';
 
 interface ProfileHeaderProps {
@@ -19,6 +20,7 @@ interface ProfileHeaderProps {
     loading?: boolean;
     studioSlug?: string;
     onCreatePost?: () => void; // Callback para abrir sheet de crear post
+    onCreateOffer?: () => void; // Callback para crear oferta
     isEditMode?: boolean; // Habilita botones de edición inline
 }
 
@@ -55,11 +57,12 @@ function getStudioInitials(studioName?: string): string {
  * - Builder preview (header sticky)
  * - Perfil público (header completo)
  */
-export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost, isEditMode = false }: ProfileHeaderProps) {
+export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost, onCreateOffer, isEditMode = false }: ProfileHeaderProps) {
     const router = useRouter();
     const { user } = useAuth();
     const studioData = data || {};
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
     // Estados para modales de edición
     const [editNameModal, setEditNameModal] = useState(false);
@@ -95,6 +98,14 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
     const handleNewPortfolio = () => {
         if (studioSlug) {
             router.push(`/${studioSlug}/profile/portfolio/nuevo`);
+        }
+    };
+
+    const handleNewOffer = () => {
+        if (onCreateOffer) {
+            onCreateOffer();
+        } else if (studioSlug) {
+            window.open(`/${studioSlug}/studio/commercial/ofertas/nuevo`, '_blank');
         }
     };
 
@@ -220,9 +231,18 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
                     <div className="flex items-center gap-2">
                         {user ? (
                             <>
-                                {/* Usuario autenticado: Quick Actions + Dashboard + Editar + Salir */}
+                                {/* Usuario autenticado */}
                                 {studioSlug && (
                                     <>
+                                        {/* Mobile: Botón menú */}
+                                        <button
+                                            onClick={() => setMobileActionsOpen(true)}
+                                            className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-md transition-colors"
+                                            aria-label="Menú de acciones"
+                                        >
+                                            <Menu className="w-4 h-4" />
+                                        </button>
+
                                         {/* Desktop: Botones separados */}
                                         <div className="hidden sm:flex items-center gap-2">
                                             <button
@@ -241,51 +261,57 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
                                                 <Plus className="w-3.5 h-3.5" />
                                                 Portfolio
                                             </button>
+                                            <button
+                                                onClick={handleNewOffer}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-md transition-colors"
+                                                aria-label="Crear oferta"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                                Oferta
+                                            </button>
                                         </div>
 
-                                        {/* Botón Dashboard */}
+                                        {/* Botón Dashboard - Solo desktop */}
                                         <button
                                             onClick={handleDashboard}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-md transition-colors"
+                                            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-md transition-colors"
                                             aria-label="Abrir dashboard"
                                         >
                                             <LayoutDashboard className="w-3.5 h-3.5" />
-                                            <span className="hidden sm:inline">Dashboard</span>
+                                            <span>Dashboard</span>
                                         </button>
                                     </>
                                 )}
 
-                                {/* Botón Cerrar Sesión */}
+                                {/* Botón Cerrar Sesión - Solo desktop */}
                                 <button
                                     onClick={handleLogout}
                                     disabled={isLoggingOut}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     aria-label="Cerrar sesión"
                                 >
                                     <LogOut className="w-3.5 h-3.5" />
-                                    <span className="hidden sm:inline">
+                                    <span>
                                         {isLoggingOut ? 'Cerrando...' : 'Salir'}
                                     </span>
                                 </button>
                             </>
                         ) : (
                             <>
-                                {/* Usuario no autenticado: Crear cuenta + Iniciar sesión */}
-                                <button
-                                    onClick={handleSignUp}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-100 bg-emerald-600 hover:bg-emerald-500 rounded-md transition-colors"
-                                    aria-label="Crear cuenta"
-                                >
-                                    <UserPlus className="w-3.5 h-3.5" />
-                                    <span className="hidden sm:inline">Crear cuenta</span>
-                                </button>
+                                {/* Usuario no autenticado: Iniciar sesión + Crear cuenta */}
                                 <button
                                     onClick={handleLogin}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-md transition-colors"
+                                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-zinc-100 bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 rounded-lg transition-colors"
                                     aria-label="Iniciar sesión"
                                 >
-                                    <LogIn className="w-3.5 h-3.5" />
-                                    <span className="hidden sm:inline">Iniciar sesión</span>
+                                    <span>Iniciar sesión</span>
+                                </button>
+                                <button
+                                    onClick={handleSignUp}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 rounded-lg transition-colors"
+                                    aria-label="Crear cuenta"
+                                >
+                                    <span>Crear cuenta</span>
                                 </button>
                             </>
                         )}
@@ -329,6 +355,18 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
                         }}
                     />
                 </>
+            )}
+
+            {/* Mobile Actions Sheet */}
+            {user && studioSlug && (
+                <MobileActionsSheet
+                    isOpen={mobileActionsOpen}
+                    onClose={() => setMobileActionsOpen(false)}
+                    onCreatePost={handleNewPost}
+                    onDashboard={handleDashboard}
+                    onLogout={handleLogout}
+                    isLoggingOut={isLoggingOut}
+                />
             )}
         </div>
     );

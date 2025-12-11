@@ -97,18 +97,21 @@ export function SignupFormWithRole({ className, ...props }: React.ComponentProps
     if (success) {
         return (
             <div className={cn('flex flex-col gap-6', className)} {...props}>
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-2xl text-green-600">¡Registro Exitoso!</CardTitle>
-                        <CardDescription>
+                <Card className="bg-zinc-900/50 border-zinc-800">
+                    <CardHeader className="space-y-1">
+                        <CardTitle className="text-xl text-emerald-400">¡Registro Exitoso!</CardTitle>
+                        <CardDescription className="text-zinc-400">
                             Revisa tu email para confirmar tu cuenta
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="text-center">
-                        <p className="text-sm text-gray-600 mb-4">
+                        <p className="text-sm text-zinc-400 mb-4">
                             Te hemos enviado un enlace de confirmación a tu email.
                         </p>
-                        <Button onClick={() => router.push('/login')} className="w-full">
+                        <Button
+                            onClick={() => router.push('/login')}
+                            className="w-full bg-emerald-700 hover:bg-emerald-600 text-white"
+                        >
                             Ir a Iniciar Sesión
                         </Button>
                     </CardContent>
@@ -119,18 +122,18 @@ export function SignupFormWithRole({ className, ...props }: React.ComponentProps
 
     return (
         <div className={cn('flex flex-col gap-6', className)} {...props}>
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-2xl">Registrarse</CardTitle>
-                    <CardDescription>
-                        Crea tu cuenta en ProSocial Platform
+            <Card className="bg-zinc-900/50 border-zinc-800">
+                <CardHeader className="space-y-1">
+                    <CardTitle className="text-xl text-zinc-100">Crear Cuenta</CardTitle>
+                    <CardDescription className="text-zinc-400">
+                        Completa los datos para registrarte
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSignup}>
-                        <div className="flex flex-col gap-6">
+                        <div className="flex flex-col gap-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="fullName">Nombre Completo</Label>
+                                <Label htmlFor="fullName" className="text-zinc-300">Nombre Completo</Label>
                                 <Input
                                     id="fullName"
                                     type="text"
@@ -138,11 +141,12 @@ export function SignupFormWithRole({ className, ...props }: React.ComponentProps
                                     required
                                     value={fullName}
                                     onChange={(e) => setFullName(e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
                                 />
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Email</Label>
+                                <Label htmlFor="email" className="text-zinc-300">Email</Label>
                                 <Input
                                     id="email"
                                     type="email"
@@ -150,60 +154,61 @@ export function SignupFormWithRole({ className, ...props }: React.ComponentProps
                                     required
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
                                 />
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="role">Tipo de Cuenta</Label>
-                                <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona tu tipo de cuenta" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={UserRole.SUSCRIPTOR}>
-                                            📸 Suscriptor (Estudio de Fotografía)
-                                        </SelectItem>
-                                        <SelectItem value={UserRole.AGENTE}>
-                                            💼 Agente ProSocial
-                                        </SelectItem>
-                                        <SelectItem value={UserRole.SUPER_ADMIN}>
-                                            🔧 Super Administrador
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="password">Contraseña</Label>
+                                <Label htmlFor="password" className="text-zinc-300">Contraseña</Label>
                                 <Input
                                     id="password"
                                     type="password"
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-zinc-100"
                                 />
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                                <Label htmlFor="confirmPassword" className="text-zinc-300">Confirmar Contraseña</Label>
                                 <Input
                                     id="confirmPassword"
                                     type="password"
                                     required
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-zinc-100"
                                 />
                             </div>
 
-                            {error && <p className="text-sm text-red-500">{error}</p>}
+                            {error && (
+                                <div className="text-sm text-red-400 bg-red-950/20 p-3 rounded border border-red-900/20">
+                                    {error}
+                                </div>
+                            )}
 
-                            <Button type="submit" className="w-full" disabled={isLoading}>
+                            <Button
+                                type="submit"
+                                className="w-full bg-emerald-700 hover:bg-emerald-600 text-white"
+                                disabled={isLoading}
+                            >
                                 {isLoading ? 'Creando cuenta...' : 'Crear Cuenta'}
                             </Button>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => router.back()}
+                                className="w-full bg-transparent border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                                disabled={isLoading}
+                            >
+                                Cancelar
+                            </Button>
                         </div>
-                        <div className="mt-4 text-center text-sm">
+                        <div className="mt-4 text-center text-sm text-zinc-400">
                             ¿Ya tienes cuenta?{' '}
-                            <Link href="/login" className="underline underline-offset-4">
+                            <Link href="/login" className="text-emerald-500 hover:text-emerald-400 underline underline-offset-4">
                                 Inicia sesión aquí
                             </Link>
                         </div>

@@ -7,9 +7,10 @@ import type { PublicPaquete } from '@/types/public-profile';
 
 interface PaqueteCardProps {
     paquete: PublicPaquete;
+    variant?: 'default' | 'compact';
 }
 
-export function PaqueteCard({ paquete }: PaqueteCardProps) {
+export function PaqueteCard({ paquete, variant = 'default' }: PaqueteCardProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const forceMutedIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -50,17 +51,17 @@ export function PaqueteCard({ paquete }: PaqueteCardProps) {
         try {
             videoElement.muted = true;
             videoElement.volume = 0;
-            
+
             // Forzar muted también desde el atributo HTML
             videoElement.setAttribute('muted', '');
-            
+
             // Override temporal de volume para prevenir cambios
             if (!videoElement.dataset.volumeOverridden) {
                 const originalVolume = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(videoElement), 'volume');
                 if (originalVolume) {
                     Object.defineProperty(videoElement, 'volume', {
                         get: () => 0,
-                        set: () => {},
+                        set: () => { },
                         configurable: true
                     });
                     videoElement.dataset.volumeOverridden = 'true';
@@ -128,8 +129,10 @@ export function PaqueteCard({ paquete }: PaqueteCardProps) {
         };
     }, [coverUrl, isVideo, forceMuted]);
 
+    const isCompact = variant === 'compact';
+
     return (
-        <div className="relative w-full aspect-[4/5] rounded-lg overflow-hidden group cursor-pointer bg-zinc-900">
+        <div className={`relative w-full ${isCompact ? 'aspect-[16/9]' : 'aspect-[4/5]'} rounded-lg overflow-hidden group cursor-pointer bg-zinc-900`}>
             {/* Imagen o video de fondo */}
             {hasCover ? (
                 isVideo ? (
@@ -188,20 +191,20 @@ export function PaqueteCard({ paquete }: PaqueteCardProps) {
             )}
 
             {/* Contenido */}
-            <div className="absolute bottom-0 left-0 right-0 p-6 z-10">
-                <div className="space-y-2">
+            <div className={`absolute bottom-0 left-0 right-0 ${isCompact ? 'p-3' : 'p-6'} z-10`}>
+                <div className={isCompact ? 'space-y-1' : 'space-y-2'}>
                     {/* Nombre */}
-                    <h3 className="text-xl font-bold text-white leading-tight">
+                    <h3 className={`${isCompact ? 'text-base' : 'text-xl'} font-bold text-white leading-tight ${isCompact ? 'line-clamp-1' : ''}`}>
                         {paquete.nombre}
                     </h3>
 
                     {/* Precio */}
-                    <div className="text-2xl font-semibold text-purple-400">
+                    <div className={`${isCompact ? 'text-lg' : 'text-2xl'} font-semibold text-purple-400`}>
                         {formatPrice(paquete.precio)}
                     </div>
 
-                    {/* Descripción */}
-                    {paquete.descripcion && (
+                    {/* Descripción - solo en variant default */}
+                    {!isCompact && paquete.descripcion && (
                         <p className="text-sm text-zinc-200 line-clamp-2 leading-relaxed">
                             {paquete.descripcion}
                         </p>

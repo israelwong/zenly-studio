@@ -1,9 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Sparkles, ArrowRight, Plus } from 'lucide-react';
-import { OfferCardWithTracking } from './OfferCardWithTracking';
-import { useParams } from 'next/navigation';
+import { ArrowRight } from 'lucide-react';
+import { OfferCard } from './OfferCard';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface PublicOffer {
@@ -13,6 +12,8 @@ interface PublicOffer {
     slug: string;
     cover_media_url: string | null;
     cover_media_type: "image" | "video" | null;
+    discount_percentage?: number | null;
+    valid_until?: string | null;
 }
 
 interface OffersCardProps {
@@ -41,46 +42,19 @@ export function OffersCard({ offers, studioSlug, studioId, ownerUserId }: Offers
     // Mostrar máximo 3 ofertas
     const displayOffers = offers.slice(0, 3);
 
-    const handleCreateOffer = () => {
-        window.open(`/${studioSlug}/studio/commercial/ofertas/nuevo`, '_blank');
-    };
-
     return (
-        <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-purple-400" />
-                    <h3 className="text-base font-semibold text-zinc-100">
-                        Ofertas Especiales
-                    </h3>
-                </div>
-                {user ? (
-                    <button
-                        onClick={handleCreateOffer}
-                        className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded transition-colors"
-                        aria-label="Crear oferta"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        Crear
-                    </button>
-                ) : offers.length > 1 ? (
-                    <span className="text-xs text-zinc-400">
-                        {offers.length} {offers.length === 1 ? 'oferta' : 'ofertas'}
-                    </span>
-                ) : null}
-            </div>
-
-            {/* Content */}
+        <div className="space-y-3">
+            {/* Ofertas - Sin card wrapper, cada una es independiente */}
             <div className="space-y-3">
                 {displayOffers.map((offer) => (
-                    <OfferCardWithTracking
+                    <OfferCard
                         key={offer.id}
                         offer={offer}
                         studioId={studioId || ''}
                         studioSlug={studioSlug}
                         ownerUserId={ownerUserId}
                         showMenu={!!user}
+                        variant="desktop"
                     />
                 ))}
             </div>
@@ -89,7 +63,7 @@ export function OffersCard({ offers, studioSlug, studioId, ownerUserId }: Offers
             {offers.length > 3 && (
                 <button
                     onClick={() => window.location.href = `/${studioSlug}#ofertas`}
-                    className="w-full flex items-center justify-center gap-2 text-sm text-zinc-400 hover:text-zinc-300 transition-colors py-2 border-t border-zinc-800/50"
+                    className="w-full flex items-center justify-center gap-2 text-sm text-zinc-400 hover:text-zinc-300 transition-colors py-2"
                 >
                     Ver todas las ofertas
                     <ArrowRight className="h-4 w-4" />

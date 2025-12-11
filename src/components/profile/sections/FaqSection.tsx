@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Plus, Edit2, Trash2, X, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Edit2, Trash2, X, Check, ArrowUp, ArrowDown } from 'lucide-react';
 import { ZenInput, ZenTextarea } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { createFAQ, updateFAQ, deleteFAQ } from '@/lib/actions/studio/faq.actions';
+import { createFAQ, updateFAQ, deleteFAQ, reorderFAQ } from '@/lib/actions/studio/faq.actions';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -142,6 +142,30 @@ export function FaqSection({
         }
     };
 
+    const handleReorder = async (faqId: string, direction: 'up' | 'down') => {
+        const currentIndex = activeFAQ.findIndex(f => f.id === faqId);
+        if (currentIndex === -1) return;
+
+        if (direction === 'up' && currentIndex === 0) return;
+        if (direction === 'down' && currentIndex === activeFAQ.length - 1) return;
+
+        const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+        setSaving(faqId);
+        try {
+            const result = await reorderFAQ(faqId, newIndex, studioSlug);
+            if (result.success) {
+                handleDataRefresh();
+            } else {
+                toast.error(result.error || 'Error al reordenar');
+            }
+        } catch (error) {
+            toast.error('Error al reordenar');
+        } finally {
+            setSaving(null);
+        }
+    };
+
     if (loading) {
         return (
             <div className="px-8 py-6 space-y-3">
@@ -221,10 +245,12 @@ export function FaqSection({
                 <div className="space-y-2">
                     {activeFAQ
                         .sort((a, b) => a.orden - b.orden)
-                        .map((faqItem) => {
+                        .map((faqItem, index) => {
                             const isOpen = openItems.has(faqItem.id);
                             const isEditing = editingId === faqItem.id;
                             const isSaving = saving === faqItem.id;
+                            const isFirst = index === 0;
+                            const isLast = index === activeFAQ.length - 1;
 
                             // Modo edición
                             if (isEditing) {
@@ -285,9 +311,30 @@ export function FaqSection({
                                         </button>
 
                                         <div className="flex items-center gap-1 shrink-0">
-                                            {/* Botones edición - izquierda del chevron */}
+                                            {/* Botones edición y reordenamiento */}
                                             {isOwner && (
                                                 <div className="flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                                                    {/* Flechas reordenamiento */}
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <button
+                                                            onClick={() => handleReorder(faqItem.id, 'up')}
+                                                            disabled={isFirst || isSaving}
+                                                            className="p-0.5 rounded hover:bg-zinc-700/50 text-zinc-400 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                                            aria-label="Mover arriba"
+                                                        >
+                                                            <ArrowUp className="w-3 h-3" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleReorder(faqItem.id, 'down')}
+                                                            disabled={isLast || isSaving}
+                                                            className="p-0.5 rounded hover:bg-zinc-700/50 text-zinc-400 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                                            aria-label="Mover abajo"
+                                                        >
+                                                            <ArrowDown className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Editar y eliminar */}
                                                     <button
                                                         onClick={() => handleEdit(faqItem)}
                                                         className="p-1.5 rounded-md bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 transition-all"

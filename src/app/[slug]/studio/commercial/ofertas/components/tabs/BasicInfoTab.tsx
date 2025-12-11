@@ -152,6 +152,7 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
               description={formData.description}
               coverMediaUrl={formData.cover_media_url}
               coverMediaType={formData.cover_media_type}
+              validUntil={formData.end_date ? formData.end_date.toISOString() : null}
             />
           </MobilePreviewOffer>
         </div>

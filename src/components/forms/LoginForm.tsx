@@ -7,6 +7,7 @@
 
 import { useState, FormEvent, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/browser'
 import { setRememberMePreference, getRememberMePreference } from '@/lib/supabase/storage-adapter'
 import { Button } from '@/components/ui/shadcn/button'
@@ -44,7 +45,7 @@ export function LoginForm() {
       setRememberMePreference(rememberMe)
 
       const supabase = createClient()
-      
+
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -72,7 +73,7 @@ export function LoginForm() {
 
       // Usar router.push en lugar de window.location para mantener el contexto
       router.push(redirectPath)
-      
+
     } catch (err) {
       console.error('Login error:', err)
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
@@ -81,17 +82,17 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle>Iniciar Sesión</CardTitle>
-        <CardDescription>
+    <Card className="w-full max-w-md bg-zinc-900/50 border-zinc-800">
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-xl text-zinc-100">Iniciar Sesión</CardTitle>
+        <CardDescription className="text-zinc-400">
           Ingresa tus credenciales para acceder a tu cuenta
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-zinc-300">Email</Label>
             <Input
               id="email"
               type="email"
@@ -100,11 +101,17 @@ export function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
+              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Contraseña</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password" className="text-zinc-300">Contraseña</Label>
+              <Link href="/forgot-password" className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"
@@ -112,6 +119,7 @@ export function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={loading}
+              className="bg-zinc-800 border-zinc-700 text-zinc-100"
             />
           </div>
 
@@ -124,20 +132,34 @@ export function LoginForm() {
             />
             <Label
               htmlFor="rememberMe"
-              className="text-sm font-normal cursor-pointer"
+              className="text-sm font-normal cursor-pointer text-zinc-400"
             >
               Mantener sesión iniciada
             </Label>
           </div>
 
           {error && (
-            <div className="text-sm text-red-500 bg-red-50 dark:bg-red-950/20 p-3 rounded">
+            <div className="text-sm text-red-400 bg-red-950/20 p-3 rounded border border-red-900/20">
               {error}
             </div>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button
+            type="submit"
+            className="w-full bg-emerald-700 hover:bg-emerald-600 text-white"
+            disabled={loading}
+          >
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.back()}
+            className="w-full bg-transparent border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+            disabled={loading}
+          >
+            Cancelar
           </Button>
         </form>
       </CardContent>

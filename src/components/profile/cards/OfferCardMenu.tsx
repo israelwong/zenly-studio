@@ -103,13 +103,13 @@ export function OfferCardMenu({ offerId, studioSlug }: OfferCardMenuProps) {
 
                     {/* Menu */}
                     <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-20 overflow-hidden">
-                        {/* Gestionar (abre Studio) */}
+                        {/* Editar (abre Studio) */}
                         <button
                             onClick={handleManage}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
                         >
                             <ExternalLink className="w-4 h-4" />
-                            Gestionar
+                            Editar
                         </button>
 
                         {/* Divider */}

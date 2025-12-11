@@ -10,7 +10,6 @@ import {
     ProfileNavTabs,
     ProfileFooter,
     ZenCreditsCard,
-    BusinessPresentationCard,
     OffersCard,
     MobilePromotionsSection,
     QuickActions
@@ -28,6 +27,11 @@ interface PublicOffer {
     slug: string;
     cover_media_url: string | null;
     cover_media_type: "image" | "video" | null;
+    discount_percentage?: number | null;
+    is_permanent?: boolean;
+    has_date_range?: boolean;
+    start_date?: string | null;
+    valid_until?: string | null;
 }
 
 interface ProfilePageClientProps {
@@ -54,11 +58,22 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
     const [editingPostId, setEditingPostId] = useState<string | undefined>(undefined);
+    const [isScrolled, setIsScrolled] = useState(false);
 
     const { studio, paquetes, posts, portfolios } = profileData;
 
     // Verificar si el usuario autenticado es el owner del studio
     const isOwner = user?.id === studio.owner_id;
+
+    // Detectar scroll para agregar margen al NavTabs
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsScrolled(window.scrollY > 10);
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     // Keyboard shortcut para abrir buscador (Cmd+K / Ctrl+K)
     useEffect(() => {
@@ -95,6 +110,18 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
             setSelectedPortfolioSlug(null);
         }
     }, [searchParams]);
+
+    // Detectar parámetro createPost para abrir sheet
+    useEffect(() => {
+        const createPostParam = searchParams.get('createPost');
+
+        if (createPostParam === 'true' && isOwner) {
+            setIsPostEditorOpen(true);
+            // Limpiar URL sin recargar página
+            const newUrl = `/${studioSlug}`;
+            window.history.replaceState({}, '', newUrl);
+        }
+    }, [searchParams, isOwner, studioSlug]);
 
     // Helper para construir URL con section
     const buildUrl = (params: { post?: string; portfolio?: string; tab?: string }) => {
@@ -236,6 +263,9 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                         setEditingPostId(undefined);
                         setIsPostEditorOpen(true);
                     }}
+                    onCreateOffer={() => {
+                        window.open(`/${studioSlug}/studio/commercial/ofertas/nuevo`, '_blank');
+                    }}
                     isEditMode={isOwner}
                 />
             </header>
@@ -243,11 +273,23 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
             {/* Main Content - Responsive Grid con max-width centrado en desktop */}
             {/* Columnas con ancho mobile-friendly: ~430px cada una */}
             <main className="w-full mx-auto max-w-[920px]">
+                {/* Mobile-only: Sticky Promotions Banner - Fuera del grid */}
+                <div className="lg:hidden">
+                    <MobilePromotionsSection
+                        offers={offers}
+                        activeTab={activeTab}
+                        studioSlug={studioSlug}
+                        studioId={studio.id}
+                        ownerUserId={studio.owner_id}
+                    />
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-[430px_430px] gap-4 p-4 lg:p-6 lg:justify-center">
                     {/* Col 1: Main content */}
                     <div className="space-y-4">
-                        {/* Navigation Tabs - Sticky */}
-                        <div className="sticky top-[72px] z-20 bg-zinc-900/50 backdrop-blur-lg rounded-lg border border-zinc-800/20">
+                        {/* Navigation Tabs - Sticky con margen dinámico */}
+                        <div className={`sticky z-20 bg-zinc-900/50 backdrop-blur-lg rounded-lg border border-zinc-800/20 transition-all duration-300 ${isScrolled ? 'top-[88px]' : 'top-[72px]'
+                            }`}>
                             <ProfileNavTabs
                                 activeTab={activeTab}
                                 onTabChange={handleTabChange}
@@ -270,14 +312,6 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                                 ownerUserId={studio.owner_id}
                                 studioSlug={studioSlug}
                             />
-
-                            {/* Mobile-only: Promociones inline */}
-                            <div className="lg:hidden">
-                                <MobilePromotionsSection
-                                    paquetes={paquetes}
-                                    activeTab={activeTab}
-                                />
-                            </div>
                         </div>
                     </div>
 
@@ -289,12 +323,6 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                             studioSlug={studioSlug}
                             studioId={studio.id}
                             ownerUserId={studio.owner_id}
-                        />
-
-                        {/* Card Presentación del Negocio */}
-                        <BusinessPresentationCard
-                            presentation={studio.presentation || undefined}
-                            studioName={studio.studio_name}
                         />
 
                         {/* Card Créditos ZEN */}

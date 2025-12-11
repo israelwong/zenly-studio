@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LogOut, CreditCard, UserCircle, Shield, Eye, Plus, FolderOpen } from "lucide-react";
+import { LogOut, CreditCard, UserCircle, Shield, Globe, Plus, FolderOpen } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { logout } from "@/lib/actions/auth/logout.action";
@@ -186,20 +186,26 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
                         </div>
                         <ZenDropdownMenuItem className="cursor-pointer" asChild>
                             <Link href={menuRoutes.verPerfilPublico} target="_blank" rel="noopener noreferrer">
-                                <Eye className="mr-2 h-4 w-4" />
-                                <span>Visitar</span>
+                                <Globe className="mr-2 h-4 w-4" />
+                                <span>Visitar perfil</span>
                             </Link>
                         </ZenDropdownMenuItem>
                         <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                            <Link href={`/${studioSlug}/profile/post`} target="_blank" rel="noopener noreferrer">
+                            <Link href={`/${studioSlug}?createPost=true`} target="_blank" rel="noopener noreferrer">
                                 <Plus className="mr-2 h-4 w-4" />
                                 <span>Crear post</span>
                             </Link>
                         </ZenDropdownMenuItem>
                         <ZenDropdownMenuItem className="cursor-pointer" asChild>
                             <Link href={`/${studioSlug}/profile/portfolio/nuevo`} target="_blank" rel="noopener noreferrer">
-                                <FolderOpen className="mr-2 h-4 w-4" />
-                                <span>Crear portafolio</span>
+                                <Plus className="mr-2 h-4 w-4" />
+                                <span>Portafolio</span>
+                            </Link>
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuItem className="cursor-pointer" asChild>
+                            <Link href={`/${studioSlug}/studio/commercial/ofertas/nuevo`} target="_blank" rel="noopener noreferrer">
+                                <Plus className="mr-2 h-4 w-4" />
+                                <span>Crear oferta</span>
                             </Link>
                         </ZenDropdownMenuItem>
                         <ZenDropdownMenuSeparator />

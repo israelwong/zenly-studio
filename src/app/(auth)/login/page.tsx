@@ -1,5 +1,6 @@
 import { LoginForm } from '@/components/forms/LoginForm'
 import { AuthHeader } from '@/components/auth/auth-header'
+import { AuthFooter } from '@/components/auth/auth-footer'
 
 export default function LoginPage() {
   return (
@@ -7,6 +8,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <AuthHeader subtitle="Ingresa a tu cuenta para acceder al panel de administración" />
         <LoginForm />
+        <AuthFooter />
       </div>
     </div>
   )

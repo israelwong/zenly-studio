@@ -1267,6 +1267,11 @@ export async function getPublicActiveOffers(studioSlug: string) {
           has_date_range: true,
           start_date: true,
           end_date: true,
+          business_term: {
+            select: {
+              discount_percentage: true,
+            },
+          },
         },
         orderBy: {
           created_at: 'desc',
@@ -1282,10 +1287,11 @@ export async function getPublicActiveOffers(studioSlug: string) {
           slug: offer.slug,
           cover_media_url: offer.cover_media_url,
           cover_media_type: offer.cover_media_type as "image" | "video" | null,
+          discount_percentage: offer.business_term?.discount_percentage ?? null,
           is_permanent: offer.is_permanent,
           has_date_range: offer.has_date_range,
           start_date: offer.start_date,
-          end_date: offer.end_date,
+          valid_until: offer.end_date,
         })),
       };
     });

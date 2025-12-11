@@ -37,6 +37,17 @@
   }
 }
 
+@layer utilities {
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 :root {
   /* Sidebar variables - tema claro (no usado en nuestro proyecto) */
   --sidebar: hsl(0 0% 98%);
