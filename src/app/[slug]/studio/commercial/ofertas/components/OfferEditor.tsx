@@ -35,7 +35,7 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { activeTab, setActiveTab, isSaving, setIsSaving, formData, contentBlocks, updateFormData, updateContentBlocks, getOfferData, savedOfferId, setSavedOfferId } = useOfferEditor();
+  const { activeTab, setActiveTab, isSaving, setIsSaving, formData, contentBlocks, leadformData, updateFormData, updateContentBlocks, updateLeadformData, getOfferData, savedOfferId, setSavedOfferId } = useOfferEditor();
   const { triggerRefresh } = useStorageRefresh(studioSlug);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -59,6 +59,7 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
       const initialSnapshot = JSON.stringify({
         formData,
         contentBlocks,
+        leadformData,
       });
       setInitialData(initialSnapshot);
       setIsDirty(false);
@@ -82,10 +83,11 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
     const currentSnapshot = JSON.stringify({
       formData,
       contentBlocks,
+      leadformData,
     });
 
     setIsDirty(currentSnapshot !== initialData);
-  }, [formData, contentBlocks, initialData, currentMode]);
+  }, [formData, contentBlocks, leadformData, initialData, currentMode]);
 
   // Prevenir cerrar ventana con cambios sin guardar
   useEffect(() => {
@@ -249,6 +251,7 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
       const initial = JSON.parse(initialData);
       updateFormData(initial.formData);
       updateContentBlocks(initial.contentBlocks);
+      updateLeadformData(initial.leadformData);
       setIsDirty(false);
       toast.success("Cambios restaurados al estado original");
     } catch (error) {
@@ -288,17 +291,24 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
           triggerRefresh();
           // Actualizar estado local con los datos actualizados sin recargar
           setCurrentOffer(result.data);
+
           // Actualizar contentBlocks en el contexto si están presentes
+          const updatedBlocks = result.data.landing_page?.content_blocks as ContentBlock[] || [];
           if (result.data.landing_page?.content_blocks) {
-            updateContentBlocks(result.data.landing_page.content_blocks as ContentBlock[]);
+            updateContentBlocks(updatedBlocks);
           }
-          // Resetear estado de cambios
-          const newSnapshot = JSON.stringify({
-            formData,
-            contentBlocks,
-          });
-          setInitialData(newSnapshot);
-          setIsDirty(false);
+
+          // Resetear estado de cambios con los datos GUARDADOS del servidor
+          // Esto asegura que initialData coincida exactamente con lo que está en DB
+          setTimeout(() => {
+            const newSnapshot = JSON.stringify({
+              formData,
+              contentBlocks: updatedBlocks.length > 0 ? updatedBlocks : contentBlocks,
+              leadformData,
+            });
+            setInitialData(newSnapshot);
+            setIsDirty(false);
+          }, 100);
         } else {
           toast.error(result.error || "Error al actualizar la oferta");
         }

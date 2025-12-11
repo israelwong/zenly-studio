@@ -79,6 +79,7 @@ export function TipoEventoSelector({
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
           {label}
+          <span className="text-red-400">*</span>
           {showBadge && (
             <div className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-400">
               Recomendado
@@ -117,18 +118,39 @@ export function TipoEventoSelector({
         </div>
       ) : (
         <div className="space-y-2">
-          <select
-            value={selectedEventTypeId || ""}
-            onChange={(e) => onChange(e.target.value || null)}
-            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-          >
-            <option value="">Sin categoría</option>
-            {eventTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.nombre}
-              </option>
-            ))}
-          </select>
+          {/* Contenedor con scroll vertical - muestra 3.5 cards (58px por card + 8px gap) */}
+          <div className="max-h-[215px] overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-900">
+            {/* Lista de tipos de evento */}
+            {eventTypes.map((type) => {
+              const isSelected = selectedEventTypeId === type.id;
+              const packagesCount = type.paquetes?.length || 0;
+
+              return (
+                <div
+                  key={type.id}
+                  onClick={() => onChange(type.id)}
+                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isSelected
+                    ? "bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/20"
+                    : "bg-zinc-900 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/50"
+                    }`}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className={`w-2 h-2 rounded-full ${isSelected ? "bg-emerald-500" : "bg-zinc-700"
+                      }`} />
+                    <span className={`text-sm font-medium ${isSelected ? "text-emerald-400" : "text-zinc-300"
+                      }`}>
+                      {type.nombre}
+                    </span>
+                  </div>
+                  {packagesCount > 0 && (
+                    <span className="px-2 py-0.5 text-xs font-medium text-zinc-400 bg-zinc-800/50 border border-zinc-700/50 rounded-full whitespace-nowrap">
+                      {packagesCount} {packagesCount === 1 ? 'paquete' : 'paquetes'}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
           {/* Hint */}
           {hint && (

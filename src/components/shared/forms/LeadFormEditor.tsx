@@ -36,17 +36,6 @@ export function LeadFormEditor({
   return (
     <div className="space-y-6">
       {/* Campos básicos info */}
-      <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg">
-        <h4 className="text-sm font-medium text-zinc-300 mb-2">
-          Campos básicos (siempre incluidos)
-        </h4>
-        <ul className="text-sm text-zinc-500 space-y-1">
-          <li>✓ Nombre completo (requerido)</li>
-          <li>✓ Teléfono (requerido)</li>
-          <li>✓ Email (opcional)</li>
-        </ul>
-      </div>
-
       {/* Título y descripción */}
       <div className="space-y-4">
         <ZenInput
@@ -240,15 +229,6 @@ export function LeadFormEditor({
             onUpdate({ success_message: e.target.value })
           }
           rows={2}
-        />
-
-        <ZenInput
-          label="URL de Redirección (opcional)"
-          value={formData.success_redirect_url}
-          onChange={(e) =>
-            onUpdate({ success_redirect_url: e.target.value })
-          }
-          placeholder="https://..."
         />
       </div>
     </div>
