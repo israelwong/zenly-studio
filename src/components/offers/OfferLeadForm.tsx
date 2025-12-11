@@ -13,26 +13,15 @@
  * Ver: docs/arquitectura-componentes-publicos.md
  */
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Image from "next/image";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
-import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge, ZenCalendar, type ZenCalendarProps } from "@/components/ui/zen";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/shadcn/popover";
+import { ZenButton, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from "@/components/ui/zen";
 import { submitOfferLeadform } from "@/lib/actions/studio/offers/offer-submissions.actions";
 import { trackOfferVisit } from "@/lib/actions/studio/offers/offer-visits.actions";
-import { checkDateAvailability } from "@/lib/actions/studio/offers/offer-availability.actions";
-import { LeadFormFieldsConfig, LeadFormField } from "@/lib/actions/schemas/offer-schemas";
+import { LeadFormFieldsConfig } from "@/lib/actions/schemas/offer-schemas";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, CalendarIcon } from "lucide-react";
-
-// Tipo específico para ZenCalendar con mode="single"
-type ZenCalendarSingleProps = Omit<ZenCalendarProps, 'mode' | 'selected' | 'onSelect'> & {
-  mode: 'single';
-  selected?: Date;
-  onSelect?: (date: Date | undefined) => void;
-};
+import { OfferLeadFormFields } from "@/components/shared/forms";
 
 // Tipos para objetos globales de tracking
 interface WindowWithDataLayer extends Window {
@@ -60,6 +49,8 @@ interface OfferLeadFormProps {
   coverUrl?: string | null;
   coverType?: string | null;
   isPreview?: boolean;
+  onSuccess?: () => void; // Callback cuando se envía exitosamente (para cerrar modal)
+  isModal?: boolean; // Indica si está dentro de un modal
 }
 
 /**
@@ -82,24 +73,41 @@ export function OfferLeadForm({
   coverUrl,
   coverType,
   isPreview = false,
+  onSuccess,
+  isModal = false,
 }: OfferLeadFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<Record<string, string>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [dateAvailability, setDateAvailability] = useState<{
-    checking: boolean;
-    available: boolean | null;
-  }>({ checking: false, available: null });
 
   // Verificar si viene de éxito
   const isSuccess = searchParams.get("success") === "true";
 
+  // Verificar si es preview desde URL
+  const isPreviewFromUrl = searchParams.get("preview") === "true";
+
+  // Combinar preview de prop y URL
+  const effectiveIsPreview = isPreview || isPreviewFromUrl;
+
   useEffect(() => {
+    // Verificar si es preview (no trackear)
+    const urlParams = new URLSearchParams(window.location.search);
+    const isPreview = urlParams.get("preview") === "true";
+
+    // Si es preview, no trackear visitas ni eventos
+    if (isPreview || isSuccess) {
+      return;
+    }
+
+    // Verificar si ya se trackeó en esta sesión de navegador
+    const sessionTrackKey = `offer_leadform_tracked_${offerId}`;
+    const alreadyTracked = sessionStorage.getItem(sessionTrackKey);
+
+    if (alreadyTracked) {
+      return;
+    }
+
     // Registrar visita al cargar el leadform
     const trackVisit = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
       const utmParams = {
         utm_source: urlParams.get("utm_source") || undefined,
         utm_medium: urlParams.get("utm_medium") || undefined,
@@ -121,6 +129,9 @@ export function OfferLeadForm({
         ...utmParams,
         session_id: sessionId,
       });
+
+      // Marcar como trackeado en sessionStorage (se borra al cerrar pestaña)
+      sessionStorage.setItem(sessionTrackKey, 'true');
 
       // Disparar evento personalizado
       if (typeof window !== "undefined") {
@@ -146,216 +157,108 @@ export function OfferLeadForm({
       }
     };
 
-    if (!isSuccess) {
-      trackVisit();
-    }
+    trackVisit();
   }, [offerId, offerSlug, isSuccess]);
 
-  // Campos básicos siempre presentes
-  const basicFields: LeadFormField[] = [
-    {
-      id: "name",
-      type: "text",
-      label: "Nombre completo",
-      required: true,
-      placeholder: "Tu nombre",
-    },
-    {
-      id: "phone",
-      type: "phone",
-      label: "Teléfono",
-      required: true,
-      placeholder: "10 dígitos",
-    },
-    {
-      id: "email",
-      type: "email",
-      label: "Email",
-      required: emailRequired,
-      placeholder: "tu@email.com",
-    },
-  ];
-
-  // Agregar campo de fecha de interés si está habilitado
-  if (enableInterestDate) {
-    basicFields.push({
-      id: "interest_date",
-      type: "date",
-      label: "Fecha de interés",
-      required: false,
-      placeholder: "Selecciona una fecha",
-    });
-  }
-
-  // Solo campos básicos (custom fields omitidos para max conversión)
-  const allFields = basicFields;
-
-  const handleInputChange = async (fieldId: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [fieldId]: value }));
-
-    // Limpiar error del campo
-    if (errors[fieldId]) {
-      setErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[fieldId];
-        return newErrors;
-      });
+  // Handler para submit del formulario compartido
+  const handleFormSubmit = async (data: {
+    name: string;
+    phone: string;
+    email: string;
+    interest_date?: string;
+  }) => {
+    // Si es preview, no enviar (ya se maneja en el componente compartido)
+    if (effectiveIsPreview) {
+      return;
     }
 
-    // Validar disponibilidad de fecha si aplica
-    if (
-      fieldId === "interest_date" &&
-      value &&
-      enableInterestDate &&
-      validateWithCalendar &&
-      !isPreview
-    ) {
-      setDateAvailability({ checking: true, available: null });
+    // Obtener parámetros UTM de la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = localStorage.getItem(`offer_session_${offerId}`);
 
-      const result = await checkDateAvailability({
-        studio_id: studioId,
-        date: value,
-      });
+    // Preparar datos del formulario
+    const customFields: Record<string, unknown> = {};
+    fieldsConfig.fields?.forEach((field) => {
+      if (data[field.id as keyof typeof data]) {
+        customFields[field.id] = data[field.id as keyof typeof data];
+      }
+    });
 
-      if (result.success && result.data) {
-        setDateAvailability({
-          checking: false,
-          available: result.data.available,
+    const result = await submitOfferLeadform(studioSlug, {
+      offer_id: offerId,
+      name: data.name,
+      phone: data.phone,
+      email: data.email || "",
+      event_type_id: eventTypeId || undefined,
+      custom_fields: customFields,
+      utm_source: urlParams.get("utm_source") || undefined,
+      utm_medium: urlParams.get("utm_medium") || undefined,
+      utm_campaign: urlParams.get("utm_campaign") || undefined,
+      utm_term: urlParams.get("utm_term") || undefined,
+      utm_content: urlParams.get("utm_content") || undefined,
+      session_id: sessionId || undefined,
+      is_test: effectiveIsPreview, // Marcar como prueba si viene de preview
+    });
+
+    if (!result.success) {
+      toast.error(result.error || "Error al enviar el formulario");
+      throw new Error(result.error || "Error al enviar el formulario");
+    }
+
+    // Disparar eventos de conversión (solo si NO es preview)
+    if (!effectiveIsPreview && typeof window !== "undefined") {
+      const windowWithDataLayer = window as WindowWithDataLayer;
+      const windowWithFbq = window as WindowWithFbq;
+
+      if (windowWithDataLayer.dataLayer) {
+        windowWithDataLayer.dataLayer.push({
+          event: "offer_form_success",
+          offer_id: offerId,
+          contact_id: result.data?.contact_id,
         });
-      } else {
-        setDateAvailability({ checking: false, available: null });
+      }
+
+      if (windowWithFbq.fbq) {
+        windowWithFbq.fbq("track", "Lead", {
+          content_name: offerSlug,
+          value: 0,
+          currency: "MXN",
+        });
       }
     }
-  };
 
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
+    toast.success(successMessage);
 
-    allFields.forEach((field) => {
-      const value = formData[field.id] || "";
-
-      if (field.required && !value.trim()) {
-        newErrors[field.id] = `${field.label} es requerido`;
-        return;
-      }
-
-      if (value && field.type === "email") {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(value)) {
-          newErrors[field.id] = "Email inválido";
-        }
-      }
-
-      if (value && field.type === "phone") {
-        const phoneRegex = /^\d{10,}$/;
-        if (!phoneRegex.test(value.replace(/\D/g, ""))) {
-          newErrors[field.id] = "Teléfono debe tener al menos 10 dígitos";
-        }
-      }
-
-      // Validar fecha de interés con agenda
-      if (
-        field.id === "interest_date" &&
-        value &&
-        validateWithCalendar &&
-        dateAvailability.available === false
-      ) {
-        newErrors[field.id] = "Esta fecha no está disponible";
-      }
-    });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      toast.error("Por favor completa todos los campos requeridos");
-      return;
-    }
-
-    // Si es preview, no enviar
-    if (isPreview) {
-      toast.success("Preview: Formulario validado correctamente");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // Obtener parámetros UTM de la URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const sessionId = localStorage.getItem(`offer_session_${offerId}`);
-
-      // Preparar datos del formulario
-      const customFields: Record<string, unknown> = {};
-      fieldsConfig.fields?.forEach((field) => {
-        if (formData[field.id]) {
-          customFields[field.id] = formData[field.id];
-        }
-      });
-
-      const result = await submitOfferLeadform(studioSlug, {
-        offer_id: offerId,
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email || "",
-        event_type_id: eventTypeId || undefined, // Tipo de evento pre-asociado
-        custom_fields: customFields,
-        utm_source: urlParams.get("utm_source") || undefined,
-        utm_medium: urlParams.get("utm_medium") || undefined,
-        utm_campaign: urlParams.get("utm_campaign") || undefined,
-        utm_term: urlParams.get("utm_term") || undefined,
-        utm_content: urlParams.get("utm_content") || undefined,
-        session_id: sessionId || undefined,
-        is_test: isPreview, // ✅ Marcar como prueba si viene del preview
-      });
-
-      if (!result.success) {
-        toast.error(result.error || "Error al enviar el formulario");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Disparar eventos de conversión
-      if (typeof window !== "undefined") {
-        const windowWithDataLayer = window as WindowWithDataLayer;
-        const windowWithFbq = window as WindowWithFbq;
-
-        if (windowWithDataLayer.dataLayer) {
-          windowWithDataLayer.dataLayer.push({
-            event: "offer_form_success",
-            offer_id: offerId,
-            contact_id: result.data?.contact_id,
-          });
-        }
-
-        if (windowWithFbq.fbq) {
-          windowWithFbq.fbq("track", "Lead", {
-            content_name: offerSlug,
-            value: 0,
-            currency: "MXN",
-          });
-        }
-      }
-
-      toast.success(successMessage);
-
-      // Redirigir según configuración
+    // Si hay callback onSuccess (modal), usarlo en lugar de redirigir
+    if (onSuccess) {
+      onSuccess();
+      // Si hay redirect URL, redirigir después de cerrar modal
       if (successRedirectUrl) {
-        window.location.href = successRedirectUrl;
+        setTimeout(() => {
+          window.location.href = successRedirectUrl;
+        }, 500);
       } else if (result.data?.redirect_url) {
-        router.push(result.data.redirect_url);
-      } else {
-        // Redirigir a la misma página con parámetro de éxito
-        router.push(`/${studioSlug}/offer/${offerSlug}/leadform?success=true`);
+        const redirectUrl = result.data.redirect_url;
+        if (redirectUrl) {
+          setTimeout(() => {
+            router.push(redirectUrl);
+          }, 500);
+        }
       }
-    } catch (error) {
-      console.error("[OfferLeadForm] Error:", error);
-      toast.error("Error al enviar el formulario. Por favor intenta de nuevo.");
-      setIsSubmitting(false);
+      return;
+    }
+
+    // Redirigir según configuración (modo página dedicada)
+    if (successRedirectUrl) {
+      window.location.href = successRedirectUrl;
+    } else if (result.data?.redirect_url) {
+      const redirectUrl = result.data.redirect_url;
+      if (redirectUrl) {
+        router.push(redirectUrl);
+      }
+    } else {
+      // Redirigir a la misma página con parámetro de éxito
+      router.push(`/${studioSlug}/offer/${offerSlug}/leadform?success=true`);
     }
   };
 
@@ -383,10 +286,10 @@ export function OfferLeadForm({
   }
 
   return (
-    <div className="relative  bg-zinc-950">
+    <div className={`relative bg-zinc-950 ${!coverUrl && !isModal ? 'min-h-screen' : ''}`}>
       {/* Hero Cover */}
       {coverUrl && (
-        <div className="absolute inset-x-0 top-0 h-[40vh] md:h-[45vh] overflow-hidden rounded-b-3xl">
+        <div className="absolute inset-0 h-[40vh] md:h-[45vh] overflow-hidden">
           {coverType === 'video' ? (
             <video
               src={coverUrl}
@@ -412,161 +315,39 @@ export function OfferLeadForm({
       )}
 
       {/* Formulario superpuesto */}
-      <div className={`relative z-10 flex items-start justify-center p-4 pb-12 ${coverUrl ? 'pt-[20vh] md:pt-[15vh]' : 'min-h-screen items-center'}`}>
-        <ZenCard className="max-w-lg w-full bg-zinc-900/50 backdrop-blur-md shadow-2xl border-zinc-800/50">
-          <ZenCardHeader>
-            <ZenCardTitle>{title || "Solicita información"}</ZenCardTitle>
-            {description && (
-              <p className="text-sm text-zinc-400 mt-2">{description}</p>
+      <div className={`relative z-10 ${isModal ? 'p-0' : 'p-4 pb-12'} ${coverUrl && !isModal ? 'pt-[20vh] md:pt-[15vh]' : !isModal ? 'min-h-screen flex items-center justify-center' : ''}`}>
+        <ZenCard className={`max-w-lg w-full ${isModal ? 'bg-transparent shadow-none border-0' : 'bg-zinc-950/50 backdrop-blur-md shadow-2xl border-zinc-800/50'}`}>
+          {!isModal && (
+            <ZenCardHeader>
+              <ZenCardTitle>{title || "Solicita información"}</ZenCardTitle>
+              {description && (
+                <p className="text-sm text-zinc-400 mt-2">{description}</p>
+              )}
+            </ZenCardHeader>
+          )}
+          <ZenCardContent className={`${isModal ? 'pt-0' : ''}`}>
+            <OfferLeadFormFields
+              fieldsConfig={fieldsConfig}
+              emailRequired={emailRequired}
+              enableInterestDate={enableInterestDate}
+              validateWithCalendar={validateWithCalendar}
+              eventTypeId={eventTypeId}
+              studioId={studioId}
+              isPreview={isPreview}
+              onSubmit={handleFormSubmit}
+              submitLabel="Enviar solicitud"
+            />
+            {!isModal && (
+              <div className="mt-4">
+                <ZenButton
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => router.back()}
+                >
+                  Cancelar
+                </ZenButton>
+              </div>
             )}
-          </ZenCardHeader>
-          <ZenCardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {allFields.map((field) => (
-                <div key={field.id}>
-                  {/* Campo de fecha con ZenCalendar */}
-                  {field.type === "date" ? (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-300 block mb-2">
-                        {field.label}
-                        {field.required && <span className="text-red-400 ml-1">*</span>}
-                      </label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <ZenButton
-                            variant="outline"
-                            className={`w-full justify-start text-left font-normal ${!formData[field.id] && "text-zinc-500"
-                              } ${errors[field.id] && "border-red-500"}`}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {formData[field.id]
-                              ? format(new Date(formData[field.id]), "PPP", { locale: es })
-                              : field.placeholder || "Selecciona una fecha"}
-                          </ZenButton>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <ZenCalendar
-                            mode="single"
-                            selected={formData[field.id] ? new Date(formData[field.id]) : undefined}
-                            onSelect={(date: Date | undefined) => {
-                              if (date) {
-                                const dateString = format(date, "yyyy-MM-dd");
-                                handleInputChange(field.id, dateString);
-                              }
-                            }}
-                            initialFocus={true}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      {errors[field.id] && (
-                        <p className="text-xs text-red-400 mt-1">{errors[field.id]}</p>
-                      )}
-                    </div>
-                  ) : field.type === "select" && field.options ? (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-300 block">
-                        {field.label}
-                        {field.required && <span className="text-red-400 ml-1">*</span>}
-                      </label>
-                      <select
-                        className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 transition-all duration-200 outline-none focus:ring-[3px] focus:border-zinc-600 focus:ring-zinc-500/20 ${errors[field.id] ? "border-red-500" : "border-zinc-700"
-                          }`}
-                        value={formData[field.id] || ""}
-                        onChange={(e) => handleInputChange(field.id, e.target.value)}
-                        required={field.required}
-                      >
-                        {field.placeholder ? (
-                          <option value="">{field.placeholder}</option>
-                        ) : null}
-                        {field.options.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                      {errors[field.id] && (
-                        <p className="text-xs text-red-400 mt-1">{errors[field.id]}</p>
-                      )}
-                    </div>
-                  ) : field.type === "textarea" ? (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-300 block">
-                        {field.label}
-                        {field.required && <span className="text-red-400 ml-1">*</span>}
-                      </label>
-                      <textarea
-                        className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 transition-all duration-200 outline-none focus:ring-[3px] focus:border-zinc-600 focus:ring-zinc-500/20 ${errors[field.id] ? "border-red-500" : "border-zinc-700"
-                          }`}
-                        value={formData[field.id] || ""}
-                        onChange={(e) => handleInputChange(field.id, e.target.value)}
-                        placeholder={field.placeholder}
-                        required={field.required}
-                        rows={4}
-                      />
-                      {errors[field.id] && (
-                        <p className="text-xs text-red-400 mt-1">{errors[field.id]}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <ZenInput
-                      label={field.label}
-                      name={field.id}
-                      type={
-                        field.type === "phone"
-                          ? "tel"
-                          : field.type === "email"
-                            ? "email"
-                            : "text"
-                      }
-                      value={formData[field.id] || ""}
-                      onChange={(e) => handleInputChange(field.id, e.target.value)}
-                      placeholder={field.placeholder}
-                      required={field.required}
-                      error={errors[field.id]}
-                    />
-                  )}
-
-                  {/* Badge de disponibilidad para fecha de interés */}
-                  {field.id === "interest_date" &&
-                    formData[field.id] &&
-                    validateWithCalendar &&
-                    !isPreview && (
-                      <div className="mt-2">
-                        {dateAvailability.checking ? (
-                          <ZenBadge variant="secondary" size="sm">
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                            Verificando...
-                          </ZenBadge>
-                        ) : dateAvailability.available === true ? (
-                          <ZenBadge variant="success" size="sm">
-                            ✓ Fecha disponible
-                          </ZenBadge>
-                        ) : dateAvailability.available === false ? (
-                          <ZenBadge variant="destructive" size="sm">
-                            ✗ Fecha no disponible
-                          </ZenBadge>
-                        ) : null}
-                      </div>
-                    )}
-                </div>
-              ))}
-
-              <ZenButton
-                type="submit"
-                className="w-full"
-                loading={!!isSubmitting}
-                disabled={
-                  !!isSubmitting ||
-                  !!dateAvailability.checking ||
-                  !!(validateWithCalendar &&
-                    enableInterestDate &&
-                    formData.interest_date &&
-                    dateAvailability.available === false)
-                }
-              >
-                Enviar solicitud
-              </ZenButton>
-            </form>
           </ZenCardContent>
         </ZenCard>
       </div>

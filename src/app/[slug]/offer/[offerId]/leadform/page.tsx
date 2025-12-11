@@ -1,15 +1,15 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
 import { getPublicOffer } from "@/lib/actions/studio/offers/offers.actions";
 import { OfferLeadForm } from "@/components/offers/OfferLeadForm";
 import { TrackingScripts } from "@/components/offers/TrackingScripts";
+import { OfferHeader } from "@/components/offers/OfferHeader";
 import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
-import { User } from "lucide-react";
 
 interface PublicOfferLeadFormPageProps {
   params: Promise<{ slug: string; offerId: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }
 
 /**
@@ -17,8 +17,11 @@ interface PublicOfferLeadFormPageProps {
  */
 export default async function PublicOfferLeadFormPage({
   params,
+  searchParams,
 }: PublicOfferLeadFormPageProps) {
   const { slug, offerId } = await params;
+  const { preview } = await searchParams;
+  const isPreview = preview === "true";
 
   try {
     // Obtener oferta pública (usar offerId como slug temporalmente)
@@ -100,52 +103,17 @@ export default async function PublicOfferLeadFormPage({
           </div>
 
           {/* Header sticky fixed en top */}
-          <div className="fixed top-0 left-0 right-0 z-50 md:top-5 px-4 md:px-0">
-            <div className="max-w-md mx-auto">
-              <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/60 backdrop-blur-md border-b border-zinc-800/30 shadow-lg shadow-zinc-950/10 md:rounded-xl">
-                {/* Logo + Info */}
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-10 h-10 bg-zinc-800/80 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-zinc-700/50">
-                    {studio?.logo_url ? (
-                      <Image
-                        src={studio.logo_url}
-                        alt="Logo"
-                        width={40}
-                        height={40}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-6 h-6 bg-zinc-600 rounded-lg" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h1 className="text-sm font-semibold text-zinc-50 truncate">
-                      {studio?.studio_name || 'Studio'}
-                    </h1>
-                    {studio?.slogan && (
-                      <p className="text-xs text-zinc-400 truncate">
-                        {studio.slogan}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Botón Visitar Perfil */}
-                <Link
-                  href={`/${slug}`}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:text-white bg-zinc-800/50 hover:bg-zinc-800/70 border border-zinc-700/50 hover:border-zinc-600 rounded-lg transition-all shrink-0"
-                >
-                  <User className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Perfil</span>
-                </Link>
-              </div>
-            </div>
-          </div>
+          <OfferHeader
+            studioSlug={slug}
+            studioName={studio?.studio_name}
+            studioSlogan={studio?.slogan}
+            logoUrl={studio?.logo_url}
+          />
 
           {/* Container mobile centrado con padding-top para header */}
-          <div className="max-w-md mx-auto min-h-screen md:py-8 pt-[57px] px-4 md:px-0">
+          <div className="max-w-md mx-auto pt-[100px] pb-8 px-4 md:px-0 md:py-24">
             {/* Wrapper con scroll y glassmorphism */}
-            <div className="min-h-[calc(100vh-57px)] bg-zinc-950/50 backdrop-blur-md md:rounded-xl">
+            <div className="bg-zinc-950/50 backdrop-blur-md rounded-xl overflow-hidden">
               {/* Leadform */}
               <OfferLeadForm
                 studioSlug={slug}

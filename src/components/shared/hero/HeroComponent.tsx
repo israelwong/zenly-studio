@@ -14,6 +14,8 @@ interface HeroComponentProps {
     isEditable?: boolean;
     // Contexto para determinar comportamiento de botones
     context?: 'portfolio' | 'offer';
+    // Modo preview: deshabilitar botones
+    isPreview?: boolean;
 }
 
 export default function HeroComponent({
@@ -21,7 +23,8 @@ export default function HeroComponent({
     media,
     className = '',
     isEditable = false,
-    context
+    context,
+    isPreview = false
 }: HeroComponentProps) {
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     const [videoError, setVideoError] = useState(false);
@@ -57,7 +60,18 @@ export default function HeroComponent({
     const imageSrc = !isVideo ? backgroundMedia?.file_url : null;
     const videoPoster = backgroundMedia?.thumbnail_url || backgroundMedia?.file_url;
 
-    // Manejo de video
+    // Carga proactiva del video (forzar carga inmediata)
+    useEffect(() => {
+        if (!isVideo || !videoSrc || isEditable) return;
+
+        const video = videoRef.current;
+        if (!video) return;
+
+        // Forzar carga inmediata del video
+        video.load();
+    }, [videoSrc, isVideo, isEditable]);
+
+    // Manejo de video y autoplay
     useEffect(() => {
         if (!isVideo || !videoSrc || isEditable) return;
 
@@ -167,8 +181,8 @@ export default function HeroComponent({
         ? `${containerStyleClasses.wrapped} ${borderRadiusClasses[borderRadius]}`
         : '';
 
-    // Padding: siempre px-4 para el texto, fullscreen no necesita padding vertical extra
-    const contentPaddingClass = 'px-4';
+    // Padding: siempre agregar padding para respiración del contenido
+    const contentPaddingClass = containerStyle === 'wrapped' ? 'p-5' : 'px-4 py-8 sm:px-6 sm:py-12';
 
     // Efecto parallax mejorado para mobile preview
     useEffect(() => {
@@ -335,6 +349,8 @@ export default function HeroComponent({
                         playsInline
                         webkit-playsinline="true"
                         preload="auto"
+                        // @ts-expect-error - fetchPriority no está en tipos pero es soportado
+                        fetchPriority="high"
                         onLoadedData={() => {
                             setIsVideoLoaded(true);
                             setVideoError(false);
@@ -342,6 +358,10 @@ export default function HeroComponent({
                         onCanPlay={() => {
                             setIsVideoLoaded(true);
                             setVideoError(false);
+                        }}
+                        onLoadedMetadata={() => {
+                            // Marcar como cargado cuando los metadatos están listos (más rápido)
+                            setIsVideoLoaded(true);
                         }}
                         onError={() => {
                             setVideoError(true);
@@ -451,21 +471,21 @@ export default function HeroComponent({
                 )}>
                     {/* Subtitle */}
                     {subtitle && (
-                        <p className="text-xs sm:text-sm text-zinc-400 font-medium mb-2 sm:mb-3 uppercase tracking-wide">
+                        <p className="text-xs sm:text-sm text-zinc-400 font-medium mb-1 sm:mb-2 uppercase tracking-wide">
                             {subtitle}
                         </p>
                     )}
 
                     {/* Title */}
                     {title && (
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4 leading-tight">
+                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 sm:mb-3 leading-tight">
                             {title}
                         </h1>
                     )}
 
                     {/* Description */}
                     {description && (
-                        <p className="text-sm sm:text-lg text-zinc-300 mb-4 sm:mb-6 leading-relaxed max-w-2xl mx-auto">
+                        <p className="text-sm sm:text-lg text-zinc-300 mb-3 sm:mb-4 leading-relaxed max-w-2xl mx-auto">
                             {description}
                         </p>
                     )}
@@ -479,6 +499,7 @@ export default function HeroComponent({
                         )}>
                             {buttons.map((button, index) => {
                                 const buttonEffect = (button.buttonEffect || (button.pulse ? 'pulse' : 'none')) as 'none' | 'pulse' | 'border-spin' | 'radial-glow';
+                                const shouldDisable = isPreview || isEditable;
 
                                 // Estilos de borderRadius (sobrescriben el rounded-md default)
                                 const borderRadiusClasses = {
@@ -521,39 +542,74 @@ export default function HeroComponent({
                                     }
                                 })() : undefined;
 
-                                return button.href ? (
-                                    <ZenButtonWithEffects
-                                        key={index}
-                                        asChild
-                                        variant={getButtonVariant(button.variant)}
-                                        size="md"
-                                        effect={buttonEffect}
-                                        className={cn(
-                                            "text-xs sm:text-base",
-                                            "w-auto min-w-fit max-w-[calc(50%-0.75rem)]",
-                                            "whitespace-normal break-words",
-                                            "text-center",
-                                            borderRadiusClass,
-                                            borderClass,
-                                            shadowClass
-                                        )}
-                                        style={customColorStyle}
-                                    >
-                                        <Link
-                                            href={button.href}
-                                            target={button.target || (button.linkType === 'external' ? '_blank' : '_self')}
-                                            onClick={button.onClick}
-                                            className="block"
+                                // Si tiene href
+                                if (button.href) {
+                                    // Si está deshabilitado, renderizar como botón simple sin Link
+                                    if (shouldDisable) {
+                                        return (
+                                            <ZenButtonWithEffects
+                                                key={index}
+                                                variant={getButtonVariant(button.variant)}
+                                                size="md"
+                                                effect="none"
+                                                disabled={true}
+                                                className={cn(
+                                                    "text-xs sm:text-base",
+                                                    "w-auto min-w-fit max-w-[calc(50%-0.75rem)]",
+                                                    "whitespace-normal break-words",
+                                                    "text-center",
+                                                    borderRadiusClass,
+                                                    borderClass,
+                                                    shadowClass,
+                                                    "opacity-50 cursor-not-allowed"
+                                                )}
+                                                style={customColorStyle}
+                                                onClick={(e) => e.preventDefault()}
+                                            >
+                                                {button.text}
+                                            </ZenButtonWithEffects>
+                                        );
+                                    }
+
+                                    // Si NO está deshabilitado, renderizar con Link
+                                    return (
+                                        <ZenButtonWithEffects
+                                            key={index}
+                                            asChild
+                                            variant={getButtonVariant(button.variant)}
+                                            size="md"
+                                            effect={buttonEffect}
+                                            className={cn(
+                                                "text-xs sm:text-base",
+                                                "w-auto min-w-fit max-w-[calc(50%-0.75rem)]",
+                                                "whitespace-normal break-words",
+                                                "text-center",
+                                                borderRadiusClass,
+                                                borderClass,
+                                                shadowClass
+                                            )}
+                                            style={customColorStyle}
                                         >
-                                            {button.text}
-                                        </Link>
-                                    </ZenButtonWithEffects>
-                                ) : (
+                                            <Link
+                                                href={button.href}
+                                                target={button.target || (button.linkType === 'external' ? '_blank' : '_self')}
+                                                onClick={button.onClick}
+                                                className="block"
+                                            >
+                                                {button.text}
+                                            </Link>
+                                        </ZenButtonWithEffects>
+                                    );
+                                }
+
+                                // Botones sin href
+                                return (
                                     <ZenButtonWithEffects
                                         key={index}
                                         variant={getButtonVariant(button.variant)}
                                         size="md"
-                                        effect={buttonEffect}
+                                        effect={shouldDisable ? 'none' : buttonEffect}
+                                        disabled={shouldDisable}
                                         className={cn(
                                             "text-xs sm:text-base",
                                             "w-auto min-w-fit max-w-[calc(50%-0.75rem)]",
@@ -561,10 +617,11 @@ export default function HeroComponent({
                                             "text-center",
                                             borderRadiusClass,
                                             borderClass,
-                                            shadowClass
+                                            shadowClass,
+                                            shouldDisable && "opacity-50 cursor-not-allowed"
                                         )}
                                         style={customColorStyle}
-                                        onClick={button.onClick}
+                                        onClick={shouldDisable ? (e) => e.preventDefault() : button.onClick}
                                     >
                                         {button.text}
                                     </ZenButtonWithEffects>

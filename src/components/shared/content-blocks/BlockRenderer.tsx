@@ -1,11 +1,10 @@
 'use client';
 
 import React from 'react';
-import { ContentBlock, TextBlockConfig, MediaBlockConfig, HeroContactConfig, HeroImageConfig, HeroVideoConfig, HeroTextConfig, HeroConfig, SeparatorBlockConfig, HeroPortfolioConfig, HeroOfferConfig } from '@/types/content-blocks';
+import { ContentBlock, TextBlockConfig, MediaBlockConfig, HeroConfig, SeparatorBlockConfig, HeroPortfolioConfig, HeroOfferConfig } from '@/types/content-blocks';
 import { VideoSingle } from '@/components/shared/video';
 import { ImageSingle, ImageGrid, ImageCarousel } from '@/components/shared/media';
 import { MasonryGallery } from '@/components/shared/media/MasonryGallery';
-import HeroComponent from '@/components/shared/hero/HeroComponent';
 import HeroPortfolioComponent from '@/components/shared/hero/portfolio/HeroPortfolioComponent';
 import HeroOfferComponent from '@/components/shared/hero/offer/HeroOfferComponent';
 
@@ -14,9 +13,13 @@ interface BlockRendererProps {
     className?: string;
     // Contexto para determinar comportamiento (ej: ocultar botones en portfolios)
     context?: 'portfolio' | 'offer';
+    // Callback para abrir modal de leadform
+    onOpenLeadForm?: () => void;
+    // Modo preview/edit: deshabilitar botones
+    isPreview?: boolean;
 }
 
-export function BlockRenderer({ block, className = '', context }: BlockRendererProps) {
+export function BlockRenderer({ block, className = '', context, onOpenLeadForm, isPreview = false }: BlockRendererProps) {
     const renderBlock = () => {
         switch (block.type) {
             case 'image':
@@ -244,87 +247,20 @@ export function BlockRenderer({ block, className = '', context }: BlockRendererP
                     </div>
                 );
 
-            case 'hero-contact':
-            case 'hero-image':
-            case 'hero-video':
-            case 'hero-text':
-            case 'hero':
-                // Convertir configuraciones antiguas a HeroConfig unificado
-                let heroConfig: HeroConfig = {};
-
-                if (block.type === 'hero-contact') {
-                    const oldConfig = block.config as HeroContactConfig;
-                    heroConfig = {
-                        title: oldConfig.titulo,
-                        subtitle: oldConfig.evento,
-                        description: oldConfig.descripcion,
-                        textAlignment: 'center',
-                        verticalAlignment: 'center',
-                        backgroundType: 'image',
-                        containerStyle: 'fullscreen'
-                    };
-                } else if (block.type === 'hero-image') {
-                    const oldConfig = block.config as HeroImageConfig;
-                    heroConfig = {
-                        title: oldConfig.title,
-                        subtitle: oldConfig.subtitle,
-                        description: oldConfig.description,
-                        buttons: oldConfig.buttons,
-                        overlay: oldConfig.overlay,
-                        overlayOpacity: oldConfig.overlayOpacity,
-                        textAlignment: oldConfig.textAlignment || 'center',
-                        verticalAlignment: oldConfig.imagePosition === 'top' ? 'top' : oldConfig.imagePosition === 'bottom' ? 'bottom' : 'center',
-                        backgroundType: 'image',
-                        containerStyle: 'fullscreen'
-                    };
-                } else if (block.type === 'hero-video') {
-                    const oldConfig = block.config as HeroVideoConfig;
-                    heroConfig = {
-                        title: oldConfig.title,
-                        subtitle: oldConfig.subtitle,
-                        description: oldConfig.description,
-                        buttons: oldConfig.buttons,
-                        overlay: oldConfig.overlay,
-                        overlayOpacity: oldConfig.overlayOpacity,
-                        textAlignment: oldConfig.textAlignment || 'center',
-                        verticalAlignment: 'center',
-                        backgroundType: 'video',
-                        autoPlay: oldConfig.autoPlay,
-                        muted: oldConfig.muted,
-                        loop: oldConfig.loop,
-                        containerStyle: 'fullscreen'
-                    };
-                } else if (block.type === 'hero-text') {
-                    const oldConfig = block.config as HeroTextConfig;
-                    heroConfig = {
-                        title: oldConfig.title,
-                        subtitle: oldConfig.subtitle,
-                        description: oldConfig.description,
-                        buttons: oldConfig.buttons,
-                        textAlignment: oldConfig.textAlignment || 'center',
-                        verticalAlignment: 'center',
-                        backgroundType: 'image',
-                        containerStyle: 'fullscreen'
-                    };
-                } else {
-                    // Caso 'hero' - usar configuración directamente
-                    heroConfig = (block.config || {}) as HeroConfig;
-                }
-
-                // Extraer contexto del config si no viene en props (preservar contexto almacenado)
-                const configWithContext = block.config as HeroConfig & {
-                    _context?: 'portfolio' | 'offer';
-                };
-                const effectiveContext = context || configWithContext._context;
-
+            // Legacy hero type - convert to hero-offer
+            case 'hero': {
+                const legacyConfig = (block.config || {}) as HeroConfig;
                 return (
-                    <HeroComponent
-                        config={heroConfig}
+                    <HeroOfferComponent
+                        config={legacyConfig}
                         media={block.media || []}
                         className={className}
-                        context={effectiveContext}
+                        context="offer"
+                        onOpenLeadForm={onOpenLeadForm}
+                        isPreview={isPreview}
                     />
                 );
+            }
 
             case 'hero-portfolio': {
                 const portfolioConfig = (block.config || {}) as HeroPortfolioConfig;
@@ -372,6 +308,8 @@ export function BlockRenderer({ block, className = '', context }: BlockRendererP
                         media={block.media || []}
                         className={className}
                         context="offer"
+                        onOpenLeadForm={onOpenLeadForm}
+                        isPreview={isPreview}
                     />
                 );
             }

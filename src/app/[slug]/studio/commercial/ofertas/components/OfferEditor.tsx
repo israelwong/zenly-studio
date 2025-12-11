@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { ArrowLeft, FileText, Layout, MessageSquare, MoreVertical, Trash2, HardDrive, Save } from "lucide-react";
+import { ArrowLeft, FileText, Layout, MessageSquare, MoreVertical, Trash2, HardDrive, Save, ExternalLink, RotateCcw } from "lucide-react";
 import {
   ZenButton,
   ZenSwitch,
@@ -238,6 +238,25 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
     { id: "leadform" as const, label: "Formulario", icon: MessageSquare },
   ];
 
+  // Restaurar cambios al estado inicial
+  const handleRestore = () => {
+    if (!initialData) {
+      toast.error("No hay datos iniciales para restaurar");
+      return;
+    }
+
+    try {
+      const initial = JSON.parse(initialData);
+      updateFormData(initial.formData);
+      updateContentBlocks(initial.contentBlocks);
+      setIsDirty(false);
+      toast.success("Cambios restaurados al estado original");
+    } catch (error) {
+      console.error("Error al restaurar cambios:", error);
+      toast.error("Error al restaurar cambios");
+    }
+  };
+
   const handleSave = async () => {
     // Validar disponibilidad
     if (!formData.is_permanent && !formData.has_date_range) {
@@ -319,6 +338,15 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
     }
   };
 
+  const handlePreview = () => {
+    if (!currentOffer?.id || !currentOffer?.slug) {
+      toast.error("Debes guardar la oferta antes de previsualizarla");
+      return;
+    }
+    const previewUrl = `/${studioSlug}/offer/${currentOffer.slug}?preview=true`;
+    window.open(previewUrl, '_blank');
+  };
+
   const handleDelete = async () => {
     if (!currentOffer?.id) return;
 
@@ -392,15 +420,48 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
                   onCheckedChange={(checked) => updateFormData({ is_active: checked })}
                 />
               </div>
-              {/* Badge de estado sin guardar */}
+              {/* Botón Preview */}
+              {currentOffer?.slug && (
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePreview}
+                  className="gap-2"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Preview
+                </ZenButton>
+              )}
+              {/* Botones de cambios sin guardar */}
               {isDirty && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-md">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                  </span>
-                  <span className="text-xs font-medium text-amber-400">Sin guardar</span>
-                </div>
+                <>
+                  {/* Botón Restaurar */}
+                  <ZenButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRestore}
+                    disabled={isSaving}
+                    className="gap-2"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Restaurar
+                  </ZenButton>
+                  {/* Botón Guardar */}
+                  <ZenButton
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="gap-2 bg-amber-600/80 hover:bg-amber-600 text-white border-amber-600/30"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500/50 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                    </span>
+                    <Save className="h-3.5 w-3.5" />
+                    {isSaving ? 'Guardando...' : 'Guardar cambios'}
+                  </ZenButton>
+                </>
               )}
               {/* Menú de opciones */}
               <ZenDropdownMenu>

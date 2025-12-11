@@ -58,20 +58,21 @@ export default function HeroOfferEditor({
         setLocalConfig(config);
         let buttons = config.buttons || [];
 
-        // Si es contexto de oferta, forzar href del leadform solo en el PRIMER botón (índice 0)
+        // Si es contexto de oferta, marcar el primer botón como leadform (sin forzar href)
+        // El href se elimina porque ahora usamos modal en lugar de ruta dedicada
         if (effectiveContext === 'offer' && offerSlug) {
-            const leadformUrl = `/${studioSlug}/offer/${offerSlug}/leadform`;
             buttons = buttons.map((btn, idx) => {
-                // Solo el primer botón (índice 0) debe estar forzado al leadform
+                // Solo el primer botón (índice 0) se marca como leadform
                 if (idx === 0) {
                     return {
                         ...btn,
-                        href: leadformUrl,
+                        // Eliminar href - ahora se usa modal
+                        href: undefined,
                         linkType: 'internal',
                         internalLinkType: 'offer-leadform'
                     };
                 }
-                // Los demás botones se mantienen editables (preservar su href si existe, o dejarlo vacío)
+                // Los demás botones se mantienen editables
                 return btn;
             });
         }
@@ -146,12 +147,12 @@ export default function HeroOfferEditor({
         // Configurar botón según contexto y posición
         let newButton: ButtonConfig;
 
-        // Solo el primer botón (cuando localButtons.length === 0) en contexto de oferta tiene leadform forzado
+        // Solo el primer botón (cuando localButtons.length === 0) en contexto de oferta tiene leadform
         if (effectiveContext === 'offer' && offerSlug && localButtons.length === 0) {
-            // Primer botón en ofertas: ruta fija al leadform
+            // Primer botón en ofertas: modal de leadform (sin href)
             newButton = {
                 text: '',
-                href: `/${studioSlug}/offer/${offerSlug}/leadform`,
+                href: undefined, // Sin href - se usa modal
                 variant: 'primary',
                 linkType: 'internal',
                 internalLinkType: 'offer-leadform',
@@ -212,18 +213,19 @@ export default function HeroOfferEditor({
 
             const updatedBtn = { ...btn, ...updates };
 
-            // Si es contexto de oferta, asegurar href correcto solo en el PRIMER botón (índice 0)
+            // Si es contexto de oferta y es el primer botón, marcar como leadform (sin forzar href)
             if (effectiveContext === 'offer' && offerSlug && index === 0) {
-                const leadformUrl = `/${studioSlug}/offer/${offerSlug}/leadform`;
-                // Forzar la ruta del leadform solo para el primer botón
-                updatedBtn.href = leadformUrl;
-                updatedBtn.linkType = 'internal';
-                updatedBtn.internalLinkType = 'offer-leadform';
+                // Si se cambia a leadform, eliminar href (se usa modal)
+                if (updates.internalLinkType === 'offer-leadform' || updatedBtn.internalLinkType === 'offer-leadform') {
+                    updatedBtn.href = undefined;
+                    updatedBtn.linkType = 'internal';
+                    updatedBtn.internalLinkType = 'offer-leadform';
+                }
             } else {
                 // Si cambia internalLinkType y no es 'custom', construir href automáticamente
                 if (updates.internalLinkType && updates.internalLinkType !== 'custom') {
                     const option = getInternalLinkOptions().find(opt => opt.value === updates.internalLinkType);
-                    if (option) {
+                    if (option && option.href) {
                         updatedBtn.href = option.href;
                     }
                 }
@@ -789,53 +791,52 @@ export default function HeroOfferEditor({
                                         )}
                                     </div>
 
-                                    {/* Si es contexto de oferta: solo el PRIMER botón muestra input deshabilitado */}
-                                    {effectiveContext === 'offer' && index === 0 ? (
-                                        <ZenInput
-                                            label="Enlace al formulario de contacto"
-                                            value={offerSlug ? `/${studioSlug}/offer/${offerSlug}/leadform` : (button.href || '')}
-                                            disabled
-                                            className="opacity-75 cursor-not-allowed"
-                                        />
-                                    ) : (
-                                        <>
-                                            {/* Radio: Tipo de enlace (solo para portfolios) */}
-                                            <div className="space-y-2">
-                                                <label className="block text-xs text-zinc-400">Tipo de enlace</label>
-                                                <div className="flex gap-4">
-                                                    <label className="flex items-center gap-2 cursor-pointer">
-                                                        <input
-                                                            type="radio"
-                                                            name={`linkType-${index}`}
-                                                            checked={button.linkType !== 'external'}
-                                                            onChange={() => updateButton(index, {
-                                                                linkType: 'internal',
-                                                                internalLinkType: 'custom',
-                                                                target: '_self'
-                                                            })}
-                                                            className="w-4 h-4 text-emerald-500 border-zinc-600 focus:ring-emerald-500 focus:ring-offset-zinc-900"
-                                                        />
-                                                        <span className="text-sm text-zinc-300">Interno</span>
-                                                    </label>
-                                                    <label className="flex items-center gap-2 cursor-pointer">
-                                                        <input
-                                                            type="radio"
-                                                            name={`linkType-${index}`}
-                                                            checked={button.linkType === 'external'}
-                                                            onChange={() => updateButton(index, {
-                                                                linkType: 'external',
-                                                                target: '_blank',
-                                                                internalLinkType: undefined
-                                                            })}
-                                                            className="w-4 h-4 text-emerald-500 border-zinc-600 focus:ring-emerald-500 focus:ring-offset-zinc-900"
-                                                        />
-                                                        <span className="text-sm text-zinc-300">Externo</span>
-                                                    </label>
-                                                </div>
-                                            </div>
+                                    {/* Radio: Tipo de enlace */}
+                                    <div className="space-y-2">
+                                        <label className="block text-xs text-zinc-400">Tipo de enlace</label>
+                                        <div className="flex gap-4">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name={`linkType-${index}`}
+                                                    checked={button.linkType !== 'external'}
+                                                    onChange={() => updateButton(index, {
+                                                        linkType: 'internal',
+                                                        internalLinkType: effectiveContext === 'offer' && index === 0 ? 'offer-leadform' : 'custom',
+                                                        target: '_self'
+                                                    })}
+                                                    className="w-4 h-4 text-emerald-500 border-zinc-600 focus:ring-emerald-500 focus:ring-offset-zinc-900"
+                                                />
+                                                <span className="text-sm text-zinc-300">Interno</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name={`linkType-${index}`}
+                                                    checked={button.linkType === 'external'}
+                                                    onChange={() => updateButton(index, {
+                                                        linkType: 'external',
+                                                        target: '_blank',
+                                                        internalLinkType: undefined
+                                                    })}
+                                                    className="w-4 h-4 text-emerald-500 border-zinc-600 focus:ring-emerald-500 focus:ring-offset-zinc-900"
+                                                />
+                                                <span className="text-sm text-zinc-300">Externo</span>
+                                            </label>
+                                        </div>
+                                    </div>
 
-                                            {/* Si es interno (portfolio) */}
-                                            {button.linkType !== 'external' && (
+                                    {/* Si es interno */}
+                                    {button.linkType !== 'external' && (
+                                        <>
+                                            {/* Si es leadform en ofertas, mostrar info en lugar de input */}
+                                            {effectiveContext === 'offer' && index === 0 && button.internalLinkType === 'offer-leadform' ? (
+                                                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
+                                                    <p className="text-xs text-emerald-400">
+                                                        Este botón abrirá el formulario de contacto en un modal.
+                                                    </p>
+                                                </div>
+                                            ) : (
                                                 <ZenInput
                                                     label="Ruta interna"
                                                     value={button.href || ''}
@@ -843,17 +844,17 @@ export default function HeroOfferEditor({
                                                     placeholder="/tu-ruta"
                                                 />
                                             )}
-
-                                            {/* Si es externo (portfolio) */}
-                                            {button.linkType === 'external' && (
-                                                <ZenInput
-                                                    label="URL externa"
-                                                    value={button.href || ''}
-                                                    onChange={(e) => updateButton(index, { href: e.target.value })}
-                                                    placeholder="https://ejemplo.com"
-                                                />
-                                            )}
                                         </>
+                                    )}
+
+                                    {/* Si es externo */}
+                                    {button.linkType === 'external' && (
+                                        <ZenInput
+                                            label="URL externa"
+                                            value={button.href || ''}
+                                            onChange={(e) => updateButton(index, { href: e.target.value })}
+                                            placeholder="https://ejemplo.com"
+                                        />
                                     )}
 
                                     <div className="grid grid-cols-2 gap-3">
@@ -1129,8 +1130,8 @@ export default function HeroOfferEditor({
                         </div>
                     )}
                 </div>
-            </ZenCardContent>
-        </ZenCard>
+            </ZenCardContent >
+        </ZenCard >
     );
 }
 

@@ -44,7 +44,7 @@ export function MobilePreviewFull({
     return (
         <div className="w-full max-w-sm mx-auto relative">
             {/* Simulador de móvil con proporciones reales */}
-            <div className="bg-zinc-900 border border-zinc-700 rounded-3xl shadow-2xl w-[375px] h-[812px] flex flex-col relative overflow-hidden">
+            <div className="bg-zinc-950 border border-zinc-700 rounded-3xl shadow-2xl w-[375px] h-[812px] flex flex-col relative overflow-hidden">
                 {/* Header simple - fijo con bordes redondeados */}
                 {!hideHeader && (
                     <div className="shrink-0 rounded-t-3xl bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3">

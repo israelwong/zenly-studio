@@ -66,10 +66,10 @@ export function LeadFormTab({ studioSlug, studioId: initialStudioId }: LeadFormT
                 studioId={studioId}
                 offerId="preview"
                 offerSlug={formData.slug || "preview"}
-                title={leadformData.title}
-                description={leadformData.description}
+                title={leadformData.title || null}
+                description={leadformData.description || null}
                 successMessage={leadformData.success_message}
-                successRedirectUrl={leadformData.success_redirect_url}
+                successRedirectUrl={leadformData.success_redirect_url || null}
                 fieldsConfig={leadformData.fields_config}
                 eventTypeId={leadformData.event_type_id}
                 enableInterestDate={leadformData.enable_interest_date}
@@ -78,6 +78,7 @@ export function LeadFormTab({ studioSlug, studioId: initialStudioId }: LeadFormT
                 coverUrl={formData.cover_media_url}
                 coverType={formData.cover_media_type}
                 isPreview={true}
+                isModal={false}
               />
             </div>
           </MobilePreviewFull>

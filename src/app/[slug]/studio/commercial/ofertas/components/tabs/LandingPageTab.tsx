@@ -44,17 +44,12 @@ export function LandingPageTab({ studioSlug, offerSlug, offerId }: LandingPageTa
       <div className="hidden lg:block">
         <div className="sticky top-6">
           <MobilePreviewFull
-            data={null}
-            contentVariant="custom"
-            activeTab="inicio"
             loading={false}
-            onClose={() => { }}
             isEditMode={true}
-            hidePortfolioHeader={true}
             hideHeader={true}
           >
             <div className="h-full overflow-auto">
-              <div className="overflow-hidden p-0.5">
+              <div className="overflow-hidden">
                 <OfferLandingPage
                   studioSlug={studioSlug}
                   offerId="preview"
@@ -62,6 +57,8 @@ export function LandingPageTab({ studioSlug, offerSlug, offerId }: LandingPageTa
                   contentBlocks={contentBlocks}
                   ctaConfig={emptyCTA}
                   onTrackView={() => { }} // No track en preview
+                  isPreview={true} // Deshabilitar tracking
+                  isEditMode={true} // Deshabilitar botones en editor
                 />
               </div>
             </div>

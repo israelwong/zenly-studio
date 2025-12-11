@@ -5,13 +5,15 @@ import { getPublicOffer } from "@/lib/actions/studio/offers/offers.actions";
 import { OfferLandingPage } from "@/components/offers/OfferLandingPage";
 import { TrackingScripts } from "@/components/offers/TrackingScripts";
 import { OfferBackgroundWrapper } from "@/components/offers/OfferBackgroundWrapper";
+import { OfferHeader } from "@/components/offers/OfferHeader";
 import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
 import { ContentBlock } from "@/types/content-blocks";
-import { PackageX, User } from "lucide-react";
+import { PackageX } from "lucide-react";
 
 interface PublicOfferPageProps {
   params: Promise<{ slug: string; offerId: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }
 
 /**
@@ -19,8 +21,11 @@ interface PublicOfferPageProps {
  */
 export default async function PublicOfferPage({
   params,
+  searchParams,
 }: PublicOfferPageProps) {
   const { slug, offerId } = await params;
+  const { preview } = await searchParams;
+  const isPreview = preview === "true";
 
   try {
     // Obtener oferta pública (solo activas)
@@ -125,47 +130,12 @@ export default async function PublicOfferPage({
           <div className="min-h-screen relative">
 
             {/* Header sticky fixed en top */}
-            <div className="fixed top-4 left-0 right-0 z-50 md:top-5 px-4 md:px-0">
-              <div className="max-w-md mx-auto">
-                <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/60 backdrop-blur-md border-b border-zinc-800/30 shadow-lg shadow-zinc-950/10 rounded-xl">
-                  {/* Logo + Info */}
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-10 h-10 bg-zinc-800/80 rounded-full flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-zinc-700/50">
-                      {studio?.logo_url ? (
-                        <Image
-                          src={studio.logo_url}
-                          alt="Logo"
-                          width={40}
-                          height={40}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 bg-zinc-600 rounded-lg" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h1 className="text-sm font-semibold text-zinc-50 truncate">
-                        {studio?.studio_name || 'Studio'}
-                      </h1>
-                      {studio?.slogan && (
-                        <p className="text-xs text-zinc-400 truncate">
-                          {studio.slogan}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Botón Visitar Perfil */}
-                  <Link
-                    href={`/${slug}`}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:text-white bg-zinc-800/50 hover:bg-zinc-800/70 border border-zinc-700/50 hover:border-zinc-600 rounded-lg transition-all shrink-0"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Perfil</span>
-                  </Link>
-                </div>
-              </div>
-            </div>
+            <OfferHeader
+              studioSlug={slug}
+              studioName={studio?.studio_name}
+              studioSlogan={studio?.slogan}
+              logoUrl={studio?.logo_url}
+            />
 
             {/* Container mobile centrado con padding-top para header */}
             <div className="max-w-md mx-auto min-h-screen pt-[81px] px-4 md:px-0 md:py-24">
@@ -180,6 +150,24 @@ export default async function PublicOfferPage({
                     (offer.landing_page.content_blocks as ContentBlock[]) || []
                   }
                   ctaConfig={offer.landing_page.cta_config}
+                  leadformData={
+                    offer.leadform
+                      ? {
+                        studioId: offer.studio_id,
+                        title: offer.leadform.title,
+                        description: offer.leadform.description,
+                        successMessage: offer.leadform.success_message,
+                        successRedirectUrl: offer.leadform.success_redirect_url,
+                        fieldsConfig: offer.leadform.fields_config,
+                        eventTypeId: offer.leadform.event_type_id,
+                        enableInterestDate: offer.leadform.enable_interest_date,
+                        validateWithCalendar: offer.leadform.validate_with_calendar,
+                        emailRequired: offer.leadform.email_required,
+                        coverUrl: null, // No mostrar cover en modal
+                        coverType: null,
+                      }
+                      : undefined
+                  }
                 />
 
                 {/* Footer */}
@@ -225,7 +213,7 @@ export async function generateMetadata({
     const title = offer.name;
     const description =
       offer.description ||
-      `Oferta especial de ${offer.objective === "presencial" ? "cita presencial" : "cita virtual"}`;
+      `Oferta especial`;
 
     return {
       title,
