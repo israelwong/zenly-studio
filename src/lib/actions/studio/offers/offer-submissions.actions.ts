@@ -134,10 +134,11 @@ export async function submitOfferLeadform(
           },
         });
 
-        if (testCount >= 2) {
+        // Límite aumentado de 2 a 5 para permitir probar múltiples promesas del mismo contacto
+        if (testCount >= 5) {
           return {
             success: false,
-            error: "Límite de pruebas alcanzado. Elimina las promesas de prueba existentes desde el CRM antes de crear nuevas.",
+            error: "Límite de pruebas alcanzado (máx. 5). Elimina las promesas de prueba existentes desde el CRM antes de crear nuevas.",
           };
         }
       }
