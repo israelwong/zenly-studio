@@ -203,6 +203,11 @@ export function OfferLeadForm({
       });
 
       if (!result.success) {
+        // En preview, mostrar errores de límite como warning, no como error crítico
+        if (effectiveIsPreview && result.error?.includes("Límite de pruebas")) {
+          toast.warning(result.error);
+          return; // No lanzar error, solo informar
+        }
         toast.error(result.error || "Error al enviar el formulario");
         throw new Error(result.error || "Error al enviar el formulario");
       }
