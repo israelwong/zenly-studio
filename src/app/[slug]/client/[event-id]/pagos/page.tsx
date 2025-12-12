@@ -1,12 +1,13 @@
-export default function ClientePagos({
+export default async function ClientePagos({
     params
 }: {
-    params: { slug: string; 'event-id': string }
+    params: Promise<{ slug: string; 'event-id': string }>
 }) {
+    const { slug, 'event-id': eventId } = await params;
     return (
         <div>
-            <h1>Pagos del Evento - {params.slug}</h1>
-            <p>Evento ID: {params['event-id']}</p>
+            <h1>Pagos del Evento - {slug}</h1>
+            <p>Evento ID: {eventId}</p>
         </div>
     );
 }

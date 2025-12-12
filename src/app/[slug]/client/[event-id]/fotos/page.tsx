@@ -1,12 +1,13 @@
-export default function ClienteFotos({
+export default async function ClienteFotos({
     params
 }: {
-    params: { slug: string; 'event-id': string }
+    params: Promise<{ slug: string; 'event-id': string }>
 }) {
+    const { slug, 'event-id': eventId } = await params;
     return (
         <div>
-            <h1>Fotos del Evento - {params.slug}</h1>
-            <p>Evento ID: {params['event-id']}</p>
+            <h1>Fotos del Evento - {slug}</h1>
+            <p>Evento ID: {eventId}</p>
         </div>
     );
 }

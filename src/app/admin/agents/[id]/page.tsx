@@ -78,8 +78,9 @@ async function getAgent(id: string): Promise<AgentDetail | null> {
     }
 }
 
-export default async function AgentDetailPage({ params }: { params: { id: string } }) {
-    const agent = await getAgent(params.id);
+export default async function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    const agent = await getAgent(id);
 
     if (!agent) {
         notFound();
