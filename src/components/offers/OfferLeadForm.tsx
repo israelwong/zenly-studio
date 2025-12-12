@@ -13,7 +13,7 @@
  * Ver: docs/arquitectura-componentes-publicos.md
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { ZenButton, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from "@/components/ui/zen";
 import { submitOfferLeadform } from "@/lib/actions/studio/offers/offer-submissions.actions";
@@ -51,6 +51,7 @@ interface OfferLeadFormProps {
   isPreview?: boolean;
   onSuccess?: () => void; // Callback cuando se envía exitosamente (para cerrar modal)
   isModal?: boolean; // Indica si está dentro de un modal
+  isEditMode?: boolean; // Modo edición: deshabilita botón cancelar
 }
 
 /**
@@ -75,9 +76,11 @@ export function OfferLeadForm({
   isPreview = false,
   onSuccess,
   isModal = false,
+  isEditMode = false,
 }: OfferLeadFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Verificar si viene de éxito
   const isSuccess = searchParams.get("success") === "true";
@@ -172,93 +175,103 @@ export function OfferLeadForm({
       return;
     }
 
-    // Obtener parámetros UTM de la URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = localStorage.getItem(`offer_session_${offerId}`);
+    setIsSubmitting(true);
 
-    // Preparar datos del formulario
-    const customFields: Record<string, unknown> = {};
-    fieldsConfig.fields?.forEach((field) => {
-      if (data[field.id as keyof typeof data]) {
-        customFields[field.id] = data[field.id as keyof typeof data];
-      }
-    });
+    try {
+      // Obtener parámetros UTM de la URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = localStorage.getItem(`offer_session_${offerId}`);
 
-    const result = await submitOfferLeadform(studioSlug, {
-      offer_id: offerId,
-      name: data.name,
-      phone: data.phone,
-      email: data.email || "",
-      event_type_id: eventTypeId || undefined,
-      custom_fields: customFields,
-      utm_source: urlParams.get("utm_source") || undefined,
-      utm_medium: urlParams.get("utm_medium") || undefined,
-      utm_campaign: urlParams.get("utm_campaign") || undefined,
-      utm_term: urlParams.get("utm_term") || undefined,
-      utm_content: urlParams.get("utm_content") || undefined,
-      session_id: sessionId || undefined,
-      is_test: effectiveIsPreview, // Marcar como prueba si viene de preview
-    });
+      // Preparar datos del formulario
+      const customFields: Record<string, unknown> = {};
+      fieldsConfig.fields?.forEach((field) => {
+        if (data[field.id as keyof typeof data]) {
+          customFields[field.id] = data[field.id as keyof typeof data];
+        }
+      });
 
-    if (!result.success) {
-      toast.error(result.error || "Error al enviar el formulario");
-      throw new Error(result.error || "Error al enviar el formulario");
-    }
+      const result = await submitOfferLeadform(studioSlug, {
+        offer_id: offerId,
+        name: data.name,
+        phone: data.phone,
+        email: data.email || "",
+        interest_date: data.interest_date,
+        event_type_id: eventTypeId || undefined,
+        custom_fields: customFields,
+        utm_source: urlParams.get("utm_source") || undefined,
+        utm_medium: urlParams.get("utm_medium") || undefined,
+        utm_campaign: urlParams.get("utm_campaign") || undefined,
+        utm_term: urlParams.get("utm_term") || undefined,
+        utm_content: urlParams.get("utm_content") || undefined,
+        session_id: sessionId || undefined,
+        is_test: effectiveIsPreview, // Marcar como prueba si viene de preview
+      });
 
-    // Disparar eventos de conversión (solo si NO es preview)
-    if (!effectiveIsPreview && typeof window !== "undefined") {
-      const windowWithDataLayer = window as WindowWithDataLayer;
-      const windowWithFbq = window as WindowWithFbq;
-
-      if (windowWithDataLayer.dataLayer) {
-        windowWithDataLayer.dataLayer.push({
-          event: "offer_form_success",
-          offer_id: offerId,
-          contact_id: result.data?.contact_id,
-        });
+      if (!result.success) {
+        toast.error(result.error || "Error al enviar el formulario");
+        throw new Error(result.error || "Error al enviar el formulario");
       }
 
-      if (windowWithFbq.fbq) {
-        windowWithFbq.fbq("track", "Lead", {
-          content_name: offerSlug,
-          value: 0,
-          currency: "MXN",
-        });
+      // Disparar eventos de conversión (solo si NO es preview)
+      if (!effectiveIsPreview && typeof window !== "undefined") {
+        const windowWithDataLayer = window as WindowWithDataLayer;
+        const windowWithFbq = window as WindowWithFbq;
+
+        if (windowWithDataLayer.dataLayer) {
+          windowWithDataLayer.dataLayer.push({
+            event: "offer_form_success",
+            offer_id: offerId,
+            contact_id: result.data?.contact_id,
+          });
+        }
+
+        if (windowWithFbq.fbq) {
+          windowWithFbq.fbq("track", "Lead", {
+            content_name: offerSlug,
+            value: 0,
+            currency: "MXN",
+          });
+        }
       }
-    }
 
-    toast.success(successMessage);
+      toast.success(successMessage);
 
-    // Si hay callback onSuccess (modal), usarlo en lugar de redirigir
-    if (onSuccess) {
-      onSuccess();
-      // Si hay redirect URL, redirigir después de cerrar modal
+      // Si hay callback onSuccess (modal), usarlo en lugar de redirigir
+      if (onSuccess) {
+        onSuccess();
+        // Si hay redirect URL, redirigir después de cerrar modal
+        if (successRedirectUrl) {
+          setTimeout(() => {
+            window.location.href = successRedirectUrl;
+          }, 500);
+        } else if (result.data?.redirect_url) {
+          const redirectUrl = result.data.redirect_url;
+          if (redirectUrl) {
+            setTimeout(() => {
+              router.push(redirectUrl);
+            }, 500);
+          }
+        }
+        return;
+      }
+
+      // Redirigir según configuración (modo página dedicada)
       if (successRedirectUrl) {
-        setTimeout(() => {
-          window.location.href = successRedirectUrl;
-        }, 500);
+        window.location.href = successRedirectUrl;
       } else if (result.data?.redirect_url) {
         const redirectUrl = result.data.redirect_url;
         if (redirectUrl) {
-          setTimeout(() => {
-            router.push(redirectUrl);
-          }, 500);
+          router.push(redirectUrl);
         }
+      } else {
+        // Redirigir a la misma página con parámetro de éxito
+        router.push(`/${studioSlug}/offer/${offerSlug}/leadform?success=true`);
       }
-      return;
-    }
-
-    // Redirigir según configuración (modo página dedicada)
-    if (successRedirectUrl) {
-      window.location.href = successRedirectUrl;
-    } else if (result.data?.redirect_url) {
-      const redirectUrl = result.data.redirect_url;
-      if (redirectUrl) {
-        router.push(redirectUrl);
-      }
-    } else {
-      // Redirigir a la misma página con parámetro de éxito
-      router.push(`/${studioSlug}/offer/${offerSlug}/leadform?success=true`);
+    } catch (error) {
+      console.error("[OfferLeadForm] Error en submit:", error);
+      // El error ya se muestra en el toast dentro del try
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -333,6 +346,7 @@ export function OfferLeadForm({
               validateWithCalendar={validateWithCalendar}
               eventTypeId={eventTypeId}
               studioId={studioId}
+              studioSlug={studioSlug}
               isPreview={isPreview}
               onSubmit={handleFormSubmit}
               submitLabel="Enviar solicitud"
@@ -343,6 +357,7 @@ export function OfferLeadForm({
                   variant="ghost"
                   className="w-full"
                   onClick={() => router.back()}
+                  disabled={isSubmitting || isEditMode}
                 >
                   Cancelar
                 </ZenButton>

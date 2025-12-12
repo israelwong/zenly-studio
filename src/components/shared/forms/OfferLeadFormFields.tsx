@@ -6,8 +6,9 @@ import { es } from "date-fns/locale";
 import { ZenButton, ZenInput, ZenBadge, ZenCalendar, type ZenCalendarProps } from "@/components/ui/zen";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/shadcn/popover";
 import { checkDateAvailability } from "@/lib/actions/studio/offers/offer-availability.actions";
+import { validatePhoneBeforeSubmit } from "@/lib/actions/studio/offers/offer-submissions.actions";
 import { LeadFormFieldsConfig, LeadFormField } from "@/lib/actions/schemas/offer-schemas";
-import { Loader2, CalendarIcon } from "lucide-react";
+import { Loader2, CalendarIcon, AlertTriangle, Info } from "lucide-react";
 import { toast } from "sonner";
 
 // Tipo específico para ZenCalendar con mode="single"
@@ -24,6 +25,7 @@ export interface OfferLeadFormFieldsProps {
   validateWithCalendar?: boolean;
   eventTypeId?: string | null;
   studioId: string;
+  studioSlug: string; // ✅ NUEVO: Para validación de teléfono
   isPreview?: boolean;
   onSubmit: (data: {
     name: string;
@@ -45,6 +47,7 @@ export function OfferLeadFormFields({
   enableInterestDate = false,
   validateWithCalendar = false,
   studioId,
+  studioSlug,
   isPreview = false,
   onSubmit,
   initialData = {},
@@ -53,10 +56,16 @@ export function OfferLeadFormFields({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>(initialData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [phoneConflict, setPhoneConflict] = useState<{
+    type: 'phone_different_email' | 'duplicate_request';
+    existingEmail?: string;
+    existingDate?: string;
+  } | null>(null);
   const [dateAvailability, setDateAvailability] = useState<{
     checking: boolean;
     available: boolean | null;
   }>({ checking: false, available: null });
+  const [pastDateAlert, setPastDateAlert] = useState(false);
 
   // Campos básicos siempre presentes
   const basicFields: LeadFormField[] = [
@@ -154,9 +163,11 @@ export function OfferLeadFormFields({
       }
 
       if (value && field.type === "phone") {
-        const phoneRegex = /^\d{10,}$/;
-        if (!phoneRegex.test(value.replace(/\D/g, ""))) {
-          newErrors[field.id] = "Teléfono debe tener al menos 10 dígitos";
+        const cleanPhone = value.replace(/\D/g, "");
+        if (cleanPhone.length !== 10) {
+          newErrors[field.id] = "El teléfono debe tener exactamente 10 dígitos";
+        } else if (!/^\d{10}$/.test(cleanPhone)) {
+          newErrors[field.id] = "El teléfono solo debe contener números";
         }
       }
 
@@ -190,11 +201,27 @@ export function OfferLeadFormFields({
     }
 
     setIsSubmitting(true);
+    setPhoneConflict(null); // Limpiar conflictos previos
 
     try {
+      // Validar teléfono antes de enviar
+      const cleanPhone = formData.phone.replace(/\D/g, "");
+      const validation = await validatePhoneBeforeSubmit(
+        studioSlug,
+        cleanPhone,
+        formData.email || undefined,
+        formData.interest_date || undefined
+      );
+
+      if (!validation.success && validation.conflict) {
+        setPhoneConflict(validation.conflict);
+        setIsSubmitting(false);
+        return;
+      }
+
       await onSubmit({
         name: formData.name,
-        phone: formData.phone,
+        phone: cleanPhone,
         email: formData.email || "",
         interest_date: formData.interest_date,
       });
@@ -208,6 +235,89 @@ export function OfferLeadFormFields({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Alert de fecha pasada */}
+      {pastDateAlert && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-red-400 mb-1">
+                Fecha no disponible
+              </h4>
+              <p className="text-sm text-zinc-300">
+                La fecha seleccionada ya ha pasado. Por favor, elige una fecha futura para tu evento.
+              </p>
+              <ZenButton
+                size="sm"
+                variant="ghost"
+                onClick={() => setPastDateAlert(false)}
+                className="mt-3"
+              >
+                Entendido
+              </ZenButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alerts de conflicto */}
+      {phoneConflict && (
+        <div className="space-y-3">
+          {phoneConflict.type === 'phone_different_email' ? (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-yellow-400 mb-1">
+                    Verifica tu número
+                  </h4>
+                  <p className="text-sm text-zinc-300">
+                    El número de teléfono que ingresaste está registrado con el correo{" "}
+                    <span className="font-semibold">{phoneConflict.existingEmail}</span>.
+                  </p>
+                  <p className="text-sm text-zinc-400 mt-2">
+                    ¿El número ingresado es correcto? Si es así, usa el mismo correo electrónico asociado.
+                  </p>
+                  <ZenButton
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPhoneConflict(null)}
+                    className="mt-3"
+                  >
+                    Corregir datos
+                  </ZenButton>
+                </div>
+              </div>
+            </div>
+          ) : phoneConflict.type === 'duplicate_request' ? (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-blue-400 mb-1">
+                    Solicitud duplicada
+                  </h4>
+                  <p className="text-sm text-zinc-300">
+                    Ya has solicitado información para esta fecha{phoneConflict.existingDate && ` (${format(new Date(phoneConflict.existingDate), "PPP", { locale: es })})`}.
+                  </p>
+                  <p className="text-sm text-zinc-400 mt-2">
+                    Te contactaremos lo antes posible. Si necesitas información para otra fecha, selecciona una diferente.
+                  </p>
+                  <ZenButton
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPhoneConflict(null)}
+                    className="mt-3"
+                  >
+                    Cambiar fecha
+                  </ZenButton>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
       {allFields.map((field) => (
         <div key={field.id}>
           {/* Campo de fecha con ZenCalendar */}
@@ -236,9 +346,26 @@ export function OfferLeadFormFields({
                     selected={formData[field.id] ? new Date(formData[field.id]) : undefined}
                     onSelect={(date: Date | undefined) => {
                       if (date) {
+                        // Verificar si es fecha pasada
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const selectedDate = new Date(date);
+                        selectedDate.setHours(0, 0, 0, 0);
+                        
+                        if (selectedDate < today) {
+                          setPastDateAlert(true);
+                          return;
+                        }
+
                         const dateString = format(date, "yyyy-MM-dd");
                         handleInputChange(field.id, dateString);
+                        setPastDateAlert(false);
                       }
+                    }}
+                    disabled={(date) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return date < today;
                     }}
                     initialFocus={true}
                   />
@@ -305,10 +432,19 @@ export function OfferLeadFormFields({
                     : "text"
               }
               value={formData[field.id] || ""}
-              onChange={(e) => handleInputChange(field.id, e.target.value)}
+              onChange={(e) => {
+                // Si es teléfono, filtrar solo dígitos
+                if (field.type === "phone") {
+                  const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  handleInputChange(field.id, digitsOnly);
+                } else {
+                  handleInputChange(field.id, e.target.value);
+                }
+              }}
               placeholder={field.placeholder}
               required={field.required}
               error={errors[field.id]}
+              maxLength={field.type === "phone" ? 10 : undefined}
             />
           )}
 

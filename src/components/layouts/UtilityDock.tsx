@@ -48,12 +48,12 @@ export function UtilityDock({
       label: 'Personal',
       action: onPersonalClick,
     },
-    {
-      id: 'magic',
-      icon: Sparkles,
-      label: 'ZEN Magic',
-      action: onMagicClick,
-    },
+    // {
+    //   id: 'magic',
+    //   icon: Sparkles,
+    //   label: 'ZEN Magic',
+    //   action: onMagicClick,
+    // },
     {
       id: 'help',
       icon: HelpCircle,

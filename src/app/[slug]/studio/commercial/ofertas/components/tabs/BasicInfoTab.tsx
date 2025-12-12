@@ -7,6 +7,7 @@ import { BasicInfoEditor } from "../editors/BasicInfoEditor";
 import { OfferCardPreview } from "@/components/previews";
 import { useOfferEditor } from "../OfferEditorContext";
 import { checkOfferSlugExists } from "@/lib/actions/studio/offers/offers.actions";
+import { obtenerCondicionComercial } from "@/lib/actions/studio/config/condiciones-comerciales.actions";
 
 interface BasicInfoTabProps {
   studioSlug: string;
@@ -26,6 +27,31 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
   const [nameError, setNameError] = useState<string | null>(null);
   const [isValidatingSlug, setIsValidatingSlug] = useState(false);
   const [slugHint, setSlugHint] = useState<string | null>(null);
+  const [discountPercentage, setDiscountPercentage] = useState<number | null>(null);
+
+  // Cargar discount_percentage cuando cambia business_term_id
+  useEffect(() => {
+    const loadDiscountPercentage = async () => {
+      if (!formData.business_term_id) {
+        setDiscountPercentage(null);
+        return;
+      }
+
+      try {
+        const result = await obtenerCondicionComercial(studioSlug, formData.business_term_id);
+        if (result.success && result.data) {
+          setDiscountPercentage(result.data.discount_percentage);
+        } else {
+          setDiscountPercentage(null);
+        }
+      } catch (error) {
+        console.error("Error loading discount:", error);
+        setDiscountPercentage(null);
+      }
+    };
+
+    loadDiscountPercentage();
+  }, [formData.business_term_id, studioSlug]);
 
   // Validar slug único cuando cambia
   useEffect(() => {
@@ -152,6 +178,7 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
               description={formData.description}
               coverMediaUrl={formData.cover_media_url}
               coverMediaType={formData.cover_media_type}
+              discountPercentage={discountPercentage}
               validUntil={formData.end_date ? formData.end_date.toISOString() : null}
             />
           </MobilePreviewOffer>

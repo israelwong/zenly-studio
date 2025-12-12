@@ -190,14 +190,22 @@ export function BasicInfoEditor({
       </div>
 
       {/* Descripción */}
-      <ZenTextarea
-        id="offer-description-textarea"
-        label="Descripción (Uso Interno)"
-        value={formData.description}
-        onChange={(e) => updateFormData({ description: e.target.value })}
-        placeholder="Notas internas sobre la oferta. Esta descripción no aparecerá en la publicación pública."
-        rows={3}
-      />
+      <div className="relative">
+        <ZenTextarea
+          id="offer-description-textarea"
+          label="Descripción"
+          value={formData.description}
+          onChange={(e) => {
+            const text = e.target.value.slice(0, 10);
+            updateFormData({ description: text });
+          }}
+          placeholder="Notas internas sobre la oferta. Esta descripción no aparecerá en la publicación pública."
+          rows={3}
+        />
+        <p className="absolute bottom-0 right-1 text-xs font-medium text-zinc-500">
+          {formData.description.length}/10
+        </p>
+      </div>
 
       {/* Divisor */}
       <div className="border-t border-zinc-800" />

@@ -218,7 +218,7 @@ export function EventPaymentsCard({
               {/* Botón para ver historial */}
               {payments.length > 0 && (
                 <ZenButton
-                  variant="outline"
+                  variant="primary"
                   size="sm"
                   onClick={() => setIsHistorySheetOpen(true)}
                   className="w-full gap-2 text-xs"

@@ -33,25 +33,12 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             icon: Briefcase,
             items: [
                 { id: 'dashboard', name: 'Dashboard', href: `/commercial/dashboard`, icon: Home },
-                { id: 'ofertas', name: 'Offers', href: `/commercial/ofertas`, icon: Megaphone },
-                { id: 'promises', name: 'Promises', href: `/commercial/promises`, icon: File },
-                { id: 'events', name: 'Events', href: `/business/events`, icon: FileText },
-                { id: 'finanzas', name: 'Finances', href: `/business/finanzas`, icon: DollarSign },
-                // { id: 'personal', name: 'Personal', href: `/business/personal`, icon: UserCog },
+                { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
+                { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
+                { id: 'events', name: 'Eventos', href: `/business/events`, icon: FileText },
+                { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
             ],
         },
-
-        // (Pago - Monetización)
-        // {
-        //     id: 'revenues',
-        //     title: 'Revenues',
-        //     icon: Users,
-        //     items: [
-        //         { id: 'planning', name: 'Planning', href: `/business/planning`, icon: FileText },
-        //         { id: 'invitations', name: 'Invitaciones', href: `/invitations`, icon: Mail },
-        //         // { id: 'galleries', name: 'Galerías', href: `/galleries`, icon: ImageIcon },
-        //     ],
-        // },
 
         // Configuración
         {
@@ -59,10 +46,12 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             title: 'Config',
             icon: Settings,
             items: [
-                { id: 'catalogo', name: 'Catalog', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
-                { id: 'contracts', name: 'Contracts', href: `/commercial/contracts`, icon: FileText },
-                { id: 'integraciones', name: 'Integrations', href: `/business/integraciones/tracking`, icon: Plug },
-                { id: 'magic', name: 'Magic IA', href: `/magic`, icon: Sparkles },
+                { id: 'catalogo', name: 'Catálogo', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
+                { id: 'tipo_evento', name: 'Tipo de Evento', href: `/commercial/tipo-evento`, icon: ShoppingBagIcon },
+
+                { id: 'contracts', name: 'Contratos', href: `/commercial/contracts`, icon: FileText },
+                { id: 'integraciones', name: 'Integraciones', href: `/business/integraciones/tracking`, icon: Plug },
+                { id: 'magic', name: 'ZEN Magic', href: `/magic`, icon: Sparkles },
             ],
         },
 
@@ -89,7 +78,7 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
     };
 
     return (
-        <ZenSidebar className={`${className} ${isOpen ? '' : 'hidden lg:block'} !w-60 lg:!w-60 sm:!w-60`}>
+        <ZenSidebar className={`${className} ${isOpen ? '' : 'hidden lg:block'} w-60 lg:w-60 sm:w-60`}>
             <ZenSidebarContent className="px-4">
                 <ZenSidebarMenu className="pt-4">
                     {/* Sección Studio */}
@@ -103,7 +92,7 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
                                             : `/${studioSlug}/studio${item.href}`}
                                         className="flex items-center gap-2.5 px-3 py-1 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/40 transition-all duration-200 rounded-md group"
                                     >
-                                        <item.icon className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 flex-shrink-0" />
+                                        <item.icon className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 shrink-0" />
                                         <span className="text-zinc-300 group-hover:text-white">{item.name}</span>
                                     </ActiveLink>
                                 </ZenSidebarMenuItem>

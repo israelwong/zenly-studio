@@ -80,6 +80,7 @@ export function LeadFormTab({ studioSlug, studioId: initialStudioId }: LeadFormT
                 coverType={formData.cover_media_type}
                 isPreview={true}
                 isModal={false}
+                isEditMode={true}
               />
             </div>
           </MobilePreviewFull>

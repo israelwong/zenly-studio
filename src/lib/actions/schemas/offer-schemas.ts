@@ -76,8 +76,9 @@ export const UpdateOfferSchema = CreateOfferSchema.partial().extend({
 export const SubmitLeadFormSchema = z.object({
   offer_id: z.string().min(1, 'El ID de la oferta es requerido'),
   name: z.string().min(1, 'El nombre es requerido').max(100, 'El nombre es demasiado largo'),
-  phone: z.string().min(10, 'El teléfono debe tener al menos 10 dígitos'),
+  phone: z.string().length(10, 'El teléfono debe tener exactamente 10 dígitos').regex(/^\d+$/, 'El teléfono solo debe contener números'),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
+  interest_date: z.string().optional(), // Fecha de interés del evento
   // Asunto / Tipo de evento
   event_type_id: z.string().optional(), // Si useEventTypes = true
   subject: z.string().optional(), // LEGACY: si useEventTypes = false

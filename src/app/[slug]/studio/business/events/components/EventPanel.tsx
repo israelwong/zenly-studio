@@ -6,7 +6,7 @@ import { EventCotizacionesCard } from './EventCotizacionesCard';
 import { EventPaymentsCard } from './EventPaymentsCard';
 import { EventAgendamiento } from './EventAgendamiento';
 import { EventTodoCard } from './EventTodoCard';
-import { EventItinerarioCard } from './EventItinerarioCard';
+// import { EventItinerarioCard } from './EventItinerarioCard';
 
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
@@ -78,15 +78,8 @@ export function EventPanel({
           />
         </div>
 
-        {/* Columna 2: Agenda + Cotizaciones + Pagos */}
+        {/* Columna 2: Cotizaciones + Pagos */}
         <div className="lg:col-span-1 space-y-6">
-          <EventAgendamiento
-            studioSlug={studioSlug}
-            eventId={eventId}
-            eventDate={eventData.promise?.event_date || eventData.event_date}
-            onAgendaUpdated={onEventUpdated}
-          />
-
           <EventCotizacionesCard
             studioSlug={studioSlug}
             eventId={eventId}
@@ -112,18 +105,26 @@ export function EventPanel({
           />
         </div>
 
-        {/* Columna 3: TODO + Itinerario */}
+        {/* Columna 3: Agenda + TODO */}
         <div className="lg:col-span-1 space-y-6">
+          <EventAgendamiento
+            studioSlug={studioSlug}
+            eventId={eventId}
+            eventDate={eventData.promise?.event_date || eventData.event_date}
+            onAgendaUpdated={onEventUpdated}
+          />
 
           <EventTodoCard
             studioSlug={studioSlug}
             eventId={eventId}
           />
 
+          {/* TODO: Funcionalidad futura - EventItinerarioCard
           <EventItinerarioCard
             studioSlug={studioSlug}
             eventId={eventId}
           />
+          */}
 
         </div>
       </div>

@@ -445,7 +445,7 @@ export function EventCotizacionesCard({
               {/* Botón Scheduler global (si hay tareas) */}
               {cotizacionesAprobadas.some(c => calculateCotizacionStats(c).totalTasks > 0) && (
                 <ZenButton
-                  variant="outline"
+                  variant="primary"
                   size="sm"
                   onClick={() => handleGestionarScheduler()}
                   className="w-full gap-2 text-xs"

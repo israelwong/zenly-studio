@@ -117,12 +117,19 @@ export function SearchCommandPalette({
 
         const searchLower = query.toLowerCase();
 
+        // Sinónimos para ofertas
+        const offerSynonyms = ['oferta', 'ofertas', 'promo', 'promoción', 'promocion'];
+        const isOfferSearch = offerSynonyms.some(synonym => searchLower.includes(synonym));
+
         return allResults.filter(result => {
             const titleMatch = result.title.toLowerCase().includes(searchLower);
             const descMatch = result.description?.toLowerCase().includes(searchLower);
             const tagsMatch = result.tags?.some(tag => tag.toLowerCase().includes(searchLower));
+            
+            // Si buscan sinónimos de oferta, incluir todos los resultados tipo 'offer'
+            const synonymMatch = isOfferSearch && result.type === 'offer';
 
-            return titleMatch || descMatch || tagsMatch;
+            return titleMatch || descMatch || tagsMatch || synonymMatch;
         });
     }, [query, allResults]);
 
@@ -385,44 +392,6 @@ export function SearchCommandPalette({
                                                         {getResultIcon(result.type)}
                                                     </div>
                                                 )}
-                                            </div>
-
-                                            {/* Info */}
-                                            <div className="flex-1 text-left min-w-0">
-                                                <div className="text-sm text-zinc-100 truncate">
-                                                    {result.title}
-                                                </div>
-                                                {result.description && (
-                                                    <div className="text-xs text-zinc-500 truncate">
-                                                        {result.description}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <ChevronRight className="w-4 h-4 text-zinc-600" />
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Contacto */}
-                            {groupedResults.contact.length > 0 && (
-                                <div>
-                                    <div className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase">
-                                        Contacto ({groupedResults.contact.length})
-                                    </div>
-                                    {groupedResults.contact.map((result, idx) => (
-                                        <button
-                                            key={result.id}
-                                            onClick={() => handleSelect(result)}
-                                            className={`w-full flex items-center gap-3 px-4 py-2 hover:bg-zinc-800 transition-colors ${selectedIndex === filteredResults.indexOf(result)
-                                                ? 'bg-zinc-800'
-                                                : ''
-                                                }`}
-                                        >
-                                            {/* Icon */}
-                                            <div className="w-10 h-10 bg-zinc-800 rounded overflow-hidden shrink-0 flex items-center justify-center">
-                                                {getResultIcon(result.type)}
                                             </div>
 
                                             {/* Info */}

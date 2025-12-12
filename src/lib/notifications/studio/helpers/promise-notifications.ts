@@ -15,13 +15,28 @@ export async function notifyPromiseCreated(
     where: { id: studioId },
     select: { slug: true },
   });
+
+  // Construir mensaje detallado
+  let message = `Nueva promesa registrada para ${contactName}`;
+  if (eventType) {
+    message += ` - ${eventType}`;
+  }
+  if (eventDate) {
+    const date = new Date(eventDate);
+    const formattedDate = date.toLocaleDateString('es-MX', { 
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+    message += ` (${formattedDate})`;
+  }
   
   return createStudioNotification({
     scope: StudioNotificationScope.STUDIO,
     type: StudioNotificationType.PROMISE_CREATED,
     studio_id: studioId,
     title: 'Nueva promesa creada',
-    message: `Se creó una nueva promesa para ${contactName}`,
+    message,
     category: 'promises',
     priority: NotificationPriority.MEDIUM,
     route: '/{slug}/studio/commercial/promises/{promise_id}',

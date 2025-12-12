@@ -8,6 +8,100 @@ import {
 } from "@/lib/actions/schemas/offer-schemas";
 import type { SubmitLeadFormResponse } from "@/types/offers";
 import { headers } from "next/headers";
+import { notifyPromiseCreated } from "@/lib/notifications/studio/helpers/promise-notifications";
+
+/**
+ * Validar teléfono antes de submit
+ * Retorna info del contacto existente si lo encuentra
+ */
+export async function validatePhoneBeforeSubmit(
+  studioSlug: string,
+  phone: string,
+  email?: string,
+  interestDate?: string
+): Promise<{
+  success: boolean;
+  conflict?: {
+    type: 'phone_different_email' | 'duplicate_request';
+    existingEmail?: string;
+    existingDate?: string;
+  };
+}> {
+  try {
+    return await retryDatabaseOperation(async () => {
+      const studio = await prisma.studios.findUnique({
+        where: { slug: studioSlug },
+        select: { id: true },
+      });
+
+      if (!studio) {
+        return { success: false };
+      }
+
+      // Buscar contacto con este teléfono
+      const existingContact = await prisma.studio_contacts.findFirst({
+        where: {
+          studio_id: studio.id,
+          phone: phone,
+        },
+        select: {
+          id: true,
+          email: true,
+        },
+      });
+
+      if (!existingContact) {
+        // No existe, puede proceder
+        return { success: true };
+      }
+
+      // Existe el teléfono, verificar email
+      if (email && existingContact.email && existingContact.email !== email) {
+        // Teléfono existe pero con email diferente
+        return {
+          success: false,
+          conflict: {
+            type: 'phone_different_email',
+            existingEmail: existingContact.email,
+          },
+        };
+      }
+
+      // Teléfono y email coinciden (o no hay email), verificar fecha
+      if (interestDate) {
+        const existingPromise = await prisma.studio_promises.findFirst({
+          where: {
+            contact_id: existingContact.id,
+            interest_date: interestDate,
+          },
+          select: {
+            interest_date: true,
+          },
+          orderBy: {
+            created_at: 'desc',
+          },
+        });
+
+        if (existingPromise) {
+          // Ya solicitó info para esta fecha
+          return {
+            success: false,
+            conflict: {
+              type: 'duplicate_request',
+              existingDate: interestDate,
+            },
+          };
+        }
+      }
+
+      // Teléfono y email coinciden, fecha diferente o sin fecha: puede proceder
+      return { success: true };
+    });
+  } catch (error) {
+    console.error("[validatePhoneBeforeSubmit] Error:", error);
+    return { success: true }; // En caso de error, permitir continuar
+  }
+}
 
 /**
  * Enviar leadform y crear contacto + promise
@@ -190,17 +284,45 @@ export async function submitOfferLeadform(
           pipeline_stage_id: nuevoStage?.id || null,
           status: "pending",
           event_type_id: validatedData.event_type_id || null,
+          interest_date: validatedData.interest_date || null,
           // ✅ Marcar como prueba si aplica
           is_test: isTest,
           test_created_at: testTimestamp,
         },
       });
 
+      // ✅ Obtener nombre del tipo de evento si existe
+      let eventTypeName: string | null = null;
+      if (validatedData.event_type_id) {
+        const eventType = await prisma.studio_event_types.findUnique({
+          where: { id: validatedData.event_type_id },
+          select: { name: true },
+        });
+        eventTypeName = eventType?.name || null;
+      }
+
+      // ✅ Crear notificación de nueva promesa (solo si NO es test)
+      if (!isTest) {
+        try {
+          await notifyPromiseCreated(
+            studio.id,
+            promise.id,
+            validatedData.name,
+            eventTypeName,
+            validatedData.interest_date || null
+          );
+        } catch (notifError) {
+          console.error("[submitOfferLeadform] Error creando notificación:", notifError);
+          // No fallar el submit si falla la notificación
+        }
+      }
+
       // Preparar datos del formulario para guardar
       const formData: Record<string, unknown> = {
         name: validatedData.name,
         phone: validatedData.phone,
         email: validatedData.email || null,
+        interest_date: validatedData.interest_date || null, // ✅ NUEVO
         event_type_id: validatedData.event_type_id || null, // ✅ NUEVO
         subject: validatedData.subject || null, // ✅ LEGACY
         ...(validatedData.custom_fields || {}),
