@@ -401,7 +401,7 @@ export function ContactEventInfoCard({
                 </label>
                 <ZenBadge
                   variant="outline"
-                  className="bg-blue-500/20 text-blue-400 border-blue-400/50 font-medium px-3 py-1.5"
+                  className="bg-blue-500/20 text-blue-400 border-blue-400/50 font-medium px-2 py-0.5 text-xs"
                 >
                   {eventData.event_type_name}
                 </ZenBadge>
@@ -450,9 +450,9 @@ export function ContactEventInfoCard({
                   return (
                     <ZenBadge
                       variant="outline"
-                      className={`${colors.bgColor} ${colors.textColor} ${colors.borderColor} font-medium px-3 py-1.5`}
+                      className={`${colors.bgColor} ${colors.textColor} ${colors.borderColor} font-medium px-2 py-0.5 text-xs`}
                     >
-                      <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                      <Calendar className="h-3 w-3 mr-1" />
                       {formatDate(eventData.event_date)}
                     </ZenBadge>
                   );
@@ -471,9 +471,9 @@ export function ContactEventInfoCard({
                       <ZenBadge
                         key={idx}
                         variant="outline"
-                        className={`${colors.bgColor} ${colors.textColor} ${colors.borderColor} font-medium px-2.5 py-1`}
+                        className={`${colors.bgColor} ${colors.textColor} ${colors.borderColor} font-medium px-2 py-0.5 text-xs`}
                       >
-                        <Calendar className="h-3 w-3 mr-1" />
+                        <Calendar className="h-2.5 w-2.5 mr-1" />
                         {formatDate(dateObj)}
                       </ZenBadge>
                     );
