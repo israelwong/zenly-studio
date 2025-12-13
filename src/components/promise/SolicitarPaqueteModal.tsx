@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/shadcn/dialog';
 import type { PublicPaquete } from '@/types/public-promise';
 import { toast } from 'sonner';
+import { solicitarPaquetePublico } from '@/lib/actions/public/paquetes.actions';
 
 interface SolicitarPaqueteModalProps {
   paquete: PublicPaquete;
@@ -34,11 +35,19 @@ export function SolicitarPaqueteModal({
     setIsSubmitting(true);
 
     try {
-      // TODO: Implementar server action para solicitar paquete
-      // await solicitarPaquetePublico(studioSlug, promiseId, paquete.id);
+      const result = await solicitarPaquetePublico(
+        promiseId,
+        paquete.id,
+        studioSlug
+      );
 
-      // Simulación temporal
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (!result.success) {
+        toast.error('Error al enviar solicitud', {
+          description: result.error || 'Por favor, intenta de nuevo o contacta al estudio.',
+        });
+        setIsSubmitting(false);
+        return;
+      }
 
       toast.success('¡Solicitud enviada!', {
         description: 'El estudio recibirá tu solicitud y se pondrá en contacto contigo.',
@@ -46,6 +55,7 @@ export function SolicitarPaqueteModal({
 
       onClose();
     } catch (error) {
+      console.error('Error:', error);
       toast.error('Error al enviar solicitud', {
         description: 'Por favor, intenta de nuevo o contacta al estudio.',
       });

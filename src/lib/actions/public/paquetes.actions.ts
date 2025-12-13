@@ -1,83 +1,95 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import type { PublicPaquete } from "@/types/public-profile";
+import { createStudioNotification } from "@/lib/actions/studio/notifications/notifications.actions";
 
 /**
- * Obtiene los paquetes públicos de un estudio
- * Para mostrar en el perfil público
+ * Solicitar información sobre un paquete desde página pública
  */
-export async function getPublicPaquetes(
-    studioSlug: string
-): Promise<{
-    success: boolean;
-    data?: PublicPaquete[];
-    error?: string;
-}> {
-    try {
-        const studio = await prisma.studios.findUnique({
-            where: { slug: studioSlug },
-            select: { id: true },
-        });
+export async function solicitarPaquetePublico(
+  promiseId: string,
+  paqueteId: string,
+  studioSlug: string
+) {
+  try {
+    // 1. Validar que la promesa existe
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      include: {
+        contact: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        studio: {
+          select: {
+            id: true,
+            studio_name: true,
+          },
+        },
+      },
+    });
 
-        if (!studio) {
-            return {
-                success: false,
-                error: "Studio no encontrado",
-            };
-        }
-
-        const paquetes = await prisma.studio_paquetes.findMany({
-            where: {
-                studio_id: studio.id,
-                status: "active",
-            },
-            select: {
-                id: true,
-                name: true,
-                description: true,
-                precio: true,
-                cover_url: true,
-                order: true,
-                is_featured: true,
-                status: true,
-                event_types: {
-                    select: {
-                        name: true,
-                        order: true,
-                    },
-                },
-            },
-            orderBy: [{ is_featured: "desc" }, { order: "asc" }],
-        });
-
-        // Transformar datos al formato público
-        const publicPaquetes: PublicPaquete[] = paquetes.map((paquete) => ({
-            id: paquete.id,
-            nombre: paquete.name,
-            descripcion: paquete.description ? paquete.description : undefined,
-            precio: paquete.precio ?? 0,
-            tipo_evento: paquete.event_types?.name ? paquete.event_types.name : undefined,
-            tipo_evento_order: paquete.event_types?.order ?? undefined,
-            cover_url: paquete.cover_url ? paquete.cover_url : undefined,
-            is_featured: paquete.is_featured ?? false,
-            status: paquete.status,
-            duracion_horas: undefined, // Campo no existe en schema actual
-            incluye: undefined, // Campo no existe en schema actual
-            no_incluye: undefined, // Campo no existe en schema actual
-            condiciones: undefined, // Campo no existe en schema actual
-            order: paquete.order,
-        }));
-
-        return {
-            success: true,
-            data: publicPaquetes,
-        };
-    } catch (error) {
-        console.error("[getPublicPaquetes] Error:", error);
-        return {
-            success: false,
-            error: "Error al obtener paquetes",
-        };
+    if (!promise) {
+      return {
+        success: false,
+        error: "Promesa no encontrada",
+      };
     }
+
+    // 2. Validar que el paquete existe y está activo
+    const paquete = await prisma.studio_paquetes.findFirst({
+      where: {
+        id: paqueteId,
+        studio_id: promise.studio.id,
+        status: "active",
+      },
+      select: {
+        id: true,
+        name: true,
+        precio: true,
+        description: true,
+      },
+    });
+
+    if (!paquete) {
+      return {
+        success: false,
+        error: "Paquete no encontrado o no disponible",
+      };
+    }
+
+    // 3. Crear notificación para el estudio
+    await createStudioNotification({
+      studio_id: promise.studio.id,
+      type: "commercial",
+      title: "Solicitud de paquete",
+      message: `${promise.contact.name} está interesado en el paquete "${paquete.name}"`,
+      priority: "medium",
+      contact_id: promise.contact.id,
+      promise_id: promiseId,
+      metadata: {
+        paquete_id: paqueteId,
+        paquete_name: paquete.name,
+        paquete_price: paquete.precio,
+        action_type: "paquete_solicitado",
+      },
+    });
+
+    return {
+      success: true,
+      data: {
+        paqueteId,
+        message: "Solicitud enviada exitosamente",
+      },
+    };
+  } catch (error) {
+    console.error("Error al solicitar paquete:", error);
+    return {
+      success: false,
+      error: "Error al enviar la solicitud",
+    };
+  }
 }

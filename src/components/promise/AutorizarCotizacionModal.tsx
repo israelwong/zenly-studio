@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/shadcn/dialog';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { toast } from 'sonner';
+import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.actions';
 
 interface AutorizarCotizacionModalProps {
   cotizacion: PublicCotizacion;
@@ -34,11 +35,19 @@ export function AutorizarCotizacionModal({
     setIsSubmitting(true);
     
     try {
-      // TODO: Implementar server action para autorizar cotización
-      // await autorizarCotizacionPublica(studioSlug, promiseId, cotizacion.id);
-      
-      // Simulación temporal
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const result = await autorizarCotizacionPublica(
+        promiseId,
+        cotizacion.id,
+        studioSlug
+      );
+
+      if (!result.success) {
+        toast.error('Error al autorizar', {
+          description: result.error || 'Por favor, intenta de nuevo o contacta al estudio.',
+        });
+        setIsSubmitting(false);
+        return;
+      }
       
       toast.success('¡Cotización autorizada!', {
         description: 'El estudio recibirá una notificación de tu decisión.',
@@ -46,6 +55,7 @@ export function AutorizarCotizacionModal({
       
       onClose();
     } catch (error) {
+      console.error('Error:', error);
       toast.error('Error al autorizar', {
         description: 'Por favor, intenta de nuevo o contacta al estudio.',
       });

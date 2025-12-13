@@ -145,7 +145,7 @@ export async function getPublicPromiseData(
                 select: {
                   metodos_pago: {
                     select: {
-                      name: true,
+                      payment_method_name: true,
                     },
                   },
                 },
@@ -224,7 +224,7 @@ export async function getPublicPromiseData(
       })),
       condiciones_comerciales: cot.condiciones_comerciales
         ? {
-            metodo_pago: cot.condiciones_comerciales_metodo_pago?.metodos_pago?.name || null,
+            metodo_pago: cot.condiciones_comerciales_metodo_pago?.metodos_pago?.payment_method_name || null,
             condiciones: cot.condiciones_comerciales.description || null,
           }
         : null,
