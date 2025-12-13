@@ -67,7 +67,7 @@ export async function getPublicPromiseData(
       event_location: string | null;
     };
     studio: {
-      name: string;
+      studio_name: string;
       logo_url: string | null;
     };
     cotizaciones: PublicCotizacion[];
@@ -265,7 +265,7 @@ export async function getPublicPromiseData(
           event_location: promise.event_location,
         },
         studio: {
-          name: studio.name,
+          studio_name: studio.studio_name,
           logo_url: studio.logo_url,
         },
         cotizaciones: mappedCotizaciones,

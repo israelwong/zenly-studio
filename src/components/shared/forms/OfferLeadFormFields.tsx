@@ -32,6 +32,7 @@ export interface OfferLeadFormFieldsProps {
     phone: string;
     email: string;
     interest_date?: string;
+    event_type_id?: string | null;
   }) => Promise<void> | void;
   onSuccess?: () => void; // Callback opcional después de submit exitoso
   initialData?: Record<string, string>;
@@ -242,6 +243,7 @@ export function OfferLeadFormFields({
         phone: cleanPhone,
         email: formData.email || "",
         interest_date: formData.interest_date,
+        event_type_id: eventTypeId,
       });
       
       // Si es preview, limpiar el formulario después del submit exitoso

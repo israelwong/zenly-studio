@@ -170,6 +170,7 @@ export function OfferLeadForm({
     phone: string;
     email: string;
     interest_date?: string;
+    event_type_id?: string | null;
   }) => {
     setIsSubmitting(true);
 
@@ -192,7 +193,7 @@ export function OfferLeadForm({
         phone: data.phone,
         email: data.email || "",
         interest_date: data.interest_date,
-        event_type_id: eventTypeId || undefined,
+        event_type_id: data.event_type_id || eventTypeId || undefined,
         custom_fields: customFields,
         utm_source: urlParams.get("utm_source") || undefined,
         utm_medium: urlParams.get("utm_medium") || undefined,

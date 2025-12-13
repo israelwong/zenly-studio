@@ -1,7 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { createStudioNotification } from "@/lib/actions/studio/notifications/notifications.actions";
+import { createStudioNotification } from "@/lib/notifications/studio/studio-notification.service";
+import { StudioNotificationScope } from "@/lib/notifications/studio/types";
 
 /**
  * Autorizar cotización desde página pública
@@ -80,11 +81,12 @@ export async function autorizarCotizacionPublica(
 
     // 4. Crear notificación para el estudio
     await createStudioNotification({
+      scope: StudioNotificationScope.STUDIO,
       studio_id: promise.studio.id,
       type: "commercial",
       title: "Cotización autorizada",
       message: `${promise.contact.name} ha autorizado la cotización "${cotizacion.name}"`,
-      priority: "high",
+      priority: "HIGH",
       contact_id: promise.contact.id,
       promise_id: promiseId,
       metadata: {
