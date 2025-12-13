@@ -124,6 +124,7 @@ export async function getPublicPromiseData(
                   id: true,
                   name: true,
                   description: true,
+                  seccion_name: true,
                   category_name: true,
                   unit_price: true,
                   quantity: true,
@@ -191,6 +192,15 @@ export async function getPublicPromiseData(
                     service_categories: {
                       select: {
                         name: true,
+                        section_categories: {
+                          select: {
+                            service_section: {
+                              select: {
+                                name: true,
+                              },
+                            },
+                          },
+                        },
                       },
                     },
                   },
@@ -218,6 +228,7 @@ export async function getPublicPromiseData(
         id: item.id,
         name: item.name || 'Servicio',
         description: item.description,
+        seccion: item.seccion_name,
         category: item.category_name || 'General',
         price: item.unit_price,
         quantity: item.quantity,
@@ -246,6 +257,7 @@ export async function getPublicPromiseData(
         id: item.items.id,
         name: item.items.name,
         description: null, // Los items no tienen descripción directa
+        seccion: item.items.service_categories.section_categories?.service_section?.name || null,
         category: item.items.service_categories.name,
       })),
       tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual

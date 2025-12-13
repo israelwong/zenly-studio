@@ -23,6 +23,7 @@ export interface PublicCotizacionServicio {
   id: string;
   name: string;
   description: string | null;
+  seccion: string | null;
   category: string;
   price: number;
   quantity: number;
@@ -49,6 +50,7 @@ export interface PublicPaqueteServicio {
   id: string;
   name: string;
   description: string | null;
+  seccion: string | null;
   category: string;
 }
 

@@ -9,22 +9,42 @@ interface PublicServiciosTreeProps {
   showPrices?: boolean;
 }
 
-interface ServiciosPorCategoria {
-  [categoria: string]: (PublicCotizacionServicio | PublicPaqueteServicio)[];
+interface ServiciosPorSeccion {
+  [seccion: string]: {
+    [categoria: string]: (PublicCotizacionServicio | PublicPaqueteServicio)[];
+  };
 }
 
 export function PublicServiciosTree({ servicios, showPrices = false }: PublicServiciosTreeProps) {
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
-  // Agrupar servicios por categoría
-  const serviciosPorCategoria: ServiciosPorCategoria = servicios.reduce((acc, servicio) => {
+  // Agrupar servicios por sección y luego por categoría
+  const serviciosPorSeccion: ServiciosPorSeccion = servicios.reduce((acc, servicio) => {
+    const seccion = servicio.seccion || 'Sin sección';
     const categoria = servicio.category || 'Sin categoría';
-    if (!acc[categoria]) {
-      acc[categoria] = [];
+    
+    if (!acc[seccion]) {
+      acc[seccion] = {};
     }
-    acc[categoria].push(servicio);
+    if (!acc[seccion][categoria]) {
+      acc[seccion][categoria] = [];
+    }
+    acc[seccion][categoria].push(servicio);
     return acc;
-  }, {} as ServiciosPorCategoria);
+  }, {} as ServiciosPorSeccion);
+
+  const toggleSection = (seccion: string) => {
+    setExpandedSections((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(seccion)) {
+        newSet.delete(seccion);
+      } else {
+        newSet.add(seccion);
+      }
+      return newSet;
+    });
+  };
 
   const toggleCategory = (categoria: string) => {
     setExpandedCategories((prev) => {
@@ -56,95 +76,141 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
 
   return (
     <div className="space-y-2">
-      {Object.entries(serviciosPorCategoria).map(([categoria, serviciosCategoria]) => {
-        const isExpanded = expandedCategories.has(categoria);
-        const totalServicios = serviciosCategoria.length;
-        const totalPrice = showPrices
-          ? serviciosCategoria.reduce((sum, s) => {
-              if (isCotizacionServicio(s)) {
-                return sum + s.price * s.quantity;
-              }
-              return sum;
-            }, 0)
-          : 0;
+      {Object.entries(serviciosPorSeccion).map(([seccion, categorias]) => {
+        const isSectionExpanded = expandedSections.has(seccion);
+        const totalServiciosSeccion = Object.values(categorias).reduce(
+          (sum, servicios) => sum + servicios.length,
+          0
+        );
 
         return (
           <div
-            key={categoria}
-            className="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-900/30"
+            key={seccion}
+            className="border border-zinc-700 rounded-lg overflow-hidden"
           >
-            {/* Header de categoría */}
+            {/* Nivel 1: Sección */}
             <button
-              onClick={() => toggleCategory(categoria)}
-              className="w-full flex items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors"
+              onClick={() => toggleSection(seccion)}
+              className="w-full flex items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors bg-zinc-800/30"
             >
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  {isExpanded ? (
+                  {isSectionExpanded ? (
                     <ChevronDown className="w-4 h-4 text-zinc-400" />
                   ) : (
                     <ChevronRight className="w-4 h-4 text-zinc-400" />
                   )}
-                  <h4 className="font-medium text-white">{categoria}</h4>
+                  <h4 className="font-semibold text-white">{seccion}</h4>
                 </div>
-                <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded">
-                  {totalServicios} {totalServicios === 1 ? 'servicio' : 'servicios'}
+                <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-1 rounded">
+                  {totalServiciosSeccion}{' '}
+                  {totalServiciosSeccion === 1 ? 'item' : 'items'}
                 </span>
               </div>
-
-              {showPrices && totalPrice > 0 && (
-                <span className="text-sm font-semibold text-emerald-400">
-                  {formatPrice(totalPrice)}
-                </span>
-              )}
             </button>
 
-            {/* Lista de servicios */}
-            {isExpanded && (
-              <div className="border-t border-zinc-800 bg-zinc-950/30">
-                <div className="divide-y divide-zinc-800/50">
-                  {serviciosCategoria.map((servicio) => {
-                    const esCotizacion = isCotizacionServicio(servicio);
-                    const subtotal = esCotizacion
-                      ? servicio.price * servicio.quantity
-                      : 0;
+            {isSectionExpanded && (
+              <div className="bg-zinc-900/50">
+                {Object.entries(categorias).map(([categoria, serviciosCategoria], categoriaIndex) => {
+                  const isCategoryExpanded = expandedCategories.has(categoria);
+                  const totalServiciosCategoria = serviciosCategoria.length;
+                  const totalPriceCategoria = showPrices
+                    ? serviciosCategoria.reduce((sum, s) => {
+                        if (isCotizacionServicio(s)) {
+                          return sum + s.price * s.quantity;
+                        }
+                        return sum;
+                      }, 0)
+                    : 0;
 
-                    return (
-                      <div key={servicio.id} className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <h5 className="font-medium text-white mb-1">
-                              {servicio.name}
-                              {esCotizacion && servicio.quantity > 1 && (
-                                <span className="ml-2 text-xs text-zinc-400">
-                                  × {servicio.quantity}
-                                </span>
-                              )}
-                            </h5>
-                            {servicio.description && (
-                              <p className="text-sm text-zinc-400 leading-relaxed">
-                                {servicio.description}
-                              </p>
+                  return (
+                    <div
+                      key={categoria}
+                      className={`${categoriaIndex > 0 ? 'border-t border-zinc-700/50' : ''}`}
+                    >
+                      {/* Nivel 2: Categoría */}
+                      <button
+                        onClick={() => toggleCategory(categoria)}
+                        className="w-full flex items-center justify-between p-3 pl-8 hover:bg-zinc-800/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            {isCategoryExpanded ? (
+                              <ChevronDown className="w-3 h-3 text-zinc-400" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3 text-zinc-400" />
                             )}
+                            <h5 className="text-sm font-medium text-zinc-300">{categoria}</h5>
                           </div>
-
-                          {showPrices && esCotizacion && (
-                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                              {servicio.quantity > 1 && (
-                                <span className="text-xs text-zinc-500">
-                                  {formatPrice(servicio.price)} c/u
-                                </span>
-                              )}
-                              <span className="text-sm font-semibold text-white">
-                                {formatPrice(subtotal)}
-                              </span>
-                            </div>
-                          )}
+                          <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
+                            {totalServiciosCategoria}{' '}
+                            {totalServiciosCategoria === 1 ? 'item' : 'items'}
+                          </span>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+
+                        {showPrices && totalPriceCategoria > 0 && (
+                          <span className="text-sm font-semibold text-emerald-400">
+                            {formatPrice(totalPriceCategoria)}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Nivel 3: Servicios */}
+                      {isCategoryExpanded && (
+                        <div className="bg-zinc-800/20 border-l-2 border-zinc-700/30 ml-8">
+                          <div className="divide-y divide-zinc-800/50">
+                            {serviciosCategoria.map((servicio, servicioIndex) => {
+                              const esCotizacion = isCotizacionServicio(servicio);
+                              const subtotal = esCotizacion
+                                ? servicio.price * servicio.quantity
+                                : 0;
+
+                              return (
+                                <div
+                                  key={servicio.id}
+                                  className={`py-3 px-4 pl-6 hover:bg-zinc-700/20 transition-colors ${
+                                    servicioIndex === 0 ? 'pt-3' : ''
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      <h6 className="text-sm text-zinc-300 leading-tight">
+                                        {servicio.name}
+                                        {esCotizacion && servicio.quantity > 1 && (
+                                          <span className="ml-2 text-xs text-zinc-500">
+                                            × {servicio.quantity}
+                                          </span>
+                                        )}
+                                      </h6>
+                                      {servicio.description && (
+                                        <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                                          {servicio.description}
+                                        </p>
+                                      )}
+                                      {showPrices && esCotizacion && servicio.quantity > 1 && (
+                                        <p className="text-xs text-zinc-500 mt-1">
+                                          {formatPrice(servicio.price)} c/u
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {showPrices && esCotizacion && (
+                                      <div className="flex-shrink-0">
+                                        <span className="text-sm font-semibold text-emerald-400">
+                                          {formatPrice(subtotal)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -153,4 +219,3 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
     </div>
   );
 }
-
