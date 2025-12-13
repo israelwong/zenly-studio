@@ -194,7 +194,7 @@ export async function getPublicPromiseData(
                         name: true,
                         section_categories: {
                           select: {
-                            service_section: {
+                            service_sections: {
                               select: {
                                 name: true,
                               },
@@ -257,7 +257,7 @@ export async function getPublicPromiseData(
         id: item.items.id,
         name: item.items.name,
         description: null, // Los items no tienen descripción directa
-        seccion: item.items.service_categories.section_categories?.service_section?.name || null,
+        seccion: item.items.service_categories.section_categories?.service_sections?.name || null,
         category: item.items.service_categories.name,
       })),
       tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual
