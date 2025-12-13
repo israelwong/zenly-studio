@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/shadcn/sheet';
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { Check } from 'lucide-react';
+import { getTotalServicios } from '@/lib/utils/public-promise';
 
 interface ComparadorSheetProps {
   cotizaciones: PublicCotizacion[];
@@ -125,7 +126,7 @@ export function ComparadorSheet({
                   {items.map((item) => (
                     <td key={item.id} className="p-4">
                       <p className="text-white font-semibold">
-                        {item.servicios.length}
+                        {getTotalServicios(item.servicios)}
                       </p>
                     </td>
                   ))}

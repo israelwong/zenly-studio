@@ -5,6 +5,7 @@ import { Package, ChevronRight, Clock } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import type { PublicPaquete } from '@/types/public-promise';
 import { PaqueteDetailSheet } from './PaqueteDetailSheet';
+import { getTotalServicios, getFirstServicios } from '@/lib/utils/public-promise';
 
 interface PaquetesSectionProps {
     paquetes: PublicPaquete[];
@@ -88,29 +89,37 @@ export function PaquetesSection({
 
                                         {/* Servicios preview */}
                                         <div className="space-y-2">
-                                            <p className="text-xs text-zinc-500 font-medium">
-                                                Incluye {paquete.servicios.length} servicio
-                                                {paquete.servicios.length !== 1 ? 's' : ''}
-                                            </p>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {paquete.servicios.slice(0, 2).map((servicio) => (
-                                                    <ZenBadge
-                                                        key={servicio.id}
-                                                        variant="outline"
-                                                        className="bg-zinc-800/50 text-zinc-300 border-zinc-700 text-xs px-2 py-0.5"
-                                                    >
-                                                        {servicio.name}
-                                                    </ZenBadge>
-                                                ))}
-                                                {paquete.servicios.length > 2 && (
-                                                    <ZenBadge
-                                                        variant="outline"
-                                                        className="bg-zinc-800/50 text-zinc-400 border-zinc-700 text-xs px-2 py-0.5"
-                                                    >
-                                                        +{paquete.servicios.length - 2} más
-                                                    </ZenBadge>
-                                                )}
-                                            </div>
+                                            {(() => {
+                                                const totalServicios = getTotalServicios(paquete.servicios);
+                                                const primerosServicios = getFirstServicios(paquete.servicios, 2);
+                                                return (
+                                                    <>
+                                                        <p className="text-xs text-zinc-500 font-medium">
+                                                            Incluye {totalServicios} servicio
+                                                            {totalServicios !== 1 ? 's' : ''}
+                                                        </p>
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {primerosServicios.map((servicio) => (
+                                                                <ZenBadge
+                                                                    key={servicio.id}
+                                                                    variant="outline"
+                                                                    className="bg-zinc-800/50 text-zinc-300 border-zinc-700 text-xs px-2 py-0.5"
+                                                                >
+                                                                    {servicio.name}
+                                                                </ZenBadge>
+                                                            ))}
+                                                            {totalServicios > 2 && (
+                                                                <ZenBadge
+                                                                    variant="outline"
+                                                                    className="bg-zinc-800/50 text-zinc-400 border-zinc-700 text-xs px-2 py-0.5"
+                                                                >
+                                                                    +{totalServicios - 2} más
+                                                                </ZenBadge>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
 
                                         {/* Tiempo mínimo de contratación */}

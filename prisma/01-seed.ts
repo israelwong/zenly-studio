@@ -78,6 +78,9 @@ async function main() {
     // 8. Demo Lead
     await seedDemoLead();
 
+    // 9. Paquetes Items
+    await seedPaquetesItems();
+
     console.log('\n✅ SEED MAESTRO COMPLETADO\n');
     console.log('📊 Resumen:');
     console.log('  ✅ Módulos de plataforma');
@@ -87,7 +90,8 @@ async function main() {
     console.log('  ✅ Pipeline Manager');
     console.log('  ✅ Catálogo de servicios');
     console.log('  ✅ Tipos de evento');
-    console.log('  ✅ Demo Lead asociado\n');
+    console.log('  ✅ Demo Lead asociado');
+    console.log('  ✅ Items asociados a paquetes\n');
     console.log('🔗 Acceso:');
     console.log('  Studio URL: /demo-studio');
     console.log('  Usuarios: Ejecutar seed-demo-users.ts\n');
@@ -685,7 +689,107 @@ async function seedTiposEvento() {
 }
 
 // ============================================
-// 9. DEMO LEAD
+// 9. PAQUETES ITEMS
+// ============================================
+
+async function seedPaquetesItems() {
+    console.log('📦 Seeding paquetes items...');
+
+    // Obtener todos los paquetes del demo studio
+    const paquetes = await prisma.studio_paquetes.findMany({
+        where: {
+            studio_id: DEMO_STUDIO_ID,
+        },
+        include: {
+            event_types: {
+                select: {
+                    id: true,
+                    name: true,
+                },
+            },
+            paquete_items: {
+                select: {
+                    id: true,
+                    item_id: true,
+                },
+            },
+        },
+    });
+
+    if (paquetes.length === 0) {
+        console.log('  ⚠️  No hay paquetes para asociar items');
+        return;
+    }
+
+    // Obtener todos los items activos del catálogo del demo studio
+    const items = await prisma.studio_items.findMany({
+        where: {
+            studio_id: DEMO_STUDIO_ID,
+            status: 'active',
+        },
+        include: {
+            service_categories: {
+                select: {
+                    id: true,
+                },
+            },
+        },
+        orderBy: {
+            order: 'asc',
+        },
+    });
+
+    if (items.length === 0) {
+        console.log('  ⚠️  No hay items en el catálogo para asociar');
+        return;
+    }
+
+    console.log(`  📊 Encontrados ${paquetes.length} paquetes y ${items.length} items`);
+
+    // Asociar items a cada paquete
+    let totalItemsAsociados = 0;
+
+    for (const paquete of paquetes) {
+        // Si el paquete ya tiene items, saltarlo
+        if (paquete.paquete_items && paquete.paquete_items.length > 0) {
+            console.log(`  ⏭️  Paquete "${paquete.name}" ya tiene ${paquete.paquete_items.length} items`);
+            continue;
+        }
+
+        // Seleccionar algunos items para asociar (por ejemplo, los primeros 3-5 items)
+        // En un caso real, podrías tener lógica más específica según el tipo de evento
+        const itemsParaAsociar = items.slice(0, Math.min(5, items.length));
+
+        if (itemsParaAsociar.length === 0) {
+            console.log(`  ⚠️  No hay items disponibles para el paquete "${paquete.name}"`);
+            continue;
+        }
+
+        // Crear paquete_items
+        const paqueteItemsData = itemsParaAsociar.map((item, index) => ({
+            paquete_id: paquete.id,
+            item_id: item.id,
+            service_category_id: item.service_category_id,
+            quantity: 1, // Cantidad por defecto
+            visible_to_client: true,
+            status: 'active',
+            order: index,
+        }));
+
+        await prisma.studio_paquete_items.createMany({
+            data: paqueteItemsData,
+            skipDuplicates: true,
+        });
+
+        totalItemsAsociados += paqueteItemsData.length;
+        console.log(`  ✅ Paquete "${paquete.name}": ${paqueteItemsData.length} items asociados`);
+    }
+
+    console.log(`  ✅ Total: ${totalItemsAsociados} items asociados a paquetes`);
+}
+
+// ============================================
+// 10. DEMO LEAD
 // ============================================
 
 async function seedDemoLead() {

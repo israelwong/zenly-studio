@@ -5,6 +5,7 @@ import { FileText, ChevronRight, Tag as TagIcon } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
+import { getTotalServicios, getFirstServicios } from '@/lib/utils/public-promise';
 
 interface CotizacionesSectionProps {
   cotizaciones: PublicCotizacion[];
@@ -102,29 +103,37 @@ export function CotizacionesSection({
 
                     {/* Servicios preview */}
                     <div className="space-y-2">
-                      <p className="text-xs text-zinc-500 font-medium">
-                        Incluye {cotizacion.servicios.length} servicio
-                        {cotizacion.servicios.length !== 1 ? 's' : ''}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {cotizacion.servicios.slice(0, 3).map((servicio) => (
-                          <ZenBadge
-                            key={servicio.id}
-                            variant="outline"
-                            className="bg-zinc-800/50 text-zinc-300 border-zinc-700 text-xs px-2 py-0.5"
-                          >
-                            {servicio.name}
-                          </ZenBadge>
-                        ))}
-                        {cotizacion.servicios.length > 3 && (
-                          <ZenBadge
-                            variant="outline"
-                            className="bg-zinc-800/50 text-zinc-400 border-zinc-700 text-xs px-2 py-0.5"
-                          >
-                            +{cotizacion.servicios.length - 3} más
-                          </ZenBadge>
-                        )}
-                      </div>
+                      {(() => {
+                        const totalServicios = getTotalServicios(cotizacion.servicios);
+                        const primerosServicios = getFirstServicios(cotizacion.servicios, 3);
+                        return (
+                          <>
+                            <p className="text-xs text-zinc-500 font-medium">
+                              Incluye {totalServicios} servicio
+                              {totalServicios !== 1 ? 's' : ''}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {primerosServicios.map((servicio) => (
+                                <ZenBadge
+                                  key={servicio.id}
+                                  variant="outline"
+                                  className="bg-zinc-800/50 text-zinc-300 border-zinc-700 text-xs px-2 py-0.5"
+                                >
+                                  {servicio.name}
+                                </ZenBadge>
+                              ))}
+                              {totalServicios > 3 && (
+                                <ZenBadge
+                                  variant="outline"
+                                  className="bg-zinc-800/50 text-zinc-400 border-zinc-700 text-xs px-2 py-0.5"
+                                >
+                                  +{totalServicios - 3} más
+                                </ZenBadge>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* Badge si viene de paquete */}

@@ -1,5 +1,29 @@
 // Tipos para la página pública de promesas
 
+// Estructura jerárquica Sección → Categoría → Servicio (igual que CatalogoServiciosTree)
+export interface PublicSeccionData {
+  id: string;
+  nombre: string;
+  orden: number;
+  categorias: PublicCategoriaData[];
+}
+
+export interface PublicCategoriaData {
+  id: string;
+  nombre: string;
+  orden: number;
+  servicios: PublicServicioData[];
+}
+
+export interface PublicServicioData {
+  id: string;
+  name: string;
+  description: string | null;
+  // Para cotizaciones
+  price?: number;
+  quantity?: number;
+}
+
 export interface PublicPromiseData {
   promise: {
     id: string;
@@ -19,23 +43,13 @@ export interface PublicPromiseData {
   paquetes: PublicPaquete[];
 }
 
-export interface PublicCotizacionServicio {
-  id: string;
-  name: string;
-  description: string | null;
-  seccion: string | null;
-  category: string;
-  price: number;
-  quantity: number;
-}
-
 export interface PublicCotizacion {
   id: string;
   name: string;
   description: string | null;
   price: number;
   discount: number | null;
-  servicios: PublicCotizacionServicio[];
+  servicios: PublicSeccionData[];
   condiciones_comerciales: {
     metodo_pago: string | null;
     condiciones: string | null;
@@ -46,20 +60,12 @@ export interface PublicCotizacion {
   } | null;
 }
 
-export interface PublicPaqueteServicio {
-  id: string;
-  name: string;
-  description: string | null;
-  seccion: string | null;
-  category: string;
-}
-
 export interface PublicPaquete {
   id: string;
   name: string;
   description: string | null;
   price: number;
-  servicios: PublicPaqueteServicio[];
+  servicios: PublicSeccionData[];
   tiempo_minimo_contratacion: number | null;
 }
 

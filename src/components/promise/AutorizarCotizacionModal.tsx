@@ -13,6 +13,7 @@ import {
 import type { PublicCotizacion } from '@/types/public-promise';
 import { toast } from 'sonner';
 import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.actions';
+import { getTotalServicios } from '@/lib/utils/public-promise';
 
 interface AutorizarCotizacionModalProps {
   cotizacion: PublicCotizacion;
@@ -96,8 +97,8 @@ export function AutorizarCotizacionModal({
               {formatPrice(calculateFinalPrice())}
             </p>
             <p className="text-sm text-zinc-400 mt-1">
-              Incluye {cotizacion.servicios.length} servicio
-              {cotizacion.servicios.length !== 1 ? 's' : ''}
+              Incluye {getTotalServicios(cotizacion.servicios)} servicio
+              {getTotalServicios(cotizacion.servicios) !== 1 ? 's' : ''}
             </p>
           </div>
 

@@ -13,6 +13,7 @@ import {
 import type { PublicPaquete } from '@/types/public-promise';
 import { toast } from 'sonner';
 import { solicitarPaquetePublico } from '@/lib/actions/public/paquetes.actions';
+import { getTotalServicios } from '@/lib/utils/public-promise';
 
 interface SolicitarPaqueteModalProps {
   paquete: PublicPaquete;
@@ -91,8 +92,8 @@ export function SolicitarPaqueteModal({
               {formatPrice(paquete.price)}
             </p>
             <p className="text-sm text-zinc-400 mt-1">
-              Incluye {paquete.servicios.length} servicio
-              {paquete.servicios.length !== 1 ? 's' : ''}
+              Incluye {getTotalServicios(paquete.servicios)} servicio
+              {getTotalServicios(paquete.servicios) !== 1 ? 's' : ''}
             </p>
           </div>
 

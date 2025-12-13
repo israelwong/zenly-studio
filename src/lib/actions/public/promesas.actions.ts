@@ -1,24 +1,18 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { obtenerCatalogo } from "@/lib/actions/studio/config/catalogo.actions";
+import type { PublicSeccionData, PublicCategoriaData, PublicServicioData } from "@/types/public-promise";
+import type { SeccionData } from "@/lib/actions/schemas/catalogo-schemas";
 
 // Tipos para cotizaciones públicas
-interface PublicCotizacionServicio {
-  id: string;
-  name: string;
-  description: string | null;
-  category: string;
-  price: number;
-  quantity: number;
-}
-
 interface PublicCotizacion {
   id: string;
   name: string;
   description: string | null;
   price: number;
   discount: number | null;
-  servicios: PublicCotizacionServicio[];
+  servicios: PublicSeccionData[];
   condiciones_comerciales: {
     metodo_pago: string | null;
     condiciones: string | null;
@@ -30,20 +24,60 @@ interface PublicCotizacion {
 }
 
 // Tipos para paquetes públicos
-interface PublicPaqueteServicio {
-  id: string;
-  name: string;
-  description: string | null;
-  category: string;
-}
-
 interface PublicPaquete {
   id: string;
   name: string;
   description: string | null;
   price: number;
-  servicios: PublicPaqueteServicio[];
+  servicios: PublicSeccionData[];
   tiempo_minimo_contratacion: number | null;
+}
+
+/**
+ * Filtrar catálogo para mostrar solo servicios incluidos en cotización/paquete
+ * Igual que ResumenCotizacionAutorizada y CotizacionForm
+ */
+function filtrarCatalogoPorItems(
+  catalogo: SeccionData[],
+  itemIds: Set<string>,
+  itemsData: Map<string, { price?: number; quantity?: number; description?: string | null }>
+): PublicSeccionData[] {
+  return catalogo
+    .map((seccion) => ({
+      id: seccion.id,
+      nombre: seccion.nombre,
+      orden: seccion.orden,
+      categorias: seccion.categorias
+        .map((categoria) => ({
+          id: categoria.id,
+          nombre: categoria.nombre,
+          orden: categoria.orden,
+          servicios: categoria.servicios
+            .filter((servicio) => itemIds.has(servicio.id))
+            .map((servicio) => {
+              const itemData = itemsData.get(servicio.id);
+              return {
+                id: servicio.id,
+                name: servicio.nombre,
+                description: itemData?.description ?? null,
+                // Para cotizaciones: incluir price y quantity
+                // Para paquetes: incluir quantity si está disponible
+                ...(itemData?.price !== undefined && itemData?.quantity !== undefined
+                  ? {
+                      price: itemData.price,
+                      quantity: itemData.quantity,
+                    }
+                  : itemData?.quantity !== undefined
+                  ? {
+                      quantity: itemData.quantity,
+                    }
+                  : {}),
+              };
+            }),
+        }))
+        .filter((categoria) => categoria.servicios.length > 0),
+    }))
+    .filter((seccion) => seccion.categorias.length > 0);
 }
 
 /**
@@ -122,13 +156,13 @@ export async function getPublicPromiseData(
               cotizacion_items: {
                 select: {
                   id: true,
+                  item_id: true,
                   name: true,
                   description: true,
-                  seccion_name: true,
-                  category_name: true,
                   unit_price: true,
                   quantity: true,
                   subtotal: true,
+                  status: true,
                 },
                 orderBy: {
                   position: 'asc',
@@ -172,7 +206,17 @@ export async function getPublicPromiseData(
       };
     }
 
-    // 3. Obtener paquetes disponibles para el tipo de evento
+    // 3. Obtener catálogo completo (incluir items inactivos para que coincidan con paquetes)
+    const catalogoResult = await obtenerCatalogo(studioSlug, false); // false = incluir todos los items (activos e inactivos)
+    if (!catalogoResult.success || !catalogoResult.data) {
+      return {
+        success: false,
+        error: "Error al obtener catálogo",
+      };
+    }
+    const catalogo = catalogoResult.data;
+
+    // 4. Obtener paquetes disponibles para el tipo de evento
     const paquetes = promise.event_type_id
       ? await prisma.studio_paquetes.findMany({
           where: {
@@ -184,27 +228,10 @@ export async function getPublicPromiseData(
             paquete_items: {
               select: {
                 id: true,
+                item_id: true,
                 quantity: true,
-                items: {
-                  select: {
-                    id: true,
-                    name: true,
-                    service_categories: {
-                      select: {
-                        name: true,
-                        section_categories: {
-                          select: {
-                            service_sections: {
-                              select: {
-                                name: true,
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
+                status: true,
+                visible_to_client: true,
               },
               orderBy: {
                 order: 'asc',
@@ -217,51 +244,132 @@ export async function getPublicPromiseData(
         })
       : [];
 
-    // 4. Mapear cotizaciones
-    const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot) => ({
-      id: cot.id,
-      name: cot.name,
-      description: cot.description,
-      price: cot.price,
-      discount: cot.discount,
-      servicios: cot.cotizacion_items.map((item) => ({
-        id: item.id,
-        name: item.name || 'Servicio',
-        description: item.description,
-        seccion: item.seccion_name,
-        category: item.category_name || 'General',
-        price: item.unit_price,
-        quantity: item.quantity,
-      })),
-      condiciones_comerciales: cot.condiciones_comerciales
-        ? {
-            metodo_pago: cot.condiciones_comerciales_metodo_pago?.metodos_pago?.payment_method_name || null,
-            condiciones: cot.condiciones_comerciales.description || null,
-          }
-        : null,
-      paquete_origen: cot.paquete
-        ? {
-            id: cot.paquete.id,
-            name: cot.paquete.name,
-          }
-        : null,
-    }));
+    // 5. Mapear cotizaciones con estructura jerárquica (igual que ResumenCotizacionAutorizada)
+    const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot) => {
+      // Crear Set de item_ids incluidos en la cotización
+      const itemIds = new Set<string>();
+      const itemsData = new Map<string, { price: number; quantity: number; description: string | null }>();
 
-    // 5. Mapear paquetes
-    const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => ({
-      id: paq.id,
-      name: paq.name,
-      description: paq.description,
-      price: paq.precio || 0,
-      servicios: paq.paquete_items.map((item) => ({
-        id: item.items.id,
-        name: item.items.name,
-        description: null, // Los items no tienen descripción directa
-        seccion: item.items.service_categories.section_categories?.service_sections?.name || null,
-        category: item.items.service_categories.name,
-      })),
-      tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual
-    }));
+      cot.cotizacion_items.forEach((item) => {
+        // Solo incluir items con item_id válido (igual que paquetes)
+        if (item.item_id) {
+          itemIds.add(item.item_id);
+          itemsData.set(item.item_id, {
+            price: item.unit_price,
+            quantity: item.quantity,
+            description: item.description,
+          });
+        }
+      });
+
+      return {
+        id: cot.id,
+        name: cot.name,
+        description: cot.description,
+        price: cot.price,
+        discount: cot.discount,
+        servicios: filtrarCatalogoPorItems(catalogo, itemIds, itemsData),
+        condiciones_comerciales: cot.condiciones_comerciales
+          ? {
+              metodo_pago: cot.condiciones_comerciales_metodo_pago?.metodos_pago?.payment_method_name || null,
+              condiciones: cot.condiciones_comerciales.description || null,
+            }
+          : null,
+        paquete_origen: cot.paquete
+          ? {
+              id: cot.paquete.id,
+              name: cot.paquete.name,
+            }
+          : null,
+      };
+    });
+
+    // 6. Mapear paquetes con estructura jerárquica (igual que ResumenCotizacionAutorizada)
+    const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
+      // Crear Set de item_ids incluidos en el paquete
+      const itemIds = new Set<string>();
+      const itemsData = new Map<string, { description: string | null }>();
+
+      // Verificar que paquete_items existe y tiene datos
+      if (!paq.paquete_items || paq.paquete_items.length === 0) {
+        console.warn(`[getPublicPromiseData] Paquete ${paq.id} (${paq.name}) no tiene paquete_items`);
+        return {
+          id: paq.id,
+          name: paq.name,
+          description: paq.description,
+          price: paq.precio || 0,
+          servicios: [], // Retornar array vacío si no hay items
+          tiempo_minimo_contratacion: null,
+        };
+      }
+
+      // Mapear items del paquete (filtrar activos y visibles al cliente)
+      paq.paquete_items.forEach((item) => {
+        if (item.item_id && item.status === 'active' && item.visible_to_client !== false) {
+          itemIds.add(item.item_id);
+          itemsData.set(item.item_id, {
+            description: null,
+            quantity: item.quantity,
+          });
+          console.log(`[getPublicPromiseData] ✅ Item agregado: ${item.item_id} (cantidad: ${item.quantity})`);
+        } else {
+          console.log(`[getPublicPromiseData] ❌ Item ${item.item_id} filtrado: status=${item.status}, visible=${item.visible_to_client}`);
+        }
+      });
+
+      // Verificar IDs del catálogo para comparar
+      const catalogoItemIds = new Set<string>();
+      catalogo.forEach(seccion => {
+        seccion.categorias.forEach(categoria => {
+          categoria.servicios.forEach(servicio => {
+            catalogoItemIds.add(servicio.id);
+          });
+        });
+      });
+      console.log(`[getPublicPromiseData] Total servicios en catálogo: ${catalogoItemIds.size}`);
+      console.log(`[getPublicPromiseData] Primeros 10 IDs del catálogo:`, Array.from(catalogoItemIds).slice(0, 10));
+      
+      // Verificar coincidencias
+      const itemsEncontrados = Array.from(itemIds).filter(id => catalogoItemIds.has(id));
+      console.log(`[getPublicPromiseData] Items del paquete encontrados en catálogo: ${itemsEncontrados.length} de ${itemIds.size}`);
+      if (itemsEncontrados.length === 0 && itemIds.size > 0) {
+        console.warn(`[getPublicPromiseData] ⚠️ NINGÚN item del paquete coincide con el catálogo!`);
+        console.warn(`[getPublicPromiseData] Item IDs del paquete:`, Array.from(itemIds));
+      }
+
+      const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
+
+      // Debug: verificar si hay items y si se filtraron correctamente
+      if (itemIds.size > 0 && serviciosFiltrados.length === 0) {
+        console.warn(`[getPublicPromiseData] ⚠️ Paquete ${paq.id} tiene ${itemIds.size} items válidos pero no se encontraron en el catálogo`);
+        console.warn(`[getPublicPromiseData] Item IDs del paquete (primeros 5):`, Array.from(itemIds).slice(0, 5));
+        const totalServicios = catalogo.reduce((sum, s) => sum + s.categorias.reduce((catSum, cat) => catSum + cat.servicios.length, 0), 0);
+        console.warn(`[getPublicPromiseData] Total servicios en catálogo:`, totalServicios);
+        
+        // Verificar si algún item del paquete existe en el catálogo
+        const catalogoItemIds = new Set<string>();
+        catalogo.forEach(seccion => {
+          seccion.categorias.forEach(categoria => {
+            categoria.servicios.forEach(servicio => {
+              catalogoItemIds.add(servicio.id);
+            });
+          });
+        });
+        const itemsEncontrados = Array.from(itemIds).filter(id => catalogoItemIds.has(id));
+        console.warn(`[getPublicPromiseData] Items del paquete encontrados en catálogo: ${itemsEncontrados.length} de ${itemIds.size}`);
+      } else if (itemIds.size > 0) {
+        console.log(`[getPublicPromiseData] ✅ Paquete ${paq.id}: ${serviciosFiltrados.length} secciones con servicios encontrados`);
+      }
+
+      return {
+        id: paq.id,
+        name: paq.name,
+        description: paq.description,
+        price: paq.precio || 0,
+        servicios: serviciosFiltrados,
+        tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual
+      };
+    });
 
     return {
       success: true,
