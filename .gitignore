@@ -52,3 +52,9 @@ COMPONENTES_A_COPIAR.md
 
 # documentation (local development)
 docs/
+
+# migration work
+migrate/
+
+# docs folder
+/docs
