@@ -135,12 +135,19 @@ export async function getPublicPromiseData(
               },
               condiciones_comerciales: {
                 select: {
-                  metodo_pago: {
+                  name: true,
+                  description: true,
+                  advance_percentage: true,
+                  discount_percentage: true,
+                },
+              },
+              condiciones_comerciales_metodo_pago: {
+                select: {
+                  metodos_pago: {
                     select: {
                       name: true,
                     },
                   },
-                  condiciones: true,
                 },
               },
               paquete: {
@@ -217,8 +224,8 @@ export async function getPublicPromiseData(
       })),
       condiciones_comerciales: cot.condiciones_comerciales
         ? {
-            metodo_pago: cot.condiciones_comerciales.metodo_pago?.name || null,
-            condiciones: cot.condiciones_comerciales.condiciones,
+            metodo_pago: cot.condiciones_comerciales_metodo_pago?.metodos_pago?.name || null,
+            condiciones: cot.condiciones_comerciales.description || null,
           }
         : null,
       paquete_origen: cot.paquete
