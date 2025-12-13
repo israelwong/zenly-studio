@@ -113,45 +113,47 @@ export async function getPublicPromiseData(
             name: true,
           },
         },
-        quotes: {
-          where: {
-            visible_to_client: true,
-            archived: false,
-          },
-          include: {
-            servicios: {
-              include: {
-                servicio: {
-                  select: {
-                    id: true,
-                    name: true,
-                    description: true,
-                    category: true,
+          quotes: {
+            where: {
+              visible_to_client: true,
+              archived: false,
+            },
+            include: {
+              cotizacion_items: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  category_name: true,
+                  unit_price: true,
+                  quantity: true,
+                  subtotal: true,
+                },
+                orderBy: {
+                  position: 'asc',
+                },
+              },
+              condiciones_comerciales: {
+                select: {
+                  metodo_pago: {
+                    select: {
+                      name: true,
+                    },
                   },
+                  condiciones: true,
+                },
+              },
+              paquete: {
+                select: {
+                  id: true,
+                  name: true,
                 },
               },
             },
-            condiciones_comerciales: {
-              select: {
-                metodo_pago: {
-                  select: {
-                    name: true,
-                  },
-                },
-                condiciones: true,
-              },
-            },
-            paquete: {
-              select: {
-                id: true,
-                name: true,
-              },
+            orderBy: {
+              order: 'asc',
             },
           },
-          orderBy: {
-            order: 'asc',
-          },
-        },
       },
     });
 
@@ -171,21 +173,29 @@ export async function getPublicPromiseData(
             status: 'active',
           },
           include: {
-            servicios: {
-              include: {
-                servicio: {
+            paquete_items: {
+              select: {
+                id: true,
+                quantity: true,
+                items: {
                   select: {
                     id: true,
                     name: true,
-                    description: true,
-                    category: true,
+                    service_categories: {
+                      select: {
+                        name: true,
+                      },
+                    },
                   },
                 },
+              },
+              orderBy: {
+                order: 'asc',
               },
             },
           },
           orderBy: {
-            price: 'asc',
+            precio: 'asc',
           },
         })
       : [];
@@ -197,13 +207,13 @@ export async function getPublicPromiseData(
       description: cot.description,
       price: cot.price,
       discount: cot.discount,
-      servicios: cot.servicios.map((cs) => ({
-        id: cs.servicio.id,
-        name: cs.servicio.name,
-        description: cs.servicio.description,
-        category: cs.servicio.category,
-        price: cs.price,
-        quantity: cs.quantity,
+      servicios: cot.cotizacion_items.map((item) => ({
+        id: item.id,
+        name: item.name || 'Servicio',
+        description: item.description,
+        category: item.category_name || 'General',
+        price: item.unit_price,
+        quantity: item.quantity,
       })),
       condiciones_comerciales: cot.condiciones_comerciales
         ? {
@@ -224,14 +234,14 @@ export async function getPublicPromiseData(
       id: paq.id,
       name: paq.name,
       description: paq.description,
-      price: paq.price,
-      servicios: paq.servicios.map((ps) => ({
-        id: ps.servicio.id,
-        name: ps.servicio.name,
-        description: ps.servicio.description,
-        category: ps.servicio.category,
+      price: paq.precio || 0,
+      servicios: paq.paquete_items.map((item) => ({
+        id: item.items.id,
+        name: item.items.name,
+        description: null, // Los items no tienen descripción directa
+        category: item.items.service_categories.name,
       })),
-      tiempo_minimo_contratacion: paq.tiempo_minimo_contratacion,
+      tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual
     }));
 
     return {
