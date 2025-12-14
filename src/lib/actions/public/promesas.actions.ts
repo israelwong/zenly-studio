@@ -29,6 +29,7 @@ interface PublicPaquete {
   name: string;
   description: string | null;
   price: number;
+  cover_url: string | null;
   servicios: PublicSeccionData[];
   tiempo_minimo_contratacion: number | null;
 }
@@ -64,14 +65,14 @@ function filtrarCatalogoPorItems(
                 // Para paquetes: incluir quantity si está disponible
                 ...(itemData?.price !== undefined && itemData?.quantity !== undefined
                   ? {
-                      price: itemData.price,
-                      quantity: itemData.quantity,
-                    }
+                    price: itemData.price,
+                    quantity: itemData.quantity,
+                  }
                   : itemData?.quantity !== undefined
-                  ? {
+                    ? {
                       quantity: itemData.quantity,
                     }
-                  : {}),
+                    : {}),
               };
             }),
         }))
@@ -113,7 +114,7 @@ export async function getPublicPromiseData(
     // 1. Validar que el studio existe
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: { 
+      select: {
         id: true,
         studio_name: true,
         logo_url: true,
@@ -147,55 +148,55 @@ export async function getPublicPromiseData(
             name: true,
           },
         },
-          quotes: {
-            where: {
-              visible_to_client: true,
-              archived: false,
+        quotes: {
+          where: {
+            visible_to_client: true,
+            archived: false,
+          },
+          include: {
+            cotizacion_items: {
+              select: {
+                id: true,
+                item_id: true,
+                name: true,
+                description: true,
+                unit_price: true,
+                quantity: true,
+                subtotal: true,
+                status: true,
+              },
+              orderBy: {
+                position: 'asc',
+              },
             },
-            include: {
-              cotizacion_items: {
-                select: {
-                  id: true,
-                  item_id: true,
-                  name: true,
-                  description: true,
-                  unit_price: true,
-                  quantity: true,
-                  subtotal: true,
-                  status: true,
-                },
-                orderBy: {
-                  position: 'asc',
-                },
+            condiciones_comerciales: {
+              select: {
+                name: true,
+                description: true,
+                advance_percentage: true,
+                discount_percentage: true,
               },
-              condiciones_comerciales: {
-                select: {
-                  name: true,
-                  description: true,
-                  advance_percentage: true,
-                  discount_percentage: true,
-                },
-              },
-              condiciones_comerciales_metodo_pago: {
-                select: {
-                  metodos_pago: {
-                    select: {
-                      payment_method_name: true,
-                    },
+            },
+            condiciones_comerciales_metodo_pago: {
+              select: {
+                metodos_pago: {
+                  select: {
+                    payment_method_name: true,
                   },
                 },
               },
-              paquete: {
-                select: {
-                  id: true,
-                  name: true,
-                },
+            },
+            paquete: {
+              select: {
+                id: true,
+                name: true,
               },
             },
-            orderBy: {
-              order: 'asc',
-            },
           },
+          orderBy: {
+            order: 'asc',
+          },
+        },
       },
     });
 
@@ -219,29 +220,34 @@ export async function getPublicPromiseData(
     // 4. Obtener paquetes disponibles para el tipo de evento
     const paquetes = promise.event_type_id
       ? await prisma.studio_paquetes.findMany({
-          where: {
-            studio_id: studio.id,
-            event_type_id: promise.event_type_id,
-            status: 'active',
-          },
-          include: {
-            paquete_items: {
-              select: {
-                id: true,
-                item_id: true,
-                quantity: true,
-                status: true,
-                visible_to_client: true,
-              },
-              orderBy: {
-                order: 'asc',
-              },
+        where: {
+          studio_id: studio.id,
+          event_type_id: promise.event_type_id,
+          status: 'active',
+        },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          precio: true,
+          cover_url: true,
+          paquete_items: {
+            select: {
+              id: true,
+              item_id: true,
+              quantity: true,
+              status: true,
+              visible_to_client: true,
+            },
+            orderBy: {
+              order: 'asc',
             },
           },
-          orderBy: {
-            precio: 'asc',
-          },
-        })
+        },
+        orderBy: {
+          precio: 'asc',
+        },
+      })
       : [];
 
     // 5. Mapear cotizaciones con estructura jerárquica (igual que ResumenCotizacionAutorizada)
@@ -271,15 +277,15 @@ export async function getPublicPromiseData(
         servicios: filtrarCatalogoPorItems(catalogo, itemIds, itemsData),
         condiciones_comerciales: cot.condiciones_comerciales
           ? {
-              metodo_pago: cot.condiciones_comerciales_metodo_pago?.metodos_pago?.payment_method_name || null,
-              condiciones: cot.condiciones_comerciales.description || null,
-            }
+            metodo_pago: cot.condiciones_comerciales_metodo_pago?.metodos_pago?.payment_method_name || null,
+            condiciones: cot.condiciones_comerciales.description || null,
+          }
           : null,
         paquete_origen: cot.paquete
           ? {
-              id: cot.paquete.id,
-              name: cot.paquete.name,
-            }
+            id: cot.paquete.id,
+            name: cot.paquete.name,
+          }
           : null,
       };
     });
@@ -298,6 +304,7 @@ export async function getPublicPromiseData(
           name: paq.name,
           description: paq.description,
           price: paq.precio || 0,
+          cover_url: paq.cover_url,
           servicios: [], // Retornar array vacío si no hay items
           tiempo_minimo_contratacion: null,
         };
@@ -328,7 +335,7 @@ export async function getPublicPromiseData(
       });
       console.log(`[getPublicPromiseData] Total servicios en catálogo: ${catalogoItemIds.size}`);
       console.log(`[getPublicPromiseData] Primeros 10 IDs del catálogo:`, Array.from(catalogoItemIds).slice(0, 10));
-      
+
       // Verificar coincidencias
       const itemsEncontrados = Array.from(itemIds).filter(id => catalogoItemIds.has(id));
       console.log(`[getPublicPromiseData] Items del paquete encontrados en catálogo: ${itemsEncontrados.length} de ${itemIds.size}`);
@@ -345,7 +352,7 @@ export async function getPublicPromiseData(
         console.warn(`[getPublicPromiseData] Item IDs del paquete (primeros 5):`, Array.from(itemIds).slice(0, 5));
         const totalServicios = catalogo.reduce((sum, s) => sum + s.categorias.reduce((catSum, cat) => catSum + cat.servicios.length, 0), 0);
         console.warn(`[getPublicPromiseData] Total servicios en catálogo:`, totalServicios);
-        
+
         // Verificar si algún item del paquete existe en el catálogo
         const catalogoItemIds = new Set<string>();
         catalogo.forEach(seccion => {
@@ -366,6 +373,7 @@ export async function getPublicPromiseData(
         name: paq.name,
         description: paq.description,
         price: paq.precio || 0,
+        cover_url: paq.cover_url,
         servicios: serviciosFiltrados,
         tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual
       };

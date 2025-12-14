@@ -924,10 +924,6 @@ export function PaquetesTipoEventoList({
             const result = await eliminarPaquete(studioSlug, paqueteIdToDelete);
 
             if (result.success) {
-                // Cerrar el modal primero antes de actualizar el estado para evitar parpadeos
-                setIsDeletePaqueteModalOpen(false);
-                setPaqueteToDelete(null);
-
                 // Actualizar el estado local
                 setPaquetesData(prev => ({
                     ...prev,
@@ -941,12 +937,15 @@ export function PaquetesTipoEventoList({
                 toast.success("Paquete eliminado correctamente");
             } else {
                 toast.error(result.error || "Error al eliminar paquete");
-                setIsLoading(false);
             }
         } catch (error) {
             console.error("Error eliminando paquete:", error);
             toast.error("Error al eliminar paquete");
+        } finally {
+            // SIEMPRE cerrar modal y resetear estado (éxito o error)
             setIsLoading(false);
+            setIsDeletePaqueteModalOpen(false);
+            setPaqueteToDelete(null);
         }
     };
 
@@ -1443,8 +1442,13 @@ export function PaquetesTipoEventoList({
                             <div className="text-sm text-white leading-tight mt-1">
                                 {paquete.name}
                             </div>
+                            <div className="text-xs text-zinc-400 leading-relaxed mt-1 line-clamp-2">
+                                {paquete.description && paquete.description.trim()
+                                    ? paquete.description
+                                    : 'Pendiente de descripción'}
+                            </div>
                             {fileSize !== null && (
-                                <div className="flex items-center gap-1 mt-0.5">
+                                <div className="flex items-center gap-1 mt-1">
                                     <HardDrive className="h-3 w-3 text-zinc-400" />
                                     <span className="text-xs text-zinc-400">
                                         {formatBytes(fileSize)}

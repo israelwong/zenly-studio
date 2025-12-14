@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import { Package, ChevronRight, Clock } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import type { PublicPaquete } from '@/types/public-promise';
 import { PaqueteDetailSheet } from './PaqueteDetailSheet';
 import { getTotalServicios, getFirstServicios } from '@/lib/utils/public-promise';
+import { cn } from '@/lib/utils';
 
 interface PaquetesSectionProps {
     paquetes: PublicPaquete[];
@@ -21,6 +23,10 @@ export function PaquetesSection({
     showAsAlternative = false,
 }: PaquetesSectionProps) {
     const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
+    const [activeIndex, setActiveIndex] = useState(0);
+    const [autoplayEnabled, setAutoplayEnabled] = useState(true);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const autoplayTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
     if (paquetes.length === 0) {
         return null;
@@ -35,6 +41,54 @@ export function PaquetesSection({
         }).format(price);
     };
 
+    // Detectar scroll para actualizar indicador
+    const handleScroll = () => {
+        if (!scrollRef.current) return;
+        const scrollLeft = scrollRef.current.scrollLeft;
+        const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
+        const index = Math.round(scrollLeft / cardWidth);
+        setActiveIndex(index);
+    };
+
+    // Autoplay con loop infinito cada 4 segundos
+    useEffect(() => {
+        if (paquetes.length <= 1 || !autoplayEnabled) return;
+
+        autoplayTimerRef.current = setInterval(() => {
+            setActiveIndex((prevIndex) => {
+                const nextIndex = (prevIndex + 1) % paquetes.length;
+
+                if (scrollRef.current) {
+                    const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
+                    scrollRef.current.scrollTo({
+                        left: cardWidth * nextIndex,
+                        behavior: 'smooth'
+                    });
+                }
+
+                return nextIndex;
+            });
+        }, 4000);
+
+        return () => {
+            if (autoplayTimerRef.current) {
+                clearInterval(autoplayTimerRef.current);
+            }
+        };
+    }, [paquetes.length, autoplayEnabled]);
+
+    // Desactivar autoplay permanentemente al hacer scroll manual
+    const handleManualScroll = () => {
+        // Desactivar autoplay permanentemente
+        setAutoplayEnabled(false);
+
+        if (autoplayTimerRef.current) {
+            clearInterval(autoplayTimerRef.current);
+        }
+
+        handleScroll();
+    };
+
     return (
         <>
             <section className="py-8 md:py-12 px-4">
@@ -44,7 +98,7 @@ export function PaquetesSection({
                         <div className="flex items-center gap-2 mb-2">
                             <Package className="h-5 w-5 text-blue-400" />
                             <h2 className="text-2xl md:text-3xl font-bold text-white">
-                                {showAsAlternative ? 'Paquetes Alternativos' : 'Paquetes Disponibles'}
+                                {showAsAlternative ? 'Paquetes Prediseñados' : 'Paquetes Disponibles'}
                             </h2>
                         </div>
                         <p className="text-zinc-400">
@@ -54,90 +108,116 @@ export function PaquetesSection({
                         </p>
                     </div>
 
-                    {/* Grid de paquetes */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Carousel de paquetes */}
+                    <div
+                        ref={scrollRef}
+                        onScroll={handleManualScroll}
+                        className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4 md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-visible md:snap-none"
+                    >
                         {paquetes.map((paquete) => {
                             return (
-                                <ZenCard
+                                <div
                                     key={paquete.id}
-                                    className="bg-zinc-900/50 border-zinc-800 hover:border-blue-500/50 transition-all duration-200 cursor-pointer group"
-                                    onClick={() => setSelectedPaquete(paquete)}
+                                    className="shrink-0 w-[calc(100vw-2rem)] snap-center md:w-auto md:shrink"
                                 >
-                                    <ZenCardHeader>
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <ZenCardTitle className="text-white group-hover:text-blue-400 transition-colors">
-                                                    {paquete.name}
-                                                </ZenCardTitle>
-                                                {paquete.description && (
-                                                    <p className="text-sm text-zinc-400 mt-1 line-clamp-2">
-                                                        {paquete.description}
-                                                    </p>
+                                    <ZenCard
+                                        className="bg-zinc-900/50 border-zinc-800 hover:border-blue-500/50 transition-all duration-200 cursor-pointer group h-full overflow-hidden"
+                                        onClick={() => setSelectedPaquete(paquete)}
+                                    >
+                                        <div className="flex items-stretch gap-4 p-4">
+                                            {/* Cover cuadrado */}
+                                            <div className="relative w-24 h-24 flex-shrink-0 bg-zinc-800 rounded overflow-hidden">
+                                                {paquete.cover_url ? (
+                                                    <Image
+                                                        src={paquete.cover_url}
+                                                        alt={paquete.name}
+                                                        fill
+                                                        className="object-cover group-hover:scale-105 transition-transform duration-200"
+                                                        sizes="96px"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+                                                        <Package className="w-8 h-8 text-zinc-600" />
+                                                    </div>
                                                 )}
                                             </div>
-                                            <ChevronRight className="h-5 w-5 text-zinc-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
-                                        </div>
-                                    </ZenCardHeader>
 
-                                    <ZenCardContent>
-                                        {/* Precio */}
-                                        <div className="mb-4">
-                                            <p className="text-2xl font-bold text-blue-400">
-                                                {formatPrice(paquete.price)}
-                                            </p>
-                                        </div>
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0 flex flex-col">
+                                                {/* Header */}
+                                                <div className="flex items-start justify-between gap-2 mb-2">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="text-base font-semibold text-white group-hover:text-blue-400 transition-colors line-clamp-1">
+                                                            {paquete.name}
+                                                        </h3>
+                                                        {paquete.description && (
+                                                            <p className="text-sm text-zinc-400 mt-1 line-clamp-2">
+                                                                {paquete.description}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <ChevronRight className="h-5 w-5 text-zinc-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                                                </div>
 
-                                        {/* Servicios preview */}
-                                        <div className="space-y-2">
-                                            {(() => {
-                                                const totalServicios = getTotalServicios(paquete.servicios);
-                                                const primerosServicios = getFirstServicios(paquete.servicios, 2);
-                                                return (
-                                                    <>
-                                                        <p className="text-xs text-zinc-500 font-medium">
-                                                            Incluye {totalServicios} servicio
-                                                            {totalServicios !== 1 ? 's' : ''}
-                                                        </p>
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {primerosServicios.map((servicio) => (
-                                                                <ZenBadge
-                                                                    key={servicio.id}
-                                                                    variant="outline"
-                                                                    className="bg-zinc-800/50 text-zinc-300 border-zinc-700 text-xs px-2 py-0.5"
-                                                                >
-                                                                    {servicio.name}
-                                                                </ZenBadge>
-                                                            ))}
-                                                            {totalServicios > 2 && (
-                                                                <ZenBadge
-                                                                    variant="outline"
-                                                                    className="bg-zinc-800/50 text-zinc-400 border-zinc-700 text-xs px-2 py-0.5"
-                                                                >
-                                                                    +{totalServicios - 2} más
-                                                                </ZenBadge>
-                                                            )}
+                                                {/* Footer */}
+                                                <div className="mt-auto space-y-2">
+                                                    {/* Precio */}
+                                                    <p className="text-xl font-bold text-blue-400">
+                                                        {formatPrice(paquete.price)}
+                                                    </p>
+
+                                                    {/* Tiempo mínimo de contratación */}
+                                                    {paquete.tiempo_minimo_contratacion && (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Clock className="h-3 w-3 text-amber-400 flex-shrink-0" />
+                                                            <span className="text-xs text-zinc-400">
+                                                                {paquete.tiempo_minimo_contratacion} días de anticipación
+                                                            </span>
                                                         </div>
-                                                    </>
-                                                );
-                                            })()}
-                                        </div>
-
-                                        {/* Tiempo mínimo de contratación */}
-                                        {paquete.tiempo_minimo_contratacion && (
-                                            <div className="mt-3 pt-3 border-t border-zinc-800">
-                                                <div className="flex items-center gap-2">
-                                                    <Clock className="h-3 w-3 text-amber-400" />
-                                                    <span className="text-xs text-zinc-400">
-                                                        Requiere {paquete.tiempo_minimo_contratacion} días de anticipación
-                                                    </span>
+                                                    )}
                                                 </div>
                                             </div>
-                                        )}
-                                    </ZenCardContent>
-                                </ZenCard>
+                                        </div>
+                                    </ZenCard>
+                                </div>
                             );
                         })}
                     </div>
+
+                    {/* Indicadores de paginación - Solo mobile */}
+                    {paquetes.length > 1 && (
+                        <div className="flex justify-center gap-1.5 mt-4 md:hidden">
+                            {paquetes.map((_, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => {
+                                        // Desactivar autoplay permanentemente
+                                        setAutoplayEnabled(false);
+
+                                        if (autoplayTimerRef.current) {
+                                            clearInterval(autoplayTimerRef.current);
+                                        }
+
+                                        if (scrollRef.current) {
+                                            const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
+                                            scrollRef.current.scrollTo({
+                                                left: cardWidth * index,
+                                                behavior: 'smooth'
+                                            });
+                                        }
+                                        setActiveIndex(index);
+                                    }}
+                                    className={cn(
+                                        "h-1.5 rounded-full transition-all",
+                                        index === activeIndex
+                                            ? "w-6 bg-blue-400"
+                                            : "w-1.5 bg-zinc-600 hover:bg-zinc-500"
+                                    )}
+                                    aria-label={`Ir a paquete ${index + 1}`}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
             </section>
 

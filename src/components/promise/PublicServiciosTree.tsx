@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { PublicSeccionData, PublicServicioData } from '@/types/public-promise';
 
@@ -10,8 +10,29 @@ interface PublicServiciosTreeProps {
 }
 
 export function PublicServiciosTree({ servicios, showPrices = false }: PublicServiciosTreeProps) {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  // Inicializar todas las secciones y categorías expandidas por defecto
+  const initialExpandedSections = useMemo(() => {
+    return new Set(servicios.map(seccion => seccion.id));
+  }, [servicios]);
+
+  const initialExpandedCategories = useMemo(() => {
+    const categories = new Set<string>();
+    servicios.forEach(seccion => {
+      seccion.categorias.forEach(categoria => {
+        categories.add(categoria.id);
+      });
+    });
+    return categories;
+  }, [servicios]);
+
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(initialExpandedSections);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(initialExpandedCategories);
+
+  // Actualizar estados cuando cambien los servicios
+  useEffect(() => {
+    setExpandedSections(initialExpandedSections);
+    setExpandedCategories(initialExpandedCategories);
+  }, [initialExpandedSections, initialExpandedCategories]);
 
   const toggleSection = (seccionId: string) => {
     setExpandedSections((prev) => {
@@ -57,10 +78,6 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
         .sort((a, b) => a.orden - b.orden)
         .map((seccion) => {
           const isSectionExpanded = expandedSections.has(seccion.id);
-          const totalServiciosSeccion = seccion.categorias.reduce(
-            (sum, cat) => sum + cat.servicios.length,
-            0
-          );
 
           return (
             <div
@@ -70,21 +87,15 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
               {/* Nivel 1: Sección */}
               <button
                 onClick={() => toggleSection(seccion.id)}
-                className="w-full flex items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors bg-zinc-800/30"
+                className="w-full flex items-center justify-start p-4 hover:bg-zinc-800/50 transition-colors bg-zinc-800/30 text-left"
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    {isSectionExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-zinc-400" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-zinc-400" />
-                    )}
-                    <h4 className="font-semibold text-white">{seccion.nombre}</h4>
-                  </div>
-                  <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-1 rounded">
-                    {totalServiciosSeccion}{' '}
-                    {totalServiciosSeccion === 1 ? 'item' : 'items'}
-                  </span>
+                <div className="flex items-center gap-2">
+                  {isSectionExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-zinc-400" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-zinc-400" />
+                  )}
+                  <h4 className="font-semibold text-white">{seccion.nombre}</h4>
                 </div>
               </button>
 
@@ -94,14 +105,13 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
                     .sort((a, b) => a.orden - b.orden)
                     .map((categoria, categoriaIndex) => {
                       const isCategoryExpanded = expandedCategories.has(categoria.id);
-                      const totalServiciosCategoria = categoria.servicios.length;
                       const totalPriceCategoria = showPrices
                         ? categoria.servicios.reduce((sum, s) => {
-                            if (isCotizacionServicio(s)) {
-                              return sum + (s.price || 0) * (s.quantity || 1);
-                            }
-                            return sum;
-                          }, 0)
+                          if (isCotizacionServicio(s)) {
+                            return sum + (s.price || 0) * (s.quantity || 1);
+                          }
+                          return sum;
+                        }, 0)
                         : 0;
 
                       return (
@@ -112,25 +122,19 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
                           {/* Nivel 2: Categoría */}
                           <button
                             onClick={() => toggleCategory(categoria.id)}
-                            className="w-full flex items-center justify-between p-3 pl-8 hover:bg-zinc-800/30 transition-colors"
+                            className="w-full flex items-center justify-between p-3 pl-8 hover:bg-zinc-800/30 transition-colors text-left"
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-2">
-                                {isCategoryExpanded ? (
-                                  <ChevronDown className="w-3 h-3 text-zinc-400" />
-                                ) : (
-                                  <ChevronRight className="w-3 h-3 text-zinc-400" />
-                                )}
-                                <h5 className="text-sm font-medium text-zinc-300">{categoria.nombre}</h5>
-                              </div>
-                              <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
-                                {totalServiciosCategoria}{' '}
-                                {totalServiciosCategoria === 1 ? 'item' : 'items'}
-                              </span>
+                            <div className="flex items-center gap-2">
+                              {isCategoryExpanded ? (
+                                <ChevronDown className="w-3 h-3 text-zinc-400" />
+                              ) : (
+                                <ChevronRight className="w-3 h-3 text-zinc-400" />
+                              )}
+                              <h5 className="text-sm font-medium text-zinc-300 text-left">{categoria.nombre}</h5>
                             </div>
 
                             {showPrices && totalPriceCategoria > 0 && (
-                              <span className="text-sm font-semibold text-emerald-400">
+                              <span className="text-sm font-semibold text-emerald-400 ml-auto pl-4">
                                 {formatPrice(totalPriceCategoria)}
                               </span>
                             )}
@@ -142,46 +146,31 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
                               <div className="divide-y divide-zinc-800/50">
                                 {categoria.servicios.map((servicio, servicioIndex) => {
                                   const esCotizacion = isCotizacionServicio(servicio);
+                                  const cantidad = esCotizacion ? (servicio.quantity || 1) : 1;
                                   const subtotal = esCotizacion
-                                    ? (servicio.price || 0) * (servicio.quantity || 1)
+                                    ? (servicio.price || 0) * cantidad
                                     : 0;
 
                                   return (
                                     <div
                                       key={servicio.id}
-                                      className={`py-3 px-4 pl-6 hover:bg-zinc-700/20 transition-colors ${
-                                        servicioIndex === 0 ? 'pt-3' : ''
-                                      }`}
+                                      className={`py-3 px-4 pl-6 hover:bg-zinc-700/20 transition-colors ${servicioIndex === 0 ? 'pt-3' : ''
+                                        }`}
                                     >
-                                      <div className="flex items-start justify-between gap-4">
+                                      <div className="flex items-start">
                                         <div className="flex-1 min-w-0">
                                           <h6 className="text-sm text-zinc-300 leading-tight">
                                             {servicio.name}
-                                            {esCotizacion && servicio.quantity && servicio.quantity > 1 && (
-                                              <span className="ml-2 text-xs text-zinc-500">
-                                                × {servicio.quantity}
-                                              </span>
-                                            )}
+                                            <span className="ml-2 text-xs text-zinc-500">
+                                              x{cantidad}
+                                            </span>
                                           </h6>
                                           {servicio.description && (
                                             <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                                               {servicio.description}
                                             </p>
                                           )}
-                                          {showPrices && esCotizacion && servicio.quantity && servicio.quantity > 1 && (
-                                            <p className="text-xs text-zinc-500 mt-1">
-                                              {formatPrice(servicio.price || 0)} c/u
-                                            </p>
-                                          )}
                                         </div>
-
-                                        {showPrices && esCotizacion && (
-                                          <div className="flex-shrink-0">
-                                            <span className="text-sm font-semibold text-emerald-400">
-                                              {formatPrice(subtotal)}
-                                            </span>
-                                          </div>
-                                        )}
                                       </div>
                                     </div>
                                   );

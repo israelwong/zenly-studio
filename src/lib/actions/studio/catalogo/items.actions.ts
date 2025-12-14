@@ -435,27 +435,17 @@ export async function eliminarItem(
             data: true,
         };
     } catch (error) {
-        console.error("[ITEMS] Error eliminando item:", error);
-
-        // Manejar errores de conexión específicos
-        if (
-            error instanceof Error && (
-                error.message.includes("Can't reach database server") ||
-                error.message.includes("P1001") ||
-                error.message.includes("connection") ||
-                error.message.includes("PrismaClientInitializationError") ||
-                (typeof error === 'object' && error !== null && 'code' in error && (error as { code: string }).code === 'P1001')
-            )
-        ) {
-            return {
-                success: false,
-                error: "Error de conexión con la base de datos. Verifica tu conexión a internet e intenta nuevamente.",
-            };
-        }
-
-        // Manejar otros errores de Prisma
+        // Manejar errores de Prisma primero (sin loguear)
         if (typeof error === 'object' && error !== null && 'code' in error) {
             const prismaError = error as { code: string };
+
+            // Error de constraint - item usado en paquetes
+            if (prismaError.code === "P2003") {
+                return {
+                    success: false,
+                    error: "No se puede eliminar el item porque está siendo usado en uno o más paquetes. Elimina primero las referencias en los paquetes.",
+                };
+            }
 
             // Error de registro no encontrado
             if (prismaError.code === "P2025") {
@@ -464,7 +454,32 @@ export async function eliminarItem(
                     error: "Item no encontrado",
                 };
             }
+
+            // Error de conexión
+            if (prismaError.code === "P1001") {
+                return {
+                    success: false,
+                    error: "Error de conexión con la base de datos. Verifica tu conexión a internet e intenta nuevamente.",
+                };
+            }
         }
+
+        // Manejar errores de conexión específicos
+        if (
+            error instanceof Error && (
+                error.message.includes("Can't reach database server") ||
+                error.message.includes("connection") ||
+                error.message.includes("PrismaClientInitializationError")
+            )
+        ) {
+            return {
+                success: false,
+                error: "Error de conexión con la base de datos. Verifica tu conexión a internet e intenta nuevamente.",
+            };
+        }
+
+        // Solo loguear errores no esperados
+        console.error("[ITEMS] Error inesperado eliminando item:", error);
 
         return {
             success: false,

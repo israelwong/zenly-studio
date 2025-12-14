@@ -28,7 +28,7 @@ import {
 } from '@/lib/actions/studio/catalogo';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { useConfiguracionPreciosUpdateListener } from '@/hooks/useConfiguracionPreciosRefresh';
-import { reordenarItems, moverItemACategoria, toggleItemPublish } from '@/lib/actions/studio/catalogo';
+import { reordenarItems, moverItemACategoria, toggleItemPublish, reordenarCategorias } from '@/lib/actions/studio/catalogo';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerMediaItemsMap, obtenerMediaItem } from '@/lib/actions/studio/catalogo/media-items.actions';
 import { obtenerSeccionesConStats } from '@/lib/actions/studio/catalogo';
@@ -153,18 +153,22 @@ export default function CatalogoTab() {
     // Función para cargar configuración de precios
     const loadConfiguracionPrecios = useCallback(async () => {
         try {
+            console.log('[CatalogoTab] 🔄 Recargando configuración de precios...');
             const response = await obtenerConfiguracionPrecios(studioSlug);
             if (response) {
                 const parseValue = (val: string | undefined, defaultValue: number): number => {
                     return val ? parseFloat(val) : defaultValue;
                 };
 
-                setPreciosConfig({
+                const newConfig = {
                     utilidad_servicio: parseValue(response.utilidad_servicio, 0.30),
                     utilidad_producto: parseValue(response.utilidad_producto, 0.40),
                     comision_venta: parseValue(response.comision_venta, 0.10),
                     sobreprecio: parseValue(response.sobreprecio, 0.05),
-                });
+                };
+
+                console.log('[CatalogoTab] ✅ Configuración actualizada:', newConfig);
+                setPreciosConfig(newConfig);
             }
         } catch (error) {
             console.error("Error loading price config:", error);
@@ -345,15 +349,43 @@ export default function CatalogoTab() {
 
     // Funciones de drag & drop
     const handleDragStart = (event: DragStartEvent) => {
-        setActiveId(event.active.id as string);
+        const activeId = event.active.id as string;
+        setActiveId(activeId);
+
+        // Verificar si se está arrastrando una categoría
+        const isCategoria = Object.values(categoriasData).some(categorias =>
+            categorias.some(cat => cat.id === activeId)
+        );
+
+        // Si se está arrastrando una categoría, colapsar todas las categorías
+        // para hacer el reordenamiento más limpio y menos caótico
+        if (isCategoria && categoriasExpandidas.size > 0) {
+            setCategoriasExpandidas(new Set());
+        }
     };
 
-    // Función para manejar drag over - expandir categorías automáticamente
+    // Función para manejar drag over - expandir categorías automáticamente solo cuando se arrastra un item
     const handleDragOver = useCallback((event: DragOverEvent) => {
-        const { over } = event;
-        if (!over) return;
+        const { over, active } = event;
+        if (!over || !active) return;
 
+        const activeId = String(active.id);
         const overId = String(over.id);
+
+        // Verificar qué tipo de elemento se está arrastrando
+        const isItem = Object.values(itemsData).some(items =>
+            items.some(item => item.id === activeId)
+        );
+        const isCategoria = Object.values(categoriasData).some(categorias =>
+            categorias.some(cat => cat.id === activeId)
+        );
+        const isSeccion = secciones.some(sec => sec.id === activeId);
+
+        // Solo expandir categorías si se está arrastrando un item
+        // Si se está reordenando una categoría o sección, no expandir nada
+        if (!isItem || isCategoria || isSeccion) {
+            return;
+        }
 
         // Buscar si el overId corresponde a una categoría
         let categoriaId = null;
@@ -375,7 +407,7 @@ export default function CatalogoTab() {
         if (categoriaId && !categoriasExpandidas.has(categoriaId)) {
             setCategoriasExpandidas(prev => new Set([...prev, categoriaId]));
         }
-    }, [categoriasExpandidas, categoriasData]);
+    }, [categoriasExpandidas, categoriasData, itemsData, secciones]);
 
     // Nueva función unificada de drag & drop siguiendo la guía
     const handleDragEnd = useCallback(
@@ -389,10 +421,74 @@ export default function CatalogoTab() {
 
             if (activeId === overId) return;
 
+            // Verificar qué tipo de elemento se está arrastrando
+            let activeCategoria = null;
+            let activeSeccionId = null;
+            for (const [seccionId, categorias] of Object.entries(categoriasData)) {
+                activeCategoria = categorias.find(cat => cat.id === activeId);
+                if (activeCategoria) {
+                    activeSeccionId = seccionId;
+                    break;
+                }
+            }
+
+            // Si se está arrastrando una categoría, manejar reordenamiento de categorías
+            if (activeCategoria && activeSeccionId) {
+                // Verificar si se está soltando sobre otra categoría de la misma sección
+                const categoriasSeccion = categoriasData[activeSeccionId] || [];
+                const overCategoria = categoriasSeccion.find(cat => cat.id === overId);
+
+                if (overCategoria) {
+                    // Reordenamiento de categorías dentro de la misma sección
+                    const activeIndex = categoriasSeccion.findIndex(cat => cat.id === activeId);
+                    const overIndex = categoriasSeccion.findIndex(cat => cat.id === overId);
+
+                    if (activeIndex === -1 || overIndex === -1) {
+                        setActiveId(null);
+                        return;
+                    }
+
+                    // Guardar estado original para revertir en caso de error
+                    const originalCategoriasData = JSON.parse(JSON.stringify(categoriasData));
+
+                    try {
+                        // Reordenar localmente
+                        const newCategorias = arrayMove(categoriasSeccion, activeIndex, overIndex);
+                        const categoriasConOrder = newCategorias.map((cat, index) => ({
+                            ...cat,
+                            order: index
+                        }));
+
+                        setCategoriasData(prev => ({
+                            ...prev,
+                            [activeSeccionId]: categoriasConOrder
+                        }));
+
+                        // Actualizar en el backend
+                        const categoriaIds = newCategorias.map(cat => cat.id);
+                        const response = await reordenarCategorias(categoriaIds);
+
+                        if (!response.success) {
+                            throw new Error(response.error);
+                        }
+
+                        toast.success("Orden de categorías actualizado");
+                    } catch (error) {
+                        console.error("Error reordenando categorías:", error);
+                        toast.error("Error al actualizar el orden de categorías");
+                        // Revertir cambios
+                        setCategoriasData(originalCategoriasData);
+                    } finally {
+                        setActiveId(null);
+                    }
+                    return;
+                }
+            }
+
             console.log("🔍 Debug drag end:", {
                 activeId,
                 overId,
-                activeType: "item", // Por ahora asumimos que siempre arrastramos items
+                activeType: "item",
             });
 
             // Determinar si se está arrastrando a una categoría vacía

@@ -37,8 +37,13 @@ export function PaqueteEditor({ studioSlug, mode, paquete, initialEventTypeId, r
     };
 
     const handleSave = (savedPaquete: PaqueteFromDB) => {
-        // Redirigir a la página de paquetes
-        router.push(getReturnUrl());
+        // Redirigir a la página anterior después de guardar exitosamente
+        // Si no hay historial, usar la URL de retorno como fallback
+        if (typeof window !== 'undefined' && window.history.length > 1) {
+            router.back();
+        } else {
+            router.push(getReturnUrl());
+        }
     };
 
     const handleCancel = () => {

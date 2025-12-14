@@ -65,6 +65,7 @@ export interface PublicPaquete {
   name: string;
   description: string | null;
   price: number;
+  cover_url: string | null;
   servicios: PublicSeccionData[];
   tiempo_minimo_contratacion: number | null;
 }

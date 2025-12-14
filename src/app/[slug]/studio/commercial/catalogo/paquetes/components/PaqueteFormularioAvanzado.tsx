@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle, ImageIcon } from 'lucide-react';
-import { ZenButton, ZenInput, ZenTextarea, ZenBadge } from '@/components/ui/zen';
+import { X, ChevronDown, ChevronRight, AlertTriangle, ImageIcon, Eye, EyeOff, Save, Globe, FileText } from 'lucide-react';
+import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenDialog } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
@@ -82,6 +82,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     const [seccionesExpandidas, setSeccionesExpandidas] = useState<Set<string>>(new Set());
     const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [showPublishDialog, setShowPublishDialog] = useState(false);
     const summaryRef = useRef<HTMLDivElement>(null);
 
 
@@ -555,13 +556,33 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             return;
         }
 
-        console.log('Datos del paquete:', { nombre, descripcion, precio: calculoPrecio.total });
-
-        if (Object.keys(items).length === 0) {
-            toast.error('Agrega al menos un servicio');
+        // Validar que haya items con cantidad > 0
+        const hasItems = Object.values(items).some(cantidad => cantidad > 0);
+        if (!hasItems) {
+            toast.error('Debes agregar al menos un servicio al paquete');
             return;
         }
 
+        // Si es creación, siempre mostrar modal
+        if (!paquete?.id) {
+            setShowPublishDialog(true);
+            return;
+        }
+
+        // Si es actualización
+        const wasOriginallyPublished = paquete?.status === 'active';
+
+        // Si estaba publicado Y sigue publicado, guardar directamente sin modal
+        if (wasOriginallyPublished && isPublished) {
+            await savePaquete(true);
+            return;
+        }
+
+        // En cualquier otro caso (cambió de estado o no estaba publicado), mostrar modal
+        setShowPublishDialog(true);
+    };
+
+    const savePaquete = async (shouldPublish: boolean) => {
         setLoading(true);
         try {
             const serviciosData = Object.entries(items)
@@ -586,9 +607,9 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 description: descripcion,
                 cover_url: coverMedia[0]?.file_url || null,
                 cover_storage_bytes: coverMedia[0]?.file_size ? BigInt(coverMedia[0].file_size) : null,
-                event_type_id: initialEventTypeId || paquete?.event_type_id || 'temp', // Usar initialEventTypeId si está disponible
+                event_type_id: initialEventTypeId || paquete?.event_type_id || 'temp',
                 precio: calculoPrecio.total,
-                status: isPublished ? 'active' : 'inactive',
+                status: shouldPublish ? 'active' : 'inactive',
                 is_featured: isFeatured,
                 servicios: serviciosData
             };
@@ -604,11 +625,9 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 console.log('[PaqueteFormularioAvanzado] Resultado actualización:', result);
                 if (result.success && result.data) {
                     toast.success('Paquete actualizado exitosamente');
-                    // Actualizar storage solo si el cover cambió (se subió nueva imagen/video)
                     if (coverChanged) {
                         triggerRefresh();
                     }
-                    // Actualizar cover original para futuras comparaciones
                     setOriginalCoverUrl(newCoverUrl);
                     onSave(result.data);
                 } else {
@@ -623,11 +642,9 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 console.log('[PaqueteFormularioAvanzado] Resultado creación:', result);
                 if (result.success && result.data) {
                     toast.success('Paquete creado exitosamente');
-                    // Actualizar storage solo si tiene cover (se subió imagen/video)
                     if (newCoverUrl) {
                         triggerRefresh();
                     }
-                    // Actualizar cover original para futuras comparaciones
                     setOriginalCoverUrl(newCoverUrl);
                     onSave(result.data);
                 } else {
@@ -637,12 +654,21 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 }
             }
         } catch (error) {
-            console.error('[PaqueteFormularioAvanzado] Error en handleSubmit:', error);
+            console.error('[PaqueteFormularioAvanzado] Error en savePaquete:', error);
             const errorMessage = error instanceof Error ? error.message : 'Error al guardar el paquete';
             toast.error(errorMessage);
         } finally {
             setLoading(false);
+            setShowPublishDialog(false);
         }
+    };
+
+    const handlePublishAndSave = () => {
+        savePaquete(true);
+    };
+
+    const handleSaveAsDraft = () => {
+        savePaquete(false);
     };
 
     if (cargandoCatalogo) {
@@ -862,7 +888,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                         {/* Cover */}
                         <div className="mt-4">
                             <div className="flex items-center gap-2 mb-3">
-                                <ImageIcon className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
                                 <span className="font-medium text-white text-sm">
                                     Carátula <span className="text-zinc-400 font-normal">(opcional)</span>
                                 </span>
@@ -1058,6 +1084,105 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Modal de confirmación de publicación */}
+            <ZenDialog
+                isOpen={showPublishDialog}
+                onClose={() => !loading && setShowPublishDialog(false)}
+                title={paquete?.id ? 'Actualizar Paquete' : 'Crear Paquete'}
+                description={
+                    paquete?.id
+                        ? 'Elige cómo deseas actualizar este paquete'
+                        : 'Elige cómo deseas crear este paquete'
+                }
+                maxWidth="lg"
+            >
+                <div className="space-y-4">
+                    {/* Opción: Publicar */}
+                    <button
+                        type="button"
+                        onClick={handlePublishAndSave}
+                        disabled={loading}
+                        className="w-full text-left p-4 rounded-lg border-2 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                    >
+                        <div className="flex items-start gap-4">
+                            <div className="shrink-0 mt-0.5">
+                                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/30 transition-colors">
+                                    <Globe className="w-5 h-5 text-emerald-400" />
+                                </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold text-white text-base">
+                                        {paquete?.id ? 'Actualizar y publicar' : 'Crear y publicar'}
+                                    </h3>
+                                    <ZenBadge variant="success" size="sm" className="text-xs">
+                                        Visible
+                                    </ZenBadge>
+                                </div>
+                                <p className="text-sm text-zinc-400 leading-relaxed">
+                                    El paquete estará visible y disponible para tus clientes. Podrán verlo y agregarlo a sus cotizaciones.
+                                </p>
+                            </div>
+                            {loading ? (
+                                <div className="shrink-0">
+                                    <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            ) : (
+                                <ChevronRight className="w-5 h-5 text-zinc-500 shrink-0 group-hover:text-emerald-400 transition-colors" />
+                            )}
+                        </div>
+                    </button>
+
+                    {/* Opción: Guardar como borrador */}
+                    <button
+                        type="button"
+                        onClick={handleSaveAsDraft}
+                        disabled={loading}
+                        className="w-full text-left p-4 rounded-lg border-2 border-zinc-700 bg-zinc-800/30 hover:bg-zinc-800/50 hover:border-zinc-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                    >
+                        <div className="flex items-start gap-4">
+                            <div className="shrink-0 mt-0.5">
+                                <div className="w-10 h-10 rounded-full bg-zinc-700/50 flex items-center justify-center group-hover:bg-zinc-700 transition-colors">
+                                    <FileText className="w-5 h-5 text-zinc-400" />
+                                </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold text-white text-base">
+                                        {paquete?.id ? 'Actualizar y mantener como borrador' : 'Crear y guardar como borrador'}
+                                    </h3>
+                                    <ZenBadge variant="outline" size="sm" className="text-xs border-zinc-600 text-zinc-400">
+                                        Borrador
+                                    </ZenBadge>
+                                </div>
+                                <p className="text-sm text-zinc-400 leading-relaxed">
+                                    El paquete se guardará pero no estará visible públicamente. Podrás editarlo y publicarlo más tarde.
+                                </p>
+                            </div>
+                            {loading ? (
+                                <div className="shrink-0">
+                                    <div className="w-5 h-5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            ) : (
+                                <ChevronRight className="w-5 h-5 text-zinc-500 shrink-0 group-hover:text-zinc-400 transition-colors" />
+                            )}
+                        </div>
+                    </button>
+
+                    {/* Botón cancelar */}
+                    <div className="pt-2 border-t border-zinc-800">
+                        <ZenButton
+                            variant="ghost"
+                            onClick={() => setShowPublishDialog(false)}
+                            disabled={loading}
+                            className="w-full"
+                        >
+                            Cancelar
+                        </ZenButton>
+                    </div>
+                </div>
+            </ZenDialog>
         </div>
     );
 });

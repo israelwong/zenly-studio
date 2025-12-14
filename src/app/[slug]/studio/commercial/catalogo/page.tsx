@@ -80,8 +80,12 @@ export default function CatalogoPage() {
                     className="px-6 pt-4"
                 />
                 <ZenCardContent className="p-6">
-                    {activeTab === 'catalogo' && <CatalogoTab />}
-                    {activeTab === 'paquetes' && <PaquetesTab />}
+                    <div style={{ display: activeTab === 'catalogo' ? 'block' : 'none' }}>
+                        <CatalogoTab />
+                    </div>
+                    <div style={{ display: activeTab === 'paquetes' ? 'block' : 'none' }}>
+                        <PaquetesTab />
+                    </div>
                 </ZenCardContent>
             </ZenCard>
 

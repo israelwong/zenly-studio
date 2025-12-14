@@ -158,12 +158,13 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
                 // Actualizar los valores iniciales con los nuevos valores guardados
                 setInitialConfig(config);
 
-                // Emitir evento para notificar a otros componentes (ya en porcentaje)
-                triggerUpdate({
-                    sobreprecio: parseFloat(config.sobreprecio || '0'),
-                    utilidad_servicio: parseFloat(config.utilidad_servicio || '0'),
-                    utilidad_producto: parseFloat(config.utilidad_producto || '0'),
-                    comision_venta: parseFloat(config.comision_venta || '0')
+                // Emitir evento para notificar a otros componentes
+                // Convertir de porcentaje (35) a decimal (0.35) para el evento
+                triggerUpdate(studioSlug, {
+                    utilidad_servicio: parseFloat(config.utilidad_servicio || '0') / 100,
+                    utilidad_producto: parseFloat(config.utilidad_producto || '0') / 100,
+                    comision_venta: parseFloat(config.comision_venta || '0') / 100,
+                    sobreprecio: parseFloat(config.sobreprecio || '0') / 100,
                 });
 
                 // Cerrar modal si existe onClose
