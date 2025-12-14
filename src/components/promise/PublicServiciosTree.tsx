@@ -134,7 +134,7 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
                             </div>
 
                             {showPrices && totalPriceCategoria > 0 && (
-                              <span className="text-sm font-semibold text-emerald-400 ml-auto pl-4">
+                              <span className="text-sm font-semibold text-blue-400 ml-auto pl-4">
                                 {formatPrice(totalPriceCategoria)}
                               </span>
                             )}

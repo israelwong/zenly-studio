@@ -1,22 +1,46 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FileText, ChevronRight, Tag as TagIcon } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, Tag as TagIcon, Sparkles } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
 import { getTotalServicios, getFirstServicios } from '@/lib/utils/public-promise';
 
+interface CondicionComercial {
+  id: string;
+  name: string;
+  description: string | null;
+  advance_percentage: number | null;
+  discount_percentage: number | null;
+  metodos_pago: Array<{
+    id: string;
+    metodo_pago_id: string;
+    metodo_pago_name: string;
+  }>;
+}
+
+interface TerminoCondicion {
+  id: string;
+  title: string;
+  content: string;
+  is_required: boolean;
+}
+
 interface CotizacionesSectionProps {
   cotizaciones: PublicCotizacion[];
   promiseId: string;
   studioSlug: string;
+  condicionesComerciales?: CondicionComercial[];
+  terminosCondiciones?: TerminoCondicion[];
 }
 
 export function CotizacionesSection({
   cotizaciones,
   promiseId,
   studioSlug,
+  condicionesComerciales,
+  terminosCondiciones,
 }: CotizacionesSectionProps) {
   const [selectedCotizacion, setSelectedCotizacion] = useState<PublicCotizacion | null>(null);
 
@@ -45,13 +69,13 @@ export function CotizacionesSection({
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-2">
-              <FileText className="h-5 w-5 text-emerald-400" />
-              <h2 className="text-2xl md:text-3xl font-bold text-white">
-                Cotizaciones Personalizadas
+              <Sparkles className="h-4 w-4 text-zinc-400" />
+              <h2 className="text-xl md:text-3xl font-bold text-white">
+                {cotizaciones.length === 1 ? 'Cotización Personalizada' : 'Cotizaciones Personalizadas'}
               </h2>
             </div>
-            <p className="text-zinc-400">
-              Revisa las propuestas que hemos preparado especialmente para tu evento
+            <p className="text-sm text-zinc-400">
+              Revisa {cotizaciones.length === 1 ? 'la propuesta' : 'las propuestas'} que hemos preparado especialmente para ti
             </p>
           </div>
 
@@ -64,13 +88,13 @@ export function CotizacionesSection({
               return (
                 <ZenCard
                   key={cotizacion.id}
-                  className="bg-zinc-900/50 border-zinc-800 hover:border-emerald-500/50 transition-all duration-200 cursor-pointer group"
+                  className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-600 transition-all duration-200 cursor-pointer group"
                   onClick={() => setSelectedCotizacion(cotizacion)}
                 >
                   <ZenCardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <ZenCardTitle className="text-white group-hover:text-emerald-400 transition-colors">
+                        <ZenCardTitle className="text-white group-hover:text-zinc-200 transition-colors">
                           {cotizacion.name}
                         </ZenCardTitle>
                         {cotizacion.description && (
@@ -79,7 +103,7 @@ export function CotizacionesSection({
                           </p>
                         )}
                       </div>
-                      <ChevronRight className="h-5 w-5 text-zinc-600 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
+                      <ChevronRight className="h-5 w-5 text-zinc-600 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
                     </div>
                   </ZenCardHeader>
 
@@ -96,7 +120,7 @@ export function CotizacionesSection({
                           </ZenBadge>
                         </div>
                       )}
-                      <p className="text-2xl font-bold text-emerald-400">
+                      <p className="text-2xl font-bold text-blue-400">
                         {formatPrice(finalPrice)}
                       </p>
                     </div>
@@ -163,6 +187,8 @@ export function CotizacionesSection({
           onClose={() => setSelectedCotizacion(null)}
           promiseId={promiseId}
           studioSlug={studioSlug}
+          condicionesComerciales={condicionesComerciales}
+          terminosCondiciones={terminosCondiciones}
         />
       )}
     </>

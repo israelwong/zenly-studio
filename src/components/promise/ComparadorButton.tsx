@@ -5,14 +5,20 @@ import { Scale } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { ComparadorSheet } from './ComparadorSheet';
+import { CotizacionDetailSheet } from './CotizacionDetailSheet';
+import { PaqueteDetailSheet } from './PaqueteDetailSheet';
 
 interface ComparadorButtonProps {
   cotizaciones: PublicCotizacion[];
   paquetes: PublicPaquete[];
+  promiseId: string;
+  studioSlug: string;
 }
 
-export function ComparadorButton({ cotizaciones, paquetes }: ComparadorButtonProps) {
+export function ComparadorButton({ cotizaciones, paquetes, promiseId, studioSlug }: ComparadorButtonProps) {
   const [showComparador, setShowComparador] = useState(false);
+  const [selectedCotizacion, setSelectedCotizacion] = useState<PublicCotizacion | null>(null);
+  const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
 
   const totalOpciones = cotizaciones.length + paquetes.length;
 
@@ -53,6 +59,35 @@ export function ComparadorButton({ cotizaciones, paquetes }: ComparadorButtonPro
           paquetes={paquetes}
           isOpen={showComparador}
           onClose={() => setShowComparador(false)}
+          onViewDetails={(item, type) => {
+            setShowComparador(false);
+            if (type === 'cotizacion') {
+              setSelectedCotizacion(item as PublicCotizacion);
+            } else {
+              setSelectedPaquete(item as PublicPaquete);
+            }
+          }}
+        />
+      )}
+
+      {/* Sheets de detalle */}
+      {selectedCotizacion && (
+        <CotizacionDetailSheet
+          cotizacion={selectedCotizacion}
+          isOpen={!!selectedCotizacion}
+          onClose={() => setSelectedCotizacion(null)}
+          promiseId={promiseId}
+          studioSlug={studioSlug}
+        />
+      )}
+
+      {selectedPaquete && (
+        <PaqueteDetailSheet
+          paquete={selectedPaquete}
+          isOpen={!!selectedPaquete}
+          onClose={() => setSelectedPaquete(null)}
+          promiseId={promiseId}
+          studioSlug={studioSlug}
         />
       )}
     </>

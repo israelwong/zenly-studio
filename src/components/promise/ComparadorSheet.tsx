@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Check } from 'lucide-react';
-import { ZenBadge, ZenCard } from '@/components/ui/zen';
+import { X, Check, Eye } from 'lucide-react';
+import { ZenBadge, ZenCard, ZenButton } from '@/components/ui/zen';
 import type { PublicCotizacion, PublicPaquete, PublicSeccionData } from '@/types/public-promise';
 
 interface ComparadorSheetProps {
@@ -10,6 +10,7 @@ interface ComparadorSheetProps {
   paquetes: PublicPaquete[];
   isOpen: boolean;
   onClose: () => void;
+  onViewDetails?: (item: PublicCotizacion | PublicPaquete, type: 'cotizacion' | 'paquete') => void;
 }
 
 type ComparableItem = (PublicCotizacion | PublicPaquete) & { type: 'cotizacion' | 'paquete' };
@@ -69,6 +70,7 @@ export function ComparadorSheet({
   paquetes,
   isOpen,
   onClose,
+  onViewDetails,
 }: ComparadorSheetProps) {
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -192,7 +194,7 @@ export function ComparadorSheet({
                         <ZenBadge
                           className={
                             item.type === 'cotizacion'
-                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] px-2 py-0.5'
+                              ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-2 py-0.5'
                               : 'bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-2 py-0.5'
                           }
                         >
@@ -270,7 +272,7 @@ export function ComparadorSheet({
                                     return (
                                       <div key={item.id} className="px-3 py-2 w-[150px] sm:w-[180px] shrink-0 flex items-center justify-center">
                                         {hasServicio ? (
-                                          <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                          <Check className="h-3.5 w-3.5 text-blue-400" />
                                         ) : (
                                           <span className="text-zinc-700 text-sm">—</span>
                                         )}
@@ -287,7 +289,7 @@ export function ComparadorSheet({
                 </ZenCard>
               ))}
 
-              {/* Precio Final */}
+              {/* Precio Final y Acciones */}
               <div className="flex gap-2">
                 <div className="sticky left-0 z-20 bg-zinc-900 w-[180px] sm:w-[220px] shrink-0">
                   <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50 px-3 py-2">
@@ -303,31 +305,36 @@ export function ComparadorSheet({
                         : item.price;
 
                     return (
-                      <div key={item.id} className="w-[150px] sm:w-[180px] shrink-0">
-                        <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50 px-3 py-2 relative">
-                          <div className="flex items-center justify-between gap-2">
-                            {/* Precio centrado */}
-                            <div className="flex-1 text-center">
-                              <p className="text-sm sm:text-base font-bold text-white">
-                                {formatPrice(finalPrice)}
+                      <div key={item.id} className="w-[150px] sm:w-[180px] shrink-0 space-y-2">
+                        <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50 px-3 py-2">
+                          <div className="text-center">
+                            <p className="text-sm sm:text-base font-bold text-white">
+                              {formatPrice(finalPrice)}
+                            </p>
+                            {isCotizacion(item) && item.discount && (
+                              <p className="text-[10px] text-zinc-500 line-through mt-0.5">
+                                {formatPrice(item.price)}
                               </p>
-                              {isCotizacion(item) && item.discount && (
-                                <p className="text-[10px] text-zinc-500 line-through mt-0.5">
-                                  {formatPrice(item.price)}
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Botón ocultar centrado verticalmente */}
-                            <button
-                              onClick={() => toggleItemVisibility(item.id)}
-                              className="p-0.5 hover:bg-zinc-800 rounded transition-colors shrink-0"
-                              title="Ocultar columna"
-                            >
-                              <X className="h-3 w-3 text-zinc-500" />
-                            </button>
+                            )}
                           </div>
                         </div>
+                        {onViewDetails && (
+                          <ZenButton
+                            onClick={() => {
+                              onViewDetails(
+                                item.type === 'cotizacion'
+                                  ? cotizaciones.find(c => c.id === item.id)!
+                                  : paquetes.find(p => p.id === item.id)!,
+                                item.type
+                              );
+                            }}
+                            className="w-full text-xs bg-blue-600 hover:bg-blue-700"
+                            size="sm"
+                          >
+
+                            Ver detalles
+                          </ZenButton>
+                        )}
                       </div>
                     );
                   })}

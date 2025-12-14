@@ -2,18 +2,40 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Package, ChevronRight, Clock } from 'lucide-react';
+import { Package, ChevronRight, Clock, Star } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import type { PublicPaquete } from '@/types/public-promise';
 import { PaqueteDetailSheet } from './PaqueteDetailSheet';
 import { getTotalServicios, getFirstServicios } from '@/lib/utils/public-promise';
 import { cn } from '@/lib/utils';
 
+interface CondicionComercial {
+    id: string;
+    name: string;
+    description: string | null;
+    advance_percentage: number | null;
+    discount_percentage: number | null;
+    metodos_pago: Array<{
+        id: string;
+        metodo_pago_id: string;
+        metodo_pago_name: string;
+    }>;
+}
+
+interface TerminoCondicion {
+    id: string;
+    title: string;
+    content: string;
+    is_required: boolean;
+}
+
 interface PaquetesSectionProps {
     paquetes: PublicPaquete[];
     promiseId: string;
     studioSlug: string;
     showAsAlternative?: boolean;
+    condicionesComerciales?: CondicionComercial[];
+    terminosCondiciones?: TerminoCondicion[];
 }
 
 export function PaquetesSection({
@@ -21,6 +43,8 @@ export function PaquetesSection({
     promiseId,
     studioSlug,
     showAsAlternative = false,
+    condicionesComerciales,
+    terminosCondiciones,
 }: PaquetesSectionProps) {
     const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -97,7 +121,7 @@ export function PaquetesSection({
                     <div className="mb-6">
                         <div className="flex items-center gap-2 mb-2">
                             <Package className="h-5 w-5 text-blue-400" />
-                            <h2 className="text-2xl md:text-3xl font-bold text-white">
+                            <h2 className="text-xl md:text-3xl font-bold text-white">
                                 {showAsAlternative ? 'Paquetes Prediseñados' : 'Paquetes Disponibles'}
                             </h2>
                         </div>
@@ -145,11 +169,19 @@ export function PaquetesSection({
                                             {/* Content */}
                                             <div className="flex-1 min-w-0 flex flex-col">
                                                 {/* Header */}
-                                                <div className="flex items-start justify-between gap-2 mb-2">
+                                                <div className="flex items-start justify-between gap-2 mb-1">
                                                     <div className="flex-1 min-w-0">
-                                                        <h3 className="text-base font-semibold text-white group-hover:text-blue-400 transition-colors line-clamp-1">
-                                                            {paquete.name}
-                                                        </h3>
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <h3 className="text-base font-semibold text-white group-hover:text-blue-400 transition-colors line-clamp-1">
+                                                                {paquete.name}
+                                                            </h3>
+                                                            {paquete.recomendado && (
+                                                                <div className="flex items-center gap-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                                                                    <Star className="h-3 w-3 fill-amber-400" />
+                                                                    <span className="text-[8px] font-bold uppercase tracking-wide">Más vendido</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                         {paquete.description && (
                                                             <p className="text-sm text-zinc-400 mt-1 line-clamp-2">
                                                                 {paquete.description}
@@ -160,7 +192,7 @@ export function PaquetesSection({
                                                 </div>
 
                                                 {/* Footer */}
-                                                <div className="mt-auto space-y-2">
+                                                <div className="mt-auto space-y-1">
                                                     {/* Precio */}
                                                     <p className="text-xl font-bold text-blue-400">
                                                         {formatPrice(paquete.price)}
@@ -229,6 +261,8 @@ export function PaquetesSection({
                     onClose={() => setSelectedPaquete(null)}
                     promiseId={promiseId}
                     studioSlug={studioSlug}
+                    condicionesComerciales={condicionesComerciales}
+                    terminosCondiciones={terminosCondiciones}
                 />
             )}
         </>

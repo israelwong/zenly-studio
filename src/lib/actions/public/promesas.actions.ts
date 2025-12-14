@@ -5,6 +5,157 @@ import { obtenerCatalogo } from "@/lib/actions/studio/config/catalogo.actions";
 import type { PublicSeccionData, PublicCategoriaData, PublicServicioData } from "@/types/public-promise";
 import type { SeccionData } from "@/lib/actions/schemas/catalogo-schemas";
 
+/**
+ * Obtener condiciones comerciales disponibles para promesa pública
+ */
+export async function obtenerCondicionesComercialesPublicas(
+  studioSlug: string
+): Promise<{
+  success: boolean;
+  data?: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    advance_percentage: number | null;
+    discount_percentage: number | null;
+    metodos_pago: Array<{
+      id: string;
+      metodo_pago_id: string;
+      metodo_pago_name: string;
+    }>;
+  }>;
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return {
+        success: false,
+        error: "Studio no encontrado",
+      };
+    }
+
+    const condiciones = await prisma.studio_condiciones_comerciales.findMany({
+      where: {
+        studio_id: studio.id,
+        status: 'active',
+      },
+      include: {
+        condiciones_comerciales_metodo_pago: {
+          include: {
+            metodos_pago: {
+              select: {
+                id: true,
+                payment_method_name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [
+        { type: 'asc' }, // Primero 'standard', luego 'offer'
+        { order: 'asc' }, // Luego por orden dentro de cada tipo
+      ],
+    });
+
+    // Mapear todas las condiciones activas (mostrar incluso si no tienen métodos de pago)
+    // Ordenar: primero standard, luego offer
+    const condicionesOrdenadas = [...condiciones].sort((a, b) => {
+      // Si ambos son del mismo tipo, ordenar por order
+      if (a.type === b.type) {
+        return (a.order || 0) - (b.order || 0);
+      }
+      // Standard primero (type === 'standard' viene antes que 'offer')
+      if (a.type === 'standard') return -1;
+      if (b.type === 'standard') return 1;
+      return 0;
+    });
+
+    const condicionesMapeadas = condicionesOrdenadas.map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      advance_percentage: c.advance_percentage,
+      discount_percentage: c.discount_percentage,
+      metodos_pago: c.condiciones_comerciales_metodo_pago.map((mp) => ({
+        id: mp.id,
+        metodo_pago_id: mp.metodo_pago_id,
+        metodo_pago_name: mp.metodos_pago.payment_method_name,
+      })),
+    }));
+
+    return {
+      success: true,
+      data: condicionesMapeadas,
+    };
+  } catch (error) {
+    console.error("Error al obtener condiciones comerciales públicas:", error);
+    return {
+      success: false,
+      error: "Error al obtener condiciones comerciales",
+    };
+  }
+}
+
+/**
+ * Obtener términos y condiciones activos para promesa pública
+ */
+export async function obtenerTerminosCondicionesPublicos(
+  studioSlug: string
+): Promise<{
+  success: boolean;
+  data?: Array<{
+    id: string;
+    title: string;
+    content: string;
+    is_required: boolean;
+  }>;
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return {
+        success: false,
+        error: "Studio no encontrado",
+      };
+    }
+
+    const terminos = await prisma.studio_terminos_condiciones.findMany({
+      where: {
+        studio_id: studio.id,
+        is_active: true,
+      },
+      orderBy: { order: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        is_required: true,
+      },
+    });
+
+    return {
+      success: true,
+      data: terminos,
+    };
+  } catch (error) {
+    console.error("Error al obtener términos y condiciones públicos:", error);
+    return {
+      success: false,
+      error: "Error al obtener términos y condiciones",
+    };
+  }
+}
+
 // Tipos para cotizaciones públicas
 interface PublicCotizacion {
   id: string;
@@ -30,6 +181,7 @@ interface PublicPaquete {
   description: string | null;
   price: number;
   cover_url: string | null;
+  recomendado: boolean;
   servicios: PublicSeccionData[];
   tiempo_minimo_contratacion: number | null;
 }
@@ -103,10 +255,29 @@ export async function getPublicPromiseData(
     };
     studio: {
       studio_name: string;
+      slogan: string | null;
       logo_url: string | null;
     };
     cotizaciones: PublicCotizacion[];
     paquetes: PublicPaquete[];
+    condiciones_comerciales?: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      advance_percentage: number | null;
+      discount_percentage: number | null;
+      metodos_pago: Array<{
+        id: string;
+        metodo_pago_id: string;
+        metodo_pago_name: string;
+      }>;
+    }>;
+    terminos_condiciones?: Array<{
+      id: string;
+      title: string;
+      content: string;
+      is_required: boolean;
+    }>;
   };
   error?: string;
 }> {
@@ -117,6 +288,7 @@ export async function getPublicPromiseData(
       select: {
         id: true,
         studio_name: true,
+        slogan: true,
         logo_url: true,
       },
     });
@@ -231,6 +403,7 @@ export async function getPublicPromiseData(
           description: true,
           precio: true,
           cover_url: true,
+          is_featured: true,
           paquete_items: {
             select: {
               id: true,
@@ -277,7 +450,7 @@ export async function getPublicPromiseData(
         servicios: filtrarCatalogoPorItems(catalogo, itemIds, itemsData),
         condiciones_comerciales: cot.condiciones_comerciales
           ? {
-            metodo_pago: cot.condiciones_comerciales_metodo_pago?.metodos_pago?.payment_method_name || null,
+            metodo_pago: cot.condiciones_comerciales_metodo_pago?.[0]?.metodos_pago?.payment_method_name || null,
             condiciones: cot.condiciones_comerciales.description || null,
           }
           : null,
@@ -294,17 +467,17 @@ export async function getPublicPromiseData(
     const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
       // Crear Set de item_ids incluidos en el paquete
       const itemIds = new Set<string>();
-      const itemsData = new Map<string, { description: string | null }>();
+      const itemsData = new Map<string, { description?: string | null; quantity?: number; price?: number }>();
 
       // Verificar que paquete_items existe y tiene datos
       if (!paq.paquete_items || paq.paquete_items.length === 0) {
-        console.warn(`[getPublicPromiseData] Paquete ${paq.id} (${paq.name}) no tiene paquete_items`);
         return {
           id: paq.id,
           name: paq.name,
           description: paq.description,
           price: paq.precio || 0,
           cover_url: paq.cover_url,
+          recomendado: paq.is_featured || false,
           servicios: [], // Retornar array vacío si no hay items
           tiempo_minimo_contratacion: null,
         };
@@ -317,56 +490,12 @@ export async function getPublicPromiseData(
           itemsData.set(item.item_id, {
             description: null,
             quantity: item.quantity,
+            price: undefined,
           });
-          console.log(`[getPublicPromiseData] ✅ Item agregado: ${item.item_id} (cantidad: ${item.quantity})`);
-        } else {
-          console.log(`[getPublicPromiseData] ❌ Item ${item.item_id} filtrado: status=${item.status}, visible=${item.visible_to_client}`);
         }
       });
 
-      // Verificar IDs del catálogo para comparar
-      const catalogoItemIds = new Set<string>();
-      catalogo.forEach(seccion => {
-        seccion.categorias.forEach(categoria => {
-          categoria.servicios.forEach(servicio => {
-            catalogoItemIds.add(servicio.id);
-          });
-        });
-      });
-      console.log(`[getPublicPromiseData] Total servicios en catálogo: ${catalogoItemIds.size}`);
-      console.log(`[getPublicPromiseData] Primeros 10 IDs del catálogo:`, Array.from(catalogoItemIds).slice(0, 10));
-
-      // Verificar coincidencias
-      const itemsEncontrados = Array.from(itemIds).filter(id => catalogoItemIds.has(id));
-      console.log(`[getPublicPromiseData] Items del paquete encontrados en catálogo: ${itemsEncontrados.length} de ${itemIds.size}`);
-      if (itemsEncontrados.length === 0 && itemIds.size > 0) {
-        console.warn(`[getPublicPromiseData] ⚠️ NINGÚN item del paquete coincide con el catálogo!`);
-        console.warn(`[getPublicPromiseData] Item IDs del paquete:`, Array.from(itemIds));
-      }
-
       const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
-
-      // Debug: verificar si hay items y si se filtraron correctamente
-      if (itemIds.size > 0 && serviciosFiltrados.length === 0) {
-        console.warn(`[getPublicPromiseData] ⚠️ Paquete ${paq.id} tiene ${itemIds.size} items válidos pero no se encontraron en el catálogo`);
-        console.warn(`[getPublicPromiseData] Item IDs del paquete (primeros 5):`, Array.from(itemIds).slice(0, 5));
-        const totalServicios = catalogo.reduce((sum, s) => sum + s.categorias.reduce((catSum, cat) => catSum + cat.servicios.length, 0), 0);
-        console.warn(`[getPublicPromiseData] Total servicios en catálogo:`, totalServicios);
-
-        // Verificar si algún item del paquete existe en el catálogo
-        const catalogoItemIds = new Set<string>();
-        catalogo.forEach(seccion => {
-          seccion.categorias.forEach(categoria => {
-            categoria.servicios.forEach(servicio => {
-              catalogoItemIds.add(servicio.id);
-            });
-          });
-        });
-        const itemsEncontrados = Array.from(itemIds).filter(id => catalogoItemIds.has(id));
-        console.warn(`[getPublicPromiseData] Items del paquete encontrados en catálogo: ${itemsEncontrados.length} de ${itemIds.size}`);
-      } else if (itemIds.size > 0) {
-        console.log(`[getPublicPromiseData] ✅ Paquete ${paq.id}: ${serviciosFiltrados.length} secciones con servicios encontrados`);
-      }
 
       return {
         id: paq.id,
@@ -374,10 +503,18 @@ export async function getPublicPromiseData(
         description: paq.description,
         price: paq.precio || 0,
         cover_url: paq.cover_url,
+        recomendado: paq.is_featured || false,
         servicios: serviciosFiltrados,
         tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual
       };
     });
+
+    // 7. Obtener condiciones comerciales disponibles y términos y condiciones
+    const [condicionesResult, terminosResult] = await Promise.all([
+      obtenerCondicionesComercialesPublicas(studioSlug),
+      obtenerTerminosCondicionesPublicos(studioSlug),
+    ]);
+
 
     return {
       success: true,
@@ -394,10 +531,13 @@ export async function getPublicPromiseData(
         },
         studio: {
           studio_name: studio.studio_name,
+          slogan: studio.slogan,
           logo_url: studio.logo_url,
         },
         cotizaciones: mappedCotizaciones,
         paquetes: mappedPaquetes,
+        condiciones_comerciales: condicionesResult.success && condicionesResult.data ? condicionesResult.data : undefined,
+        terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
       },
     };
   } catch (error) {

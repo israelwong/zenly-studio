@@ -21,6 +21,8 @@ interface AutorizarCotizacionModalProps {
   onClose: () => void;
   promiseId: string;
   studioSlug: string;
+  condicionesComercialesId?: string | null;
+  condicionesComercialesMetodoPagoId?: string | null;
 }
 
 export function AutorizarCotizacionModal({
@@ -29,31 +31,35 @@ export function AutorizarCotizacionModal({
   onClose,
   promiseId,
   studioSlug,
+  condicionesComercialesId,
+  condicionesComercialesMetodoPagoId,
 }: AutorizarCotizacionModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAutorizar = async () => {
     setIsSubmitting(true);
-    
+
     try {
       const result = await autorizarCotizacionPublica(
         promiseId,
         cotizacion.id,
-        studioSlug
+        studioSlug,
+        condicionesComercialesId,
+        condicionesComercialesMetodoPagoId
       );
 
       if (!result.success) {
-        toast.error('Error al autorizar', {
+        toast.error('Error al enviar solicitud', {
           description: result.error || 'Por favor, intenta de nuevo o contacta al estudio.',
         });
         setIsSubmitting(false);
         return;
       }
-      
-      toast.success('¡Cotización autorizada!', {
-        description: 'El estudio recibirá una notificación de tu decisión.',
+
+      toast.success('¡Solicitud enviada!', {
+        description: 'El estudio recibirá tu solicitud y se pondrá en contacto contigo.',
       });
-      
+
       onClose();
     } catch (error) {
       console.error('Error:', error);
@@ -83,9 +89,9 @@ export function AutorizarCotizacionModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Autorizar Cotización</DialogTitle>
+          <DialogTitle>Solicitar Contratación</DialogTitle>
           <DialogDescription>
-            Confirma que deseas autorizar esta cotización para tu evento
+            Confirma que deseas solicitar la contratación de esta cotización
           </DialogDescription>
         </DialogHeader>
 
@@ -105,7 +111,7 @@ export function AutorizarCotizacionModal({
           {/* Información importante */}
           <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
             <p className="text-sm text-zinc-300 leading-relaxed">
-              Al autorizar esta cotización, el estudio recibirá una notificación y se
+              Al solicitar la contratación, el estudio recibirá una notificación y se
               pondrá en contacto contigo para confirmar los detalles finales y coordinar
               el pago.
             </p>
@@ -129,12 +135,12 @@ export function AutorizarCotizacionModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Autorizando...
+                  Enviando...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Confirmar Autorización
+                  Confirmar Solicitud
                 </>
               )}
             </ZenButton>

@@ -21,6 +21,8 @@ interface SolicitarPaqueteModalProps {
   onClose: () => void;
   promiseId: string;
   studioSlug: string;
+  condicionesComercialesId?: string | null;
+  condicionesComercialesMetodoPagoId?: string | null;
 }
 
 export function SolicitarPaqueteModal({
@@ -29,6 +31,8 @@ export function SolicitarPaqueteModal({
   onClose,
   promiseId,
   studioSlug,
+  condicionesComercialesId,
+  condicionesComercialesMetodoPagoId,
 }: SolicitarPaqueteModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -39,7 +43,9 @@ export function SolicitarPaqueteModal({
       const result = await solicitarPaquetePublico(
         promiseId,
         paquete.id,
-        studioSlug
+        studioSlug,
+        condicionesComercialesId,
+        condicionesComercialesMetodoPagoId
       );
 
       if (!result.success) {

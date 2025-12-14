@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { createStudioNotification } from "@/lib/notifications/studio/studio-notification.service";
-import { StudioNotificationScope } from "@/lib/notifications/studio/types";
+import { StudioNotificationScope, StudioNotificationType, NotificationPriority } from "@/lib/notifications/studio/types";
 
 /**
  * Solicitar información sobre un paquete desde página pública
@@ -10,7 +10,9 @@ import { StudioNotificationScope } from "@/lib/notifications/studio/types";
 export async function solicitarPaquetePublico(
   promiseId: string,
   paqueteId: string,
-  studioSlug: string
+  studioSlug: string,
+  condicionesComercialesId?: string | null,
+  condicionesComercialesMetodoPagoId?: string | null
 ) {
   try {
     // 1. Validar que la promesa existe
@@ -62,21 +64,102 @@ export async function solicitarPaquetePublico(
       };
     }
 
-    // 3. Crear notificación para el estudio
+    // 3. Obtener información de la condición comercial seleccionada (si existe)
+    let condicionComercialInfo = null;
+    let metodoPagoInfo = null;
+
+    if (condicionesComercialesId) {
+      const condicionComercial = await prisma.studio_condiciones_comerciales.findUnique({
+        where: { id: condicionesComercialesId },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          advance_percentage: true,
+          discount_percentage: true,
+        },
+      });
+
+      condicionComercialInfo = condicionComercial;
+
+      if (condicionesComercialesMetodoPagoId) {
+        const metodoPago = await prisma.studio_condiciones_comerciales_metodo_pago.findUnique({
+          where: { id: condicionesComercialesMetodoPagoId },
+          include: {
+            metodos_pago: {
+              select: {
+                payment_method_name: true,
+              },
+            },
+          },
+        });
+
+        metodoPagoInfo = metodoPago?.metodos_pago?.payment_method_name || null;
+      }
+    }
+
+    // 4. Construir mensaje con información de condición comercial
+    let mensajeNotificacion = `${promise.contact.name} solicita contratar el paquete "${paquete.name}"`;
+    let contenidoLog = `Cliente solicitó contratación del paquete: "${paquete.name}"`;
+
+    if (condicionComercialInfo) {
+      mensajeNotificacion += ` con condici?n comercial: "${condicionComercialInfo.name}"`;
+      contenidoLog += ` con condici?n comercial: "${condicionComercialInfo.name}"`;
+
+      if (metodoPagoInfo) {
+        mensajeNotificacion += ` (M?todo de pago: ${metodoPagoInfo})`;
+        contenidoLog += ` (M?todo de pago: ${metodoPagoInfo})`;
+      }
+
+      if (condicionComercialInfo.advance_percentage) {
+        mensajeNotificacion += ` - Anticipo: ${condicionComercialInfo.advance_percentage}%`;
+      }
+
+      if (condicionComercialInfo.discount_percentage) {
+        mensajeNotificacion += ` - Descuento: ${condicionComercialInfo.discount_percentage}%`;
+      }
+    }
+
+    // 5. Crear notificación para el estudio
     await createStudioNotification({
       scope: StudioNotificationScope.STUDIO,
       studio_id: promise.studio.id,
-      type: "commercial",
-      title: "Solicitud de paquete",
-      message: `${promise.contact.name} está interesado en el paquete "${paquete.name}"`,
-      priority: "MEDIUM",
+      type: StudioNotificationType.PROMISE_UPDATED,
+      title: "Solicitud de contratación de paquete",
+      message: mensajeNotificacion,
+      priority: NotificationPriority.MEDIUM,
       contact_id: promise.contact.id,
       promise_id: promiseId,
+      paquete_id: paqueteId,
       metadata: {
         paquete_id: paqueteId,
         paquete_name: paquete.name,
-        paquete_price: paquete.precio,
-        action_type: "paquete_solicitado",
+        package_price: paquete.precio ?? undefined,
+        condiciones_comerciales_id: condicionesComercialesId || null,
+        condiciones_comerciales_metodo_pago_id: condicionesComercialesMetodoPagoId || null,
+        condicion_comercial_name: condicionComercialInfo?.name || null,
+        metodo_pago_name: metodoPagoInfo || null,
+        action_type: "paquete_contratacion_solicitada",
+      },
+    });
+
+    // 6. Agregar log a la promesa
+    await prisma.studio_promise_logs.create({
+      data: {
+        promise_id: promiseId,
+        user_id: null,
+        content: contenidoLog,
+        log_type: "system",
+        metadata: {
+          action: "paquete_contratacion_solicitada",
+          paquete_id: paqueteId,
+          paquete_name: paquete.name,
+          paquete_price: paquete.precio ?? null,
+          condiciones_comerciales_id: condicionesComercialesId || null,
+          condiciones_comerciales_metodo_pago_id: condicionesComercialesMetodoPagoId || null,
+          condicion_comercial_name: condicionComercialInfo?.name || null,
+          metodo_pago_name: metodoPagoInfo || null,
+        },
       },
     });
 
