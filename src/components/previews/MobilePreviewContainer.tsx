@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { ProfileHeader, ProfileContent, ProfileFooter, ProfileNavTabs, FaqSection } from '@/components/profile';
+import { ProfileHeader, ProfileContent, ProfileNavTabs, FaqSection } from '@/components/profile';
+import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 
 interface MobilePreviewContainerProps {
     children?: React.ReactNode;
@@ -125,10 +126,7 @@ export function MobilePreviewContainer({
                         {/* Footer dentro del contenido */}
                         {showFooter && (
                             <div className="mt-4">
-                                <ProfileFooter
-                                    data={data}
-                                    loading={loading}
-                                />
+                                <PublicPageFooter />
                             </div>
                         )}
                     </div>

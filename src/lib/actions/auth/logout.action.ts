@@ -4,13 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 /**
- * Cierra la sesión del usuario y redirige al login
+ * Cierra la sesión del usuario y redirige
+ * 
+ * @param redirectTo - Ruta opcional a donde redirigir (default: /login)
  * 
  * Nota: La limpieza de la preferencia "rememberMe" se hace en el cliente
  * porque requiere acceso a localStorage. El componente LogoutButton
  * maneja esto antes de llamar a esta función.
  */
-export async function logout() {
+export async function logout(redirectTo?: string) {
     try {
         const supabase = await createClient();
 
@@ -24,12 +26,12 @@ export async function logout() {
 
         console.log("✅ Sesión cerrada exitosamente");
 
-        // Redirigir al login
-        redirect("/login");
+        // Redirigir a la ruta especificada o al login por defecto
+        redirect(redirectTo || "/login");
 
     } catch (error) {
         console.error("Error en logout:", error);
-        // Aún así redirigir al login en caso de error
-        redirect("/login");
+        // Aún así redirigir en caso de error
+        redirect(redirectTo || "/login");
     }
 }

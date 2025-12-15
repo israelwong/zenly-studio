@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { ProfileContent, ProfileFooter } from '@/components/profile';
+import { ProfileContent } from '@/components/profile';
+import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { Share2, ArrowLeft } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 
@@ -100,7 +101,7 @@ export function MobilePreviewFull({
 
                             {/* Footer dentro del contenido */}
                             <div className="mt-4">
-                                <ProfileFooter />
+                                <PublicPageFooter />
                             </div>
                         </div>
                     )}

@@ -74,15 +74,20 @@ export async function proxy(request: NextRequest) {
   const isStudioRoute = pathname.match(/^\/([a-zA-Z0-9-]+)\/studio(\/.*)?$/);
   const isStudioProtected = isStudioRoute && !isReservedPath(pathname);
 
-  // Verificar si es una ruta de cliente dinámica [slug]/client
-  const isClienteRoute = pathname.match(/^\/([a-zA-Z0-9-]+)\/client(\/.*)?$/);
-  const isClienteProtected = isClienteRoute && !isReservedPath(pathname);
+  // Verificar si es una ruta de cliente dinámica [slug]/cliente
+  // NOTA: Las rutas de cliente son PÚBLICAS - usan su propio sistema de auth por cookies
+  const isClienteRoute = pathname.match(/^\/([a-zA-Z0-9-]+)\/cliente(\/.*)?$/);
 
   // Verificar si es una ruta de profile edit [slug]/profile/edit
   const isProfileEditRoute = pathname.match(/^\/([a-zA-Z0-9-]+)\/profile\/edit(\/.*)?$/);
   const isProfileEditProtected = isProfileEditRoute && !isReservedPath(pathname);
 
-  if (isProtectedRoute || isStudioProtected || isClienteProtected || isProfileEditProtected) {
+  // Si es una ruta de cliente, permitir acceso directo (auth por cookies propias)
+  if (isClienteRoute) {
+    return NextResponse.next();
+  }
+
+  if (isProtectedRoute || isStudioProtected || isProfileEditProtected) {
     const response = NextResponse.next();
 
     const supabase = createServerClient(
@@ -139,16 +144,6 @@ export async function proxy(request: NextRequest) {
 
     if (!hasAccess) {
       return NextResponse.redirect(new URL("/unauthorized", request.url));
-    }
-
-    // Verificar cliente
-    if (isClienteProtected) {
-      const hasClienteAccess = await checkClienteAccess(user, pathname, request);
-      if (!hasClienteAccess) {
-        const studioSlug = pathname.match(/^\/([a-zA-Z0-9-]+)\/client/)?.[1];
-        const loginUrl = new URL(`/${studioSlug}/client/login?redirect=${encodeURIComponent(pathname)}`, request.url);
-        return NextResponse.redirect(loginUrl);
-      }
     }
 
     return response;
@@ -223,13 +218,13 @@ export async function proxy(request: NextRequest) {
     // No reescribir rutas que ya existen:
     // - /[slug] (página pública del studio)
     // - /[slug]/studio (panel privado del studio)  
-    // - /[slug]/client (portal de clientes)
+    // - /[slug]/cliente (portal de clientes)
     // - /[slug]/preview (preview de promesas - pública)
     // - /[slug]/post (posts públicos)
     // - /[slug]/profile (perfil público)
     // - /[slug]/offer (ofertas públicas)
     // - /[slug]/promise (promesas públicas)
-    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/client') || subPath.startsWith('/preview') || subPath.startsWith('/post') || subPath.startsWith('/profile') || subPath.startsWith('/offer') || subPath.startsWith('/promise')) {
+    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/cliente') || subPath.startsWith('/preview') || subPath.startsWith('/post') || subPath.startsWith('/profile') || subPath.startsWith('/offer') || subPath.startsWith('/promise')) {
       return NextResponse.next();
     }
 
@@ -259,41 +254,6 @@ function checkRouteAccess(userRole: string, pathname: string): boolean {
 
     default:
       return false;
-  }
-}
-
-async function checkClienteAccess(user: any, pathname: string, request: NextRequest): Promise<boolean> {
-  try {
-    // Extraer el slug del studio de la ruta
-    const slugMatch = pathname.match(/^\/([a-zA-Z0-9-]+)\/client(\/.*)?$/);
-    if (!slugMatch) return false;
-
-    const studioSlug = slugMatch[1];
-
-    // Verificar si el usuario tiene acceso a este studio específico
-    // Esto se puede hacer verificando:
-    // 1. Si el usuario es el propietario del studio (suscriptor)
-    // 2. Si el usuario es un cliente con código de acceso válido
-    // 3. Si el usuario tiene un token de acceso específico
-
-    // Por ahora, implementar lógica básica
-    // TODO: Implementar verificación real de acceso de cliente
-
-    // Verificar si el usuario tiene metadata de cliente para este studio
-    const clienteData = user.user_metadata?.cliente_access;
-    if (clienteData && clienteData.studio_slug === studioSlug) {
-      return true;
-    }
-
-    // Verificar si es el propietario del studio
-    if (user.user_metadata?.role === 'suscriptor' && user.user_metadata?.studio_slug === studioSlug) {
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    console.error('Error checking cliente access:', error);
-    return false;
   }
 }
 

@@ -6,6 +6,7 @@ import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { CotizacionesSection } from '@/components/promise/CotizacionesSection';
 import { PaquetesSection } from '@/components/promise/PaquetesSection';
 import { ComparadorButton } from '@/components/promise/ComparadorButton';
+import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { ZenButton, ZenCard } from '@/components/ui/zen';
 import { prisma } from '@/lib/prisma';
 
@@ -201,14 +202,7 @@ export default async function PromisePage({ params }: PromisePageProps) {
         )}
 
         {/* Footer by Zen */}
-        <footer className="border-t border-zinc-800/30 p-6 text-center">
-          <p className="text-xs text-zinc-500 mb-1">
-            Powered by <Link href="/" className="text-zinc-400 font-medium hover:text-zinc-300 transition-colors">Zen México</Link>
-          </p>
-          <p className="text-xs text-zinc-600">
-            © {new Date().getFullYear()} Todos los derechos reservados
-          </p>
-        </footer>
+        <PublicPageFooter />
       </div>
     </div>
   );

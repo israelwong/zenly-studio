@@ -6,6 +6,7 @@ import { OfferLandingPage } from "@/components/offers/OfferLandingPage";
 import { TrackingScripts } from "@/components/offers/TrackingScripts";
 import { OfferBackgroundWrapper } from "@/components/offers/OfferBackgroundWrapper";
 import { OfferHeader } from "@/components/offers/OfferHeader";
+import { PublicPageFooter } from "@/components/shared/PublicPageFooter";
 import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
 import { ContentBlock } from "@/types/content-blocks";
@@ -171,14 +172,7 @@ export default async function PublicOfferPage({
                 />
 
                 {/* Footer */}
-                <div className="border-t border-zinc-800/30 p-6 text-center">
-                  <p className="text-xs text-zinc-500 mb-1">
-                    Powered by <Link href="/" className="text-zinc-400 font-medium hover:text-zinc-300 transition-colors">Zen México</Link>
-                  </p>
-                  <p className="text-xs text-zinc-600">
-                    © {new Date().getFullYear()} Todos los derechos reservados
-                  </p>
-                </div>
+                <PublicPageFooter />
               </div>
             </div>
           </div>

@@ -13,10 +13,11 @@ export { ProfileHeader } from './ProfileHeader';
 export { PublicProfileEditButton } from './PublicProfileEditButton';
 export { ProfileNavTabs } from './ProfileNavTabs';
 export { ProfileContent } from './ProfileContent';
-export { ProfileFooter } from './ProfileFooter';
+// ProfileFooter deprecated - use PublicPageFooter from @/components/shared
 export { SearchCommandPalette } from './SearchCommandPalette';
 export { MediaDisplay } from './MediaDisplay';
 export { MobileActionsSheet } from './MobileActionsSheet';
+export { MobileGuestActionsSheet } from './MobileGuestActionsSheet';
 // ProfileFAQ deprecated - usar FaqSection desde sections
 export { FaqSection as ProfileFAQ } from './sections';
 

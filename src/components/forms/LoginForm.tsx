@@ -155,7 +155,7 @@ export function LoginForm() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.back()}
+            onClick={() => router.push('/')}
             className="w-full bg-transparent border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
             disabled={loading}
           >

@@ -8,11 +8,11 @@ import { PublicProfileData } from '@/types/public-profile';
 import {
     ProfileHeader,
     ProfileNavTabs,
-    ProfileFooter,
     ZenCreditsCard,
     OffersCard,
     MobilePromotionsSection
 } from '@/components/profile';
+import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { QuickActions } from '@/components/profile/QuickActions';
 import { PostDetailModal } from '@/components/profile/sections/PostDetailModal';
 import { PortfolioDetailModal } from '@/components/profile/sections/PortfolioDetailModal';
@@ -333,11 +333,11 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
 
             {/* Mobile-only: Footer */}
             <footer className="lg:hidden">
-                <ProfileFooter />
+                <PublicPageFooter />
             </footer>
 
             {/* Quick Actions FAB - Solo mobile */}
-            <QuickActions 
+            <QuickActions
                 studioSlug={studioSlug}
                 onCreatePost={() => {
                     setEditingPostId(undefined);

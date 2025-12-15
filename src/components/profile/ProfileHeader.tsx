@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Plus, LogOut, LayoutDashboard, UserPlus, LogIn, Pencil, Menu } from 'lucide-react';
+import { Plus, LogOut, LayoutDashboard, UserPlus, LogIn, Pencil, Menu, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { logout } from '@/lib/actions/auth/logout.action';
 import { clearRememberMePreference } from '@/lib/supabase/storage-adapter';
 import { EditStudioNameModal, EditSloganModal, EditLogoModal } from './modals';
 import { MobileActionsSheet } from './MobileActionsSheet';
+import { MobileGuestActionsSheet } from './MobileGuestActionsSheet';
 import { useDynamicFavicon } from '@/hooks/useDynamicFavicon';
 
 interface ProfileHeaderProps {
@@ -63,6 +64,7 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
     const studioData = data || {};
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+    const [mobileGuestActionsOpen, setMobileGuestActionsOpen] = useState(false);
 
     // Estados para modales de edición
     const [editNameModal, setEditNameModal] = useState(false);
@@ -123,12 +125,19 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
         router.push('/login');
     };
 
+    const handleClientPortal = () => {
+        if (studioSlug) {
+            router.push(`/${studioSlug}/cliente/login`);
+        }
+    };
+
     const handleLogout = async () => {
         if (isLoggingOut) return;
         setIsLoggingOut(true);
         try {
             clearRememberMePreference();
-            await logout();
+            // Redirigir al perfil público del estudio después de logout
+            await logout(studioSlug ? `/${studioSlug}` : '/login');
         } catch (error) {
             console.error("Error al cerrar sesión:", error);
             setIsLoggingOut(false);
@@ -298,21 +307,43 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
                             </>
                         ) : (
                             <>
-                                {/* Usuario no autenticado: Iniciar sesión + Crear cuenta */}
+                                {/* Usuario no autenticado */}
+                                {/* Mobile: Solo botón hamburguesa */}
                                 <button
-                                    onClick={handleLogin}
-                                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-zinc-100 bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 rounded-lg transition-colors"
-                                    aria-label="Iniciar sesión"
+                                    onClick={() => setMobileGuestActionsOpen(true)}
+                                    className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-md transition-colors"
+                                    aria-label="Menú"
                                 >
-                                    <span>Iniciar sesión</span>
+                                    <Menu className="w-4 h-4" />
                                 </button>
-                                <button
-                                    onClick={handleSignUp}
-                                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 rounded-lg transition-colors"
-                                    aria-label="Crear cuenta"
-                                >
-                                    <span>Crear cuenta</span>
-                                </button>
+
+                                {/* Desktop: Botones completos */}
+                                <div className="hidden sm:flex items-center gap-2">
+                                    <button
+                                        onClick={handleClientPortal}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-zinc-100 bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 rounded-lg transition-colors"
+                                        aria-label="Portal de clientes"
+                                    >
+                                        <Users className="w-3.5 h-3.5" />
+                                        <span>Clientes</span>
+                                    </button>
+
+                                    <button
+                                        onClick={handleLogin}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-zinc-100 bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 rounded-lg transition-colors"
+                                        aria-label="Iniciar sesión"
+                                    >
+                                        <span>Iniciar sesión</span>
+                                    </button>
+
+                                    <button
+                                        onClick={handleSignUp}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 rounded-lg transition-colors"
+                                        aria-label="Crear Studio"
+                                    >
+                                        <span>Crear Studio</span>
+                                    </button>
+                                </div>
                             </>
                         )}
                     </div>
@@ -357,7 +388,7 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
                 </>
             )}
 
-            {/* Mobile Actions Sheet */}
+            {/* Mobile Actions Sheet - Usuario autenticado */}
             {user && studioSlug && (
                 <MobileActionsSheet
                     isOpen={mobileActionsOpen}
@@ -366,6 +397,17 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
                     onDashboard={handleDashboard}
                     onLogout={handleLogout}
                     isLoggingOut={isLoggingOut}
+                />
+            )}
+
+            {/* Mobile Guest Actions Sheet - Usuario NO autenticado */}
+            {!user && (
+                <MobileGuestActionsSheet
+                    isOpen={mobileGuestActionsOpen}
+                    onClose={() => setMobileGuestActionsOpen(false)}
+                    onClientPortal={handleClientPortal}
+                    onLogin={handleLogin}
+                    onSignUp={handleSignUp}
                 />
             )}
         </div>
