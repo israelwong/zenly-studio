@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenSwitch, ZenButton } from "@/components/ui/zen";
-import { MobilePreviewOffer } from "@/components/previews";
 import { BasicInfoEditor } from "../editors/BasicInfoEditor";
 import { OfferCardPreview } from "@/components/previews";
 import { useOfferEditor } from "../OfferEditorContext";
 import { checkOfferSlugExists } from "@/lib/actions/studio/offers/offers.actions";
 import { obtenerCondicionComercial } from "@/lib/actions/studio/config/condiciones-comerciales.actions";
+import { obtenerTipoEventoPorId } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 
 interface BasicInfoTabProps {
   studioSlug: string;
@@ -28,6 +28,7 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
   const [isValidatingSlug, setIsValidatingSlug] = useState(false);
   const [slugHint, setSlugHint] = useState<string | null>(null);
   const [discountPercentage, setDiscountPercentage] = useState<number | null>(null);
+  const [eventTypeName, setEventTypeName] = useState<string | null>(null);
 
   // Cargar discount_percentage cuando cambia business_term_id
   useEffect(() => {
@@ -52,6 +53,30 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
 
     loadDiscountPercentage();
   }, [formData.business_term_id, studioSlug]);
+
+  // Cargar nombre del tipo de evento cuando cambia event_type_id
+  useEffect(() => {
+    const loadEventTypeName = async () => {
+      if (!formData.event_type_id) {
+        setEventTypeName(null);
+        return;
+      }
+
+      try {
+        const result = await obtenerTipoEventoPorId(formData.event_type_id);
+        if (result.success && result.data) {
+          setEventTypeName(result.data.nombre);
+        } else {
+          setEventTypeName(null);
+        }
+      } catch (error) {
+        console.error("Error loading event type:", error);
+        setEventTypeName(null);
+      }
+    };
+
+    loadEventTypeName();
+  }, [formData.event_type_id]);
 
   // Validar slug único cuando cambia
   useEffect(() => {
@@ -164,15 +189,12 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
 
       {/* Col 2: Preview */}
       <div className="hidden lg:block">
-        <div className="sticky top-6">
-          <MobilePreviewOffer
-            data={{
-              studio_name: "Tu Estudio",
-              slogan: "Vista previa",
-              logo_url: null,
-            }}
-            loading={false}
-          >
+        <div className="sticky top-6 space-y-6">
+          {/* Preview Desktop */}
+          <div>
+            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">
+              Vista Desktop (Sidebar)
+            </p>
             <OfferCardPreview
               name={formData.name}
               description={formData.description}
@@ -180,8 +202,33 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
               coverMediaType={formData.cover_media_type}
               discountPercentage={discountPercentage}
               validUntil={formData.end_date ? formData.end_date.toISOString() : null}
+              isPermanent={formData.is_permanent}
+              hasDateRange={formData.has_date_range}
+              startDate={formData.start_date ? formData.start_date.toISOString() : null}
+              eventTypeName={eventTypeName}
+              variant="desktop"
             />
-          </MobilePreviewOffer>
+          </div>
+
+          {/* Preview Mobile */}
+          <div>
+            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">
+              Vista Mobile (Carousel)
+            </p>
+            <OfferCardPreview
+              name={formData.name}
+              description={formData.description}
+              coverMediaUrl={formData.cover_media_url}
+              coverMediaType={formData.cover_media_type}
+              discountPercentage={discountPercentage}
+              validUntil={formData.end_date ? formData.end_date.toISOString() : null}
+              isPermanent={formData.is_permanent}
+              hasDateRange={formData.has_date_range}
+              startDate={formData.start_date ? formData.start_date.toISOString() : null}
+              eventTypeName={eventTypeName}
+              variant="compact"
+            />
+          </div>
         </div>
       </div>
     </div>

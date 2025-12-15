@@ -29,7 +29,7 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
 
         {
             id: 'business',
-            title: 'Business',
+            title: 'Negocio',
             icon: Briefcase,
             items: [
                 { id: 'dashboard', name: 'Dashboard', href: `/commercial/dashboard`, icon: Home },
@@ -43,15 +43,14 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
         // Configuración
         {
             id: 'settings',
-            title: 'Config',
+            title: 'Configuración',
             icon: Settings,
             items: [
                 { id: 'catalogo', name: 'Catálogo', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
                 { id: 'tipo_evento', name: 'Tipo de Evento', href: `/commercial/tipo-evento`, icon: ShoppingBagIcon },
-
                 { id: 'contracts', name: 'Contratos', href: `/commercial/contracts`, icon: FileText },
-                { id: 'integraciones', name: 'Integraciones', href: `/business/integraciones/tracking`, icon: Plug },
-                { id: 'magic', name: 'ZEN Magic', href: `/magic`, icon: Sparkles },
+                // { id: 'integraciones', name: 'Integraciones', href: `/business/integraciones/tracking`, icon: Plug },
+                // { id: 'magic', name: 'ZEN Magic', href: `/magic`, icon: Sparkles },
             ],
         },
 

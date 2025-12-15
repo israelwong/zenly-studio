@@ -144,13 +144,32 @@ export async function createOffer(
 
       // Asociar business_term si se proporcionó
       if (validatedData.business_term_id) {
-        await prisma.studio_condiciones_comerciales.update({
-          where: { id: validatedData.business_term_id },
-          data: {
-            offer_id: offer.id,
-            type: 'offer',
+        // Verificar que la condición pertenezca al mismo studio
+        const businessTerm = await prisma.studio_condiciones_comerciales.findFirst({
+          where: {
+            id: validatedData.business_term_id,
+            studio_id: studio.id,
           },
         });
+
+        if (businessTerm) {
+          // Si la condición ya está asociada a otra oferta, desasociarla primero
+          if (businessTerm.offer_id) {
+            await prisma.studio_condiciones_comerciales.update({
+              where: { id: validatedData.business_term_id },
+              data: { offer_id: null },
+            });
+          }
+
+          // Asociar la condición a esta nueva oferta
+          await prisma.studio_condiciones_comerciales.update({
+            where: { id: validatedData.business_term_id },
+            data: {
+              offer_id: offer.id,
+              type: 'offer',
+            },
+          });
+        }
       }
 
       const mappedOffer: StudioOffer = {
@@ -386,24 +405,58 @@ export async function updateOffer(
       });
 
       // Manejar business_term_id
+      let updatedBusinessTerm = offer.business_term;
       if ('business_term_id' in validatedData) {
         const businessTermId = validatedData.business_term_id;
 
-        // Primero, desasociar cualquier condición comercial existente de esta oferta
+        // Paso 1: Desasociar cualquier condición comercial existente de esta oferta
         await prisma.studio_condiciones_comerciales.updateMany({
           where: { offer_id: offerId },
           data: { offer_id: null },
         });
 
-        // Si hay un business_term_id, asociarlo a esta oferta
+        // Paso 2: Si hay un business_term_id, verificar y asociarlo a esta oferta
         if (businessTermId) {
-          await prisma.studio_condiciones_comerciales.update({
+          // Verificar que la condición pertenezca al mismo studio
+          const businessTerm = await prisma.studio_condiciones_comerciales.findFirst({
+            where: {
+              id: businessTermId,
+              studio_id: studio.id,
+            },
+          });
+
+          if (!businessTerm) {
+            return { success: false, error: "Condición comercial no encontrada o no pertenece a este estudio" };
+          }
+
+          // Desasociar esta condición de cualquier otra oferta (por si estaba asociada)
+          if (businessTerm.offer_id && businessTerm.offer_id !== offerId) {
+            await prisma.studio_condiciones_comerciales.update({
+              where: { id: businessTermId },
+              data: { offer_id: null },
+            });
+          }
+
+          // Asociar la condición a esta oferta
+          const updated = await prisma.studio_condiciones_comerciales.update({
             where: { id: businessTermId },
             data: {
               offer_id: offerId,
               type: 'offer',
             },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              discount_percentage: true,
+              advance_percentage: true,
+              type: true,
+              override_standard: true,
+            },
           });
+          updatedBusinessTerm = updated;
+        } else {
+          updatedBusinessTerm = null;
         }
       }
 
@@ -438,15 +491,15 @@ export async function updateOffer(
         end_date: offer.end_date,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
-        business_term_id: offer.business_term?.id || null,
-        business_term: offer.business_term ? {
-          id: offer.business_term.id,
-          name: offer.business_term.name,
-          description: offer.business_term.description,
-          discount_percentage: offer.business_term.discount_percentage,
-          advance_percentage: offer.business_term.advance_percentage,
-          type: offer.business_term.type as 'standard' | 'offer',
-          override_standard: offer.business_term.override_standard,
+        business_term_id: updatedBusinessTerm?.id || null,
+        business_term: updatedBusinessTerm ? {
+          id: updatedBusinessTerm.id,
+          name: updatedBusinessTerm.name,
+          description: updatedBusinessTerm.description,
+          discount_percentage: updatedBusinessTerm.discount_percentage,
+          advance_percentage: updatedBusinessTerm.advance_percentage,
+          type: updatedBusinessTerm.type as 'standard' | 'offer',
+          override_standard: updatedBusinessTerm.override_standard,
         } : undefined,
         landing_page: offer.landing_page
           ? {
@@ -826,6 +879,17 @@ export async function listOffers(
         include: {
           landing_page: true,
           leadform: true,
+          business_term: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              discount_percentage: true,
+              advance_percentage: true,
+              type: true,
+              override_standard: true,
+            },
+          },
         },
         orderBy: [
           { order: "asc" },
@@ -854,6 +918,18 @@ export async function listOffers(
             end_date: offer.end_date,
             created_at: offer.created_at,
             updated_at: offer.updated_at,
+            business_term_id: offer.business_term_id,
+            business_term: offer.business_term
+              ? {
+                id: offer.business_term.id,
+                name: offer.business_term.name,
+                description: offer.business_term.description,
+                discount_percentage: offer.business_term.discount_percentage,
+                advance_percentage: offer.business_term.advance_percentage,
+                type: offer.business_term.type as "standard" | "offer",
+                override_standard: offer.business_term.override_standard,
+              }
+              : undefined,
             landing_page: offer.landing_page
               ? {
                 id: offer.landing_page.id,
