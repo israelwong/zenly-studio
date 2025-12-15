@@ -72,7 +72,7 @@ export async function autorizarCotizacionPublica(
       };
     }
 
-    // 3. Obtener información de la condición comercial seleccionada (si existe)
+    // 3. Obtener informaci?n de la condici?n comercial seleccionada (si existe)
     let condicionComercialInfo = null;
     let metodoPagoInfo = null;
 
@@ -117,7 +117,7 @@ export async function autorizarCotizacionPublica(
       },
     });
 
-    // 5. Construir mensaje con información de condición comercial
+    // 5. Construir mensaje con informaci?n de condici?n comercial
     let mensajeNotificacion = `${promise.contact.name} solicita contratar la cotizaci?n "${cotizacion.name}"`;
     let contenidoLog = `Cliente solicit? contrataci?n de la cotizaci?n: "${cotizacion.name}"`;
 
@@ -190,7 +190,7 @@ export async function autorizarCotizacionPublica(
       },
     };
   } catch (error) {
-    console.error("Error al solicitar contrataci?n:", error);
+    console.error("Error al solicitar contratación:", error);
     return {
       success: false,
       error: "Error al enviar la solicitud",

@@ -671,6 +671,15 @@ export async function getPublicOffer(
         include: {
           landing_page: true,
           leadform: true,
+          business_term: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              discount_percentage: true,
+              advance_percentage: true,
+            },
+          },
         },
       });
 
@@ -685,6 +694,15 @@ export async function getPublicOffer(
           include: {
             landing_page: true,
             leadform: true,
+            business_term: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                discount_percentage: true,
+                advance_percentage: true,
+              },
+            },
           },
         });
       }
@@ -712,6 +730,15 @@ export async function getPublicOffer(
         end_date: offer.end_date,
         created_at: offer.created_at,
         updated_at: offer.updated_at,
+        business_term: offer.business_term ? {
+          id: offer.business_term.id,
+          name: offer.business_term.name,
+          description: offer.business_term.description,
+          discount_percentage: offer.business_term.discount_percentage,
+          advance_percentage: offer.business_term.advance_percentage,
+          type: 'offer' as const,
+          override_standard: false,
+        } : undefined,
         landing_page: offer.landing_page
           ? {
             id: offer.landing_page.id,

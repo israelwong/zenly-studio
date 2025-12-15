@@ -271,13 +271,8 @@ export function OfferLeadForm({
       // Redirigir según configuración (modo página dedicada)
       if (successRedirectUrl) {
         window.location.href = successRedirectUrl;
-      } else if (result.data?.redirect_url) {
-        const redirectUrl = result.data.redirect_url;
-        if (redirectUrl) {
-          router.push(redirectUrl);
-        }
       } else {
-        // Redirigir a la misma página con parámetro de éxito
+        // Redirigir a la misma página con parámetro de éxito para mostrar modal
         router.push(`/${studioSlug}/offer/${offerSlug}/leadform?success=true`);
       }
     } catch (error) {

@@ -5,7 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
-import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
+import { formatRelativeTime, formatInitials, formatDate } from '@/lib/actions/utils/formatting';
 import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge } from '@/components/ui/zen';
 import { getPromiseTagsByPromiseId, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
@@ -32,8 +32,8 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
 
     const style = {
         transform: CSS.Transform.toString(transform),
-        transition: isDragging 
-            ? 'none' 
+        transition: isDragging
+            ? 'none'
             : `${transition}, all 0.2s cubic-bezier(0.18, 0.67, 0.6, 1.22)`,
         opacity: isDragging ? 0 : 1,
         cursor: isDragging ? 'grabbing' : 'pointer',
@@ -79,13 +79,6 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
         return 'text-emerald-400'; // Con tiempo (más de 7 días)
     };
 
-    const formatDate = (date: Date): string => {
-        return date.toLocaleDateString('es-MX', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-        });
-    };
 
 
     // Si los datos no vienen en la promesa, cargarlos (fallback para compatibilidad)
@@ -202,7 +195,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
             e.stopPropagation();
             return;
         }
-        
+
         // Ejecutar onClick normalmente
         if (onClick) {
             onClick(promise);

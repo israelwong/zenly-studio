@@ -134,20 +134,20 @@ export async function validatePhoneBeforeSubmit(
         };
       }
 
-    // Teléfono y email coinciden (o no hay email), verificar fecha
-    if (interestDate) {
-      const existingPromise = await prisma.studio_promises.findFirst({
-        where: {
-          contact_id: existingContact.id,
-          event_date: new Date(interestDate),
-        },
-        select: {
-          event_date: true,
-        },
-        orderBy: {
-          created_at: 'desc',
-        },
-      });
+      // Teléfono y email coinciden (o no hay email), verificar fecha
+      if (interestDate) {
+        const existingPromise = await prisma.studio_promises.findFirst({
+          where: {
+            contact_id: existingContact.id,
+            event_date: new Date(interestDate),
+          },
+          select: {
+            event_date: true,
+          },
+          orderBy: {
+            created_at: 'desc',
+          },
+        });
 
         if (existingPromise) {
           // Ya solicitó info para esta fecha
@@ -349,6 +349,19 @@ export async function submitOfferLeadform(
       });
 
       // Crear promise asociada
+      // Parsear fecha de forma segura (sin cambios por zona horaria)
+      let eventDate: Date | null = null;
+      if (validatedData.interest_date) {
+        // Si es formato YYYY-MM-DD, parsear como fecha local
+        const dateMatch = validatedData.interest_date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (dateMatch) {
+          const [, year, month, day] = dateMatch;
+          eventDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } else {
+          eventDate = new Date(validatedData.interest_date);
+        }
+      }
+
       const promise = await prisma.studio_promises.create({
         data: {
           studio_id: studio.id,
@@ -357,7 +370,7 @@ export async function submitOfferLeadform(
           pipeline_stage_id: nuevoStage?.id || null,
           status: "pending",
           event_type_id: validatedData.event_type_id || null,
-          event_date: validatedData.interest_date ? new Date(validatedData.interest_date) : null, // ✅ Guardar como event_date
+          event_date: eventDate, // ✅ Guardar como event_date (parseado de forma segura)
           // ✅ Marcar como prueba si aplica
           is_test: isTest,
           test_created_at: testTimestamp,
@@ -419,10 +432,10 @@ export async function submitOfferLeadform(
       }
 
       // Determinar URL de redirección
-      const redirectUrl = isTest 
+      const redirectUrl = isTest
         ? null // Preview no redirige
-        : (offer?.leadform?.success_redirect_url || 
-           (offer ? `/${studioSlug}/offer/${offer.slug}/leadform?success=true` : null));
+        : (offer?.leadform?.success_redirect_url ||
+          (offer ? `/${studioSlug}/offer/${offer.slug}/leadform?success=true` : null));
 
       return {
         success: true,

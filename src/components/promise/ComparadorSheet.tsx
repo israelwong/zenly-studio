@@ -194,14 +194,14 @@ export function ComparadorSheet({
                         <ZenBadge
                           className={
                             item.type === 'cotizacion'
-                              ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-2 py-0.5'
+                              ? 'bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-2 py-0.5'
                               : 'bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-2 py-0.5'
                           }
                         >
                           {item.type === 'cotizacion' ? 'Cotización' : 'Paquete'}
                         </ZenBadge>
-                        <p className="font-semibold text-white text-xs sm:text-sm truncate mt-1.5">{item.name}</p>
-                        <p className="text-sm sm:text-base font-bold text-white mt-1">
+                        <p className="font-semibold text-white text-xs sm:text-sm truncate mt-1.5 capitalize">{item.name}</p>
+                        <p className="text-md sm:text-base font-bold text-white mt-1">
                           {formatPrice(finalPrice)}
                         </p>
                         {isCotizacion(item) && item.discount && (
@@ -272,7 +272,7 @@ export function ComparadorSheet({
                                     return (
                                       <div key={item.id} className="px-3 py-2 w-[150px] sm:w-[180px] shrink-0 flex items-center justify-center">
                                         {hasServicio ? (
-                                          <Check className="h-3.5 w-3.5 text-blue-400" />
+                                          <Check className={`h-3.5 w-3.5 ${item.type === 'cotizacion' ? 'text-emerald-400' : 'text-blue-400'}`} />
                                         ) : (
                                           <span className="text-zinc-700 text-sm">—</span>
                                         )}
@@ -290,10 +290,12 @@ export function ComparadorSheet({
               ))}
 
               {/* Precio Final y Acciones */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-stretch">
                 <div className="sticky left-0 z-20 bg-zinc-900 w-[180px] sm:w-[220px] shrink-0">
-                  <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50 px-3 py-2">
-                    <p className="text-xs sm:text-sm font-medium text-zinc-400">Precio Total</p>
+                  <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50 px-3 py-2 h-full flex items-center justify-center">
+                    <div className="text-center">
+                      <p className="text-xs sm:text-sm font-medium text-zinc-400">Precio Total</p>
+                    </div>
                   </div>
                 </div>
 
@@ -305,10 +307,10 @@ export function ComparadorSheet({
                         : item.price;
 
                     return (
-                      <div key={item.id} className="w-[150px] sm:w-[180px] shrink-0 space-y-2">
+                      <div key={item.id} className="w-[150px] sm:w-[180px] shrink-0">
                         <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/50 px-3 py-2">
                           <div className="text-center">
-                            <p className="text-sm sm:text-base font-bold text-white">
+                            <p className="text-lg sm:text-base font-bold text-white">
                               {formatPrice(finalPrice)}
                             </p>
                             {isCotizacion(item) && item.discount && (
@@ -316,25 +318,25 @@ export function ComparadorSheet({
                                 {formatPrice(item.price)}
                               </p>
                             )}
+                            {onViewDetails && (
+                              <ZenButton
+                                onClick={() => {
+                                  onViewDetails(
+                                    item.type === 'cotizacion'
+                                      ? cotizaciones.find(c => c.id === item.id)!
+                                      : paquetes.find(p => p.id === item.id)!,
+                                    item.type
+                                  );
+                                }}
+                                variant="ghost"
+                                className={`w-full text-xs ${item.type === 'cotizacion' ? 'text-emerald-400' : 'text-blue-400'}`}
+                                size="sm"
+                              >
+                                {item.type === 'cotizacion' ? 'Autorizar' : 'Ver detalles'}
+                              </ZenButton>
+                            )}
                           </div>
                         </div>
-                        {onViewDetails && (
-                          <ZenButton
-                            onClick={() => {
-                              onViewDetails(
-                                item.type === 'cotizacion'
-                                  ? cotizaciones.find(c => c.id === item.id)!
-                                  : paquetes.find(p => p.id === item.id)!,
-                                item.type
-                              );
-                            }}
-                            className="w-full text-xs bg-blue-600 hover:bg-blue-700"
-                            size="sm"
-                          >
-
-                            Ver detalles
-                          </ZenButton>
-                        )}
                       </div>
                     );
                   })}

@@ -121,9 +121,9 @@ export async function getContacts(
     const mappedContacts: Contact[] = contacts.map(contact => {
       // Determinar status basado en eventos y promesas
       const hasEvents = contact.cotizaciones.length > 0;
-      const hasPromisesNoAprobadas = contact.promises.length > 0 && 
+      const hasPromisesNoAprobadas = contact.promises.length > 0 &&
         contact.promises.some(p => p.quotes.length === 0);
-      
+
       // Si tiene eventos asociados → cliente
       // Si solo tiene promesas no aprobadas → prospecto
       // Si no tiene ni eventos ni promesas → usar status del contacto
@@ -298,14 +298,14 @@ export async function createContact(
       validatedData = createContactSchema.parse(data);
     } catch (error: any) {
       if (error.errors) {
-        return { 
-          success: false, 
-          error: JSON.stringify(error.errors) 
+        return {
+          success: false,
+          error: JSON.stringify(error.errors)
         };
       }
-      return { 
-        success: false, 
-        error: error.message || 'Error de validación' 
+      return {
+        success: false,
+        error: error.message || 'Error de validación'
       };
     }
 
@@ -426,14 +426,14 @@ export async function updateContact(
       validatedData = updateContactSchema.parse(data);
     } catch (error: any) {
       if (error.errors) {
-        return { 
-          success: false, 
-          error: JSON.stringify(error.errors) 
+        return {
+          success: false,
+          error: JSON.stringify(error.errors)
         };
       }
-      return { 
-        success: false, 
-        error: error.message || 'Error de validación' 
+      return {
+        success: false,
+        error: error.message || 'Error de validación'
       };
     }
 
@@ -612,6 +612,23 @@ export async function deleteContact(
       return { success: false, error: 'Contacto no encontrado' };
     }
 
+    // Verificar asociaciones antes de eliminar
+    const checkResult = await checkContactAssociations(studioSlug, contactId);
+
+    if (!checkResult.success) {
+      return { success: false, error: checkResult.error || 'Error al verificar asociaciones' };
+    }
+
+    if (checkResult.hasAssociations) {
+      if (checkResult.hasPromises && checkResult.hasEvents) {
+        return { success: false, error: 'No se puede eliminar porque tiene promesas y eventos asociados' };
+      } else if (checkResult.hasPromises) {
+        return { success: false, error: 'No se puede eliminar porque tiene promesas asociadas' };
+      } else if (checkResult.hasEvents) {
+        return { success: false, error: 'No se puede eliminar porque tiene eventos asociados' };
+      }
+    }
+
     await prisma.studio_contacts.delete({
       where: { id: contactId }
     });
@@ -762,12 +779,12 @@ export async function getContactEvents(studioSlug: string, contactId: string) {
 export async function checkContactAssociations(
   studioSlug: string,
   contactId: string
-): Promise<{ 
-  success: boolean; 
-  hasAssociations: boolean; 
-  hasPromises: boolean; 
+): Promise<{
+  success: boolean;
+  hasAssociations: boolean;
+  hasPromises: boolean;
   hasEvents: boolean;
-  error?: string 
+  error?: string
 }> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -776,12 +793,12 @@ export async function checkContactAssociations(
     });
 
     if (!studio) {
-      return { 
-        success: false, 
-        hasAssociations: false, 
-        hasPromises: false, 
+      return {
+        success: false,
+        hasAssociations: false,
+        hasPromises: false,
         hasEvents: false,
-        error: 'Studio no encontrado' 
+        error: 'Studio no encontrado'
       };
     }
 

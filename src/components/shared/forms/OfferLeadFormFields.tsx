@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/shadcn/
 import { checkDateAvailability } from "@/lib/actions/studio/offers/offer-availability.actions";
 import { validatePhoneBeforeSubmit, validateEmailBeforeSubmit } from "@/lib/actions/studio/offers/offer-submissions.actions";
 import { LeadFormFieldsConfig, LeadFormField } from "@/lib/actions/schemas/offer-schemas";
+import { formatDate } from "@/lib/actions/utils/formatting";
 import { Loader2, CalendarIcon, AlertTriangle, Info } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,6 +49,7 @@ export function OfferLeadFormFields({
   emailRequired = false,
   enableInterestDate = false,
   validateWithCalendar = false,
+  eventTypeId,
   studioId,
   studioSlug,
   isPreview = false,
@@ -208,7 +210,7 @@ export function OfferLeadFormFields({
 
     try {
       const cleanPhone = formData.phone.replace(/\D/g, "");
-      
+
       // Validar teléfono antes de enviar
       const phoneValidation = await validatePhoneBeforeSubmit(
         studioSlug,
@@ -245,7 +247,7 @@ export function OfferLeadFormFields({
         interest_date: formData.interest_date,
         event_type_id: eventTypeId,
       });
-      
+
       // Si es preview, limpiar el formulario después del submit exitoso
       if (isPreview) {
         setFormData(initialData);
@@ -255,7 +257,7 @@ export function OfferLeadFormFields({
         setDateAvailability({ checking: false, available: null });
         setPastDateAlert(false);
       }
-      
+
       // Llamar callback de éxito si existe
       if (onSuccess) {
         onSuccess();
@@ -333,7 +335,7 @@ export function OfferLeadFormFields({
                     Solicitud duplicada
                   </h4>
                   <p className="text-sm text-zinc-300">
-                    Ya has solicitado información para esta fecha{phoneConflict.existingDate && ` (${format(new Date(phoneConflict.existingDate), "PPP", { locale: es })})`}.
+                    Ya has solicitado información para esta fecha{phoneConflict.existingDate && ` (${formatDate(phoneConflict.existingDate)})`}.
                   </p>
                   <p className="text-sm text-zinc-400 mt-2">
                     Te contactaremos lo antes posible. Si necesitas información para otra fecha, selecciona una diferente.
@@ -401,11 +403,11 @@ export function OfferLeadFormFields({
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {formData[field.id]
                       ? (() => {
-                          // Parsear fecha en zona horaria local
-                          const [year, month, day] = formData[field.id].split('-');
-                          const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                          return format(localDate, "PPP", { locale: es });
-                        })()
+                        // Parsear fecha en zona horaria local
+                        const [year, month, day] = formData[field.id].split('-');
+                        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                        return format(localDate, "PPP", { locale: es });
+                      })()
                       : field.placeholder || "Selecciona una fecha"}
                   </ZenButton>
                 </PopoverTrigger>
@@ -424,7 +426,7 @@ export function OfferLeadFormFields({
                         today.setHours(0, 0, 0, 0);
                         const selectedDate = new Date(date);
                         selectedDate.setHours(0, 0, 0, 0);
-                        
+
                         if (selectedDate < today) {
                           setPastDateAlert(true);
                           return;
@@ -435,7 +437,7 @@ export function OfferLeadFormFields({
                         const month = String(date.getMonth() + 1).padStart(2, '0');
                         const day = String(date.getDate()).padStart(2, '0');
                         const dateString = `${year}-${month}-${day}`;
-                        
+
                         handleInputChange(field.id, dateString);
                         setPastDateAlert(false);
                         setDatePopoverOpen(false); // Cerrar popover

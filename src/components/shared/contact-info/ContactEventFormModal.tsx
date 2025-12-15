@@ -73,22 +73,36 @@ export function ContactEventFormModal({
     const [showContactSuggestions, setShowContactSuggestions] = useState(false);
     const [filteredContactSuggestions, setFilteredContactSuggestions] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
     const [allContacts, setAllContacts] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
+    // Helper para parsear fecha de forma segura (sin cambios por zona horaria)
+    const parseDateSafe = (date: Date | string): Date => {
+        if (typeof date === "string") {
+            // Si es formato YYYY-MM-DD o ISO, parsear como fecha local
+            const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (dateMatch) {
+                const [, year, month, day] = dateMatch;
+                return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            }
+            return new Date(date);
+        }
+        return date;
+    };
+
     const [selectedDates, setSelectedDates] = useState<Date[]>(() => {
         // Priorizar event_date si existe, luego interested_dates
         if (initialData?.event_date) {
-            return [new Date(initialData.event_date)];
+            return [parseDateSafe(initialData.event_date)];
         }
         if (initialData?.interested_dates) {
-            return initialData.interested_dates.map(d => new Date(d));
+            return initialData.interested_dates.map(d => parseDateSafe(d));
         }
         return [];
     });
     const [month, setMonth] = useState<Date | undefined>(() => {
         if (initialData?.event_date) {
-            return new Date(initialData.event_date);
+            return parseDateSafe(initialData.event_date);
         }
         if (initialData?.interested_dates && initialData.interested_dates.length > 0) {
-            return new Date(initialData.interested_dates[0]);
+            return parseDateSafe(initialData.interested_dates[0]);
         }
         return undefined;
     });
@@ -196,13 +210,13 @@ export function ContactEventFormModal({
                 });
                 setNameInput(initialData.name || '');
 
-                // Priorizar event_date si existe
+                // Priorizar event_date si existe (usar parseo seguro)
                 if (initialData.event_date) {
-                    setSelectedDates([new Date(initialData.event_date)]);
-                    setMonth(new Date(initialData.event_date));
+                    setSelectedDates([parseDateSafe(initialData.event_date)]);
+                    setMonth(parseDateSafe(initialData.event_date));
                 } else if (initialData.interested_dates && initialData.interested_dates.length > 0) {
-                    setSelectedDates(initialData.interested_dates.map(d => new Date(d)));
-                    setMonth(new Date(initialData.interested_dates[0]));
+                    setSelectedDates(initialData.interested_dates.map(d => parseDateSafe(d)));
+                    setMonth(parseDateSafe(initialData.interested_dates[0]));
                 } else {
                     setSelectedDates([]);
                     setMonth(undefined);

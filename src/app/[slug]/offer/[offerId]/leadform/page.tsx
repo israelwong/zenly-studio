@@ -4,6 +4,7 @@ import { getPublicOffer } from "@/lib/actions/studio/offers/offers.actions";
 import { OfferLeadForm } from "@/components/offers/OfferLeadForm";
 import { TrackingScripts } from "@/components/offers/TrackingScripts";
 import { OfferHeader } from "@/components/offers/OfferHeader";
+import { OfferInfoCard } from "@/components/offers/OfferInfoCard";
 import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
 
@@ -92,7 +93,21 @@ export default async function PublicOfferLeadFormPage({
           />
 
           {/* Container mobile centrado con padding-top para header */}
-          <div className="max-w-md mx-auto min-h-screen pt-[81px] px-4 md:px-0 md:py-24">
+          <div className="max-w-md mx-auto min-h-screen pt-[94px] px-4 md:px-0 md:py-24">
+            {/* Ficha informativa de la oferta - Mostrar siempre que haya datos disponibles */}
+            {(offer.business_term || offer.has_date_range) && (
+              <div className="mb-6">
+                <OfferInfoCard
+                  discountPercentage={offer.business_term?.discount_percentage ?? null}
+                  advancePercentage={offer.business_term?.advance_percentage ?? null}
+                  startDate={offer.start_date ?? null}
+                  endDate={offer.end_date ?? null}
+                  isPermanent={offer.is_permanent || false}
+                  hasDateRange={offer.has_date_range || false}
+                />
+              </div>
+            )}
+
             {/* Leadform con su propio fondo */}
             <OfferLeadForm
               studioSlug={slug}

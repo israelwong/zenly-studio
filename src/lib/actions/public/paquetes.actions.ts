@@ -103,12 +103,12 @@ export async function solicitarPaquetePublico(
     let contenidoLog = `Cliente solicitó contratación del paquete: "${paquete.name}"`;
 
     if (condicionComercialInfo) {
-      mensajeNotificacion += ` con condici?n comercial: "${condicionComercialInfo.name}"`;
-      contenidoLog += ` con condici?n comercial: "${condicionComercialInfo.name}"`;
+      mensajeNotificacion += ` con condición comercial: "${condicionComercialInfo.name}"`;
+      contenidoLog += ` con condición comercial: "${condicionComercialInfo.name}"`;
 
       if (metodoPagoInfo) {
-        mensajeNotificacion += ` (M?todo de pago: ${metodoPagoInfo})`;
-        contenidoLog += ` (M?todo de pago: ${metodoPagoInfo})`;
+        mensajeNotificacion += ` (Método de pago: ${metodoPagoInfo})`;
+        contenidoLog += ` (Método de pago: ${metodoPagoInfo})`;
       }
 
       if (condicionComercialInfo.advance_percentage) {

@@ -11,9 +11,9 @@ import {
     ProfileFooter,
     ZenCreditsCard,
     OffersCard,
-    MobilePromotionsSection,
-    QuickActions
+    MobilePromotionsSection
 } from '@/components/profile';
+import { QuickActions } from '@/components/profile/QuickActions';
 import { PostDetailModal } from '@/components/profile/sections/PostDetailModal';
 import { PortfolioDetailModal } from '@/components/profile/sections/PortfolioDetailModal';
 import { SearchCommandPalette } from '@/components/profile/SearchCommandPalette';
@@ -337,7 +337,13 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
             </footer>
 
             {/* Quick Actions FAB - Solo mobile */}
-            <QuickActions studioSlug={studioSlug} />
+            <QuickActions 
+                studioSlug={studioSlug}
+                onCreatePost={() => {
+                    setEditingPostId(undefined);
+                    setIsPostEditorOpen(true);
+                }}
+            />
 
             {/* Post Detail Modal */}
             <PostDetailModal

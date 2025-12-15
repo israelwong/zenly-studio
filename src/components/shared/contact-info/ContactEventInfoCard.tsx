@@ -571,9 +571,15 @@ export function ContactEventInfoCard({
             event_type_id: promiseData.event_type_id || undefined,
             event_location: promiseData.event_location || undefined,
             event_name: promiseData.event_name || undefined,
-            // Si es evento y hay event_date, usar esa fecha; si no, usar interested_dates
+            // Si es evento y hay event_date, convertir a formato YYYY-MM-DD (sin cambios por zona horaria)
             interested_dates: context === 'event' && eventData.event_date
-              ? [eventData.event_date.toISOString()]
+              ? (() => {
+                const date = eventData.event_date;
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return [`${year}-${month}-${day}`];
+              })()
               : promiseData.interested_dates || undefined,
             acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
             social_network_id: promiseData.social_network_id || undefined,

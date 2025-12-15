@@ -18,23 +18,31 @@ export async function notifyPromiseCreated(
   });
 
   // Construir mensaje detallado
-  let message = isTest 
+  let message = isTest
     ? `Promesa de prueba registrada para ${contactName}`
     : `Nueva promesa registrada para ${contactName}`;
-    
+
   if (eventType) {
     message += ` - ${eventType}`;
   }
   if (eventDate) {
-    const date = new Date(eventDate);
-    const formattedDate = date.toLocaleDateString('es-MX', { 
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
+    // Parsear fecha de forma segura (sin cambios por zona horaria)
+    let date: Date;
+    const dateMatch = eventDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (dateMatch) {
+      const [, year, month, day] = dateMatch;
+      date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    } else {
+      date = new Date(eventDate);
+    }
+    const formattedDate = date.toLocaleDateString('es-MX', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
     });
     message += ` (${formattedDate})`;
   }
-  
+
   return createStudioNotification({
     scope: StudioNotificationScope.STUDIO,
     type: StudioNotificationType.PROMISE_CREATED,

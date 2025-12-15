@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Edit } from 'lucide-react';
 import { ZenButton, ZenBadge, SeparadorZen } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
@@ -55,6 +55,7 @@ export function CotizacionDetailSheet({
   const [selectedCondicionId, setSelectedCondicionId] = useState<string | null>(null);
   const [selectedMetodoPagoId, setSelectedMetodoPagoId] = useState<string | null>(null);
   const [loadingCondiciones, setLoadingCondiciones] = useState(true);
+  const precioDesgloseRef = useRef<HTMLDivElement>(null);
 
   const loadCondicionesYTerminos = useCallback(async () => {
     setLoadingCondiciones(true);
@@ -118,6 +119,55 @@ export function CotizacionDetailSheet({
 
   const finalPrice = calculateFinalPrice();
   const hasDiscount = cotizacion.discount && cotizacion.discount > 0;
+
+  // Calcular precio según condición comercial seleccionada
+  const calculatePriceWithCondition = () => {
+    if (!selectedCondicionId) return null;
+
+    const condicion = condicionesComerciales.find(c => c.id === selectedCondicionId);
+    if (!condicion) return null;
+
+    // Precio base (ya con descuento de cotización si aplica)
+    const precioBase = finalPrice;
+
+    // Aplicar descuento adicional de la condición comercial
+    const descuentoCondicion = condicion.discount_percentage ?? 0;
+    const precioConDescuento = descuentoCondicion > 0
+      ? precioBase - (precioBase * descuentoCondicion) / 100
+      : precioBase;
+
+    // Calcular anticipo
+    const anticipoPorcentaje = condicion.advance_percentage ?? 0;
+    const anticipo = anticipoPorcentaje > 0
+      ? (precioConDescuento * anticipoPorcentaje) / 100
+      : 0;
+
+    // Calcular diferido
+    const diferido = precioConDescuento - anticipo;
+
+    return {
+      precioBase,
+      descuentoCondicion,
+      precioConDescuento,
+      anticipoPorcentaje,
+      anticipo,
+      diferido,
+    };
+  };
+
+  const precioCalculado = calculatePriceWithCondition();
+
+  // Scroll automático al desglose cuando se selecciona una condición comercial
+  useEffect(() => {
+    if (precioCalculado && precioDesgloseRef.current) {
+      setTimeout(() => {
+        precioDesgloseRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }, 100);
+    }
+  }, [precioCalculado]);
 
   if (!isOpen) return null;
 
@@ -345,6 +395,51 @@ export function CotizacionDetailSheet({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Cálculo de precio según condición comercial */}
+            {precioCalculado && (
+              <div ref={precioDesgloseRef} className="mt-4 bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
+                <h4 className="text-sm font-semibold text-white mb-3">Resumen de Pago</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-400">Precio</span>
+                    <span className="text-sm font-medium text-zinc-300">
+                      {formatPrice(precioCalculado.precioBase)}
+                    </span>
+                  </div>
+                  {precioCalculado.descuentoCondicion > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-zinc-400">Descuento</span>
+                      <span className="text-sm font-medium text-red-400">
+                        -{precioCalculado.descuentoCondicion}%
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
+                    <span className="text-sm font-semibold text-white">Total a pagar</span>
+                    <span className="text-lg font-bold text-emerald-400">
+                      {formatPrice(precioCalculado.precioConDescuento)}
+                    </span>
+                  </div>
+                  {precioCalculado.anticipoPorcentaje > 0 && (
+                    <>
+                      <div className="flex justify-between items-center pt-2">
+                        <span className="text-sm text-zinc-400">Anticipo ({precioCalculado.anticipoPorcentaje}%)</span>
+                        <span className="text-sm font-medium text-blue-400">
+                          {formatPrice(precioCalculado.anticipo)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-zinc-400">Diferido</span>
+                        <span className="text-sm font-medium text-zinc-300">
+                          {formatPrice(precioCalculado.diferido)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
