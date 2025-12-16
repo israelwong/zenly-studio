@@ -1,14 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Edit, ExternalLink, Loader2, ContactRound, Calendar } from 'lucide-react';
+import { Edit, ExternalLink, Loader2, ContactRound, Calendar, Phone, Mail } from 'lucide-react';
 import { useContactsSheet } from '@/components/shared/contacts/ContactsSheetContext';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, SeparadorZen, ZenBadge } from '@/components/ui/zen';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/shadcn/hover-card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/shadcn/avatar';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { getContactById } from '@/lib/actions/studio/commercial/contacts/contacts.actions';
+import { logWhatsAppSent, logCallMade, logEmailSent } from '@/lib/actions/studio/commercial/promises';
 import { ContactEventFormModal } from './ContactEventFormModal';
 
 /**
@@ -101,6 +103,129 @@ interface ContactEventInfoCardProps {
   onEdit?: () => void;
   onUpdated?: () => void;
   context?: 'promise' | 'event'; // Contexto para determinar qué mostrar
+}
+
+function PhoneActionsPopover({
+  phone,
+  contactName,
+  studioSlug,
+  promiseId,
+}: {
+  phone: string;
+  contactName: string;
+  studioSlug: string;
+  promiseId?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const handleWhatsApp = async () => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const message = encodeURIComponent(`Hola ${contactName}`);
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
+
+    if (promiseId) {
+      logWhatsAppSent(studioSlug, promiseId, contactName, phone).catch((error) => {
+        console.error('Error registrando WhatsApp:', error);
+      });
+    }
+
+    window.open(whatsappUrl, '_blank');
+    setOpen(false);
+  };
+
+  const handleCall = async () => {
+    if (promiseId) {
+      logCallMade(studioSlug, promiseId, contactName, phone).catch((error) => {
+        console.error('Error registrando llamada:', error);
+      });
+    }
+
+    window.open(`tel:${phone}`, '_self');
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-sm text-zinc-200 hover:text-emerald-400 transition-colors underline decoration-dotted underline-offset-2 cursor-pointer"
+        >
+          {phone}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 bg-zinc-900 border-zinc-700 p-2" align="start">
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={handleWhatsApp}
+            className="w-full px-3 py-2 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-2 text-sm"
+          >
+            <WhatsAppIcon className="h-4 w-4" size={16} />
+            <span>WhatsApp</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleCall}
+            className="w-full px-3 py-2 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2 text-sm"
+          >
+            <Phone className="h-4 w-4" />
+            <span>Llamar ahora</span>
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function EmailActionsPopover({
+  email,
+  contactName,
+  studioSlug,
+  promiseId,
+}: {
+  email: string;
+  contactName: string;
+  studioSlug: string;
+  promiseId?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const handleEmail = async () => {
+    if (promiseId) {
+      logEmailSent(studioSlug, promiseId, contactName, email).catch((error) => {
+        console.error('Error registrando email:', error);
+      });
+    }
+
+    window.open(`mailto:${email}`, '_self');
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-sm text-zinc-200 hover:text-purple-400 transition-colors underline decoration-dotted underline-offset-2 cursor-pointer"
+        >
+          {email}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 bg-zinc-900 border-zinc-700 p-2" align="start">
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={handleEmail}
+            className="w-full px-3 py-2 rounded-lg bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-2 text-sm"
+          >
+            <Mail className="h-4 w-4" />
+            <span>Enviar email</span>
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function ContactHoverCard({
@@ -218,7 +343,7 @@ function ContactHoverCard({
               </button>
             )}
             <div className="flex justify-between gap-4">
-              <Avatar className="h-16 w-16 flex-shrink-0">
+              <Avatar className="h-16 w-16 shrink-0">
                 <AvatarImage
                   src={contactData?.avatar_url || undefined}
                   alt={finalName}
@@ -314,7 +439,7 @@ export function ContactEventInfoCard({
   return (
     <>
       <ZenCard>
-        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
+        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
           <div className="flex items-center justify-between">
             <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
               Información
@@ -356,14 +481,24 @@ export function ContactEventInfoCard({
               <label className="text-xs font-medium text-zinc-400 block mb-1">
                 Teléfono
               </label>
-              <p className="text-sm text-zinc-200">{contactData.phone}</p>
+              <PhoneActionsPopover
+                phone={contactData.phone}
+                contactName={contactData.name}
+                studioSlug={studioSlug}
+                promiseId={promiseId || undefined}
+              />
             </div>
             {contactData.email && (
               <div>
                 <label className="text-xs font-medium text-zinc-400 block mb-1">
                   Email
                 </label>
-                <p className="text-sm text-zinc-200">{contactData.email}</p>
+                <EmailActionsPopover
+                  email={contactData.email}
+                  contactName={contactData.name}
+                  studioSlug={studioSlug}
+                  promiseId={promiseId || undefined}
+                />
               </div>
             )}
           </div>

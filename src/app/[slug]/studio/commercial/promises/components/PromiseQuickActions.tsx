@@ -1,13 +1,10 @@
 'use client';
 
-import React from 'react';
-import { Share2, MessageCircle, Phone, Mail } from 'lucide-react';
+import React, { useState } from 'react';
+import { Eye, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  logWhatsAppSent,
-  logCallMade,
   logProfileShared,
-  logEmailSent,
 } from '@/lib/actions/studio/commercial/promises';
 
 interface PromiseQuickActionsProps {
@@ -23,34 +20,11 @@ export function PromiseQuickActions({
   studioSlug,
   contactId,
   contactName,
-  phone,
+  phone: _phone,
   email,
   promiseId,
 }: PromiseQuickActionsProps) {
-  const handleWhatsApp = async () => {
-    const message = encodeURIComponent(`Hola ${contactName}, te contacto desde ZEN`);
-    const whatsappUrl = `https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`;
-
-    // Registrar log si hay promiseId
-    if (promiseId) {
-      logWhatsAppSent(studioSlug, promiseId, contactName, phone).catch((error) => {
-        console.error('Error registrando WhatsApp:', error);
-      });
-    }
-
-    window.open(whatsappUrl, '_blank');
-  };
-
-  const handleCall = async () => {
-    // Registrar log si hay promiseId
-    if (promiseId) {
-      logCallMade(studioSlug, promiseId, contactName, phone).catch((error) => {
-        console.error('Error registrando llamada:', error);
-      });
-    }
-
-    window.open(`tel:${phone}`, '_self');
-  };
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const handleShareProfile = async () => {
     const profileUrl = `${window.location.origin}/${studioSlug}/client/profile/${contactId}`;
@@ -78,9 +52,29 @@ export function PromiseQuickActions({
     }
   };
 
-  const handleSharePromise = () => {
+  const handleCopyLink = async () => {
     if (!promiseId) {
-      toast.error('La promesa debe estar guardada para compartir');
+      toast.error('La promesa debe estar guardada para copiar el link');
+      return;
+    }
+
+    const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
+
+    try {
+      await navigator.clipboard.writeText(previewUrl);
+      setLinkCopied(true);
+      setTimeout(() => {
+        setLinkCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Error copiando link:', error);
+      toast.error('Error al copiar el link');
+    }
+  };
+
+  const handlePreview = () => {
+    if (!promiseId) {
+      toast.error('La promesa debe estar guardada para ver la vista previa');
       return;
     }
 
@@ -95,57 +89,39 @@ export function PromiseQuickActions({
     window.open(previewUrl, '_blank');
   };
 
-  const handleEmail = async () => {
-    // Registrar log si hay promiseId
-    if (promiseId && email) {
-      logEmailSent(studioSlug, promiseId, contactName, email).catch((error) => {
-        console.error('Error registrando email:', error);
-      });
-    }
-
-    window.open(`mailto:${email}`, '_self');
-  };
-
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={handleWhatsApp}
-        className="px-3 py-2 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-2 text-sm"
-        title="WhatsApp"
-        aria-label="Abrir WhatsApp"
-      >
-        <MessageCircle className="h-4 w-4" />
-        <span>WhatsApp</span>
-      </button>
-      <button
-        onClick={handleCall}
-        className="px-3 py-2 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2 text-sm"
-        title="Llamar"
-        aria-label="Llamar"
-      >
-        <Phone className="h-4 w-4" />
-        <span>Llamar</span>
-      </button>
-      {email && (
-        <button
-          onClick={handleEmail}
-          className="px-3 py-2 rounded-lg bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-2 text-sm"
-          title="Email"
-          aria-label="Enviar email"
-        >
-          <Mail className="h-4 w-4" />
-          <span>Email</span>
-        </button>
-      )}
-      <button
-        onClick={handleSharePromise}
-        className="px-3 py-2 rounded-lg bg-zinc-600/10 hover:bg-zinc-600/20 text-zinc-400 hover:text-zinc-300 transition-colors flex items-center gap-2 text-sm"
-        title="Compartir promesa"
-        aria-label="Compartir promesa"
+        onClick={handleCopyLink}
+        className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm ${linkCopied
+          ? 'bg-emerald-600/10 text-emerald-400'
+          : 'bg-zinc-600/10 hover:bg-zinc-600/20 text-zinc-400 hover:text-zinc-300'
+          }`}
+        title={linkCopied ? 'Link copiado' : 'Copiar link'}
+        aria-label={linkCopied ? 'Link copiado' : 'Copiar link'}
         disabled={!promiseId}
       >
-        <Share2 className="h-4 w-4" />
-        <span>Compartir</span>
+        {linkCopied ? (
+          <>
+            <Check className="h-4 w-4" />
+            <span>Link copiado</span>
+          </>
+        ) : (
+          <>
+            <Copy className="h-4 w-4" />
+            <span>Copiar link</span>
+          </>
+        )}
+      </button>
+      <button
+        onClick={handlePreview}
+        className="px-3 py-2 rounded-lg bg-zinc-600/10 hover:bg-zinc-600/20 text-zinc-400 hover:text-zinc-300 transition-colors flex items-center gap-2 text-sm"
+        title="Vista previa"
+        aria-label="Vista previa"
+        disabled={!promiseId}
+      >
+        <Eye className="h-4 w-4" />
+        <span>Vista previa</span>
       </button>
     </div>
   );

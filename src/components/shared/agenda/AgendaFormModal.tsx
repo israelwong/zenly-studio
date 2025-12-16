@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ZenDialog } from '@/components/ui/zen';
+import { ZenDialog, ZenConfirmModal } from '@/components/ui/zen';
 import { AgendaForm } from './AgendaForm';
 import { toast } from 'sonner';
 import {
   crearAgendamiento,
   actualizarAgendamiento,
+  eliminarAgendamiento,
   type AgendaItem,
 } from '@/lib/actions/shared/agenda-unified.actions';
 
@@ -32,6 +33,8 @@ export function AgendaFormModal({
   onSuccess,
 }: AgendaFormModalProps) {
   const [loading, setLoading] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSubmit = async (data: {
     date: Date;
@@ -102,6 +105,28 @@ export function AgendaFormModal({
     }
   };
 
+  const handleDelete = async () => {
+    if (!initialData?.id) return;
+
+    setIsDeleting(true);
+    try {
+      const result = await eliminarAgendamiento(studioSlug, initialData.id);
+      if (result.success) {
+        toast.success('Agendamiento eliminado correctamente');
+        onSuccess?.(undefined);
+        onClose();
+      } else {
+        toast.error(result.error || 'Error al eliminar agendamiento');
+      }
+    } catch (error) {
+      console.error('Error deleting agendamiento:', error);
+      toast.error('Error al eliminar agendamiento');
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteModalOpen(false);
+    }
+  };
+
   const title = initialData ? 'Editar Agendamiento' : 'Nuevo Agendamiento';
   const description = contexto
     ? `Agendamiento para ${contexto === 'promise' ? 'promesa' : 'evento'}`
@@ -123,8 +148,27 @@ export function AgendaFormModal({
         eventoId={eventoId}
         onSubmit={handleSubmit}
         onCancel={onClose}
+        onDelete={initialData ? () => setIsDeleteModalOpen(true) : undefined}
         loading={loading}
       />
+      {isDeleteModalOpen && (
+        <ZenConfirmModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => {
+            if (!isDeleting) {
+              setIsDeleteModalOpen(false);
+            }
+          }}
+          onConfirm={handleDelete}
+          title="Eliminar agendamiento"
+          description="¿Estás seguro de que deseas eliminar este agendamiento? Esta acción no se puede deshacer."
+          confirmText="Eliminar"
+          cancelText="Cancelar"
+          variant="destructive"
+          loading={isDeleting}
+          loadingText="Eliminando..."
+        />
+      )}
     </ZenDialog>
   );
 }

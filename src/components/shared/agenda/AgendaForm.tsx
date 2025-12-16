@@ -46,6 +46,7 @@ export function AgendaForm({
     onSubmit,
     onCancel,
     onCancelCita,
+    onDelete,
     loading = false,
 }: AgendaFormProps) {
     const [date, setDate] = useState<Date | undefined>(
@@ -444,21 +445,24 @@ export function AgendaForm({
 
             {/* Botones */}
             <div className={`flex gap-2 pt-2 ${initialData && onCancelCita ? 'flex-col' : ''}`}>
-                <div className="flex gap-2">
-                    <ZenButton
-                        type="button"
-                        variant="outline"
-                        onClick={onCancel}
-                        disabled={loading}
-                        className={initialData && onCancelCita ? 'flex-1' : 'flex-1'}
-                    >
-                        Cerrar
-                    </ZenButton>
+                <div className="flex gap-2 w-full">
+                    {initialData && onDelete && (
+                        <ZenButton
+                            type="button"
+                            variant="destructive"
+                            onClick={onDelete}
+                            disabled={loading}
+                            className="shrink-0"
+                            title="Eliminar agendamiento"
+                        >
+                            Eliminar
+                        </ZenButton>
+                    )}
                     <ZenButton
                         type="submit"
                         disabled={loading || !date || !eventType}
                         loading={loading}
-                        className={initialData && onCancelCita ? 'flex-1' : 'flex-1'}
+                        className="flex-1"
                     >
                         {initialData ? 'Actualizar' : 'Crear'} Agendamiento
                     </ZenButton>

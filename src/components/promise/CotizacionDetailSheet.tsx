@@ -393,17 +393,15 @@ export function CotizacionDetailSheet({
                                 )}
 
                                 <div className={`flex items-center gap-3 text-xs mt-1.5 ${isSelected ? 'text-zinc-300' : 'text-zinc-400'}`}>
-                                  {condicion.advance_percentage !== null && (
-                                    {(() => {
-                                      const advanceType = condicion.advance_type || 'percentage';
-                                      if (advanceType === 'fixed_amount' && condicion.advance_amount) {
-                                        return <span>Anticipo: {formatCurrency(condicion.advance_amount)}</span>;
-                                      } else if (advanceType === 'percentage' && condicion.advance_percentage !== null) {
-                                        return <span>Anticipo: {condicion.advance_percentage}%</span>;
-                                      }
-                                      return null;
-                                    })()}
-                                  )}
+                                  {(() => {
+                                    const advanceType = condicion.advance_type || 'percentage';
+                                    if (advanceType === 'fixed_amount' && condicion.advance_amount) {
+                                      return <span>Anticipo: {formatCurrency(condicion.advance_amount)}</span>;
+                                    } else if (advanceType === 'percentage' && condicion.advance_percentage !== null) {
+                                      return <span>Anticipo: {condicion.advance_percentage}%</span>;
+                                    }
+                                    return null;
+                                  })()}
                                   <span>Descuento: {condicion.discount_percentage ?? 0}%</span>
                                   <span className="text-emerald-400">Método: {metodo.metodo_pago_name}</span>
                                 </div>

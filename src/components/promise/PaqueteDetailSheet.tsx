@@ -9,7 +9,6 @@ import { SolicitarPaqueteModal } from './SolicitarPaqueteModal';
 import { SolicitarPersonalizacionModal } from './SolicitarPersonalizacionModal';
 import { obtenerCondicionesComercialesPublicas, obtenerTerminosCondicionesPublicos } from '@/lib/actions/public/promesas.actions';
 import { formatCurrency } from '@/lib/actions/utils/formatting';
-import { formatCurrency } from '@/lib/actions/utils/formatting';
 
 interface CondicionComercial {
   id: string;

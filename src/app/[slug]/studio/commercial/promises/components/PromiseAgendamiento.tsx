@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, Clock, Edit, Plus, Video, Link as LinkIcon, X, Copy, Check } from 'lucide-react';
+import { Calendar, MapPin, Clock, Plus, Video, Link as LinkIcon, Edit, Copy, Check } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
 import { AgendaFormModal } from '@/components/shared/agenda';
 import { obtenerAgendamientoPorPromise, eliminarAgendamiento } from '@/lib/actions/shared/agenda-unified.actions';
@@ -109,15 +109,27 @@ export function PromiseAgendamiento({
             <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
               Agendamiento
             </ZenCardTitle>
-            {agendamiento && (
+            {!agendamiento ? (
               <ZenButton
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsDeleteModalOpen(true)}
-                className="h-6 px-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/20"
+                onClick={() => setIsModalOpen(true)}
+                className="h-6 w-6 p-0 text-zinc-400 hover:text-emerald-400"
+                title="Agendar"
+                aria-label="Agendar"
               >
-                <X className="h-3 w-3 mr-1" />
-                Cancelar
+                <Plus className="h-3.5 w-3.5" />
+              </ZenButton>
+            ) : (
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsModalOpen(true)}
+                className="h-6 w-6 p-0 text-zinc-400 hover:text-emerald-400"
+                title="Editar agendamiento"
+                aria-label="Editar agendamiento"
+              >
+                <Edit className="h-3.5 w-3.5" />
               </ZenButton>
             )}
           </div>
@@ -131,18 +143,9 @@ export function PromiseAgendamiento({
           ) : !agendamiento ? (
             <div className="flex flex-col items-center justify-center py-6">
               <Calendar className="h-8 w-8 text-zinc-600 mb-2" />
-              <p className="text-xs text-zinc-500 text-center mb-3">
+              <p className="text-xs text-zinc-500 text-center">
                 No hay agendamiento aún
               </p>
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsModalOpen(true)}
-                className="text-xs"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Agendar
-              </ZenButton>
             </div>
           ) : (
             <div className="space-y-3">
@@ -292,17 +295,6 @@ export function PromiseAgendamiento({
                   </p>
                 </div>
               )}
-
-              {/* Botón para editar */}
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsModalOpen(true)}
-                className="w-full text-xs text-zinc-400 hover:text-zinc-300 mt-2"
-              >
-                <Edit className="h-3.5 w-3.5 mr-1.5" />
-                Editar agendamiento
-              </ZenButton>
             </div>
           )}
         </ZenCardContent>
