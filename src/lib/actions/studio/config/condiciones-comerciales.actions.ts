@@ -132,6 +132,13 @@ export async function crearCondicionComercial(
             throw new Error("Studio no encontrado");
         }
 
+        // Determinar el tipo y offer_id
+        // Si viene desde contexto de oferta, crear como tipo "offer" pero sin asociar (offer_id = null)
+        // El usuario seleccionará después cuál condición usar para la oferta
+        const typeToUse = context?.type === 'offer' ? 'offer' : validationResult.data.type || 'standard';
+        // No asociar automáticamente: el usuario seleccionará la condición desde el selector
+        const offerIdToUse = null; // Siempre null al crear, el usuario asociará después si lo desea
+
         // Verificar que el nombre sea único para este studio
         const condicionExistente = await prisma.studio_condiciones_comerciales.findFirst({
             where: {
@@ -157,8 +164,8 @@ export async function crearCondicionComercial(
             advance_percentage: validationResult.data.porcentaje_anticipo ? parseFloat(validationResult.data.porcentaje_anticipo) : null,
             status: validationResult.data.status,
             order: validationResult.data.orden || 0,
-            type: context?.type === 'offer' ? 'offer' : validationResult.data.type || 'standard',
-            offer_id: context?.offerId || validationResult.data.offer_id || null,
+            type: typeToUse,
+            offer_id: offerIdToUse,
             override_standard: validationResult.data.override_standard || false,
             updated_at: new Date(),
         };
@@ -175,6 +182,18 @@ export async function crearCondicionComercial(
         };
     } catch (error) {
         console.error("Error al crear condición comercial:", error);
+
+        // Manejar error de restricción única en offer_id
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+            const meta = error.meta as { target?: string[] } | undefined;
+            if (meta?.target?.includes('offer_id')) {
+                return {
+                    success: false,
+                    error: "Ya existe una condición comercial especial para esta oferta. Solo puede haber una condición especial por oferta.",
+                };
+            }
+        }
+
         return {
             success: false,
             error: "Error al crear condición comercial",
@@ -248,8 +267,8 @@ export async function actualizarCondicionComercial(
             advance_percentage: validationResult.data.porcentaje_anticipo ? parseFloat(validationResult.data.porcentaje_anticipo) : null,
             status: validationResult.data.status,
             order: validationResult.data.orden || 0,
-            type: context?.type === 'offer' ? 'offer' : validationResult.data.type || condicionExistente.type || 'standard',
-            offer_id: context?.offerId || validationResult.data.offer_id || condicionExistente.offer_id,
+            type: validationResult.data.type !== undefined ? validationResult.data.type : (context?.type === 'offer' ? 'offer' : condicionExistente.type || 'standard'),
+            offer_id: validationResult.data.offer_id !== undefined ? validationResult.data.offer_id : (context?.offerId || condicionExistente.offer_id),
             override_standard: validationResult.data.override_standard ?? condicionExistente.override_standard ?? false,
             updated_at: new Date(),
         };

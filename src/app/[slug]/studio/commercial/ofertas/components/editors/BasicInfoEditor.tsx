@@ -485,7 +485,7 @@ export function BasicInfoEditor({
                       <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                         Condiciones Estándar
                       </h4>
-                      <ZenButton
+                      {/* <ZenButton
                         type="button"
                         variant="ghost"
                         size="sm"
@@ -494,7 +494,7 @@ export function BasicInfoEditor({
                       >
                         <Settings className="h-3 w-3 mr-1" />
                         Gestionar
-                      </ZenButton>
+                      </ZenButton> */}
                     </div>
                     <div className="space-y-2">
                       {businessTerms

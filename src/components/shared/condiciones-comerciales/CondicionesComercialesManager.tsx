@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { ZenDialog } from '@/components/ui/zen/modals/ZenDialog';
 import { ZenButton, ZenInput, ZenTextarea, ZenSwitch } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
@@ -212,12 +212,14 @@ export function CondicionesComercialesManager({
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showUtilidadModal, setShowUtilidadModal] = useState(false);
+  const [viewingOfferCondition, setViewingOfferCondition] = useState<CondicionComercial | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     discount_percentage: '',
     advance_percentage: '',
     status: true,
+    is_offer: false,
   });
   const [formErrors, setFormErrors] = useState<{
     nombre?: string[];
@@ -231,17 +233,20 @@ export function CondicionesComercialesManager({
     discount_percentage: '',
     advance_percentage: '',
     status: true,
+    is_offer: false,
   });
 
   // Verificar si hay cambios sin guardar
   const hasUnsavedChanges = () => {
-    if (!showForm) return false;
+    if (!showForm && !viewingOfferCondition) return false;
+    if (viewingOfferCondition) return false; // Ficha informativa no tiene cambios editables
     return (
       formData.name !== initialFormData.name ||
       formData.description !== initialFormData.description ||
       formData.discount_percentage !== initialFormData.discount_percentage ||
       formData.advance_percentage !== initialFormData.advance_percentage ||
-      formData.status !== initialFormData.status
+      formData.status !== initialFormData.status ||
+      formData.is_offer !== initialFormData.is_offer
     );
   };
 
@@ -257,12 +262,14 @@ export function CondicionesComercialesManager({
   const handleConfirmClose = () => {
     setShowForm(false);
     setEditingId(null);
+    setViewingOfferCondition(null);
     const emptyForm = {
       name: '',
       description: '',
       discount_percentage: '',
       advance_percentage: '',
       status: true,
+      is_offer: false,
     };
     setFormData(emptyForm);
     setInitialFormData(emptyForm);
@@ -373,6 +380,7 @@ export function CondicionesComercialesManager({
       discount_percentage: '',
       advance_percentage: '',
       status: true,
+      is_offer: false,
     };
     setFormData(emptyForm);
     setInitialFormData(emptyForm);
@@ -382,12 +390,14 @@ export function CondicionesComercialesManager({
 
   const handleEdit = (condicion: CondicionComercial) => {
     setEditingId(condicion.id);
+    setViewingOfferCondition(null);
     const editForm = {
       name: condicion.name,
       description: condicion.description || '',
       discount_percentage: condicion.discount_percentage?.toString() || '',
       advance_percentage: condicion.advance_percentage?.toString() || '',
       status: condicion.status === 'active',
+      is_offer: condicion.type === 'offer',
     };
     setFormData(editForm);
     setInitialFormData(editForm);
@@ -427,6 +437,62 @@ export function CondicionesComercialesManager({
     setPendingDeleteId(null);
   };
 
+  const handleConvertToStandard = async () => {
+    if (!viewingOfferCondition) return;
+
+    try {
+      const data = {
+        nombre: viewingOfferCondition.name,
+        descripcion: viewingOfferCondition.description || null,
+        porcentaje_descuento: viewingOfferCondition.discount_percentage?.toString() || null,
+        porcentaje_anticipo: viewingOfferCondition.advance_percentage?.toString() || null,
+        status: viewingOfferCondition.status,
+        orden: viewingOfferCondition.order || 0,
+        type: 'standard' as const,
+        offer_id: null,
+        override_standard: viewingOfferCondition.override_standard || false,
+      } satisfies CondicionComercialForm;
+
+      const result = await actualizarCondicionComercial(studioSlug, viewingOfferCondition.id, data);
+
+      if (result.success && result.data) {
+        const condicionMapeada: CondicionComercial = {
+          id: result.data.id,
+          name: result.data.name,
+          description: result.data.description,
+          discount_percentage: result.data.discount_percentage,
+          advance_percentage: result.data.advance_percentage,
+          status: result.data.status,
+          order: result.data.order,
+          type: result.data.type,
+          offer_id: result.data.offer_id,
+          override_standard: result.data.override_standard,
+        };
+
+        setCondiciones(prev =>
+          prev.map(c => (c.id === viewingOfferCondition.id ? condicionMapeada : c))
+        );
+
+        toast.success('Condición convertida a estándar exitosamente');
+        setViewingOfferCondition(null);
+        onRefresh?.();
+      } else {
+        const errorMessage = typeof result.error === 'string'
+          ? result.error
+          : 'Error al convertir condición';
+        toast.error(errorMessage);
+      }
+    } catch (error) {
+      console.error('Error converting condition:', error);
+      toast.error('Error al convertir condición');
+    }
+  };
+
+  const handleRemoveFromOffer = async () => {
+    if (!viewingOfferCondition) return;
+    await handleConvertToStandard();
+  };
+
   const handleToggleStatus = async (id: string, newStatus: boolean) => {
     try {
       const condicion = condiciones.find(c => c.id === id);
@@ -439,6 +505,8 @@ export function CondicionesComercialesManager({
         porcentaje_anticipo: condicion.advance_percentage?.toString() || null,
         status: newStatus ? 'active' : 'inactive',
         orden: condicion.order || 0,
+        type: condicion.type || 'standard',
+        offer_id: condicion.offer_id || null,
       } satisfies CondicionComercialForm;
 
       const result = await actualizarCondicionComercial(studioSlug, id, data);
@@ -452,6 +520,9 @@ export function CondicionesComercialesManager({
           advance_percentage: result.data.advance_percentage,
           status: result.data.status,
           order: result.data.order,
+          type: result.data.type,
+          offer_id: result.data.offer_id,
+          override_standard: result.data.override_standard,
         };
 
         setCondiciones(prev =>
@@ -678,13 +749,16 @@ export function CondicionesComercialesManager({
     }
 
     try {
+      const condicionExistente = editingId ? condiciones.find(c => c.id === editingId) : null;
       const data = {
         nombre: formData.name,
         descripcion: formData.description || null,
         porcentaje_descuento: formData.discount_percentage || null,
         porcentaje_anticipo: formData.advance_percentage || null,
         status: formData.status ? 'active' : 'inactive',
-        orden: condiciones.length,
+        orden: editingId ? (condicionExistente?.order || 0) : condiciones.length,
+        type: formData.is_offer ? 'offer' : 'standard',
+        offer_id: formData.is_offer && context?.offerId ? context.offerId : (editingId && !formData.is_offer ? null : condicionExistente?.offer_id || null),
       } satisfies CondicionComercialForm;
 
       let result;
@@ -706,6 +780,9 @@ export function CondicionesComercialesManager({
           advance_percentage: result.data.advance_percentage,
           status: result.data.status,
           order: result.data.order,
+          type: result.data.type,
+          offer_id: result.data.offer_id,
+          override_standard: result.data.override_standard,
         };
 
         if (editingId) {
@@ -774,7 +851,89 @@ export function CondicionesComercialesManager({
           </div>
         )}
 
-        {showForm ? (
+        {viewingOfferCondition ? (
+          <div className="space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-1">{viewingOfferCondition.name}</h3>
+                {viewingOfferCondition.description && (
+                  <p className="text-sm text-zinc-400">{viewingOfferCondition.description}</p>
+                )}
+              </div>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setViewingOfferCondition(null)}
+                className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-300"
+              >
+                <X className="h-4 w-4" />
+              </ZenButton>
+            </div>
+
+            <div className="p-4 bg-zinc-800/50 border border-zinc-700 rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-zinc-400">Descuento</span>
+                <span className="text-sm font-medium text-white">
+                  {viewingOfferCondition.discount_percentage ?? 0}%
+                </span>
+              </div>
+              {viewingOfferCondition.advance_percentage && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-zinc-400">Anticipo</span>
+                  <span className="text-sm font-medium text-white">
+                    {viewingOfferCondition.advance_percentage}%
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <ZenSwitch
+                checked={viewingOfferCondition.status === 'active'}
+                onCheckedChange={(checked) => {
+                  handleToggleStatus(viewingOfferCondition.id, checked);
+                  setViewingOfferCondition(prev => prev ? {
+                    ...prev,
+                    status: checked ? 'active' : 'inactive'
+                  } : null);
+                }}
+                label="Activa"
+                description={viewingOfferCondition.status === 'active' ? 'La condición está activa y disponible para usar' : 'La condición está inactiva y no se mostrará'}
+              />
+
+              <div className="pt-2 border-t border-zinc-700">
+                <ZenSwitch
+                  checked={false}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      handleConvertToStandard();
+                    }
+                  }}
+                  label="Convertir a condición estándar"
+                  description="Desvincula esta condición de la oferta y la convierte en una condición estándar reutilizable"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4">
+              <ZenButton
+                type="button"
+                variant="ghost"
+                onClick={() => setViewingOfferCondition(null)}
+              >
+                Cerrar
+              </ZenButton>
+              <ZenButton
+                type="button"
+                variant="destructive"
+                onClick={handleRemoveFromOffer}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Desvincular de oferta
+              </ZenButton>
+            </div>
+          </div>
+        ) : showForm ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <ZenInput
               label="Nombre de la condición"
@@ -855,8 +1014,15 @@ export function CondicionesComercialesManager({
             <ZenSwitch
               checked={formData.status}
               onCheckedChange={(checked) => setFormData({ ...formData, status: checked })}
-              label="Estado"
+              label="Activa"
               description={formData.status ? 'La condición está activa y disponible para usar' : 'La condición está inactiva y no se mostrará'}
+            />
+
+            <ZenSwitch
+              checked={formData.is_offer}
+              onCheckedChange={(checked) => setFormData({ ...formData, is_offer: checked })}
+              label="Es oferta"
+              description={formData.is_offer ? 'Esta condición está vinculada a una oferta específica' : 'Esta condición es estándar y está disponible para todas las ofertas'}
             />
 
             <div className="flex items-center justify-end gap-3 pt-4">

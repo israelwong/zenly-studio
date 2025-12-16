@@ -201,8 +201,8 @@ export function CrearCondicionComercialModal({
       <ZenDialog
         isOpen={isOpen}
         onClose={handleClose}
-        title="Nueva Condición Comercial"
-        description={context ? `Para: ${context.offerName}` : 'Crea una nueva condición comercial'}
+        title={context ? "Nueva Condición Especial (Oferta)" : "Nueva Condición Comercial"}
+        description={context ? `Condición especial vinculada a la oferta: ${context.offerName}` : 'Crea una nueva condición comercial'}
         maxWidth="md"
       >
         {/* Banner de contexto de oferta */}
