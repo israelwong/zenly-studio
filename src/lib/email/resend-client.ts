@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { BRANDING, EMAILS } from '@/config/branding';
 
 if (!process.env.RESEND_API_KEY) {
     throw new Error('RESEND_API_KEY is not defined in environment variables');
@@ -8,8 +9,8 @@ export const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Configuración de emails
 export const EMAIL_CONFIG = {
-    from: process.env.RESEND_FROM_EMAIL || 'Zen Studio <noreply@prosocial.mx>',
-    replyTo: process.env.RESEND_REPLY_TO || 'contacto@prosocial.mx',
+    from: process.env.RESEND_FROM_EMAIL || `${BRANDING.emailFrom} <${EMAILS.noreply}>`,
+    replyTo: process.env.RESEND_REPLY_TO || EMAILS.hello,
 } as const;
 
 // Tipos para emails

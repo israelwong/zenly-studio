@@ -10,6 +10,7 @@ import {
     Hr,
 } from '@react-email/components';
 import * as React from 'react';
+import { BRANDING, EMAILS } from '@/config/branding';
 
 interface EmailLayoutProps {
     children: React.ReactNode;
@@ -28,7 +29,7 @@ export function EmailLayout({ children, title, previewText, platformData }: Emai
     return (
         <Html>
             <Head>
-                <title>{title || platformData?.nombre || 'ProSocial Platform'}</title>
+                <title>{title || platformData?.nombre || BRANDING.fullName}</title>
                 {previewText && (
                     <meta name="description" content={previewText} />
                 )}
@@ -41,7 +42,7 @@ export function EmailLayout({ children, title, previewText, platformData }: Emai
                             src={platformData?.logotipo || 'https://fhwfdwrrnwkbnwxabkcq.supabase.co/storage/v1/object/public/ProSocialPlatform/platform/logotipo.svg'}
                             width="160"
                             height="32"
-                            alt={platformData?.nombre || 'ProSocial Platform'}
+                            alt={platformData?.nombre || BRANDING.fullName}
                             style={logo}
                         />
                     </Section>
@@ -55,14 +56,14 @@ export function EmailLayout({ children, title, previewText, platformData }: Emai
                     <Section style={footer}>
                         <Hr style={hr} />
                         <Text style={footerText}>
-                            © 2024 {platformData?.nombre || 'ProSocial Platform'}. Todos los derechos reservados.
+                            {BRANDING.copyrightText}
                         </Text>
                         <Text style={footerText}>
-                            <Link href={platformData?.sitio_web || "https://prosocialmx.com"} style={footerLink}>
-                                Sitio Web
+                            <Link href={platformData?.sitio_web || BRANDING.websiteUrl} style={footerLink}>
+                                {BRANDING.domain}
                             </Link>
                             {' • '}
-                            <Link href={`mailto:${platformData?.soporte_email || "soporte@prosocialmx.com"}`} style={footerLink}>
+                            <Link href={`mailto:${platformData?.soporte_email || EMAILS.support}`} style={footerLink}>
                                 Soporte
                             </Link>
                         </Text>

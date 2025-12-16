@@ -5,6 +5,7 @@ import {
 } from '@react-email/components';
 import * as React from 'react';
 import { EmailLayout } from '../components/EmailLayout';
+import { BRANDING } from '@/config/branding';
 
 interface AgentCredentialsEmailProps {
     agentName: string;
@@ -29,7 +30,7 @@ export function AgentCredentialsEmail({
     isNewAgent = false,
     platformData
 }: AgentCredentialsEmailProps) {
-    const platformName = platformData?.nombre || 'ProSocial Platform';
+    const platformName = platformData?.nombre || BRANDING.fullName;
     
     const previewText = isNewAgent
         ? `Bienvenido a ${platformName}, ${agentName}`
