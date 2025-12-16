@@ -126,6 +126,17 @@ export interface PromiseWithContact {
     link_meeting_url: string | null;
     concept: string | null;
   } | null;
+  offer?: {
+    id: string;
+    name: string;
+    slug: string;
+    business_term: {
+      id: string;
+      name: string;
+      discount_percentage: number | null;
+      advance_percentage: number | null;
+    } | null;
+  } | null;
 }
 
 export interface PipelineStage {

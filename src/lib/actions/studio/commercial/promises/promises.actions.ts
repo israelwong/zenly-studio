@@ -139,6 +139,21 @@ export async function getPromises(
           orderBy: { date: 'desc' },
           take: 1,
         },
+        offer: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            business_term: {
+              select: {
+                id: true,
+                name: true,
+                discount_percentage: true,
+                advance_percentage: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { created_at: 'desc' },
       skip: (page - 1) * limit,
@@ -189,6 +204,17 @@ export async function getPromises(
         cotizaciones_count: promise.quotes?.length || 0,
         event: promise.event || null,
         agenda: promise.agenda?.[0] || null,
+        offer: promise.offer ? {
+          id: promise.offer.id,
+          name: promise.offer.name,
+          slug: promise.offer.slug,
+          business_term: promise.offer.business_term ? {
+            id: promise.offer.business_term.id,
+            name: promise.offer.business_term.name,
+            discount_percentage: promise.offer.business_term.discount_percentage,
+            advance_percentage: promise.offer.business_term.advance_percentage,
+          } : null,
+        } : null,
       };
     });
 
@@ -1274,7 +1300,7 @@ export async function deleteTestPromises(
 
           // Eliminar contacto
           await tx.studio_contacts.deleteMany({
-            where: { 
+            where: {
               id: contactId,
               is_test: true, // Extra validación de seguridad
             },

@@ -27,14 +27,24 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
     // Nota: Profile y Content ahora están en /profile/edit/ con su propio sidebar
     const builderNavItems = [
 
+        // Comercial
+        {
+            id: 'commercial',
+            title: 'Comercial',
+            icon: ShoppingBagIcon,
+            items: [
+                { id: 'dashboard', name: 'Dashboard', href: `/commercial/dashboard`, icon: Home },
+                { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
+                { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
+                { id: 'catalogo', name: 'Catálogo', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
+            ],
+        },
+
         {
             id: 'business',
             title: 'Negocio',
             icon: Briefcase,
             items: [
-                { id: 'dashboard', name: 'Dashboard', href: `/commercial/dashboard`, icon: Home },
-                { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
-                { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
                 { id: 'events', name: 'Eventos', href: `/business/events`, icon: FileText },
                 { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
             ],
@@ -46,7 +56,6 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             title: 'Configuración',
             icon: Settings,
             items: [
-                { id: 'catalogo', name: 'Catálogo', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
                 { id: 'tipo_evento', name: 'Tipo de Evento', href: `/commercial/tipo-evento`, icon: ShoppingBagIcon },
                 { id: 'contracts', name: 'Contratos', href: `/commercial/contracts`, icon: FileText },
                 // { id: 'integraciones', name: 'Integraciones', href: `/business/integraciones/tracking`, icon: Plug },

@@ -18,7 +18,7 @@ function BackgroundBlobs() {
         <>
           {/* Blob 1 - Color dominante (grande, arriba) */}
           <div
-            className="absolute top-20 left-1/2 -translate-x-1/2 w-[800px] h-[700px] rounded-full blur-3xl opacity-0 animate-pulse transition-all duration-[2000ms]"
+            className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[450px] rounded-full blur-3xl opacity-0 animate-pulse transition-all duration-[2000ms]"
             style={{
               backgroundColor: colors.primary,
               animationDuration: '8s',
@@ -28,7 +28,7 @@ function BackgroundBlobs() {
 
           {/* Blob 2 - Color dominante (mediano, centro-izq) */}
           <div
-            className="absolute top-60 left-1/3 -translate-x-1/2 w-[500px] h-[500px] rounded-full blur-3xl opacity-0 transition-all duration-[2000ms] delay-300"
+            className="absolute top-60 left-1/2 -translate-x-1/2 w-[800px] h-[350px] rounded-full blur-3xl opacity-0 transition-all duration-[2000ms] delay-300"
             style={{
               backgroundColor: colors.primary,
               opacity: 0.25
@@ -37,7 +37,7 @@ function BackgroundBlobs() {
 
           {/* Blob 3 - Color acento (grande, abajo centro) */}
           <div
-            className="absolute top-96 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full blur-3xl opacity-0 animate-pulse transition-all duration-[2000ms] delay-500"
+            className="absolute top-96 left-1/2 -translate-x-1/2 w-[600px] h-[450px] rounded-full blur-3xl opacity-0 animate-pulse transition-all duration-[2000ms] delay-500"
             style={{
               backgroundColor: colors.accent,
               animationDuration: '10s',

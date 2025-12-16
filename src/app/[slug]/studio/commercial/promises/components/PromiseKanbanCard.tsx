@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound } from 'lucide-react';
+import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound, Tag, Percent, HandCoins } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials, formatDate } from '@/lib/actions/utils/formatting';
 import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge } from '@/components/ui/zen';
@@ -307,6 +307,39 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
                                     {tag.name}
                                 </span>
                             ))}
+                        </div>
+                    )}
+
+                    {/* Badge de procedencia */}
+                    {promise.offer ? (
+                        <div className="flex items-start gap-1.5 text-xs">
+                            <Tag className="h-3 w-3 mt-0.5 flex-shrink-0 text-purple-400" />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-purple-300 font-medium truncate">
+                                    {promise.offer.name}
+                                </div>
+                                {promise.offer.business_term && (
+                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                        {promise.offer.business_term.discount_percentage !== null && (
+                                            <span className="inline-flex items-center gap-0.5 text-purple-400/80">
+                                                <Percent className="h-2.5 w-2.5" />
+                                                {promise.offer.business_term.discount_percentage}% desc.
+                                            </span>
+                                        )}
+                                        {promise.offer.business_term.advance_percentage !== null && (
+                                            <span className="inline-flex items-center gap-0.5 text-purple-400/80">
+                                                <HandCoins className="h-2.5 w-2.5" />
+                                                {promise.offer.business_term.advance_percentage}% anticipo
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                            <Tag className="h-3 w-3 flex-shrink-0" />
+                            <span>Registro manual</span>
                         </div>
                     )}
 
