@@ -32,6 +32,7 @@ interface PublicOffer {
     has_date_range?: boolean;
     start_date?: string | null;
     valid_until?: string | null;
+    event_type_name?: string | null;
 }
 
 interface ProfilePageClientProps {

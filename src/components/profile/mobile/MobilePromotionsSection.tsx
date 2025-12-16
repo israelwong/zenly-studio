@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { OfferCard } from '../cards/OfferCard';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +16,7 @@ interface PublicOffer {
     has_date_range?: boolean;
     start_date?: string | null;
     valid_until?: string | null;
+    event_type_name?: string | null;
 }
 
 interface MobilePromotionsSectionProps {
@@ -42,8 +43,11 @@ export function MobilePromotionsSection({
     const autoplayTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
     const restartTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
+    // Memoizar offers.length para evitar re-renders infinitos
+    const offersCount = useMemo(() => offers.length, [offers.length]);
+
     // No mostrar si no hay ofertas
-    if (!offers || offers.length === 0) {
+    if (!offers || offersCount === 0) {
         return null;
     }
 
@@ -51,22 +55,22 @@ export function MobilePromotionsSection({
     const handleScroll = () => {
         if (!scrollRef.current) return;
         const scrollLeft = scrollRef.current.scrollLeft;
-        const cardWidth = scrollRef.current.scrollWidth / offers.length;
+        const cardWidth = scrollRef.current.scrollWidth / offersCount;
         const index = Math.round(scrollLeft / cardWidth);
         setActiveIndex(index);
     };
 
     // Autoplay con loop infinito cada 3 segundos
     useEffect(() => {
-        if (offers.length <= 1) return;
+        if (offersCount <= 1) return;
 
         autoplayTimerRef.current = setInterval(() => {
             setActiveIndex((prevIndex) => {
-                const nextIndex = (prevIndex + 1) % offers.length;
+                const nextIndex = (prevIndex + 1) % offersCount;
 
                 // Scroll usando ref actualizado
                 if (scrollRef.current) {
-                    const cardWidth = scrollRef.current.scrollWidth / offers.length;
+                    const cardWidth = scrollRef.current.scrollWidth / offersCount;
                     scrollRef.current.scrollTo({
                         left: cardWidth * nextIndex,
                         behavior: 'smooth'
@@ -85,7 +89,7 @@ export function MobilePromotionsSection({
                 clearTimeout(restartTimerRef.current);
             }
         };
-    }, [offers.length]);
+    }, [offersCount]);
 
     // Pausar autoplay al interactuar manualmente
     const handleManualScroll = () => {
@@ -101,13 +105,13 @@ export function MobilePromotionsSection({
 
         // Reiniciar autoplay después de 5 segundos de inactividad
         restartTimerRef.current = setTimeout(() => {
-            if (offers.length > 1) {
+            if (offersCount > 1) {
                 autoplayTimerRef.current = setInterval(() => {
                     setActiveIndex((prevIndex) => {
-                        const nextIndex = (prevIndex + 1) % offers.length;
+                        const nextIndex = (prevIndex + 1) % offersCount;
 
                         if (scrollRef.current) {
-                            const cardWidth = scrollRef.current.scrollWidth / offers.length;
+                            const cardWidth = scrollRef.current.scrollWidth / offersCount;
                             scrollRef.current.scrollTo({
                                 left: cardWidth * nextIndex,
                                 behavior: 'smooth'
@@ -151,7 +155,7 @@ export function MobilePromotionsSection({
             </div>
 
             {/* Indicadores de paginación */}
-            {offers.length > 1 && (
+            {offersCount > 1 && (
                 <div className="flex justify-center gap-1.5 mt-4">
                     {offers.map((_, index) => (
                         <button
@@ -167,7 +171,7 @@ export function MobilePromotionsSection({
 
                                 // Scroll a índice
                                 if (scrollRef.current) {
-                                    const cardWidth = scrollRef.current.scrollWidth / offers.length;
+                                    const cardWidth = scrollRef.current.scrollWidth / offersCount;
                                     scrollRef.current.scrollTo({
                                         left: cardWidth * index,
                                         behavior: 'smooth'
@@ -177,13 +181,13 @@ export function MobilePromotionsSection({
 
                                 // Reiniciar autoplay después de 5 segundos
                                 restartTimerRef.current = setTimeout(() => {
-                                    if (offers.length > 1) {
+                                    if (offersCount > 1) {
                                         autoplayTimerRef.current = setInterval(() => {
                                             setActiveIndex((prevIndex) => {
-                                                const nextIndex = (prevIndex + 1) % offers.length;
+                                                const nextIndex = (prevIndex + 1) % offersCount;
 
                                                 if (scrollRef.current) {
-                                                    const cardWidth = scrollRef.current.scrollWidth / offers.length;
+                                                    const cardWidth = scrollRef.current.scrollWidth / offersCount;
                                                     scrollRef.current.scrollTo({
                                                         left: cardWidth * nextIndex,
                                                         behavior: 'smooth'

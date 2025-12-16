@@ -1386,11 +1386,31 @@ export async function getPublicActiveOffers(studioSlug: string) {
               discount_percentage: true,
             },
           },
+          leadform: {
+            select: {
+              event_type_id: true,
+            },
+          },
         },
         orderBy: {
           created_at: 'desc',
         },
       });
+
+      // Obtener event_type_ids únicos
+      const eventTypeIds = offers
+        .map(o => o.leadform?.event_type_id)
+        .filter((id): id is string => Boolean(id));
+
+      // Fetch event types si hay IDs
+      const eventTypesMap = new Map<string, string>();
+      if (eventTypeIds.length > 0) {
+        const eventTypes = await prisma.studio_event_types.findMany({
+          where: { id: { in: eventTypeIds } },
+          select: { id: true, name: true },
+        });
+        eventTypes.forEach(et => eventTypesMap.set(et.id, et.name));
+      }
 
       return {
         success: true,
@@ -1406,6 +1426,9 @@ export async function getPublicActiveOffers(studioSlug: string) {
           has_date_range: offer.has_date_range,
           start_date: offer.start_date,
           valid_until: offer.end_date,
+          event_type_name: offer.leadform?.event_type_id 
+            ? eventTypesMap.get(offer.leadform.event_type_id) ?? null
+            : null,
         })),
       };
     });

@@ -198,14 +198,14 @@ export function BasicInfoEditor({
           label="Descripción"
           value={formData.description}
           onChange={(e) => {
-            const text = e.target.value.slice(0, 10);
+            const text = e.target.value.slice(0, 100);
             updateFormData({ description: text });
           }}
           placeholder="Notas internas sobre la oferta. Esta descripción no aparecerá en la publicación pública."
           rows={3}
         />
         <p className="absolute bottom-0 right-1 text-xs font-medium text-zinc-500">
-          {formData.description.length}/10
+          {formData.description.length}/100
         </p>
       </div>
 
@@ -342,10 +342,10 @@ export function BasicInfoEditor({
                       {dateRange?.from ? (
                         dateRange.to ? (
                           <>
-                            {format(dateRange.from, "dd 'de' MMMM, yyyy", { locale: es })} - {format(dateRange.to, "dd 'de' MMMM, yyyy", { locale: es })}
+                            {format(dateRange.from, "dd MMM yyyy", { locale: es })} - {format(dateRange.to, "dd MMM yyyy", { locale: es })}
                           </>
                         ) : (
-                          format(dateRange.from, "dd 'de' MMMM, yyyy", { locale: es })
+                          format(dateRange.from, "dd MMM yyyy", { locale: es })
                         )
                       ) : (
                         <span className="text-zinc-500">Seleccionar rango de fechas</span>

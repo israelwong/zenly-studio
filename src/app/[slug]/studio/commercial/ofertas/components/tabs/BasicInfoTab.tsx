@@ -190,7 +190,7 @@ export function BasicInfoTab({ studioSlug, mode, offerId, onSave, onCancel, isSa
 
       {/* Col 2: Preview */}
       <div className="hidden lg:block">
-        <div className="sticky top-6 space-y-6">
+        <div className="sticky top-6 space-y-6 px-12">
           {/* Preview Desktop */}
           <div>
             <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">

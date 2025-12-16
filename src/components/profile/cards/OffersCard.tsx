@@ -14,6 +14,7 @@ interface PublicOffer {
     cover_media_type: "image" | "video" | null;
     discount_percentage?: number | null;
     valid_until?: string | null;
+    event_type_name?: string | null;
 }
 
 interface OffersCardProps {
