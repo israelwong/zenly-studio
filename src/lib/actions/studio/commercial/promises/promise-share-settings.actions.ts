@@ -55,6 +55,8 @@ export async function getPromiseShareSettings(
         share_show_categories_subtotals: true,
         share_show_items_prices: true,
         share_min_days_to_hire: true,
+        share_show_standard_conditions: true,
+        share_show_offer_conditions: true,
         quotes: {
           where: {
             archived: false,
@@ -118,6 +120,8 @@ export async function updatePromiseShareSettings(
     show_categories_subtotals: boolean;
     show_items_prices: boolean;
     min_days_to_hire: number;
+    show_standard_conditions: boolean;
+    show_offer_conditions: boolean;
     remember_preferences: boolean;
   }
 ): Promise<{
@@ -167,6 +171,8 @@ export async function updatePromiseShareSettings(
           share_show_categories_subtotals: null,
           share_show_items_prices: null,
           share_min_days_to_hire: null,
+          share_show_standard_conditions: null,
+          share_show_offer_conditions: null,
         },
       });
     } else {

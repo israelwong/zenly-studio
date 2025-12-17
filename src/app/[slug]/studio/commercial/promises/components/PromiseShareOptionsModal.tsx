@@ -32,8 +32,12 @@ export function PromiseShareOptionsModal({
   useEffect(() => {
     if (isOpen && promiseId) {
       loadSettings();
+    } else if (!isOpen) {
+      // Resetear estados cuando el modal se cierra
+      setLoading(false);
+      setSaving(false);
     }
-  }, [isOpen, promiseId, studioSlug]);
+  }, [isOpen, promiseId]);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -71,13 +75,13 @@ export function PromiseShareOptionsModal({
         show_categories_subtotals: showCategoriesSubtotals,
         show_items_prices: showItemsPrices,
         min_days_to_hire: minDaysToHire,
+        show_standard_conditions: showStandardConditions,
+        show_offer_conditions: showOfferConditions,
         remember_preferences: false, // Siempre guardar solo para esta promesa
       });
 
       if (result.success) {
         toast.success('Preferencias guardadas');
-        // Recargar los datos para asegurar que se reflejen los cambios
-        await loadSettings();
         onClose();
       } else {
         toast.error(result.error || 'Error al guardar preferencias');
@@ -196,11 +200,11 @@ export function PromiseShareOptionsModal({
               />
             </div>
 
-            {/* Switch para mostrar condiciones comerciales de ofertas */}
+            {/* Switch para mostrar condiciones comerciales de oferta */}
             <div className="flex items-center justify-between py-2">
               <div className="flex-1">
                 <label className="text-sm font-medium text-zinc-200">
-                  Mostrar condiciones comerciales de ofertas
+                  Mostrar condiciones comerciales de oferta
                 </label>
                 <p className="text-xs text-zinc-400 mt-0.5">
                   El prospecto verá las condiciones comerciales de tipo oferta

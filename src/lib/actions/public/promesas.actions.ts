@@ -22,6 +22,7 @@ export async function obtenerCondicionesComercialesPublicas(
     advance_type?: string | null;
     advance_amount?: number | null;
     discount_percentage: number | null;
+    type?: string;
     metodos_pago: Array<{
       id: string;
       metodo_pago_id: string;
@@ -87,6 +88,7 @@ export async function obtenerCondicionesComercialesPublicas(
       advance_type: c.advance_type,
       advance_amount: c.advance_amount,
       discount_percentage: c.discount_percentage,
+      type: c.type,
       metodos_pago: c.condiciones_comerciales_metodo_pago.map((mp) => ({
         id: mp.id,
         metodo_pago_id: mp.metodo_pago_id,
@@ -120,6 +122,7 @@ export async function filtrarCondicionesPorPreferencias(
     advance_type?: string | null;
     advance_amount?: number | null;
     discount_percentage: number | null;
+    type?: string;
     metodos_pago: Array<{
       id: string;
       metodo_pago_id: string;
@@ -136,6 +139,7 @@ export async function filtrarCondicionesPorPreferencias(
   advance_type?: string | null;
   advance_amount?: number | null;
   discount_percentage: number | null;
+  type?: string;
   metodos_pago: Array<{
     id: string;
     metodo_pago_id: string;
@@ -144,29 +148,42 @@ export async function filtrarCondicionesPorPreferencias(
 }>> {
   if (condiciones.length === 0) return [];
 
-  const studio = await prisma.studios.findUnique({
-    where: { slug: studioSlug },
-    select: { id: true },
-  });
+  // Si las condiciones ya tienen el tipo, filtrar directamente
+  // Si no tienen tipo, obtenerlo desde la base de datos
+  const condicionesSinTipo = condiciones.filter(c => !c.type);
 
-  if (!studio) return condiciones;
+  if (condicionesSinTipo.length > 0) {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
 
-  const condicionesConTipo = await prisma.studio_condiciones_comerciales.findMany({
-    where: {
-      studio_id: studio.id,
-      status: 'active',
-      id: { in: condiciones.map(c => c.id) },
-    },
-    select: {
-      id: true,
-      type: true,
-    },
-  });
+    if (studio) {
+      const condicionesConTipo = await prisma.studio_condiciones_comerciales.findMany({
+        where: {
+          studio_id: studio.id,
+          status: 'active',
+          id: { in: condicionesSinTipo.map(c => c.id) },
+        },
+        select: {
+          id: true,
+          type: true,
+        },
+      });
 
-  const tipoMap = new Map(condicionesConTipo.map(c => [c.id, c.type]));
+      const tipoMap = new Map(condicionesConTipo.map(c => [c.id, c.type]));
+
+      // Agregar tipo a las condiciones que no lo tienen
+      condiciones.forEach(condicion => {
+        if (!condicion.type) {
+          condicion.type = tipoMap.get(condicion.id) || 'standard';
+        }
+      });
+    }
+  }
 
   return condiciones.filter((condicion) => {
-    const tipo = tipoMap.get(condicion.id);
+    const tipo = condicion.type || 'standard';
     if (tipo === 'standard') {
       return showStandard;
     } else if (tipo === 'offer') {
@@ -340,7 +357,10 @@ export async function getPublicPromiseData(
       name: string;
       description: string | null;
       advance_percentage: number | null;
+      advance_type?: string | null;
+      advance_amount?: number | null;
       discount_percentage: number | null;
+      type?: string;
       metodos_pago: Array<{
         id: string;
         metodo_pago_id: string;
@@ -669,23 +689,8 @@ export async function getPublicPromiseData(
     // Filtrar condiciones comerciales según preferencias
     let condicionesFiltradas = condicionesResult.success && condicionesResult.data ? condicionesResult.data : [];
     if (condicionesFiltradas.length > 0) {
-      // Obtener el tipo de cada condición desde la base de datos
-      const condicionesConTipo = await prisma.studio_condiciones_comerciales.findMany({
-        where: {
-          studio_id: studio.id,
-          status: 'active',
-          id: { in: condicionesFiltradas.map(c => c.id) },
-        },
-        select: {
-          id: true,
-          type: true,
-        },
-      });
-
-      const tipoMap = new Map(condicionesConTipo.map(c => [c.id, c.type]));
-
       condicionesFiltradas = condicionesFiltradas.filter((condicion) => {
-        const tipo = tipoMap.get(condicion.id);
+        const tipo = condicion.type || 'standard';
         if (tipo === 'standard') {
           return shareSettings.show_standard_conditions;
         } else if (tipo === 'offer') {
@@ -723,6 +728,8 @@ export async function getPublicPromiseData(
           show_categories_subtotals: shareSettings.show_categories_subtotals,
           show_items_prices: shareSettings.show_items_prices,
           min_days_to_hire: shareSettings.min_days_to_hire,
+          show_standard_conditions: shareSettings.show_standard_conditions,
+          show_offer_conditions: shareSettings.show_offer_conditions,
         },
       },
     };
