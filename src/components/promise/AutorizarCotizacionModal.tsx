@@ -35,6 +35,7 @@ export function AutorizarCotizacionModal({
   condicionesComercialesMetodoPagoId,
 }: AutorizarCotizacionModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleAutorizar = async () => {
     setIsSubmitting(true);
@@ -56,14 +57,11 @@ export function AutorizarCotizacionModal({
         return;
       }
 
-      toast.success('¡Solicitud enviada!', {
-        description: 'El estudio recibirá tu solicitud y se pondrá en contacto contigo.',
-      });
-
-      onClose();
+      setIsSubmitting(false);
+      setShowSuccessModal(true);
     } catch (error) {
-      console.error('Error:', error);
-      toast.error('Error al autorizar', {
+      console.error('Error en handleAutorizar:', error);
+      toast.error('Error al enviar solicitud', {
         description: 'Por favor, intenta de nuevo o contacta al estudio.',
       });
     } finally {
@@ -85,69 +83,100 @@ export function AutorizarCotizacionModal({
     return cotizacion.price - (cotizacion.price * cotizacion.discount) / 100;
   };
 
+  const handleCloseSuccess = () => {
+    setShowSuccessModal(false);
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Solicitar Contratación</DialogTitle>
-          <DialogDescription>
-            Confirma que deseas solicitar la contratación de esta cotización
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && !showSuccessModal && onClose()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Solicitar Contratación</DialogTitle>
+            <DialogDescription>
+              Confirma que deseas solicitar la contratación de esta cotización
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* Resumen de cotización */}
-          <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
-            <h4 className="font-semibold text-white mb-2">{cotizacion.name}</h4>
-            <p className="text-2xl font-bold text-emerald-400">
-              {formatPrice(calculateFinalPrice())}
-            </p>
-            <p className="text-sm text-zinc-400 mt-1">
-              Incluye {getTotalServicios(cotizacion.servicios)} servicio
-              {getTotalServicios(cotizacion.servicios) !== 1 ? 's' : ''}
+          <div className="space-y-6 py-4">
+            {/* Resumen de cotización */}
+            <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
+              <h4 className="font-semibold text-white mb-2">{cotizacion.name}</h4>
+              <p className="text-2xl font-bold text-emerald-400">
+                {formatPrice(calculateFinalPrice())}
+              </p>
+              <p className="text-sm text-zinc-400 mt-1">
+                Incluye {getTotalServicios(cotizacion.servicios)} servicio
+                {getTotalServicios(cotizacion.servicios) !== 1 ? 's' : ''}
+              </p>
+            </div>
+
+            {/* Información importante */}
+            <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
+              <p className="text-sm text-zinc-300 leading-relaxed">
+                Al solicitar la contratación, el estudio recibirá una notificación y se
+                pondrá en contacto contigo para confirmar los detalles finales y coordinar
+                el pago.
+              </p>
+            </div>
+
+            {/* Botones */}
+            <div className="flex flex-col-reverse sm:flex-row gap-3">
+              <ZenButton
+                variant="outline"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="flex-1"
+              >
+                Cancelar
+              </ZenButton>
+              <ZenButton
+                onClick={handleAutorizar}
+                disabled={isSubmitting}
+                className="flex-1"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Confirmar Solicitud
+                  </>
+                )}
+              </ZenButton>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación */}
+      <Dialog open={showSuccessModal} onOpenChange={(open) => !open && handleCloseSuccess()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/20">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            </div>
+            <DialogTitle className="text-center">Mensaje Enviado</DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4">
+            <p className="text-center text-zinc-300 leading-relaxed">
+              Lo revisaremos lo antes posible para dar seguimiento a tu solicitud.
             </p>
           </div>
 
-          {/* Información importante */}
-          <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
-            <p className="text-sm text-zinc-300 leading-relaxed">
-              Al solicitar la contratación, el estudio recibirá una notificación y se
-              pondrá en contacto contigo para confirmar los detalles finales y coordinar
-              el pago.
-            </p>
-          </div>
-
-          {/* Botones */}
-          <div className="flex flex-col-reverse sm:flex-row gap-3">
-            <ZenButton
-              variant="outline"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="flex-1"
-            >
-              Cancelar
+          <div className="flex justify-center">
+            <ZenButton onClick={handleCloseSuccess} className="min-w-[120px]">
+              Entendido
             </ZenButton>
-            <ZenButton
-              onClick={handleAutorizar}
-              disabled={isSubmitting}
-              className="flex-1"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Enviando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Confirmar Solicitud
-                </>
-              )}
-            </ZenButton>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

@@ -5,7 +5,8 @@ import { createStudioNotification } from "@/lib/notifications/studio/studio-noti
 import { StudioNotificationScope, StudioNotificationType, NotificationPriority } from "@/lib/notifications/studio/types";
 
 /**
- * Autorizar cotización desde página pública
+ * Solicitar contratación de cotización desde página pública
+ * Solo envía notificación, NO autoriza la cotización (la autorización es manual)
  */
 export async function autorizarCotizacionPublica(
   promiseId: string,
@@ -15,7 +16,7 @@ export async function autorizarCotizacionPublica(
   condicionesComercialesMetodoPagoId?: string | null
 ) {
   try {
-    // 1. Validar que la promesa y cotizaci?n existen
+    // 1. Validar que la promesa y cotización existen
     const promise = await prisma.studio_promises.findUnique({
       where: { id: promiseId },
       include: {
@@ -54,7 +55,6 @@ export async function autorizarCotizacionPublica(
         id: true,
         name: true,
         price: true,
-        selected_by_prospect: true,
       },
     });
 
@@ -65,15 +65,7 @@ export async function autorizarCotizacionPublica(
       };
     }
 
-    // 2. Verificar si ya fue seleccionada
-    if (cotizacion.selected_by_prospect) {
-      return {
-        success: false,
-        error: "Esta cotización ya ha sido autorizada previamente",
-      };
-    }
-
-    // 3. Obtener informaci?n de la condici?n comercial seleccionada (si existe)
+    // 2. Obtener información de la condición comercial seleccionada (si existe)
     let condicionComercialInfo = null;
     let metodoPagoInfo = null;
 
@@ -109,28 +101,17 @@ export async function autorizarCotizacionPublica(
       }
     }
 
-    // 4. Actualizar cotización como seleccionada
-    await prisma.studio_cotizaciones.update({
-      where: { id: cotizacionId },
-      data: {
-        selected_by_prospect: true,
-        selected_at: new Date(),
-        condiciones_comerciales_id: condicionesComercialesId || null,
-        condiciones_comerciales_metodo_pago_id: condicionesComercialesMetodoPagoId || null,
-      },
-    });
-
-    // 5. Construir mensaje con informaci?n de condici?n comercial
-    let mensajeNotificacion = `${promise.contact.name} solicita contratar la cotizaci?n "${cotizacion.name}"`;
-    let contenidoLog = `Cliente solicit? contrataci?n de la cotizaci?n: "${cotizacion.name}"`;
+    // 3. Construir mensaje con información de condición comercial
+    let mensajeNotificacion = `${promise.contact.name} solicita contratar la cotización "${cotizacion.name}"`;
+    let contenidoLog = `Cliente solicitó contratación de la cotización: "${cotizacion.name}"`;
 
     if (condicionComercialInfo) {
-      mensajeNotificacion += ` con condici?n comercial: "${condicionComercialInfo.name}"`;
-      contenidoLog += ` con condici?n comercial: "${condicionComercialInfo.name}"`;
+      mensajeNotificacion += ` con condición comercial: "${condicionComercialInfo.name}"`;
+      contenidoLog += ` con condición comercial: "${condicionComercialInfo.name}"`;
 
       if (metodoPagoInfo) {
-        mensajeNotificacion += ` (M?todo de pago: ${metodoPagoInfo})`;
-        contenidoLog += ` (M?todo de pago: ${metodoPagoInfo})`;
+        mensajeNotificacion += ` (Método de pago: ${metodoPagoInfo})`;
+        contenidoLog += ` (Método de pago: ${metodoPagoInfo})`;
       }
 
       if (condicionComercialInfo.advance_type === 'fixed_amount' && condicionComercialInfo.advance_amount) {
@@ -144,7 +125,7 @@ export async function autorizarCotizacionPublica(
       }
     }
 
-    // 6. Crear notificación para el estudio con route a la promesa
+    // 4. Crear notificación para el estudio con route a la promesa
     await createStudioNotification({
       scope: StudioNotificationScope.STUDIO,
       studio_id: promise.studio.id,
@@ -172,7 +153,7 @@ export async function autorizarCotizacionPublica(
       },
     });
 
-    // 8. Agregar log a la promesa
+    // 5. Agregar log a la promesa
     await prisma.studio_promise_logs.create({
       data: {
         promise_id: promiseId,

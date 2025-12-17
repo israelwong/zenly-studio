@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit, Loader2 } from 'lucide-react';
+import { Edit, Loader2, CheckCircle2 } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import {
   Dialog,
