@@ -690,97 +690,102 @@ model platform_agent_discount_codes {
 }
 
 model studios {
-  id                         String                           @id @default(cuid())
-  studio_name                String
-  slug                       String                           @unique
-  email                      String                           @unique
-  address                    String?
-  website                    String?
-  logo_url                   String?
-  plan_id                    String?
-  subscription_status        SubscriptionStatus               @default(TRIAL)
-  subscription_start         DateTime?
-  subscription_end           DateTime?
-  stripe_customer_id         String?                          @unique
-  stripe_subscription_id     String?                          @unique
-  stripe_account_id          String?                          @unique
-  stripe_onboarding_complete Boolean                          @default(false)
-  commission_rate            Decimal                          @default(0.30)
-  is_active                  Boolean                          @default(true)
-  created_at                 DateTime                         @default(now())
-  updated_at                 DateTime                         @updatedAt
-  isotipo_url                String?
-  slogan                     String?
-  account_holder             String?
-  account_number             String?
-  bank_name                  String?
-  clabe_number               String?
-  presentation               String?
-  keywords                   String?
-  latitude                   Float?
-  longitude                  Float?
-  maps_url                   String?
-  place_id                   String?
-  has_crew                   Boolean?
-  gtm_id                     String?
-  facebook_pixel_id          String?
-  manager_pipeline_stages    studio_manager_pipeline_stages[]
-  platform_campaigns         platform_campaigns[]
-  platform_leads             platform_leads?
-  platform_user_profiles     platform_user_profiles[]
-  agenda                     studio_agenda[]
-  business_hours             studio_business_hours[]
-  crew_skills                studio_crew_skills[]
-  category_media             studio_category_media[]          @relation("category_media")
-  client_portal_access       studio_client_portal_access[]
-  contacts                   studio_contacts[]
-  promise_pipeline_stages    studio_promise_pipeline_stages[]
-  promise_tags               studio_promise_tags[]
-  condiciones_comerciales    studio_condiciones_comerciales[]
-  configuraciones            studio_configuraciones[]
-  cotizaciones               studio_cotizaciones[]
-  event_types                studio_event_types[]
-  eventos                    studio_events[]
-  promises                   studio_promises[]
-  studio_notifications       studio_notifications[]
-  faq                        studio_faq[]
-  gastos                     studio_gastos[]
-  recurring_expenses         studio_recurring_expenses[]
-  item_media                 studio_item_media[]              @relation("item_media")
-  items                      studio_items[]
-  lead_forms                 studio_lead_forms[]
-  metodos_pago               studio_metodos_pago[]
-  studio_modules             studio_modules[]
-  nominas                    studio_nominas[]
-  paquetes                   studio_paquetes[]
-  crew_members               studio_crew_members[]
-  phones                     studio_phones[]
-  portfolio_media            studio_portfolio_media[]         @relation("portfolio_media")
-  portfolios                 studio_portfolios[]
-  offer_media                studio_offer_media[]             @relation("offer_media")
-  post_media                 studio_post_media[]              @relation("post_media")
-  posts                      studio_posts[]
-  revenue_transactions       studio_revenue_transactions[]
-  studio_role_permissions    studio_role_permissions[]
-  scheduling_rules           studio_scheduling_rules[]
-  section_media              studio_section_media[]           @relation("section_media")
-  setup_status               studio_setup_status?
-  social_networks            studio_social_networks[]
-  storage_log                studio_storage_log[]
-  storage_usage              studio_storage_usage?
-  studio_revenue_products    studio_studio_revenue_products[]
-  terminos_condiciones       studio_terminos_condiciones[]
-  user_profiles              studio_user_profiles[]
-  studio_users               studio_users[]
-  zonas_trabajo              studio_zonas_trabajo[]
-  contract_templates         studio_contract_templates[]
-  event_contracts            studio_event_contracts[]
-  offers                     studio_offers[]
-  content_analytics          studio_content_analytics[]
-  plan                       platform_plans?                  @relation(fields: [plan_id], references: [id])
-  subscriptions              subscriptions[]
-  usage_tracking             usage_tracking[]
-  user_studio_roles          user_studio_roles[]
+  id                                              String                           @id @default(cuid())
+  studio_name                                     String
+  slug                                            String                           @unique
+  email                                           String                           @unique
+  address                                         String?
+  website                                         String?
+  logo_url                                        String?
+  plan_id                                         String?
+  subscription_status                             SubscriptionStatus               @default(TRIAL)
+  subscription_start                              DateTime?
+  subscription_end                                DateTime?
+  stripe_customer_id                              String?                          @unique
+  stripe_subscription_id                          String?                          @unique
+  stripe_account_id                               String?                          @unique
+  stripe_onboarding_complete                      Boolean                          @default(false)
+  commission_rate                                 Decimal                          @default(0.30)
+  is_active                                       Boolean                          @default(true)
+  created_at                                      DateTime                         @default(now())
+  updated_at                                      DateTime                         @updatedAt
+  isotipo_url                                     String?
+  slogan                                          String?
+  account_holder                                  String?
+  account_number                                  String?
+  bank_name                                       String?
+  clabe_number                                    String?
+  presentation                                    String?
+  keywords                                        String?
+  latitude                                        Float?
+  longitude                                       Float?
+  maps_url                                        String?
+  place_id                                        String?
+  has_crew                                        Boolean?
+  gtm_id                                          String?
+  facebook_pixel_id                               String?
+  // Preferencias por defecto para compartir promesas (para "recordar preferencias")
+  promise_share_default_show_packages             Boolean                          @default(true)
+  promise_share_default_show_categories_subtotals Boolean                          @default(false)
+  promise_share_default_show_items_prices         Boolean                          @default(false)
+  promise_share_default_min_days_to_hire          Int                              @default(30)
+  manager_pipeline_stages                         studio_manager_pipeline_stages[]
+  platform_campaigns                              platform_campaigns[]
+  platform_leads                                  platform_leads?
+  platform_user_profiles                          platform_user_profiles[]
+  agenda                                          studio_agenda[]
+  business_hours                                  studio_business_hours[]
+  crew_skills                                     studio_crew_skills[]
+  category_media                                  studio_category_media[]          @relation("category_media")
+  client_portal_access                            studio_client_portal_access[]
+  contacts                                        studio_contacts[]
+  promise_pipeline_stages                         studio_promise_pipeline_stages[]
+  promise_tags                                    studio_promise_tags[]
+  condiciones_comerciales                         studio_condiciones_comerciales[]
+  configuraciones                                 studio_configuraciones[]
+  cotizaciones                                    studio_cotizaciones[]
+  event_types                                     studio_event_types[]
+  eventos                                         studio_events[]
+  promises                                        studio_promises[]
+  studio_notifications                            studio_notifications[]
+  faq                                             studio_faq[]
+  gastos                                          studio_gastos[]
+  recurring_expenses                              studio_recurring_expenses[]
+  item_media                                      studio_item_media[]              @relation("item_media")
+  items                                           studio_items[]
+  lead_forms                                      studio_lead_forms[]
+  metodos_pago                                    studio_metodos_pago[]
+  studio_modules                                  studio_modules[]
+  nominas                                         studio_nominas[]
+  paquetes                                        studio_paquetes[]
+  crew_members                                    studio_crew_members[]
+  phones                                          studio_phones[]
+  portfolio_media                                 studio_portfolio_media[]         @relation("portfolio_media")
+  portfolios                                      studio_portfolios[]
+  offer_media                                     studio_offer_media[]             @relation("offer_media")
+  post_media                                      studio_post_media[]              @relation("post_media")
+  posts                                           studio_posts[]
+  revenue_transactions                            studio_revenue_transactions[]
+  studio_role_permissions                         studio_role_permissions[]
+  scheduling_rules                                studio_scheduling_rules[]
+  section_media                                   studio_section_media[]           @relation("section_media")
+  setup_status                                    studio_setup_status?
+  social_networks                                 studio_social_networks[]
+  storage_log                                     studio_storage_log[]
+  storage_usage                                   studio_storage_usage?
+  studio_revenue_products                         studio_studio_revenue_products[]
+  terminos_condiciones                            studio_terminos_condiciones[]
+  user_profiles                                   studio_user_profiles[]
+  studio_users                                    studio_users[]
+  zonas_trabajo                                   studio_zonas_trabajo[]
+  contract_templates                              studio_contract_templates[]
+  event_contracts                                 studio_event_contracts[]
+  offers                                          studio_offers[]
+  content_analytics                               studio_content_analytics[]
+  plan                                            platform_plans?                  @relation(fields: [plan_id], references: [id])
+  subscriptions                                   subscriptions[]
+  usage_tracking                                  usage_tracking[]
+  user_studio_roles                               user_studio_roles[]
 
   @@index([plan_id])
   @@index([slug])
@@ -1253,35 +1258,40 @@ model studio_contact_logs {
 //! PROMISES
 
 model studio_promises {
-  id                String                          @id @default(cuid())
-  studio_id         String
-  contact_id        String
-  offer_id          String? // Oferta de origen (null si es prospecto manual)
-  event_type_id     String?
-  event_location    String? // Lugar del evento (consolidado con sede)
-  name              String? // Nombre del evento (opcional)
-  address           String? // Dirección del evento (movido desde studio_events)
-  event_date        DateTime? // Fecha del evento confirmada (consolidado con defined_date)
-  pipeline_stage_id String?
-  status            String                          @default("pending")
-  defined_date      DateTime? // Mantener para compatibilidad con fechas tentativas
-  tentative_dates   Json?
-  is_test           Boolean                         @default(false) // Marca promesas de prueba del preview
-  test_created_at   DateTime? // Timestamp de creación para tracking
-  created_at        DateTime                        @default(now())
-  updated_at        DateTime                        @updatedAt
-  studio            studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  contact           studio_contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
-  offer             studio_offers?                  @relation(fields: [offer_id], references: [id], onDelete: SetNull)
-  event_type        studio_event_types?             @relation(fields: [event_type_id], references: [id])
-  pipeline_stage    studio_promise_pipeline_stages? @relation(fields: [pipeline_stage_id], references: [id])
-  quotes            studio_cotizaciones[]
-  event             studio_events?
-  logs              studio_promise_logs[]
-  tags              studio_promises_tags[]
-  notifications     studio_notifications[]
-  agenda            studio_agenda[]
-  pagos             studio_pagos[]
+  id                              String                          @id @default(cuid())
+  studio_id                       String
+  contact_id                      String
+  offer_id                        String? // Oferta de origen (null si es prospecto manual)
+  event_type_id                   String?
+  event_location                  String? // Lugar del evento (consolidado con sede)
+  name                            String? // Nombre del evento (opcional)
+  address                         String? // Dirección del evento (movido desde studio_events)
+  event_date                      DateTime? // Fecha del evento confirmada (consolidado con defined_date)
+  pipeline_stage_id               String?
+  status                          String                          @default("pending")
+  defined_date                    DateTime? // Mantener para compatibilidad con fechas tentativas
+  tentative_dates                 Json?
+  is_test                         Boolean                         @default(false) // Marca promesas de prueba del preview
+  test_created_at                 DateTime? // Timestamp de creación para tracking
+  // Override opcional de preferencias de compartir (null = usar default del studio)
+  share_show_packages             Boolean?
+  share_show_categories_subtotals Boolean?
+  share_show_items_prices         Boolean?
+  share_min_days_to_hire          Int?
+  created_at                      DateTime                        @default(now())
+  updated_at                      DateTime                        @updatedAt
+  studio                          studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  contact                         studio_contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  offer                           studio_offers?                  @relation(fields: [offer_id], references: [id], onDelete: SetNull)
+  event_type                      studio_event_types?             @relation(fields: [event_type_id], references: [id])
+  pipeline_stage                  studio_promise_pipeline_stages? @relation(fields: [pipeline_stage_id], references: [id])
+  quotes                          studio_cotizaciones[]
+  event                           studio_events?
+  logs                            studio_promise_logs[]
+  tags                            studio_promises_tags[]
+  notifications                   studio_notifications[]
+  agenda                          studio_agenda[]
+  pagos                           studio_pagos[]
 
   @@index([studio_id, contact_id])
   @@index([studio_id, status])
@@ -1813,7 +1823,7 @@ model studio_condiciones_comerciales {
   updated_at                          DateTime                                     @updatedAt
   advance_percentage                  Float?                                       @default(0) // Porcentaje de anticipo (0-100)
   advance_type                        String?                                      @default("percentage") // "percentage" | "fixed_amount"
-  advance_amount                      Float?                                       // Monto fijo de anticipo cuando advance_type = "fixed_amount"
+  advance_amount                      Float? // Monto fijo de anticipo cuando advance_type = "fixed_amount"
   description                         String?
   discount_percentage                 Float?
   name                                String
@@ -1932,7 +1942,7 @@ model studio_cotizacion_items {
   item_id                    String?
   service_category_id        String?
   quantity                   Int                 @default(1)
-  position                   Int                 @default(0)
+  order                      Int                 @default(0)
   assigned_to_crew_member_id String?
   scheduler_task_id          String?             @unique
   assignment_date            DateTime?
@@ -2259,34 +2269,34 @@ model studio_revenue_transactions {
 
 //! CONTENT (PORTFOLIOS)
 model studio_portfolios {
-  id                    String                            @id @default(cuid())
-  studio_id             String
-  title                 String
-  slug                  String
-  description           String?
-  cover_image_url       String?
-  cover_storage_bytes   BigInt?
-  category              String?
-  order                 Int                               @default(0)
-  is_published          Boolean                           @default(false)
-  view_count            Int                               @default(0)
-  created_at            DateTime                          @default(now())
-  updated_at            DateTime                          @updatedAt
-  caption               String?
-  cover_index           Int                               @default(0)
-  cta_action            String                            @default("whatsapp")
-  cta_enabled           Boolean                           @default(true)
-  cta_link              String?
-  cta_text              String                            @default("Cotiza tu evento")
-  event_type_id         String?
-  is_featured           Boolean                           @default(false)
-  published_at          DateTime?
-  tags                  String[]                          @default([])
-  content_blocks        studio_portfolio_content_blocks[]
-  items                 studio_portfolio_items[]
-  media                 studio_portfolio_media[]          @relation("portfolio_media")
-  event_type            studio_event_types?               @relation(fields: [event_type_id], references: [id])
-  studio                studios                           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  id                  String                            @id @default(cuid())
+  studio_id           String
+  title               String
+  slug                String
+  description         String?
+  cover_image_url     String?
+  cover_storage_bytes BigInt?
+  category            String?
+  order               Int                               @default(0)
+  is_published        Boolean                           @default(false)
+  view_count          Int                               @default(0)
+  created_at          DateTime                          @default(now())
+  updated_at          DateTime                          @updatedAt
+  caption             String?
+  cover_index         Int                               @default(0)
+  cta_action          String                            @default("whatsapp")
+  cta_enabled         Boolean                           @default(true)
+  cta_link            String?
+  cta_text            String                            @default("Cotiza tu evento")
+  event_type_id       String?
+  is_featured         Boolean                           @default(false)
+  published_at        DateTime?
+  tags                String[]                          @default([])
+  content_blocks      studio_portfolio_content_blocks[]
+  items               studio_portfolio_items[]
+  media               studio_portfolio_media[]          @relation("portfolio_media")
+  event_type          studio_event_types?               @relation(fields: [event_type_id], references: [id])
+  studio              studios                           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@unique([studio_id, slug])
   @@index([studio_id, is_published, published_at])
@@ -2585,34 +2595,34 @@ model studio_lead_forms {
 
 //! OFFERS
 model studio_offers {
-  id                     String                              @id @default(cuid())
-  studio_id              String
-  name                   String
-  description            String?
-  slug                   String
-  cover_media_url        String?
-  cover_media_type       String? // 'image' | 'video'
-  is_active              Boolean                             @default(true)
-  is_permanent           Boolean                             @default(false) // Si true: oferta siempre disponible
-  has_date_range         Boolean                             @default(false) // Si true: temporalidad definida
-  start_date             DateTime? // Fecha inicio (si has_date_range = true)
-  end_date               DateTime? // Fecha fin (si has_date_range = true)
-  business_term_id       String? // Condición comercial asociada a esta oferta
-  event_type_id          String? // Tipo de evento asociado
-  created_at             DateTime                            @default(now())
-  updated_at             DateTime                            @updatedAt
-  order                  Int?                                @default(0)
-  studio                 studios                             @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  landing_page           studio_offer_landing_pages?
-  leadform               studio_offer_leadforms?
-  visits                 studio_offer_visits[]
-  submissions            studio_offer_submissions[]
-  media                  studio_offer_media[]                @relation("offer_media")
-  content_blocks         studio_offer_content_blocks[]
-  business_term          studio_condiciones_comerciales?     @relation("offer_business_term", fields: [business_term_id], references: [id], onDelete: SetNull)
-  event_type             studio_event_types?                 @relation(fields: [event_type_id], references: [id], onDelete: SetNull)
-  created_by_offers      studio_condiciones_comerciales[]    @relation("offer_exclusive_terms") // Condiciones creadas exclusivamente para esta oferta
-  promises               studio_promises[]                   // Promesas generadas desde esta oferta
+  id                String                           @id @default(cuid())
+  studio_id         String
+  name              String
+  description       String?
+  slug              String
+  cover_media_url   String?
+  cover_media_type  String? // 'image' | 'video'
+  is_active         Boolean                          @default(true)
+  is_permanent      Boolean                          @default(false) // Si true: oferta siempre disponible
+  has_date_range    Boolean                          @default(false) // Si true: temporalidad definida
+  start_date        DateTime? // Fecha inicio (si has_date_range = true)
+  end_date          DateTime? // Fecha fin (si has_date_range = true)
+  business_term_id  String? // Condición comercial asociada a esta oferta
+  event_type_id     String? // Tipo de evento asociado
+  created_at        DateTime                         @default(now())
+  updated_at        DateTime                         @updatedAt
+  order             Int?                             @default(0)
+  studio            studios                          @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  landing_page      studio_offer_landing_pages?
+  leadform          studio_offer_leadforms?
+  visits            studio_offer_visits[]
+  submissions       studio_offer_submissions[]
+  media             studio_offer_media[]             @relation("offer_media")
+  content_blocks    studio_offer_content_blocks[]
+  business_term     studio_condiciones_comerciales?  @relation("offer_business_term", fields: [business_term_id], references: [id], onDelete: SetNull)
+  event_type        studio_event_types?              @relation(fields: [event_type_id], references: [id], onDelete: SetNull)
+  created_by_offers studio_condiciones_comerciales[] @relation("offer_exclusive_terms") // Condiciones creadas exclusivamente para esta oferta
+  promises          studio_promises[] // Promesas generadas desde esta oferta
 
   @@unique([studio_id, slug])
   @@index([studio_id, is_active])
@@ -3055,39 +3065,39 @@ enum PortfolioItemType {
 //! ANALYTICS
 
 model studio_content_analytics {
-  id            String              @id @default(cuid())
-  studio_id     String
-  
+  id        String @id @default(cuid())
+  studio_id String
+
   // Entidad relacionada (polimórfica)
-  content_type  ContentType         // POST | PORTFOLIO | OFFER | PACKAGE
-  content_id    String              // ID del post/portfolio/offer/paquete
-  
+  content_type ContentType // POST | PORTFOLIO | OFFER | PACKAGE
+  content_id   String // ID del post/portfolio/offer/paquete
+
   // Tipo de evento
-  event_type    AnalyticsEventType
-  
+  event_type AnalyticsEventType
+
   // Contexto del usuario
-  user_id       String?             // Si está autenticado
-  ip_address    String?             // IP anónima para uniqueness
-  user_agent    String?             // Browser/device info
-  session_id    String?             // Para agrupar sesión
-  
+  user_id    String? // Si está autenticado
+  ip_address String? // IP anónima para uniqueness
+  user_agent String? // Browser/device info
+  session_id String? // Para agrupar sesión
+
   // Contexto de origen
-  referrer      String?             // URL de origen
-  utm_source    String?
-  utm_medium    String?
-  utm_campaign  String?
-  utm_term      String?
-  utm_content   String?
-  
+  referrer     String? // URL de origen
+  utm_source   String?
+  utm_medium   String?
+  utm_campaign String?
+  utm_term     String?
+  utm_content  String?
+
   // Metadata adicional (JSON flexible)
-  metadata      Json?               // Ej: { "media_id": "xxx", "cta_type": "whatsapp" }
-  
+  metadata Json? // Ej: { "media_id": "xxx", "cta_type": "whatsapp" }
+
   // Timestamps
-  created_at    DateTime            @default(now())
-  
+  created_at DateTime @default(now())
+
   // Relaciones
-  studio        studios             @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  
+  studio studios @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
   // Índices optimizados
   @@index([studio_id, content_type, content_id, event_type])
   @@index([content_type, content_id, created_at])
@@ -3105,38 +3115,38 @@ enum ContentType {
 
 enum AnalyticsEventType {
   // Vistas
-  PAGE_VIEW       // Página dedicada cargada
-  FEED_VIEW       // Renderizado en feed/listado
-  SIDEBAR_VIEW    // Oferta visible en sidebar
-  
+  PAGE_VIEW // Página dedicada cargada
+  FEED_VIEW // Renderizado en feed/listado
+  SIDEBAR_VIEW // Oferta visible en sidebar
+
   // Interacciones básicas
-  MODAL_OPEN      // Click para abrir modal/detalle
-  MODAL_CLOSE     // Cerrar modal
-  OFFER_CLICK     // Click en oferta
-  
+  MODAL_OPEN // Click para abrir modal/detalle
+  MODAL_CLOSE // Cerrar modal
+  OFFER_CLICK // Click en oferta
+
   // Navegación
-  NEXT_CONTENT    // Navegar al siguiente
-  PREV_CONTENT    // Navegar al anterior
-  
+  NEXT_CONTENT // Navegar al siguiente
+  PREV_CONTENT // Navegar al anterior
+
   // Compartir
-  LINK_COPY       // Copiar link para compartir
-  SHARE_CLICK     // Click en botón de compartir
-  
+  LINK_COPY // Copiar link para compartir
+  SHARE_CLICK // Click en botón de compartir
+
   // Media
-  MEDIA_CLICK     // Click en imagen/video
-  MEDIA_VIEW      // Ver media en lightbox
-  CAROUSEL_NEXT   // Siguiente en carousel
-  CAROUSEL_PREV   // Anterior en carousel
-  
+  MEDIA_CLICK // Click en imagen/video
+  MEDIA_VIEW // Ver media en lightbox
+  CAROUSEL_NEXT // Siguiente en carousel
+  CAROUSEL_PREV // Anterior en carousel
+
   // CTAs y conversiones
-  CTA_CLICK       // Click en CTA principal
-  WHATSAPP_CLICK  // Click en WhatsApp
-  FORM_VIEW       // Ver formulario (offers)
-  FORM_SUBMIT     // Enviar formulario (offers)
-  
+  CTA_CLICK // Click en CTA principal
+  WHATSAPP_CLICK // Click en WhatsApp
+  FORM_VIEW // Ver formulario (offers)
+  FORM_SUBMIT // Enviar formulario (offers)
+
   // Engagement
-  SCROLL_50       // Scroll 50% del contenido
-  SCROLL_100      // Scroll 100% del contenido
-  TIME_30S        // Tiempo en página > 30s
-  TIME_60S        // Tiempo en página > 60s
+  SCROLL_50 // Scroll 50% del contenido
+  SCROLL_100 // Scroll 100% del contenido
+  TIME_30S // Tiempo en página > 30s
+  TIME_60S // Tiempo en página > 60s
 }

@@ -141,45 +141,45 @@ export function OfferCardPreview({
           <div className="flex items-center gap-4 p-4">
             {/* Cover - Más grande que compact */}
             <div className="relative w-28 h-28 shrink-0 bg-zinc-800 rounded overflow-hidden">
-              {coverMediaUrl ? (
-                coverMediaType === "video" ? (
-                  <video
-                    src={coverMediaUrl}
-                    className="w-full h-full object-cover"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                  />
-                ) : (
-                  <Image
-                    src={coverMediaUrl}
-                    alt={name}
-                    fill
-                    className="object-cover"
-                    sizes="112px"
-                  />
-                )
+            {coverMediaUrl ? (
+              coverMediaType === "video" ? (
+                <video
+                  src={coverMediaUrl}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+                <Image
+                  src={coverMediaUrl}
+                  alt={name}
+                  fill
+                  className="object-cover"
+                    sizes="112px"
+                />
+              )
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
                   <svg className="w-8 h-8 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              )}
-            </div>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            )}
+          </div>
 
             {/* Content */}
             <div className="flex-1 min-w-0">
               <h3 className="text-base font-semibold text-zinc-100 group-hover:text-purple-400 transition-colors line-clamp-1">
-                {name || "Nombre de la oferta"}
-              </h3>
+              {name || "Nombre de la oferta"}
+            </h3>
 
-              {description && (
+            {description && (
                 <p className="text-sm text-zinc-400 line-clamp-2 mt-1">
-                  {description}
-                </p>
-              )}
+                {description}
+              </p>
+            )}
 
               {/* Badges inline */}
               <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -189,18 +189,18 @@ export function OfferCardPreview({
                     {eventTypeName}
                   </span>
                 )}
-                {discountPercentage && (
+              {discountPercentage && (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-purple-500/20 text-purple-300">
                     <Tag className="w-3 h-3" />
                     {discountPercentage}%
-                  </span>
-                )}
-                {validityText && (
-                  <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+                </span>
+              )}
+              {validityText && (
+                <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
                     <Clock className="w-3 h-3" />
-                    {validityText}
-                  </span>
-                )}
+                  {validityText}
+                </span>
+              )}
               </div>
             </div>
           </div>

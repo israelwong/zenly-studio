@@ -50,9 +50,9 @@ export const CondicionComercialWithValidationSchema = z.object({
     // Validar anticipo según tipo
     const tipoAnticipo = data.tipo_anticipo || 'percentage';
     if (tipoAnticipo === 'percentage') {
-        if (data.porcentaje_anticipo) {
-            const anticipo = parseFloat(data.porcentaje_anticipo);
-            return anticipo >= 0 && anticipo <= 100;
+    if (data.porcentaje_anticipo) {
+        const anticipo = parseFloat(data.porcentaje_anticipo);
+        return anticipo >= 0 && anticipo <= 100;
         }
     } else if (tipoAnticipo === 'fixed_amount') {
         if (data.monto_anticipo) {
@@ -95,9 +95,9 @@ export const createCondicionComercialSchema = (sobreprecio: number) => z.object(
     // Validar anticipo según tipo
     const tipoAnticipo = data.tipo_anticipo || 'percentage';
     if (tipoAnticipo === 'percentage') {
-        if (data.porcentaje_anticipo) {
-            const anticipo = parseFloat(data.porcentaje_anticipo);
-            return anticipo >= 0 && anticipo <= 100;
+    if (data.porcentaje_anticipo) {
+        const anticipo = parseFloat(data.porcentaje_anticipo);
+        return anticipo >= 0 && anticipo <= 100;
         }
     } else if (tipoAnticipo === 'fixed_amount') {
         if (data.monto_anticipo) {

@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { obtenerCatalogo } from "@/lib/actions/studio/config/catalogo.actions";
+import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/config/configuracion-precios.actions";
+import { calcularPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
 import type { PublicSeccionData, PublicCategoriaData, PublicServicioData } from "@/types/public-promise";
 import type { SeccionData } from "@/lib/actions/schemas/catalogo-schemas";
 
@@ -282,6 +284,12 @@ export async function getPublicPromiseData(
       content: string;
       is_required: boolean;
     }>;
+    share_settings: {
+      show_packages: boolean;
+      show_categories_subtotals: boolean;
+      show_items_prices: boolean;
+      min_days_to_hire: number;
+    };
   };
   error?: string;
 }> {
@@ -294,6 +302,10 @@ export async function getPublicPromiseData(
         studio_name: true,
         slogan: true,
         logo_url: true,
+        promise_share_default_show_packages: true,
+        promise_share_default_show_categories_subtotals: true,
+        promise_share_default_show_items_prices: true,
+        promise_share_default_min_days_to_hire: true,
       },
     });
 
@@ -304,13 +316,21 @@ export async function getPublicPromiseData(
       };
     }
 
-    // 2. Obtener la promesa con sus cotizaciones
+    // 2. Obtener la promesa con sus cotizaciones y preferencias de compartir
     const promise = await prisma.studio_promises.findFirst({
       where: {
         id: promiseId,
         studio_id: studio.id,
       },
-      include: {
+      select: {
+        id: true,
+        event_type_id: true,
+        event_date: true,
+        event_location: true,
+        share_show_packages: true,
+        share_show_categories_subtotals: true,
+        share_show_items_prices: true,
+        share_min_days_to_hire: true,
         contact: {
           select: {
             name: true,
@@ -342,7 +362,7 @@ export async function getPublicPromiseData(
                 status: true,
               },
               orderBy: {
-                position: 'asc',
+                order: 'asc',
               },
             },
             condiciones_comerciales: {
@@ -383,6 +403,14 @@ export async function getPublicPromiseData(
       };
     }
 
+    // Obtener preferencias de compartir (combinar defaults del studio con overrides de la promesa)
+    const shareSettings = {
+      show_packages: promise.share_show_packages ?? studio.promise_share_default_show_packages,
+      show_categories_subtotals: promise.share_show_categories_subtotals ?? studio.promise_share_default_show_categories_subtotals,
+      show_items_prices: promise.share_show_items_prices ?? studio.promise_share_default_show_items_prices,
+      min_days_to_hire: promise.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire,
+    };
+
     // 3. Obtener catálogo completo (incluir items inactivos para que coincidan con paquetes)
     const catalogoResult = await obtenerCatalogo(studioSlug, false); // false = incluir todos los items (activos e inactivos)
     if (!catalogoResult.success || !catalogoResult.data) {
@@ -393,8 +421,17 @@ export async function getPublicPromiseData(
     }
     const catalogo = catalogoResult.data;
 
-    // 4. Obtener paquetes disponibles para el tipo de evento
-    const paquetes = promise.event_type_id
+    // 4. Obtener configuración de precios para calcular precios del catálogo
+    const configForm = await obtenerConfiguracionPrecios(studioSlug);
+    const configPrecios = configForm ? {
+      utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30') / 100,
+      utilidad_producto: parseFloat(configForm.utilidad_producto || '0.20') / 100,
+      comision_venta: parseFloat(configForm.comision_venta || '0.10') / 100,
+      sobreprecio: parseFloat(configForm.sobreprecio || '0.05') / 100,
+    } : null;
+
+    // 5. Obtener paquetes disponibles para el tipo de evento (solo si show_packages está habilitado)
+    const paquetes = (shareSettings.show_packages && promise.event_type_id)
       ? await prisma.studio_paquetes.findMany({
         where: {
           studio_id: studio.id,
@@ -413,8 +450,18 @@ export async function getPublicPromiseData(
               id: true,
               item_id: true,
               quantity: true,
+              precio_personalizado: true,
               status: true,
               visible_to_client: true,
+              items: {
+                select: {
+                  id: true,
+                  name: true,
+                  cost: true,
+                  expense: true,
+                  utility_type: true,
+                },
+              },
             },
             orderBy: {
               order: 'asc',
@@ -491,10 +538,33 @@ export async function getPublicPromiseData(
       paq.paquete_items.forEach((item) => {
         if (item.item_id && item.status === 'active' && item.visible_to_client !== false) {
           itemIds.add(item.item_id);
+
+          // Calcular precio: usar precio_personalizado si existe, si no calcular desde catálogo
+          let precioItem: number | undefined = undefined;
+
+          if (item.precio_personalizado !== null && item.precio_personalizado !== undefined) {
+            precioItem = item.precio_personalizado;
+          } else if (item.items && configPrecios) {
+            // Calcular precio desde catálogo
+            const tipoUtilidad = item.items.utility_type?.toLowerCase() || 'service';
+            const tipoUtilidadFinal = tipoUtilidad.includes('service') || tipoUtilidad.includes('servicio')
+              ? 'servicio'
+              : 'producto';
+
+            const precios = calcularPrecio(
+              item.items.cost || 0,
+              item.items.expense || 0,
+              tipoUtilidadFinal,
+              configPrecios
+            );
+
+            precioItem = precios.precio_final;
+          }
+
           itemsData.set(item.item_id, {
             description: null,
             quantity: item.quantity,
-            price: undefined,
+            price: precioItem,
           });
         }
       });
@@ -542,6 +612,12 @@ export async function getPublicPromiseData(
         paquetes: mappedPaquetes,
         condiciones_comerciales: condicionesResult.success && condicionesResult.data ? condicionesResult.data : undefined,
         terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
+        share_settings: {
+          show_packages: shareSettings.show_packages,
+          show_categories_subtotals: shareSettings.show_categories_subtotals,
+          show_items_prices: shareSettings.show_items_prices,
+          min_days_to_hire: shareSettings.min_days_to_hire,
+        },
       },
     };
   } catch (error) {

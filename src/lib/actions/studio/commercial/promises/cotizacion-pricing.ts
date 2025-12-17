@@ -1,8 +1,10 @@
 'use server';
 
 import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { calcularPrecio, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
+import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 
 /**
  * ⚡ GUARDA PRECIOS DE COTIZACIÓN AL AUTORIZAR
@@ -92,8 +94,8 @@ export async function guardarEstructuraCotizacionAutorizada(
 
       // Normalizar tipoUtilidad: puede venir como 'service', 'servicio', 'product', 'producto', etc.
       const normalizedTipoUtilidad = datosCatalogo.tipoUtilidad?.toLowerCase() || 'service';
-      const tipoUtilidadFinal = normalizedTipoUtilidad.includes('service') || normalizedTipoUtilidad.includes('servicio') 
-        ? 'servicio' 
+      const tipoUtilidadFinal = normalizedTipoUtilidad.includes('service') || normalizedTipoUtilidad.includes('servicio')
+        ? 'servicio'
         : 'producto';
 
       // 🔍 DEBUG: Log detallado del tipo de utilidad
@@ -147,6 +149,117 @@ export async function guardarEstructuraCotizacionAutorizada(
     }
   } catch (error) {
     console.error('[PRICING] Error guardando estructura:', error);
+    throw error;
+  }
+}
+
+/**
+ * ⚡ CALCULA Y GUARDA PRECIOS DE COTIZACIÓN AL CREAR/ACTUALIZAR
+ * 
+ * Similar a guardarEstructuraCotizacionAutorizada pero solo guarda campos operacionales
+ * (sin snapshots, que solo se guardan al autorizar)
+ */
+export async function calcularYGuardarPreciosCotizacion(
+  cotizacionId: string,
+  studioSlug: string
+): Promise<void> {
+  try {
+    // 1️⃣ Obtener configuración de precios
+    const configForm = await obtenerConfiguracionPrecios(studioSlug);
+    if (!configForm) {
+      console.warn('[PRICING] No hay configuración de precios, no se calcularán precios');
+      return;
+    }
+
+    // Convertir a formato ConfiguracionPrecios (decimales)
+    const configPrecios: ConfiguracionPrecios = {
+      utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30'),
+      utilidad_producto: parseFloat(configForm.utilidad_producto || '0.20'),
+      comision_venta: parseFloat(configForm.comision_venta || '0.10'),
+      sobreprecio: parseFloat(configForm.sobreprecio || '0.05'),
+    };
+
+    // 2️⃣ Obtener catálogo
+    const catalogoResult = await obtenerCatalogo(studioSlug, false);
+    if (!catalogoResult.success || !catalogoResult.data) {
+      throw new Error('No se pudo obtener el catálogo');
+    }
+
+    // Crear mapa de item_id -> datos del catálogo
+    interface DatosCatalogo {
+      nombre: string;
+      costo: number;
+      gasto: number;
+      tipoUtilidad: string;
+      seccion: string;
+      categoria: string;
+    }
+    const catalogoMap = new Map<string, DatosCatalogo>();
+    catalogoResult.data.forEach(seccion => {
+      seccion.categorias.forEach(categoria => {
+        categoria.servicios.forEach(servicio => {
+          catalogoMap.set(servicio.id, {
+            nombre: servicio.nombre,
+            costo: servicio.costo,
+            gasto: servicio.gasto,
+            tipoUtilidad: servicio.tipo_utilidad,
+            seccion: seccion.nombre,
+            categoria: categoria.nombre,
+          });
+        });
+      });
+    });
+
+    // 3️⃣ Obtener items de la cotización
+    const items = await prisma.studio_cotizacion_items.findMany({
+      where: { cotizacion_id: cotizacionId },
+    });
+
+    if (items.length === 0) return;
+
+    // 4️⃣ Calcular y guardar precios para cada item
+    for (const item of items) {
+      if (!item.item_id) continue;
+
+      const datosCatalogo = catalogoMap.get(item.item_id);
+      if (!datosCatalogo) {
+        console.warn(`[PRICING] Item ${item.item_id} no encontrado en catálogo`);
+        continue;
+      }
+
+      // Normalizar tipoUtilidad
+      const normalizedTipoUtilidad = datosCatalogo.tipoUtilidad?.toLowerCase() || 'service';
+      const tipoUtilidadFinal = normalizedTipoUtilidad.includes('service') || normalizedTipoUtilidad.includes('servicio')
+        ? 'servicio'
+        : 'producto';
+
+      // Calcular precios
+      const precios = calcularPrecio(
+        datosCatalogo.costo || 0,
+        datosCatalogo.gasto || 0,
+        tipoUtilidadFinal,
+        configPrecios
+      );
+
+      // Guardar solo campos operacionales (sin snapshots)
+      await prisma.studio_cotizacion_items.update({
+        where: { id: item.id },
+        data: {
+          name: datosCatalogo.nombre,
+          category_name: datosCatalogo.categoria,
+          seccion_name: datosCatalogo.seccion,
+          cost: datosCatalogo.costo || 0,
+          expense: datosCatalogo.gasto || 0,
+          unit_price: precios.precio_final,
+          subtotal: precios.precio_final * item.quantity,
+          profit: precios.utilidad_base,
+          public_price: precios.precio_final,
+          profit_type: tipoUtilidadFinal,
+        },
+      });
+    }
+  } catch (error) {
+    console.error('[PRICING] Error calculando y guardando precios:', error);
     throw error;
   }
 }

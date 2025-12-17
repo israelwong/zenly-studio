@@ -1,0 +1,1 @@
+export { ResumenCotizacion } from './ResumenCotizacion';

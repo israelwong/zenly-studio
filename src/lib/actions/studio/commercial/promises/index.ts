@@ -34,6 +34,12 @@ export {
 } from './promise-quick-actions.actions';
 
 export {
+  getPromiseShareSettings,
+  updatePromiseShareSettings,
+  type PromiseShareSettings,
+} from './promise-share-settings.actions';
+
+export {
   getEventTypes,
 } from './event-types.actions';
 

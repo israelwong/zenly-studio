@@ -53,7 +53,10 @@ export default function EditarCotizacionPage() {
       const result = await getPromiseById(promiseId);
 
       if (result.success && result.data) {
-        const hasDate = result.data.defined_date ||
+        // Usar event_date como campo principal (estándar actual)
+        // También verificar defined_date e interested_dates como fallback para compatibilidad
+        const hasDate = result.data.event_date ||
+          result.data.defined_date ||
           (result.data.interested_dates && result.data.interested_dates.length > 0);
 
         if (!hasDate) {

@@ -121,7 +121,7 @@ export default async function PromisePage({ params }: PromisePageProps) {
     );
   }
 
-  const { promise, studio: studioData, cotizaciones, paquetes, condiciones_comerciales, terminos_condiciones } = result.data;
+  const { promise, studio: studioData, cotizaciones, paquetes, condiciones_comerciales, terminos_condiciones, share_settings } = result.data;
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -168,6 +168,45 @@ export default async function PromisePage({ params }: PromisePageProps) {
           studioLogoUrl={studioData.logo_url}
         />
 
+        {/* Fecha sugerida de contratación */}
+        {share_settings.min_days_to_hire && share_settings.min_days_to_hire > 0 && promise.event_date && (
+          <section className="py-4 px-4">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900/30 border border-zinc-800 rounded-lg">
+                <svg
+                  className="w-4 h-4 text-emerald-400 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+                <p className="text-sm text-zinc-300">
+                  Sugerimos contratar antes del {' '}
+                  <span className="font-medium text-emerald-400">
+                    {(() => {
+                      const eventDate = new Date(promise.event_date);
+                      const fechaSugerida = new Date(eventDate);
+                      fechaSugerida.setDate(fechaSugerida.getDate() - share_settings.min_days_to_hire);
+                      return fechaSugerida.toLocaleDateString('es-MX', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      });
+                    })()}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Cotizaciones personalizadas */}
         {cotizaciones.length > 0 && (
           <CotizacionesSection
@@ -176,6 +215,8 @@ export default async function PromisePage({ params }: PromisePageProps) {
             studioSlug={slug}
             condicionesComerciales={condiciones_comerciales}
             terminosCondiciones={terminos_condiciones}
+            showCategoriesSubtotals={share_settings.show_categories_subtotals}
+            showItemsPrices={share_settings.show_items_prices}
           />
         )}
 
@@ -188,6 +229,9 @@ export default async function PromisePage({ params }: PromisePageProps) {
             showAsAlternative={cotizaciones.length > 0}
             condicionesComerciales={condiciones_comerciales}
             terminosCondiciones={terminos_condiciones}
+            minDaysToHire={share_settings.min_days_to_hire}
+            showCategoriesSubtotals={share_settings.show_categories_subtotals}
+            showItemsPrices={share_settings.show_items_prices}
           />
         )}
 

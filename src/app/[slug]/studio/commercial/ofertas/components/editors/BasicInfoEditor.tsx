@@ -634,14 +634,14 @@ export function BasicInfoEditor({
           .map(t => {
             const tWithAdvance = t as typeof t & { advance_type?: string | null; advance_amount?: number | null };
             return {
-              id: t.id,
-              name: t.name,
-              description: t.description,
-              discount_percentage: t.discount_percentage,
-              advance_percentage: t.advance_percentage,
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            discount_percentage: t.discount_percentage,
+            advance_percentage: t.advance_percentage,
               advance_type: tWithAdvance.advance_type,
               advance_amount: tWithAdvance.advance_amount,
-              type: (t.type || 'standard') as 'standard' | 'offer',
+            type: (t.type || 'standard') as 'standard' | 'offer',
             };
           });
         setBusinessTerms(activeTerms);

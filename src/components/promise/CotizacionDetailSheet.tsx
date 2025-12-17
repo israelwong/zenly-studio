@@ -40,6 +40,8 @@ interface CotizacionDetailSheetProps {
   studioSlug: string;
   condicionesComerciales?: CondicionComercial[];
   terminosCondiciones?: TerminoCondicion[];
+  showCategoriesSubtotals?: boolean;
+  showItemsPrices?: boolean;
 }
 
 export function CotizacionDetailSheet({
@@ -50,6 +52,8 @@ export function CotizacionDetailSheet({
   studioSlug,
   condicionesComerciales: condicionesComercialesIniciales,
   terminosCondiciones: terminosCondicionesIniciales,
+  showCategoriesSubtotals = false,
+  showItemsPrices = false,
 }: CotizacionDetailSheetProps) {
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [showPersonalizacionModal, setShowPersonalizacionModal] = useState(false);
@@ -147,6 +151,7 @@ export function CotizacionDetailSheet({
         ? (precioConDescuento * (condicion.advance_percentage ?? 0)) / 100
         : 0;
     const anticipoPorcentaje = advanceType === 'percentage' ? (condicion.advance_percentage ?? 0) : null;
+    const anticipoMontoFijo = advanceType === 'fixed_amount' ? condicion.advance_amount : null;
 
     // Calcular diferido
     const diferido = precioConDescuento - anticipo;
@@ -155,7 +160,9 @@ export function CotizacionDetailSheet({
       precioBase,
       descuentoCondicion,
       precioConDescuento,
+      advanceType,
       anticipoPorcentaje,
+      anticipoMontoFijo,
       anticipo,
       diferido,
     };
@@ -253,7 +260,11 @@ export function CotizacionDetailSheet({
             <h3 className="text-lg font-semibold text-white mb-4">
               Servicios Incluidos
             </h3>
-            <PublicServiciosTree servicios={cotizacion.servicios} showPrices />
+            <PublicServiciosTree
+              servicios={cotizacion.servicios}
+              showPrices={showItemsPrices}
+              showSubtotals={showCategoriesSubtotals}
+            />
           </div>
 
           {/* Condiciones comerciales */}
@@ -441,10 +452,14 @@ export function CotizacionDetailSheet({
                       {formatPrice(precioCalculado.precioConDescuento)}
                     </span>
                   </div>
-                  {precioCalculado.anticipoPorcentaje > 0 && (
+                  {precioCalculado.anticipo > 0 && (
                     <>
                       <div className="flex justify-between items-center pt-2">
-                        <span className="text-sm text-zinc-400">Anticipo ({precioCalculado.anticipoPorcentaje}%)</span>
+                        <span className="text-sm text-zinc-400">
+                          {precioCalculado.advanceType === 'fixed_amount'
+                            ? 'Anticipo'
+                            : `Anticipo (${precioCalculado.anticipoPorcentaje ?? 0}%)`}
+                        </span>
                         <span className="text-sm font-medium text-blue-400">
                           {formatPrice(precioCalculado.anticipo)}
                         </span>

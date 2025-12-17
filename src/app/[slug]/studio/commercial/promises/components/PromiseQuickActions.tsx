@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Eye, Copy, Check } from 'lucide-react';
+import { Settings, Copy, Check, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   logProfileShared,
 } from '@/lib/actions/studio/commercial/promises';
+import { PromiseShareOptionsModal } from './PromiseShareOptionsModal';
 
 interface PromiseQuickActionsProps {
   studioSlug: string;
@@ -14,6 +15,23 @@ interface PromiseQuickActionsProps {
   phone: string;
   email?: string | null;
   promiseId?: string | null;
+  isLoading?: boolean;
+}
+
+export function PromiseQuickActionsSkeleton() {
+  return (
+    <div className="flex items-center gap-2">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="px-3 py-2 rounded-lg bg-zinc-600/10 animate-pulse flex items-center gap-2"
+        >
+          <div className="h-4 w-4 bg-zinc-700 rounded" />
+          <div className="h-4 w-20 bg-zinc-700 rounded" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function PromiseQuickActions({
@@ -23,8 +41,13 @@ export function PromiseQuickActions({
   phone: _phone,
   email,
   promiseId,
+  isLoading = false,
 }: PromiseQuickActionsProps) {
+  if (isLoading) {
+    return <PromiseQuickActionsSkeleton />;
+  }
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   const handleShareProfile = async () => {
     const profileUrl = `${window.location.origin}/${studioSlug}/client/profile/${contactId}`;
@@ -123,6 +146,24 @@ export function PromiseQuickActions({
         <Eye className="h-4 w-4" />
         <span>Vista previa</span>
       </button>
+      <button
+        onClick={() => setIsShareModalOpen(true)}
+        className="px-3 py-2 rounded-lg bg-zinc-600/10 hover:bg-zinc-600/20 text-zinc-400 hover:text-zinc-300 transition-colors flex items-center gap-2 text-sm"
+        title="Preferencias de compartir"
+        aria-label="Preferencias de compartir"
+        disabled={!promiseId}
+      >
+        <Settings className="h-4 w-4" />
+        <span>Preferencias</span>
+      </button>
+      {promiseId && (
+        <PromiseShareOptionsModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+        />
+      )}
     </div>
   );
 }

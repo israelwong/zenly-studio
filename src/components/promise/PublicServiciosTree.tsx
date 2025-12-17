@@ -7,9 +7,10 @@ import type { PublicSeccionData, PublicServicioData } from '@/types/public-promi
 interface PublicServiciosTreeProps {
   servicios: PublicSeccionData[];
   showPrices?: boolean;
+  showSubtotals?: boolean;
 }
 
-export function PublicServiciosTree({ servicios, showPrices = false }: PublicServiciosTreeProps) {
+export function PublicServiciosTree({ servicios, showPrices = false, showSubtotals = false }: PublicServiciosTreeProps) {
   // Inicializar todas las secciones y categorías expandidas por defecto
   const initialExpandedSections = useMemo(() => {
     return new Set(servicios.map(seccion => seccion.id));
@@ -105,14 +106,12 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
                     .sort((a, b) => a.orden - b.orden)
                     .map((categoria, categoriaIndex) => {
                       const isCategoryExpanded = expandedCategories.has(categoria.id);
-                      const totalPriceCategoria = showPrices
-                        ? categoria.servicios.reduce((sum, s) => {
-                          if (isCotizacionServicio(s)) {
-                            return sum + (s.price || 0) * (s.quantity || 1);
-                          }
-                          return sum;
-                        }, 0)
-                        : 0;
+                      // Calcular subtotal por categoría: suma de (precio × cantidad) de todos los items
+                      const totalPriceCategoria = categoria.servicios.reduce((sum, s) => {
+                        const precio = s.price ?? 0;
+                        const cantidad = s.quantity ?? 1;
+                        return sum + (precio * cantidad);
+                      }, 0);
 
                       return (
                         <div
@@ -133,7 +132,8 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
                               <h5 className="text-sm font-medium text-zinc-300 text-left">{categoria.nombre}</h5>
                             </div>
 
-                            {showPrices && totalPriceCategoria > 0 && (
+                            {/* Mostrar subtotal por categoría solo si showSubtotals está activo */}
+                            {showSubtotals && (
                               <span className="text-sm font-semibold text-blue-400 ml-auto pl-4">
                                 {formatPrice(totalPriceCategoria)}
                               </span>
@@ -157,7 +157,7 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
                                       className={`py-3 px-4 pl-6 hover:bg-zinc-700/20 transition-colors ${servicioIndex === 0 ? 'pt-3' : ''
                                         }`}
                                     >
-                                      <div className="flex items-start">
+                                      <div className="flex items-start justify-between">
                                         <div className="flex-1 min-w-0">
                                           <h6 className="text-sm text-zinc-300 leading-tight">
                                             {servicio.name}
@@ -171,6 +171,12 @@ export function PublicServiciosTree({ servicios, showPrices = false }: PublicSer
                                             </p>
                                           )}
                                         </div>
+                                        {/* Mostrar precio individual solo si showPrices está activo */}
+                                        {showPrices && esCotizacion && servicio.price !== undefined && (
+                                          <span className="text-sm font-medium text-blue-400 ml-4 shrink-0">
+                                            {formatPrice(subtotal)}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   );

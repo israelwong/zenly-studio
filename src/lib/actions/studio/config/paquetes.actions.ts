@@ -170,7 +170,7 @@ export async function obtenerPaquete(paqueteId: string) {
                         items: true,
                         service_categories: true
                     },
-                    orderBy: { position: 'asc' }
+                    orderBy: { order: 'asc' }
                 },
                 event_types: true
             }
@@ -283,7 +283,7 @@ export async function obtenerPaquetes(studioSlug: string) {
                             select: { name: true }
                         }
                     },
-                    orderBy: { position: 'asc' }
+                    orderBy: { order: 'asc' }
                 },
                 event_types: {
                     select: { name: true }

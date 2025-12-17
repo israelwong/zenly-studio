@@ -36,6 +36,9 @@ interface PaquetesSectionProps {
     showAsAlternative?: boolean;
     condicionesComerciales?: CondicionComercial[];
     terminosCondiciones?: TerminoCondicion[];
+    minDaysToHire?: number;
+    showCategoriesSubtotals?: boolean;
+    showItemsPrices?: boolean;
 }
 
 export function PaquetesSection({
@@ -45,6 +48,9 @@ export function PaquetesSection({
     showAsAlternative = false,
     condicionesComerciales,
     terminosCondiciones,
+    minDaysToHire,
+    showCategoriesSubtotals = false,
+    showItemsPrices = false,
 }: PaquetesSectionProps) {
     const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -198,15 +204,6 @@ export function PaquetesSection({
                                                         {formatPrice(paquete.price)}
                                                     </p>
 
-                                                    {/* Tiempo mínimo de contratación */}
-                                                    {paquete.tiempo_minimo_contratacion && (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <Clock className="h-3 w-3 text-amber-400 flex-shrink-0" />
-                                                            <span className="text-xs text-zinc-400">
-                                                                {paquete.tiempo_minimo_contratacion} días de anticipación
-                                                            </span>
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -263,6 +260,9 @@ export function PaquetesSection({
                     studioSlug={studioSlug}
                     condicionesComerciales={condicionesComerciales}
                     terminosCondiciones={terminosCondiciones}
+                    showCategoriesSubtotals={false}
+                    showItemsPrices={false}
+                    minDaysToHire={minDaysToHire}
                 />
             )}
         </>

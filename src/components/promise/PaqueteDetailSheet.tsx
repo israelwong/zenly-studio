@@ -40,6 +40,9 @@ interface PaqueteDetailSheetProps {
   studioSlug: string;
   condicionesComerciales?: CondicionComercial[];
   terminosCondiciones?: TerminoCondicion[];
+  showCategoriesSubtotals?: boolean;
+  showItemsPrices?: boolean;
+  minDaysToHire?: number;
 }
 
 export function PaqueteDetailSheet({
@@ -50,6 +53,9 @@ export function PaqueteDetailSheet({
   studioSlug,
   condicionesComerciales: condicionesComercialesIniciales,
   terminosCondiciones: terminosCondicionesIniciales,
+  showCategoriesSubtotals = false,
+  showItemsPrices = false,
+  minDaysToHire,
 }: PaqueteDetailSheetProps) {
   const [showSolicitarModal, setShowSolicitarModal] = useState(false);
   const [showPersonalizacionModal, setShowPersonalizacionModal] = useState(false);
@@ -214,17 +220,6 @@ export function PaqueteDetailSheet({
                 </p>
               </div>
 
-              {paquete.tiempo_minimo_contratacion && (
-                <div className="flex items-center gap-2 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 shrink-0">
-                  <Clock className="h-4 w-4 text-amber-400 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-xs text-zinc-400">Requiere</p>
-                    <p className="text-sm font-medium text-amber-300 truncate">
-                      {paquete.tiempo_minimo_contratacion} días
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -235,25 +230,13 @@ export function PaqueteDetailSheet({
             <h3 className="text-lg font-semibold text-white mb-4">
               Servicios Incluidos
             </h3>
-            <PublicServiciosTree servicios={paquete.servicios} showPrices={false} />
+            <PublicServiciosTree
+              servicios={paquete.servicios}
+              showPrices={false}
+              showSubtotals={false}
+            />
           </div>
 
-          {/* Información importante */}
-          {paquete.tiempo_minimo_contratacion && (
-            <>
-              <SeparadorZen />
-              <div className="bg-amber-500/10 rounded-lg p-4 border border-amber-500/20">
-                <h4 className="font-semibold text-amber-300 mb-2">
-                  ⏰ Tiempo mínimo de contratación
-                </h4>
-                <p className="text-sm text-zinc-300 leading-relaxed">
-                  Este paquete requiere al menos {paquete.tiempo_minimo_contratacion} días
-                  de anticipación para garantizar la disponibilidad y preparación de todos
-                  los servicios incluidos.
-                </p>
-              </div>
-            </>
-          )}
 
           {/* Condiciones comerciales */}
           <SeparadorZen />

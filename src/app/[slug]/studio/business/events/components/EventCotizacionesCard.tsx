@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/zen';
 import { formatNumber, formatDate } from '@/lib/actions/utils/formatting';
 import { cancelarCotizacion, cancelarCotizacionYEvento, getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
-import { ResumenCotizacion } from '@/app/[slug]/studio/commercial/promises/[promiseId]/cotizacion/[cotizacionId]/autorizar/components/ResumenCotizacion';
+import { ResumenCotizacion } from '@/components/shared/cotizaciones';
 import { ResumenCotizacionAutorizada, type CotizacionItem as ResumenCotizacionItem } from './ResumenCotizacionAutorizada';
 import { AutorizarRevisionModal } from './AutorizarRevisionModal';
 import { InfoCrearRevisionModal } from './InfoCrearRevisionModal';

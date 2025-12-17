@@ -9,7 +9,7 @@ import {
   type AutorizarRevisionCotizacionData,
   type CotizacionResponse,
 } from '@/lib/actions/schemas/cotizaciones-schemas';
-import { guardarEstructuraCotizacionAutorizada } from './cotizacion-pricing';
+import { guardarEstructuraCotizacionAutorizada, calcularYGuardarPreciosCotizacion } from './cotizacion-pricing';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 
 /**
@@ -76,9 +76,18 @@ export async function crearRevisionCotizacion(
 
     const revisionNumber = revisionesExistentes + 1;
 
-    // Transacci?n para crear revisi?n
+    // Preparar items antes de la transacción
+    const itemsToCreate = Object.entries(validatedData.items)
+      .filter(([, quantity]) => quantity > 0)
+      .map(([itemId, quantity], index) => ({
+        item_id: itemId,
+        quantity,
+        order: index,
+      }));
+
+    // Transacción para crear revisión
     const nuevaRevision = await prisma.$transaction(async (tx) => {
-      // 1. Crear nueva cotizaci?n como revisi?n
+      // 1. Crear nueva cotización como revisión
       const revision = await tx.studio_cotizaciones.create({
         data: {
           studio_id: studio.id,
@@ -95,19 +104,13 @@ export async function crearRevisionCotizacion(
         },
       });
 
-      // 2. Crear items de la revisi?n desde cat?logo (no snapshots)
-      const itemsToCreate = Object.entries(validatedData.items)
-        .filter(([, quantity]) => quantity > 0)
-        .map(([itemId, quantity], index) => ({
-          cotizacion_id: revision.id,
-          item_id: itemId,
-          quantity,
-          position: index,
-        }));
-
+      // 2. Crear items de la revisión desde catálogo (no snapshots)
       if (itemsToCreate.length > 0) {
         await tx.studio_cotizacion_items.createMany({
-          data: itemsToCreate,
+          data: itemsToCreate.map(item => ({
+            cotizacion_id: revision.id,
+            ...item,
+          })),
         });
       }
 
@@ -129,6 +132,14 @@ export async function crearRevisionCotizacion(
       return revision;
     });
 
+    // Calcular y guardar precios de los items (después de la transacción)
+    if (itemsToCreate.length > 0) {
+      await calcularYGuardarPreciosCotizacion(nuevaRevision.id, validatedData.studio_slug).catch((error) => {
+        console.error('[COTIZACIONES] Error calculando precios en revisión:', error);
+        // No fallar la creación si el cálculo de precios falla
+      });
+    }
+
     revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises/${cotizacionOriginal.promise_id}`);
     if (cotizacionOriginal.evento_id) {
       revalidatePath(`/${validatedData.studio_slug}/studio/business/events/${cotizacionOriginal.evento_id}`);
@@ -143,17 +154,17 @@ export async function crearRevisionCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error creando revisi?n:', error);
+    console.error('[COTIZACIONES] Error creando revisión:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al crear revisi?n de cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al crear revisión de cotización',
     };
   }
 }
 
 /**
- * Autorizar revisi?n de cotizaci?n con migraci?n de dependencias
- * Migra scheduler tasks y crew assignments de la cotizaci?n original a la revisi?n
+ * Autorizar revisión de cotización con migración de dependencias
+ * Migra scheduler tasks y crew assignments de la cotización original a la revisión
  */
 export async function autorizarRevisionCotizacion(
   data: AutorizarRevisionCotizacionData
@@ -171,7 +182,7 @@ export async function autorizarRevisionCotizacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener revisi?n con sus items
+    // Obtener revisión con sus items
     const revision = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: validatedData.revision_id,
@@ -189,10 +200,10 @@ export async function autorizarRevisionCotizacion(
     });
 
     if (!revision || !revision.revision_of_id) {
-      return { success: false, error: 'Revisi?n o cotizaci?n original no encontrada' };
+      return { success: false, error: 'Revisión o cotización original no encontrada' };
     }
 
-    // Obtener cotizaci?n original con sus items (separado porque no hay relaci?n en Prisma)
+    // Obtener cotización original con sus items (separado porque no hay relación en Prisma)
     const original = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: revision.revision_of_id,
@@ -211,12 +222,12 @@ export async function autorizarRevisionCotizacion(
     });
 
     if (!original) {
-      return { success: false, error: 'Cotizaci?n original no encontrada' };
+      return { success: false, error: 'Cotización original no encontrada' };
     }
 
-    // Validar que la revisi?n est? pendiente
+    // Validar que la revisión está pendiente
     if (revision.status !== 'pendiente') {
-      return { success: false, error: 'La revisi?n ya fue procesada' };
+      return { success: false, error: 'La revisión ya fue procesada' };
     }
 
     // Obtener evento asociado a la original
@@ -232,10 +243,10 @@ export async function autorizarRevisionCotizacion(
     });
 
     if (!eventoOriginal) {
-      return { success: false, error: 'No se encontr? evento asociado a la cotizaci?n original' };
+      return { success: false, error: 'No se encontró evento asociado a la cotización original' };
     }
 
-    // Obtener configuraci?n de precios
+    // Obtener configuración de precios
     const configResult = await obtenerConfiguracionPrecios(validatedData.studio_slug);
     const configPrecios = {
       utilidad_servicio: Number(configResult?.utilidad_servicio) || 0,
@@ -247,9 +258,9 @@ export async function autorizarRevisionCotizacion(
     // Calcular descuento
     const descuento = revision.price > validatedData.monto ? revision.price - validatedData.monto : 0;
 
-    // Transacci?n para autorizar revisi?n y migrar dependencias
+    // Transacción para autorizar revisión y migrar dependencias
     await prisma.$transaction(async (tx) => {
-      // 1. Guardar snapshots de la revisi?n
+      // 1. Guardar snapshots de la revisión
       await guardarEstructuraCotizacionAutorizada(
         tx,
         validatedData.revision_id,
@@ -284,7 +295,7 @@ export async function autorizarRevisionCotizacion(
 
       // 4. Migrar dependencias si se solicita
       if (validatedData.migrar_dependencias) {
-        // Crear mapa de item_id original ? item_id revisi?n
+        // Crear mapa de item_id original → item_id revisión
         const itemsOriginalMap = new Map(
           original.cotizacion_items.map((item) => [item.item_id || '', item.id])
         );
@@ -297,7 +308,7 @@ export async function autorizarRevisionCotizacion(
           if (!itemOriginal.item_id || !itemOriginal.scheduler_task_id) continue;
 
           const itemRevisionId = itemsRevisionMap.get(itemOriginal.item_id);
-          if (!itemRevisionId) continue; // Item no existe en revisi?n
+          if (!itemRevisionId) continue; // Item no existe en revisión
 
           // Actualizar scheduler task para apuntar al nuevo item
           await tx.studio_scheduler_event_tasks.update({
@@ -332,7 +343,7 @@ export async function autorizarRevisionCotizacion(
         }
       }
 
-      // 5. Actualizar evento para usar la revisi?n como cotizaci?n activa
+      // 5. Actualizar evento para usar la revisión como cotización activa
       await tx.studio_events.update({
         where: { id: eventoOriginal.id },
         data: {
@@ -353,10 +364,10 @@ export async function autorizarRevisionCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error autorizando revisi?n:', error);
+    console.error('[COTIZACIONES] Error autorizando revisión:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al autorizar revisi?n de cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al autorizar revisión de cotización',
     };
   }
 }

@@ -866,7 +866,7 @@ export async function obtenerEventoDetalle(
                 },
               },
               orderBy: {
-                position: 'asc',
+                order: 'asc',
               },
             },
           },
@@ -932,7 +932,7 @@ export async function obtenerEventoDetalle(
                 },
               },
               orderBy: {
-                position: 'asc',
+                order: 'asc',
               },
             },
           },

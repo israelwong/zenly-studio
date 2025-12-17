@@ -7,7 +7,7 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescriptio
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getPromiseById } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { toast } from 'sonner';
-import { ResumenCotizacion } from '../../autorizar/components/ResumenCotizacion';
+import { ResumenCotizacion } from '@/components/shared/cotizaciones';
 import { DatosContratante } from '../../autorizar/components/DatosContratante';
 import { CondicionesComercialesSelector } from '../../autorizar/components/CondicionesComercialesSelector';
 import { autorizarRevisionCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones-revision.actions';
@@ -31,7 +31,18 @@ export default function AutorizarRevisionPage() {
     evento_id: string | null;
     revision_of_id: string | null;
     revision_number: number | null;
-    items: Array<{ item_id: string; quantity: number }>;
+    items: Array<{
+      item_id: string;
+      quantity: number;
+      unit_price: number;
+      subtotal: number;
+      cost: number;
+      expense: number;
+      name: string | null;
+      description: string | null;
+      category_name: string | null;
+      seccion_name: string | null;
+    }>;
   } | null>(null);
   const [cotizacionOriginal, setCotizacionOriginal] = useState<{
     id: string;
@@ -42,6 +53,7 @@ export default function AutorizarRevisionPage() {
     contact_phone: string;
     contact_email: string | null;
     event_type_name: string | null;
+    event_date: Date | null;
     interested_dates: string[] | null;
     defined_date: Date | null;
   } | null>(null);
@@ -90,7 +102,7 @@ export default function AutorizarRevisionPage() {
                 id: originalResult.data.id,
                 name: originalResult.data.name,
               });
-              // Si la revisión no tiene evento_id pero la original sí, usar el de la original
+              // Si la revisión no tiene evento_id pero la original s?, usar el de la original
               if (!cotizacionResult.data.evento_id && originalResult.data.evento_id) {
                 setCotizacion({
                   ...cotizacionResult.data,
@@ -113,6 +125,7 @@ export default function AutorizarRevisionPage() {
             contact_phone: promiseResult.data.contact_phone,
             contact_email: promiseResult.data.contact_email,
             event_type_name: promiseResult.data.event_type_name,
+            event_date: promiseResult.data.event_date,
             interested_dates: promiseResult.data.interested_dates,
             defined_date: promiseResult.data.defined_date,
           });

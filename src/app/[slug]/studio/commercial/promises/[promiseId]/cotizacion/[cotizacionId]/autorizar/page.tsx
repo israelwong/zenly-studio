@@ -7,7 +7,7 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescriptio
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getPromiseById } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { toast } from 'sonner';
-import { ResumenCotizacion } from './components/ResumenCotizacion';
+import { ResumenCotizacion } from '@/components/shared/cotizaciones';
 import { DatosContratante } from './components/DatosContratante';
 import { CondicionesComercialesSelector } from './components/CondicionesComercialesSelector';
 import { autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -29,7 +29,18 @@ export default function AutorizarCotizacionPage() {
     promise_id: string | null;
     contact_id: string | null;
     evento_id: string | null;
-    items: Array<{ item_id: string; quantity: number }>;
+    items: Array<{
+      item_id: string;
+      quantity: number;
+      unit_price: number;
+      subtotal: number;
+      cost: number;
+      expense: number;
+      name: string | null;
+      description: string | null;
+      category_name: string | null;
+      seccion_name: string | null;
+    }>;
   } | null>(null);
   const [promise, setPromise] = useState<{
     contact_name: string;

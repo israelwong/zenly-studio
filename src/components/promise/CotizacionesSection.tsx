@@ -33,6 +33,8 @@ interface CotizacionesSectionProps {
   studioSlug: string;
   condicionesComerciales?: CondicionComercial[];
   terminosCondiciones?: TerminoCondicion[];
+  showCategoriesSubtotals?: boolean;
+  showItemsPrices?: boolean;
 }
 
 export function CotizacionesSection({
@@ -41,6 +43,8 @@ export function CotizacionesSection({
   studioSlug,
   condicionesComerciales,
   terminosCondiciones,
+  showCategoriesSubtotals = false,
+  showItemsPrices = false,
 }: CotizacionesSectionProps) {
   const [selectedCotizacion, setSelectedCotizacion] = useState<PublicCotizacion | null>(null);
 
@@ -189,6 +193,8 @@ export function CotizacionesSection({
           studioSlug={studioSlug}
           condicionesComerciales={condicionesComerciales}
           terminosCondiciones={terminosCondiciones}
+          showCategoriesSubtotals={showCategoriesSubtotals}
+          showItemsPrices={showItemsPrices}
         />
       )}
     </>
