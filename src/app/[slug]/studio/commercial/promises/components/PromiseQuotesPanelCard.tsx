@@ -102,7 +102,7 @@ export function PromiseQuotesPanelCard({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const getStatusVariant = (status: string, revisionStatus?: string | null): 'default' | 'destructive' | 'secondary' | 'success' | 'warning' | 'info' => {
+  const getStatusVariant = (status: string, revisionStatus?: string | null, selectedByProspect?: boolean): 'default' | 'destructive' | 'secondary' | 'success' | 'warning' | 'info' => {
     // Si es revisión pendiente, usar ámbar
     if (revisionStatus === 'pending_revision') {
       return 'warning';
@@ -115,11 +115,15 @@ export function PromiseQuotesPanelCard({
     if (status === 'rechazada' || status === 'rejected' || status === 'cancelada') {
       return 'destructive';
     }
+    // Si está pre-autorizada y es pendiente, usar info (azul)
+    if (selectedByProspect && (status === 'pendiente' || status === 'pending')) {
+      return 'info';
+    }
     // Pendiente y otros estados: zinc
     return 'secondary';
   };
 
-  const getStatusLabel = (status: string, revisionStatus?: string | null): string => {
+  const getStatusLabel = (status: string, revisionStatus?: string | null, selectedByProspect?: boolean): string => {
     // Si es revisión pendiente (no autorizada aún)
     if (revisionStatus === 'pending_revision') {
       return 'Revisión';
@@ -133,6 +137,10 @@ export function PromiseQuotesPanelCard({
     }
     if (status === 'cancelada') {
       return 'Cancelada';
+    }
+    // Si está pre-autorizada y es pendiente, mostrar "Pre autorizada"
+    if (selectedByProspect && (status === 'pendiente' || status === 'pending')) {
+      return 'Pre autorizada';
     }
     if (status === 'pendiente' || status === 'pending') {
       return 'Pendiente';
@@ -498,10 +506,13 @@ export function PromiseQuotesPanelCard({
                   ${cotizacion.price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
                 <ZenBadge
-                  variant={getStatusVariant(cotizacion.status, cotizacion.revision_status)}
-                  className="text-[10px] px-1.5 py-0.5 rounded-full"
+                  variant={getStatusVariant(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full ${cotizacion.selected_by_prospect && (cotizacion.status === 'pendiente' || cotizacion.status === 'pending')
+                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                      : ''
+                    }`}
                 >
-                  {getStatusLabel(cotizacion.status, cotizacion.revision_status)}
+                  {getStatusLabel(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
                   {cotizacion.revision_number && cotizacion.revision_status === 'pending_revision' && (
                     <span className="ml-1">#{cotizacion.revision_number}</span>
                   )}

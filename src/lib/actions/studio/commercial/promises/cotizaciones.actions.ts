@@ -31,6 +31,8 @@ export interface CotizacionListItem {
   revision_of_id?: string | null;
   revision_number?: number | null;
   revision_status?: string | null;
+  selected_by_prospect?: boolean;
+  selected_at?: Date | null;
 }
 
 export interface CotizacionesListResponse {
@@ -216,6 +218,8 @@ export async function getCotizacionesByPromiseId(
         revision_of_id: true,
         revision_number: true,
         revision_status: true,
+        selected_by_prospect: true,
+        selected_at: true,
       },
       orderBy: [
         { archived: 'asc' }, // No archivadas primero
@@ -239,6 +243,8 @@ export async function getCotizacionesByPromiseId(
         revision_of_id: cot.revision_of_id,
         revision_number: cot.revision_number,
         revision_status: cot.revision_status,
+        selected_by_prospect: cot.selected_by_prospect,
+        selected_at: cot.selected_at,
       })),
     };
   } catch (error) {
@@ -270,6 +276,10 @@ export async function getCotizacionById(
     revision_of_id?: string | null;
     revision_number?: number | null;
     revision_status?: string | null;
+    condiciones_comerciales_id?: string | null;
+    condiciones_comerciales_metodo_pago_id?: string | null;
+    selected_by_prospect?: boolean;
+    selected_at?: Date | null;
     items: Array<{
       item_id: string;
       quantity: number;
@@ -300,7 +310,22 @@ export async function getCotizacionById(
         id: cotizacionId,
         studio_id: studio.id,
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        status: true,
+        promise_id: true,
+        contact_id: true,
+        evento_id: true,
+        revision_of_id: true,
+        revision_number: true,
+        revision_status: true,
+        condiciones_comerciales_id: true,
+        condiciones_comerciales_metodo_pago_id: true,
+        selected_by_prospect: true,
+        selected_at: true,
         cotizacion_items: {
           select: {
             id: true,
@@ -418,6 +443,10 @@ export async function getCotizacionById(
         revision_of_id: cotizacion.revision_of_id,
         revision_number: cotizacion.revision_number,
         revision_status: cotizacion.revision_status,
+        condiciones_comerciales_id: cotizacion.condiciones_comerciales_id,
+        condiciones_comerciales_metodo_pago_id: cotizacion.condiciones_comerciales_metodo_pago_id,
+        selected_by_prospect: cotizacion.selected_by_prospect,
+        selected_at: cotizacion.selected_at,
         items: itemsOrdenados,
       },
     };
@@ -1021,6 +1050,8 @@ export async function updateCotizacion(
         revision_of_id: true,
         revision_number: true,
         revision_status: true,
+        selected_by_prospect: true,
+        selected_at: true,
       },
     });
 

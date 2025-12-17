@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { X, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
-import { ZenButton, ZenInput, ZenTextarea, ZenBadge } from '@/components/ui/zen';
+import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
@@ -26,6 +26,19 @@ interface CotizacionFormProps {
   hideActionButtons?: boolean;
   onAfterSave?: () => void;
   customActionButtons?: React.ReactNode;
+  condicionComercialPreAutorizada?: {
+    id: string;
+    name: string;
+    description: string | null;
+    advance_percentage: number | null;
+    advance_type: string | null;
+    advance_amount: number | null;
+    discount_percentage: number | null;
+  } | null;
+  isPreAutorizada?: boolean;
+  onAutorizar?: () => void | Promise<void>;
+  isAutorizando?: boolean;
+  isAlreadyAuthorized?: boolean;
 }
 
 export function CotizacionForm({
@@ -39,6 +52,11 @@ export function CotizacionForm({
   hideActionButtons = false,
   onAfterSave,
   customActionButtons,
+  condicionComercialPreAutorizada,
+  isPreAutorizada = false,
+  onAutorizar,
+  isAutorizando = false,
+  isAlreadyAuthorized = false,
   onCreateAsRevision,
   revisionOriginalId,
 }: CotizacionFormProps & {
@@ -1014,6 +1032,89 @@ export function CotizacionForm({
               </div>
             </div>
           </div>
+
+          {/* Ficha de Condición Comercial Pre-Autorizada */}
+          {isPreAutorizada && condicionComercialPreAutorizada && (
+            <div className="mt-4">
+              <ZenCard variant="outlined" className="bg-blue-500/5 border-blue-500/20">
+                <ZenCardContent className="p-4">
+                  <div className="space-y-3">
+                    {/* Header */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-zinc-400">
+                            Condición Comercial
+                          </h3>
+                          <ZenBadge
+                            size="sm"
+                            className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-[10px] px-1.5 py-0.5 rounded-full">
+                            Pre autorizada
+                          </ZenBadge>
+                        </div>
+                      </div>
+                      <h4 className="text-base font-semibold text-white">
+                        {condicionComercialPreAutorizada.name}
+                      </h4>
+                      {condicionComercialPreAutorizada.description && (
+                        <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
+                          {condicionComercialPreAutorizada.description}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Detalles de la condición */}
+                    {(condicionComercialPreAutorizada.advance_type || condicionComercialPreAutorizada.discount_percentage) && (
+                      <div className="pt-2 border-t border-zinc-700/50">
+                        <div className="flex flex-wrap items-center gap-3 text-xs">
+                          {condicionComercialPreAutorizada.advance_type === 'fixed_amount' && condicionComercialPreAutorizada.advance_amount ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-zinc-500">Anticipo:</span>
+                              <span className="font-semibold text-emerald-400">
+                                ${condicionComercialPreAutorizada.advance_amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          ) : condicionComercialPreAutorizada.advance_percentage ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-zinc-500">Anticipo:</span>
+                              <span className="font-semibold text-emerald-400">
+                                {condicionComercialPreAutorizada.advance_percentage}%
+                              </span>
+                            </div>
+                          ) : null}
+                          {condicionComercialPreAutorizada.discount_percentage ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-zinc-500">Descuento:</span>
+                              <span className="font-semibold text-blue-400">
+                                {condicionComercialPreAutorizada.discount_percentage}%
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Botón de autorizar */}
+                    {onAutorizar && !isAlreadyAuthorized && (
+                      <div className="pt-2 border-t border-zinc-700/50">
+                        <ZenButton
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={onAutorizar}
+                          disabled={isAutorizando || loading}
+                          loading={isAutorizando}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          Autorizar ahora
+                        </ZenButton>
+                      </div>
+                    )}
+                  </div>
+                </ZenCardContent>
+              </ZenCard>
+            </div>
+          )}
 
           {/* Botones fuera del card de Cálculo Financiero */}
           {customActionButtons ? (

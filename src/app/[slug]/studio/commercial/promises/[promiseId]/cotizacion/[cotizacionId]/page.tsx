@@ -7,6 +7,8 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescriptio
 import { CotizacionForm } from '../../../components/CotizacionForm';
 import { archiveCotizacion, deleteCotizacion, getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getPromiseById } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
+import { obtenerCondicionComercial } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
+import { ZenBadge } from '@/components/ui/zen';
 import { toast } from 'sonner';
 
 export default function EditarCotizacionPage() {
@@ -23,14 +25,41 @@ export default function EditarCotizacionPage() {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isValidatingDate, setIsValidatingDate] = useState(false);
   const [cotizacionStatus, setCotizacionStatus] = useState<string | null>(null);
+  const [condicionComercial, setCondicionComercial] = useState<{
+    id: string;
+    name: string;
+    description: string | null;
+    advance_percentage: number | null;
+    advance_type: string | null;
+    advance_amount: number | null;
+    discount_percentage: number | null;
+  } | null>(null);
+  const [selectedByProspect, setSelectedByProspect] = useState(false);
 
-  // Cargar estado de la cotización
+  // Cargar estado de la cotización y condición comercial
   useEffect(() => {
     const loadCotizacionStatus = async () => {
       try {
         const result = await getCotizacionById(cotizacionId, studioSlug);
         if (result.success && result.data) {
           setCotizacionStatus(result.data.status);
+          setSelectedByProspect(result.data.selected_by_prospect || false);
+
+          // Cargar condición comercial si existe
+          if (result.data.condiciones_comerciales_id) {
+            const condicionResult = await obtenerCondicionComercial(studioSlug, result.data.condiciones_comerciales_id);
+            if (condicionResult.success && condicionResult.data) {
+              setCondicionComercial({
+                id: condicionResult.data.id,
+                name: condicionResult.data.name,
+                description: condicionResult.data.description,
+                advance_percentage: condicionResult.data.advance_percentage,
+                advance_type: condicionResult.data.advance_type,
+                advance_amount: condicionResult.data.advance_amount,
+                discount_percentage: condicionResult.data.discount_percentage,
+              });
+            }
+          }
         }
       } catch (error) {
         console.error('Error loading cotizacion status:', error);
@@ -101,9 +130,16 @@ export default function EditarCotizacionPage() {
                 <ArrowLeft className="h-4 w-4" />
               </ZenButton>
               <div>
-                <ZenCardTitle>Editar Cotización</ZenCardTitle>
+                <div className="flex items-center gap-2">
+                  <ZenCardTitle>Editar Cotización</ZenCardTitle>
+                  {condicionComercial && (
+                    <ZenBadge className="bg-blue-500/20 text-blue-300 border-blue-500/30">
+                      {condicionComercial.name}
+                    </ZenBadge>
+                  )}
+                </div>
                 <ZenCardDescription>
-                  Actualiza la información de la cotización
+                  {condicionComercial?.description || 'Actualiza la información de la cotización'}
                 </ZenCardDescription>
               </div>
             </div>
@@ -161,6 +197,11 @@ export default function EditarCotizacionPage() {
             contactId={contactId || null}
             redirectOnSuccess={`/${studioSlug}/studio/commercial/promises/${promiseId}`}
             onLoadingChange={setIsFormLoading}
+            condicionComercialPreAutorizada={condicionComercial}
+            isPreAutorizada={selectedByProspect}
+            onAutorizar={handleAutorizar}
+            isAutorizando={isValidatingDate}
+            isAlreadyAuthorized={isAlreadyAuthorized}
           />
         </ZenCardContent>
       </ZenCard>

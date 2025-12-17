@@ -72,6 +72,10 @@ export default function AutorizarCotizacionPage() {
           });
           // Inicializar monto con el precio de la cotización
           setMonto(cotizacionResult.data.price.toString());
+          // Inicializar condición comercial si existe
+          if (cotizacionResult.data.condiciones_comerciales_id) {
+            setCondicionComercialId(cotizacionResult.data.condiciones_comerciales_id);
+          }
         } else {
           toast.error(cotizacionResult.error || 'Cotización no encontrada');
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);

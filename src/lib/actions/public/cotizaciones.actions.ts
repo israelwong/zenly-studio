@@ -1,12 +1,14 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { createStudioNotification } from "@/lib/notifications/studio/studio-notification.service";
 import { StudioNotificationScope, StudioNotificationType, NotificationPriority } from "@/lib/notifications/studio/types";
 
 /**
- * Solicitar contratación de cotización desde página pública
- * Solo envía notificación, NO autoriza la cotización (la autorización es manual)
+ * Pre-autorizar cotización desde página pública
+ * Asocia condición comercial y marca como pre-autorizada (selected_by_prospect)
+ * La autorización final es manual por parte del estudio
  */
 export async function autorizarCotizacionPublica(
   promiseId: string,
@@ -14,7 +16,14 @@ export async function autorizarCotizacionPublica(
   studioSlug: string,
   condicionesComercialesId?: string | null,
   condicionesComercialesMetodoPagoId?: string | null
-) {
+): Promise<{
+  success: boolean;
+  data?: {
+    cotizacionId: string;
+    message: string;
+  };
+  error?: string;
+}> {
   try {
     // 1. Validar que la promesa y cotización existen
     const promise = await prisma.studio_promises.findUnique({
@@ -101,9 +110,24 @@ export async function autorizarCotizacionPublica(
       }
     }
 
-    // 3. Construir mensaje con información de condición comercial
-    let mensajeNotificacion = `${promise.contact.name} solicita contratar la cotización "${cotizacion.name}"`;
-    let contenidoLog = `Cliente solicitó contratación de la cotización: "${cotizacion.name}"`;
+    // 3. Actualizar cotización: asociar condición comercial y marcar como pre-autorizada
+    const updatedCotizacion = await prisma.studio_cotizaciones.update({
+      where: { id: cotizacionId },
+      data: {
+        condiciones_comerciales_id: condicionesComercialesId || null,
+        condiciones_comerciales_metodo_pago_id: condicionesComercialesMetodoPagoId || null,
+        selected_by_prospect: true,
+        selected_at: new Date(),
+      },
+    });
+
+    // Revalidar paths para refrescar datos en el panel
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+
+    // 4. Construir mensaje con información de condición comercial
+    let mensajeNotificacion = `${promise.contact.name} pre-autorizó la cotización "${cotizacion.name}"`;
+    let contenidoLog = `Cliente pre-autorizó la cotización: "${cotizacion.name}"`;
 
     if (condicionComercialInfo) {
       mensajeNotificacion += ` con condición comercial: "${condicionComercialInfo.name}"`;
@@ -125,7 +149,7 @@ export async function autorizarCotizacionPublica(
       }
     }
 
-    // 4. Crear notificación para el estudio con route a la promesa
+    // 5. Crear notificación para el estudio con route a la promesa
     await createStudioNotification({
       scope: StudioNotificationScope.STUDIO,
       studio_id: promise.studio.id,
@@ -153,7 +177,7 @@ export async function autorizarCotizacionPublica(
       },
     });
 
-    // 5. Agregar log a la promesa
+    // 6. Agregar log a la promesa
     await prisma.studio_promise_logs.create({
       data: {
         promise_id: promiseId,
