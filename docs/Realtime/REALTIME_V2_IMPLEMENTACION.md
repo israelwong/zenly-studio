@@ -244,6 +244,7 @@ supabase/migrations/
 **Migración aplicada:** `20250122000024_migrate_all_to_realtime_send.sql`
 
 **Qué hace esta migración:**
+
 - ✅ Actualiza trigger de **promises** → `realtime.send`
 - ✅ Actualiza trigger de **notificaciones** → `realtime.send`
 - ✅ Actualiza trigger de **cotizaciones** → `realtime.send`
@@ -252,6 +253,7 @@ supabase/migrations/
 - ✅ Usa canales públicos (evita problemas de `auth.uid() NULL`)
 
 **Ventajas de la solución:**
+
 - ✅ No requiere políticas RLS complejas
 - ✅ Funciona con usuarios autenticados y anónimos
 - ✅ Solución centralizada y robusta
@@ -263,36 +265,36 @@ supabase/migrations/
 - **Migraciones anteriores eliminadas** - Solo se mantiene la migración final para evitar confusión
 - **Scripts de debug eliminados** - La solución está probada y funcionando
 
-   Ejecutar el script de verificación en Supabase SQL Editor:
+  Ejecutar el script de verificación en Supabase SQL Editor:
 
-   ```bash
-   scripts/verify-realtime-user.sql
-   ```
+  ```bash
+  scripts/verify-realtime-user.sql
+  ```
 
-   O ejecutar manualmente:
+  O ejecutar manualmente:
 
-   ```sql
-   -- Verificar que supabase_id coincide con auth.uid()
-   SELECT
-     sup.email,
-     sup.supabase_id,
-     au.id as auth_user_id,
-     CASE
-       WHEN sup.supabase_id = au.id::text THEN '✅ OK'
-       ELSE '❌ CORREGIR'
-     END as status
-   FROM studio_user_profiles sup
-   LEFT JOIN auth.users au ON au.email = sup.email
-   WHERE sup.email = 'owner@demo-studio.com';
-   ```
+  ```sql
+  -- Verificar que supabase_id coincide con auth.uid()
+  SELECT
+    sup.email,
+    sup.supabase_id,
+    au.id as auth_user_id,
+    CASE
+      WHEN sup.supabase_id = au.id::text THEN '✅ OK'
+      ELSE '❌ CORREGIR'
+    END as status
+  FROM studio_user_profiles sup
+  LEFT JOIN auth.users au ON au.email = sup.email
+  WHERE sup.email = 'owner@demo-studio.com';
+  ```
 
-   Si no coincide, corregir:
+  Si no coincide, corregir:
 
-   ```sql
-   UPDATE studio_user_profiles
-   SET supabase_id = (SELECT id::text FROM auth.users WHERE email = 'owner@demo-studio.com')
-   WHERE email = 'owner@demo-studio.com';
-   ```
+  ```sql
+  UPDATE studio_user_profiles
+  SET supabase_id = (SELECT id::text FROM auth.users WHERE email = 'owner@demo-studio.com')
+  WHERE email = 'owner@demo-studio.com';
+  ```
 
 4. **Verificar configuración de Supabase Dashboard** (Solo si persiste el error)
    - Ir a **Supabase Dashboard** → **Project Settings** → **Realtime Settings**
@@ -366,10 +368,12 @@ supabase/migrations/
   - No requiere políticas RLS adicionales
 
 **Migraciones eliminadas (eran de prueba/debug):**
+
 - Todas las migraciones de prueba (20250122000007 a 20250122000023)
 - Scripts de debug en `/scripts` relacionados con Realtime
 
 **Migraciones originales eliminadas:**
+
 - `20250120000000_studio_notifications_realtime_trigger.sql` (reemplazada)
 - `20250121000003_promises_realtime_trigger.sql` (reemplazada)
 - `20250121000004_cotizaciones_realtime_trigger.sql` (reemplazada)
