@@ -358,24 +358,55 @@ supabase/migrations/
 
 ---
 
-## 📌 Migraciones Finales
+## 📌 Migraciones Aplicadas
 
-**Solo se mantiene una migración para Realtime:**
+### Migraciones de Realtime
+
+**Migración final de Realtime:**
 
 - `20250122000024_migrate_all_to_realtime_send.sql` - **SOLUCIÓN FINAL**
   - Actualiza todos los triggers (promises, notificaciones, cotizaciones)
   - Usa `realtime.send` con canales públicos
-  - No requiere políticas RLS adicionales
+  - No requiere políticas RLS adicionales para Realtime
 
-**Migraciones eliminadas (eran de prueba/debug):**
+### Migraciones de Seguridad (RLS) - REQUERIDAS
 
+**Estas migraciones son necesarias para proteger el acceso directo a las tablas:**
+
+- `20250120000001_sync_auth_studio_user_profiles.sql`
+  - Sincroniza `auth.users` con `studio_user_profiles`
+  - Crea trigger para mantener sincronización automática
+  - **CRÍTICA** - Necesaria para el funcionamiento del sistema
+
+- `20250120000002_enable_rls_studio_user_profiles.sql`
+  - Habilita RLS en `studio_user_profiles`
+  - Políticas: lectura propia, lectura del studio, actualización propia
+  - **REQUERIDA** - Protege acceso a perfiles de usuario
+
+- `20250121000000_enable_rls_promises.sql`
+  - Habilita RLS en `studio_promises`
+  - Políticas: CRUD limitado a usuarios del mismo studio
+  - **REQUERIDA** - Protege acceso a promesas
+
+- `20250121000001_enable_rls_cotizaciones.sql`
+  - Habilita RLS en `studio_cotizaciones`
+  - Políticas: CRUD limitado a usuarios del mismo studio
+  - **REQUERIDA** - Protege acceso a cotizaciones
+
+- `20250121000002_enable_rls_cotizacion_items.sql`
+  - Habilita RLS en `studio_cotizacion_items`
+  - Políticas: CRUD limitado a items de cotizaciones del mismo studio
+  - **REQUERIDA** - Protege acceso a items de cotizaciones
+
+**Nota importante:** Aunque Realtime usa canales públicos (no requiere políticas RLS para Realtime), estas políticas RLS son **necesarias** para proteger el acceso directo a las tablas a través de Prisma/Server Actions.
+
+### Migraciones Eliminadas
+
+**Migraciones de prueba/debug eliminadas:**
 - Todas las migraciones de prueba (20250122000007 a 20250122000023)
 - Scripts de debug en `/scripts` relacionados con Realtime
 
-**Migraciones originales eliminadas:**
-
-- `20250120000000_studio_notifications_realtime_trigger.sql` (reemplazada)
-- `20250121000003_promises_realtime_trigger.sql` (reemplazada)
-- `20250121000004_cotizaciones_realtime_trigger.sql` (reemplazada)
-
-Todas fueron reemplazadas por la migración final que usa `realtime.send` en lugar de `realtime.broadcast_changes`.
+**Migraciones originales de Realtime eliminadas (reemplazadas):**
+- `20250120000000_studio_notifications_realtime_trigger.sql` (reemplazada por 20250122000024)
+- `20250121000003_promises_realtime_trigger.sql` (reemplazada por 20250122000024)
+- `20250121000004_cotizaciones_realtime_trigger.sql` (reemplazada por 20250122000024)

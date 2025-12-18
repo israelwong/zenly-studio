@@ -1,1 +1,0 @@
-export { CampanaModal } from './CampanaModal';

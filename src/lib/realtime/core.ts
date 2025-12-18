@@ -41,7 +41,6 @@ export async function setupRealtimeAuth(
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError && requiresAuth) {
-      console.warn('[Realtime Core] ⚠️ Error obteniendo usuario:', userError);
       return { success: false, hasSession: false, error: userError.message };
     }
 
@@ -59,12 +58,10 @@ export async function setupRealtimeAuth(
 
     // Si hay error o no hay sesión y requiere auth, intentar refrescar
     if ((sessionError || !session) && requiresAuth && user) {
-      console.log('[Realtime Core] 🔄 Intentando refrescar sesión...');
       const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
       if (!refreshError && refreshedSession) {
         session = refreshedSession;
         sessionError = null;
-        console.log('[Realtime Core] ✅ Sesión refrescada exitosamente');
       }
     }
 
@@ -91,44 +88,16 @@ export async function setupRealtimeAuth(
 
     // IMPORTANTE: setAuth debe llamarse ANTES de crear cualquier canal
     // Para canales privados, SIEMPRE pasar el token explícitamente
-    // Esto asegura que Realtime tenga el contexto de autenticación correcto
     try {
       if (requiresAuth && accessToken) {
-        // Para canales privados, pasar el token explícitamente
-        // Esto es CRÍTICO para que auth.uid() funcione en las políticas RLS
         await supabase.realtime.setAuth(accessToken);
-        console.log('[Realtime Core] 🔑 Token pasado explícitamente a setAuth()');
       } else if (!requiresAuth) {
-        // Para canales públicos, pasar null
         await supabase.realtime.setAuth(null);
       } else {
-        // Si requiere auth pero no hay token, intentar obtenerlo automáticamente
         await supabase.realtime.setAuth();
-        console.log('[Realtime Core] ⚠️ setAuth() llamado sin token (fallback)');
       }
-
-      // Decodificar token para verificar contenido (solo para debugging)
-      let tokenPayload: any = null;
-      if (accessToken) {
-        try {
-          const parts = accessToken.split('.');
-          if (parts.length === 3) {
-            tokenPayload = JSON.parse(atob(parts[1]));
-          }
-        } catch {
-          // Ignorar error de decodificación
-        }
-      }
-
-      console.log('[Realtime Core] ✅ setAuth llamado con token:', {
-        hasToken: !!accessToken,
-        tokenLength: accessToken?.length || 0,
-        tokenSub: tokenPayload?.sub || 'N/A',
-        tokenExp: tokenPayload?.exp ? new Date(tokenPayload.exp * 1000).toISOString() : 'N/A',
-        tokenExpired: tokenPayload?.exp ? Date.now() > tokenPayload.exp * 1000 : false,
-      });
     } catch (setAuthError) {
-      console.error('[Realtime Core] ❌ Error en setAuth:', setAuthError);
+      console.error('[Realtime Core] Error en setAuth:', setAuthError);
       if (requiresAuth) {
         return { success: false, hasSession: false, error: 'Error configurando autenticación Realtime' };
       }
@@ -197,13 +166,6 @@ export function createRealtimeChannel(
     },
   });
 
-  console.log('[Realtime Core] 📡 Canal creado:', {
-    channelName: config.channelName,
-    isPrivate: config.isPrivate,
-    requiresAuth: config.requiresAuth,
-    timestamp: new Date().toISOString(),
-  });
-
   return channel;
 }
 
@@ -251,39 +213,19 @@ export async function subscribeToChannel(
     // Pequeña pausa adicional para asegurar que el token se propaga
     setTimeout(() => {
       channel.subscribe((status, err) => {
-        console.log('[Realtime Core] 📡 Estado de suscripción:', {
-          status,
-          error: err?.message,
-          channelName: channel.topic,
-          timestamp: new Date().toISOString(),
-        });
-
         if (onStatusChange) {
           onStatusChange(status, err);
         }
 
         if (status === 'SUBSCRIBED') {
-          console.log('[Realtime Core] ✅ Suscrito exitosamente:', channel.topic);
           resolve(true);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          const errorMsg = err?.message || 'Error desconocido';
-          const isUnauthorized = errorMsg.includes('Unauthorized') || errorMsg.includes('permissions');
-
-          console.error('[Realtime Core] ❌ Error en suscripción:', {
-            status,
-            error: errorMsg,
-            isUnauthorized,
-            channelName: channel.topic,
-            suggestion: isUnauthorized
-              ? 'Verificar que setAuth() se llamó con token válido y que la política RLS permite acceso'
-              : 'Error desconocido en suscripción',
-          });
+          console.error('[Realtime Core] Error en suscripción:', err?.message || 'Error desconocido');
           resolve(false);
         } else if (status === 'CLOSED') {
-          console.log('[Realtime Core] 🔒 Canal cerrado:', channel.topic);
           resolve(false);
         }
       });
-    }, 100); // Pausa adicional para propagación del token
+    }, 100);
   });
 }

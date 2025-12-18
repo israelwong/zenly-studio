@@ -324,18 +324,18 @@ export async function getNotificationsHistory(
     ...(options?.category ? { category: options.category } : {}),
     ...(options?.search
       ? {
-          OR: [
-            { title: { contains: options.search, mode: 'insensitive' } },
-            { message: { contains: options.search, mode: 'insensitive' } },
-          ],
-        }
+        OR: [
+          { title: { contains: options.search, mode: 'insensitive' } },
+          { message: { contains: options.search, mode: 'insensitive' } },
+        ],
+      }
       : {}),
     ...(options?.cursor
       ? {
-          created_at: {
-            lt: new Date(options.cursor),
-          },
-        }
+        created_at: {
+          lt: new Date(options.cursor),
+        },
+      }
       : {}),
   };
 
