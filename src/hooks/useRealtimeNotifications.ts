@@ -3,6 +3,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/browser';
 import { REALTIME_CONFIG, logRealtime, canUseRealtime } from '@/lib/realtime/realtime-control';
+import {
+  setupRealtimeAuth,
+  createRealtimeChannel,
+  RealtimeChannelPresets,
+  subscribeToChannel,
+} from '@/lib/realtime/core';
+import type { RealtimeChannel } from '@supabase/realtime-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface Notification {
   id: string;
@@ -20,10 +28,10 @@ interface UseRealtimeNotificationsOptions {
   onNotificationRead?: (notificationId: string) => void;
 }
 
-export function useRealtimeNotifications({ 
-  studioSlug, 
-  onNotification, 
-  onNotificationRead 
+export function useRealtimeNotifications({
+  studioSlug,
+  onNotification,
+  onNotificationRead
 }: UseRealtimeNotificationsOptions) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -31,11 +39,12 @@ export function useRealtimeNotifications({
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [reconnectionAttempts, setReconnectionAttempts] = useState(0);
-  
+
   // Referencias para control de conexiones
-  const channelRef = useRef<any>(null);
-  const supabaseRef = useRef<any>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const supabaseRef = useRef<SupabaseClient | null>(null);
   const isMountedRef = useRef(true);
+  const supabaseRealtime = createClient();
 
   // Función para cargar notificaciones iniciales
   const loadInitialNotifications = useCallback(async () => {
@@ -43,10 +52,10 @@ export function useRealtimeNotifications({
       setLoading(true);
       setError(null);
       logRealtime('STUDIO_NOTIFICACIONES', 'Cargando notificaciones iniciales', { studioSlug });
-      
+
       // TODO: Implementar Server Action para obtener notificaciones
       // const data = await obtenerNotificacionesStudio(studioSlug);
-      
+
       // Por ahora, usar datos de ejemplo
       const mockNotifications: Notification[] = [
         {
@@ -58,7 +67,7 @@ export function useRealtimeNotifications({
           read: false
         }
       ];
-      
+
       if (isMountedRef.current) {
         setNotifications(mockNotifications);
         setUnreadCount(mockNotifications.filter(n => !n.read).length);
@@ -78,19 +87,21 @@ export function useRealtimeNotifications({
   // Función para manejar nuevas notificaciones
   const handleNewNotification = useCallback((payload: any) => {
     if (!isMountedRef.current) return;
-    
+
     logRealtime('STUDIO_NOTIFICACIONES', 'Nueva notificación recibida', payload);
-    
+
+    const p = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+
     const newNotification: Notification = {
-      id: payload.id || Date.now().toString(),
-      title: payload.title || 'Nueva notificación',
-      message: payload.message || '',
-      type: payload.type || 'info',
-      timestamp: payload.timestamp || new Date().toISOString(),
+      id: (p.id as string) || Date.now().toString(),
+      title: (p.title as string) || 'Nueva notificación',
+      message: (p.message as string) || '',
+      type: (p.type as Notification['type']) || 'info',
+      timestamp: (p.timestamp as string) || new Date().toISOString(),
       read: false,
-      actionUrl: payload.actionUrl
+      actionUrl: p.actionUrl as string | undefined
     };
-    
+
     setNotifications(prev => [newNotification, ...prev]);
     setUnreadCount(prev => prev + 1);
     onNotification?.(newNotification);
@@ -99,18 +110,18 @@ export function useRealtimeNotifications({
   // Función para marcar notificación como leída
   const markAsRead = useCallback((notificationId: string) => {
     if (!isMountedRef.current) return;
-    
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === notificationId 
+
+    setNotifications(prev =>
+      prev.map(notification =>
+        notification.id === notificationId
           ? { ...notification, read: true }
           : notification
       )
     );
-    
+
     setUnreadCount(prev => Math.max(0, prev - 1));
     onNotificationRead?.(notificationId);
-    
+
     logRealtime('STUDIO_NOTIFICACIONES', 'Notificación marcada como leída', { notificationId });
   }, [onNotificationRead]);
 
@@ -146,32 +157,69 @@ export function useRealtimeNotifications({
 
     supabaseRef.current = supabaseRealtime;
 
-    // Suscribirse a notificaciones del studio
-    const channel = supabaseRealtime
-      .channel(`studio:${studioSlug}:notifications`, {
-        config: {
-          private: true,
-          broadcast: { self: true, ack: true }
+    // Configurar Realtime usando utilidad centralizada
+    const setupRealtime = async () => {
+      try {
+        logRealtime('STUDIO_NOTIFICACIONES', 'Iniciando setup de Realtime (v2)', { studioSlug });
+
+        // Notificaciones siempre requieren autenticación
+        const requiresAuth = true;
+
+        // Configurar autenticación
+        const authResult = await setupRealtimeAuth(supabaseRealtime, requiresAuth);
+
+        if (!authResult.success) {
+          logRealtime('STUDIO_NOTIFICACIONES', 'Error configurando auth', { error: authResult.error });
+          setError('Error de autenticación para notificaciones');
+          return;
         }
-      })
-      .on('broadcast', { event: 'notification_created' }, handleNewNotification)
-      .on('broadcast', { event: 'notification_updated' }, (payload) => {
-        logRealtime('STUDIO_NOTIFICACIONES', 'Notificación actualizada', payload);
-        // TODO: Implementar lógica de actualización
-      })
-      .subscribe((status, err) => {
-        if (isMountedRef.current) {
+
+        // Crear configuración del canal usando preset
+        // Con realtime.send usamos canales públicos (evita problemas de RLS/auth.uid() NULL)
+        const channelConfig = RealtimeChannelPresets.notifications(studioSlug, true); // true = canal público
+
+        // Crear canal usando utilidad centralizada
+        const channel = createRealtimeChannel(supabaseRealtime, channelConfig);
+
+        // Agregar listeners
+        // Soporte para realtime.send (formato: { operation, record, ... })
+        channel
+          .on('broadcast', { event: 'notification_created' }, handleNewNotification)
+          .on('broadcast', { event: 'notification_updated' }, (payload: unknown) => {
+            logRealtime('STUDIO_NOTIFICACIONES', 'Notificación actualizada', payload);
+            // TODO: Implementar lógica de actualización
+          })
+          .on('broadcast', { event: 'INSERT' }, handleNewNotification)
+          .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            logRealtime('STUDIO_NOTIFICACIONES', 'Notificación actualizada (UPDATE)', payload);
+          })
+          // Listener genérico para realtime.send (formato alternativo)
+          .on('broadcast', { event: '*' }, (payload: unknown) => {
+            const p = payload as any;
+            const operation = p.operation || p.event;
+            if (operation === 'INSERT') handleNewNotification(payload);
+            else if (operation === 'UPDATE') {
+              logRealtime('STUDIO_NOTIFICACIONES', 'Notificación actualizada (realtime.send)', payload);
+            }
+          });
+
+        // Suscribirse usando utilidad centralizada
+        const subscribed = await subscribeToChannel(channel, (status, err) => {
+          if (!isMountedRef.current) return;
+
           switch (status) {
             case 'SUBSCRIBED':
               setIsConnected(true);
               setReconnectionAttempts(0);
-              logRealtime('STUDIO_NOTIFICACIONES', 'Canal de notificaciones suscrito exitosamente', { status });
+              setError(null);
+              logRealtime('STUDIO_NOTIFICACIONES', 'Canal suscrito exitosamente', { status });
               break;
             case 'CHANNEL_ERROR':
+            case 'TIMED_OUT':
               setIsConnected(false);
               setReconnectionAttempts(prev => prev + 1);
-              logRealtime('STUDIO_NOTIFICACIONES', 'Error en canal de notificaciones', { status, error: err, attempts: reconnectionAttempts + 1 });
-              
+              logRealtime('STUDIO_NOTIFICACIONES', 'Error en canal', { status, error: err?.message, attempts: reconnectionAttempts + 1 });
+
               // Intentar reconexión si no hemos excedido el límite
               if (reconnectionAttempts < REALTIME_CONFIG.MAX_RECONNECTION_ATTEMPTS) {
                 setTimeout(() => {
@@ -180,19 +228,31 @@ export function useRealtimeNotifications({
                     cleanupConnections();
                   }
                 }, REALTIME_CONFIG.RECONNECTION_DELAY);
+              } else {
+                setError('Error de conexión. Máximo de intentos alcanzado.');
               }
               break;
             case 'CLOSED':
               setIsConnected(false);
-              logRealtime('STUDIO_NOTIFICACIONES', 'Canal de notificaciones cerrado', { status });
+              logRealtime('STUDIO_NOTIFICACIONES', 'Canal cerrado', { status });
               break;
             default:
-              logRealtime('STUDIO_NOTIFICACIONES', 'Estado del canal de notificaciones', { status });
+              logRealtime('STUDIO_NOTIFICACIONES', 'Estado del canal', { status });
           }
-        }
-      });
+        });
 
-    channelRef.current = channel;
+        if (subscribed) {
+          channelRef.current = channel;
+        } else {
+          setError('No se pudo suscribir al canal de notificaciones');
+        }
+      } catch (error) {
+        console.error('[useRealtimeNotifications] Error en setupRealtime:', error);
+        setError('Error configurando Realtime');
+      }
+    };
+
+    setupRealtime();
 
     // Cleanup al desmontar
     return () => {
