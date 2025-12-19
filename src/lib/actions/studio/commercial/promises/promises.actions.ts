@@ -16,6 +16,7 @@ import {
   type PromisesListResponse,
   type PromiseResponse,
   type PromiseWithContact,
+  type ActionResponse,
 } from '@/lib/actions/schemas/promises-schemas';
 
 /**
@@ -236,6 +237,196 @@ export async function getPromises(
   }
 }
 
+/**
+ * Obtener una promesa por ID en formato PromiseWithContact
+ */
+export async function getPromiseByIdAsPromiseWithContact(
+  studioSlug: string,
+  promiseId: string
+): Promise<ActionResponse<PromiseWithContact>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const promise = await prisma.studio_promises.findFirst({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      include: {
+        contact: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            avatar_url: true,
+            status: true,
+            created_at: true,
+            updated_at: true,
+          },
+        },
+        pipeline_stage: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
+            order: true,
+          },
+        },
+        event_type: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        event: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        logs: {
+          orderBy: { created_at: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            content: true,
+            created_at: true,
+          },
+        },
+        tags: {
+          include: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                color: true,
+                description: true,
+                order: true,
+                is_active: true,
+                created_at: true,
+                updated_at: true,
+              },
+            },
+          },
+          orderBy: { created_at: 'asc' },
+        },
+        quotes: {
+          select: {
+            id: true,
+          },
+        },
+        agenda: {
+          select: {
+            id: true,
+            type_scheduling: true,
+            date: true,
+            time: true,
+            address: true,
+            link_meeting_url: true,
+            concept: true,
+          },
+          orderBy: { date: 'desc' },
+          take: 1,
+        },
+        offer: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            business_term: {
+              select: {
+                id: true,
+                name: true,
+                discount_percentage: true,
+                advance_percentage: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!promise) {
+      return { success: false, error: 'Promesa no encontrada' };
+    }
+
+    // Mapear tags activos
+    const tags = promise.tags
+      ?.filter((pt) => pt.tag.is_active)
+      .map((pt) => ({
+        id: pt.tag.id,
+        name: pt.tag.name,
+        slug: pt.tag.slug,
+        color: pt.tag.color,
+        description: pt.tag.description,
+        order: pt.tag.order,
+        is_active: pt.tag.is_active,
+        created_at: pt.tag.created_at,
+        updated_at: pt.tag.updated_at,
+      })) || [];
+
+    const promiseWithContact: PromiseWithContact = {
+      id: promise.contact.id,
+      promise_id: promise.id,
+      studio_id: promise.studio_id,
+      name: promise.contact.name,
+      phone: promise.contact.phone,
+      email: promise.contact.email,
+      avatar_url: promise.contact.avatar_url,
+      status: promise.contact.status,
+      event_type_id: promise.event_type_id,
+      event_name: promise.name || null,
+      interested_dates: promise.tentative_dates
+        ? (promise.tentative_dates as string[])
+        : null,
+      event_date: promise.event_date,
+      defined_date: promise.defined_date,
+      promise_pipeline_stage_id: promise.pipeline_stage_id,
+      is_test: promise.is_test || false,
+      created_at: promise.contact.created_at,
+      updated_at: promise.updated_at,
+      event_type: promise.event_type || null,
+      promise_pipeline_stage: promise.pipeline_stage || null,
+      last_log: promise.logs?.[0] || null,
+      tags: tags.length > 0 ? tags : undefined,
+      cotizaciones_count: promise.quotes?.length || 0,
+      event: promise.event || null,
+      agenda: promise.agenda?.[0] || null,
+      offer: promise.offer ? {
+        id: promise.offer.id,
+        name: promise.offer.name,
+        slug: promise.offer.slug,
+        business_term: promise.offer.business_term ? {
+          id: promise.offer.business_term.id,
+          name: promise.offer.business_term.name,
+          discount_percentage: promise.offer.business_term.discount_percentage,
+          advance_percentage: promise.offer.business_term.advance_percentage,
+        } : null,
+      } : null,
+    };
+
+    return {
+      success: true,
+      data: promiseWithContact,
+    };
+  } catch (error) {
+    console.error('[PROMISES] Error obteniendo promesa por ID:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
 
 /**
  * Crear nueva promise

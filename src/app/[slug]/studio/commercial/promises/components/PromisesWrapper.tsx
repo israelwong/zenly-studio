@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { PromisesKanban, PromisesSkeleton } from './';
-import { getPromises, getPipelineStages } from '@/lib/actions/studio/commercial/promises';
+import { getPromises, getPipelineStages, getPromiseByIdAsPromiseWithContact } from '@/lib/actions/studio/commercial/promises';
 import { usePromisesRealtime } from '@/hooks/usePromisesRealtime';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 
@@ -74,11 +74,29 @@ export function PromisesWrapper({ studioSlug, onOpenPromiseFormRef, onReloadKanb
     loadData();
   }, [loadData]);
 
-  // Callbacks para Realtime
-  const handlePromiseInserted = useCallback(() => {
-    console.log('[PromisesWrapper] Nueva promesa detectada, recargando...');
-    loadData();
-  }, [loadData]);
+  // Callback para Realtime - agregar solo la nueva promesa sin recargar todo
+  const handlePromiseInserted = useCallback(async (promiseId: string) => {
+    console.log('[PromisesWrapper] Nueva promesa detectada:', promiseId);
+    try {
+      // Obtener solo la nueva promesa en formato PromiseWithContact
+      const result = await getPromiseByIdAsPromiseWithContact(studioSlug, promiseId);
+
+      if (result.success && result.data) {
+        // Verificar que no exista ya en el estado
+        setPromises((prev) => {
+          if (prev.some((p) => p.promise_id === promiseId)) {
+            return prev;
+          }
+          // Agregar al inicio (más reciente primero)
+          return [result.data!, ...prev];
+        });
+      }
+    } catch (error) {
+      console.error('[PromisesWrapper] Error al obtener nueva promesa:', error);
+      // Fallback: recargar todo si falla
+      loadData();
+    }
+  }, [studioSlug, loadData]);
 
   const handlePromiseUpdatedRealtime = useCallback((promiseId: string) => {
     console.log('[PromisesWrapper] Promesa actualizada:', promiseId);

@@ -1,5 +1,6 @@
 export {
   getPromises,
+  getPromiseByIdAsPromiseWithContact,
   createPromise,
   updatePromise,
   movePromise,

@@ -13,7 +13,7 @@ import { ZenButton, ZenSelect } from '@/components/ui/zen';
 import { cn } from '@/lib/utils';
 import { useNotificationsHistory } from '@/hooks/useNotificationsHistory';
 import { buildRoute } from '@/lib/notifications/studio';
-import { formatRelativeTime } from '@/lib/actions/utils/formatting';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
 import type { studio_notifications } from '@prisma/client';
 
 interface NotificationsHistorySheetProps {
@@ -104,14 +104,6 @@ export function NotificationsHistorySheet({
     }
   };
 
-  const formatTime = (date: Date | null) => {
-    if (!date) return '';
-    try {
-      return formatRelativeTime(date);
-    } catch {
-      return '';
-    }
-  };
 
   const groupedEntries = Object.entries(groupedByDate).sort((a, b) => {
     // Ordenar por fecha: Hoy > Ayer > Esta semana > Este mes > meses anteriores (más recientes primero)
@@ -221,53 +213,12 @@ export function NotificationsHistorySheet({
                     {groupKey}
                   </div>
                   {groupNotifications.map((notification) => (
-                    <div
+                    <HistoryNotificationItem
                       key={notification.id}
-                      className={cn(
-                        'p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors cursor-pointer relative group',
-                        !notification.is_read && 'border-emerald-500/30 bg-emerald-950/10'
-                      )}
-                      onClick={() => handleNotificationClick(notification)}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5">
-                          <Bell className="h-4 w-4 text-zinc-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <p
-                              className={cn(
-                                'text-sm font-medium text-zinc-200',
-                                !notification.is_read && 'font-semibold'
-                              )}
-                            >
-                              {notification.title}
-                            </p>
-                            {!notification.is_read && (
-                              <span className="h-2 w-2 rounded-full bg-emerald-500 flex-shrink-0 mt-1.5" />
-                            )}
-                          </div>
-                          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-                            {notification.message}
-                          </p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-zinc-500">
-                              {formatTime(notification.created_at)}
-                            </span>
-                            {notification.category && (
-                              <span className="text-xs text-zinc-500">
-                                • {notification.category}
-                              </span>
-                            )}
-                            {!notification.is_active && (
-                              <span className="text-xs text-zinc-600">
-                                • Eliminada
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      notification={notification}
+                      open={open}
+                      onNotificationClick={handleNotificationClick}
+                    />
                   ))}
                 </div>
               ))}
@@ -294,6 +245,68 @@ export function NotificationsHistorySheet({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// Componente separado para cada notificación con tiempo relativo dinámico
+function HistoryNotificationItem({
+  notification,
+  open,
+  onNotificationClick,
+}: {
+  notification: studio_notifications;
+  open: boolean;
+  onNotificationClick: (notification: studio_notifications) => void;
+}) {
+  const relativeTime = useRelativeTime(notification.created_at, open);
+
+  return (
+    <div
+      className={cn(
+        'p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors cursor-pointer relative group',
+        !notification.is_read && 'border-emerald-500/30 bg-emerald-950/10'
+      )}
+      onClick={() => onNotificationClick(notification)}
+    >
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5">
+          <Bell className="h-4 w-4 text-zinc-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <p
+              className={cn(
+                'text-sm font-medium text-zinc-200',
+                !notification.is_read && 'font-semibold'
+              )}
+            >
+              {notification.title}
+            </p>
+            {!notification.is_read && (
+              <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+            )}
+          </div>
+          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
+            {notification.message}
+          </p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-zinc-500">
+              {relativeTime}
+            </span>
+            {notification.category && (
+              <span className="text-xs text-zinc-500">
+                • {notification.category}
+              </span>
+            )}
+            {!notification.is_active && (
+              <span className="text-xs text-zinc-600">
+                • Eliminada
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

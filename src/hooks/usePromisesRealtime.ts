@@ -11,7 +11,7 @@ import {
 
 interface UsePromisesRealtimeProps {
   studioSlug: string;
-  onPromiseInserted?: () => void;
+  onPromiseInserted?: (promiseId: string) => void;
   onPromiseUpdated?: (promiseId: string) => void;
   onPromiseDeleted?: (promiseId: string) => void;
 }
@@ -44,10 +44,12 @@ export function usePromisesRealtime({
         || p.new?.id
         || (p.new && typeof p.new === 'object' ? p.new.id : null)
         || (p.id ? p.id : null) as string;
-      if (promiseId && onPromiseUpdated) {
-        onPromiseUpdated(promiseId);
-      } else if (onPromiseInserted) {
-        onPromiseInserted();
+      if (promiseId) {
+        if (onPromiseInserted) {
+          onPromiseInserted(promiseId);
+        } else if (onPromiseUpdated) {
+          onPromiseUpdated(promiseId);
+        }
       }
     },
     [onPromiseInserted, onPromiseUpdated]

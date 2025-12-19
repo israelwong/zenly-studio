@@ -14,8 +14,9 @@ import {
 } from '@/components/ui/zen/overlays/ZenDropdownMenu';
 import { useStudioNotifications } from '@/hooks/useStudioNotifications';
 import { buildRoute } from '@/lib/notifications/studio';
-import { formatRelativeTime } from '@/lib/actions/utils/formatting';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { NotificationsHistorySheet } from './NotificationsHistorySheet';
+import type { studio_notifications } from '@prisma/client';
 
 interface NotificationsDropdownProps {
   studioSlug: string;
@@ -60,7 +61,7 @@ export function NotificationsDropdown({ studioSlug }: NotificationsDropdownProps
   }, [open]);
 
   const handleNotificationClick = async (
-    notification: typeof notifications[0]
+    notification: studio_notifications
   ) => {
     const route = buildRoute(
       notification.route,
@@ -88,16 +89,8 @@ export function NotificationsDropdown({ studioSlug }: NotificationsDropdownProps
     await deleteNotification(notificationId);
   };
 
-  const formatTime = (date: Date | null) => {
-    if (!date) return '';
-    try {
-      return formatRelativeTime(date);
-    } catch {
-      return '';
-    }
-  };
 
-  const getNotificationIcon = (notification: typeof notifications[0]) => {
+  const getNotificationIcon = (notification: studio_notifications) => {
     // Mostrar icono de flask para notificaciones de prueba
     if (notification.metadata && typeof notification.metadata === 'object' && 'is_test' in notification.metadata && notification.metadata.is_test) {
       return <FlaskRound className="h-4 w-4 text-amber-400" />;
@@ -182,53 +175,14 @@ export function NotificationsDropdown({ studioSlug }: NotificationsDropdownProps
         ) : (
           <div className="py-1">
             {notifications.map((notification) => (
-              <ZenDropdownMenuItem
+              <NotificationItem
                 key={notification.id}
-                className={cn(
-                  'flex flex-col items-start gap-1 px-3 py-3 cursor-pointer relative group',
-                  !notification.is_read && 'bg-zinc-800/50'
-                )}
-                onClick={() => handleNotificationClick(notification)}
-              >
-                <button
-                  onClick={(e) => handleDeleteNotification(e, notification.id)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
-                  title="Cerrar notificación"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-                <div className="flex items-start gap-2 w-full pr-6">
-                  <div className="mt-0.5">{getNotificationIcon(notification)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p
-                        className={cn(
-                          'text-sm font-medium text-zinc-200 line-clamp-2',
-                          !notification.is_read && 'font-semibold'
-                        )}
-                      >
-                        {notification.title}
-                      </p>
-                      {!notification.is_read && (
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 flex-shrink-0 mt-1.5" />
-                      )}
-                    </div>
-                    <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-                      {notification.message}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-zinc-500">
-                        {formatTime(notification.created_at)}
-                      </span>
-                      {notification.metadata && (
-                        <span className="text-xs text-zinc-500">
-                          • {notification.category}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </ZenDropdownMenuItem>
+                notification={notification}
+                open={open}
+                onNotificationClick={handleNotificationClick}
+                onDelete={handleDeleteNotification}
+                getNotificationIcon={getNotificationIcon}
+              />
             ))}
           </div>
         )}
@@ -252,6 +206,72 @@ export function NotificationsDropdown({ studioSlug }: NotificationsDropdownProps
         studioSlug={studioSlug}
       />
     </ZenDropdownMenu>
+  );
+}
+
+// Componente separado para cada notificación con tiempo relativo dinámico
+function NotificationItem({
+  notification,
+  open,
+  onNotificationClick,
+  onDelete,
+  getNotificationIcon,
+}: {
+  notification: studio_notifications;
+  open: boolean;
+  onNotificationClick: (notification: studio_notifications) => void;
+  onDelete: (e: React.MouseEvent, notificationId: string) => void;
+  getNotificationIcon: (notification: studio_notifications) => React.ReactNode;
+}) {
+  const relativeTime = useRelativeTime(notification.created_at, open);
+
+  return (
+    <ZenDropdownMenuItem
+      className={cn(
+        'flex flex-col items-start gap-1 px-3 py-3 cursor-pointer relative group',
+        !notification.is_read && 'bg-zinc-800/50'
+      )}
+      onClick={() => onNotificationClick(notification)}
+    >
+      <button
+        onClick={(e) => onDelete(e, notification.id)}
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
+        title="Cerrar notificación"
+      >
+        <X className="h-3 w-3" />
+      </button>
+      <div className="flex items-start gap-2 w-full pr-6">
+        <div className="mt-0.5">{getNotificationIcon(notification)}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <p
+              className={cn(
+                'text-sm font-medium text-zinc-200 line-clamp-2',
+                !notification.is_read && 'font-semibold'
+              )}
+            >
+              {notification.title}
+            </p>
+            {!notification.is_read && (
+              <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+            )}
+          </div>
+          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
+            {notification.message}
+          </p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-zinc-500">
+              {relativeTime}
+            </span>
+            {notification.metadata && (
+              <span className="text-xs text-zinc-500">
+                • {notification.category}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </ZenDropdownMenuItem>
   );
 }
 
