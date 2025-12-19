@@ -218,7 +218,19 @@ export async function subscribeToChannel(
         if (status === 'SUBSCRIBED') {
           resolve(true);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('[Realtime Core] Error en suscripción:', err?.message || 'Error desconocido');
+          // Solo mostrar error si hay información útil
+          const errorMessage = err?.message || err?.toString() || 'Error desconocido';
+          const channelName = (channel as any).topic || 'canal desconocido';
+
+          // No mostrar errores de timeout si no hay error específico (puede ser esperado)
+          if (status === 'TIMED_OUT' && !err) {
+            // Timeout sin error específico - probablemente esperado, no loguear
+            resolve(false);
+            return;
+          }
+
+          // Mostrar error con contexto
+          console.warn(`[Realtime Core] ${status} en canal "${channelName}":`, errorMessage);
           resolve(false);
         } else if (status === 'CLOSED') {
           resolve(false);

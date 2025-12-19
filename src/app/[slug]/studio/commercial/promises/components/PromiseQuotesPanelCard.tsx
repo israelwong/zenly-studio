@@ -518,30 +518,35 @@ export function PromiseQuotesPanelCard({
                   )}
                 </ZenBadge>
               </div>
-              {/* Mostrar precio final calculado si está pre-autorizada con condiciones comerciales */}
-              {cotizacion.selected_by_prospect && cotizacion.condiciones_comerciales && (() => {
-                // Precio base (con descuento de cotización si aplica)
-                const precioBase = cotizacion.discount
-                  ? cotizacion.price - (cotizacion.price * cotizacion.discount) / 100
-                  : cotizacion.price;
+              {/* Mostrar precio final calculado si está pre-autorizada o cancelada y tiene condición comercial con descuento */}
+              {(() => {
+                const esPreAutorizadaOCancelada = cotizacion.selected_by_prospect || cotizacion.status === 'cancelada';
+                const tieneCondicionComercial = !!cotizacion.condiciones_comerciales;
 
-                // Precio con descuento de condición comercial
-                const descuentoCondicion = cotizacion.condiciones_comerciales.discount_percentage ?? 0;
-                const precioConDescuento = descuentoCondicion > 0
-                  ? precioBase - (precioBase * descuentoCondicion) / 100
-                  : precioBase;
+                if (esPreAutorizadaOCancelada && tieneCondicionComercial) {
+                  // Precio base (con descuento de cotización si aplica - discount es monto fijo, no porcentaje)
+                  const precioBase = cotizacion.discount && cotizacion.discount > 0
+                    ? cotizacion.price - cotizacion.discount
+                    : cotizacion.price;
 
-                // Solo mostrar si hay diferencia con el precio original
-                if (precioConDescuento !== cotizacion.price) {
-                  return (
-                    <div className="mt-0.5">
-                      <p className={`text-[10px] ${cotizacion.archived ? 'text-zinc-600' : 'text-blue-400'}`}>
-                        A pagar: <span className="font-semibold">
-                          ${precioConDescuento.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                        </span>
-                      </p>
-                    </div>
-                  );
+                  // Precio con descuento de condición comercial (porcentaje)
+                  const descuentoCondicion = cotizacion.condiciones_comerciales.discount_percentage ?? 0;
+                  const precioConDescuento = descuentoCondicion > 0
+                    ? precioBase - (precioBase * descuentoCondicion) / 100
+                    : precioBase;
+
+                  // Mostrar si hay descuento de condición comercial y el precio es válido (positivo)
+                  if (descuentoCondicion > 0 && precioConDescuento > 0) {
+                    return (
+                      <div className="mt-0.5">
+                        <p className={`text-[10px] ${cotizacion.archived ? 'text-zinc-600' : 'text-blue-400'}`}>
+                          A pagar: <span className="font-semibold">
+                            ${precioConDescuento.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          </span>
+                        </p>
+                      </div>
+                    );
+                  }
                 }
                 return null;
               })()}

@@ -49,6 +49,7 @@ export function AutorizarCotizacionModal({
   condicionesComercialesMetodoPagoId,
   precioCalculado,
   showPackages = false,
+  onSuccess,
 }: AutorizarCotizacionModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -94,7 +95,7 @@ export function AutorizarCotizacionModal({
     }).format(price);
   };
 
-  // Usar precio calculado si está disponible, sino calcular básico
+  // Usar precio calculado si est? disponible, sino calcular b?sico
   const precioFinal = precioCalculado
     ? precioCalculado.precioConDescuento
     : (cotizacion.discount
@@ -104,7 +105,7 @@ export function AutorizarCotizacionModal({
   const handleCloseSuccess = () => {
     setShowSuccessModal(false);
     onClose();
-    // Cerrar también el sheet si se proporciona el callback
+    // Cerrar tambi?n el sheet si se proporciona el callback
     onSuccess?.();
   };
 
@@ -113,14 +114,14 @@ export function AutorizarCotizacionModal({
       <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && !showSuccessModal && onClose()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Solicitar Contratación</DialogTitle>
+            <DialogTitle>Solicitar Contrataci?n</DialogTitle>
             <DialogDescription>
-              Confirma que deseas solicitar la contratación de esta cotización
+              Confirma que deseas solicitar la contrataci?n de esta cotizaci?n
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {/* Resumen de cotización */}
+            {/* Resumen de cotizaci?n */}
             <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
               <h4 className="font-semibold text-white mb-3">{cotizacion.name}</h4>
 
@@ -173,7 +174,7 @@ export function AutorizarCotizacionModal({
                   </p>
                 </div>
               ) : (
-                // Fallback: mostrar precio básico
+                // Fallback: mostrar precio b?sico
                 <>
                   <p className="text-2xl font-bold text-emerald-400">
                     {formatPrice(precioFinal)}
@@ -186,11 +187,11 @@ export function AutorizarCotizacionModal({
               )}
             </div>
 
-            {/* Información importante */}
+            {/* Informaci?n importante */}
             <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
               <p className="text-sm text-zinc-300 leading-relaxed">
-                Al solicitar la contratación, el estudio recibirá una notificación y se
-                pondrá en contacto contigo para confirmar los detalles finales y coordinar
+                Al solicitar la contrataci?n, el estudio recibir? una notificaci?n y se
+                pondr? en contacto contigo para confirmar los detalles finales y coordinar
                 el pago.
               </p>
             </div>
@@ -230,7 +231,7 @@ export function AutorizarCotizacionModal({
         </DialogContent>
       </Dialog>
 
-      {/* Modal de confirmación */}
+      {/* Modal de confirmaci?n */}
       <Dialog open={showSuccessModal} onOpenChange={(open) => !open && handleCloseSuccess()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
