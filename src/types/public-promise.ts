@@ -58,6 +58,7 @@ export interface PublicCotizacion {
     id: string;
     name: string;
   } | null;
+  selected_by_prospect?: boolean;
 }
 
 export interface PublicPaquete {

@@ -373,16 +373,17 @@ export function CotizacionDetailSheet({
         {/* Footer */}
         <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-4 sm:px-6 py-3">
           <div className="flex gap-2">
-
-            <ZenButton
-              variant="ghost"
-              onClick={() => setShowPersonalizacionModal(true)}
-              className="shrink-0"
-              size="sm"
-            >
-              <Edit className="h-4 w-4 mr-1.5" />
-              Personalizar
-            </ZenButton>
+            {!currentCotizacion.selected_by_prospect && (
+              <ZenButton
+                variant="ghost"
+                onClick={() => setShowPersonalizacionModal(true)}
+                className="shrink-0"
+                size="sm"
+              >
+                <Edit className="h-4 w-4 mr-1.5" />
+                Personalizar
+              </ZenButton>
+            )}
             <ZenButton
               onClick={() => setShowAutorizarModal(true)}
               className="flex-1"
@@ -408,6 +409,7 @@ export function CotizacionDetailSheet({
           condicionesComercialesMetodoPagoId={selectedMetodoPagoId}
           precioCalculado={precioCalculado}
           showPackages={showPackages}
+          onSuccess={onClose}
         />
       )}
 

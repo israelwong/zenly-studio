@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { PromisePageClient } from '@/components/promise/PromisePageClient';
+import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
 import { ZenButton, ZenCard } from '@/components/ui/zen';
 import { prisma } from '@/lib/prisma';
 
@@ -142,18 +143,20 @@ export default async function PromisePage({ params }: PromisePageProps) {
   const { promise, studio: studioData, cotizaciones, paquetes, condiciones_comerciales, terminos_condiciones, share_settings, portafolios } = result.data;
 
   return (
-    <PromisePageClient
-      promise={promise}
-      studio={studioData}
-      cotizaciones={cotizaciones}
-      paquetes={paquetes}
-      condiciones_comerciales={condiciones_comerciales}
-      terminos_condiciones={terminos_condiciones}
-      share_settings={share_settings}
-      portafolios={portafolios}
-      studioSlug={slug}
-      promiseId={promiseId}
-    />
+    <Suspense fallback={<PromisePageSkeleton />}>
+      <PromisePageClient
+        promise={promise}
+        studio={studioData}
+        cotizaciones={cotizaciones}
+        paquetes={paquetes}
+        condiciones_comerciales={condiciones_comerciales}
+        terminos_condiciones={terminos_condiciones}
+        share_settings={share_settings}
+        portafolios={portafolios}
+        studioSlug={slug}
+        promiseId={promiseId}
+      />
+    </Suspense>
   );
 }
 

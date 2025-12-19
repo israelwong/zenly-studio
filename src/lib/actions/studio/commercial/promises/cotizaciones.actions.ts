@@ -1610,17 +1610,6 @@ export async function autorizarCotizacion(
       const { notifyQuoteApproved } = await import('@/lib/notifications/studio');
       const contactName = cotizacion.contact?.name || cotizacion.promise?.contact?.name || 'Cliente';
 
-      console.log('[AUTORIZACION] ?? Creando notificaci?n con:', {
-        studioId: studio.id,
-        quoteId: validatedData.cotizacion_id,
-        contactName,
-        monto: validatedData.monto,
-        eventoIdOriginal: eventoId,
-        eventoIdFinal,
-        eventoIdFromCotizacion: cotizacionActualizada?.evento_id,
-        eventoIdType: typeof eventoIdFinal,
-      });
-
       await notifyQuoteApproved(
         studio.id,
         validatedData.cotizacion_id,

@@ -42,6 +42,7 @@ interface PaquetesSectionProps {
     showStandardConditions?: boolean;
     showOfferConditions?: boolean;
     showPackages?: boolean;
+    cotizaciones?: Array<{ id: string; paquete_origen?: { id: string } | null; selected_by_prospect?: boolean }>;
 }
 
 export function PaquetesSection({
@@ -57,6 +58,7 @@ export function PaquetesSection({
     showStandardConditions = true,
     showOfferConditions = false,
     showPackages = false,
+    cotizaciones = [],
 }: PaquetesSectionProps) {
     const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -270,6 +272,7 @@ export function PaquetesSection({
                     showItemsPrices={false}
                     minDaysToHire={minDaysToHire}
                     showPackages={showPackages}
+                    cotizaciones={cotizaciones}
                 />
             )}
         </>

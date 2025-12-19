@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { X, Clock, Send, Edit } from 'lucide-react';
 import { ZenButton, SeparadorZen } from '@/components/ui/zen';
 import type { PublicPaquete } from '@/types/public-promise';
@@ -50,6 +50,7 @@ interface PaqueteDetailSheetProps {
   showStandardConditions?: boolean;
   showOfferConditions?: boolean;
   showPackages?: boolean;
+  cotizaciones?: Array<{ id: string; paquete_origen?: { id: string } | null; selected_by_prospect?: boolean }>;
 }
 
 export function PaqueteDetailSheet({
@@ -66,6 +67,7 @@ export function PaqueteDetailSheet({
   showStandardConditions = true,
   showOfferConditions = false,
   showPackages = false,
+  cotizaciones = [],
 }: PaqueteDetailSheetProps) {
   const [showSolicitarModal, setShowSolicitarModal] = useState(false);
   const [showPersonalizacionModal, setShowPersonalizacionModal] = useState(false);
@@ -182,6 +184,14 @@ export function PaqueteDetailSheet({
 
   const precioCalculado = calculatePriceWithCondition();
 
+  // Verificar si el paquete ya fue solicitado (existe cotización pre-autorizada creada desde este paquete)
+  const isPaqueteSolicitado = useMemo(() => {
+    return cotizaciones.some(
+      (cot) =>
+        cot.paquete_origen?.id === paquete.id && cot.selected_by_prospect === true
+    );
+  }, [cotizaciones, paquete.id]);
+
   // Scroll automático al desglose cuando se selecciona una condición comercial
   useEffect(() => {
     if (precioCalculado && precioDesgloseRef.current) {
@@ -295,15 +305,17 @@ export function PaqueteDetailSheet({
         {/* Footer */}
         <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 px-4 sm:px-6 py-3">
           <div className="flex gap-2">
-            <ZenButton
-              variant="ghost"
-              onClick={() => setShowPersonalizacionModal(true)}
-              className="shrink-0"
-              size="sm"
-            >
-              <Edit className="h-4 w-4 mr-1.5" />
-              Personalizar
-            </ZenButton>
+            {!isPaqueteSolicitado && (
+              <ZenButton
+                variant="ghost"
+                onClick={() => setShowPersonalizacionModal(true)}
+                className="shrink-0"
+                size="sm"
+              >
+                <Edit className="h-4 w-4 mr-1.5" />
+                Personalizar
+              </ZenButton>
+            )}
             <ZenButton
               onClick={() => setShowSolicitarModal(true)}
               className="flex-1"
@@ -329,6 +341,7 @@ export function PaqueteDetailSheet({
           condicionesComercialesMetodoPagoId={selectedMetodoPagoId}
           precioCalculado={precioCalculado}
           showPackages={showPackages}
+          onSuccess={onClose}
         />
       )}
 

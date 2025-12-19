@@ -35,6 +35,8 @@ interface SolicitarPaqueteModalProps {
   condicionesComercialesId?: string | null;
   condicionesComercialesMetodoPagoId?: string | null;
   precioCalculado?: PrecioCalculado | null;
+  showPackages?: boolean;
+  onSuccess?: () => void;
 }
 
 export function SolicitarPaqueteModal({
@@ -47,6 +49,7 @@ export function SolicitarPaqueteModal({
   condicionesComercialesMetodoPagoId,
   precioCalculado,
   showPackages = false,
+  onSuccess,
 }: SolicitarPaqueteModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -95,6 +98,8 @@ export function SolicitarPaqueteModal({
   const handleCloseSuccess = () => {
     setShowSuccessModal(false);
     onClose();
+    // Cerrar también el sheet si se proporciona el callback
+    onSuccess?.();
   };
 
   return (

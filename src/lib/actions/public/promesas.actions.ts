@@ -633,6 +633,7 @@ export async function getPublicPromiseData(
             name: cot.paquete.name,
           }
           : null,
+        selected_by_prospect: cot.selected_by_prospect || false,
       };
     });
 

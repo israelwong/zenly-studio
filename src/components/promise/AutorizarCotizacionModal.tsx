@@ -36,6 +36,7 @@ interface AutorizarCotizacionModalProps {
   condicionesComercialesMetodoPagoId?: string | null;
   precioCalculado?: PrecioCalculado | null;
   showPackages?: boolean;
+  onSuccess?: () => void;
 }
 
 export function AutorizarCotizacionModal({
@@ -103,6 +104,8 @@ export function AutorizarCotizacionModal({
   const handleCloseSuccess = () => {
     setShowSuccessModal(false);
     onClose();
+    // Cerrar también el sheet si se proporciona el callback
+    onSuccess?.();
   };
 
   return (

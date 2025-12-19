@@ -76,17 +76,6 @@ export async function guardarEstructuraCotizacionAutorizada(
         continue;
       }
 
-      // 🔍 DEBUG: Loguear valores antes de calcular
-      console.log(`[PRICING DEBUG] Item: ${datosCatalogo.nombre}`, {
-        item_id: item.item_id,
-        cost_from_catalog: datosCatalogo.costo,
-        expense_from_catalog: datosCatalogo.gasto,
-        utility_type: datosCatalogo.tipoUtilidad,
-        quantity: item.quantity,
-        seccion: datosCatalogo.seccion,
-        categoria: datosCatalogo.categoria,
-      });
-
       // Validar que tipoUtilidad no sea vacío
       if (!datosCatalogo.tipoUtilidad) {
         console.warn(`[PRICING] ⚠️ Item ${item.item_id} (${datosCatalogo.nombre}) tiene tipoUtilidad vacío`);
@@ -98,13 +87,6 @@ export async function guardarEstructuraCotizacionAutorizada(
         ? 'servicio'
         : 'producto';
 
-      // 🔍 DEBUG: Log detallado del tipo de utilidad
-      console.log(`[PRICING] Item: ${datosCatalogo.nombre}`, {
-        tipoUtilidad_original: datosCatalogo.tipoUtilidad,
-        tipoUtilidad_normalized: normalizedTipoUtilidad,
-        tipoUtilidad_final: tipoUtilidadFinal,
-      });
-
       // Calcular precios con valores del catálogo (igual que ResumenCotizacion)
       const precios = calcularPrecio(
         datosCatalogo.costo || 0,
@@ -112,12 +94,6 @@ export async function guardarEstructuraCotizacionAutorizada(
         tipoUtilidadFinal,
         configPrecios
       );
-
-      console.log(`[PRICING DEBUG] Precios calculados para ${datosCatalogo.nombre}:`, {
-        precio_final: precios.precio_final,
-        utilidad_base: precios.utilidad_base,
-        subtotal_sera: precios.precio_final * item.quantity,
-      });
 
       await tx.studio_cotizacion_items.update({
         where: { id: item.id },
