@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { useFavicon } from '@/hooks/useFavicon';
 import { obtenerEventosCliente, obtenerStudioPublicInfo } from '@/lib/actions/public/cliente';
-import { ClientHeader, ClientSidebar, ClientFooter } from './components';
+import { ZenSidebarProvider } from '@/components/ui/zen';
+import { ClientLayoutWrapper } from './components/ClientLayoutWrapper';
 import { Loader2 } from 'lucide-react';
 import type { ClientEvent } from '@/types/client';
 import type { StudioPublicInfo } from '@/lib/actions/public/cliente';
@@ -99,15 +100,15 @@ export default function ClienteLayout({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col">
-      <ClientHeader cliente={cliente} studioInfo={studioInfo} />
-      <div className="flex flex-1 overflow-hidden">
-        <ClientSidebar eventos={eventos} clienteName={cliente.name} />
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-      </div>
-      <ClientFooter />
-    </div>
+    <ZenSidebarProvider>
+      <ClientLayoutWrapper
+        slug={slug}
+        cliente={cliente}
+        eventos={eventos}
+        studioInfo={studioInfo}
+      >
+        {children}
+      </ClientLayoutWrapper>
+    </ZenSidebarProvider>
   );
 }

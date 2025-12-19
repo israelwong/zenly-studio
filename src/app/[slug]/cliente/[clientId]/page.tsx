@@ -54,16 +54,14 @@ export default function ClienteDashboard() {
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-      {/* Header */}
-      <div className="bg-zinc-900 border-b border-zinc-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <h1 className="text-3xl font-bold text-zinc-100 mb-2">Mis Eventos</h1>
-          <p className="text-zinc-400">Bienvenido, {cliente?.name}</p>
-        </div>
+      {/* Page Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-zinc-100 mb-2">Mis Eventos</h1>
+        <p className="text-zinc-400">Bienvenido, {cliente?.name}</p>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div>
         {eventos.length === 0 ? (
           <ZenCard>
             <div className="p-12 text-center">

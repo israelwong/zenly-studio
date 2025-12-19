@@ -14,7 +14,7 @@ DECLARE
   payload JSONB;
 BEGIN
   SELECT slug INTO studio_slug
-  FROM studios
+  FROM public.studios
   WHERE id = COALESCE(NEW.studio_id, OLD.studio_id);
   
   IF studio_slug IS NULL THEN
@@ -40,7 +40,7 @@ BEGIN
   
   RETURN COALESCE(NEW, OLD);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Asegurar que el trigger existe
 DROP TRIGGER IF EXISTS studio_promises_realtime_trigger ON studio_promises;
@@ -58,7 +58,7 @@ DECLARE
   payload JSONB;
 BEGIN
   SELECT slug INTO studio_slug
-  FROM studios
+  FROM public.studios
   WHERE id = COALESCE(NEW.studio_id, OLD.studio_id);
   
   IF studio_slug IS NULL THEN
@@ -84,7 +84,7 @@ BEGIN
   
   RETURN COALESCE(NEW, OLD);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Asegurar que el trigger existe
 DROP TRIGGER IF EXISTS studio_notifications_realtime_trigger ON studio_notifications;
@@ -102,7 +102,7 @@ DECLARE
   payload JSONB;
 BEGIN
   SELECT slug INTO studio_slug
-  FROM studios
+  FROM public.studios
   WHERE id = COALESCE(NEW.studio_id, OLD.studio_id);
   
   IF studio_slug IS NULL THEN
@@ -128,7 +128,7 @@ BEGIN
   
   RETURN COALESCE(NEW, OLD);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Asegurar que el trigger existe
 DROP TRIGGER IF EXISTS studio_cotizaciones_realtime_trigger ON studio_cotizaciones;

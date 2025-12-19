@@ -12,8 +12,8 @@ DECLARE
 BEGIN
   -- Obtener studio_slug desde promise_id
   SELECT s.slug INTO studio_slug
-  FROM studios s
-  INNER JOIN studio_promises p ON p.studio_id = s.id
+  FROM public.studios s
+  INNER JOIN public.studio_promises p ON p.studio_id = s.id
   WHERE p.id = COALESCE(NEW.promise_id, OLD.promise_id);
   
   IF studio_slug IS NULL THEN
@@ -39,7 +39,7 @@ BEGIN
   
   RETURN COALESCE(NEW, OLD);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Asegurar que el trigger existe
 DROP TRIGGER IF EXISTS studio_promise_logs_realtime_trigger ON studio_promise_logs;

@@ -18,6 +18,7 @@
     "db:seed-promise-pipeline": "tsx prisma/04-seed-promise-pipeline.ts",
     "db:seed-social": "tsx prisma/seed-social-networks.ts",
     "db:verify-seeds": "tsx scripts/verify-seeds.ts",
+    "db:check-extensions": "tsx scripts/check-extensions-pre-upgrade.ts",
     "db:reset": "tsx scripts/prisma-with-direct.ts migrate reset --force && npm run db:seed",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook"
   },
