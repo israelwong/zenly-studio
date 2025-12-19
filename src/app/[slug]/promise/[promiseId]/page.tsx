@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { PromisePageClient } from '@/components/promise/PromisePageClient';
 import { ZenButton, ZenCard } from '@/components/ui/zen';
@@ -16,10 +17,7 @@ interface PromisePageProps {
 export default async function PromisePage({ params }: PromisePageProps) {
   const { slug, promiseId } = await params;
 
-  // Obtener datos completos de la promesa
-  const result = await getPublicPromiseData(slug, promiseId);
-
-  // Obtener información del studio para el header (incluso si la promesa no existe)
+  // Obtener información del studio (para verificación y header)
   const studio = await prisma.studios.findUnique({
     where: { slug },
     select: {
@@ -29,6 +27,25 @@ export default async function PromisePage({ params }: PromisePageProps) {
       logo_url: true,
     },
   });
+
+  // Verificar si hay cotizaciones aprobadas antes de cargar datos
+  if (studio) {
+    const cotizacionesAprobadas = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise_id: promiseId,
+        studio_id: studio.id,
+        status: { in: ['aprobada', 'autorizada', 'approved'] },
+      },
+      select: { id: true },
+    });
+
+    if (cotizacionesAprobadas) {
+      redirect(`/${slug}/cliente`);
+    }
+  }
+
+  // Obtener datos completos de la promesa
+  const result = await getPublicPromiseData(slug, promiseId);
 
   // Si no hay datos, mostrar mensaje de error
   if (!result.success || !result.data) {

@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { Calendar, MapPin, Tag, ChevronRight } from 'lucide-react';
 import { ZenCard, ZenButton, ZenBadge } from '@/components/ui/zen';
+import { useClientAuth } from '@/hooks/useClientAuth';
 import type { ClientEvent } from '@/types/client';
 
 interface EventCardProps {
@@ -12,7 +13,9 @@ interface EventCardProps {
 export function EventCard({ evento }: EventCardProps) {
   const router = useRouter();
   const params = useParams();
+  const { cliente } = useClientAuth();
   const slug = params?.slug as string;
+  const clientId = params?.clientId as string || cliente?.id;
 
   const formatFecha = (fecha: string) => {
     try {
@@ -40,10 +43,12 @@ export function EventCard({ evento }: EventCardProps) {
 
   const isPagado = evento.cotizacion.pendiente <= 0;
 
+  if (!clientId) return null;
+
   return (
     <ZenCard
       className="hover:border-emerald-500/50 transition-colors cursor-pointer"
-      onClick={() => router.push(`/${slug}/cliente/${evento.id}`)}
+      onClick={() => router.push(`/${slug}/cliente/${clientId}/${evento.id}`)}
     >
       <div className="p-6 space-y-4">
         {/* Header con badge de pago */}
@@ -104,7 +109,7 @@ export function EventCard({ evento }: EventCardProps) {
           className="w-full"
           onClick={(e) => {
             e.stopPropagation();
-            router.push(`/${slug}/cliente/${evento.id}`);
+            router.push(`/${slug}/cliente/${clientId}/${evento.id}`);
           }}
         >
           Ver detalle

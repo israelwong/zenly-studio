@@ -76,8 +76,11 @@ export function CotizacionesSection({
   };
 
   const calculateFinalPrice = (cotizacion: PublicCotizacion) => {
-    if (!cotizacion.discount) return cotizacion.price;
-    return cotizacion.price - (cotizacion.price * cotizacion.discount) / 100;
+    if (!cotizacion.discount || cotizacion.discount <= 0) return cotizacion.price;
+
+    // El descuento viene como monto absoluto en $ (no como porcentaje ni factor)
+    // Total = precio - descuento
+    return cotizacion.price - cotizacion.discount;
   };
 
   return (
@@ -101,6 +104,14 @@ export function CotizacionesSection({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {cotizaciones.map((cotizacion) => {
               const finalPrice = calculateFinalPrice(cotizacion);
+
+              // El descuento viene como monto absoluto en $
+              const descuentoEnDolares = cotizacion.discount || 0;
+              // Calcular porcentaje para mostrar: (descuento / precio) * 100
+              const descuentoPorcentaje = cotizacion.discount && cotizacion.price > 0
+                ? (cotizacion.discount / cotizacion.price) * 100
+                : 0;
+
               const hasDiscount = cotizacion.discount && cotizacion.discount > 0;
 
               return (
@@ -134,7 +145,7 @@ export function CotizacionesSection({
                             {formatPrice(cotizacion.price)}
                           </span>
                           <ZenBadge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs px-2 py-0.5">
-                            -{cotizacion.discount}%
+                            -{Math.round(descuentoPorcentaje)}%
                           </ZenBadge>
                         </div>
                       )}

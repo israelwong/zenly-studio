@@ -62,26 +62,29 @@ export async function loginCliente(data: LoginData & { rememberSession?: boolean
       };
     }
 
-    // Verificar que el contacto tenga al menos una promesa autorizada
-    const hasAuthorizedPromise = await prisma.studio_promises.findFirst({
+    // Verificar que el contacto tenga al menos una cotización aprobada
+    const hasApprovedCotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
-        contact_id: contact.id,
-        status: 'authorized',
+        promise: {
+          contact_id: contact.id,
+        },
+        status: { in: ['aprobada', 'autorizada', 'approved'] },
       },
+      select: { id: true },
     });
 
-    if (!hasAuthorizedPromise) {
+    if (!hasApprovedCotizacion) {
       return {
         success: false,
-        message: 'No tienes eventos contratados disponibles',
+        message: 'No tienes cotizaciones aprobadas disponibles',
       };
     }
 
     // Crear sesión (usando cookies)
     const cookieStore = await cookies();
-    
+
     // Duración de la sesión basada en "recordar sesión"
-    const maxAge = data.rememberSession 
+    const maxAge = data.rememberSession
       ? 60 * 60 * 24 * 30  // 30 días si recordar
       : 60 * 60 * 24 * 7;  // 7 días por defecto
 
@@ -150,18 +153,34 @@ export async function getClienteSession(): Promise<ClientSession | null> {
 
     const clienteData = JSON.parse(session.value) as ClientSession;
 
-    // Verificar que el cliente aún existe y tiene promesas autorizadas
+    // Verificar que el cliente aún existe y tiene cotizaciones aprobadas
     const contact = await prisma.studio_contacts.findUnique({
       where: { id: clienteData.id },
-      include: {
-        promises: {
-          where: { status: 'authorized' },
-          take: 1,
-        },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        studio_id: true,
       },
     });
 
-    if (!contact || contact.promises.length === 0) {
+    if (!contact) {
+      return null;
+    }
+
+    // Verificar que tenga al menos una cotización aprobada
+    const hasApprovedCotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise: {
+          contact_id: contact.id,
+        },
+        status: { in: ['aprobada', 'autorizada', 'approved'] },
+      },
+      select: { id: true },
+    });
+
+    if (!hasApprovedCotizacion) {
       return null;
     }
 

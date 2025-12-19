@@ -17,14 +17,17 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
     const promises = await prisma.studio_promises.findMany({
       where: {
         contact_id: contactId,
-        status: 'authorized',
         quotes: {
           some: {
-            status: 'authorized',
+            status: { in: ['aprobada', 'autorizada', 'approved'] },
           },
         },
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        event_date: true,
+        event_location: true,
         event_type: {
           select: {
             id: true,
@@ -32,23 +35,34 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
           },
         },
         quotes: {
-          where: { status: 'authorized' },
-          include: {
-            items: {
+          where: { status: { in: ['aprobada', 'autorizada', 'approved'] } },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            discount: true,
+            status: true,
+            cotizacion_items: {
               include: {
-                catalog_item: {
+                items: {
                   select: {
                     id: true,
                     name: true,
-                    catalog_category: {
+                    service_categories: {
                       select: {
                         id: true,
                         name: true,
-                        catalog_section: {
+                        section_categories: {
                           select: {
                             id: true,
-                            name: true,
-                            order: true,
+                            service_sections: {
+                              select: {
+                                id: true,
+                                name: true,
+                                order: true,
+                              },
+                            },
                           },
                         },
                       },
@@ -56,11 +70,7 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
                   },
                 },
               },
-              orderBy: [
-                { catalog_item: { catalog_category: { catalog_section: { order: 'asc' } } } },
-                { catalog_item: { catalog_category: { order: 'asc' } } },
-                { catalog_item: { order: 'asc' } },
-              ],
+              orderBy: { order: 'asc' },
             },
             pagos: {
               where: {
@@ -80,19 +90,22 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
 
     const eventos: ClientEvent[] = promises.map((promise) => {
       const cotizacion = promise.quotes[0];
-      
+
       if (!cotizacion) {
         return null;
       }
 
       // Calcular totales
-      const total = cotizacion.total || 0;
+      // El descuento viene como monto absoluto en $ (no como factor decimal)
+      const precioBase = cotizacion.price || 0;
       const descuento = cotizacion.discount || null;
-      const pagado = cotizacion.pagos.reduce((sum, pago) => sum + pago.amount, 0);
+      const descuentoEnDolares = descuento || 0;
+      const total = precioBase - descuentoEnDolares;
+      const pagado = cotizacion.pagos.reduce((sum, pago) => sum + Number(pago.amount), 0);
       const pendiente = total - pagado;
 
       // Agrupar servicios por sección -> categoría -> items
-      const serviciosAgrupados = agruparServiciosPorSeccion(cotizacion.items);
+      const serviciosAgrupados = agruparServiciosPorSeccion(cotizacion.cotizacion_items);
 
       return {
         id: promise.id,
@@ -134,9 +147,18 @@ export async function obtenerEventoDetalle(promiseId: string, contactId: string)
       where: {
         id: promiseId,
         contact_id: contactId,
-        status: 'authorized',
+        quotes: {
+          some: {
+            status: { in: ['aprobada', 'autorizada', 'approved'] },
+          },
+        },
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        event_date: true,
+        event_location: true,
+        address: true,
         event_type: {
           select: {
             id: true,
@@ -144,24 +166,34 @@ export async function obtenerEventoDetalle(promiseId: string, contactId: string)
           },
         },
         quotes: {
-          where: { status: 'authorized' },
-          include: {
-            items: {
+          where: { status: { in: ['aprobada', 'autorizada', 'approved'] } },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            discount: true,
+            status: true,
+            cotizacion_items: {
               include: {
-                catalog_item: {
+                items: {
                   select: {
                     id: true,
                     name: true,
-                    description: true,
-                    catalog_category: {
+                    service_categories: {
                       select: {
                         id: true,
                         name: true,
-                        catalog_section: {
+                        section_categories: {
                           select: {
                             id: true,
-                            name: true,
-                            order: true,
+                            service_sections: {
+                              select: {
+                                id: true,
+                                name: true,
+                                order: true,
+                              },
+                            },
                           },
                         },
                       },
@@ -169,11 +201,7 @@ export async function obtenerEventoDetalle(promiseId: string, contactId: string)
                   },
                 },
               },
-              orderBy: [
-                { catalog_item: { catalog_category: { catalog_section: { order: 'asc' } } } },
-                { catalog_item: { catalog_category: { order: 'asc' } } },
-                { catalog_item: { order: 'asc' } },
-              ],
+              orderBy: { order: 'asc' },
             },
             pagos: {
               where: {
@@ -200,13 +228,16 @@ export async function obtenerEventoDetalle(promiseId: string, contactId: string)
     const cotizacion = promise.quotes[0];
 
     // Calcular totales
-    const total = cotizacion.total || 0;
+    // El descuento viene como monto absoluto en $ (no como factor decimal)
+    const precioBase = cotizacion.price || 0;
     const descuento = cotizacion.discount || null;
-    const pagado = cotizacion.pagos.reduce((sum, pago) => sum + pago.amount, 0);
+    const descuentoEnDolares = descuento || 0;
+    const total = precioBase - descuentoEnDolares;
+    const pagado = cotizacion.pagos.reduce((sum, pago) => sum + Number(pago.amount), 0);
     const pendiente = total - pagado;
 
     // Agrupar servicios
-    const serviciosAgrupados = agruparServiciosPorSeccion(cotizacion.items);
+    const serviciosAgrupados = agruparServiciosPorSeccion(cotizacion.cotizacion_items);
 
     const eventoDetalle: ClientEventDetail = {
       id: promise.id,
@@ -249,12 +280,17 @@ function agruparServiciosPorSeccion(items: any[]): PublicSeccionData[] {
 
   items.forEach((item) => {
     // Usar snapshots si existen, sino usar relaciones
-    const seccionId = item.catalog_item?.catalog_category?.catalog_section?.id || 'sin-seccion';
-    const seccionName = item.seccion_snapshot || item.catalog_item?.catalog_category?.catalog_section?.name || 'Sin sección';
-    const seccionOrder = item.catalog_item?.catalog_category?.catalog_section?.order || 999;
+    const seccionId = item.items?.service_categories?.section_categories?.service_sections?.id ||
+      item.seccion_name_snapshot || 'sin-seccion';
+    const seccionName = item.seccion_name_snapshot ||
+      item.items?.service_categories?.section_categories?.service_sections?.name ||
+      'Sin sección';
+    const seccionOrder = item.items?.service_categories?.section_categories?.service_sections?.order || 999;
 
-    const categoriaId = item.catalog_item?.catalog_category?.id || 'sin-categoria';
-    const categoriaName = item.categoria_snapshot || item.catalog_item?.catalog_category?.name || 'Sin categoría';
+    const categoriaId = item.items?.service_categories?.id ||
+      item.category_name_snapshot || 'sin-categoria';
+    const categoriaName = item.category_name_snapshot ||
+      item.items?.service_categories?.name || 'Sin categoría';
 
     // Obtener o crear sección
     if (!seccionesMap.has(seccionId)) {
@@ -283,9 +319,9 @@ function agruparServiciosPorSeccion(items: any[]): PublicSeccionData[] {
     // Agregar servicio
     categoria.servicios.push({
       id: item.id,
-      name: item.nombre_snapshot || item.catalog_item?.name || 'Servicio sin nombre',
-      description: item.catalog_item?.description || null,
-      price: item.unit_price || 0,
+      name: item.name_snapshot || item.name || item.items?.name || 'Servicio sin nombre',
+      description: item.description_snapshot || item.description || item.items?.description || null,
+      price: item.unit_price_snapshot || item.unit_price || 0,
       quantity: item.quantity || 1,
     });
   });

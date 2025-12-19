@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { useFavicon } from '@/hooks/useFavicon';
 import { loginCliente, obtenerStudioPublicInfo, getClienteSession } from '@/lib/actions/public/cliente';
 import { ToastContainer } from '@/components/client';
+import { LoginSkeleton } from '../components/LoginSkeleton';
 import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { PublicPageHeader } from '@/components/shared/PublicPageHeader';
 import type { StudioPublicInfo } from '@/lib/actions/public/cliente';
@@ -37,8 +38,8 @@ export default function ClientLoginPage() {
       if (slug) {
         const session = await getClienteSession();
         if (session) {
-          // Si hay sesión activa, redirigir automáticamente
-          router.push(`/${slug}/cliente`);
+          // Si hay sesión activa, redirigir automáticamente al clientId
+          router.push(`/${slug}/cliente/${session.id}`);
         } else {
           setIsCheckingSession(false);
         }
@@ -138,10 +139,10 @@ export default function ClientLoginPage() {
         rememberSession,
       });
 
-      if (result.success) {
+      if (result.success && result.data) {
         success('¡Bienvenido! Redirigiendo...');
         setTimeout(() => {
-          router.push(`/${slug}/cliente`);
+          router.push(`/${slug}/cliente/${result.data.id}`);
         }, 1000);
       } else {
         showError(result.message || 'Error al iniciar sesión');
@@ -153,13 +154,9 @@ export default function ClientLoginPage() {
     }
   };
 
-  // Mostrar loading mientras verifica sesión
+  // Mostrar skeleton mientras verifica sesión
   if (isCheckingSession) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="text-zinc-400 text-sm">Verificando sesión...</div>
-      </div>
-    );
+    return <LoginSkeleton />;
   }
 
   return (

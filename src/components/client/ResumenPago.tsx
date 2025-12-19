@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Receipt, ArrowRight } from 'lucide-react';
 import { ZenCard, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { SeparadorZen } from '@/components/ui/zen';
+import { useClientAuth } from '@/hooks/useClientAuth';
 
 interface ResumenPagoProps {
   eventoId: string;
@@ -16,7 +17,9 @@ interface ResumenPagoProps {
 export function ResumenPago({ eventoId, total, pagado, pendiente, descuento }: ResumenPagoProps) {
   const router = useRouter();
   const params = useParams();
+  const { cliente } = useClientAuth();
   const slug = params?.slug as string;
+  const clientId = params?.clientId as string || cliente?.id;
 
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -54,12 +57,12 @@ export function ResumenPago({ eventoId, total, pagado, pendiente, descuento }: R
           {descuento && descuento > 0 && (
             <>
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-400">Descuento ({descuento}%):</span>
-                <span className="text-emerald-400">-{formatMoney(total * (descuento / 100))}</span>
+                <span className="text-zinc-400">Descuento:</span>
+                <span className="text-emerald-400">-{formatMoney(descuento)}</span>
               </div>
               <div className="flex justify-between text-sm font-semibold">
                 <span className="text-zinc-300">Total a pagar:</span>
-                <span className="text-zinc-100">{formatMoney(total - (total * (descuento / 100)))}</span>
+                <span className="text-zinc-100">{formatMoney(total)}</span>
               </div>
             </>
           )}
@@ -99,7 +102,11 @@ export function ResumenPago({ eventoId, total, pagado, pendiente, descuento }: R
         <ZenButton
           variant="outline"
           className="w-full"
-          onClick={() => router.push(`/${slug}/cliente/${eventoId}/pagos`)}
+          onClick={() => {
+            if (clientId) {
+              router.push(`/${slug}/cliente/${clientId}/${eventoId}/pagos`);
+            }
+          }}
         >
           Ver historial de pagos
           <ArrowRight className="h-4 w-4 ml-2" />
