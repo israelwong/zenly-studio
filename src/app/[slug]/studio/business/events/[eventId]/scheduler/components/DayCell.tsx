@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Plus } from 'lucide-react';
+import { Plus, UserPlus } from 'lucide-react';
 import { TaskCard } from './TaskCard';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { SelectCrewModal } from './SelectCrewModal';
+import { asignarCrewAItem } from '@/lib/actions/studio/business/events';
+import { toast } from 'sonner';
 
 interface DayCellProps {
     date: Date;
@@ -10,6 +14,8 @@ interface DayCellProps {
     onDayClick?: (date: Date) => void;
     onTaskClick?: (taskId: string, date: Date) => void;
     itemId?: string;
+    studioSlug?: string;
+    onItemUpdate?: () => void;
     tasks?: Array<{
         id: string;
         name: string;
@@ -65,10 +71,32 @@ export function DayCell({
     tasks = [],
     showMonth = false,
     isToday = false,
+    itemId,
+    studioSlug,
+    onItemUpdate,
 }: DayCellProps) {
+    const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
+
     if (isHeader) {
         return <DayCellHeader date={date} showMonth={showMonth} isToday={isToday} />;
     }
+
+    const handleAssignCrew = async (crewMemberId: string | null) => {
+        if (!itemId || !studioSlug) return;
+
+        try {
+            const result = await asignarCrewAItem(studioSlug, itemId, crewMemberId);
+            if (!result.success) {
+                throw new Error(result.error || 'Error al asignar personal');
+            }
+            toast.success(crewMemberId ? 'Personal asignado correctamente' : 'Asignación removida');
+            if (onItemUpdate) {
+                onItemUpdate();
+            }
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Error al asignar personal');
+        }
+    };
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -115,8 +143,9 @@ export function DayCell({
     };
 
     const hasTasks = tasksThisDay.length > 0;
+    const canShowContextMenu = !isHeader && itemId && studioSlug;
 
-    return (
+    const cellContent = (
         <div
             data-day-cell={date.toISOString()}
             className="w-[60px] flex-shrink-0 h-full relative hover:bg-zinc-800/30 transition-colors group cursor-pointer border-r border-zinc-800/50"
@@ -147,5 +176,36 @@ export function DayCell({
                 </div>
             )}
         </div>
+    );
+
+    // Si no puede mostrar context menu, retornar solo el contenido
+    if (!canShowContextMenu) {
+        return cellContent;
+    }
+
+    return (
+        <>
+            <ContextMenu>
+                <ContextMenuTrigger asChild>
+                    {cellContent}
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-56 bg-zinc-900 border-zinc-800 z-50">
+                    <ContextMenuItem
+                        onClick={() => setSelectCrewModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                    >
+                        <UserPlus className="h-4 w-4 text-zinc-400" />
+                        <span>Asignar personal</span>
+                    </ContextMenuItem>
+                </ContextMenuContent>
+            </ContextMenu>
+
+            <SelectCrewModal
+                isOpen={selectCrewModalOpen}
+                onClose={() => setSelectCrewModalOpen(false)}
+                onSelect={handleAssignCrew}
+                studioSlug={studioSlug}
+            />
+        </>
     );
 }

@@ -6,6 +6,8 @@ interface SchedulerTimelineRowProps {
     dateRange?: DateRange;
     isHeader?: boolean;
     itemId?: string;
+    studioSlug?: string;
+    onItemUpdate?: () => void;
     tasks?: Array<{
         id: string;
         name: string;
@@ -21,6 +23,8 @@ export function SchedulerTimelineRow({
     dateRange,
     isHeader = false,
     itemId,
+    studioSlug,
+    onItemUpdate,
     tasks = [],
     onDayClick,
     onTaskClick
@@ -63,6 +67,8 @@ export function SchedulerTimelineRow({
                         date={day}
                         isHeader={isHeader}
                         itemId={itemId}
+                        studioSlug={studioSlug}
+                        onItemUpdate={onItemUpdate}
                         tasks={tasks}
                         onDayClick={isHeader ? undefined : onDayClick}
                         onTaskClick={onTaskClick}

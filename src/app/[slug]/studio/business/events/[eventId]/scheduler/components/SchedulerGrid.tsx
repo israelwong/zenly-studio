@@ -7,24 +7,30 @@ import type { DateRange } from 'react-day-picker';
 import { SchedulerRow } from './SchedulerRow';
 import { getTotalGridWidth } from '../utils/coordinate-utils';
 
+type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
+
 interface SchedulerGridProps {
   secciones: SeccionData[];
-  itemsMap: Map<string, NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0]>;
+  itemsMap: Map<string, CotizacionItem>;
   dateRange: DateRange;
+  studioSlug?: string;
   onTaskUpdate: (taskId: string, startDate: Date, endDate: Date) => Promise<void>;
   onTaskCreate?: (itemId: string, catalogItemId: string, itemName: string, startDate: Date) => Promise<void>;
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
+  onItemUpdate?: (updatedItem: CotizacionItem) => void;
 }
 
 export const SchedulerGrid = React.memo(({
   secciones,
   itemsMap,
   dateRange,
+  studioSlug,
   onTaskUpdate,
   onTaskCreate,
   onTaskDelete,
   onTaskToggleComplete,
+  onItemUpdate,
 }: SchedulerGridProps) => {
   const totalWidth = getTotalGridWidth(dateRange);
 
@@ -72,10 +78,13 @@ export const SchedulerGrid = React.memo(({
                     itemName={item.name || servicio.nombre}
                     tasks={tasks}
                     dateRange={dateRange}
+                    studioSlug={studioSlug}
+                    item={item}
                     onTaskUpdate={onTaskUpdate}
                     onTaskCreate={onTaskCreate}
                     onTaskDelete={onTaskDelete}
                     onTaskToggleComplete={onTaskToggleComplete}
+                    onItemUpdate={onItemUpdate}
                   />
                 );
               })}

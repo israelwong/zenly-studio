@@ -80,6 +80,15 @@ export function SchedulerItemRow({
                 <SchedulerTimelineRow
                     dateRange={dateRange}
                     itemId={localItem.id}
+                    studioSlug={studioSlug}
+                    onItemUpdate={onItemUpdate ? () => {
+                        // Cuando se actualiza desde DayCell, actualizar el item local
+                        // El hook useSchedulerItemSync se sincronizará automáticamente
+                        // cuando el prop 'item' cambie desde el padre
+                        if (onItemUpdate) {
+                            onItemUpdate(localItem);
+                        }
+                    } : undefined}
                     tasks={tasks}
                     onDayClick={handleDayClick}
                     onTaskClick={(taskId, dayDate) => {

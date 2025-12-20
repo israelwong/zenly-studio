@@ -16,6 +16,9 @@ import {
   getStatusColor,
 } from '../utils/task-status-utils';
 import { TaskBarContextMenu } from './TaskBarContextMenu';
+import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
+
+type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
 interface TaskBarProps {
   taskId: string;
@@ -26,9 +29,12 @@ interface TaskBarProps {
   isCompleted: boolean;
   hasCrewMember?: boolean;
   dateRange: DateRange;
+  studioSlug?: string;
+  item?: CotizacionItem;
   onUpdate: (taskId: string, startDate: Date, endDate: Date) => Promise<void>;
   onDelete?: (taskId: string) => Promise<void>;
   onToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
+  onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onClick?: (e: React.MouseEvent) => void;
 }
 
@@ -41,9 +47,12 @@ export const TaskBar = React.memo(({
   isCompleted,
   hasCrewMember = false,
   dateRange,
+  studioSlug,
+  item,
   onUpdate,
   onDelete,
   onToggleComplete,
+  onItemUpdate,
   onClick,
 }: TaskBarProps) => {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -76,7 +85,7 @@ export const TaskBar = React.memo(({
 
   // Manejar drag stop - solo actualizar si hubo movimiento real
   const handleDragStop = useCallback(
-    async (_e: RndDragEvent, d: { x: number; y: number }) => {
+    (_e: RndDragEvent, d: { x: number; y: number }) => {
       // Detectar si hubo movimiento real (threshold de 5px)
       const hasMoved = Math.abs(d.x - dragStartPosRef.current.x) > 5;
 
@@ -101,16 +110,14 @@ export const TaskBar = React.memo(({
       }
 
       setIsUpdating(true);
-      try {
-        setLocalStartDate(newStartDate);
-        setLocalEndDate(newEndDate);
-        await onUpdate(taskId, newStartDate, newEndDate);
-      } catch (error) {
+      setLocalStartDate(newStartDate);
+      setLocalEndDate(newEndDate);
+      onUpdate(taskId, newStartDate, newEndDate).catch(() => {
         setLocalStartDate(startDate);
         setLocalEndDate(endDate);
-      } finally {
+      }).finally(() => {
         setIsUpdating(false);
-      }
+      });
     },
     [taskId, localStartDate, localEndDate, dateRange, onUpdate, startDate, endDate]
   );
@@ -122,17 +129,20 @@ export const TaskBar = React.memo(({
 
   // Manejar resize stop - solo actualizar si hubo cambio real
   const handleResizeStop = useCallback(
-    async (
-      _e: React.SyntheticEvent,
+    (
+      _e: MouseEvent | TouchEvent,
       _direction: string,
       _ref: HTMLElement,
       _delta: { height: number; width: number },
       position: { x: number; y: number }
     ) => {
-      const newWidth = _ref.offsetWidth;
+      const rawWidth = _ref.offsetWidth;
+
+      // Forzar ancho mínimo de 60px (1 día) y redondear a múltiplos de 60px
+      const snappedWidth = Math.max(60, Math.round(rawWidth / 60) * 60);
 
       // Detectar si hubo cambio real (threshold de 10px = grid snap)
-      const hasResized = Math.abs(newWidth - dragStartPosRef.current.width) > 10;
+      const hasResized = Math.abs(snappedWidth - dragStartPosRef.current.width) > 10;
 
       if (!hasResized) {
         return; // No hubo resize, ignorar
@@ -140,8 +150,8 @@ export const TaskBar = React.memo(({
 
       const newStartDate = getDateFromPosition(position.x, dateRange);
 
-      // Convertir ancho a duración en días
-      const newDurationDays = Math.max(1, Math.round(newWidth / 60));
+      // Convertir ancho a duración en días (mínimo 1 día)
+      const newDurationDays = Math.max(1, snappedWidth / 60);
       const newEndDate = new Date(newStartDate);
       newEndDate.setDate(newEndDate.getDate() + newDurationDays - 1);
 
@@ -151,16 +161,14 @@ export const TaskBar = React.memo(({
       }
 
       setIsUpdating(true);
-      try {
-        setLocalStartDate(newStartDate);
-        setLocalEndDate(newEndDate);
-        await onUpdate(taskId, newStartDate, newEndDate);
-      } catch (error) {
+      setLocalStartDate(newStartDate);
+      setLocalEndDate(newEndDate);
+      onUpdate(taskId, newStartDate, newEndDate).catch(() => {
         setLocalStartDate(startDate);
         setLocalEndDate(endDate);
-      } finally {
+      }).finally(() => {
         setIsUpdating(false);
-      }
+      });
     },
     [taskId, dateRange, onUpdate, startDate, endDate]
   );
@@ -184,8 +192,12 @@ export const TaskBar = React.memo(({
       startDate={localStartDate}
       endDate={localEndDate}
       isCompleted={isCompleted}
+      itemId={itemId}
+      studioSlug={studioSlug}
+      item={item}
       onDelete={handleDelete}
       onToggleComplete={handleToggleComplete}
+      onItemUpdate={onItemUpdate}
     >
       <Rnd
         key={`${taskId}-${itemId}`}
@@ -195,6 +207,7 @@ export const TaskBar = React.memo(({
           width: Math.max(width, 60),
           height: 48,
         }}
+        minWidth={60}
         onDragStart={handleDragStart}
         onDragStop={handleDragStop}
         onResizeStart={handleResizeStart}

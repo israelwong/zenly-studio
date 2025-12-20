@@ -8,24 +8,30 @@ import { SchedulerHeader } from './SchedulerHeader';
 import { SchedulerGrid } from './SchedulerGrid';
 import { getTodayPosition } from '../utils/coordinate-utils';
 
+type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
+
 interface SchedulerTimelineProps {
   secciones: SeccionData[];
-  itemsMap: Map<string, NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0]>;
+  itemsMap: Map<string, CotizacionItem>;
   dateRange: DateRange;
+  studioSlug?: string;
   onTaskUpdate: (taskId: string, startDate: Date, endDate: Date) => Promise<void>;
   onTaskCreate?: (itemId: string, catalogItemId: string, itemName: string, startDate: Date) => Promise<void>;
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
+  onItemUpdate?: (updatedItem: CotizacionItem) => void;
 }
 
 export const SchedulerTimeline = React.memo(({
   secciones,
   itemsMap,
   dateRange,
+  studioSlug,
   onTaskUpdate,
   onTaskCreate,
   onTaskDelete,
   onTaskToggleComplete,
+  onItemUpdate,
 }: SchedulerTimelineProps) => {
   // Calcular posición de la línea "HOY"
   const todayPosition = getTodayPosition(dateRange);
@@ -40,10 +46,12 @@ export const SchedulerTimeline = React.memo(({
         secciones={secciones}
         itemsMap={itemsMap}
         dateRange={dateRange}
+        studioSlug={studioSlug}
         onTaskUpdate={onTaskUpdate}
         onTaskCreate={onTaskCreate}
         onTaskDelete={onTaskDelete}
         onTaskToggleComplete={onTaskToggleComplete}
+        onItemUpdate={onItemUpdate}
       />
 
       {/* Línea vertical "HOY" */}

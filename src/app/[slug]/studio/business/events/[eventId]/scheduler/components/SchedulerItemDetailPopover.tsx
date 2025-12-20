@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { ZenInput, ZenButton, ZenBadge, ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
-import { CrewMemberFormModal } from '@/components/shared/crew-members/CrewMemberFormModal';
+import { ZenButton, ZenBadge, ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 import { asignarCrewAItem, obtenerCrewMembers } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
-import { Check, X } from 'lucide-react';
+import { X, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
+import { SelectCrewModal } from './SelectCrewModal';
 
 interface CrewMember {
     id: string;
@@ -50,10 +50,9 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
     const { localItem, updateCrewMember } = useSchedulerItemSync(item, onItemUpdate);
 
     const [open, setOpen] = useState(false);
+    const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
     const [members, setMembers] = useState<CrewMember[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [formModalOpen, setFormModalOpen] = useState(false);
 
     // Usar localItem (sincronizado con servidor)
     const selectedMemberId = localItem.assigned_to_crew_member_id;
@@ -62,6 +61,7 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
     const costoUnitario = localItem.cost ?? localItem.cost_snapshot ?? 0;
     const costoTotal = costoUnitario * localItem.quantity;
 
+    // Cargar miembros solo para mostrar el nombre del asignado
     const loadMembers = useCallback(async () => {
         try {
             setLoadingMembers(true);
@@ -76,23 +76,12 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
         }
     }, [studioSlug]);
 
-    // Cargar miembros cada vez que se abre el popover para asegurar sincronización
+    // Cargar miembros cuando se abre el popover (solo para mostrar info del asignado)
     useEffect(() => {
-        if (open) {
+        if (open && members.length === 0 && !loadingMembers) {
             loadMembers();
         }
-    }, [open, loadMembers]);
-
-    // Filtrar miembros según búsqueda
-    const filteredMembers = useMemo(() => {
-        if (!searchTerm.trim()) return members;
-        const term = searchTerm.toLowerCase();
-        return members.filter(m =>
-            m.name.toLowerCase().includes(term) ||
-            m.email?.toLowerCase().includes(term) ||
-            m.tipo.toLowerCase().includes(term)
-        );
-    }, [members, searchTerm]);
+    }, [open, members.length, loadingMembers, loadMembers]);
 
     const handleMemberSelect = async (memberId: string | null) => {
         const selectedMember = memberId ? members.find(m => m.id === memberId) : null;
@@ -112,34 +101,19 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
             }
         );
 
-        toast.success('Personal asignado correctamente');
-        setSearchTerm('');
+        toast.success(memberId ? 'Personal asignado correctamente' : 'Asignación removida');
+        // Recargar miembros para actualizar la lista
+        await loadMembers();
     };
 
     const handleRemoveAssignment = async () => {
         await handleMemberSelect(null);
     };
 
-    const handleCrewCreated = async () => {
-        // Cerrar el modal primero
-        setFormModalOpen(false);
-        setSearchTerm('');
-
-        // Recargar miembros para incluir el nuevo personal
-        await loadMembers();
-
-        // Reabrir el popover después de un pequeño delay para asegurar que los miembros se cargaron
-        setTimeout(() => {
-            setOpen(true);
-        }, 100);
-    };
-
-    const handleOpenCreateModal = () => {
-        // Cerrar el popover antes de abrir el modal
+    const handleOpenSelectModal = () => {
         setOpen(false);
-        // Abrir el modal después de un pequeño delay para que el popover se cierre primero
         setTimeout(() => {
-            setFormModalOpen(true);
+            setSelectCrewModalOpen(true);
         }, 150);
     };
 
@@ -194,7 +168,7 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
                                     const assignedMember = members.find(m => m.id === selectedMemberId);
                                     return assignedMember ? (
                                         <div className="px-2 py-1.5 bg-zinc-800/50 rounded text-xs flex items-center gap-1.5">
-                                            <ZenAvatar className="h-6 w-6 flex-shrink-0">
+                                            <ZenAvatar className="h-6 w-6 shrink-0">
                                                 <ZenAvatarFallback className="bg-blue-600/20 text-blue-400 text-[10px]">
                                                     {getInitials(assignedMember.name)}
                                                 </ZenAvatarFallback>
@@ -221,96 +195,32 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
                                 </button>
                             </div>
                         ) : (
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-zinc-400">
+                            <div>
+                                <label className="text-sm font-medium text-zinc-400 block mb-2">
                                     Asignar personal:
                                 </label>
-
-                                {/* Input de búsqueda */}
-                                <ZenInput
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Buscar personal..."
-                                    className="w-full"
-                                />
-
-                                {/* Lista de coincidencias o botón crear */}
-                                {loadingMembers ? (
-                                    <div className="text-xs text-zinc-500 py-2">Cargando...</div>
-                                ) : searchTerm.trim() && filteredMembers.length === 0 ? (
-                                    <ZenButton
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={handleOpenCreateModal}
-                                        className="w-full text-xs text-zinc-400 hover:text-zinc-300"
-                                    >
-                                        Registrar personal
-                                    </ZenButton>
-                                ) : (
-                                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                                        {/* Lista de miembros filtrados */}
-                                        {(searchTerm.trim() ? filteredMembers : members).slice(0, 5).map((member) => (
-                                            <button
-                                                key={member.id}
-                                                onClick={() => {
-                                                    handleMemberSelect(member.id);
-                                                    setSearchTerm('');
-                                                }}
-                                                className={cn(
-                                                    'w-full flex items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-zinc-800 rounded transition-colors',
-                                                    selectedMemberId === member.id && 'bg-zinc-800'
-                                                )}
-                                            >
-                                                {/* Avatar */}
-                                                <ZenAvatar className="h-6 w-6 flex-shrink-0">
-                                                    <ZenAvatarFallback className="bg-blue-600/20 text-blue-400 text-[10px]">
-                                                        {getInitials(member.name)}
-                                                    </ZenAvatarFallback>
-                                                </ZenAvatar>
-
-                                                {/* Check indicator */}
-                                                <div className="h-3 w-3 flex items-center justify-center flex-shrink-0">
-                                                    {selectedMemberId === member.id && (
-                                                        <Check className="h-3 w-3 text-emerald-400" />
-                                                    )}
-                                                </div>
-
-                                                {/* Información */}
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-zinc-300 truncate">{member.name}</div>
-                                                    <div className="text-[10px] text-zinc-500 truncate">
-                                                        {member.tipo}
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        ))}
-
-                                        {/* Botón crear si hay búsqueda y no hay coincidencias */}
-                                        {searchTerm.trim() && filteredMembers.length === 0 && (
-                                            <ZenButton
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={handleOpenCreateModal}
-                                                className="w-full text-xs text-zinc-400 hover:text-zinc-300 mt-2"
-                                            >
-                                                Registrar personal
-                                            </ZenButton>
-                                        )}
-                                    </div>
-                                )}
+                                <ZenButton
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleOpenSelectModal}
+                                    className="w-full gap-1.5 h-8 text-xs"
+                                >
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                    Seleccionar personal
+                                </ZenButton>
                             </div>
                         )}
                     </div>
                 </PopoverContent>
             </Popover>
 
-            {/* Modal para crear personal */}
-            <CrewMemberFormModal
+            {/* Modal para seleccionar/crear personal */}
+            <SelectCrewModal
+                isOpen={selectCrewModalOpen}
+                onClose={() => setSelectCrewModalOpen(false)}
+                onSelect={handleMemberSelect}
                 studioSlug={studioSlug}
-                isOpen={formModalOpen}
-                onClose={() => setFormModalOpen(false)}
-                initialMember={null}
-                onSuccess={handleCrewCreated}
+                currentMemberId={selectedMemberId}
             />
         </>
     );

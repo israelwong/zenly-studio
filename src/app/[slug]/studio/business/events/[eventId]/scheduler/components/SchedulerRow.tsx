@@ -2,8 +2,11 @@
 
 import React, { useCallback } from 'react';
 import type { DateRange } from 'react-day-picker';
+import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { TaskBar } from './TaskBar';
 import { getTotalGridWidth, getDateFromPosition } from '../utils/coordinate-utils';
+
+type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
 interface SchedulerRowProps {
   itemId: string;
@@ -18,10 +21,13 @@ interface SchedulerRowProps {
     has_crew_member?: boolean;
   }>;
   dateRange: DateRange;
+  studioSlug?: string;
+  item?: CotizacionItem;
   onTaskUpdate: (taskId: string, startDate: Date, endDate: Date) => Promise<void>;
   onTaskCreate?: (itemId: string, catalogItemId: string, itemName: string, startDate: Date) => Promise<void>;
   onTaskDelete?: (taskId: string) => Promise<void>;
   onTaskToggleComplete?: (taskId: string, isCompleted: boolean) => Promise<void>;
+  onItemUpdate?: (updatedItem: CotizacionItem) => void;
   onClick?: (e: React.MouseEvent) => void;
 }
 
@@ -31,10 +37,13 @@ export const SchedulerRow = React.memo(({
   itemName,
   tasks,
   dateRange,
+  studioSlug,
+  item,
   onTaskUpdate,
   onTaskCreate,
   onTaskDelete,
   onTaskToggleComplete,
+  onItemUpdate,
   onClick,
 }: SchedulerRowProps) => {
   const totalWidth = getTotalGridWidth(dateRange);
@@ -102,9 +111,12 @@ export const SchedulerRow = React.memo(({
             isCompleted={task.is_completed}
             hasCrewMember={task.has_crew_member}
             dateRange={dateRange}
+            studioSlug={studioSlug}
+            item={item}
             onUpdate={handleTaskUpdate}
             onDelete={onTaskDelete}
             onToggleComplete={onTaskToggleComplete}
+            onItemUpdate={onItemUpdate}
           />
         ))}
       </div>

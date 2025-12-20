@@ -105,10 +105,12 @@ export const SchedulerPanel = React.memo(({
             secciones={secciones}
             itemsMap={itemsMap}
             dateRange={dateRange}
+            studioSlug={studioSlug}
             onTaskUpdate={handleTaskUpdate}
             onTaskCreate={onTaskCreate}
             onTaskDelete={onTaskDelete}
             onTaskToggleComplete={onTaskToggleComplete}
+            onItemUpdate={onItemUpdate}
           />
         </div>
       </div>
