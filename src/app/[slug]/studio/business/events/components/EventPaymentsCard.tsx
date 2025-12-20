@@ -225,18 +225,6 @@ export function EventPaymentsCard({
                                 </div>
                             </div>
 
-                            {/* Botón para ver historial */}
-                            {payments.length > 0 && (
-                                <ZenButton
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() => setIsHistorySheetOpen(true)}
-                                    className="w-full gap-2 text-xs"
-                                >
-                                    Ver historial de pagos ({payments.length})
-                                </ZenButton>
-                            )}
-
                             {payments.length === 0 && (
                                 <div className="text-center py-4">
                                     <p className="text-xs text-zinc-500 mb-2">
@@ -252,6 +240,19 @@ export function EventPaymentsCard({
                         </div>
                     )}
                 </ZenCardContent>
+                {/* Footer con botón de historial */}
+                {payments.length > 0 && (
+                    <div className="px-4 pb-4 pt-3 border-t border-zinc-800">
+                        <ZenButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsHistorySheetOpen(true)}
+                            className="w-full gap-2 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-950/20"
+                        >
+                            Ver historial de pagos ({payments.length})
+                        </ZenButton>
+                    </div>
+                )}
             </ZenCard>
 
             {/* Modal para crear/editar pago */}

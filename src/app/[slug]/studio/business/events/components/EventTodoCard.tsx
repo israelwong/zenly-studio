@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2, Circle, Plus } from 'lucide-react';
+import { CheckCircle2, Circle } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
+import { TasksHistorySheet } from './TasksHistorySheet';
 
 interface TodoItem {
   id: string;
@@ -25,6 +26,8 @@ export function EventTodoCard({ studioSlug, eventId }: EventTodoCardProps) {
     { id: '5', title: 'Revisar equipo técnico', completed: false },
   ]);
 
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
   const handleToggle = (id: string) => {
     setTodos(prev => prev.map(todo =>
       todo.id === id ? { ...todo, completed: !todo.completed } : todo
@@ -32,59 +35,73 @@ export function EventTodoCard({ studioSlug, eventId }: EventTodoCardProps) {
   };
 
   const completedCount = todos.filter(t => t.completed).length;
+  const totalTasks = todos.length;
 
   return (
-    <ZenCard variant="default" padding="none">
-      <ZenCardHeader className="border-b border-zinc-800 pb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <ZenCardTitle className="text-base">Tareas</ZenCardTitle>
-            <p className="text-xs text-zinc-500 mt-1">
-              {completedCount} de {todos.length} completadas
-            </p>
-          </div>
-          <ZenButton
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            disabled
-          >
-            <Plus className="h-4 w-4" />
-          </ZenButton>
-        </div>
-      </ZenCardHeader>
-
-      <ZenCardContent className="p-4">
-        <div className="space-y-2">
-          {todos.map((todo) => (
-            <div
-              key={todo.id}
-              className="flex items-start gap-3 p-2 rounded hover:bg-zinc-900/50 transition-colors cursor-pointer"
-              onClick={() => handleToggle(todo.id)}
-            >
-              {todo.completed ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-              ) : (
-                <Circle className="h-5 w-5 text-zinc-600 flex-shrink-0 mt-0.5" />
-              )}
-              <span
-                className={`text-sm flex-1 ${todo.completed
-                    ? 'line-through text-zinc-600'
-                    : 'text-zinc-300'
-                  }`}
-              >
-                {todo.title}
+    <>
+      <ZenCard>
+        <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
+          <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
+            Tareas
+          </ZenCardTitle>
+        </ZenCardHeader>
+        <ZenCardContent className="p-4">
+          <div className="space-y-4">
+            {/* Resumen compacto */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-zinc-400" />
+                <span className="text-xs text-zinc-400">Total</span>
+              </div>
+              <span className="text-sm font-semibold text-zinc-200">
+                {totalTasks} {totalTasks === 1 ? 'tarea' : 'tareas'}
               </span>
             </div>
-          ))}
-        </div>
 
-        {todos.length === 0 && (
-          <div className="text-center py-8 text-zinc-600 text-sm">
-            No hay tareas pendientes
+            {completedCount > 0 && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <span className="text-xs text-zinc-400">Completadas</span>
+                </div>
+                <span className="text-sm font-semibold text-emerald-400">
+                  {completedCount}
+                </span>
+              </div>
+            )}
+
+            {totalTasks === 0 && (
+              <div className="text-center py-4">
+                <Circle className="h-8 w-8 text-zinc-600 mx-auto mb-2" />
+                <p className="text-xs text-zinc-500">
+                  No hay tareas registradas
+                </p>
+              </div>
+            )}
+          </div>
+        </ZenCardContent>
+        {/* Footer con botón de historial */}
+        {totalTasks > 0 && (
+          <div className="px-4 pb-4 pt-3 border-t border-zinc-800">
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsSheetOpen(true)}
+              className="w-full gap-2 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-950/20"
+            >
+              Ver todas las tareas ({totalTasks})
+            </ZenButton>
           </div>
         )}
-      </ZenCardContent>
-    </ZenCard>
+      </ZenCard>
+
+      {/* Sheet de historial de tareas */}
+      <TasksHistorySheet
+        isOpen={isSheetOpen}
+        onClose={() => setIsSheetOpen(false)}
+        tasks={todos}
+        onToggleTask={handleToggle}
+      />
+    </>
   );
 }
