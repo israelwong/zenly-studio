@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { SectionNavigation, NavigationItem } from '@/components/ui/section-navigation';
+import { SectionNavigation, NavigationItem } from '@/components/ui/shadcn/section-navigation';
 import { LucideIcon } from 'lucide-react';
 
 export interface SectionLayoutProps {

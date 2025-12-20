@@ -6,7 +6,7 @@ export function validateData<T>(schema: z.ZodSchema<T>, data: unknown): T {
         return schema.parse(data);
     } catch (error) {
         if (error instanceof z.ZodError) {
-            const errorMessages = error.errors.map((err) => err.message).join(", ");
+            const errorMessages = error.issues.map((err) => err.message).join(", ");
             throw new Error(`Datos inválidos: ${errorMessages}`);
         }
         throw error;
@@ -23,7 +23,7 @@ export function safeValidateData<T>(
         return { success: true, data: result };
     } catch (error) {
         if (error instanceof z.ZodError) {
-            const errors = error.errors.map((err) => err.message);
+            const errors = error.issues.map((err) => err.message);
             return { success: false, errors };
         }
         return { success: false, errors: ["Error de validación desconocido"] };
@@ -35,7 +35,7 @@ export function validateFormData<T>(
     schema: z.ZodSchema<T>,
     formData: FormData
 ): T {
-    const data: Record<string, any> = {};
+    const data: Record<string, unknown> = {};
 
     for (const [key, value] of formData.entries()) {
         // Convertir strings a números si es necesario
@@ -58,7 +58,7 @@ export function validateUrlParams<T>(
     schema: z.ZodSchema<T>,
     params: Record<string, string | string[] | undefined>
 ): T {
-    const data: Record<string, any> = {};
+    const data: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(params)) {
         if (Array.isArray(value)) {
@@ -76,7 +76,7 @@ export function validateQueryParams<T>(
     schema: z.ZodSchema<T>,
     searchParams: URLSearchParams
 ): T {
-    const data: Record<string, any> = {};
+    const data: Record<string, unknown> = {};
 
     for (const [key, value] of searchParams.entries()) {
         // Convertir strings a números si es necesario

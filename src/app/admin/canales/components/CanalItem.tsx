@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
 import { Edit, Trash2, Eye, EyeOff, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import {

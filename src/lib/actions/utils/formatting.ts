@@ -38,6 +38,24 @@ export function formatPercentage(
     }).format(value / 100);
 }
 
+/**
+ * Parsea una fecha de forma segura sin cambios por zona horaria
+ * Si es string en formato YYYY-MM-DD, lo parsea como fecha local
+ */
+function parseDateSafe(date: Date | string): Date {
+    if (typeof date === "string") {
+        // Si es formato YYYY-MM-DD, parsear como fecha local
+        const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (dateMatch) {
+            const [, year, month, day] = dateMatch;
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        }
+        // Si no, usar Date normal
+        return new Date(date);
+    }
+    return date;
+}
+
 // Función para formatear fechas
 export function formatDate(
     date: Date | string,
@@ -47,7 +65,7 @@ export function formatDate(
         day: "numeric",
     }
 ): string {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
+    const dateObj = parseDateSafe(date);
 
     return new Intl.DateTimeFormat("es-MX", options).format(dateObj);
 }

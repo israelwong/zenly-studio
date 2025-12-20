@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 @layer base {
   * {
@@ -9,21 +12,168 @@
     @apply bg-zinc-950 text-white;
   }
 
-  /* Custom scrollbar for dark theme */
+  /* Custom scrollbar for dark theme - Delgado y moderno */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-zinc-800;
+    @apply bg-transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-zinc-700 rounded;
+    @apply bg-zinc-700/50 rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-zinc-600;
+    @apply bg-zinc-600/70;
   }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(63, 63, 70, 0.5) transparent;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+:root {
+  /* Sidebar variables - tema claro (no usado en nuestro proyecto) */
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+  /* Toast/Popover variables */
+  --popover: hsl(240 10% 3.9%); /* zinc-950 */
+  --popover-foreground: hsl(0 0% 100%); /* white */
+  --border: hsl(240 3.7% 15.9%); /* zinc-800 */
+}
+
+.dark {
+  /* Sidebar variables - tema oscuro zinc */
+  --sidebar: hsl(240 5.9% 10%); /* zinc-900 */
+  --sidebar-foreground: hsl(240 4.8% 95.9%); /* zinc-100 */
+  --sidebar-primary: hsl(240 5.9% 10%); /* zinc-900 */
+  --sidebar-primary-foreground: hsl(0 0% 100%); /* white */
+  --sidebar-accent: hsl(240 3.7% 15.9%); /* zinc-800 */
+  --sidebar-accent-foreground: hsl(240 4.8% 95.9%); /* zinc-100 */
+  --sidebar-border: hsl(240 3.7% 15.9%); /* zinc-800 */
+  --sidebar-ring: hsl(217.2 91.2% 59.8%); /* blue-500 */
+
+  /* Toast/Popover variables para dark mode */
+  --popover: hsl(240 10% 3.9%); /* zinc-950 */
+  --popover-foreground: hsl(0 0% 100%); /* white */
+  --border: hsl(240 3.7% 15.9%); /* zinc-800 */
+}
+
+@theme inline {
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  /* Mantener nuestro tema zinc original */
+  * {
+    @apply border-zinc-800;
+  }
+  body {
+    @apply bg-zinc-950 text-white;
+  }
+}
+
+/* Sonner Toast Styles - Fix para toasts apilados sin texto visible */
+[data-sonner-toast]:not([data-type="success"]):not([data-type="error"]):not(
+    [data-type="info"]
+  ):not([data-type="warning"]) {
+  background: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  border-color: var(--border) !important;
+}
+
+[data-sonner-toast] [data-title] {
+  color: var(--popover-foreground) !important;
+  opacity: 1 !important;
+}
+
+[data-sonner-toast] [data-description] {
+  color: var(--popover-foreground) !important;
+  opacity: 0.8 !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  color: var(--popover-foreground) !important;
+}
+
+[data-sonner-toast][data-styled="true"] {
+  background: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-title] {
+  color: var(--popover-foreground) !important;
+  opacity: 1 !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-description] {
+  color: var(--popover-foreground) !important;
+  opacity: 0.8 !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-icon] {
+  color: var(--popover-foreground) !important;
+}
+
+/* Fix para richColors con toasts apilados */
+[data-sonner-toast][data-type="success"],
+[data-sonner-toast][data-type="success"][data-styled="true"] {
+  background: hsl(142 30% 12%) !important;
+  border-color: hsl(142 76% 36%) !important;
+}
+
+[data-sonner-toast][data-type="error"],
+[data-sonner-toast][data-type="error"][data-styled="true"] {
+  background: hsl(0 30% 12%) !important;
+  border-color: hsl(0 72% 50%) !important;
+}
+
+[data-sonner-toast][data-type="info"],
+[data-sonner-toast][data-type="warning"] {
+  background: var(--popover) !important;
+}
+
+[data-sonner-toast][data-type="success"] [data-title],
+[data-sonner-toast][data-type="error"] [data-title],
+[data-sonner-toast][data-type="info"] [data-title],
+[data-sonner-toast][data-type="warning"] [data-title] {
+  color: var(--popover-foreground) !important;
+}
+
+[data-sonner-toast][data-type="success"] [data-description],
+[data-sonner-toast][data-type="error"] [data-description],
+[data-sonner-toast][data-type="info"] [data-description],
+[data-sonner-toast][data-type="warning"] [data-description] {
+  color: var(--popover-foreground) !important;
+  opacity: 0.8 !important;
 }

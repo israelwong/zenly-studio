@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/shadcn/button';
+import { ZenInput } from '@/components/ui/zen';
+import { Label } from '@/components/ui/shadcn/label';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Switch } from '@/components/ui/shadcn/switch';
 import {
     Dialog,
     DialogContent,
@@ -13,7 +13,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/shadcn/dialog';
 import { createPlataformaRedSocial, updatePlataformaRedSocial } from '../actions';
 
 interface PlataformaRedSocial {
@@ -166,40 +166,32 @@ export function PlataformaModal({ isOpen, onClose, plataforma, onSuccess }: Plat
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="nombre" className="text-white">
-                                Nombre *
-                            </Label>
-                            <Input
-                                id="nombre"
-                                value={formData.nombre}
-                                onChange={(e) => {
-                                    const nombre = e.target.value;
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        nombre,
-                                        slug: prev.slug || generateSlug(nombre)
-                                    }));
-                                }}
-                                className="bg-zinc-800 border-zinc-700 text-white"
-                                placeholder="Ej: Facebook"
-                                required
-                            />
-                        </div>
+                        <ZenInput
+                            id="nombre"
+                            label="Nombre"
+                            required
+                            value={formData.nombre}
+                            onChange={(e) => {
+                                const nombre = e.target.value;
+                                setFormData(prev => ({
+                                    ...prev,
+                                    nombre,
+                                    slug: prev.slug || generateSlug(nombre)
+                                }));
+                            }}
+                            className="bg-zinc-800 border-zinc-700 text-white"
+                            placeholder="Ej: Facebook"
+                        />
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="slug" className="text-white">
-                                Slug *
-                            </Label>
-                            <Input
-                                id="slug"
-                                value={formData.slug}
-                                onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-                                className="bg-zinc-800 border-zinc-700 text-white"
-                                placeholder="facebook"
-                                required
-                            />
-                        </div>
+                        <ZenInput
+                            id="slug"
+                            label="Slug"
+                            required
+                            value={formData.slug}
+                            onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+                            className="bg-zinc-800 border-zinc-700 text-white"
+                            placeholder="facebook"
+                        />
 
                         <div className="grid gap-2">
                             <Label htmlFor="descripcion" className="text-white">
@@ -221,14 +213,14 @@ export function PlataformaModal({ isOpen, onClose, plataforma, onSuccess }: Plat
                                     Color
                                 </Label>
                                 <div className="flex items-center space-x-2">
-                                    <Input
+                                    <ZenInput
                                         id="color"
                                         type="color"
                                         value={formData.color}
                                         onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
                                         className="w-16 h-10 bg-zinc-800 border-zinc-700"
                                     />
-                                    <Input
+                                    <ZenInput
                                         value={formData.color}
                                         onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
                                         className="bg-zinc-800 border-zinc-700 text-white"
@@ -237,47 +229,35 @@ export function PlataformaModal({ isOpen, onClose, plataforma, onSuccess }: Plat
                                 </div>
                             </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="icono" className="text-white">
-                                    Icono
-                                </Label>
-                                <Input
-                                    id="icono"
-                                    value={formData.icono}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, icono: e.target.value }))}
-                                    className="bg-zinc-800 border-zinc-700 text-white"
-                                    placeholder="facebook"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="urlBase" className="text-white">
-                                URL Base
-                            </Label>
-                            <Input
-                                id="urlBase"
-                                value={formData.urlBase}
-                                onChange={(e) => setFormData(prev => ({ ...prev, urlBase: e.target.value }))}
+                            <ZenInput
+                                id="icono"
+                                label="Icono"
+                                value={formData.icono}
+                                onChange={(e) => setFormData(prev => ({ ...prev, icono: e.target.value }))}
                                 className="bg-zinc-800 border-zinc-700 text-white"
-                                placeholder="https://facebook.com/"
+                                placeholder="facebook"
                             />
                         </div>
 
+                        <ZenInput
+                            id="urlBase"
+                            label="URL Base"
+                            value={formData.urlBase}
+                            onChange={(e) => setFormData(prev => ({ ...prev, urlBase: e.target.value }))}
+                            className="bg-zinc-800 border-zinc-700 text-white"
+                            placeholder="https://facebook.com/"
+                        />
+
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="orden" className="text-white">
-                                    Orden
-                                </Label>
-                                <Input
-                                    id="orden"
-                                    type="number"
-                                    value={formData.orden}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, orden: parseInt(e.target.value) || 1 }))}
-                                    className="bg-zinc-800 border-zinc-700 text-white"
-                                    min="1"
-                                />
-                            </div>
+                            <ZenInput
+                                id="orden"
+                                label="Orden"
+                                type="number"
+                                value={formData.orden}
+                                onChange={(e) => setFormData(prev => ({ ...prev, orden: parseInt(e.target.value) || 1 }))}
+                                className="bg-zinc-800 border-zinc-700 text-white"
+                                min="1"
+                            />
 
                             <div className="flex items-center space-x-2 pt-6">
                                 <Switch

@@ -5,6 +5,7 @@ import { usePlatformConfig } from '@/hooks/usePlatformConfig';
 import { PlatformLogo } from './PlatformLogo';
 import { ContactInfo } from './ContactInfo';
 import { SocialMediaLinks } from './SocialMediaLinks';
+import { BRANDING } from '@/config/branding';
 
 interface PlatformFooterProps {
     className?: string;
@@ -21,8 +22,8 @@ export function PlatformFooter({
 }: PlatformFooterProps) {
     const { config } = usePlatformConfig();
 
-    const currentYear = new Date().getFullYear();
-    const companyName = config?.nombre_empresa || 'ProSocial Platform';
+    const currentYear = BRANDING.copyrightYear;
+    const companyName = config?.nombre_empresa || BRANDING.fullName;
 
     return (
         <footer className={`bg-zinc-900 border-t border-zinc-800 ${className}`}>
@@ -32,7 +33,7 @@ export function PlatformFooter({
                     <div className="col-span-1 md:col-span-2">
                         <PlatformLogo showText={true} />
                         <p className="mt-4 text-sm text-zinc-400 max-w-md">
-                            {config?.meta_description || 'Plataforma SaaS multi-tenant para gestión de estudios de fotografía con sistema de leads, campañas y agentes comerciales.'}
+                            {config?.meta_description || BRANDING.tagline}
                         </p>
                         {showSocial && (
                             <div className="mt-6">

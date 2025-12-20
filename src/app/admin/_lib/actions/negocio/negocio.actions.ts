@@ -190,7 +190,7 @@ export async function obtenerRedesSociales(): Promise<NegocioRRSSData[]> {
 export async function guardarRedesSociales(redes: NegocioRRSSData[]) {
     try {
         // Obtener o crear negocio
-        let negocio = await prisma.negocio.findFirst({
+        const negocio = await prisma.negocio.findFirst({
             where: { status: 'active' }
         })
 
@@ -284,7 +284,7 @@ export async function obtenerHorarios(): Promise<NegocioHorariosData[]> {
 export async function guardarHorarios(horarios: NegocioHorariosData[]) {
     try {
         // Obtener o crear negocio
-        let negocio = await prisma.negocio.findFirst({
+        const negocio = await prisma.negocio.findFirst({
             where: { status: 'active' }
         })
 

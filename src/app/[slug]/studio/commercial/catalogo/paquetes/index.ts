@@ -1,0 +1,2 @@
+export { PaquetesTabSkeleton } from './PaquetesTabSkeleton';
+

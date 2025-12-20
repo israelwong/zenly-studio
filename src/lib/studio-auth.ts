@@ -21,13 +21,13 @@ export async function authenticateStudio(
 ): Promise<StudioAuthResult> {
     try {
         // Obtener el studio por slug
-        const studio = await prisma.projects.findUnique({
+        const studio = await prisma.studios.findUnique({
             where: { slug },
             select: {
                 id: true,
-                name: true,
+                studio_name: true,
                 slug: true,
-                active: true
+                is_active: true
             }
         });
 
@@ -39,7 +39,7 @@ export async function authenticateStudio(
             };
         }
 
-        if (!studio.active) {
+        if (!studio.is_active) {
             return {
                 studio: null,
                 error: 'Studio is inactive',
@@ -50,9 +50,9 @@ export async function authenticateStudio(
         // TODO: Verificar que el usuario autenticado tiene acceso a este studio
         // const userId = request.headers.get('x-user-id');
         // if (userId) {
-        //     const userAccess = await prisma.project_users.findFirst({
+        //     const userAccess = await prisma.studio_users.findFirst({
         //         where: {
-        //             projectId: studio.id,
+        //             studio_id: studio.id,
         //             userId: userId
         //         }
         //     });
@@ -66,7 +66,13 @@ export async function authenticateStudio(
         //     }
         // }
 
-        return { studio };
+        return {
+            studio: {
+                id: studio.id,
+                name: studio.studio_name,
+                slug: studio.slug
+            }
+        };
     } catch (error) {
         console.error('Error in studio authentication:', error);
         return {

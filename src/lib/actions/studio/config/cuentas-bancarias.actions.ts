@@ -1,179 +1,381 @@
-"use server";
+'use server';
 
-import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
-import {
-    CuentaBancariaCreateSchema,
-    CuentaBancariaUpdateSchema,
-    CuentaBancariaDeleteSchema,
-    type CuentaBancariaCreateForm,
-    type CuentaBancariaUpdateForm,
-    type CuentaBancariaDeleteForm,
-} from "@/lib/actions/schemas/cuentas-bancarias-schemas";
+import { prisma } from '@/lib/prisma';
+import { revalidatePath } from 'next/cache';
+import { CuentaBancariaSchema, CuentaBancariaUpdateSchema } from '@/lib/actions/schemas/cuentas-bancarias-schemas';
+import { CuentaBancariaData } from '@/app/studio/[slug]/configuracion/negocio/cuentas-bancarias/types';
 
-// Obtener cuentas bancarias del studio
-export async function obtenerCuentasBancariasStudio(studioSlug: string) {
-    try {
-        const studio = await prisma.projects.findUnique({
-            where: { slug: studioSlug },
-            select: { id: true },
-        });
-
-        if (!studio) {
-            throw new Error("Studio no encontrado");
-        }
-
-        const cuentas = await prisma.project_cuentas_bancarias.findMany({
-            where: { projectId: studio.id },
-            orderBy: [
-                { esPrincipal: 'desc' },
-                { createdAt: 'desc' }
-            ],
-        });
-
-        return cuentas;
-    } catch (error) {
-        console.error('Error al obtener cuentas bancarias:', error);
-        throw new Error("Error al cargar las cuentas bancarias");
-    }
+interface ActionResult<T = unknown> {
+    success: boolean;
+    data?: T;
+    error?: string | Record<string, string[]>;
+    message?: string;
 }
 
-// Obtener estadísticas de cuentas bancarias
-export async function obtenerEstadisticasCuentasBancarias(studioSlug: string) {
+// Obtener todas las cuentas bancarias de un proyecto
+export async function obtenerCuentasBancarias(studioSlug: string): Promise<ActionResult<CuentaBancariaData[]>> {
     try {
-        const studio = await prisma.projects.findUnique({
+        console.log('🔍 Buscando proyecto con slug:', studioSlug);
+
+        // Buscar el proyecto por slug
+        const proyecto = await prisma.studios.findUnique({
             where: { slug: studioSlug },
-            select: { id: true },
+            select: { id: true }
         });
 
-        if (!studio) {
-            throw new Error("Studio no encontrado");
+        console.log('📋 Proyecto encontrado:', proyecto);
+
+        if (!proyecto) {
+            console.log('❌ Proyecto no encontrado');
+            return {
+                success: false,
+                error: 'Proyecto no encontrado'
+            };
         }
 
-        const cuentas = await prisma.project_cuentas_bancarias.findMany({
-            where: { projectId: studio.id },
+        console.log('🔍 Buscando cuentas bancarias para proyecto:', proyecto.id);
+
+        const cuentas = await prisma.studio_cuentas_bancarias.findMany({
+            where: {
+                studio_id: proyecto.id,
+                activo: true
+            },
+            orderBy: {
+                createdAt: 'asc'
+            }
         });
 
-        const stats = {
-            total: cuentas.length,
-            activas: cuentas.filter(c => c.activo).length,
-            inactivas: cuentas.filter(c => !c.activo).length,
-            principales: cuentas.filter(c => c.esPrincipal).length,
-        };
+        console.log('📋 Cuentas encontradas:', cuentas.length, cuentas);
 
-        return stats;
+        const cuentasData: CuentaBancariaData[] = cuentas.map(cuenta => ({
+            id: cuenta.id,
+            banco: cuenta.banco,
+            numeroCuenta: cuenta.numeroCuenta,
+            titular: cuenta.titular,
+            activo: cuenta.activo,
+            createdAt: cuenta.createdAt,
+            updatedAt: cuenta.updatedAt
+        }));
+
+        console.log('✅ Cuentas procesadas:', cuentasData.length);
+
+        return {
+            success: true,
+            data: cuentasData
+        };
     } catch (error) {
-        console.error('Error al obtener estadísticas:', error);
-        throw new Error("Error al cargar las estadísticas");
+        console.error('❌ Error al obtener cuentas bancarias:', error);
+        console.error('❌ Error details:', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+            name: error instanceof Error ? error.name : undefined
+        });
+        return {
+            success: false,
+            error: 'Error interno del servidor'
+        };
     }
 }
 
 // Crear nueva cuenta bancaria
 export async function crearCuentaBancaria(
     studioSlug: string,
-    data: CuentaBancariaCreateForm
-) {
+    data: Record<string, unknown>
+): Promise<ActionResult<CuentaBancariaData>> {
     try {
-        const studio = await prisma.projects.findUnique({
+        // Validar datos
+        const validatedData = CuentaBancariaSchema.parse(data);
+
+        // Buscar el proyecto por slug
+        const proyecto = await prisma.studios.findUnique({
             where: { slug: studioSlug },
-            select: { id: true },
+            select: { id: true }
         });
 
-        if (!studio) {
-            throw new Error("Studio no encontrado");
+        if (!proyecto) {
+            return {
+                success: false,
+                error: 'Proyecto no encontrado'
+            };
         }
 
-        const validatedData = CuentaBancariaCreateSchema.parse(data);
+        // Verificar que la CLABE no esté duplicada
+        const cuentaExistente = await prisma.studio_cuentas_bancarias.findFirst({
+            where: {
+                studio_id: proyecto.id,
+                numeroCuenta: validatedData.numeroCuenta,
+                activo: true
+            }
+        });
 
-        // Si se marca como principal, desmarcar las demás
-        if (validatedData.esPrincipal) {
-            await prisma.project_cuentas_bancarias.updateMany({
-                where: { projectId: studio.id },
-                data: { esPrincipal: false },
-            });
+        if (cuentaExistente) {
+            return {
+                success: false,
+                error: 'Ya existe una cuenta bancaria con esta CLABE'
+            };
         }
 
-        const nuevaCuenta = await prisma.project_cuentas_bancarias.create({
+        // Crear la cuenta bancaria
+        const nuevaCuenta = await prisma.studio_cuentas_bancarias.create({
             data: {
-                projectId: studio.id,
-                ...validatedData,
-            },
+                studio_id: proyecto.id,
+                banco: validatedData.banco,
+                numeroCuenta: validatedData.numeroCuenta,
+                tipoCuenta: 'corriente', // Valor por defecto
+                titular: validatedData.titular,
+                activo: validatedData.activo,
+                esPrincipal: false // No permitir cuenta principal en versión simple
+            }
         });
 
-        revalidatePath(`/studio/${studioSlug}/configuracion/negocio/cuentas-bancarias`);
-        return nuevaCuenta;
-    } catch (error) {
+        const cuentaData: CuentaBancariaData = {
+            id: nuevaCuenta.id,
+            banco: nuevaCuenta.banco,
+            numeroCuenta: nuevaCuenta.numeroCuenta,
+            titular: nuevaCuenta.titular,
+            activo: nuevaCuenta.activo,
+            createdAt: nuevaCuenta.createdAt,
+            updatedAt: nuevaCuenta.updatedAt
+        };
+
+        revalidatePath(`/${studioSlug}/studio/configuracion/negocio/cuentas-bancarias`);
+
+        return {
+            success: true,
+            data: cuentaData,
+            message: 'Cuenta bancaria creada exitosamente'
+        };
+    } catch (error: unknown) {
         console.error('Error al crear cuenta bancaria:', error);
-        throw new Error("Error al crear la cuenta bancaria");
+
+        if (error instanceof Error && error.name === 'ZodError') {
+            const zodError = error as unknown as { errors: Array<{ path: string[]; message: string }> };
+            return {
+                success: false,
+                error: zodError.errors.reduce((acc: Record<string, string[]>, err) => {
+                    acc[err.path[0]] = [err.message];
+                    return acc;
+                }, {})
+            };
+        }
+
+        return {
+            success: false,
+            error: 'Error interno del servidor'
+        };
     }
 }
 
-// Actualizar cuenta bancaria existente
+// Actualizar cuenta bancaria
 export async function actualizarCuentaBancaria(
+    studioSlug: string,
     cuentaId: string,
-    data: CuentaBancariaUpdateForm
-) {
+    data: Record<string, unknown>
+): Promise<ActionResult<CuentaBancariaData>> {
     try {
-        const validatedData = CuentaBancariaUpdateSchema.parse(data);
+        // Validar datos
+        const validatedData = CuentaBancariaUpdateSchema.parse({ ...data, id: cuentaId });
 
-        // Si se marca como principal, desmarcar las demás
-        if (validatedData.esPrincipal) {
-            const cuenta = await prisma.project_cuentas_bancarias.findUnique({
-                where: { id: cuentaId },
-                select: { projectId: true },
+        // Buscar el proyecto por slug
+        const proyecto = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
+        });
+
+        if (!proyecto) {
+            return {
+                success: false,
+                error: 'Proyecto no encontrado'
+            };
+        }
+
+        // Verificar que la cuenta existe y pertenece al proyecto
+        const cuentaExistente = await prisma.studio_cuentas_bancarias.findFirst({
+            where: {
+                id: cuentaId,
+                studio_id: proyecto.id
+            }
+        });
+
+        if (!cuentaExistente) {
+            return {
+                success: false,
+                error: 'Cuenta bancaria no encontrada'
+            };
+        }
+
+        // Verificar que la CLABE no esté duplicada (excluyendo la cuenta actual)
+        if (validatedData.numeroCuenta && validatedData.numeroCuenta !== cuentaExistente.numeroCuenta) {
+            const clabeDuplicada = await prisma.studio_cuentas_bancarias.findFirst({
+                where: {
+                    studio_id: proyecto.id,
+                    numeroCuenta: validatedData.numeroCuenta,
+                    activo: true,
+                    id: { not: cuentaId }
+                }
             });
 
-            if (cuenta) {
-                await prisma.project_cuentas_bancarias.updateMany({
-                    where: { projectId: cuenta.projectId },
-                    data: { esPrincipal: false },
-                });
+            if (clabeDuplicada) {
+                return {
+                    success: false,
+                    error: 'Ya existe una cuenta bancaria con esta CLABE'
+                };
             }
         }
 
-        const cuentaActualizada = await prisma.project_cuentas_bancarias.update({
+        // No permitir cuenta principal en versión simple
+
+        // Actualizar la cuenta bancaria
+        const cuentaActualizada = await prisma.studio_cuentas_bancarias.update({
             where: { id: cuentaId },
-            data: validatedData,
+            data: {
+                banco: validatedData.banco,
+                numeroCuenta: validatedData.numeroCuenta,
+                tipoCuenta: 'corriente', // Mantener valor por defecto
+                titular: validatedData.titular,
+                activo: validatedData.activo,
+                esPrincipal: false // No permitir cuenta principal en versión simple
+            }
         });
 
-        revalidatePath(`/studio/[slug]/configuracion/negocio/cuentas-bancarias`);
-        return cuentaActualizada;
-    } catch (error) {
+        const cuentaData: CuentaBancariaData = {
+            id: cuentaActualizada.id,
+            banco: cuentaActualizada.banco,
+            numeroCuenta: cuentaActualizada.numeroCuenta,
+            titular: cuentaActualizada.titular,
+            activo: cuentaActualizada.activo,
+            createdAt: cuentaActualizada.createdAt,
+            updatedAt: cuentaActualizada.updatedAt
+        };
+
+        revalidatePath(`/${studioSlug}/studio/configuracion/negocio/cuentas-bancarias`);
+
+        return {
+            success: true,
+            data: cuentaData,
+            message: 'Cuenta bancaria actualizada exitosamente'
+        };
+    } catch (error: unknown) {
         console.error('Error al actualizar cuenta bancaria:', error);
-        throw new Error("Error al actualizar la cuenta bancaria");
+
+        if (error instanceof Error && error.name === 'ZodError') {
+            const zodError = error as unknown as { errors: Array<{ path: string[]; message: string }> };
+            return {
+                success: false,
+                error: zodError.errors.reduce((acc: Record<string, string[]>, err) => {
+                    acc[err.path[0]] = [err.message];
+                    return acc;
+                }, {})
+            };
+        }
+
+        return {
+            success: false,
+            error: 'Error interno del servidor'
+        };
     }
 }
 
-// Eliminar cuenta bancaria
-export async function eliminarCuentaBancaria(cuentaId: string) {
+// Eliminar cuenta bancaria (soft delete)
+export async function eliminarCuentaBancaria(
+    studioSlug: string,
+    cuentaId: string
+): Promise<ActionResult> {
     try {
-        await prisma.project_cuentas_bancarias.delete({
-            where: { id: cuentaId },
+        // Buscar el proyecto por slug
+        const proyecto = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
         });
 
-        revalidatePath(`/studio/[slug]/configuracion/negocio/cuentas-bancarias`);
-        return { success: true };
+        if (!proyecto) {
+            return {
+                success: false,
+                error: 'Proyecto no encontrado'
+            };
+        }
+
+        // Verificar que la cuenta existe y pertenece al proyecto
+        const cuentaExistente = await prisma.studio_cuentas_bancarias.findFirst({
+            where: {
+                id: cuentaId,
+                studio_id: proyecto.id
+            }
+        });
+
+        if (!cuentaExistente) {
+            return {
+                success: false,
+                error: 'Cuenta bancaria no encontrada'
+            };
+        }
+
+        // Soft delete - marcar como inactiva
+        await prisma.studio_cuentas_bancarias.update({
+            where: { id: cuentaId },
+            data: {
+                activo: false,
+                esPrincipal: false // También quitar como principal
+            }
+        });
+
+        revalidatePath(`/${studioSlug}/studio/configuracion/negocio/cuentas-bancarias`);
+
+        return {
+            success: true
+        };
     } catch (error) {
         console.error('Error al eliminar cuenta bancaria:', error);
-        throw new Error("Error al eliminar la cuenta bancaria");
+        return {
+            success: false,
+            error: 'Error interno del servidor'
+        };
     }
 }
 
-// Toggle estado activo/inactivo
-export async function toggleCuentaBancariaEstado(
-    cuentaId: string,
-    data: { id: string; activo: boolean }
-) {
+
+// Actualizar orden de cuentas bancarias
+export async function actualizarOrdenCuentasBancarias(
+    studioSlug: string,
+    nuevoOrden: { id: string; orden: number }[]
+): Promise<ActionResult> {
     try {
-        const cuentaActualizada = await prisma.project_cuentas_bancarias.update({
-            where: { id: cuentaId },
-            data: { activo: data.activo },
+        // Buscar el proyecto por slug
+        const proyecto = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true }
         });
 
-        revalidatePath(`/studio/[slug]/configuracion/negocio/cuentas-bancarias`);
-        return cuentaActualizada;
+        if (!proyecto) {
+            return {
+                success: false,
+                error: 'Proyecto no encontrado'
+            };
+        }
+
+        // Actualizar el orden de cada cuenta
+        for (const { id } of nuevoOrden) {
+            await prisma.studio_cuentas_bancarias.updateMany({
+                where: {
+                    id,
+                    studio_id: proyecto.id
+                },
+                data: {
+                    // No hay campo orden en el schema actual, pero mantenemos la función para compatibilidad
+                }
+            });
+        }
+
+        revalidatePath(`/${studioSlug}/studio/configuracion/negocio/cuentas-bancarias`);
+
+        return {
+            success: true
+        };
     } catch (error) {
-        console.error('Error al cambiar estado de cuenta bancaria:', error);
-        throw new Error("Error al cambiar el estado de la cuenta bancaria");
+        console.error('Error al actualizar orden de cuentas:', error);
+        return {
+            success: false,
+            error: 'Error interno del servidor'
+        };
     }
 }

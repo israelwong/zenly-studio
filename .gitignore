@@ -47,7 +47,14 @@ src/hooks/legacy/
 src/lib/legacy/
 src/app/legacy/
 legacy-temp/
+legacy-migrated/
 COMPONENTES_A_COPIAR.md
 
 # documentation (local development)
 docs/
+
+# migration work
+migrate/
+
+# docs folder
+/docs

@@ -1,0 +1,3024 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model platform_config {
+  id                    String   @id @default(cuid())
+  logo_url              String?
+  favicon_url           String?
+  comercial_email       String?
+  comercial_whatsapp    String?
+  soporte_email         String?
+  soporte_chat_url      String?
+  timezone              String   @default("America/Mexico_City")
+  facebook_url          String?
+  instagram_url         String?
+  twitter_url           String?
+  linkedin_url          String?
+  terminos_condiciones  String?
+  politica_privacidad   String?
+  aviso_legal           String?
+  meta_description      String?
+  meta_keywords         String?
+  google_analytics_id   String?
+  google_tag_manager_id String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  address               String?
+  business_hours        String?
+  commercial_phone      String?
+  company_name          String
+  support_phone         String?
+}
+
+model platform_modules {
+  id                 String               @id @default(cuid())
+  slug               String               @unique
+  name               String
+  description        String?
+  category           ModuleCategory
+  base_price         Decimal?
+  billing_type       String               @default("MONTHLY")
+  is_active          Boolean              @default(true)
+  version            String               @default("1.0.0")
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
+  studio_modules     studio_modules[]
+  subscription_items subscription_items[]
+
+  @@index([category, is_active])
+}
+
+model platform_services {
+  id            String             @id @default(cuid())
+  name          String             @unique
+  slug          String             @unique
+  description   String?
+  active        Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  categoryId    String
+  position      Int                @default(0)
+  plan_services plan_services[]
+  category      service_categories @relation(fields: [categoryId], references: [id])
+
+  @@index([active, position])
+  @@index([categoryId])
+}
+
+model service_categories {
+  id          String              @id @default(cuid())
+  name        String              @unique
+  description String
+  icon        String
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  position    Int                 @default(0)
+  services    platform_services[]
+
+  @@index([active, position])
+}
+
+model users {
+  id                String                  @id @default(cuid())
+  supabase_id       String                  @unique
+  email             String                  @unique
+  full_name         String?
+  avatar_url        String?
+  phone             String?
+  is_active         Boolean                 @default(true)
+  email_verified    Boolean                 @default(false)
+  created_at        DateTime                @default(now())
+  updated_at        DateTime                @updatedAt
+  access_logs       user_access_logs[]
+  platform_roles    user_platform_roles[]
+  security_settings user_security_settings?
+  studio_roles      user_studio_roles[]
+
+  @@index([email])
+  @@index([supabase_id])
+  @@index([is_active])
+}
+
+model user_platform_roles {
+  id         String       @id @default(cuid())
+  user_id    String
+  role       PlatformRole
+  is_active  Boolean      @default(true)
+  granted_at DateTime     @default(now())
+  granted_by String?
+  revoked_at DateTime?
+  user       users        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, role])
+  @@index([user_id, is_active])
+  @@index([role, is_active])
+}
+
+model user_studio_roles {
+  id                    String                       @id @default(cuid())
+  user_id               String
+  studio_id             String
+  role                  StudioRole
+  permissions           Json?
+  is_active             Boolean                      @default(true)
+  invited_at            DateTime                     @default(now())
+  invited_by            String?
+  accepted_at           DateTime?
+  revoked_at            DateTime?
+  assigned_tasks_gantt  studio_gantt_event_tasks[]   @relation("TaskAssignedTo")
+  completed_tasks_gantt studio_gantt_event_tasks[]   @relation("TaskCompletedBy")
+  gantt_task_activities studio_gantt_task_activity[]
+  event_tasks           studio_event_tasks[]
+  event_timeline        studio_event_timeline[]
+  managed_events        studio_events[]              @relation("EventProjectManager")
+  crew_member_as_role   studio_crew_members?         @relation
+  lead_activities       marketing_lead_activities[]
+  lead_notes            marketing_lead_notes[]
+  assigned_leads        marketing_leads[]
+  studio                studios                      @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  user                  users                        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, studio_id, role])
+  @@index([user_id, is_active])
+  @@index([studio_id, is_active])
+  @@index([role, is_active])
+  @@index([user_id, studio_id, is_active])
+}
+
+model studio_role_permissions {
+  id          String     @id @default(cuid())
+  studio_id   String
+  role        StudioRole
+  module_slug String
+  permissions Json
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  studio      studios    @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, role, module_slug])
+  @@index([studio_id, role])
+}
+
+model platform_leads {
+  id                            String                          @id @default(cuid())
+  name                          String
+  email                         String                          @unique
+  phone                         String
+  score                         Int?
+  priority                      String                          @default("medium")
+  utm_campaign                  String?
+  utm_medium                    String?
+  utm_source                    String?
+  acquisition_channel_id        String?
+  agent_conversion_id           String?
+  agent_id                      String?
+  avatar_url                    String?
+  campaign_id                   String?
+  conversion_date               DateTime?
+  conversion_method             String?
+  created_at                    DateTime                        @default(now())
+  first_interaction_date        DateTime?
+  interaction_count             Int?                            @default(0)
+  interested_plan               String?
+  last_contact_date             DateTime?
+  lead_type                     String?                         @default("prospect")
+  original_source               String?
+  probable_start_date           DateTime?
+  stage_id                      String?
+  studio_id                     String?                         @unique
+  studio_name                   String?
+  studio_slug                   String?
+  updated_at                    DateTime                        @updatedAt
+  platform_activities           platform_activities[]
+  agent_discount_codes          platform_agent_discount_codes[]
+  discount_usage                platform_discount_usage[]
+  platform_lead_bitacora        platform_lead_bitacora[]
+  platform_acquisition_channels platform_acquisition_channels?  @relation(fields: [acquisition_channel_id], references: [id])
+  platform_agents               platform_agents?                @relation(fields: [agent_id], references: [id])
+  platform_campaigns            platform_campaigns?             @relation(fields: [campaign_id], references: [id])
+  platform_pipeline_stages      platform_pipeline_stages?       @relation(fields: [stage_id], references: [id])
+  studio                        studios?                        @relation(fields: [studio_id], references: [id])
+  platform_notifications        platform_notifications[]
+  studio_notifications          studio_notifications[]
+
+  @@index([agent_id])
+  @@index([campaign_id])
+  @@index([acquisition_channel_id])
+  @@index([stage_id, priority])
+}
+
+model platform_pipeline_stages {
+  id               String                   @id @default(cuid())
+  color            String                   @default("#3B82F6")
+  pipeline_type_id String?
+  created_at       DateTime                 @default(now())
+  is_active        Boolean                  @default(true)
+  updated_at       DateTime                 @updatedAt
+  description      String?
+  name             String
+  order            Int                      @default(0)
+  platform_leads   platform_leads[]
+  pipeline_type    platform_pipeline_types? @relation(fields: [pipeline_type_id], references: [id])
+
+  @@index([is_active])
+  @@index([order])
+  @@index([pipeline_type_id])
+}
+
+model platform_pipeline_types {
+  id              String                     @id @default(cuid())
+  color           String                     @default("#3B82F6")
+  created_at      DateTime                   @default(now())
+  updated_at      DateTime                   @updatedAt
+  active          Boolean                    @default(true)
+  description     String?
+  name            String                     @unique
+  order           Int                        @default(0)
+  pipeline_stages platform_pipeline_stages[]
+
+  @@index([active])
+  @@index([order])
+}
+
+model platform_activities {
+  id               String                @id @default(cuid())
+  created_at       DateTime              @default(now())
+  lead_id          String
+  user_id          String?
+  description      String
+  next_action      String?
+  next_action_date DateTime?
+  result           String?
+  type             String
+  platform_leads   platform_leads        @relation(fields: [lead_id], references: [id])
+  user_profiles    studio_user_profiles? @relation(fields: [user_id], references: [id])
+
+  @@index([lead_id, created_at])
+  @@index([user_id, created_at])
+}
+
+model platform_lead_bitacora {
+  id             String                   @id @default(cuid())
+  tipo           PlatformLeadBitacoraTipo
+  titulo         String?
+  metadata       Json?
+  created_at     DateTime                 @default(now())
+  lead_id        String
+  updated_at     DateTime                 @updatedAt
+  usuario_id     String?
+  description    String
+  platform_leads platform_leads           @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  user_profiles  studio_user_profiles?    @relation(fields: [usuario_id], references: [id])
+
+  @@index([created_at])
+  @@index([lead_id])
+  @@index([tipo])
+}
+
+model platform_agents {
+  id                     String                          @id @default(cuid())
+  email                  String                          @unique
+  created_at             DateTime                        @default(now())
+  updated_at             DateTime                        @updatedAt
+  active                 Boolean                         @default(true)
+  conversion_commission  Decimal                         @default(0.05)
+  monthly_leads_goal     Int                             @default(20)
+  name                   String
+  phone                  String
+  agent_discount_codes   platform_agent_discount_codes[]
+  platform_leads         platform_leads[]
+  platform_notifications platform_notifications[]
+  studio_notifications   studio_notifications[]
+
+  @@index([active])
+}
+
+model platform_acquisition_channels {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  description     String?
+  color           String?
+  icon            String?
+  order           Int               @default(0)
+  created_at      DateTime          @default(now())
+  is_active       Boolean           @default(true)
+  is_visible      Boolean           @default(true)
+  updated_at      DateTime          @updatedAt
+  platform_leads  platform_leads[]
+  studio_contacts studio_contacts[]
+
+  @@index([is_active])
+  @@index([is_visible])
+}
+
+model platform_campaigns {
+  id                          String                        @id @default(cuid())
+  name                        String
+  description                 String?
+  status                      String                        @default("planned")
+  studio_id                   String?
+  actual_spend                Decimal                       @default(0)
+  created_at                  DateTime                      @default(now())
+  end_date                    DateTime
+  is_active                   Boolean                       @default(true)
+  leads_generated             Int                           @default(0)
+  leads_subscribed            Int                           @default(0)
+  start_date                  DateTime
+  total_budget                Decimal
+  updated_at                  DateTime                      @updatedAt
+  platform_campaign_platforms platform_campaign_platforms[]
+  studio                      studios?                      @relation(fields: [studio_id], references: [id])
+  platform_leads              platform_leads[]
+
+  @@index([start_date, end_date])
+  @@index([is_active])
+  @@index([status])
+  @@index([studio_id])
+}
+
+model platform_advertising_platforms {
+  id                          String                        @id @default(cuid())
+  name                        String                        @unique
+  description                 String?
+  type                        String
+  color                       String?
+  icon                        String?
+  order                       Int                           @default(0)
+  created_at                  DateTime                      @default(now())
+  is_active                   Boolean                       @default(true)
+  updated_at                  DateTime                      @updatedAt
+  platform_campaign_platforms platform_campaign_platforms[]
+
+  @@index([is_active])
+  @@index([type])
+}
+
+model platform_campaign_platforms {
+  id                             String                         @id @default(cuid())
+  budget                         Decimal
+  leads                          Int                            @default(0)
+  conversions                    Int                            @default(0)
+  actual_spend                   Decimal                        @default(0)
+  campaign_id                    String
+  created_at                     DateTime                       @default(now())
+  platform_id                    String
+  updated_at                     DateTime                       @updatedAt
+  platform_campaigns             platform_campaigns             @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  platform_advertising_platforms platform_advertising_platforms @relation(fields: [platform_id], references: [id])
+
+  @@unique([campaign_id, platform_id])
+  @@index([campaign_id])
+  @@index([platform_id])
+}
+
+model platform_notifications {
+  id              String               @id @default(cuid())
+  metadata        Json?
+  priority        String               @default("medium")
+  agent_id        String?
+  created_at      DateTime             @default(now())
+  expires_at      DateTime?
+  is_active       Boolean              @default(true)
+  is_read         Boolean              @default(false)
+  lead_id         String?
+  scheduled_for   DateTime?
+  updated_at      DateTime             @updatedAt
+  user_id         String
+  category        String               @default("general")
+  message         String
+  title           String
+  type            String               @default("info")
+  platform_agents platform_agents?     @relation(fields: [agent_id], references: [id])
+  platform_leads  platform_leads?      @relation(fields: [lead_id], references: [id])
+  user_profiles   studio_user_profiles @relation(fields: [user_id], references: [id])
+
+  @@index([created_at])
+  @@index([scheduled_for])
+  @@index([type, category])
+  @@index([user_id, is_active])
+  @@index([user_id, is_read])
+}
+
+model platform_social_networks {
+  id                      String                   @id @default(cuid())
+  name                    String                   @unique
+  slug                    String                   @unique
+  description             String?
+  color                   String?
+  icon                    String?
+  order                   Int                      @default(0)
+  base_url                String?
+  created_at              DateTime                 @default(now())
+  is_active               Boolean                  @default(true)
+  updated_at              DateTime                 @updatedAt
+  studio_social_networks  studio_social_networks[]
+  contact_social_networks studio_contacts[]        @relation("ContactSocialNetwork")
+
+  @@index([is_active])
+  @@index([order])
+}
+
+model platform_plans {
+  id                 String               @id @default(cuid())
+  name               String
+  slug               String               @unique
+  features           Json?
+  popular            Boolean              @default(false)
+  active             Boolean              @default(true)
+  description        String?
+  price_monthly      Decimal?
+  price_yearly       Decimal?
+  stripe_price_id    String?              @unique
+  stripe_product_id  String?
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
+  order              Int                  @default(0)
+  plan_limits        plan_limits[]
+  plan_services      plan_services[]
+  studios            studios[]
+  subscription_items subscription_items[]
+  subscriptions      subscriptions[]
+
+  @@index([active, order])
+  @@index([stripe_price_id])
+}
+
+model plan_limits {
+  id          String         @id @default(cuid())
+  plan_id     String
+  limit_type  PlanLimitType
+  limit_value Int
+  unit        String?
+  plan        platform_plans @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+
+  @@unique([plan_id, limit_type])
+  @@index([plan_id])
+}
+
+model plan_services {
+  id         String            @id @default(cuid())
+  plan_id    String
+  service_id String
+  active     Boolean           @default(false)
+  limite     Int?
+  unidad     UnidadMedida?
+  created_at DateTime          @default(now())
+  updated_at DateTime          @updatedAt
+  plan       platform_plans    @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  service    platform_services @relation(fields: [service_id], references: [id], onDelete: Cascade)
+
+  @@unique([plan_id, service_id])
+  @@index([plan_id])
+  @@index([service_id])
+}
+
+model subscriptions {
+  id                     String                          @id @default(cuid())
+  studio_id              String
+  stripe_subscription_id String                          @unique
+  stripe_customer_id     String
+  plan_id                String
+  status                 SubscriptionStatus
+  current_period_start   DateTime
+  current_period_end     DateTime
+  billing_cycle_anchor   DateTime
+  created_at             DateTime                        @default(now())
+  updated_at             DateTime                        @updatedAt
+  agent_discount_codes   platform_agent_discount_codes[]
+  billing_cycles         platform_billing_cycles[]
+  discount_usage         platform_discount_usage[]
+  changes                subscription_changes[]
+  items                  subscription_items[]
+  plans                  platform_plans                  @relation(fields: [plan_id], references: [id])
+  studio                 studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([stripe_subscription_id])
+  @@index([studio_id])
+}
+
+model subscription_items {
+  id               String               @id @default(cuid())
+  subscription_id  String
+  item_type        SubscriptionItemType
+  plan_id          String?
+  module_id        String?
+  overage_type     String?
+  overage_quantity Int?
+  unit_price       Decimal
+  quantity         Int                  @default(1)
+  subtotal         Decimal
+  stripe_item_id   String?              @unique
+  description      String?
+  activated_at     DateTime             @default(now())
+  deactivated_at   DateTime?
+  module           platform_modules?    @relation(fields: [module_id], references: [id])
+  plan             platform_plans?      @relation(fields: [plan_id], references: [id])
+  subscription     subscriptions        @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+
+  @@index([subscription_id])
+  @@index([item_type])
+  @@index([plan_id])
+  @@index([module_id])
+  @@index([subscription_id, deactivated_at])
+}
+
+model subscription_changes {
+  id               String                 @id @default(cuid())
+  subscription_id  String
+  change_type      SubscriptionChangeType
+  old_plan_id      String?
+  new_plan_id      String?
+  module_id        String?
+  module_action    String?
+  old_mrr          Decimal?
+  new_mrr          Decimal?
+  mrr_delta        Decimal?
+  reason           String?
+  triggered_by     String?
+  proration_amount Decimal?
+  changed_at       DateTime               @default(now())
+  effective_date   DateTime
+  subscription     subscriptions          @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+
+  @@index([subscription_id, changed_at])
+  @@index([change_type])
+  @@index([effective_date])
+}
+
+model usage_tracking {
+  id                   String   @id @default(cuid())
+  studio_id            String
+  period_start         DateTime
+  period_end           DateTime
+  events_created       Int      @default(0)
+  storage_used_gb      Float    @default(0)
+  team_members_active  Int      @default(0)
+  portfolios_created   Int      @default(0)
+  lead_forms_submitted Int      @default(0)
+  events_overage       Int      @default(0)
+  storage_overage_gb   Float    @default(0)
+  overage_charges      Decimal  @default(0)
+  calculated_at        DateTime @default(now())
+  studio               studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, period_start])
+  @@index([studio_id, period_start])
+  @@index([period_start, period_end])
+}
+
+model mrr_snapshots {
+  id                     String   @id @default(cuid())
+  snapshot_date          DateTime @unique
+  total_mrr              Decimal
+  plan_mrr               Decimal
+  addon_mrr              Decimal
+  overage_mrr            Decimal
+  basic_count            Int
+  basic_mrr              Decimal
+  pro_count              Int
+  pro_mrr                Decimal
+  enterprise_count       Int
+  enterprise_mrr         Decimal
+  payment_addon_count    Int
+  payment_addon_mrr      Decimal
+  cloud_addon_count      Int
+  cloud_addon_mrr        Decimal
+  invitation_addon_count Int
+  invitation_addon_mrr   Decimal
+  pages_addon_count      Int
+  pages_addon_mrr        Decimal
+  new_mrr                Decimal
+  expansion_mrr          Decimal
+  contraction_mrr        Decimal
+  churn_mrr              Decimal
+  total_active_studios   Int
+  new_studios            Int
+  churned_studios        Int
+  calculated_at          DateTime @default(now())
+
+  @@index([snapshot_date])
+}
+
+model platform_billing_cycles {
+  id                String        @id @default(cuid())
+  subscription_id   String
+  period_start      DateTime
+  period_end        DateTime
+  amount            Decimal
+  status            String
+  stripe_invoice_id String?
+  created_at        DateTime      @default(now())
+  subscriptions     subscriptions @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+
+  @@index([period_start, period_end])
+  @@index([status])
+  @@index([subscription_id])
+}
+
+model platform_discount_codes {
+  id               String                    @id @default(cuid())
+  stripe_coupon_id String?                   @unique
+  created_at       DateTime                  @default(now())
+  updated_at       DateTime                  @updatedAt
+  active           Boolean                   @default(true)
+  application_type String
+  code             String                    @unique
+  current_usage    Int                       @default(0)
+  description      String?
+  discount_type    String
+  discount_value   Decimal
+  end_date         DateTime
+  max_usage        Int?
+  name             String
+  start_date       DateTime
+  discount_usage   platform_discount_usage[]
+
+  @@index([active])
+  @@index([start_date, end_date])
+  @@index([stripe_coupon_id])
+}
+
+model platform_discount_usage {
+  id               String                  @id @default(cuid())
+  discount_code_id String
+  lead_id          String?
+  subscription_id  String?
+  discount_amount  Decimal
+  usage_date       DateTime                @default(now())
+  discount_code    platform_discount_codes @relation(fields: [discount_code_id], references: [id])
+  lead             platform_leads?         @relation(fields: [lead_id], references: [id])
+  subscription     subscriptions?          @relation(fields: [subscription_id], references: [id])
+
+  @@index([discount_code_id])
+  @@index([lead_id])
+  @@index([subscription_id])
+  @@index([usage_date])
+}
+
+model platform_agent_discount_codes {
+  id                String          @id @default(cuid())
+  lead_id           String
+  stripe_coupon_id  String?         @unique
+  subscription_id   String?
+  active            Boolean         @default(true)
+  agent_id          String
+  base_code         String
+  complete_code     String          @unique
+  creation_date     DateTime        @default(now())
+  discount_duration String
+  discount_type     String
+  discount_value    Decimal
+  expiration_date   DateTime
+  usage_date        DateTime?
+  used              Boolean         @default(false)
+  agent             platform_agents @relation(fields: [agent_id], references: [id])
+  lead              platform_leads  @relation(fields: [lead_id], references: [id])
+  subscription      subscriptions?  @relation(fields: [subscription_id], references: [id])
+
+  @@index([lead_id])
+  @@index([agent_id])
+  @@index([complete_code])
+  @@index([used])
+  @@index([expiration_date])
+}
+
+model studios {
+  id                         String                           @id @default(cuid())
+  studio_name                String
+  slug                       String                           @unique
+  email                      String                           @unique
+  address                    String?
+  website                    String?
+  logo_url                   String?
+  plan_id                    String?
+  subscription_status        SubscriptionStatus               @default(TRIAL)
+  subscription_start         DateTime?
+  subscription_end           DateTime?
+  stripe_customer_id         String?                          @unique
+  stripe_subscription_id     String?                          @unique
+  stripe_account_id          String?                          @unique
+  stripe_onboarding_complete Boolean                          @default(false)
+  commission_rate            Decimal                          @default(0.30)
+  is_active                  Boolean                          @default(true)
+  created_at                 DateTime                         @default(now())
+  updated_at                 DateTime                         @updatedAt
+  isotipo_url                String?
+  slogan                     String?
+  account_holder             String?
+  account_number             String?
+  bank_name                  String?
+  clabe_number               String?
+  presentation               String?
+  keywords                   String?
+  latitude                   Float?
+  longitude                  Float?
+  maps_url                   String?
+  place_id                   String?
+  gantt_templates            studio_gantt_templates[]
+  manager_pipeline_stages    studio_manager_pipeline_stages[]
+  marketing_leads            marketing_leads[]
+  marketing_pipeline_stages  marketing_pipeline_stages[]
+  platform_campaigns         platform_campaigns[]
+  platform_leads             platform_leads?
+  platform_user_profiles     platform_user_profiles[]
+  agenda                     studio_agenda[]
+  business_hours             studio_business_hours[]
+  crew_categories            studio_crew_categories[]
+  category_media             studio_category_media[]          @relation("category_media")
+  client_portal_access       studio_client_portal_access[]
+  events_stages              studio_events_stage[]
+  clientes                   studio_clientes[]
+  contacts                   studio_contacts[]
+  promise_pipeline_stages    studio_promise_pipeline_stages[]
+  promise_tags               studio_promise_tags[]
+  condiciones_comerciales    studio_condiciones_comerciales[]
+  configuraciones            studio_configuraciones[]
+  cotizaciones               studio_cotizaciones[]
+  event_types                studio_event_types[]
+  eventos                    studio_events[]
+  promises                   studio_promises[]
+  studio_notifications       studio_notifications[]
+  faq                        studio_faq[]
+  gastos                     studio_gastos[]
+  item_media                 studio_item_media[]              @relation("item_media")
+  items                      studio_items[]
+  lead_forms                 studio_lead_forms[]
+  metodos_pago               studio_metodos_pago[]
+  studio_modules             studio_modules[]
+  nominas                    studio_nominas[]
+  paquetes                   studio_paquetes[]
+  crew_members               studio_crew_members[]
+  crew_profiles              studio_crew_profiles[]
+  phones                     studio_phones[]
+  portfolio_media            studio_portfolio_media[]         @relation("portfolio_media")
+  portfolios                 studio_portfolios[]
+  post_media                 studio_post_media[]              @relation("post_media")
+  posts                      studio_posts[]
+  revenue_transactions       studio_revenue_transactions[]
+  studio_role_permissions    studio_role_permissions[]
+  scheduling_rules           studio_scheduling_rules[]
+  section_media              studio_section_media[]           @relation("section_media")
+  setup_status               studio_setup_status?
+  social_networks            studio_social_networks[]
+  storage_log                studio_storage_log[]
+  storage_usage              studio_storage_usage?
+  studio_revenue_products    studio_studio_revenue_products[]
+  terminos_condiciones       studio_terminos_condiciones[]
+  user_profiles              studio_user_profiles[]
+  studio_users               studio_users[]
+  zonas_trabajo              studio_zonas_trabajo[]
+  plan                       platform_plans?                  @relation(fields: [plan_id], references: [id])
+  subscriptions              subscriptions[]
+  usage_tracking             usage_tracking[]
+  user_studio_roles          user_studio_roles[]
+
+  @@index([plan_id])
+  @@index([slug])
+  @@index([is_active])
+  @@index([subscription_status])
+}
+
+model studio_modules {
+  id             String           @id @default(cuid())
+  studio_id      String
+  module_id      String
+  is_active      Boolean          @default(false)
+  activated_at   DateTime?
+  deactivated_at DateTime?
+  config_data    Json?
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+  module         platform_modules @relation(fields: [module_id], references: [id])
+  studio         studios          @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, module_id])
+  @@index([studio_id, is_active])
+  @@index([module_id, is_active])
+}
+
+//! PROFILE
+
+model studio_phones {
+  id         String   @id @default(cuid())
+  studio_id  String
+  number     String
+  type       String
+  is_active  Boolean  @default(true)
+  order      Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  label      String?
+  studio     studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id])
+  @@index([studio_id, is_active])
+  @@index([studio_id, type])
+}
+
+model studio_business_hours {
+  id          String   @id @default(cuid())
+  studio_id   String
+  day_of_week String
+  start_time  String
+  end_time    String
+  is_active   Boolean  @default(true)
+  order       Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  studio      studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, day_of_week])
+  @@index([studio_id])
+  @@index([studio_id, day_of_week])
+}
+
+model studio_social_networks {
+  id          String                    @id @default(cuid())
+  studio_id   String
+  platform_id String?
+  url         String
+  is_active   Boolean                   @default(true)
+  order       Int                       @default(0)
+  created_at  DateTime                  @default(now())
+  updated_at  DateTime                  @updatedAt
+  platform    platform_social_networks? @relation(fields: [platform_id], references: [id])
+  studio      studios                   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, platform_id])
+  @@index([studio_id])
+  @@index([platform_id])
+}
+
+model studio_scheduling_rules {
+  id                   String   @id @default(cuid())
+  studio_id            String
+  name                 String
+  description          String?
+  recurrence           String
+  operational_capacity Int      @default(1)
+  status               String   @default("active")
+  order                Int      @default(0)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  studio               studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id])
+  @@index([status])
+  @@index([order])
+}
+
+model studio_setup_status {
+  id                  String                   @id @default(cuid())
+  studio_id           String                   @unique
+  created_at          DateTime                 @default(now())
+  is_fully_configured Boolean                  @default(false)
+  last_validated_at   DateTime                 @default(now())
+  overall_progress    Int                      @default(0)
+  updated_at          DateTime                 @updatedAt
+  sections            setup_section_progress[]
+  studio              studios                  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id])
+  @@index([is_fully_configured])
+  @@index([overall_progress])
+}
+
+model studio_zonas_trabajo {
+  id         String   @id @default(cuid())
+  studio_id  String
+  nombre     String
+  orden      Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  studio     studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id])
+  @@index([studio_id, orden])
+}
+
+//! SETUP
+
+model setup_section_progress {
+  id                    String              @id @default(cuid())
+  status                String
+  errors                Json?
+  completed_at          DateTime?
+  completed_fields      Json
+  completion_percentage Int                 @default(0)
+  last_updated_at       DateTime            @default(now())
+  missing_fields        Json
+  section_id            String
+  section_name          String
+  setup_status_id       String
+  setup_status          studio_setup_status @relation(fields: [setup_status_id], references: [id], onDelete: Cascade)
+
+  @@unique([setup_status_id, section_id])
+  @@index([section_id])
+  @@index([status])
+  @@index([completion_percentage])
+}
+
+model setup_section_config {
+  id              String   @id @default(cuid())
+  description     String
+  dependencies    Json
+  weight          Int      @default(10)
+  created_at      DateTime @default(now())
+  is_active       Boolean  @default(true)
+  optional_fields Json
+  required_fields Json
+  section_id      String   @unique
+  section_name    String
+  updated_at      DateTime @updatedAt
+
+  @@index([section_id])
+  @@index([is_active])
+}
+
+model setup_progress_log {
+  id         String   @id @default(cuid())
+  studio_id  String
+  action     String
+  details    Json?
+  source     String
+  created_at DateTime @default(now())
+  new_status String?
+  old_status String?
+  section_id String?
+
+  @@index([studio_id])
+  @@index([section_id])
+  @@index([action])
+  @@index([created_at])
+}
+
+//! CONTENT (CATALOG)
+
+model studio_configuraciones {
+  id                String   @id @default(cuid())
+  studio_id         String
+  status            String   @default("active")
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  authorization_key String?
+  markup            Float
+  name              String
+  product_margin    Float
+  sales_commission  Float
+  service_margin    Float
+  studio            studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id])
+}
+
+model studio_event_types {
+  id              String                   @id @default(cuid())
+  studio_id       String
+  name            String
+  status          String                   @default("active")
+  order           Int                      @default(0)
+  created_at      DateTime                 @default(now())
+  updated_at      DateTime                 @updatedAt
+  gantt_templates studio_gantt_templates[]
+  marketing_leads marketing_leads[]
+  quotes          studio_cotizaciones[]
+  studio          studios                  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  events          studio_events[]
+  packages        studio_paquetes[]
+  portfolios      studio_portfolios[]
+  posts           studio_posts[]
+  promises        studio_promises[]
+
+  @@index([studio_id])
+  @@index([studio_id, status])
+}
+
+model studio_items {
+  id                  String                    @id @default(cuid())
+  studio_id           String
+  service_category_id String
+  name                String
+  type                ItemType                  @default(SERVICIO)
+  cost                Float                     @default(0)
+  expense             Float                     @default(0)
+  utility_type        String                    @default("service")
+  order               Int                       @default(0)
+  status              String                    @default("active")
+  created_at          DateTime                  @default(now())
+  updated_at          DateTime                  @updatedAt
+  quote_items         studio_cotizacion_items[]
+  item_expenses       studio_item_expenses[]
+  item_media          studio_item_media[]
+  service_categories  studio_service_categories @relation(fields: [service_category_id], references: [id])
+  studio              studios                   @relation(fields: [studio_id], references: [id])
+  package_items       studio_paquete_items[]
+
+  @@index([studio_id, status])
+}
+
+//!revisar
+model studio_service_categories {
+  id                 String                     @id @default(cuid())
+  name               String                     @unique
+  order              Int                        @default(0)
+  created_at         DateTime                   @default(now())
+  updated_at         DateTime                   @updatedAt
+  category_media     studio_category_media[]
+  cotizacion_items   studio_cotizacion_items[]
+  items              studio_items[]
+  paquete_items      studio_paquete_items[]
+  section_categories studio_section_categories?
+
+  @@index([name])
+}
+
+model studio_service_sections {
+  id                 String                      @id @default(cuid())
+  name               String                      @unique
+  description        String?
+  order              Int                         @default(0)
+  created_at         DateTime                    @default(now())
+  updated_at         DateTime                    @updatedAt
+  section_categories studio_section_categories[]
+  section_media      studio_section_media[]
+
+  @@index([name])
+}
+
+model studio_section_categories {
+  id                 String                    @id @default(cuid())
+  section_id         String
+  category_id        String                    @unique
+  service_categories studio_service_categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  service_sections   studio_service_sections   @relation(fields: [section_id], references: [id], onDelete: Cascade)
+}
+
+model studio_item_expenses {
+  id         String       @id @default(cuid())
+  item_id    String
+  name       String
+  cost       Float
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+  items      studio_items @relation(fields: [item_id], references: [id], onDelete: Cascade)
+}
+
+//! CONTENT (CATALOG MEDIA)
+
+model studio_section_media {
+  id            String                  @id @default(cuid())
+  section_id    String
+  studio_id     String
+  file_url      String
+  file_type     String
+  filename      String
+  storage_bytes BigInt
+  mime_type     String
+  dimensions    Json?
+  display_order Int                     @default(0)
+  alt_text      String?
+  created_at    DateTime                @default(now())
+  updated_at    DateTime                @updatedAt
+  section       studio_service_sections @relation(fields: [section_id], references: [id], onDelete: Cascade)
+  studio        studios                 @relation("section_media", fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([section_id])
+  @@index([studio_id])
+  @@index([storage_bytes])
+}
+
+model studio_category_media {
+  id               String                    @id @default(cuid())
+  category_id      String
+  studio_id        String
+  file_url         String
+  file_type        String
+  filename         String
+  storage_bytes    BigInt
+  mime_type        String
+  dimensions       Json?
+  duration_seconds Int?
+  display_order    Int                       @default(0)
+  alt_text         String?
+  created_at       DateTime                  @default(now())
+  updated_at       DateTime                  @updatedAt
+  category         studio_service_categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  studio           studios                   @relation("category_media", fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([category_id])
+  @@index([studio_id])
+  @@index([storage_bytes])
+}
+
+model studio_item_media {
+  id               String       @id @default(cuid())
+  item_id          String
+  studio_id        String
+  file_url         String
+  file_type        String
+  filename         String
+  storage_bytes    BigInt
+  mime_type        String
+  dimensions       Json?
+  duration_seconds Int?
+  display_order    Int          @default(0)
+  alt_text         String?
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+  item             studio_items @relation(fields: [item_id], references: [id], onDelete: Cascade)
+  studio           studios      @relation("item_media", fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([item_id])
+  @@index([studio_id])
+  @@index([storage_bytes])
+}
+
+//! CONTENT (PAQUETES)
+
+model studio_paquetes {
+  id                  String                 @id @default(cuid())
+  studio_id           String
+  utilidad            Float?
+  precio              Float?
+  status              String                 @default("active")
+  created_at          DateTime               @default(now())
+  updated_at          DateTime               @updatedAt
+  cost                Float?
+  event_type_id       String
+  expense             Float?
+  name                String
+  order               Int                    @default(0)
+  description         String?
+  cover_url           String?
+  cover_storage_bytes BigInt?
+  is_featured         Boolean                @default(false)
+  paquete_items       studio_paquete_items[]
+  cotizaciones        studio_cotizaciones[]
+  notifications       studio_notifications[]
+  event_types         studio_event_types     @relation(fields: [event_type_id], references: [id])
+  studio              studios                @relation(fields: [studio_id], references: [id])
+
+  @@index([studio_id, status])
+  @@index([studio_id, is_featured])
+}
+
+model studio_paquete_items {
+  id                   String                    @id @default(cuid())
+  paquete_id           String
+  item_id              String
+  service_category_id  String
+  quantity             Int                       @default(1)
+  visible_to_client    Boolean                   @default(true)
+  status               String                    @default("active")
+  created_at           DateTime                  @default(now())
+  updated_at           DateTime                  @updatedAt
+  precio_personalizado Float?
+  order                Int                       @default(0)
+  items                studio_items              @relation(fields: [item_id], references: [id])
+  paquetes             studio_paquetes           @relation(fields: [paquete_id], references: [id], onDelete: Cascade)
+  service_categories   studio_service_categories @relation(fields: [service_category_id], references: [id])
+
+  @@index([paquete_id])
+}
+
+//! BUSINESS (PERSONAL)
+model studio_crew_categories {
+  id           String                @id @default(cuid())
+  studio_id    String
+  tipo         PersonalType
+  color        String?
+  icono        String?
+  created_at   DateTime              @default(now())
+  updated_at   DateTime              @updatedAt
+  description  String?
+  name         String
+  order        Int                   @default(0)
+  is_active    Boolean               @default(true)
+  is_default   Boolean               @default(false)
+  studio       studios               @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  crew_members studio_crew_members[]
+
+  @@unique([studio_id, name])
+  @@index([studio_id, tipo])
+  @@index([studio_id, is_active])
+  @@index([is_default])
+  @@index([order])
+}
+
+model studio_crew_members {
+  id                  String                            @id @default(cuid())
+  studio_id           String
+  email               String?
+  tipo                PersonalType
+  status              String                            @default("activo")
+  created_at          DateTime                          @default(now())
+  platform_user_id    String?
+  user_studio_role_id String?                           @unique
+  updated_at          DateTime                          @updatedAt
+  category_id         String
+  clabe_account       String?
+  emergency_phone     String?
+  fixed_salary        Float?
+  name                String
+  order               Int?
+  phone               String?
+  variable_salary     Float?
+  nominas             studio_nominas[]
+  event_team          studio_event_team[]
+  category            studio_crew_categories            @relation(fields: [category_id], references: [id])
+  platformUser        platform_user_profiles?           @relation(fields: [platform_user_id], references: [id])
+  user_studio_role    user_studio_roles?                @relation(fields: [user_studio_role_id], references: [id])
+  studio              studios                           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  profile_assignments studio_crew_profile_assignments[]
+  cotizacion_items    studio_cotizacion_items[]
+
+  @@index([studio_id])
+  @@index([tipo])
+  @@index([status])
+  @@index([platform_user_id])
+  @@index([user_studio_role_id])
+}
+
+model studio_crew_profiles {
+  id               String                            @id @default(cuid())
+  studio_id        String
+  created_at       DateTime                          @default(now())
+  is_active        Boolean                           @default(true)
+  updated_at       DateTime                          @updatedAt
+  description      String?
+  name             String
+  order            Int                               @default(0)
+  crew_assignments studio_crew_profile_assignments[]
+  studio           studios                           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, name])
+  @@index([studio_id, is_active])
+  @@index([order])
+}
+
+model studio_crew_profile_assignments {
+  id             String               @id @default(cuid())
+  created_at     DateTime             @default(now())
+  crew_member_id String
+  profile_id     String
+  crew_member    studio_crew_members  @relation(fields: [crew_member_id], references: [id], onDelete: Cascade)
+  profile        studio_crew_profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@unique([crew_member_id, profile_id])
+  @@index([crew_member_id])
+  @@index([profile_id])
+}
+
+//! COMMERCIAL (CLIENTES)
+
+model studio_clientes {
+  id                     String                  @id @default(cuid())
+  studio_id              String
+  email                  String
+  status                 String                  @default("activo")
+  created_at             DateTime                @default(now())
+  is_active              Boolean                 @default(true)
+  last_login             DateTime?
+  platform_user_id       String?
+  updated_at             DateTime                @updatedAt
+  address                String?
+  name                   String
+  phone                  String
+  platform_user_profiles platform_user_profiles? @relation(fields: [platform_user_id], references: [id])
+  studio                 studios                 @relation(fields: [studio_id], references: [id])
+  pagos                  studio_pagos[]
+
+  @@index([studio_id, email])
+  @@index([studio_id, status])
+  @@index([studio_id, phone])
+  @@index([platform_user_id])
+}
+
+model studio_contacts {
+  id                     String                         @id @default(cuid())
+  studio_id              String
+  name                   String
+  phone                  String
+  email                  String?
+  address                String?
+  avatar_url             String?
+  status                 String                         @default("prospecto")
+  acquisition_channel_id String?
+  social_network_id      String?
+  referrer_contact_id    String?
+  referrer_name          String?
+  notes                  String?
+  created_at             DateTime                       @default(now())
+  updated_at             DateTime                       @updatedAt
+  studio                 studios                        @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  acquisition_channel    platform_acquisition_channels? @relation(fields: [acquisition_channel_id], references: [id])
+  social_network         platform_social_networks?      @relation("ContactSocialNetwork", fields: [social_network_id], references: [id])
+  referrer_contact       studio_contacts?               @relation("ContactReferrer", fields: [referrer_contact_id], references: [id])
+  referred_contacts      studio_contacts[]              @relation("ContactReferrer")
+  cotizaciones           studio_cotizaciones[]
+  contact_logs           studio_contact_logs[]
+  promises               studio_promises[]
+  pagos                  studio_pagos[]
+  events                 studio_events[]
+  notifications          studio_notifications[]
+
+  @@unique([studio_id, phone])
+  @@index([studio_id, email])
+  @@index([studio_id, phone])
+  @@index([studio_id, status])
+  @@index([acquisition_channel_id])
+  @@index([social_network_id])
+  @@index([referrer_contact_id])
+}
+
+//! PROMISES PIPELINE
+
+model studio_promise_pipeline_stages {
+  id         String            @id @default(cuid())
+  studio_id  String
+  name       String
+  slug       String
+  color      String            @default("#3B82F6")
+  order      Int               @default(0)
+  is_system  Boolean           @default(false)
+  is_active  Boolean           @default(true)
+  created_at DateTime          @default(now())
+  updated_at DateTime          @updatedAt
+  studio     studios           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  promises   studio_promises[]
+
+  @@unique([studio_id, slug])
+  @@index([studio_id, order])
+  @@index([studio_id, is_active])
+}
+
+model studio_contact_logs {
+  id         String          @id @default(cuid())
+  contact_id String
+  user_id    String?
+  content    String
+  log_type   String          @default("note")
+  metadata   Json?
+  created_at DateTime        @default(now())
+  contact    studio_contacts @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  user       studio_users?   @relation(fields: [user_id], references: [id])
+
+  @@index([contact_id, created_at])
+  @@index([user_id])
+}
+
+//! PROMISES
+
+model studio_promises {
+  id                String                          @id @default(cuid())
+  studio_id         String
+  contact_id        String
+  event_type_id     String?
+  event_location    String?
+  pipeline_stage_id String?
+  status            String                          @default("pending")
+  defined_date      DateTime?
+  tentative_dates   Json?
+  created_at        DateTime                        @default(now())
+  updated_at        DateTime                        @updatedAt
+  studio            studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  contact           studio_contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  event_type        studio_event_types?             @relation(fields: [event_type_id], references: [id])
+  pipeline_stage    studio_promise_pipeline_stages? @relation(fields: [pipeline_stage_id], references: [id])
+  quotes            studio_cotizaciones[]
+  event             studio_events?
+  logs              studio_promise_logs[]
+  tags              studio_promises_tags[]
+  notifications     studio_notifications[]
+  agenda            studio_agenda[]
+  pagos             studio_pagos[]
+
+  @@index([studio_id, contact_id])
+  @@index([studio_id, status])
+  @@index([pipeline_stage_id])
+}
+
+model studio_promise_logs {
+  id         String          @id @default(cuid())
+  promise_id String
+  user_id    String?
+  content    String
+  log_type   String          @default("system")
+  metadata   Json?
+  created_at DateTime        @default(now())
+  promise    studio_promises @relation(fields: [promise_id], references: [id], onDelete: Cascade)
+  user       studio_users?   @relation(fields: [user_id], references: [id])
+
+  @@index([promise_id, created_at])
+  @@index([user_id])
+}
+
+//! PROMISES TAGS
+
+model studio_promise_tags {
+  id          String                 @id @default(cuid())
+  studio_id   String
+  name        String
+  slug        String
+  color       String                 @default("#3B82F6")
+  description String?
+  order       Int                    @default(0)
+  is_active   Boolean                @default(true)
+  created_at  DateTime               @default(now())
+  updated_at  DateTime               @updatedAt
+  studio      studios                @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  promises    studio_promises_tags[]
+
+  @@unique([studio_id, slug])
+  @@index([studio_id, order])
+  @@index([studio_id, is_active])
+}
+
+model studio_promises_tags {
+  id         String              @id @default(cuid())
+  promise_id String
+  tag_id     String
+  created_at DateTime            @default(now())
+  promise    studio_promises     @relation(fields: [promise_id], references: [id], onDelete: Cascade)
+  tag        studio_promise_tags @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@unique([promise_id, tag_id])
+  @@index([promise_id])
+  @@index([tag_id])
+}
+
+//! BUSINESS (EVENTOS)
+
+model studio_events {
+  id             String   @id @default(cuid())
+  studio_id      String
+  contact_id     String
+  promise_id     String?  @unique
+  cotizacion_id  String?  @unique
+  event_type_id  String?
+  event_stage_id String?
+  stage_id       String?
+  name           String?  @default("Pendiente")
+  event_date     DateTime
+  address        String?
+  sede           String?
+  status         String   @default("active")
+  user_id        String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  // Campos operativos (de manager_events)
+  contract_value          Decimal?
+  paid_amount             Decimal   @default(0)
+  pending_amount          Decimal   @default(0)
+  studio_manager_id       String?
+  started_at              DateTime?
+  completed_at            DateTime?
+  originated_from_lead_id String?   @unique
+
+  // Relaciones comerciales
+  contact         studio_contacts                 @relation(fields: [contact_id], references: [id])
+  promise         studio_promises?                @relation(fields: [promise_id], references: [id])
+  cotizacion      studio_cotizaciones?            @relation("EventoCotizacionAutorizada", fields: [cotizacion_id], references: [id])
+  event_type      studio_event_types?             @relation(fields: [event_type_id], references: [id])
+  event_stage     studio_events_stage?            @relation(fields: [event_stage_id], references: [id])
+  stage           studio_manager_pipeline_stages? @relation(fields: [stage_id], references: [id])
+  project_manager user_studio_roles?              @relation("EventProjectManager", fields: [studio_manager_id], references: [id])
+  studio          studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  studio_users    studio_users?                   @relation(fields: [user_id], references: [id])
+  originated_lead marketing_leads?                @relation(fields: [originated_from_lead_id], references: [id])
+
+  // Relaciones comerciales existentes
+  agenda       studio_agenda[]
+  cotizaciones studio_cotizaciones[] @relation("EventoCotizaciones")
+  event_logs   studio_events_logs[]
+  gastos       studio_gastos[]
+  nominas      studio_nominas[]
+
+  // Relaciones operativas (de manager_events)
+  gantt                studio_gantt_event_instances?
+  deliverables         studio_event_deliverables[]
+  payments             studio_event_payments[]
+  tasks                studio_event_tasks[]
+  team_assignments     studio_event_team[]
+  timeline             studio_event_timeline[]
+  client_portal_access studio_client_portal_access[]
+  notifications        studio_notifications[]
+
+  @@index([contact_id])
+  @@index([cotizacion_id])
+  @@index([event_date])
+  @@index([studio_id, status])
+  @@index([promise_id])
+  @@index([stage_id])
+  @@index([originated_from_lead_id])
+  @@map("studio_eventos")
+}
+
+model studio_events_stage {
+  id         String          @id @default(cuid())
+  studio_id  String
+  name       String
+  slug       String
+  order      Int             @default(0)
+  is_active  Boolean         @default(true)
+  is_system  Boolean         @default(false)
+  created_at DateTime        @default(now())
+  updated_at DateTime        @updatedAt
+  eventos    studio_events[]
+
+  studio studios @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, slug])
+  @@index([studio_id, is_active, order])
+  @@index([order])
+  @@map("studio_evento_etapas")
+}
+
+model studio_events_logs {
+  id         String        @id @default(cuid())
+  status     String        @default("active")
+  created_at DateTime      @default(now())
+  event_id   String
+  updated_at DateTime      @updatedAt
+  comment    String
+  importance String        @default("1")
+  eventos    studio_events @relation(fields: [event_id], references: [id])
+
+  @@index([event_id, created_at])
+  @@map("studio_evento_bitacoras")
+}
+
+//! COMMERCIAL (AGENDA)
+
+model studio_agenda {
+  id               String                 @id @default(cuid())
+  studio_id        String
+  status           String                 @default("pendiente")
+  agenda_tipo      String?
+  created_at       DateTime               @default(now())
+  evento_id        String?
+  promise_id       String?
+  contexto         String?
+  metadata         Json?
+  link_meeting_url String?
+  type_scheduling  String?
+  updated_at       DateTime               @updatedAt
+  user_id          String?
+  address          String?
+  concept          String?
+  date             DateTime?
+  description      String?
+  time             String?
+  eventos          studio_events?         @relation(fields: [evento_id], references: [id])
+  promise          studio_promises?       @relation(fields: [promise_id], references: [id])
+  studio           studios                @relation(fields: [studio_id], references: [id])
+  studio_users     studio_users?          @relation(fields: [user_id], references: [id])
+  notifications    studio_notifications[]
+
+  @@index([studio_id])
+  @@index([evento_id])
+  @@index([promise_id])
+  @@index([date])
+  @@index([contexto, date])
+}
+
+model studio_agenda_tipos {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String   @unique
+}
+
+//! NOTIFICACIONES DE ESTUDIO
+
+model studio_notifications {
+  id String @id @default(cuid())
+
+  // Scope y destinatarios
+  scope     StudioNotificationScope @default(STUDIO)
+  studio_id String
+  user_id   String?
+  role      StudioRole?
+
+  // Tipo y contenido
+  type     StudioNotificationType
+  title    String
+  message  String
+  category String                 @default("general")
+  priority NotificationPriority   @default(MEDIUM)
+
+  // Navegación y tracking
+  route        String?
+  route_params Json?
+  clicked_at   DateTime?
+  is_read      Boolean   @default(false)
+  read_at      DateTime?
+
+  // Metadata estructurado
+  metadata Json?
+
+  // Relaciones con entidades del estudio
+  promise_id String?
+  event_id   String?
+  payment_id String?
+  paquete_id String?
+  quote_id   String?
+  contact_id String?
+  lead_id    String?
+  agent_id   String?
+  agenda_id  String?
+
+  // Control de ciclo de vida
+  is_active     Boolean   @default(true)
+  expires_at    DateTime?
+  scheduled_for DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  // Relaciones
+  studio          studios               @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  user            studio_user_profiles? @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  promise         studio_promises?      @relation(fields: [promise_id], references: [id], onDelete: SetNull)
+  event           studio_events?        @relation(fields: [event_id], references: [id], onDelete: SetNull)
+  contact         studio_contacts?      @relation(fields: [contact_id], references: [id], onDelete: SetNull)
+  paquete         studio_paquetes?      @relation(fields: [paquete_id], references: [id], onDelete: SetNull)
+  agenda          studio_agenda?        @relation(fields: [agenda_id], references: [id], onDelete: SetNull)
+  platform_agents platform_agents?      @relation(fields: [agent_id], references: [id], onDelete: SetNull)
+  platform_leads  platform_leads?       @relation(fields: [lead_id], references: [id], onDelete: SetNull)
+
+  // Índices optimizados
+  @@index([studio_id, scope, is_active, created_at])
+  @@index([user_id, is_read, created_at])
+  @@index([studio_id, user_id, is_read])
+  @@index([studio_id, role, is_read])
+  @@index([type, category])
+  @@index([created_at])
+  @@index([scheduled_for])
+  @@index([expires_at])
+  @@index([promise_id])
+  @@index([event_id])
+  @@index([payment_id])
+}
+
+//! COMMERCIAL (CONDICIONES COMERCIALES)
+
+model studio_condiciones_comerciales {
+  id                                  String                                       @id @default(cuid())
+  studio_id                           String
+  status                              String                                       @default("active")
+  created_at                          DateTime                                     @default(now())
+  updated_at                          DateTime                                     @updatedAt
+  advance_percentage                  Float?                                       @default(0)
+  description                         String?
+  discount_percentage                 Float?
+  name                                String
+  order                               Int?                                         @default(0)
+  studio                              studios                                      @relation(fields: [studio_id], references: [id])
+  condiciones_comerciales_metodo_pago studio_condiciones_comerciales_metodo_pago[]
+  cotizaciones                        studio_cotizaciones[]
+  pagos                               studio_pagos[]
+
+  @@index([studio_id])
+}
+
+model studio_terminos_condiciones {
+  id          String   @id @default(cuid())
+  studio_id   String
+  title       String
+  content     String
+  order       Int      @default(0)
+  is_active   Boolean  @default(true)
+  is_required Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  studio      studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id, is_active])
+  @@index([studio_id, order])
+}
+
+model studio_condiciones_comerciales_metodo_pago {
+  id                         String                         @id @default(cuid())
+  orden                      Int?                           @default(0)
+  status                     String                         @default("active")
+  condiciones_comerciales_id String
+  created_at                 DateTime                       @default(now())
+  metodo_pago_id             String
+  updated_at                 DateTime                       @updatedAt
+  condiciones_comerciales    studio_condiciones_comerciales @relation(fields: [condiciones_comerciales_id], references: [id], onDelete: Cascade)
+  metodos_pago               studio_metodos_pago            @relation(fields: [metodo_pago_id], references: [id])
+  pagos                      studio_pagos[]
+  cotizaciones               studio_cotizaciones[]          @relation("CondicionesComercialesMetodoPagoToCotizacion")
+
+  @@index([condiciones_comerciales_id])
+  @@index([metodo_pago_id])
+}
+
+//! COMMERCIAL (COTIZACIONES)
+
+model studio_cotizaciones {
+  id                                     String                                       @id @default(cuid())
+  studio_id                              String
+  status                                 String                                       @default("pendiente")
+  condiciones_comerciales_id             String?
+  condiciones_comerciales_metodo_pago_id String?
+  contact_id                             String?
+  promise_id                             String?
+  created_at                             DateTime                                     @default(now())
+  evento_id                              String?
+  expires_at                             DateTime?                                    @default(dbgenerated("(now() + '10 days'::interval)"))
+  updated_at                             DateTime                                     @updatedAt
+  archived                               Boolean                                      @default(false)
+  description                            String?
+  discount                               Float?
+  event_type_id                          String
+  name                                   String
+  price                                  Float
+  visible_to_client                      Boolean?                                     @default(true)
+  order                                  Int?                                         @default(0)
+  paquete_id                             String?
+  selected_by_prospect                   Boolean                                      @default(false)
+  selected_at                            DateTime?
+  tyc_accepted                           Boolean                                      @default(false)
+  tyc_accepted_at                        DateTime?
+  payment_promise_date                   DateTime?
+  payment_registered                     Boolean                                      @default(false)
+  cotizacion_costos                      studio_cotizacion_costos[]
+  cotizacion_items                       studio_cotizacion_items[]
+  cotizacion_visitas                     studio_cotizacion_visitas[]
+  condiciones_comerciales                studio_condiciones_comerciales?              @relation(fields: [condiciones_comerciales_id], references: [id])
+  event_types                            studio_event_types                           @relation(fields: [event_type_id], references: [id])
+  eventos                                studio_events?                               @relation("EventoCotizaciones", fields: [evento_id], references: [id])
+  studio                                 studios                                      @relation(fields: [studio_id], references: [id])
+  contact                                studio_contacts?                             @relation(fields: [contact_id], references: [id])
+  promise                                studio_promises?                             @relation(fields: [promise_id], references: [id])
+  paquete                                studio_paquetes?                             @relation(fields: [paquete_id], references: [id])
+  pagos                                  studio_pagos[]
+  condiciones_comerciales_metodo_pago    studio_condiciones_comerciales_metodo_pago[] @relation("CondicionesComercialesMetodoPagoToCotizacion")
+  evento_autorizado                      studio_events?                               @relation("EventoCotizacionAutorizada")
+
+  @@index([evento_id])
+  @@index([studio_id, status])
+  @@index([expires_at])
+  @@index([contact_id])
+  @@index([promise_id])
+  @@index([promise_id, selected_by_prospect])
+  @@index([selected_at])
+  @@index([paquete_id])
+  @@index([payment_registered])
+}
+
+model studio_cotizacion_items {
+  id                         String                     @id @default(cuid())
+  cotizacion_id              String
+  item_id                    String?
+  service_category_id        String?
+  quantity                   Int                        @default(1)
+  position                   Int                        @default(0)
+  assigned_to_crew_member_id String?
+  gantt_task_id              String?                    @unique
+  assignment_date            DateTime?
+  delivery_date              DateTime?
+  task_type                  String? // "operation", "editing", "delivery"
+  internal_delivery_days     Int?
+  client_delivery_days       Int?
+  status                     String                     @default("pendiente")
+  seccion_name_snapshot      String?
+  category_name_snapshot     String?
+  name_snapshot              String                     @default("Servicio migrado")
+  description_snapshot       String?
+  unit_price_snapshot        Float                      @default(0)
+  cost_snapshot              Float                      @default(0)
+  expense_snapshot           Float                      @default(0)
+  profit_snapshot            Float                      @default(0)
+  public_price_snapshot      Float                      @default(0)
+  profit_type_snapshot       String                     @default("servicio")
+  unit_price                 Float                      @default(0)
+  subtotal                   Float                      @default(0)
+  name                       String?
+  description                String?
+  cost                       Float?                     @default(0)
+  expense                    Float?                     @default(0)
+  profit                     Float?                     @default(0)
+  public_price               Float?                     @default(0)
+  profit_type                String?                    @default("servicio")
+  category_name              String?
+  seccion_name               String?
+  is_custom                  Boolean                    @default(false)
+  original_service_id        String?
+  created_at                 DateTime                   @default(now())
+  updated_at                 DateTime                   @updatedAt
+  cotizaciones               studio_cotizaciones        @relation(fields: [cotizacion_id], references: [id], onDelete: Cascade)
+  items                      studio_items?              @relation(fields: [item_id], references: [id])
+  service_categories         studio_service_categories? @relation(fields: [service_category_id], references: [id])
+  assigned_to_crew_member    studio_crew_members?       @relation(fields: [assigned_to_crew_member_id], references: [id])
+  gantt_task                 studio_gantt_event_tasks?  @relation("CotizacionItemGanttTask")
+  nomina_servicios           studio_nomina_servicios[]
+
+  @@index([cotizacion_id])
+  @@index([assigned_to_crew_member_id])
+  @@index([gantt_task_id])
+}
+
+model studio_cotizacion_costos {
+  id            String              @id @default(cuid())
+  cotizacion_id String
+  created_at    DateTime            @default(now())
+  updated_at    DateTime            @updatedAt
+  cost          Float               @default(0)
+  description   String?
+  name          String
+  position      Int                 @default(0)
+  type          String              @default("adicional")
+  cotizaciones  studio_cotizaciones @relation(fields: [cotizacion_id], references: [id], onDelete: Cascade)
+
+  @@index([cotizacion_id])
+}
+
+model studio_cotizacion_visitas {
+  id            String              @id @default(cuid())
+  cotizacion_id String
+  created_at    DateTime            @default(now())
+  cotizaciones  studio_cotizaciones @relation(fields: [cotizacion_id], references: [id], onDelete: Cascade)
+
+  @@index([cotizacion_id, created_at])
+}
+
+//! COMMERCIAL (FINANZAS)
+model studio_metodos_pago {
+  id                                  String                                       @id @default(cuid())
+  studio_id                           String
+  payment_method                      String?                                      @default("card")
+  status                              String                                       @default("active")
+  created_at                          DateTime                                     @default(now())
+  updated_at                          DateTime                                     @updatedAt
+  base_commission_percentage          Float?
+  fixed_commission_amount             Float?
+  msi_commission_percentage           Float?
+  msi_installments                    Int?
+  order                               Int?                                         @default(0)
+  payment_method_name                 String
+  condiciones_comerciales_metodo_pago studio_condiciones_comerciales_metodo_pago[]
+  studio                              studios                                      @relation(fields: [studio_id], references: [id])
+  pagos                               studio_pagos[]
+
+  @@index([studio_id])
+}
+
+model studio_pagos {
+  id                                     String                                      @id @default(cuid())
+  metodo_pago                            String
+  stripe_session_id                      String?                                     @unique
+  stripe_payment_id                      String?                                     @unique
+  status                                 String                                      @default("pending")
+  contact_id                             String?
+  promise_id                             String?
+  condiciones_comerciales_id             String?
+  condiciones_comerciales_metodo_pago_id String?
+  cotizacion_id                          String?
+  created_at                             DateTime                                    @default(now())
+  metodo_pago_id                         String?
+  updated_at                             DateTime                                    @updatedAt
+  user_id                                String?
+  amount                                 Float
+  concept                                String
+  description                            String?
+  stripe_commission                      Float?
+  transaction_category                   String?                                     @default("abono")
+  transaction_type                       String?                                     @default("ingreso")
+  payment_date                           DateTime?
+  condiciones_comerciales                studio_condiciones_comerciales?             @relation(fields: [condiciones_comerciales_id], references: [id])
+  condiciones_comerciales_metodo_pago    studio_condiciones_comerciales_metodo_pago? @relation(fields: [condiciones_comerciales_metodo_pago_id], references: [id])
+  cotizaciones                           studio_cotizaciones?                        @relation(fields: [cotizacion_id], references: [id])
+  metodos_pago                           studio_metodos_pago?                        @relation(fields: [metodo_pago_id], references: [id])
+  studio_users                           studio_users?                               @relation(fields: [user_id], references: [id])
+  contact                                studio_contacts?                            @relation(fields: [contact_id], references: [id])
+  promise                                studio_promises?                            @relation(fields: [promise_id], references: [id])
+  studio_clientes                        studio_clientes?                            @relation(fields: [studio_clientesId], references: [id])
+  studio_clientesId                      String?
+
+  @@index([status])
+  @@index([created_at])
+  @@index([contact_id])
+  @@index([promise_id])
+  @@index([cotizacion_id])
+}
+
+model studio_nominas {
+  id                     String                    @id @default(cuid())
+  studio_id              String
+  status                 String                    @default("pendiente")
+  created_at             DateTime                  @default(now())
+  evento_id              String?
+  personal_id            String?
+  updated_at             DateTime                  @updatedAt
+  user_id                String
+  assignment_date        DateTime                  @default(now())
+  authorization_date     DateTime?
+  authorized_by          String?
+  commission_percentage  Float?
+  concept                String
+  deductions             Float                     @default(0)
+  description            String?
+  end_period             DateTime?
+  expense_total_snapshot Float                     @default(0)
+  gross_amount           Float
+  net_amount             Float
+  paid_by                String?
+  payment_date           DateTime?
+  payment_method         String?                   @default("transferencia")
+  payment_type           String                    @default("individual")
+  services_included      Int                       @default(1)
+  start_period           DateTime?
+  total_cost_snapshot    Float                     @default(0)
+  payroll_services       studio_nomina_servicios[]
+  authorized_by_user     studio_users?             @relation("nominas_autorizado_porTostudio_users", fields: [authorized_by], references: [id])
+  eventos                studio_events?            @relation(fields: [evento_id], references: [id])
+  paid_by_user           studio_users?             @relation("nominas_pagado_porTostudio_users", fields: [paid_by], references: [id])
+  personal               studio_crew_members?      @relation(fields: [personal_id], references: [id])
+  studio                 studios                   @relation(fields: [studio_id], references: [id])
+  user                   studio_users              @relation("nominas_userIdTostudio_users", fields: [user_id], references: [id])
+
+  @@index([studio_id])
+  @@index([status])
+  @@index([assignment_date])
+}
+
+model studio_nomina_servicios {
+  id                String                   @id @default(cuid())
+  created_at        DateTime                 @default(now())
+  assigned_cost     Float
+  assigned_quantity Int                      @default(1)
+  category_name     String?
+  payroll_id        String
+  quote_service_id  String?
+  section_name      String?
+  service_name      String
+  payroll           studio_nominas           @relation(fields: [payroll_id], references: [id], onDelete: Cascade)
+  quote_items       studio_cotizacion_items? @relation(fields: [quote_service_id], references: [id])
+
+  @@unique([payroll_id, quote_service_id])
+  @@index([payroll_id])
+}
+
+model studio_gastos {
+  id             String         @id @default(cuid())
+  studio_id      String
+  status         String         @default("activo")
+  created_at     DateTime       @default(now())
+  evento_id      String?
+  updated_at     DateTime       @updatedAt
+  amount         Float
+  category       String
+  concept        String
+  date           DateTime       @default(now())
+  description    String?
+  invoice_date   DateTime?
+  invoice_number String?
+  payment_method String?
+  receipt_url    String?
+  subcategory    String?
+  supplier       String?
+  user_id        String
+  eventos        studio_events? @relation(fields: [evento_id], references: [id])
+  studio         studios        @relation(fields: [studio_id], references: [id])
+  user           studio_users   @relation(fields: [user_id], references: [id])
+
+  @@index([evento_id])
+  @@index([date, category])
+  @@index([studio_id])
+}
+
+//! COMMERCIAL (REVENUE)
+model studio_revenue_products {
+  id                               String                           @id @default(cuid())
+  created_at                       DateTime                         @default(now())
+  updated_at                       DateTime                         @updatedAt
+  active                           Boolean                          @default(true)
+  billing_type                     String
+  category                         String
+  configuration                    Json?
+  description                      String
+  lifecycle                        Int?
+  name                             String
+  platform_commission              Decimal
+  public_price                     Decimal
+  studio_commission                Decimal
+  studio_revenue_products_relation studio_studio_revenue_products[]
+
+  @@index([category, active])
+}
+
+model studio_studio_revenue_products {
+  id                   String                  @id @default(cuid())
+  studio_id            String
+  created_at           DateTime                @default(now())
+  revenue_product_id   String
+  updated_at           DateTime                @updatedAt
+  activated_at         DateTime?
+  active               Boolean                 @default(false)
+  custom_commission    Decimal?
+  custom_price         Decimal?
+  deactivated_at       DateTime?
+  studio_configuration Json?
+  revenue_product      studio_revenue_products @relation(fields: [revenue_product_id], references: [id])
+  studio               studios                 @relation(fields: [studio_id], references: [id])
+
+  @@unique([studio_id, revenue_product_id])
+  @@index([studio_id, active])
+}
+
+model studio_revenue_transactions {
+  id                   String   @id @default(cuid())
+  studio_id            String
+  payment_id           String
+  amount_total         Decimal
+  prosocial_commission Decimal
+  studio_amount        Decimal
+  commission_rate      Decimal
+  description          String?
+  transaction_date     DateTime @default(now())
+  status               String   @default("pending")
+  stripe_transfer_id   String?
+  stripe_fee           Decimal?
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  studio               studios  @relation(fields: [studio_id], references: [id])
+
+  @@index([status])
+  @@index([studio_id, transaction_date])
+}
+
+//! COMMERCIAL (MARKETING)
+
+model marketing_pipeline_stages {
+  id          String             @id @default(cuid())
+  studio_id   String
+  name        String
+  slug        String
+  description String?
+  color       String             @default("#3B82F6")
+  order       Int                @default(0)
+  stage_type  MarketingStageType
+  is_active   Boolean            @default(true)
+  is_system   Boolean            @default(false)
+  created_at  DateTime           @default(now())
+  updated_at  DateTime           @updatedAt
+  leads       marketing_leads[]
+  studio      studios            @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, slug])
+  @@index([studio_id, is_active, order])
+}
+
+model marketing_leads {
+  id                    String                      @id @default(cuid())
+  studio_id             String
+  stage_id              String
+  contact_name          String
+  contact_email         String
+  contact_phone         String
+  event_type_id         String?
+  event_date            DateTime?
+  budget_range          String?
+  source_channel_id     String?
+  assigned_to_user_id   String?
+  priority              LeadPriority                @default(MEDIUM)
+  score                 Int?
+  last_contact_date     DateTime?
+  next_follow_up_date   DateTime?
+  contact_attempts      Int                         @default(0)
+  converted_to_event_id String?                     @unique
+  converted_at          DateTime?
+  conversion_value      Decimal?
+  is_active             Boolean                     @default(true)
+  lost_reason           String?
+  lost_at               DateTime?
+  created_at            DateTime                    @default(now())
+  updated_at            DateTime                    @updatedAt
+  converted_event       studio_events?
+  activities            marketing_lead_activities[]
+  notes                 marketing_lead_notes[]
+  assigned_to           user_studio_roles?          @relation(fields: [assigned_to_user_id], references: [id])
+  event_type            studio_event_types?         @relation(fields: [event_type_id], references: [id])
+  stage                 marketing_pipeline_stages   @relation(fields: [stage_id], references: [id])
+  studio                studios                     @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  quotes                marketing_quotes[]
+
+  @@index([studio_id, stage_id])
+  @@index([studio_id, is_active])
+  @@index([assigned_to_user_id])
+  @@index([converted_to_event_id])
+  @@index([event_date])
+  @@index([next_follow_up_date])
+}
+
+model marketing_lead_activities {
+  id           String            @id @default(cuid())
+  lead_id      String
+  user_id      String
+  type         ActivityType
+  subject      String
+  description  String?
+  outcome      String?
+  scheduled_at DateTime?
+  completed_at DateTime?
+  created_at   DateTime          @default(now())
+  lead         marketing_leads   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  user         user_studio_roles @relation(fields: [user_id], references: [id])
+
+  @@index([lead_id, created_at])
+  @@index([user_id])
+  @@index([scheduled_at])
+}
+
+model marketing_quotes {
+  id               String          @id @default(cuid())
+  lead_id          String
+  version          Int             @default(1)
+  quote_data       Json
+  total_amount     Decimal
+  discount_percent Decimal?        @default(0)
+  final_amount     Decimal
+  sent_at          DateTime?
+  viewed_at        DateTime?
+  view_count       Int             @default(0)
+  accepted_at      DateTime?
+  rejected_at      DateTime?
+  rejection_reason String?
+  expires_at       DateTime
+  is_active        Boolean         @default(true)
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
+  lead             marketing_leads @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  @@index([lead_id, version])
+  @@index([expires_at, is_active])
+}
+
+model marketing_lead_notes {
+  id         String            @id @default(cuid())
+  lead_id    String
+  user_id    String
+  content    String
+  is_pinned  Boolean           @default(false)
+  created_at DateTime          @default(now())
+  updated_at DateTime          @updatedAt
+  lead       marketing_leads   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  user       user_studio_roles @relation(fields: [user_id], references: [id])
+
+  @@index([lead_id, created_at])
+  @@index([is_pinned])
+}
+
+model studio_manager_pipeline_stages {
+  id          String           @id @default(cuid())
+  studio_id   String
+  name        String
+  slug        String
+  description String?
+  color       String           @default("#10B981")
+  order       Int              @default(0)
+  stage_type  ManagerStageType
+  is_active   Boolean          @default(true)
+  is_system   Boolean          @default(false)
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+  events      studio_events[]
+  studio      studios          @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, slug])
+  @@index([studio_id, is_active, order])
+}
+
+model studio_event_tasks {
+  id             String             @id @default(cuid())
+  event_id       String
+  title          String
+  description    String?
+  assigned_to_id String?
+  due_date       DateTime?
+  completed_at   DateTime?
+  is_completed   Boolean            @default(false)
+  order          Int                @default(0)
+  created_at     DateTime           @default(now())
+  assigned_to    user_studio_roles? @relation(fields: [assigned_to_id], references: [id])
+  event          studio_events      @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@index([event_id, is_completed])
+  @@index([assigned_to_id])
+  @@index([due_date])
+}
+
+model studio_event_deliverables {
+  id                 String          @id @default(cuid())
+  event_id           String
+  type               DeliverableType
+  name               String
+  description        String?
+  file_url           String?
+  file_size_mb       Float?
+  delivered_at       DateTime?
+  client_approved_at DateTime?
+  created_at         DateTime        @default(now())
+  event              studio_events   @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@index([event_id, type])
+  @@index([delivered_at])
+}
+
+model studio_event_team {
+  id             String              @id @default(cuid())
+  event_id       String
+  crew_member_id String
+  role           String
+  hours          Float?
+  cost           Decimal?
+  created_at     DateTime            @default(now())
+  event          studio_events       @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  crew_member    studio_crew_members @relation(fields: [crew_member_id], references: [id])
+
+  @@unique([event_id, crew_member_id, role])
+  @@index([event_id])
+  @@index([crew_member_id])
+}
+
+model studio_event_timeline {
+  id          String             @id @default(cuid())
+  event_id    String
+  user_id     String?
+  action_type String
+  description String
+  metadata    Json?
+  created_at  DateTime           @default(now())
+  event       studio_events      @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user        user_studio_roles? @relation(fields: [user_id], references: [id])
+
+  @@index([event_id, created_at])
+  @@index([action_type])
+}
+
+model studio_event_payments {
+  id                String        @id @default(cuid())
+  event_id          String
+  amount            Decimal
+  payment_method    String
+  payment_date      DateTime
+  concept           String?
+  stripe_payment_id String?       @unique
+  created_at        DateTime      @default(now())
+  event             studio_events @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@index([event_id, payment_date])
+}
+
+//! BUSINESS COMMERCIAL (GANTT)
+model studio_gantt_templates {
+  id                      String                         @id @default(cuid())
+  studio_id               String
+  name                    String
+  description             String?
+  event_type_id           String?
+  estimated_duration_days Int
+  pre_event_days          Int
+  post_event_days         Int
+  color                   String                         @default("#3B82F6")
+  icon                    String?
+  is_default              Boolean                        @default(false)
+  is_active               Boolean                        @default(true)
+  created_by_user_id      String
+  created_at              DateTime                       @default(now())
+  updated_at              DateTime                       @updatedAt
+  instances               studio_gantt_event_instances[]
+  tasks                   studio_gantt_template_tasks[]
+  event_type              studio_event_types?            @relation(fields: [event_type_id], references: [id])
+  studio                  studios                        @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, name])
+  @@index([studio_id, is_active])
+  @@index([event_type_id])
+  @@index([is_default])
+}
+
+model studio_gantt_template_tasks {
+  id                 String                        @id @default(cuid())
+  template_id        String
+  name               String
+  description        String?
+  days_before_event  Int?
+  days_after_event   Int?
+  duration_days      Int                           @default(1)
+  category           TaskCategory
+  priority           TaskPriority                  @default(MEDIUM)
+  depends_on_task_id String?
+  suggested_role     String?
+  order              Int                           @default(0)
+  checklist_items    Json?
+  created_at         DateTime                      @default(now())
+  updated_at         DateTime                      @updatedAt
+  depends_on         studio_gantt_template_tasks?  @relation("TaskDependency", fields: [depends_on_task_id], references: [id])
+  dependent_tasks    studio_gantt_template_tasks[] @relation("TaskDependency")
+  template           studio_gantt_templates        @relation(fields: [template_id], references: [id], onDelete: Cascade)
+
+  @@index([template_id, order])
+  @@index([category])
+}
+
+model studio_gantt_event_instances {
+  id          String                     @id @default(cuid())
+  event_id    String                     @unique
+  template_id String?
+  is_custom   Boolean                    @default(false)
+  custom_name String?
+  event_date  DateTime
+  start_date  DateTime
+  end_date    DateTime
+  created_at  DateTime                   @default(now())
+  updated_at  DateTime                   @updatedAt
+  event       studio_events              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  template    studio_gantt_templates?    @relation(fields: [template_id], references: [id])
+  tasks       studio_gantt_event_tasks[]
+
+  @@index([event_id])
+  @@index([template_id])
+  @@index([event_date])
+}
+
+model studio_gantt_event_tasks {
+  id                   String                       @id @default(cuid())
+  gantt_instance_id    String
+  template_task_id     String?
+  cotizacion_item_id   String?                      @unique
+  name                 String
+  description          String?
+  start_date           DateTime
+  end_date             DateTime
+  duration_days        Int                          @default(1)
+  category             TaskCategory
+  priority             TaskPriority                 @default(MEDIUM)
+  assigned_to_user_id  String?
+  assigned_at          DateTime?
+  status               TaskStatus                   @default(PENDING)
+  progress_percent     Int                          @default(0)
+  completed_at         DateTime?
+  completed_by_user_id String?
+  depends_on_task_id   String?
+  checklist_items      Json?
+  order                Int                          @default(0)
+  notes                String?
+  budget_amount        Decimal?
+  actual_cost          Decimal?
+  created_at           DateTime                     @default(now())
+  updated_at           DateTime                     @updatedAt
+  assigned_to          user_studio_roles?           @relation("TaskAssignedTo", fields: [assigned_to_user_id], references: [id])
+  completed_by         user_studio_roles?           @relation("TaskCompletedBy", fields: [completed_by_user_id], references: [id])
+  depends_on           studio_gantt_event_tasks?    @relation("EventTaskDependency", fields: [depends_on_task_id], references: [id])
+  dependent_tasks      studio_gantt_event_tasks[]   @relation("EventTaskDependency")
+  gantt_instance       studio_gantt_event_instances @relation(fields: [gantt_instance_id], references: [id], onDelete: Cascade)
+  cotizacion_item      studio_cotizacion_items?     @relation("CotizacionItemGanttTask", fields: [cotizacion_item_id], references: [id])
+  activity_log         studio_gantt_task_activity[]
+
+  @@index([gantt_instance_id, status])
+  @@index([assigned_to_user_id])
+  @@index([start_date, end_date])
+  @@index([status])
+  @@index([cotizacion_item_id])
+}
+
+model studio_gantt_task_activity {
+  id         String                   @id @default(cuid())
+  task_id    String
+  user_id    String
+  action     TaskAction
+  old_value  Json?
+  new_value  Json?
+  notes      String?
+  created_at DateTime                 @default(now())
+  task       studio_gantt_event_tasks @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user       user_studio_roles        @relation(fields: [user_id], references: [id])
+
+  @@index([task_id, created_at])
+  @@index([action])
+}
+
+//! CONTENT (PORTFOLIOS)
+model studio_portfolios {
+  id              String                            @id @default(cuid())
+  studio_id       String
+  title           String
+  slug            String
+  description     String?
+  cover_image_url String?
+  category        String?
+  order           Int                               @default(0)
+  is_published    Boolean                           @default(false)
+  view_count      Int                               @default(0)
+  created_at      DateTime                          @default(now())
+  updated_at      DateTime                          @updatedAt
+  caption         String?
+  cover_index     Int                               @default(0)
+  cta_action      String                            @default("whatsapp")
+  cta_enabled     Boolean                           @default(true)
+  cta_link        String?
+  cta_text        String                            @default("Cotiza tu evento")
+  event_type_id   String?
+  is_featured     Boolean                           @default(false)
+  published_at    DateTime?
+  tags            String[]                          @default([])
+  content_blocks  studio_portfolio_content_blocks[]
+  items           studio_portfolio_items[]
+  media           studio_portfolio_media[]          @relation("portfolio_media")
+  event_type      studio_event_types?               @relation(fields: [event_type_id], references: [id])
+  studio          studios                           @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, slug])
+  @@index([studio_id, is_published, published_at])
+  @@index([studio_id, is_featured])
+  @@index([category])
+  @@index([event_type_id])
+  @@index([order])
+}
+
+model studio_portfolio_items {
+  id             String            @id @default(cuid())
+  portfolio_id   String
+  item_type      PortfolioItemType
+  title          String?
+  description    String?
+  image_url      String
+  thumbnail_url  String?
+  video_url      String?
+  video_provider String?
+  order          Int               @default(0)
+  width          Int?
+  height         Int?
+  file_size      Int?
+  created_at     DateTime          @default(now())
+  portfolio      studio_portfolios @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+
+  @@index([portfolio_id, order])
+}
+
+model studio_portfolio_media {
+  id                  String                                 @id @default(cuid())
+  portfolio_id        String
+  studio_id           String
+  file_url            String
+  file_type           String
+  filename            String
+  storage_bytes       BigInt
+  mime_type           String
+  dimensions          Json?
+  duration_seconds    Int?
+  display_order       Int                                    @default(0)
+  alt_text            String?
+  thumbnail_url       String?
+  storage_path        String
+  created_at          DateTime                               @default(now())
+  updated_at          DateTime                               @updatedAt
+  content_block_media studio_portfolio_content_block_media[]
+  portfolio           studio_portfolios                      @relation("portfolio_media", fields: [portfolio_id], references: [id], onDelete: Cascade)
+  studio              studios                                @relation("portfolio_media", fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([portfolio_id])
+  @@index([studio_id])
+  @@index([display_order])
+  @@index([storage_bytes])
+}
+
+model studio_portfolio_content_blocks {
+  id           String                                 @id @default(cuid())
+  portfolio_id String
+  type         String
+  title        String?
+  description  String?
+  presentation String                                 @default("block")
+  order        Int                                    @default(0)
+  config       Json?
+  created_at   DateTime                               @default(now())
+  updated_at   DateTime                               @updatedAt
+  block_media  studio_portfolio_content_block_media[]
+  portfolio    studio_portfolios                      @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+
+  @@index([portfolio_id, order])
+  @@index([type])
+}
+
+model studio_portfolio_content_block_media {
+  id               String                          @id @default(cuid())
+  content_block_id String
+  media_id         String
+  order            Int                             @default(0)
+  created_at       DateTime                        @default(now())
+  content_block    studio_portfolio_content_blocks @relation(fields: [content_block_id], references: [id], onDelete: Cascade)
+  media            studio_portfolio_media          @relation(fields: [media_id], references: [id], onDelete: Cascade)
+
+  @@unique([content_block_id, media_id])
+  @@index([content_block_id, order])
+  @@index([media_id])
+}
+
+//! STORAGE
+
+model studio_storage_usage {
+  id                    String   @id @default(cuid())
+  studio_id             String   @unique
+  total_storage_bytes   BigInt   @default(0)
+  section_media_bytes   BigInt   @default(0)
+  category_media_bytes  BigInt   @default(0)
+  item_media_bytes      BigInt   @default(0)
+  portfolio_media_bytes BigInt   @default(0)
+  page_media_bytes      BigInt   @default(0)
+  quota_limit_bytes     BigInt
+  last_calculated_at    DateTime @default(now())
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  studio                studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id])
+  @@index([total_storage_bytes])
+}
+
+model studio_storage_log {
+  id                String   @id @default(cuid())
+  studio_id         String
+  action            String
+  media_type        String
+  storage_bytes     BigInt
+  filename          String
+  reason            String?
+  triggered_by_user String?
+  created_at        DateTime @default(now())
+  studio            studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id, action])
+  @@index([studio_id, created_at])
+}
+
+//! CONTENT
+
+model studio_faq {
+  id         String   @id @default(cuid())
+  studio_id  String
+  pregunta   String
+  respuesta  String
+  orden      Int      @default(0)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  studio     studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id, is_active])
+  @@index([studio_id, orden])
+}
+
+model studio_posts {
+  id            String              @id @default(cuid())
+  studio_id     String
+  title         String?
+  caption       String?
+  cover_index   Int                 @default(0)
+  event_type_id String?
+  tags          String[]            @default([])
+  is_featured   Boolean             @default(false)
+  is_published  Boolean             @default(false)
+  published_at  DateTime?
+  view_count    Int                 @default(0)
+  created_at    DateTime            @default(now())
+  updated_at    DateTime            @updatedAt
+  media         studio_post_media[] @relation("post_media")
+  event_type    studio_event_types? @relation(fields: [event_type_id], references: [id])
+  studio        studios             @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id, is_published, published_at])
+  @@index([studio_id, is_featured])
+  @@index([event_type_id])
+}
+
+model studio_post_media {
+  id               String       @id @default(cuid())
+  post_id          String
+  studio_id        String
+  file_url         String
+  file_type        String
+  filename         String
+  storage_bytes    BigInt
+  mime_type        String
+  dimensions       Json?
+  duration_seconds Int?
+  display_order    Int          @default(0)
+  alt_text         String?
+  thumbnail_url    String?
+  storage_path     String
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+  post             studio_posts @relation("post_media", fields: [post_id], references: [id], onDelete: Cascade)
+  studio           studios      @relation("post_media", fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id])
+  @@index([studio_id])
+  @@index([display_order])
+  @@index([storage_bytes])
+}
+
+enum ModuleCategory {
+  CORE
+  ADDON
+  ENTERPRISE
+}
+
+model platform_user_profiles {
+  id                  String                @id @default(cuid())
+  supabaseUserId      String?               @unique
+  email               String                @unique
+  role                UserRole
+  studio_id           String?
+  avatar_url          String?
+  created_at          DateTime              @default(now())
+  full_name           String?
+  is_active           Boolean               @default(true)
+  updated_at          DateTime              @updatedAt
+  studio              studios?              @relation(fields: [studio_id], references: [id])
+  studio_clientes     studio_clientes[]
+  studio_crew_members studio_crew_members[]
+  studio_users        studio_users[]
+
+  @@index([email])
+  @@index([role])
+  @@index([studio_id])
+  @@index([supabaseUserId])
+}
+
+model studio_user_profiles {
+  id                     String                   @id @default(cuid())
+  email                  String                   @unique
+  supabase_id            String?                  @unique @map("supabase_id")
+  role                   UserRole
+  studio_id              String?
+  avatar_url             String?
+  created_at             DateTime                 @default(now())
+  full_name              String?
+  is_active              Boolean                  @default(true)
+  updated_at             DateTime                 @updatedAt
+  platform_activities    platform_activities[]
+  platform_lead_bitacora platform_lead_bitacora[]
+  platform_notifications platform_notifications[]
+  studio_notifications   studio_notifications[]
+  studio                 studios?                 @relation(fields: [studio_id], references: [id])
+
+  @@index([email])
+  @@index([supabase_id])
+  @@index([role])
+  @@index([studio_id])
+}
+
+model studio_users {
+  id                                           String                  @id @default(cuid())
+  studio_id                                    String
+  phone                                        String?
+  type                                         PersonnelType
+  role                                         String                  @default("user")
+  status                                       String                  @default("inactive")
+  created_at                                   DateTime                @default(now())
+  full_name                                    String
+  is_active                                    Boolean                 @default(true)
+  platform_user_id                             String?
+  updated_at                                   DateTime                @updatedAt
+  agenda                                       studio_agenda[]
+  eventos                                      studio_events[]
+  gastos                                       studio_gastos[]
+  nominas_nominas_autorizado_porTostudio_users studio_nominas[]        @relation("nominas_autorizado_porTostudio_users")
+  nominas_nominas_pagado_porTostudio_users     studio_nominas[]        @relation("nominas_pagado_porTostudio_users")
+  nominas_nominas_userIdTostudio_users         studio_nominas[]        @relation("nominas_userIdTostudio_users")
+  pagos                                        studio_pagos[]
+  platform_user_profiles                       platform_user_profiles? @relation(fields: [platform_user_id], references: [id])
+  contact_logs                                 studio_contact_logs[]
+  promise_logs                                 studio_promise_logs[]
+  studio                                       studios                 @relation(fields: [studio_id], references: [id])
+
+  @@index([studio_id, status])
+  @@index([type])
+  @@index([is_active])
+  @@index([platform_user_id])
+}
+
+//! REVISAR
+model studio_lead_forms {
+  id                   String   @id @default(cuid())
+  studio_id            String
+  form_name            String
+  form_slug            String
+  title                String?
+  description          String?
+  success_message      String   @default("¡Gracias! Nos pondremos en contacto pronto.")
+  redirect_to_packages Boolean  @default(true)
+  fields_config        Json
+  is_active            Boolean  @default(true)
+  submit_count         Int      @default(0)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  studio               studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, form_slug])
+  @@index([studio_id, is_active])
+}
+
+model studio_client_portal_access {
+  id               String        @id @default(cuid())
+  studio_id        String
+  event_id         String
+  client_email     String
+  client_name      String?
+  access_code      String        @unique
+  is_active        Boolean       @default(true)
+  last_accessed_at DateTime?
+  access_count     Int           @default(0)
+  expires_at       DateTime?
+  created_at       DateTime      @default(now())
+  event            studio_events @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  studio           studios       @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, event_id, client_email])
+  @@index([access_code])
+  @@index([client_email])
+  @@index([studio_id, is_active])
+}
+
+model user_security_settings {
+  id                  String   @id @default(cuid())
+  user_id             String   @unique
+  email_notifications Boolean  @default(true)
+  device_alerts       Boolean  @default(true)
+  session_timeout     Int      @default(30)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  user                users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+model user_access_logs {
+  id         String   @id @default(cuid())
+  user_id    String
+  action     String
+  ip_address String?
+  user_agent String?
+  success    Boolean
+  details    Json?
+  created_at DateTime @default(now())
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([action])
+  @@index([created_at])
+  @@index([success])
+}
+
+enum PlatformRole {
+  SUPER_ADMIN
+  AGENTE
+  SUSCRIPTOR
+}
+
+enum StudioRole {
+  OWNER
+  ADMIN
+  MANAGER
+  PHOTOGRAPHER
+  EDITOR
+  ASSISTANT
+  PROVIDER
+  CLIENT
+}
+
+enum StudioNotificationScope {
+  STUDIO
+  USER
+  ROLE
+}
+
+enum StudioNotificationType {
+  PROMISE_CREATED
+  PROMISE_UPDATED
+  PROMISE_STAGE_CHANGED
+  EVENT_CREATED
+  EVENT_APPROVED
+  EVENT_STATUS_CHANGED
+  EVENT_CANCELLED
+  PAYMENT_RECEIVED
+  PAYMENT_PENDING
+  PAYMENT_FAILED
+  PAYMENT_REFUNDED
+  PACKAGE_CREATED
+  PACKAGE_UPDATED
+  PACKAGE_APPROVED
+  QUOTE_CREATED
+  QUOTE_APPROVED
+  QUOTE_REJECTED
+  LEAD_ASSIGNED
+  CONTACT_CREATED
+  CONTACT_UPDATED
+  AGENDA_CREATED
+  AGENDA_UPDATED
+  AGENDA_CANCELLED
+  STUDIO_SETTINGS_UPDATED
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PlatformLeadBitacoraTipo {
+  NOTA_PERSONALIZADA
+  CAMBIO_ETAPA
+  ASIGNACION_AGENTE
+  DESASIGNACION_AGENTE
+  CREACION_LEAD
+  ACTUALIZACION_DATOS
+  LLAMADA_REALIZADA
+  EMAIL_ENVIADO
+  REUNION_AGENDADA
+  CONTRATO_FIRMADO
+  SUSCRIPCION_ACTIVA
+  CANCELACION
+  DESCUENTO_APLICADO
+  CODIGO_DESCUENTO_GENERADO
+}
+
+enum PlanLimitType {
+  EVENTS_PER_MONTH
+  STORAGE_GB
+  TEAM_MEMBERS
+  PORTFOLIOS
+  LEAD_FORMS
+  ACTIVE_CAMPAIGNS
+  GANTT_TEMPLATES
+}
+
+enum UnidadMedida {
+  BOOLEAN
+  CANTIDAD
+  HORAS
+  USUARIOS
+  CATALOGOS
+  GB
+  PROYECTOS
+  COTIZACIONES
+  LANDING_PAGES
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  CANCELLED
+  PAUSED
+  EXPIRED
+}
+
+enum SubscriptionItemType {
+  PLAN
+  ADDON
+  OVERAGE
+  DISCOUNT
+}
+
+enum SubscriptionChangeType {
+  PLAN_UPGRADE
+  PLAN_DOWNGRADE
+  ADDON_ADDED
+  ADDON_REMOVED
+  TRIAL_STARTED
+  TRIAL_ENDED
+  CANCELLED
+  REACTIVATED
+  PAUSED
+  RESUMED
+}
+
+enum PersonalType {
+  OPERATIVO
+  ADMINISTRATIVO
+  PROVEEDOR
+}
+
+enum ItemType {
+  PRODUCTO
+  SERVICIO
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  AGENTE
+  SUSCRIPTOR
+  PERSONAL_SUSCRIPTOR
+  CLIENTE_SUSCRIPTOR
+}
+
+enum PersonnelType {
+  EMPLEADO
+  PROVEEDOR
+}
+
+enum LeadStatus {
+  NUEVO
+  CONTACTADO
+  INTERESADO
+  COTIZACION
+  NEGOCIACION
+  CONVERTIDO
+  PERDIDO
+}
+
+enum MarketingStageType {
+  PROSPECTING
+  QUALIFICATION
+  PROPOSAL
+  CONVERSION
+  CLOSED_LOST
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  MEETING
+  WHATSAPP
+  NOTE
+  TASK
+}
+
+enum ManagerStageType {
+  PLANNING
+  PRODUCTION
+  POST_PRODUCTION
+  DELIVERY
+  WARRANTY
+  COMPLETED
+}
+
+enum DeliverableType {
+  PHOTO_GALLERY
+  VIDEO_HIGHLIGHTS
+  FULL_VIDEO
+  ALBUM
+  DIGITAL_DOWNLOAD
+  OTHER
+}
+
+enum TaskCategory {
+  PLANNING
+  PRODUCTION
+  POST_PRODUCTION
+  REVIEW
+  DELIVERY
+  WARRANTY
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskAction {
+  CREATED
+  UPDATED
+  ASSIGNED
+  STATUS_CHANGED
+  COMPLETED
+  DELETED
+  NOTE_ADDED
+}
+
+enum PortfolioItemType {
+  PHOTO
+  VIDEO
+}

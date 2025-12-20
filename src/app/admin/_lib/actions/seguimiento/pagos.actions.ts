@@ -254,7 +254,7 @@ export async function cambiarStatusPago(pagoId: string, nuevoStatus: PagoStatus)
             throw new Error('Pago no encontrado')
         }
 
-        let cambiosAdicionales = {
+        const cambiosAdicionales = {
             cotizacionActualizada: false,
             eventoActualizado: false,
             eventoEtapaActualizada: false,

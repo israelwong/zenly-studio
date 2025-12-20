@@ -26,7 +26,7 @@ export class PreciosValidator extends BaseValidator {
                 // Validar campos específicos de precios
                 const configData = preciosConfig.configuracion || {};
                 let fieldsValidated = 0;
-                let totalFields = 3; // utilidad_base, sobreprecio, descuento_maximo
+                const totalFields = 3; // utilidad_base, sobreprecio, descuento_maximo
 
                 if (configData.utilidad_base !== undefined && configData.utilidad_base > 0) {
                     fieldsValidated++;

@@ -16,10 +16,10 @@ import {
     sortableKeyboardCoordinates,
     rectSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Input } from '@/components/ui/shadcn/input';
+import { ZenButton } from '@/components/ui/zen';
+import { Badge } from '@/components/ui/shadcn/badge';
 import Link from 'next/link';
 import {
     Search,
@@ -432,35 +432,36 @@ export function PlansContainer({
 
                         {/* Filtros */}
                         <div className="flex gap-2 flex-wrap">
-                            <Button
-                                variant={filter === 'all' ? 'default' : 'outline'}
+                            <ZenButton
+                                variant={filter === 'all' ? 'primary' : 'outline'}
                                 onClick={() => setFilter('all')}
                                 size="sm"
+                                icon={Filter}
+                                iconPosition="left"
                             >
-                                <Filter className="mr-2 h-4 w-4" />
                                 Todos ({plans.length})
-                            </Button>
-                            <Button
-                                variant={filter === 'active' ? 'default' : 'outline'}
+                            </ZenButton>
+                            <ZenButton
+                                variant={filter === 'active' ? 'primary' : 'outline'}
                                 onClick={() => setFilter('active')}
                                 size="sm"
                             >
                                 Activos ({plans.filter(p => p.active).length})
-                            </Button>
-                            <Button
-                                variant={filter === 'inactive' ? 'default' : 'outline'}
+                            </ZenButton>
+                            <ZenButton
+                                variant={filter === 'inactive' ? 'primary' : 'outline'}
                                 onClick={() => setFilter('inactive')}
                                 size="sm"
                             >
                                 Inactivos ({plans.filter(p => !p.active).length})
-                            </Button>
-                            <Button
-                                variant={filter === 'popular' ? 'default' : 'outline'}
+                            </ZenButton>
+                            <ZenButton
+                                variant={filter === 'popular' ? 'primary' : 'outline'}
                                 onClick={() => setFilter('popular')}
                                 size="sm"
                             >
                                 Populares ({plans.filter(p => p.popular).length})
-                            </Button>
+                            </ZenButton>
                         </div>
                     </div>
 
@@ -473,9 +474,9 @@ export function PlansContainer({
                             { key: 'price' as SortType, label: 'Precio' },
                             { key: 'studios' as SortType, label: 'Estudios' }
                         ].map((sort) => (
-                            <Button
+                            <ZenButton
                                 key={sort.key}
-                                variant={sortBy === sort.key ? 'default' : 'ghost'}
+                                variant={sortBy === sort.key ? 'primary' : 'ghost'}
                                 size="sm"
                                 onClick={() => toggleSort(sort.key)}
                                 className="text-xs"
@@ -486,7 +487,7 @@ export function PlansContainer({
                                         <SortAsc className="ml-1 h-3 w-3" /> :
                                         <SortDesc className="ml-1 h-3 w-3" />
                                 )}
-                            </Button>
+                            </ZenButton>
                         ))}
                     </div>
                 </CardContent>
@@ -526,12 +527,11 @@ export function PlansContainer({
                                 }
                             </div>
                             {!searchTerm && filter === 'all' && (
-                                <Button asChild>
+                                <ZenButton asChild icon={Plus} iconPosition="left">
                                     <Link href="/admin/plans/new">
-                                        <Plus className="mr-2 h-4 w-4" />
                                         Crear primer plan
                                     </Link>
-                                </Button>
+                                </ZenButton>
                             )}
                         </div>
                     ) : (

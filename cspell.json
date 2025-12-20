@@ -122,7 +122,8 @@
     "postcss-config",
     "tailwind-config",
     "tsconfig",
-    "tsconfig-tsbuildinfo"
+    "tsconfig-tsbuildinfo",
+    "Condicion"
   ],
   "ignorePaths": [
     "node_modules/**",
@@ -137,4 +138,3 @@
     "*.tsbuildinfo"
   ]
 }
-

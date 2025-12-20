@@ -1,26 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/shadcn/button";
+import { ZenInput } from "@/components/ui/zen";
+import { Label } from "@/components/ui/shadcn/label";
+import { Textarea } from "@/components/ui/shadcn/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/shadcn/card";
+import { Badge } from "@/components/ui/shadcn/badge";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/ui/shadcn/dialog";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue
-} from "@/components/ui/select";
+} from "@/components/ui/shadcn/select";
 import {
     Plus,
     Save,
@@ -272,9 +272,9 @@ export function SimpleLimitsModal({ isOpen, onClose, limits, onSave }: SimpleLim
                             {/* Configurar límite */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label htmlFor="limite">Límite</Label>
-                                    <Input
+                                    <ZenInput
                                         id="limite"
+                                        label="Límite"
                                         type="number"
                                         placeholder="ej: 10, 0 (sin acceso), vacío (ilimitado)"
                                         value={newLimit.limite === null ? '' : newLimit.limite}
@@ -288,9 +288,9 @@ export function SimpleLimitsModal({ isOpen, onClose, limits, onSave }: SimpleLim
                                     </p>
                                 </div>
                                 <div>
-                                    <Label htmlFor="unidad">Unidad (opcional)</Label>
-                                    <Input
+                                    <ZenInput
                                         id="unidad"
+                                        label="Unidad (opcional)"
                                         placeholder="ej: GB, horas, usuarios"
                                         value={newLimit.unidad || ''}
                                         onChange={(e) => setNewLimit(prev => ({

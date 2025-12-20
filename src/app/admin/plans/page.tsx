@@ -1,6 +1,6 @@
 import React from 'react';
 import { prisma } from '@/lib/prisma';
-import { SectionNavigation } from '@/components/ui/section-navigation';
+import { SectionNavigation } from '@/components/ui/shadcn/section-navigation';
 import { PlansPageClient } from './components';
 import { Plan } from './types';
 
@@ -16,14 +16,14 @@ async function getPlans(): Promise<Plan[]> {
             include: {
                 _count: {
                     select: {
-                        projects: true,
-                        subscriptions: true
+                        studios: true,
+                        subscriptions: true,
                     }
                 }
             },
             orderBy: [
                 { active: 'desc' },
-                { orden: 'asc' },
+                { order: 'asc' },
                 { name: 'asc' }
             ]
         });

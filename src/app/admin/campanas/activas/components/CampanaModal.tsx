@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/shadcn/button';
+import { ZenInput } from '@/components/ui/zen';
+import { Label } from '@/components/ui/shadcn/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { toast } from 'sonner';
 
 interface Plataforma {
@@ -225,46 +225,40 @@ export function CampanaModal({ isOpen, onClose, onSave, editingCampaña }: Campa
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <Label htmlFor="nombre" className="mb-2 block">Nombre de la Campaña *</Label>
-                        <Input
-                            id="nombre"
-                            value={formData.nombre}
-                            onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                            placeholder="Ej: Campaña de Verano 2024"
-                            required
-                            disabled={isSubmitting}
-                            className="bg-zinc-900 border-zinc-700 text-white"
-                        />
-                    </div>
+                    <ZenInput
+                        id="nombre"
+                        label="Nombre de la Campaña"
+                        required
+                        value={formData.nombre}
+                        onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                        placeholder="Ej: Campaña de Verano 2024"
+                        disabled={isSubmitting}
+                        className="bg-zinc-900 border-zinc-700 text-white"
+                    />
 
-                    <div>
-                        <Label htmlFor="descripcion" className="mb-2 block">Descripción</Label>
-                        <Input
-                            id="descripcion"
-                            value={formData.descripcion}
-                            onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                            placeholder="Descripción de la campaña..."
-                            disabled={isSubmitting}
-                            className="bg-zinc-900 border-zinc-700 text-white"
-                        />
-                    </div>
+                    <ZenInput
+                        id="descripcion"
+                        label="Descripción"
+                        value={formData.descripcion}
+                        onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                        placeholder="Descripción de la campaña..."
+                        disabled={isSubmitting}
+                        className="bg-zinc-900 border-zinc-700 text-white"
+                    />
 
-                    <div>
-                        <Label htmlFor="presupuestoTotal" className="mb-2 block">Presupuesto Total *</Label>
-                        <Input
-                            id="presupuestoTotal"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={formData.presupuestoTotal}
-                            onChange={(e) => setFormData({ ...formData, presupuestoTotal: e.target.value })}
-                            placeholder="0.00"
-                            required
-                            disabled={isSubmitting}
-                            className="bg-zinc-900 border-zinc-700 text-white"
-                        />
-                    </div>
+                    <ZenInput
+                        id="presupuestoTotal"
+                        label="Presupuesto Total"
+                        required
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.presupuestoTotal}
+                        onChange={(e) => setFormData({ ...formData, presupuestoTotal: e.target.value })}
+                        placeholder="0.00"
+                        disabled={isSubmitting}
+                        className="bg-zinc-900 border-zinc-700 text-white"
+                    />
 
                     {/* Selección de Plataformas */}
                     <div>
@@ -313,30 +307,27 @@ export function CampanaModal({ isOpen, onClose, onSave, editingCampaña }: Campa
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <Label className="text-xs text-zinc-400">Presupuesto</Label>
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={selectedPlataforma.presupuesto}
-                                                        onChange={(e) => updatePlataforma(selectedPlataforma.plataformaId, 'presupuesto', parseFloat(e.target.value) || 0)}
-                                                        className="bg-zinc-900 border-zinc-700 text-white text-sm"
-                                                        disabled={isSubmitting}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-xs text-zinc-400">Gasto Real</Label>
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={selectedPlataforma.gastoReal}
-                                                        onChange={(e) => updatePlataforma(selectedPlataforma.plataformaId, 'gastoReal', parseFloat(e.target.value) || 0)}
-                                                        className="bg-zinc-900 border-zinc-700 text-white text-sm"
-                                                        disabled={isSubmitting}
-                                                    />
-                                                </div>
+                                                <ZenInput
+                                                    label="Presupuesto"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={selectedPlataforma.presupuesto}
+                                                    onChange={(e) => updatePlataforma(selectedPlataforma.plataformaId, 'presupuesto', parseFloat(e.target.value) || 0)}
+                                                    className="bg-zinc-900 border-zinc-700 text-white text-sm"
+                                                    disabled={isSubmitting}
+                                                />
+
+                                                <ZenInput
+                                                    label="Gasto Real"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={selectedPlataforma.gastoReal}
+                                                    onChange={(e) => updatePlataforma(selectedPlataforma.plataformaId, 'gastoReal', parseFloat(e.target.value) || 0)}
+                                                    className="bg-zinc-900 border-zinc-700 text-white text-sm"
+                                                    disabled={isSubmitting}
+                                                />
                                             </div>
                                         </div>
                                     );
@@ -346,30 +337,27 @@ export function CampanaModal({ isOpen, onClose, onSave, editingCampaña }: Campa
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label htmlFor="fechaInicio" className="mb-2 block">Período Inicial *</Label>
-                            <Input
-                                id="fechaInicio"
-                                type="date"
-                                value={formData.fechaInicio}
-                                onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
-                                required
-                                disabled={isSubmitting}
-                                className="bg-zinc-900 border-zinc-700 text-white"
-                            />
-                        </div>
-                        <div>
-                            <Label htmlFor="fechaFin" className="mb-2 block">Período Final *</Label>
-                            <Input
-                                id="fechaFin"
-                                type="date"
-                                value={formData.fechaFin}
-                                onChange={(e) => setFormData({ ...formData, fechaFin: e.target.value })}
-                                required
-                                disabled={isSubmitting}
-                                className="bg-zinc-900 border-zinc-700 text-white"
-                            />
-                        </div>
+                        <ZenInput
+                            id="fechaInicio"
+                            label="Período Inicial"
+                            required
+                            type="date"
+                            value={formData.fechaInicio}
+                            onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
+                            disabled={isSubmitting}
+                            className="bg-zinc-900 border-zinc-700 text-white"
+                        />
+
+                        <ZenInput
+                            id="fechaFin"
+                            label="Período Final"
+                            required
+                            type="date"
+                            value={formData.fechaFin}
+                            onChange={(e) => setFormData({ ...formData, fechaFin: e.target.value })}
+                            disabled={isSubmitting}
+                            className="bg-zinc-900 border-zinc-700 text-white"
+                        />
                     </div>
 
                     <div className="flex items-center justify-between p-4 bg-zinc-900/50 border border-zinc-700 rounded-lg">

@@ -1,7 +1,13 @@
 // filepath: /Users/israelwong/Documents/Desarrollo/prosocial-app/next.config.js
 const nextConfig = {
   images: {
-    domains: ['bgtapcutchryzhzooony.supabase.co'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'bgtapcutchryzhzooony.supabase.co',
+        pathname: '/**',
+      },
+    ],
   },
   env: {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,

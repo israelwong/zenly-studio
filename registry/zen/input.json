@@ -1,0 +1,15 @@
+{
+  "name": "zen-input",
+  "type": "component",
+  "files": [
+    {
+      "name": "zen-input.tsx",
+      "content": "import * as React from \"react\"\nimport { cn } from \"@/lib/utils\"\nimport { ZEN_COLORS, ZEN_SPACING } from \"@/components/ui/zen/tokens\"\nimport { ZenLabel } from \"@/components/ui/zen/base/ZenLabel\"\n\nexport interface ZenInputProps\n  extends React.InputHTMLAttributes<HTMLInputElement> {\n  label?: string\n  required?: boolean\n  error?: string\n  hint?: string\n  success?: string\n}\n\nconst ZenInput = React.forwardRef<HTMLInputElement, ZenInputProps>(\n  ({ className, type, label, required, error, hint, success, id, ...props }, ref) => {\n    const inputId = id || React.useId()\n    const hasError = !!error\n    const hasSuccess = !!success && !hasError\n    \n    return (\n      <div className=\"space-y-2\">\n        {label && (\n          <ZenLabel \n            htmlFor={inputId}\n            required={required}\n            className={cn(\n              hasError && \"text-red-400\",\n              hasSuccess && \"text-green-400\"\n            )}\n          >\n            {label}\n          </ZenLabel>\n        )}\n        <input\n          type={type}\n          id={inputId}\n          className={cn(\n            \"flex h-10 w-full rounded-md border bg-transparent px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\",\n            ZEN_COLORS.input.default.bg,\n            ZEN_COLORS.input.default.border,\n            ZEN_COLORS.input.default.text,\n            hasError && ZEN_COLORS.input.error.border,\n            hasSuccess && ZEN_COLORS.input.success.border,\n            ZEN_SPACING.input.padding,\n            className\n          )}\n          ref={ref}\n          {...props}\n        />\n        {(hint || error || success) && (\n          <div className=\"text-xs\">\n            {error && (\n              <span className=\"text-red-400\">{error}</span>\n            )}\n            {success && !error && (\n              <span className=\"text-green-400\">{success}</span>\n            )}\n            {hint && !error && !success && (\n              <span className=\"text-zinc-400\">{hint}</span>\n            )}\n          </div>\n        )}\n      </div>\n    )\n  }\n)\nZenInput.displayName = \"ZenInput\"\n\nexport { ZenInput }",
+      "type": "tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": ["zen-label"],
+  "description": "Input unificado del ZEN Design System con label integrado, estados de error/success y hints contextuales.",
+  "keywords": ["input", "zen", "design-system", "form", "validation", "label"]
+}

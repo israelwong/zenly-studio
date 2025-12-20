@@ -1,0 +1,218 @@
+# ZEN Design System - Reglas de Desarrollo
+
+## Propósito
+
+ZEN Design System es el sistema de componentes unificado para ProSocial Platform que garantiza consistencia visual y mejora la experiencia de desarrollo.
+
+## Estructura
+
+```
+/src/components/ui/
+├── zen/                    # ZEN Design System (USAR PRIMERO)
+│   ├── base/              # Componentes base
+│   ├── forms/             # Componentes de formulario
+│   ├── layout/            # Componentes de layout
+│   ├── specialized/       # Componentes especializados
+│   ├── tokens/            # Design tokens
+│   └── index.ts          # Exports centralizados
+└── shadcn/               # Componentes Shadcn (backup)
+```
+
+## Reglas de Importación
+
+### ✅ CORRECTO
+
+```typescript
+// Prioridad 1: ZEN Design System
+import { ZenButton, ZenInput, ZenCard } from "@/components/ui/zen";
+
+// Prioridad 2: Shadcn (solo si no existe en ZEN)
+import { Dialog, Select } from "@/components/ui/shadcn/dialog";
+```
+
+### ❌ INCORRECTO
+
+```typescript
+// ❌ NO usar rutas directas
+import { ZenButton } from "@/components/ui/zen/base/ZenButton";
+
+// ❌ NO usar Shadcn cuando existe ZEN
+import { Button } from "@/components/ui/shadcn/button"; // Usar ZenButton
+import { Input } from "@/components/ui/shadcn/input";   // Usar ZenInput
+```
+
+## Componentes Disponibles
+
+### Base Components
+- `ZenButton` - Botón unificado con estados de loading
+- `ZenInput` - Input con label integrado
+- `ZenCard` - Contenedor con tema zinc
+- `ZenBadge` - Badge semántico
+
+### Form Components
+- `ZenTextarea` - Textarea con contador
+- `ZenFormSection` - Sección de formulario
+- `ZenSelect` - Select con búsqueda (próximo)
+- `ZenCheckbox` - Checkbox mejorado (próximo)
+
+### Layout Components
+- `ZenSidebar` - Sidebar unificado (próximo)
+- `ZenNavbar` - Navbar consistente (próximo)
+- `ZenModal` - Modal estándar (próximo)
+
+## Patrones de Uso
+
+### Formularios
+
+```typescript
+import { ZenInput, ZenTextarea, ZenButton } from "@/components/ui/zen";
+
+function MiFormulario() {
+  return (
+    <form className="space-y-6">
+      <ZenInput 
+        label="Nombre del Campo"
+        required
+        error={errors.campo}
+        hint="Texto de ayuda para el usuario"
+      />
+      
+      <ZenTextarea 
+        label="Descripción"
+        maxLength={500}
+        minRows={3}
+        hint="Describe detalladamente..."
+      />
+      
+      <ZenButton 
+        variant="primary" 
+        loading={saving}
+        loadingText="Guardando..."
+      >
+        Guardar Cambios
+      </ZenButton>
+    </form>
+  );
+}
+```
+
+### Cards y Contenedores
+
+```typescript
+import { 
+  ZenCard, 
+  ZenCardHeader, 
+  ZenCardTitle, 
+  ZenCardDescription, 
+  ZenCardContent 
+} from "@/components/ui/zen";
+
+function MiSeccion() {
+  return (
+    <ZenCard variant="default" padding="none">
+      <ZenCardHeader>
+        <ZenCardTitle>Título de la Sección</ZenCardTitle>
+        <ZenCardDescription>
+          Descripción clara de la funcionalidad
+        </ZenCardDescription>
+      </ZenCardHeader>
+      <ZenCardContent>
+        {/* Contenido de la sección */}
+      </ZenCardContent>
+    </ZenCard>
+  );
+}
+```
+
+## Design Tokens
+
+### Uso de Tokens
+
+```typescript
+import { ZEN_COLORS, ZEN_SPACING, ZEN_TYPOGRAPHY } from "@/components/ui/zen";
+
+// Colores
+const buttonClass = cn(
+  ZEN_COLORS.button.primary.bg,
+  ZEN_COLORS.button.primary.hover
+);
+
+// Espaciado
+const cardClass = cn(
+  ZEN_SPACING.padding.card.md,
+  ZEN_SPACING.zen.cardSpacing
+);
+
+// Tipografía
+const titleClass = ZEN_TYPOGRAPHY.component.pageTitle;
+```
+
+### Tokens Disponibles
+
+- **ZEN_COLORS** - Paleta completa con tema zinc
+- **ZEN_SPACING** - Sistema de espaciado responsivo
+- **ZEN_TYPOGRAPHY** - Tipografía por componente
+
+## Migración a ZEN
+
+### Proceso Recomendado
+
+1. **Analizar** sección actual
+2. **Identificar** componentes necesarios
+3. **Crear** componentes ZEN faltantes
+4. **Refactorizar** usando ZEN
+5. **Probar** funcionalidad
+6. **Commit** con branch específico
+
+### Naming Convention
+
+```bash
+# Branches para migración ZEN
+v1.1.ui.{seccion}     # ej: v1.1.ui.identidad
+v1.1.ui.{componente}  # ej: v1.1.ui.sidebar
+```
+
+## Validación
+
+### Checklist Pre-Commit
+
+- [ ] ✅ Usar componentes ZEN cuando estén disponibles
+- [ ] ✅ Importar desde `@/components/ui/zen`
+- [ ] ✅ No hardcodear estilos que existen en tokens
+- [ ] ✅ Mantener TypeScript strict sin `any`
+- [ ] ✅ Incluir props de accesibilidad
+- [ ] ✅ Documentar componentes nuevos
+
+### Revisión de Código
+
+```typescript
+// ✅ APROBAR
+import { ZenButton, ZenInput } from "@/components/ui/zen";
+
+// ❌ RECHAZAR
+import { Button } from "@/components/ui/button";
+<div className="bg-zinc-900 p-6">
+```
+
+## Documentación
+
+- **README**: `/src/components/ui/zen/README.md`
+- **Listado**: `/docs/04-best-practices/ZEN_COMPONENTS_LISTADO.md`
+- **Tokens**: `/src/components/ui/zen/tokens/`
+
+## Troubleshooting
+
+### Error: Componente ZEN no encontrado
+1. Verificar en `/src/components/ui/zen/index.ts`
+2. Crear componente si no existe
+3. Usar Shadcn como fallback temporal
+
+### Error: Estilos inconsistentes
+1. Verificar uso de design tokens
+2. Evitar hardcodear clases CSS
+3. Usar componentes ZEN completos
+
+### Error: TypeScript en componentes ZEN
+1. Verificar imports de tipos
+2. Usar interfaces exportadas
+3. No usar `any` type

@@ -2,13 +2,21 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabaseRealtime } from '@/lib/supabase/realtime-client';
-import { obtenerIdentidadStudio } from '@/lib/actions/studio/config/identidad.actions';
+import { obtenerIdentidadStudio } from '@/lib/actions/studio/profile/identidad';
 import { REALTIME_CONFIG, logRealtime, canUseRealtime } from '@/lib/realtime/realtime-control';
-import type { IdentidadData } from '@/app/studio/[slug]/configuracion/cuenta/identidad/types';
+import type { IdentidadData } from '@/app/[slug]/studio/profile/identidad/types';
+import type { RealtimeChannel } from '@supabase/realtime-js';
+import { REALTIME_CHANNEL_STATES } from '@supabase/realtime-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface UseRealtimeStudioOptions {
   studioSlug: string;
   onUpdate?: (data: IdentidadData) => void;
+}
+
+interface BroadcastPayload {
+  event: string;
+  payload?: unknown;
 }
 
 export function useRealtimeStudio({ studioSlug, onUpdate }: UseRealtimeStudioOptions) {
@@ -17,10 +25,10 @@ export function useRealtimeStudio({ studioSlug, onUpdate }: UseRealtimeStudioOpt
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [reconnectionAttempts, setReconnectionAttempts] = useState(0);
-  
+
   // Referencias para control de conexiones
-  const channelRef = useRef<any>(null);
-  const supabaseRef = useRef<any>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const supabaseRef = useRef<SupabaseClient | null>(null);
   const isMountedRef = useRef(true);
 
   // Función para cargar datos iniciales
@@ -29,30 +37,32 @@ export function useRealtimeStudio({ studioSlug, onUpdate }: UseRealtimeStudioOpt
       setLoading(true);
       setError(null);
       logRealtime('STUDIO_NAVBAR', 'Cargando datos iniciales del studio', { studioSlug });
-      
+
       const data = await obtenerIdentidadStudio(studioSlug);
-      
+
       if (isMountedRef.current) {
+        if ('error' in data) {
+          throw new Error(data.error);
+        }
         setIdentidadData(data);
         onUpdate?.(data);
-        logRealtime('STUDIO_NAVBAR', 'Datos iniciales cargados exitosamente', { name: data.name });
+        logRealtime('STUDIO_NAVBAR', 'Datos iniciales cargados exitosamente', { name: data.studio_name });
       }
     } catch (err) {
       console.error('Error loading studio data:', err);
       setError('Error al cargar datos del estudio');
-      
+
       // Fallback a datos por defecto
       const fallbackData: IdentidadData = {
         id: studioSlug,
-        name: 'Studio',
+        studio_name: 'Studio',
         slug: studioSlug,
         slogan: null,
-        descripcion: null,
+        presentacion: null,
         palabras_clave: [],
-        logoUrl: null,
-        isotipo_url: null
+        logo_url: null
       };
-      
+
       if (isMountedRef.current) {
         setIdentidadData(fallbackData);
         onUpdate?.(fallbackData);
@@ -73,19 +83,22 @@ export function useRealtimeStudio({ studioSlug, onUpdate }: UseRealtimeStudioOpt
   }, [studioSlug, loadInitialData]);
 
   // Función para manejar actualizaciones de Realtime
-  const handleRealtimeUpdate = useCallback(async (payload: any, eventType: string) => {
+  const handleRealtimeUpdate = useCallback(async (payload: BroadcastPayload, eventType: string) => {
     if (!isMountedRef.current) return;
-    
+
     logRealtime('STUDIO_NAVBAR', `Datos actualizados via realtime (${eventType})`, payload);
-    
+
     try {
       // Recargar datos actualizados
       const updatedData = await obtenerIdentidadStudio(studioSlug);
-      
+
       if (isMountedRef.current) {
+        if ('error' in updatedData) {
+          throw new Error(updatedData.error);
+        }
         setIdentidadData(updatedData);
         onUpdate?.(updatedData);
-        logRealtime('STUDIO_NAVBAR', 'Datos actualizados exitosamente', { name: updatedData.name });
+        logRealtime('STUDIO_NAVBAR', 'Datos actualizados exitosamente', { name: updatedData.studio_name });
       }
     } catch (err) {
       console.error('Error reloading studio data after realtime update:', err);
@@ -111,7 +124,7 @@ export function useRealtimeStudio({ studioSlug, onUpdate }: UseRealtimeStudioOpt
     }
 
     // Verificar si ya hay una conexión activa
-    if (channelRef.current?.state === 'subscribed') {
+    if (channelRef.current?.state === REALTIME_CHANNEL_STATES.joined) {
       logRealtime('STUDIO_NAVBAR', 'Canal ya suscrito, evitando duplicación');
       return;
     }
@@ -140,7 +153,7 @@ export function useRealtimeStudio({ studioSlug, onUpdate }: UseRealtimeStudioOpt
               setIsConnected(false);
               setReconnectionAttempts(prev => prev + 1);
               logRealtime('STUDIO_NAVBAR', 'Error en canal', { status, error: err, attempts: reconnectionAttempts + 1 });
-              
+
               // Intentar reconexión si no hemos excedido el límite
               if (reconnectionAttempts < REALTIME_CONFIG.MAX_RECONNECTION_ATTEMPTS) {
                 setTimeout(() => {
@@ -173,15 +186,18 @@ export function useRealtimeStudio({ studioSlug, onUpdate }: UseRealtimeStudioOpt
   // Función para recargar datos manualmente
   const refetch = useCallback(async () => {
     if (!isMountedRef.current) return;
-    
+
     try {
       setLoading(true);
       setError(null);
       logRealtime('STUDIO_NAVBAR', 'Recargando datos manualmente');
-      
+
       const data = await obtenerIdentidadStudio(studioSlug);
-      
+
       if (isMountedRef.current) {
+        if ('error' in data) {
+          throw new Error(data.error);
+        }
         setIdentidadData(data);
         onUpdate?.(data);
         logRealtime('STUDIO_NAVBAR', 'Datos recargados exitosamente');

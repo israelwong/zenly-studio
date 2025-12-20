@@ -17,7 +17,7 @@ export interface DashboardStudio {
   };
   _count: {
     eventos: number;
-    clientes: number;
+    contacts: number;
   };
 }
 
@@ -45,20 +45,20 @@ export interface DashboardCliente {
  */
 export async function obtenerDashboardStudio(studioSlug: string): Promise<DashboardStudio | null> {
   return await retryDatabaseOperation(async () => {
-    const studio = await prisma.projects.findUnique({
+    const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
       select: {
         id: true,
-        name: true,
+        studio_name: true,
         slug: true,
         email: true,
         address: true,
         website: true,
-        subscriptionStatus: true,
+        subscription_status: true,
         _count: {
           select: {
             eventos: true,
-            clientes: true,
+            contacts: true,
           },
         },
       },
@@ -86,9 +86,9 @@ export async function obtenerDashboardStudio(studioSlug: string): Promise<Dashbo
 export async function obtenerEventosRecientes(studioSlug: string): Promise<DashboardEvento[]> {
   return await retryDatabaseOperation(async () => {
     try {
-      const eventos = await prisma.eventos.findMany({
+      const eventos = await prisma.studio_events.findMany({
         where: {
-          projects: { slug: studioSlug },
+          studio: { slug: studioSlug },
         },
         select: {
           id: true,
@@ -124,22 +124,28 @@ export async function obtenerEventosRecientes(studioSlug: string): Promise<Dashb
 export async function obtenerClientesRecientes(studioSlug: string): Promise<DashboardCliente[]> {
   return await retryDatabaseOperation(async () => {
     try {
-      const clientes = await prisma.clientes.findMany({
+      const contacts = await prisma.studio_contacts.findMany({
         where: {
-          projects: { slug: studioSlug },
+          studio: { slug: studioSlug },
         },
         select: {
           id: true,
-          nombre: true,
+          name: true,
           email: true,
-          telefono: true,
+          phone: true,
           status: true,
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { created_at: "desc" },
         take: 5,
       });
 
-      return clientes;
+      return contacts.map(contact => ({
+        id: contact.id,
+        nombre: contact.name,
+        email: contact.email || "",
+        telefono: contact.phone,
+        status: contact.status,
+      }));
     } catch (error) {
       // En modo desarrollo, retornar array vacío si hay error
       console.log('No hay clientes disponibles en modo desarrollo');

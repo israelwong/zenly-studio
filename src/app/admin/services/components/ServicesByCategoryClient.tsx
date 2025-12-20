@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { ZenButton, ZenInput } from '@/components/ui/zen';
+import { Badge } from '@/components/ui/shadcn/badge';
 import {
     Search,
     Plus,
@@ -567,22 +566,18 @@ export function ServicesByCategoryClient() {
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <CardTitle>Filtros y Búsqueda</CardTitle>
-                        <Button onClick={handleCreate}>
-                            <Plus className="h-4 w-4 mr-2" />
+                        <ZenButton onClick={handleCreate} icon={Plus} iconPosition="left">
                             Nuevo Servicio
-                        </Button>
+                        </ZenButton>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="relative">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Buscar por nombre, slug o descripción..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-8"
-                        />
-                    </div>
+                    <ZenInput
+                        placeholder="Buscar por nombre, slug o descripción..."
+                        icon={Search}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                 </CardContent>
             </Card>
 
@@ -674,10 +669,9 @@ export function ServicesByCategoryClient() {
                             }
                         </p>
                         {!searchTerm && (
-                            <Button onClick={handleCreate}>
-                                <Plus className="h-4 w-4 mr-2" />
+                            <ZenButton onClick={handleCreate} icon={Plus} iconPosition="left">
                                 Crear Primer Servicio
-                            </Button>
+                            </ZenButton>
                         )}
                     </CardContent>
                 </Card>

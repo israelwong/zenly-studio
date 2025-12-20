@@ -1,0 +1,96 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from "@/components/ui/zen";
+import { MobilePreviewFull } from "@/components/previews";
+import { LeadFormEditor } from "@/components/shared/forms";
+import { OfferLeadForm } from "@/components/offers/OfferLeadForm";
+import { useOfferEditor } from "../OfferEditorContext";
+import { getStudioIdBySlug } from "@/lib/actions/studio/offers/offers.actions";
+
+interface LeadFormTabProps {
+  studioSlug: string;
+  studioId?: string;
+  onSave?: () => void | Promise<void>;
+  onCancel?: () => void;
+}
+
+export function LeadFormTab({ studioSlug, studioId: initialStudioId, onSave, onCancel }: LeadFormTabProps) {
+  const [studioId, setStudioId] = useState<string>(initialStudioId || "");
+  const { formData, leadformData, updateLeadformData, isSaving } = useOfferEditor();
+
+  useEffect(() => {
+    if (!initialStudioId) {
+      const loadStudioId = async () => {
+        const id = await getStudioIdBySlug(studioSlug);
+        if (id) {
+          setStudioId(id);
+        }
+      };
+      loadStudioId();
+    }
+  }, [studioSlug, initialStudioId]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Col 1: Editor */}
+      <div>
+        <ZenCard>
+          <ZenCardHeader>
+            <ZenCardTitle>
+              Formulario de Contacto <span className="text-xs font-normal text-zinc-600">(Paso 3 de 3)</span>
+            </ZenCardTitle>
+          </ZenCardHeader>
+          <ZenCardContent>
+            <LeadFormEditor
+              studioSlug={studioSlug}
+              formData={leadformData}
+              onUpdate={updateLeadformData}
+              mode="single"
+              eventTypeId={formData.event_type_id}
+              onSave={onSave}
+              onCancel={onCancel}
+              isSaving={isSaving}
+            />
+          </ZenCardContent>
+        </ZenCard>
+      </div>
+
+      {/* Col 2: Preview */}
+      <div className="hidden lg:block">
+        <div className="sticky top-6">
+          <MobilePreviewFull
+            data={undefined}
+            loading={false}
+            onClose={() => { }}
+            isEditMode={true}
+            hideHeader={true}
+          >
+            <div className="h-full overflow-auto">
+              <OfferLeadForm
+                studioSlug={studioSlug}
+                studioId={studioId}
+                offerId="preview"
+                offerSlug={formData.slug || "preview"}
+                title={leadformData.title || null}
+                description={leadformData.description || null}
+                successMessage={leadformData.success_message}
+                successRedirectUrl={leadformData.success_redirect_url || null}
+                fieldsConfig={leadformData.fields_config}
+                eventTypeId={formData.event_type_id}
+                enableInterestDate={leadformData.enable_interest_date}
+                validateWithCalendar={leadformData.validate_with_calendar}
+                emailRequired={leadformData.email_required}
+                coverUrl={formData.cover_media_url}
+                coverType={formData.cover_media_type}
+                isPreview={true}
+                isModal={false}
+                isEditMode={true}
+              />
+            </div>
+          </MobilePreviewFull>
+        </div>
+      </div>
+    </div>
+  );
+}

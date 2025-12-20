@@ -28,13 +28,13 @@ export class SetupValidationService {
         return SetupValidationService.instance;
     }
 
-    async validateStudioSetup(projectId: string): Promise<StudioSetupStatus> {
+    async validateStudioSetup(studioId: string): Promise<StudioSetupStatus> {
         try {
             // 1. Obtener datos del proyecto
-            const projectData = await this.getProjectData(projectId);
+            const studioData = await this.getStudioData(studioId);
 
-            if (!projectData) {
-                throw new Error(`Proyecto no encontrado: ${projectId}`);
+            if (!studioData) {
+                throw new Error(`Studio no encontrado: ${studioId}`);
             }
 
             // 2. Obtener configuración de secciones
@@ -43,7 +43,7 @@ export class SetupValidationService {
             // 3. Validar cada sección
             const sections = await Promise.all(
                 sectionsConfig.map(config =>
-                    this.validateSection(projectId, config, projectData)
+                    this.validateSection(studioId, config, studioData)
                 )
             );
 
@@ -52,7 +52,7 @@ export class SetupValidationService {
             const isFullyConfigured = overallProgress >= 90; // 90% o más se considera completo
 
             // 5. Actualizar o crear registro
-            const setupStatus = await this.updateSetupStatus(projectId, {
+            const setupStatus = await this.updateSetupStatus(studioId, {
                 overallProgress,
                 isFullyConfigured,
                 sections
@@ -65,9 +65,9 @@ export class SetupValidationService {
         }
     }
 
-    private async getProjectData(projectId: string): Promise<any> {
-        return await prisma.projects.findUnique({
-            where: { id: projectId },
+    private async getStudioData(studioId: string): Promise<any> {
+        return await prisma.studios.findUnique({
+            where: { id: studioId },
             include: {
                 redes_sociales: {
                     include: {
@@ -92,13 +92,13 @@ export class SetupValidationService {
     }
 
     private async validateSection(
-        projectId: string,
+        studioId: string,
         config: SetupSectionConfig,
-        projectData: any
+        studioData: any
     ): Promise<SetupSectionProgress> {
         try {
             const validator = this.getSectionValidator(config.sectionId);
-            const result = await validator.validate(projectData);
+            const result = await validator.validate(studioData);
 
             // Lógica de estado más clara y consistente
             let status: 'pending' | 'in_progress' | 'completed' | 'error';
@@ -180,7 +180,7 @@ export class SetupValidationService {
     }
 
     private async updateSetupStatus(
-        projectId: string,
+        studioId: string,
         data: {
             overallProgress: number;
             isFullyConfigured: boolean;
@@ -189,14 +189,14 @@ export class SetupValidationService {
     ): Promise<StudioSetupStatus> {
         // Buscar estado existente
         const existingStatus = await prisma.studio_setup_status.findUnique({
-            where: { projectId },
+            where: { studio_id: studioId },
             include: { sections: true }
         });
 
         if (existingStatus) {
             // Actualizar estado existente
             const updatedStatus = await prisma.studio_setup_status.update({
-                where: { projectId },
+                where: { studio_id: studioId },
                 data: {
                     overallProgress: data.overallProgress,
                     isFullyConfigured: data.isFullyConfigured,
@@ -211,7 +211,7 @@ export class SetupValidationService {
 
             return {
                 id: updatedStatus.id,
-                projectId: updatedStatus.projectId,
+                studio_id: updatedStatus.studio_id,
                 overallProgress: updatedStatus.overallProgress,
                 isFullyConfigured: updatedStatus.isFullyConfigured,
                 lastValidatedAt: updatedStatus.lastValidatedAt,
@@ -221,7 +221,7 @@ export class SetupValidationService {
             // Crear nuevo estado
             const newStatus = await prisma.studio_setup_status.create({
                 data: {
-                    projectId,
+                    studio_id: studioId,
                     overallProgress: data.overallProgress,
                     isFullyConfigured: data.isFullyConfigured,
                     lastValidatedAt: new Date()
@@ -233,7 +233,7 @@ export class SetupValidationService {
 
             return {
                 id: newStatus.id,
-                projectId: newStatus.projectId,
+                studio_id: newStatus.studio_id,
                 overallProgress: newStatus.overallProgress,
                 isFullyConfigured: newStatus.isFullyConfigured,
                 lastValidatedAt: newStatus.lastValidatedAt,
@@ -269,7 +269,7 @@ export class SetupValidationService {
     }
 
     async logSetupChange(
-        projectId: string,
+        studioId: string,
         action: 'created' | 'updated' | 'completed' | 'error',
         source: 'manual' | 'ai' | 'system' = 'system',
         sectionId?: string,
@@ -278,7 +278,7 @@ export class SetupValidationService {
         try {
             await prisma.setup_progress_log.create({
                 data: {
-                    projectId,
+                    studio_id: studioId,
                     sectionId,
                     action,
                     details: details || {},

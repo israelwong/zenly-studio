@@ -6,13 +6,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/shadcn/button';
+import { ZenInput } from '@/components/ui/zen';
+import { Label } from '@/components/ui/shadcn/label';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Switch } from '@/components/ui/shadcn/switch';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Separator } from '@/components/ui/shadcn/separator';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PlanMigrationModal } from './components/PlanMigrationModal';
@@ -464,29 +464,23 @@ export default function EditPlanPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Nombre del Plan *</Label>
-                                <Input
-                                    id="name"
-                                    {...register('name')}
-                                    placeholder="Ej: Plan Básico"
-                                />
-                                {errors.name && (
-                                    <p className="text-sm text-red-500">{errors.name.message}</p>
-                                )}
-                            </div>
+                            <ZenInput
+                                id="name"
+                                label="Nombre del Plan"
+                                required
+                                {...register('name')}
+                                placeholder="Ej: Plan Básico"
+                                error={errors.name?.message}
+                            />
 
-                            <div className="space-y-2">
-                                <Label htmlFor="slug">Slug *</Label>
-                                <Input
-                                    id="slug"
-                                    {...register('slug')}
-                                    placeholder="plan-basico"
-                                />
-                                {errors.slug && (
-                                    <p className="text-sm text-red-500">{errors.slug.message}</p>
-                                )}
-                            </div>
+                            <ZenInput
+                                id="slug"
+                                label="Slug"
+                                required
+                                {...register('slug')}
+                                placeholder="plan-basico"
+                                error={errors.slug?.message}
+                            />
                         </div>
 
                         <div className="space-y-2">
@@ -508,35 +502,27 @@ export default function EditPlanPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="price_monthly">Precio Mensual (MXN)</Label>
-                                <Input
-                                    id="price_monthly"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    {...register('price_monthly')}
-                                    placeholder="599.00"
-                                />
-                                {errors.price_monthly && (
-                                    <p className="text-sm text-red-500">{errors.price_monthly.message}</p>
-                                )}
-                            </div>
+                            <ZenInput
+                                id="price_monthly"
+                                label="Precio Mensual (MXN)"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                {...register('price_monthly')}
+                                placeholder="599.00"
+                                error={errors.price_monthly?.message}
+                            />
 
-                            <div className="space-y-2">
-                                <Label htmlFor="price_yearly">Precio Anual (MXN)</Label>
-                                <Input
-                                    id="price_yearly"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    {...register('price_yearly')}
-                                    placeholder="5990.00"
-                                />
-                                {errors.price_yearly && (
-                                    <p className="text-sm text-red-500">{errors.price_yearly.message}</p>
-                                )}
-                            </div>
+                            <ZenInput
+                                id="price_yearly"
+                                label="Precio Anual (MXN)"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                {...register('price_yearly')}
+                                placeholder="5990.00"
+                                error={errors.price_yearly?.message}
+                            />
                         </div>
                     </CardContent>
                 </Card>

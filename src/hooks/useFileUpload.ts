@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { uploadFileStorage, deleteFileStorage, updateFileStorage } from '@/lib/actions/shared/media.actions';
+import { optimizeAvatarImage } from '@/lib/utils/image-optimizer';
 import type { FileUploadResult, FileDeleteResult } from '@/lib/actions/schemas/media-schemas';
 
 interface UseFileUploadOptions {
@@ -44,10 +45,19 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
   }, []);
 
   const validateFile = useCallback((file: File): boolean => {
-    if (!allowedMimeTypes.includes(file.type)) {
-      const allowedTypes = allowedMimeTypes.join(', ');
-      setError(`Tipo de archivo no permitido. Tipos soportados: ${allowedTypes}`);
-      return false;
+    // Validar por MIME type
+    if (allowedMimeTypes.includes(file.type)) {
+      // MIME válido, continuar
+    } else {
+      // Si MIME no es reconocido, verificar por extensión
+      const fileName = file.name.toLowerCase();
+      const isSVG = fileName.endsWith('.svg') && allowedMimeTypes.includes('image/svg+xml');
+      
+      if (!isSVG) {
+        const allowedTypes = allowedMimeTypes.join(', ');
+        setError(`Tipo de archivo no permitido. Tipos soportados: ${allowedTypes}`);
+        return false;
+      }
     }
 
     const maxSizeBytes = maxSize * 1024 * 1024;

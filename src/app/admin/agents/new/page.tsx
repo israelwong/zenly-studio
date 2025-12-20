@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { ZenButton, ZenInput } from '@/components/ui/zen';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Switch } from '@/components/ui/shadcn/switch';
+import { Label } from '@/components/ui/shadcn/label';
 import { ArrowLeft, Save, User, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -119,12 +118,11 @@ export default function NewAgentPage() {
             <div className="space-y-6">
                 {/* Header */}
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="sm" asChild>
+                    <ZenButton variant="ghost" size="sm" asChild icon={ArrowLeft} iconPosition="left">
                         <Link href="/admin/agents">
-                            <ArrowLeft className="mr-2 h-4 w-4" />
                             Volver a Agentes
                         </Link>
-                    </Button>
+                    </ZenButton>
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight">Agente Creado Exitosamente</h1>
                         <p className="text-muted-foreground">
@@ -152,18 +150,13 @@ export default function NewAgentPage() {
                                     <div className="flex-1 p-3 bg-muted rounded-md font-mono">
                                         {createdAgent.authUser.email}
                                     </div>
-                                    <Button
+                                    <ZenButton
                                         variant="outline"
                                         size="sm"
                                         onClick={() => copyToClipboard(createdAgent.authUser.email, 'email')}
                                         className="shrink-0"
-                                    >
-                                        {copiedStates.email ? (
-                                            <Check className="h-4 w-4 text-green-600" />
-                                        ) : (
-                                            <Copy className="h-4 w-4" />
-                                        )}
-                                    </Button>
+                                        icon={copiedStates.email ? Check : Copy}
+                                    />
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -172,18 +165,13 @@ export default function NewAgentPage() {
                                     <div className="flex-1 p-3 bg-muted rounded-md font-mono">
                                         {createdAgent.authUser.tempPassword}
                                     </div>
-                                    <Button
+                                    <ZenButton
                                         variant="outline"
                                         size="sm"
                                         onClick={() => copyToClipboard(createdAgent.authUser.tempPassword, 'password')}
                                         className="shrink-0"
-                                    >
-                                        {copiedStates.password ? (
-                                            <Check className="h-4 w-4 text-green-600" />
-                                        ) : (
-                                            <Copy className="h-4 w-4" />
-                                        )}
-                                    </Button>
+                                        icon={copiedStates.password ? Check : Copy}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -193,18 +181,13 @@ export default function NewAgentPage() {
                                 <div className="flex-1 p-3 bg-muted rounded-md font-mono">
                                     {typeof window !== 'undefined' ? window.location.origin : ''}/agente
                                 </div>
-                                <Button
+                                <ZenButton
                                     variant="outline"
                                     size="sm"
                                     onClick={() => copyToClipboard(`${typeof window !== 'undefined' ? window.location.origin : ''}/agente`, 'url')}
                                     className="shrink-0"
-                                >
-                                    {copiedStates.url ? (
-                                        <Check className="h-4 w-4 text-green-600" />
-                                    ) : (
-                                        <Copy className="h-4 w-4" />
-                                    )}
-                                </Button>
+                                    icon={copiedStates.url ? Check : Copy}
+                                />
                             </div>
                         </div>
                         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -216,23 +199,15 @@ export default function NewAgentPage() {
 
                         {/* Botón para copiar todas las credenciales */}
                         <div className="pt-4 border-t">
-                            <Button
+                            <ZenButton
                                 onClick={copyAllCredentials}
-                                className="w-full"
-                                variant="default"
+                                fullWidth
+                                variant="primary"
+                                icon={copiedStates.all ? Check : Copy}
+                                iconPosition="left"
                             >
-                                {copiedStates.all ? (
-                                    <>
-                                        <Check className="mr-2 h-4 w-4 text-white" />
-                                        Credenciales Copiadas
-                                    </>
-                                ) : (
-                                    <>
-                                        <Copy className="mr-2 h-4 w-4" />
-                                        Copiar Todas las Credenciales
-                                    </>
-                                )}
-                            </Button>
+                                {copiedStates.all ? 'Credenciales Copiadas' : 'Copiar Todas las Credenciales'}
+                            </ZenButton>
                             <p className="text-xs text-muted-foreground mt-2 text-center">
                                 Copia todas las credenciales en formato listo para compartir
                             </p>
@@ -247,12 +222,11 @@ export default function NewAgentPage() {
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Button variant="ghost" size="sm" asChild>
+                <ZenButton variant="ghost" size="sm" asChild icon={ArrowLeft} iconPosition="left">
                     <Link href="/admin/agents">
-                        <ArrowLeft className="mr-2 h-4 w-4" />
                         Volver
                     </Link>
-                </Button>
+                </ZenButton>
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Nuevo Agente</h1>
                     <p className="text-muted-foreground">
@@ -275,39 +249,33 @@ export default function NewAgentPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="nombre">Nombre Completo *</Label>
-                                <Input
-                                    id="nombre"
-                                    value={formData.nombre}
-                                    onChange={(e) => handleInputChange('nombre', e.target.value)}
-                                    placeholder="Ej: Juan Pérez"
-                                    required
-                                />
-                            </div>
+                            <ZenInput
+                                id="nombre"
+                                label="Nombre Completo"
+                                required
+                                value={formData.nombre}
+                                onChange={(e) => handleInputChange('nombre', e.target.value)}
+                                placeholder="Ej: Juan Pérez"
+                            />
 
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Email *</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => handleInputChange('email', e.target.value)}
-                                    placeholder="juan@ejemplo.com"
-                                    required
-                                />
-                            </div>
+                            <ZenInput
+                                id="email"
+                                label="Email"
+                                required
+                                type="email"
+                                value={formData.email}
+                                onChange={(e) => handleInputChange('email', e.target.value)}
+                                placeholder="juan@ejemplo.com"
+                            />
 
-                            <div className="space-y-2">
-                                <Label htmlFor="telefono">Teléfono *</Label>
-                                <Input
-                                    id="telefono"
-                                    value={formData.telefono}
-                                    onChange={(e) => handleInputChange('telefono', e.target.value)}
-                                    placeholder="+52 55 1234 5678"
-                                    required
-                                />
-                            </div>
+                            <ZenInput
+                                id="telefono"
+                                label="Teléfono"
+                                required
+                                value={formData.telefono}
+                                onChange={(e) => handleInputChange('telefono', e.target.value)}
+                                placeholder="+52 55 1234 5678"
+                            />
 
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
@@ -334,27 +302,23 @@ export default function NewAgentPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="metaMensualLeads">Meta Mensual de Leads</Label>
-                                <Input
-                                    id="metaMensualLeads"
-                                    type="number"
-                                    min="1"
-                                    max="1000"
-                                    value={formData.metaMensualLeads}
-                                    onChange={(e) => handleInputChange('metaMensualLeads', parseInt(e.target.value) || 0)}
-                                    placeholder="20"
-                                />
-                                <p className="text-sm text-muted-foreground">
-                                    Número de leads que debe gestionar mensualmente
-                                </p>
-                            </div>
+                            <ZenInput
+                                id="metaMensualLeads"
+                                label="Meta Mensual de Leads"
+                                type="number"
+                                min="1"
+                                max="1000"
+                                value={formData.metaMensualLeads}
+                                onChange={(e) => handleInputChange('metaMensualLeads', parseInt(e.target.value) || 0)}
+                                placeholder="20"
+                                hint="Número de leads que debe gestionar mensualmente"
+                            />
 
                             <div className="space-y-2">
-                                <Label htmlFor="comisionConversion">Comisión por Conversión</Label>
                                 <div className="flex items-center space-x-2">
-                                    <Input
+                                    <ZenInput
                                         id="comisionConversion"
+                                        label="Comisión por Conversión"
                                         type="number"
                                         min="0"
                                         max="1"
@@ -362,15 +326,13 @@ export default function NewAgentPage() {
                                         value={formData.comisionConversion}
                                         onChange={(e) => handleInputChange('comisionConversion', parseFloat(e.target.value) || 0)}
                                         placeholder="0.05"
+                                        hint="Porcentaje de comisión por cada conversión exitosa"
                                         className="flex-1"
                                     />
-                                    <span className="text-sm text-muted-foreground">
+                                    <span className="text-sm text-muted-foreground mt-8">
                                         ({Math.round(formData.comisionConversion * 100)}%)
                                     </span>
                                 </div>
-                                <p className="text-sm text-muted-foreground">
-                                    Porcentaje de comisión por cada conversión exitosa
-                                </p>
                             </div>
 
                             <div className="p-4 bg-muted rounded-lg">
@@ -398,22 +360,12 @@ export default function NewAgentPage() {
 
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-4">
-                    <Button type="button" variant="outline" asChild>
+                    <ZenButton type="button" variant="outline" asChild>
                         <Link href="/admin/agents">Cancelar</Link>
-                    </Button>
-                    <Button type="submit" disabled={isLoading}>
-                        {isLoading ? (
-                            <>
-                                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                Creando...
-                            </>
-                        ) : (
-                            <>
-                                <Save className="mr-2 h-4 w-4" />
-                                Crear Agente
-                            </>
-                        )}
-                    </Button>
+                    </ZenButton>
+                    <ZenButton type="submit" loading={isLoading} loadingText="Creando..." icon={Save} iconPosition="left">
+                        Crear Agente
+                    </ZenButton>
                 </div>
             </form>
         </div>

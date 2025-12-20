@@ -1,456 +1,290 @@
-# ProSocial Platform - Cursor Rules
+# ZENPro - Cursor Rules v2.1 (Haiku Optimizado)
 
-## 🎯 **PROYECTO OVERVIEW**
+## 🎯 PROYECTO CORE
 
-ProSocial Platform es una plataforma SaaS multi-tenant para gestión de estudios de fotografía con:
+**Producto:** ZEN - Plataforma modular SaaS para estudios fotográficos  
+**Stack:** Next.js 15 + TypeScript 5 + React 19 + Prisma + Supabase + Tailwind 4  
+**Arquitectura:** Multi-tenant con sistema de módulos activables
 
-- **Next.js 15.5.2** (App Router) + **TypeScript 5** + **Tailwind CSS 4**
-- **React 19.1.0** + **Supabase** (Auth + Database) + **Prisma 6.15.0** (ORM)
-- **Stripe** (Pagos) + **Shadcn/ui** (Componentes)
-- **Arquitectura Multi-tenant** con roles: Super Admin, Asesor, Suscriptor
+---
 
-### **Estado de Versiones**
+## 🤖 MODO HAIKU - REGLAS DE EFICIENCIA
 
-- ✅ **Next.js 15.5.2** - Última versión estable (26 agosto 2024)
-- ✅ **React 19.1.0** - Última versión estable con nuevas características
-- ✅ **TypeScript 5** - Última versión estable con mejoras de rendimiento
-- ✅ **Todas las dependencias** actualizadas a versiones compatibles
+**PRINCIPIO FUNDAMENTAL: Máxima utilidad, mínimos tokens**
 
-## 🏗️ **ARQUITECTURA Y ESTRUCTURA**
+### Formato de Respuestas Haiku
 
-### **Estructura de Directorios**
+**✅ CORRECTO:**
+
+```typescript
+// Código refactorizado
+[código limpio y completo]
+// Cambios: extraje validación, agregué tipos
+```
+
+**❌ PROHIBIDO:**
+
+```
+Voy a analizar tu código...
+[explicación previa]
+[código]
+Resumen de cambios:
+- Punto 1
+- Punto 2
+Resumen ejecutivo: [repetir lo mismo]
+Mensaje de commit sugerido: [otro resumen]
+¿Necesitas algo más?
+```
+
+### Reglas por Tipo de Tarea
+
+**Refactoring:**
+
+- Solo código + 1 línea de cambios clave
+- NO resúmenes antes/después
+- NO commits automáticos
+
+**Server Actions:**
+
+```typescript
+// ✅ Entregar directo
+export async function crearLead(data: unknown) {
+  const validated = LeadSchema.parse(data);
+  return await prisma.platform_leads.create({ data: validated });
+}
+// Validación + create. Listo.
+
+// ❌ NO hacer
+("Primero valido con Zod, luego creo en DB, finalmente revalido...");
+```
+
+**Componentes ZEN:**
+
+- Código completo funcional
+- NO explicar props obvias
+- Comentarios solo para lógica compleja
+
+**Debugging:**
+
+- Ir directo al fix
+- Explicar SOLO si no es obvio
+- NO narrar proceso de análisis
+
+**Análisis/Review:**
+
+- Bullets directos: `Problema → Fix`
+- NO contexto repetido
+- NO resumen ejecutivo
+
+### Excepciones (SÍ dar detalle)
+
+- Arquitectura de módulos nuevos
+- Trade-offs importantes
+- Usuario pregunta "¿por qué?"
+- Cambios que rompen compatibilidad
+
+---
+
+## 🧩 ARQUITECTURA MODULAR
+
+**Módulos Core MVP:**
+
+- ZEN Manager (incluido en todos los planes)
+- ZEN Magic (IA - planes Pro+)
+- ZEN Marketing (CRM - planes Pro+)
+
+**Módulos Add-ons (Fase 2+):**
+
+- ZEN Payment (+$10 USD/mes)
+- ZEN Conversations (+$15 USD/mes)
+- ZEN Cloud (+$15 USD/mes)
+- ZEN Invitation (+$12 USD/mes)
+
+**Verificación de Módulos:**
+
+```typescript
+const hasModule = await checkStudioModule(studioId, "payment");
+```
+
+---
+
+## 🏗️ ESTRUCTURA DE DIRECTORIOS
 
 ```
 src/
-├── app/                    # Next.js App Router
-│   ├── (auth)/            # Autenticación (route group)
-│   ├── (marketing)/       # Marketing público (route group)
-│   ├── admin/             # Panel de administración
-│   ├── agente/            # Panel de asesores
-│   ├── api/               # API Routes
-│   └── studio/            # Landing pages de estudios
-├── components/            # Componentes reutilizables
-├── lib/                   # Utilidades y configuraciones
-└── types/                 # Definiciones TypeScript
+├── app/(authenticated)/
+│   ├── admin/              # Super Admin
+│   ├── agente/             # Agentes CRM
+│   └── studio/[slug]/      # Suscriptores
+│       ├── manager/        # ZEN Manager
+│       ├── magic/          # ZEN Magic
+│       ├── marketing/      # ZEN Marketing
+│       └── payment/        # ZEN Payment (add-on)
+├── components/ui/
+│   ├── zen/               # ZEN Design System (USAR PRIMERO)
+│   └── shadcn/            # Base components (fallback)
+├── lib/
+│   ├── actions/           # Server Actions por módulo
+│   └── modules/           # Lógica de gestión de módulos
+└── types/                 # TypeScript types
 ```
-
-### **Rutas Principales**
-
-- `/admin/*` - Panel de administración (Super Admin)
-- `/asesor/*` - Panel de asesores
-- `/studio/[slug]` - Landing page de estudios
-- `/api/*` - API endpoints
-
-### **Rutas de Autenticación**
-
-- `/login` - Inicio de sesión
-- `/sign-up` - Registro de usuarios
-- `/forgot-password` - Recuperación de contraseña
-- `/update-password` - Actualización de contraseña
-- `/error` - Página de error de autenticación
-- `/redirect` - Redirección post-autenticación
-- `/sign-up-success` - Confirmación de registro
-- `/complete-profile` - Completar perfil
-- `/confirm` - Confirmación de email
-
-## 🎨 **DISEÑO Y UI/UX**
-
-### **Tema Oscuro (Zinc)**
-
-```css
-/* Colores principales */
-bg-zinc-950    /* Fondo principal */
-bg-zinc-900    /* Cards y contenedores */
-bg-zinc-800    /* Bordes y separadores */
-text-white     /* Texto principal */
-text-zinc-300  /* Texto secundario */
-```
-
-### **Componentes UI**
-
-- **Shadcn/ui** como base de componentes
-- **Lucide React** para iconos
-- **Tailwind CSS** para estilos
-- **Sonner** para notificaciones toast
-
-### **Patrones de Diseño**
-
-- **Cards** con `bg-zinc-900 border-zinc-800`
-- **Botones** con colores semánticos (blue-600, red-600, etc.)
-- **Formularios** con validación y estados de carga
-- **Modales** para acciones CRUD
-
-## 🔧 **DESARROLLO Y CÓDIGO**
-
-### **TypeScript**
-
-- **Strict mode** habilitado
-- **Interfaces** para todos los tipos de datos
-- **Tipado fuerte** en props y estados
-- **Paths aliases** con `@/*` para imports
-
-### **React Patterns**
-
-```typescript
-// Componentes funcionales con hooks
-"use client";
-
-// Estados con useState
-const [loading, setLoading] = useState(false);
-
-// Efectos con dependencias correctas
-useEffect(() => {
-  fetchData();
-}, [dependency]);
-
-// useCallback para funciones en dependencias
-const fetchData = useCallback(async () => {
-  // ...
-}, [dependency]);
-```
-
-### **Next.js App Router**
-
-- **Server Components** por defecto
-- **Client Components** con `'use client'` cuando necesario
-- **API Routes** en `app/api/`
-- **Dynamic routes** con `[id]` o `[slug]`
-
-## 🗄️ **BASE DE DATOS Y API**
-
-### **Prisma Schema**
-
-- **Modelos** con naming convention `ProSocial*`
-- **Relaciones** bien definidas con `@relation`
-- **Índices** para optimización de queries
-- **Campos** con tipos apropiados (String, Int, DateTime, Decimal)
-
-### **API Routes**
-
-```typescript
-// Estructura estándar
-export async function GET(request: Request) {
-  try {
-    // Lógica de negocio
-    return NextResponse.json(data);
-  } catch (error) {
-    return NextResponse.json({ error: "Message" }, { status: 500 });
-  }
-}
-```
-
-### **Supabase Integration**
-
-- **Auth** con `@supabase/ssr`
-- **RLS** (Row Level Security) habilitado
-- **Client/Server** separation correcta
-
-## 🚀 **FUNCIONALIDADES PRINCIPALES**
-
-### **Sistema de Leads (CRM)**
-
-- **Kanban Board** con drag & drop
-- **Pipeline** configurable por etapas
-- **Bitácora** de actividades
-- **Canales de adquisición** trackeables
-
-### **Gestión de Campañas**
-
-- **Campañas activas** vs **historial**
-- **Plataformas** de publicidad
-- **Métricas** de ROI y conversión
-
-### **Multi-tenant**
-
-- **Estudios** como tenants
-- **Roles** y permisos granulares
-- **Aislamiento** de datos por tenant
-
-## 📝 **CONVENCIONES DE CÓDIGO**
-
-### **Naming**
-
-- **Archivos**: kebab-case (`lead-form.tsx`)
-- **Componentes**: PascalCase (`LeadForm`)
-- **Variables**: camelCase (`leadData`)
-- **Constantes**: UPPER_SNAKE_CASE (`API_BASE_URL`)
-
-### **Imports**
-
-```typescript
-// Orden de imports
-import React from "react";
-import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { LeadForm } from "./components/LeadForm";
-```
-
-### **Error Handling**
-
-```typescript
-try {
-  // Operación
-} catch (error) {
-  console.error("Error context:", error);
-  toast.error("Mensaje de error para usuario");
-  // Fallback o estado de error
-}
-```
-
-## 🔒 **SEGURIDAD Y VALIDACIÓN**
-
-### **Autenticación**
-
-- **Supabase Auth** con JWT
-- **Middleware** para protección de rutas
-- **RLS** en base de datos
-
-### **Validación**
-
-- **Zod** para schemas de validación
-- **React Hook Form** para formularios
-- **Validación** tanto cliente como servidor
-
-## 🧪 **TESTING Y CALIDAD**
-
-### **Linting**
-
-- **ESLint** con configuración Next.js
-- **TypeScript** strict mode
-- **Prettier** para formato (si está configurado)
-
-### **Performance**
-
-- **Dynamic imports** para code splitting
-- **Image optimization** con Next.js Image
-- **Prisma** queries optimizadas
-
-## 📦 **DEPENDENCIAS PRINCIPALES**
-
-### **Core**
-
-- `next@15.5.2` - Framework (última versión estable)
-- `react@19.1.0` - UI Library (última versión estable)
-- `typescript@5` - Type Safety (última versión estable)
-
-### **UI/UX**
-
-- `@radix-ui/*` - Componentes primitivos
-- `tailwindcss@4` - Styling
-- `lucide-react` - Iconos
-- `sonner` - Notificaciones
-
-### **Backend**
-
-- `@prisma/client@6.15.0` - ORM
-- `@supabase/supabase-js@2.57.4` - Backend
-- `stripe@18.5.0` - Pagos
-
-### **Utilities**
-
-- `@dnd-kit/*` - Drag & Drop
-- `react-hook-form` - Formularios
-- `zod` - Validación
-- `date-fns` - Fechas
-
-## 🎯 **MEJORES PRÁCTICAS**
-
-### **Componentes**
-
-- **Reutilizables** y modulares
-- **Props** bien tipadas
-- **Estados** locales cuando sea posible
-- **Loading states** y error boundaries
-
-### **Performance**
-
-- **useCallback** para funciones en dependencias
-- **useMemo** para cálculos costosos
-- **Dynamic imports** para componentes pesados
-- **Optimistic updates** cuando sea apropiado
-
-### **Accesibilidad**
-
-- **Semantic HTML** correcto
-- **ARIA labels** cuando sea necesario
-- **Keyboard navigation** funcional
-- **Color contrast** adecuado
-
-## 🚨 **ANTI-PATRONES A EVITAR**
-
-### **❌ No hacer**
-
-- Usar `any` type en TypeScript
-- Mutar props directamente
-- Usar `useEffect` sin dependencias correctas
-- Hardcodear strings en lugar de constantes
-- Ignorar errores de linting
-- Usar Prisma en client-side components
-
-### **✅ Sí hacer**
-
-- Tipado fuerte en TypeScript
-- Inmutabilidad en estados
-- Dependencias correctas en hooks
-- Constantes para valores mágicos
-- Código limpio sin warnings
-- API routes para operaciones de DB
-
-## 🔄 **FLUJO DE DESARROLLO**
-
-### **Nuevas Features**
-
-1. **Diseñar** la estructura de datos en Prisma
-2. **Crear** API routes necesarias
-3. **Implementar** componentes UI
-4. **Conectar** frontend con backend
-5. **Testear** funcionalidad completa
-6. **Optimizar** performance si es necesario
-
-### **Debugging**
-
-- **Console.log** para debugging temporal
-- **React DevTools** para inspeccionar estados
-- **Prisma Studio** para ver datos
-- **Network tab** para API calls
-
-## 📚 **RECURSOS Y DOCUMENTACIÓN**
-
-### **Documentación del Proyecto (docs/)**
-
-**ESTRUCTURA ORGANIZADA:**
-
-- `docs/01-architecture/` - Arquitectura y diseño del sistema
-- `docs/02-implementation/` - Guías de implementación paso a paso
-- `docs/03-troubleshooting/` - Solución de problemas conocidos
-- `docs/04-best-practices/` - Mejores prácticas y estándares
-- `docs/05-legacy/` - Código legacy y migración
-- `docs/06-reference/` - Referencias y configuraciones
-
-**CONSULTAR SIEMPRE:**
-
-- `docs/README.md` - Índice principal de documentación
-- `docs/04-best-practices/TYPESCRIPT_BEST_PRACTICES.md` - Reglas de TypeScript
-- `docs/02-implementation/KANBAN_IMPLEMENTATION_GUIDE.md` - Guía del Kanban
-
-### **Documentación Oficial**
-
-- [Next.js 15 Docs](https://nextjs.org/docs)
-- [Prisma Docs](https://www.prisma.io/docs)
-- [Supabase Docs](https://supabase.com/docs)
-- [Tailwind CSS](https://tailwindcss.com/docs)
-
-### **Componentes**
-
-- [Shadcn/ui](https://ui.shadcn.com/)
-- [Radix UI](https://www.radix-ui.com/)
-- [Lucide Icons](https://lucide.dev/)
 
 ---
 
-## 🎯 **INSTRUCCIONES ESPECÍFICAS PARA CURSOR**
+## 🎨 DISEÑO ZEN (PRIORIDAD #1)
 
-### **🔍 CONSULTA DE DOCUMENTACIÓN (OBLIGATORIO)**
+**Imports OBLIGATORIOS:**
 
-**ANTES de resolver cualquier problema, SIEMPRE:**
+```typescript
+// ✅ SIEMPRE ZEN primero
+import { ZenButton, ZenInput, ZenCard } from "@/components/ui/zen";
 
-1. **Consultar** la documentación en `/docs/` para soluciones existentes
-2. **Revisar** especialmente:
-   - `docs/03-troubleshooting/` - Para problemas conocidos
-   - `docs/04-best-practices/` - Para patrones establecidos
-   - `docs/02-implementation/` - Para guías de implementación
-3. **Buscar** en archivos de documentación antes de proponer nuevas soluciones
-4. **Verificar** si el problema ya fue documentado y resuelto
-
-### **📝 DOCUMENTACIÓN DE SOLUCIONES (CRÍTICO)**
-
-**NUNCA documentar automáticamente. SIEMPRE preguntar:**
-
-1. **Después de resolver un problema**, preguntar al usuario:
-   > "¿Estás listo para que documente esta solución?"
-2. **Esperar confirmación** antes de crear/actualizar documentación
-3. **Validar** que la solución sea definitiva y no temporal
-4. **Confirmar** que el usuario está satisfecho con la implementación
-
-**Razón**: Las soluciones pueden ser prematuras o no definitivas. El usuario debe validar antes de documentar.
-
-### **🔄 FLUJO DE TRABAJO CON DOCUMENTACIÓN**
-
-**PROCESO OBLIGATORIO:**
-
-1. **Problema identificado** → Consultar `docs/03-troubleshooting/`
-2. **Solución encontrada** → Implementar y probar
-3. **Solución validada** → Preguntar al usuario si documentar
-4. **Confirmación recibida** → Documentar en categoría apropiada
-5. **Documentación actualizada** → Actualizar índice en `docs/README.md`
-
-**CATEGORÍAS DE DOCUMENTACIÓN:**
-
-- **Problemas técnicos** → `docs/03-troubleshooting/`
-- **Patrones de código** → `docs/04-best-practices/`
-- **Guías de implementación** → `docs/02-implementation/`
-- **Decisiones arquitectónicas** → `docs/01-architecture/`
-
-### **Al crear componentes:**
-
-1. **Usar** el tema oscuro zinc consistente
-2. **Implementar** estados de loading y error
-3. **Tipar** todas las props e interfaces (NUNCA usar `any`)
-4. **Seguir** los patrones de diseño establecidos
-5. **Optimizar** para performance desde el inicio
-
-### **Al modificar APIs:**
-
-1. **Mantener** compatibilidad con frontend existente
-2. **Validar** inputs con Zod
-3. **Manejar** errores apropiadamente
-4. **Documentar** cambios en tipos
-5. **Testear** endpoints manualmente
-
-### **Al trabajar con base de datos:**
-
-1. **Usar** Prisma Client correctamente
-2. **Optimizar** queries con includes selectivos
-3. **Manejar** transacciones cuando sea necesario
-4. **Respetar** RLS policies de Supabase
-5. **Migrar** schema cuando sea necesario
-
-### **Al implementar nuevas features:**
-
-1. **Seguir** la arquitectura multi-tenant
-2. **Implementar** permisos por rol
-3. **Mantener** consistencia con el diseño
-4. **Optimizar** para mobile y desktop
-5. **Documentar** funcionalidades complejas (solo después de confirmación)
-
-### **🚨 PROTECCIÓN DE ARCHIVOS DE ENTORNO (CRÍTICO):**
-
-**NUNCA modificar archivos `.env` o `.env.local`:**
-
-1. **PROHIBIDO** editar, crear o modificar archivos `.env*`
-2. **PROHIBIDO** sobrescribir variables de entorno existentes
-3. **PROHIBIDO** agregar valores de ejemplo o placeholder
-4. **PROHIBIDO** hardcodear URLs, keys o secrets
-
-**Si necesitas una nueva variable de entorno:**
-
-1. **SOLICITAR** al usuario que la agregue manualmente
-2. **PROPORCIONAR** el nombre exacto de la variable
-3. **EXPLICAR** el propósito y formato requerido
-4. **ESPERAR** confirmación antes de continuar
-
-**Ejemplo de solicitud:**
-
-```
-"Necesito que agregues la variable de entorno:
-NOMBRE_VARIABLE=valor_requerido
-Propósito: [explicación]
-Formato: [tipo de dato esperado]"
+// ❌ PROHIBIDO - Rutas directas
+import { ZenButton } from "@/components/ui/zen/base/ZenButton";
 ```
 
-**Razón**: Los archivos `.env` contienen configuraciones críticas y secretos que no deben ser modificados automáticamente.
+**Tema:** Dark mode zinc con acentos por rol (emerald/blue/purple)
 
 ---
 
-**¡Mantén el código limpio, tipado y siguiendo estas convenciones para un desarrollo eficiente! 🚀**
+## 🔧 CÓDIGO
+
+**TypeScript:**
+
+- Strict mode SIEMPRE
+- NO `any` (usar `unknown`)
+- Tipar props y retornos
+- `interface` sobre `type`
+
+**React:**
+
+- Componentes funcionales
+- `"use client"` solo si necesario
+- Server Components por defecto
+
+**Next.js:**
+
+- Server Actions para mutaciones
+- API Routes SOLO webhooks
+
+---
+
+## 🗄️ BASE DE DATOS
+
+**Naming (CRÍTICO):**
+
+- Tablas: `snake_case` plural (`studio_modules`)
+- Columnas: `snake_case` (`is_active`, `created_at`)
+- Relaciones: `{tabla}_id` (`studio_id`)
+
+**Prisma:**
+
+```prisma
+model studio_modules {
+  id         String   @id @default(cuid())
+  studio_id  String
+  is_active  Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  @@unique([studio_id, module_id])
+  @@index([studio_id, is_active])
+}
+```
+
+---
+
+## 📝 CONVENCIONES
+
+**Naming:**
+
+- Archivos: `kebab-case.tsx`
+- Componentes: `PascalCase`
+- Variables: `camelCase`
+- Constantes: `UPPER_SNAKE_CASE`
+- Server Actions: `verbSustantivo` (`crearLead`)
+
+**Imports (Orden):**
+
+```typescript
+// 1. React/Next
+// 2. Third-party
+// 3. ZEN Design System
+// 4. Shadcn (fallback)
+// 5. Local (types → utils → components)
+```
+
+---
+
+## 🚨 PROHIBIDO
+
+- ❌ Usar `any`
+- ❌ Usar Shadcn si existe componente ZEN
+- ❌ Queries Prisma en Client Components
+- ❌ Hardcodear strings repetidos
+- ❌ **Resúmenes múltiples innecesarios**
+- ❌ **Explicar código autoexplicativo**
+
+---
+
+## ✅ SIEMPRE HACER
+
+- ✅ ZEN Design System primero
+- ✅ Tipado fuerte TypeScript
+- ✅ Error handling + loading states
+- ✅ Validación Zod en Server Actions
+- ✅ Verificar permisos de módulo
+- ✅ **Respuestas concisas y directas**
+- ✅ **Código > Palabras**
+
+---
+
+## 🎯 PATRONES RÁPIDOS
+
+**Server Action:**
+
+```typescript
+"use server";
+export async function crearLead(studioId: string, data: unknown) {
+  const hasModule = await checkStudioModule(studioId, "manager");
+  if (!hasModule) throw new Error("Módulo no activo");
+
+  const validated = LeadCreateSchema.parse(data);
+  const lead = await prisma.platform_leads.create({ data: validated });
+
+  revalidatePath(`/studio/${slug}/manager/kanban`);
+  return lead;
+}
+```
+
+**Formulario ZEN:**
+
+```typescript
+<form onSubmit={handleSubmit}>
+  <ZenInput label="Nombre" name="nombre" required error={errors.nombre} />
+  <ZenButton type="submit" loading={isSubmitting}>Guardar</ZenButton>
+</form>
+```
+
+---
+
+## 📦 DEPENDENCIAS
+
+- Next.js 15.5.2
+- React 19.1.0
+- TypeScript 5
+- Prisma 6.15.0
+- Supabase 2.57.4
+- Tailwind 4
+
+---
+
+## 🤖 DIVISIÓN DE MODELOS
+
+**Sonnet 4.5:** Arquitectura, refactoring complejo, code review crítico  
+**Haiku 4.5:** CRUD, componentes UI, queries, debugging (90% del trabajo)  
+**Claude Code:** Migraciones, scripts
+
+---
+
+**Prioriza eficiencia en tokens sin sacrificar calidad.**  
+**Código limpio, respuestas directas, fotógrafo mobile-first.**

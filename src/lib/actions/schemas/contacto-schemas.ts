@@ -11,14 +11,14 @@ export const TIPOS_TELEFONO = [
 
 // Schema para crear teléfono
 export const TelefonoCreateSchema = z.object({
-    numero: z.string()
+    number: z.string() // Actualizado: numero → number
         .min(1, "El número de teléfono es requerido")
         .regex(/^[\+]?[0-9\s\-\(\)]+$/, "Formato de teléfono inválido")
         .max(20, "El número de teléfono es muy largo"),
-    tipo: z.enum(TIPOS_TELEFONO, {
+    type: z.enum(TIPOS_TELEFONO, { // Actualizado: tipo → type
         errorMap: () => ({ message: "Tipo de teléfono inválido" })
     }),
-    activo: z.boolean().default(true),
+    is_active: z.boolean().default(true), // Actualizado: activo → is_active
 });
 
 // Schema para actualizar teléfono
@@ -34,7 +34,7 @@ export const TelefonosBulkUpdateSchema = z.object({
 // Schema para toggle de estado de teléfono
 export const TelefonoToggleSchema = z.object({
     id: IdSchema,
-    activo: z.boolean(),
+    is_active: z.boolean(), // Actualizado: activo → is_active
 });
 
 // Schema para eliminar teléfono
@@ -44,8 +44,8 @@ export const TelefonoDeleteSchema = z.object({
 
 // Schema para filtros de teléfonos
 export const TelefonosFiltersSchema = z.object({
-    activo: z.boolean().optional(),
-    tipo: z.enum(TIPOS_TELEFONO).optional(),
+    is_active: z.boolean().optional(), // Actualizado: activo → is_active
+    type: z.enum(TIPOS_TELEFONO).optional(), // Actualizado: tipo → type
 });
 
 // Schema para datos de contacto (dirección y website)
@@ -78,7 +78,7 @@ export const ContactoStatsSchema = z.object({
 
 // Schema para validación de número de teléfono
 export const TelefonoValidationSchema = z.object({
-    numero: z.string().min(1, "Número requerido"),
+    number: z.string().min(1, "Número requerido"), // Actualizado: numero → number
     pais: z.string().optional().default("MX"),
 });
 
@@ -110,28 +110,28 @@ export function getTipoTelefonoInfo(tipo: TipoTelefono) {
 }
 
 // Función para validar número de teléfono
-export function validateTelefono(numero: string): boolean {
+export function validateTelefono(number: string): boolean { // Actualizado: numero → number
     // Regex para números de teléfono internacionales
     const telefonoRegex = /^[\+]?[0-9\s\-\(\)]+$/;
-    return telefonoRegex.test(numero) && numero.length >= 7 && numero.length <= 20;
+    return telefonoRegex.test(number) && number.length >= 7 && number.length <= 20; // Actualizado: numero → number
 }
 
 // Función para formatear número de teléfono
-export function formatTelefono(numero: string): string {
+export function formatTelefono(number: string): string { // Actualizado: numero → number
     // Remover caracteres no numéricos excepto +
-    const cleaned = numero.replace(/[^\d\+]/g, '');
+    const cleaned = number.replace(/[^\d\+]/g, ''); // Actualizado: numero → number
 
     // Si no tiene código de país, agregar +52 para México
     if (!cleaned.startsWith('+')) {
         return `+52 ${cleaned}`;
     }
 
-    return numero;
+    return number; // Actualizado: numero → number
 }
 
 // Función para extraer número limpio
-export function getTelefonoLimpio(numero: string): string {
-    return numero.replace(/[^\d]/g, '');
+export function getTelefonoLimpio(number: string): string { // Actualizado: numero → number
+    return number.replace(/[^\d]/g, ''); // Actualizado: numero → number
 }
 
 // Función para validar URL de website

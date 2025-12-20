@@ -1,6 +1,6 @@
 import React from 'react';
 import { prisma } from '@/lib/prisma';
-import { SectionNavigation } from '@/components/ui/section-navigation';
+import { SectionNavigation } from '@/components/ui/shadcn/section-navigation';
 import { AgentsPageClient } from './components';
 import { Agent } from './types';
 import { withRetry, getFriendlyErrorMessage } from '@/lib/database/retry-helper';
@@ -24,7 +24,7 @@ async function getAgents(): Promise<Agent[]> {
                     }
                 },
                 orderBy: {
-                    createdAt: 'desc'
+                    created_at: 'desc'
                 }
             });
         });

@@ -44,10 +44,8 @@ let globalPromise: Promise<PlatformConfig | null> | null = null;
 const getDefaultConfig = (): PlatformConfig => ({
     id: 'default',
     nombre_empresa: 'ProSocial Platform',
-    nombre_plataforma: 'ProSocial Platform',
-    descripcion: 'Plataforma de gestión de estudios de fotografía',
-    isotipo: null,
-    logotipo: null,
+    logo_url: null,
+    favicon_url: null,
     comercial_telefono: null,
     comercial_email: null,
     comercial_whatsapp: null,
@@ -61,23 +59,13 @@ const getDefaultConfig = (): PlatformConfig => ({
     instagram_url: null,
     twitter_url: null,
     linkedin_url: null,
-    youtube_url: null,
-    tiktok_url: null,
     terminos_condiciones: null,
     politica_privacidad: null,
     aviso_legal: null,
-    meta_title: 'ProSocial Platform',
-    meta_description: 'Plataforma de gestión de estudios de fotografía',
-    meta_keywords: 'fotografía, estudios, gestión, CRM',
-    favicon: null,
-    og_image: null,
-    twitter_image: null,
-    analytics_gtag: null,
-    analytics_ga4: null,
-    analytics_facebook: null,
-    hotjar_id: null,
-    intercom_id: null,
-    zendesk_id: null,
+    meta_description: null,
+    meta_keywords: null,
+    google_analytics_id: null,
+    google_tag_manager_id: null,
     createdAt: new Date(),
     updatedAt: new Date()
 });
@@ -119,7 +107,7 @@ export function usePlatformConfig(): UsePlatformConfigReturn {
         globalPromise = (async () => {
             try {
                 const response = await fetch('/api/platform-config');
-                
+
                 if (!response.ok) {
                     // Intentar obtener el mensaje de error del servidor
                     let errorMessage = 'Error al cargar la configuración';
@@ -129,7 +117,7 @@ export function usePlatformConfig(): UsePlatformConfigReturn {
                     } catch {
                         // Si no se puede parsear el error, usar el mensaje por defecto
                     }
-                    
+
                     // Si es un error de conexión a la base de datos, usar configuración por defecto
                     if (response.status >= 500) {
                         console.warn('Error de servidor, usando configuración por defecto:', errorMessage);
@@ -137,7 +125,7 @@ export function usePlatformConfig(): UsePlatformConfigReturn {
                         globalConfig = defaultConfig;
                         return defaultConfig;
                     }
-                    
+
                     throw new Error(errorMessage);
                 }
 
@@ -147,7 +135,7 @@ export function usePlatformConfig(): UsePlatformConfigReturn {
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
                 console.error('Error fetching platform config:', err);
-                
+
                 // Si es un error de red o conexión, usar configuración por defecto
                 if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('connection')) {
                     console.warn('Error de conexión, usando configuración por defecto');
@@ -155,7 +143,7 @@ export function usePlatformConfig(): UsePlatformConfigReturn {
                     globalConfig = defaultConfig;
                     return defaultConfig;
                 }
-                
+
                 throw new Error(errorMessage);
             }
         })();

@@ -1,20 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/shadcn/card";
+import { Button } from "@/components/ui/shadcn/button";
+import { ZenInput } from "@/components/ui/zen";
+import { Label } from "@/components/ui/shadcn/label";
+import { Textarea } from "@/components/ui/shadcn/textarea";
+import { Switch } from "@/components/ui/shadcn/switch";
+import { Badge } from "@/components/ui/shadcn/badge";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/shadcn/select";
 import {
     Settings,
     Save,
@@ -178,34 +178,26 @@ export default function ConfiguracionPage() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="descuentoMaximoPorcentaje">Descuento Máximo (%)</Label>
-                            <Input
-                                id="descuentoMaximoPorcentaje"
-                                type="number"
-                                value={configuracion.descuentoMaximoPorcentaje}
-                                onChange={(e) => handleInputChange("descuentoMaximoPorcentaje", parseInt(e.target.value))}
-                                min="1"
-                                max="100"
-                            />
-                            <p className="text-sm text-muted-foreground">
-                                Porcentaje máximo permitido para descuentos
-                            </p>
-                        </div>
+                        <ZenInput
+                            id="descuentoMaximoPorcentaje"
+                            label="Descuento Máximo (%)"
+                            type="number"
+                            value={configuracion.descuentoMaximoPorcentaje}
+                            onChange={(e) => handleInputChange("descuentoMaximoPorcentaje", parseInt(e.target.value))}
+                            min="1"
+                            max="100"
+                            hint="Porcentaje máximo permitido para descuentos"
+                        />
 
-                        <div className="space-y-2">
-                            <Label htmlFor="descuentoMaximoMonto">Descuento Máximo ($)</Label>
-                            <Input
-                                id="descuentoMaximoMonto"
-                                type="number"
-                                value={configuracion.descuentoMaximoMonto}
-                                onChange={(e) => handleInputChange("descuentoMaximoMonto", parseInt(e.target.value))}
-                                min="1"
-                            />
-                            <p className="text-sm text-muted-foreground">
-                                Monto máximo permitido para descuentos fijos
-                            </p>
-                        </div>
+                        <ZenInput
+                            id="descuentoMaximoMonto"
+                            label="Descuento Máximo ($)"
+                            type="number"
+                            value={configuracion.descuentoMaximoMonto}
+                            onChange={(e) => handleInputChange("descuentoMaximoMonto", parseInt(e.target.value))}
+                            min="1"
+                            hint="Monto máximo permitido para descuentos fijos"
+                        />
                     </div>
                 </CardContent>
             </Card>
@@ -233,19 +225,15 @@ export default function ConfiguracionPage() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="codigoBaseAgentes">Código Base para Agentes</Label>
-                            <Input
-                                id="codigoBaseAgentes"
-                                value={configuracion.codigoBaseAgentes}
-                                onChange={(e) => handleInputChange("codigoBaseAgentes", e.target.value.toUpperCase())}
-                                placeholder="DEMO"
-                                className="font-mono"
-                            />
-                            <p className="text-sm text-muted-foreground">
-                                Prefijo para códigos generados por agentes
-                            </p>
-                        </div>
+                        <ZenInput
+                            id="codigoBaseAgentes"
+                            label="Código Base para Agentes"
+                            value={configuracion.codigoBaseAgentes}
+                            onChange={(e) => handleInputChange("codigoBaseAgentes", e.target.value.toUpperCase())}
+                            placeholder="DEMO"
+                            className="font-mono"
+                            hint="Prefijo para códigos generados por agentes"
+                        />
 
                         <div className="space-y-2">
                             <Label>Duración por Defecto</Label>
@@ -267,20 +255,16 @@ export default function ConfiguracionPage() {
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="descuentoMaximoAgente">Descuento Máximo para Agentes (%)</Label>
-                        <Input
-                            id="descuentoMaximoAgente"
-                            type="number"
-                            value={configuracion.descuentoMaximoAgente}
-                            onChange={(e) => handleInputChange("descuentoMaximoAgente", parseInt(e.target.value))}
-                            min="1"
-                            max="100"
-                        />
-                        <p className="text-sm text-muted-foreground">
-                            Porcentaje máximo que pueden ofrecer los agentes
-                        </p>
-                    </div>
+                    <ZenInput
+                        id="descuentoMaximoAgente"
+                        label="Descuento Máximo para Agentes (%)"
+                        type="number"
+                        value={configuracion.descuentoMaximoAgente}
+                        onChange={(e) => handleInputChange("descuentoMaximoAgente", parseInt(e.target.value))}
+                        min="1"
+                        max="100"
+                        hint="Porcentaje máximo que pueden ofrecer los agentes"
+                    />
                 </CardContent>
             </Card>
 
@@ -306,32 +290,24 @@ export default function ConfiguracionPage() {
                         />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="webhookStripe">Webhook de Stripe</Label>
-                        <Input
-                            id="webhookStripe"
-                            value={configuracion.webhookStripe}
-                            onChange={(e) => handleInputChange("webhookStripe", e.target.value)}
-                            placeholder="https://api.stripe.com/v1/webhooks/..."
-                        />
-                        <p className="text-sm text-muted-foreground">
-                            URL del webhook para recibir eventos de Stripe
-                        </p>
-                    </div>
+                    <ZenInput
+                        id="webhookStripe"
+                        label="Webhook de Stripe"
+                        value={configuracion.webhookStripe}
+                        onChange={(e) => handleInputChange("webhookStripe", e.target.value)}
+                        placeholder="https://api.stripe.com/v1/webhooks/..."
+                        hint="URL del webhook para recibir eventos de Stripe"
+                    />
 
-                    <div className="space-y-2">
-                        <Label htmlFor="apiKeyStripe">API Key de Stripe</Label>
-                        <Input
-                            id="apiKeyStripe"
-                            type="password"
-                            value={configuracion.apiKeyStripe}
-                            onChange={(e) => handleInputChange("apiKeyStripe", e.target.value)}
-                            placeholder="sk_test_..."
-                        />
-                        <p className="text-sm text-muted-foreground">
-                            Clave API para autenticación con Stripe
-                        </p>
-                    </div>
+                    <ZenInput
+                        id="apiKeyStripe"
+                        label="API Key de Stripe"
+                        type="password"
+                        value={configuracion.apiKeyStripe}
+                        onChange={(e) => handleInputChange("apiKeyStripe", e.target.value)}
+                        placeholder="sk_test_..."
+                        hint="Clave API para autenticación con Stripe"
+                    />
 
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={handleTestStripe} disabled={loading}>
@@ -408,39 +384,33 @@ export default function ConfiguracionPage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="grid gap-4 md:grid-cols-3">
-                        <div className="space-y-2">
-                            <Label htmlFor="maxCodigosPorAgente">Máx. Códigos por Agente</Label>
-                            <Input
-                                id="maxCodigosPorAgente"
-                                type="number"
-                                value={configuracion.maxCodigosPorAgente}
-                                onChange={(e) => handleInputChange("maxCodigosPorAgente", parseInt(e.target.value))}
-                                min="1"
-                            />
-                        </div>
+                        <ZenInput
+                            id="maxCodigosPorAgente"
+                            label="Máx. Códigos por Agente"
+                            type="number"
+                            value={configuracion.maxCodigosPorAgente}
+                            onChange={(e) => handleInputChange("maxCodigosPorAgente", parseInt(e.target.value))}
+                            min="1"
+                        />
 
-                        <div className="space-y-2">
-                            <Label htmlFor="maxCodigosPorDia">Máx. Códigos por Día</Label>
-                            <Input
-                                id="maxCodigosPorDia"
-                                type="number"
-                                value={configuracion.maxCodigosPorDia}
-                                onChange={(e) => handleInputChange("maxCodigosPorDia", parseInt(e.target.value))}
-                                min="1"
-                            />
-                        </div>
+                        <ZenInput
+                            id="maxCodigosPorDia"
+                            label="Máx. Códigos por Día"
+                            type="number"
+                            value={configuracion.maxCodigosPorDia}
+                            onChange={(e) => handleInputChange("maxCodigosPorDia", parseInt(e.target.value))}
+                            min="1"
+                        />
 
-                        <div className="space-y-2">
-                            <Label htmlFor="diasAntesExpiracion">Días antes de Expiración</Label>
-                            <Input
-                                id="diasAntesExpiracion"
-                                type="number"
-                                value={configuracion.diasAntesExpiracion}
-                                onChange={(e) => handleInputChange("diasAntesExpiracion", parseInt(e.target.value))}
-                                min="1"
-                                max="30"
-                            />
-                        </div>
+                        <ZenInput
+                            id="diasAntesExpiracion"
+                            label="Días antes de Expiración"
+                            type="number"
+                            value={configuracion.diasAntesExpiracion}
+                            onChange={(e) => handleInputChange("diasAntesExpiracion", parseInt(e.target.value))}
+                            min="1"
+                            max="30"
+                        />
                     </div>
                 </CardContent>
             </Card>

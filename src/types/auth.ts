@@ -79,9 +79,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 // =====================================================================
 
 export const ROLE_ROUTES: Record<UserRole, string> = {
-    [UserRole.SUPER_ADMIN]: "/platform/admin",
-    [UserRole.AGENTE]: "/platform/agente",
-    [UserRole.SUSCRIPTOR]: "/studio", // Se completará con el slug del studio
+    [UserRole.SUPER_ADMIN]: "/admin/dashboard",
+    [UserRole.AGENTE]: "/agente/leads",
+    [UserRole.SUSCRIPTOR]: "/studio/commercial/dashboard", // Se completará con el slug del studio
 }
 
 // =====================================================================
@@ -101,12 +101,13 @@ export function canAccessRoute(userRole: UserRole, pathname: string): boolean {
     // Verificar rutas específicas por rol
     switch (userRole) {
         case UserRole.AGENTE:
-            return pathname.startsWith("/platform/agente") ||
-                pathname.startsWith("/platform/admin/leads") ||
-                pathname.startsWith("/platform/admin/analytics")
+            return pathname.startsWith("/agente") ||
+                pathname.startsWith("/admin/leads") ||
+                pathname.startsWith("/admin/analytics")
 
         case UserRole.SUSCRIPTOR:
-            return pathname.startsWith("/studio/")
+            return pathname.startsWith("/studio/") ||
+                pathname.startsWith("/[slug]/")
 
         default:
             return false
@@ -132,8 +133,9 @@ export function getDefaultRoute(userRole: UserRole | string, studioSlug?: string
             return "/agente"
         case UserRole.SUSCRIPTOR:
         case 'suscriptor':
-            console.log('🔍 getDefaultRoute - Redirigiendo a /studio')
-            return studioSlug ? `/studio/${studioSlug}` : "/unauthorized"
+            const route = studioSlug ? `/${studioSlug}/studio` : "/unauthorized"
+            console.log('🔍 getDefaultRoute - Redirigiendo a:', route)
+            return route
         default:
             console.log('🔍 getDefaultRoute - Redirigiendo a /unauthorized (default)')
             return "/unauthorized"

@@ -8,7 +8,7 @@ import { StudioSetupStatus } from '@/types/setup-validation';
 interface SetupStatusResponse {
     success: boolean;
     data?: StudioSetupStatus & {
-        project: {
+        studio: {
             id: string;
             name: string;
             slug: string;

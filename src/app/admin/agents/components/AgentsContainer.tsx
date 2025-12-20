@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { ZenButton } from '@/components/ui/zen';
+import { ZenInput } from '@/components/ui/zen';
 import { Plus, User, Search, Filter, X } from 'lucide-react';
 import Link from 'next/link';
 import { AgentCard } from './AgentCard';
@@ -80,53 +80,47 @@ export function AgentsContainer({ agents, onAgentDelete }: AgentsContainerProps)
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-col gap-4 md:flex-row">
-                        <div className="flex-1">
-                            <div className="relative">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Buscar por nombre, email o teléfono..."
-                                    className="pl-8 pr-8"
-                                    value={searchTerm}
-                                    onChange={(e) => handleSearch(e.target.value)}
+                        <div className="flex-1 relative">
+                            <ZenInput
+                                placeholder="Buscar por nombre, email o teléfono..."
+                                icon={Search}
+                                value={searchTerm}
+                                onChange={(e) => handleSearch(e.target.value)}
+                            />
+                            {searchTerm && (
+                                <ZenButton
+                                    variant="ghost"
+                                    size="sm"
+                                    icon={X}
+                                    className="absolute right-1 top-1 h-6 w-6 p-0"
+                                    onClick={clearSearch}
                                 />
-                                {searchTerm && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="absolute right-1 top-1 h-6 w-6 p-0"
-                                        onClick={clearSearch}
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </Button>
-                                )}
-                            </div>
+                            )}
                         </div>
                         <div className="flex gap-2">
-                            <Button
-                                variant="outline"
+                            <ZenButton
+                                variant={activeFilter === 'all' ? 'primary' : 'outline'}
                                 size="sm"
+                                icon={Filter}
+                                iconPosition="left"
                                 onClick={() => handleFilterChange('all')}
-                                className={activeFilter === 'all' ? 'bg-primary text-primary-foreground' : ''}
                             >
-                                <Filter className="mr-2 h-4 w-4" />
                                 Todos
-                            </Button>
-                            <Button
-                                variant="outline"
+                            </ZenButton>
+                            <ZenButton
+                                variant={activeFilter === 'active' ? 'primary' : 'outline'}
                                 size="sm"
                                 onClick={() => handleFilterChange('active')}
-                                className={activeFilter === 'active' ? 'bg-primary text-primary-foreground' : ''}
                             >
                                 Activos
-                            </Button>
-                            <Button
-                                variant="outline"
+                            </ZenButton>
+                            <ZenButton
+                                variant={activeFilter === 'inactive' ? 'primary' : 'outline'}
                                 size="sm"
                                 onClick={() => handleFilterChange('inactive')}
-                                className={activeFilter === 'inactive' ? 'bg-primary text-primary-foreground' : ''}
                             >
                                 Inactivos
-                            </Button>
+                            </ZenButton>
                         </div>
                     </div>
                 </CardContent>
@@ -154,12 +148,11 @@ export function AgentsContainer({ agents, onAgentDelete }: AgentsContainerProps)
                                 Comienza creando tu primer agente comercial.
                             </p>
                             <div className="mt-6">
-                                <Button asChild>
+                                <ZenButton asChild icon={Plus} iconPosition="left">
                                     <Link href="/admin/agents/new">
-                                        <Plus className="mr-2 h-4 w-4" />
                                         Crear Agente
                                     </Link>
-                                </Button>
+                                </ZenButton>
                             </div>
                         </div>
                     ) : filteredAgents.length === 0 ? (

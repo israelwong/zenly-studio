@@ -10,4 +10,4 @@ export * from "./identidad-schemas";
 export * from "./media-schemas";
 export * from "./configuracion-precios-schemas";
 export * from "./condiciones-comerciales-schemas";
-export * from "./metodos-pago-schemas";
+export * from "./metodos-schemas";

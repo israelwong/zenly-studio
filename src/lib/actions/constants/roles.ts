@@ -49,7 +49,7 @@ export function hasPermission(
     const resourcePermissions = permissions[resource as keyof typeof permissions];
     if (!resourcePermissions) return false;
 
-    return resourcePermissions.includes(action as any);
+    return (resourcePermissions as readonly string[]).includes(action);
 }
 
 // Función para obtener todos los permisos de un rol

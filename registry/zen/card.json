@@ -1,0 +1,15 @@
+{
+  "name": "zen-card",
+  "type": "component",
+  "files": [
+    {
+      "name": "zen-card.tsx",
+      "content": "import * as React from \"react\"\nimport { cn } from \"@/lib/utils\"\nimport { ZEN_COLORS, ZEN_SPACING } from \"@/components/ui/zen/tokens\"\n\nconst ZenCard = React.forwardRef<\n  HTMLDivElement,\n  React.HTMLAttributes<HTMLDivElement> & {\n    variant?: \"default\" | \"outline\" | \"ghost\"\n    padding?: \"none\" | \"sm\" | \"md\" | \"lg\"\n  }\n>(({ className, variant = \"default\", padding = \"md\", ...props }, ref) => (\n  <div\n    ref={ref}\n    className={cn(\n      \"rounded-lg border text-card-foreground shadow-sm\",\n      ZEN_COLORS.card[variant].bg,\n      ZEN_COLORS.card[variant].border,\n      ZEN_SPACING.card[padding],\n      className\n    )}\n    {...props}\n  />\n))\nZenCard.displayName = \"ZenCard\"\n\nconst ZenCardHeader = React.forwardRef<\n  HTMLDivElement,\n  React.HTMLAttributes<HTMLDivElement>\n>(({ className, ...props }, ref) => (\n  <div\n    ref={ref}\n    className={cn(\n      \"flex flex-col space-y-1.5\",\n      ZEN_SPACING.card.header,\n      className\n    )}\n    {...props}\n  />\n))\nZenCardHeader.displayName = \"ZenCardHeader\"\n\nconst ZenCardTitle = React.forwardRef<\n  HTMLParagraphElement,\n  React.HTMLAttributes<HTMLHeadingElement>\n>(({ className, ...props }, ref) => (\n  <h3\n    ref={ref}\n    className={cn(\n      \"text-lg font-semibold leading-none tracking-tight\",\n      ZEN_COLORS.card.title,\n      className\n    )}\n    {...props}\n  />\n))\nZenCardTitle.displayName = \"ZenCardTitle\"\n\nconst ZenCardDescription = React.forwardRef<\n  HTMLParagraphElement,\n  React.HTMLAttributes<HTMLParagraphElement>\n>(({ className, ...props }, ref) => (\n  <p\n    ref={ref}\n    className={cn(\n      \"text-sm text-muted-foreground\",\n      ZEN_COLORS.card.description,\n      className\n    )}\n    {...props}\n  />\n))\nZenCardDescription.displayName = \"ZenCardDescription\"\n\nconst ZenCardContent = React.forwardRef<\n  HTMLDivElement,\n  React.HTMLAttributes<HTMLDivElement>\n>(({ className, ...props }, ref) => (\n  <div\n    ref={ref}\n    className={cn(\n      ZEN_SPACING.card.content,\n      className\n    )}\n    {...props}\n  />\n))\nZenCardContent.displayName = \"ZenCardContent\"\n\nconst ZenCardFooter = React.forwardRef<\n  HTMLDivElement,\n  React.HTMLAttributes<HTMLDivElement>\n>(({ className, ...props }, ref) => (\n  <div\n    ref={ref}\n    className={cn(\n      \"flex items-center\",\n      ZEN_SPACING.card.footer,\n      className\n    )}\n    {...props}\n  />\n))\nZenCardFooter.displayName = \"ZenCardFooter\"\n\nexport {\n  ZenCard,\n  ZenCardHeader,\n  ZenCardFooter,\n  ZenCardTitle,\n  ZenCardDescription,\n  ZenCardContent\n}",
+      "type": "tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": [],
+  "description": "Card unificado del ZEN Design System con variantes, padding configurable y componentes de header, content y footer.",
+  "keywords": ["card", "zen", "design-system", "container", "layout"]
+}

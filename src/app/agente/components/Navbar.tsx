@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { ZenButton } from '@/components/ui/zen';
 import { User, Bell, LogOut, Settings, ChevronDown } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/browser';
 import { PlatformIsotipo } from '@/components/platform';
 import { usePlatformName } from '@/hooks/usePlatformConfig';
 
@@ -25,7 +25,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
 
     return (
         <div className="sticky top-0 z-[999] flex h-16 shrink-0 items-center gap-x-4 border-b border-zinc-800 bg-zinc-900 px-6 shadow-sm">
-            <Button
+            <ZenButton
                 variant="ghost"
                 size="sm"
                 className="lg:hidden text-zinc-400 hover:text-white hover:bg-zinc-800"
@@ -34,14 +34,14 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
-            </Button>
+            </ZenButton>
 
             <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
                 <div className="flex flex-1 items-center">
                     <div className="flex items-center space-x-3">
-                        <PlatformIsotipo 
-                            width={32} 
-                            height={32} 
+                        <PlatformIsotipo
+                            width={32}
+                            height={32}
                         />
                         <h1 className="text-lg font-semibold text-white">
                             {platformName}
@@ -55,7 +55,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                     <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-zinc-700" />
 
                     {/* Notificaciones */}
-                    <Button
+                    <ZenButton
                         variant="ghost"
                         size="sm"
                         className="relative text-zinc-400 hover:text-white hover:bg-zinc-800"
@@ -65,11 +65,11 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                         <span className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
                             2
                         </span>
-                    </Button>
+                    </ZenButton>
 
                     {/* Menú de Usuario */}
                     <div className="relative">
-                        <Button
+                        <ZenButton
                             variant="ghost"
                             size="sm"
                             onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -82,7 +82,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                                 Agente
                             </span>
                             <ChevronDown className="h-4 w-4" />
-                        </Button>
+                        </ZenButton>
 
                         {/* Menú Desplegable */}
                         {isUserMenuOpen && (
@@ -92,30 +92,34 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                                         <p className="text-sm font-medium text-white">Agente</p>
                                         <p className="text-xs text-zinc-400">Gestión de Leads</p>
                                     </div>
-                                    <Button
+                                    <ZenButton
                                         variant="ghost"
                                         size="sm"
-                                        className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-none"
+                                        icon={Settings}
+                                        iconPosition="left"
+                                        fullWidth
+                                        className="justify-start text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-none"
                                         onClick={() => {
                                             setIsUserMenuOpen(false);
                                             // TODO: Implementar configuración de usuario
                                         }}
                                     >
-                                        <Settings className="mr-2 h-4 w-4" />
                                         Configurar
-                                    </Button>
-                                    <Button
+                                    </ZenButton>
+                                    <ZenButton
                                         variant="ghost"
                                         size="sm"
-                                        className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-none"
+                                        icon={LogOut}
+                                        iconPosition="left"
+                                        fullWidth
+                                        className="justify-start text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-none"
                                         onClick={() => {
                                             setIsUserMenuOpen(false);
                                             handleLogout();
                                         }}
                                     >
-                                        <LogOut className="mr-2 h-4 w-4" />
                                         Cerrar Sesión
-                                    </Button>
+                                    </ZenButton>
                                 </div>
                             </div>
                         )}

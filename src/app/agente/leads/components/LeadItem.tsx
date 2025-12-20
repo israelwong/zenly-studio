@@ -1,7 +1,7 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { User, Mail, Phone, Calendar } from 'lucide-react';
 import { LeadAssignmentStatus } from '@/components/shared/LeadAssignmentStatus';
 

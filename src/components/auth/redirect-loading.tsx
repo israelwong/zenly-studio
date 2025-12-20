@@ -1,5 +1,5 @@
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
-import { Card, CardContent } from "@/components/ui/card"
+import { LoadingSpinner } from "@/components/ui/shadcn/loading-spinner"
+import { Card, CardContent } from "@/components/ui/shadcn/card"
 
 export function RedirectLoading() {
   return (

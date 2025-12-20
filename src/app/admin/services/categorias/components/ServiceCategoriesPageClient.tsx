@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Button } from '@/components/ui/shadcn/button';
+import { ZenInput } from '@/components/ui/zen';
 import {
     Search,
     Plus,
@@ -267,15 +267,12 @@ export function ServiceCategoriesPageClient() {
                     <CardTitle>Filtros y Búsqueda</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="relative">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Buscar por nombre o descripción..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-8"
-                        />
-                    </div>
+                    <ZenInput
+                        placeholder="Buscar por nombre o descripción..."
+                        icon={Search}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                 </CardContent>
             </Card>
 

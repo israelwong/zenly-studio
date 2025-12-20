@@ -17,14 +17,14 @@ export async function sendAgentCredentialsEmail(data: AgentCredentialsData) {
     try {
         // Obtener configuración de la plataforma
         const platformConfig = await prisma.platform_config.findFirst();
-        
+
         // Generar URL de login - limpiar comillas extra
         const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://prosocial-platform.vercel.app').replace(/['"]/g, '');
         const loginUrl = `${baseUrl}/login`;
 
         // Datos dinámicos de la plataforma
         const platformData = {
-            nombre: platformConfig?.nombre_empresa || 'ProSocial Platform',
+            nombre: platformConfig?.nombre_empresa || 'Zen Studio',
             logotipo: platformConfig?.logo_url || 'https://fhwfdwrrnwkbnwxabkcq.supabase.co/storage/v1/object/public/ProSocialPlatform/platform/logotipo.svg',
             isotipo: platformConfig?.favicon_url || 'https://fhwfdwrrnwkbnwxabkcq.supabase.co/storage/v1/object/public/ProSocialPlatform/platform/isotipo.svg',
             sitio_web: platformConfig?.sitio_web || 'https://prosocialmx.com',
@@ -59,8 +59,8 @@ export async function sendAgentCredentialsEmail(data: AgentCredentialsData) {
         const result = await sendEmail({
             to: data.email,
             subject: data.isNewAgent
-                ? '🎉 Bienvenido a ProSocial Platform - Credenciales de Acceso'
-                : '🔑 Credenciales Actualizadas - ProSocial Platform',
+                ? '🎉 Bienvenido a Zen Studio - Credenciales de Acceso'
+                : '🔑 Credenciales Actualizadas - Zen Studio',
             html: emailHtml,
             text: generatePlainTextVersion(data, loginUrl, platformData),
         });

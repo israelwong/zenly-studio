@@ -10,8 +10,8 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
+} from '@/components/ui/shadcn/alert-dialog';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { AlertTriangle, Users, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Agent } from '../types';

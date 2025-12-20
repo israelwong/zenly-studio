@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Button } from '@/components/ui/shadcn/button';
+import { ZenInput } from '@/components/ui/zen';
+import { Label } from '@/components/ui/shadcn/label';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/shadcn/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { toast } from 'sonner';
 import { Loader2, Save, Building2, Phone, Headphones, MapPin, Share2, FileText, Search, Settings } from 'lucide-react';
 
@@ -170,42 +170,31 @@ export function ConfiguracionPageClient({ initialConfig }: ConfiguracionPageClie
                         {/* Información General */}
                         <TabsContent value="general" className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="nombre_empresa" className="text-white">
-                                        Nombre de la Empresa *
-                                    </Label>
-                                    <Input
-                                        id="nombre_empresa"
-                                        value={config.nombre_empresa}
-                                        onChange={(e) => handleInputChange('nombre_empresa', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="Nombre de la empresa"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="logo_url" className="text-white">
-                                        URL del Logo
-                                    </Label>
-                                    <Input
-                                        id="logo_url"
-                                        value={config.logo_url || ''}
-                                        onChange={(e) => handleInputChange('logo_url', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="https://ejemplo.com/logo.png"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="favicon_url" className="text-white">
-                                        URL del Favicon
-                                    </Label>
-                                    <Input
-                                        id="favicon_url"
-                                        value={config.favicon_url || ''}
-                                        onChange={(e) => handleInputChange('favicon_url', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="https://ejemplo.com/favicon.ico"
-                                    />
-                                </div>
+                                <ZenInput
+                                    id="nombre_empresa"
+                                    label="Nombre de la Empresa"
+                                    required
+                                    value={config.nombre_empresa}
+                                    onChange={(e) => handleInputChange('nombre_empresa', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="Nombre de la empresa"
+                                />
+                                <ZenInput
+                                    id="logo_url"
+                                    label="URL del Logo"
+                                    value={config.logo_url || ''}
+                                    onChange={(e) => handleInputChange('logo_url', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="https://ejemplo.com/logo.png"
+                                />
+                                <ZenInput
+                                    id="favicon_url"
+                                    label="URL del Favicon"
+                                    value={config.favicon_url || ''}
+                                    onChange={(e) => handleInputChange('favicon_url', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="https://ejemplo.com/favicon.ico"
+                                />
                                 <div className="space-y-2">
                                     <Label htmlFor="timezone" className="text-white">
                                         Zona Horaria
@@ -232,86 +221,62 @@ export function ConfiguracionPageClient({ initialConfig }: ConfiguracionPageClie
                         {/* Contacto Comercial */}
                         <TabsContent value="comercial" className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="comercial_telefono" className="text-white">
-                                        Teléfono Comercial
-                                    </Label>
-                                    <Input
-                                        id="comercial_telefono"
-                                        value={config.comercial_telefono || ''}
-                                        onChange={(e) => handleInputChange('comercial_telefono', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="+52 55 1234 5678"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="comercial_email" className="text-white">
-                                        Email Comercial
-                                    </Label>
-                                    <Input
-                                        id="comercial_email"
-                                        type="email"
-                                        value={config.comercial_email || ''}
-                                        onChange={(e) => handleInputChange('comercial_email', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="comercial@empresa.com"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="comercial_whatsapp" className="text-white">
-                                        WhatsApp Comercial
-                                    </Label>
-                                    <Input
-                                        id="comercial_whatsapp"
-                                        value={config.comercial_whatsapp || ''}
-                                        onChange={(e) => handleInputChange('comercial_whatsapp', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="+52 55 1234 5678"
-                                    />
-                                </div>
+                                <ZenInput
+                                    id="comercial_telefono"
+                                    label="Teléfono Comercial"
+                                    value={config.comercial_telefono || ''}
+                                    onChange={(e) => handleInputChange('comercial_telefono', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="+52 55 1234 5678"
+                                />
+                                <ZenInput
+                                    id="comercial_email"
+                                    label="Email Comercial"
+                                    type="email"
+                                    value={config.comercial_email || ''}
+                                    onChange={(e) => handleInputChange('comercial_email', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="comercial@empresa.com"
+                                />
+                                <ZenInput
+                                    id="comercial_whatsapp"
+                                    label="WhatsApp Comercial"
+                                    value={config.comercial_whatsapp || ''}
+                                    onChange={(e) => handleInputChange('comercial_whatsapp', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="+52 55 1234 5678"
+                                />
                             </div>
                         </TabsContent>
 
                         {/* Contacto Soporte */}
                         <TabsContent value="soporte" className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="soporte_telefono" className="text-white">
-                                        Teléfono de Soporte
-                                    </Label>
-                                    <Input
-                                        id="soporte_telefono"
-                                        value={config.soporte_telefono || ''}
-                                        onChange={(e) => handleInputChange('soporte_telefono', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="+52 55 1234 5678"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="soporte_email" className="text-white">
-                                        Email de Soporte
-                                    </Label>
-                                    <Input
-                                        id="soporte_email"
-                                        type="email"
-                                        value={config.soporte_email || ''}
-                                        onChange={(e) => handleInputChange('soporte_email', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="soporte@empresa.com"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="soporte_chat_url" className="text-white">
-                                        URL del Chat de Soporte
-                                    </Label>
-                                    <Input
-                                        id="soporte_chat_url"
-                                        value={config.soporte_chat_url || ''}
-                                        onChange={(e) => handleInputChange('soporte_chat_url', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="https://chat.empresa.com"
-                                    />
-                                </div>
+                                <ZenInput
+                                    id="soporte_telefono"
+                                    label="Teléfono de Soporte"
+                                    value={config.soporte_telefono || ''}
+                                    onChange={(e) => handleInputChange('soporte_telefono', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="+52 55 1234 5678"
+                                />
+                                <ZenInput
+                                    id="soporte_email"
+                                    label="Email de Soporte"
+                                    type="email"
+                                    value={config.soporte_email || ''}
+                                    onChange={(e) => handleInputChange('soporte_email', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="soporte@empresa.com"
+                                />
+                                <ZenInput
+                                    id="soporte_chat_url"
+                                    label="URL del Chat de Soporte"
+                                    value={config.soporte_chat_url || ''}
+                                    onChange={(e) => handleInputChange('soporte_chat_url', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="https://chat.empresa.com"
+                                />
                             </div>
                         </TabsContent>
 
@@ -350,54 +315,38 @@ export function ConfiguracionPageClient({ initialConfig }: ConfiguracionPageClie
                         {/* Redes Sociales */}
                         <TabsContent value="redes" className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="facebook_url" className="text-white">
-                                        Facebook
-                                    </Label>
-                                    <Input
-                                        id="facebook_url"
-                                        value={config.facebook_url || ''}
-                                        onChange={(e) => handleInputChange('facebook_url', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="https://facebook.com/empresa"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="instagram_url" className="text-white">
-                                        Instagram
-                                    </Label>
-                                    <Input
-                                        id="instagram_url"
-                                        value={config.instagram_url || ''}
-                                        onChange={(e) => handleInputChange('instagram_url', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="https://instagram.com/empresa"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="twitter_url" className="text-white">
-                                        Twitter
-                                    </Label>
-                                    <Input
-                                        id="twitter_url"
-                                        value={config.twitter_url || ''}
-                                        onChange={(e) => handleInputChange('twitter_url', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="https://twitter.com/empresa"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="linkedin_url" className="text-white">
-                                        LinkedIn
-                                    </Label>
-                                    <Input
-                                        id="linkedin_url"
-                                        value={config.linkedin_url || ''}
-                                        onChange={(e) => handleInputChange('linkedin_url', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="https://linkedin.com/company/empresa"
-                                    />
-                                </div>
+                                <ZenInput
+                                    id="facebook_url"
+                                    label="Facebook"
+                                    value={config.facebook_url || ''}
+                                    onChange={(e) => handleInputChange('facebook_url', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="https://facebook.com/empresa"
+                                />
+                                <ZenInput
+                                    id="instagram_url"
+                                    label="Instagram"
+                                    value={config.instagram_url || ''}
+                                    onChange={(e) => handleInputChange('instagram_url', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="https://instagram.com/empresa"
+                                />
+                                <ZenInput
+                                    id="twitter_url"
+                                    label="Twitter"
+                                    value={config.twitter_url || ''}
+                                    onChange={(e) => handleInputChange('twitter_url', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="https://twitter.com/empresa"
+                                />
+                                <ZenInput
+                                    id="linkedin_url"
+                                    label="LinkedIn"
+                                    value={config.linkedin_url || ''}
+                                    onChange={(e) => handleInputChange('linkedin_url', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="https://linkedin.com/company/empresa"
+                                />
                             </div>
                         </TabsContent>
 
@@ -456,43 +405,31 @@ export function ConfiguracionPageClient({ initialConfig }: ConfiguracionPageClie
                                         rows={3}
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="meta_keywords" className="text-white">
-                                        Meta Keywords (SEO)
-                                    </Label>
-                                    <Input
-                                        id="meta_keywords"
-                                        value={config.meta_keywords || ''}
-                                        onChange={(e) => handleInputChange('meta_keywords', e.target.value)}
-                                        className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="palabra1, palabra2, palabra3"
-                                    />
-                                </div>
+                                <ZenInput
+                                    id="meta_keywords"
+                                    label="Meta Keywords (SEO)"
+                                    value={config.meta_keywords || ''}
+                                    onChange={(e) => handleInputChange('meta_keywords', e.target.value)}
+                                    className="bg-zinc-800 border-zinc-700 text-white"
+                                    placeholder="palabra1, palabra2, palabra3"
+                                />
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="google_analytics_id" className="text-white">
-                                            Google Analytics ID
-                                        </Label>
-                                        <Input
-                                            id="google_analytics_id"
-                                            value={config.google_analytics_id || ''}
-                                            onChange={(e) => handleInputChange('google_analytics_id', e.target.value)}
-                                            className="bg-zinc-800 border-zinc-700 text-white"
-                                            placeholder="GA-XXXXXXXXX-X"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="google_tag_manager_id" className="text-white">
-                                            Google Tag Manager ID
-                                        </Label>
-                                        <Input
-                                            id="google_tag_manager_id"
-                                            value={config.google_tag_manager_id || ''}
-                                            onChange={(e) => handleInputChange('google_tag_manager_id', e.target.value)}
-                                            className="bg-zinc-800 border-zinc-700 text-white"
-                                            placeholder="GTM-XXXXXXX"
-                                        />
-                                    </div>
+                                    <ZenInput
+                                        id="google_analytics_id"
+                                        label="Google Analytics ID"
+                                        value={config.google_analytics_id || ''}
+                                        onChange={(e) => handleInputChange('google_analytics_id', e.target.value)}
+                                        className="bg-zinc-800 border-zinc-700 text-white"
+                                        placeholder="GA-XXXXXXXXX-X"
+                                    />
+                                    <ZenInput
+                                        id="google_tag_manager_id"
+                                        label="Google Tag Manager ID"
+                                        value={config.google_tag_manager_id || ''}
+                                        onChange={(e) => handleInputChange('google_tag_manager_id', e.target.value)}
+                                        className="bg-zinc-800 border-zinc-700 text-white"
+                                        placeholder="GTM-XXXXXXX"
+                                    />
                                 </div>
                             </div>
                         </TabsContent>

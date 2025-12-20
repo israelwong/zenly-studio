@@ -1,12 +1,5 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createClientSupabase } from '@/lib/supabase';
 
-export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Re-exportar para uso en hooks
+export const createClient = createClientSupabase;
 
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables')
-  }
-
-  return createBrowserClient(supabaseUrl, supabaseKey)
-}

@@ -1,1 +1,0 @@
-export { ConfiguracionSidebar } from './ConfiguracionSidebar';

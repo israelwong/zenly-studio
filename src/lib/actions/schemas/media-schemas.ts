@@ -5,18 +5,21 @@ export const FileTypeSchema = z.enum(["image", "video", "document", "gallery"]);
 
 // Categorías de media
 export const MediaCategorySchema = z.enum([
-  "identidad",    // Logos, isotipos
-  "servicios",    // Portadas de servicios
-  "eventos",      // Portadas de eventos
-  "galeria",      // Galerías generales
-  "clientes",     // Fotos de clientes
-  "documentos",   // PDFs, documentos
-  "temp"          // Archivos temporales
+  "identidad",         // Logos, isotipos
+  "servicios",         // Portadas de servicios
+  "eventos",           // Portadas de eventos
+  "galeria",           // Galerías generales
+  "clientes",          // Fotos de clientes
+  "documentos",        // PDFs, documentos
+  "temp",              // Archivos temporales
+  "categorias",        // Categorías catálogo (subcategory: {categoryId}/fotos|videos)
+  "items",             // Items catálogo (subcategory: {itemId}/fotos|videos)
+  "secciones"          // Secciones catálogo (subcategory: {sectionId}/portada)
 ]);
 
 // MIME types permitidos por categoría
 export const ALLOWED_MIME_TYPES = {
-  image: ["image/png", "image/svg+xml"],
+  image: ["image/png", "image/svg+xml", "image/jpeg", "image/jpg"],
   video: ["video/mp4"],
   document: ["application/pdf"],
   gallery: ["image/jpeg", "image/jpg"]

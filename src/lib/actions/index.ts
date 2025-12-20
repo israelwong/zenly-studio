@@ -3,9 +3,6 @@ export * from "./constants";
 export * from "./schemas";
 export * from "./utils";
 
-// Server Actions específicas
-export * from "./studio/config/personal.actions";
-
 // Re-exportar tipos importantes para facilitar el uso
 export type {
     // Constantes

@@ -1,8 +1,8 @@
 import React from 'react';
 import { prisma } from '@/lib/prisma';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Badge } from '@/components/ui/shadcn/badge';
 import {
     ArrowLeft,
     Edit,
@@ -56,7 +56,7 @@ async function getAgent(id: string): Promise<AgentDetail | null> {
                         createdAt: true
                     },
                     orderBy: {
-                        createdAt: 'desc'
+                        created_at: 'desc'
                     },
                     take: 10 // Últimos 10 leads
                 },
@@ -78,8 +78,9 @@ async function getAgent(id: string): Promise<AgentDetail | null> {
     }
 }
 
-export default async function AgentDetailPage({ params }: { params: { id: string } }) {
-    const agent = await getAgent(params.id);
+export default async function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    const agent = await getAgent(id);
 
     if (!agent) {
         notFound();

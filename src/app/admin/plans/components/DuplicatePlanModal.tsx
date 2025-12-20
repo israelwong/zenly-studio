@@ -7,12 +7,12 @@ import {
     DialogHeader,
     DialogTitle,
     DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
+} from '@/components/ui/shadcn/dialog';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
+import { Switch } from '@/components/ui/shadcn/switch';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { Loader2, Copy, AlertTriangle } from 'lucide-react';
 import { Plan } from '../types';
 

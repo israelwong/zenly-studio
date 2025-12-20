@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { createClient } from '@/lib/supabase/browser';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { ZenButton, ZenInput } from '@/components/ui/zen';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/shadcn/select';
 import {
     Plus,
     Search,
@@ -24,7 +23,7 @@ import {
     Target,
     CheckCircle
 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/shadcn/dropdown-menu';
 
 interface Lead {
     id: string;
@@ -259,7 +258,7 @@ export default function LeadsPage() {
                                 <h3 className="text-lg font-semibold text-red-600">Error al cargar leads</h3>
                                 <p className="text-muted-foreground mt-2">{error}</p>
                             </div>
-                            <Button
+                            <ZenButton
                                 onClick={() => {
                                     setError(null);
                                     setLoading(true);
@@ -268,7 +267,7 @@ export default function LeadsPage() {
                                 variant="outline"
                             >
                                 Reintentar
-                            </Button>
+                            </ZenButton>
                         </div>
                     </CardContent>
                 </Card>
@@ -284,10 +283,9 @@ export default function LeadsPage() {
                     <h1 className="text-3xl font-bold">Gestión de Leads</h1>
                     <p className="text-muted-foreground">Administra y sigue el progreso de tus leads</p>
                 </div>
-                <Button>
-                    <Plus className="h-4 w-4 mr-2" />
+                <ZenButton icon={Plus} iconPosition="left">
                     Nuevo Lead
-                </Button>
+                </ZenButton>
             </div>
 
             {/* Métricas principales */}
@@ -440,21 +438,13 @@ export default function LeadsPage() {
                                             </div>
                                         </div>
                                         <div className="flex gap-1">
-                                            <Button variant="outline" size="sm">
-                                                <Phone className="h-3 w-3" />
-                                            </Button>
-                                            <Button variant="outline" size="sm">
-                                                <Mail className="h-3 w-3" />
-                                            </Button>
-                                            <Button variant="outline" size="sm">
-                                                <MessageSquare className="h-3 w-3" />
-                                            </Button>
+                                            <ZenButton variant="outline" size="sm" icon={Phone} />
+                                            <ZenButton variant="outline" size="sm" icon={Mail} />
+                                            <ZenButton variant="outline" size="sm" icon={MessageSquare} />
                                         </div>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                    <MoreVertical className="h-4 w-4" />
-                                                </Button>
+                                                <ZenButton variant="ghost" size="sm" className="h-8 w-8 p-0" icon={MoreVertical} />
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuItem>

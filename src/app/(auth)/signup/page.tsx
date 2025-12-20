@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAuth } from '@/components/providers/auth-provider'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/browser'
+import { Button } from '@/components/ui/shadcn/button'
+import { Input } from '@/components/ui/shadcn/input'
+import { Label } from '@/components/ui/shadcn/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card'
+import { AuthHeader } from '@/components/auth/auth-header'
+import { AuthFooter } from '@/components/auth/auth-footer'
+import { CheckCircle2 } from 'lucide-react'
 
 export default function SignUpPage() {
     const [email, setEmail] = useState('')
@@ -18,7 +19,6 @@ export default function SignUpPage() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
-    const { signUp } = useAuth()
     const router = useRouter()
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -38,83 +38,113 @@ export default function SignUpPage() {
             return
         }
 
-        const { error } = await signUp(email, password, {
-            role: 'admin' // Por defecto, los nuevos usuarios son admin
-        })
+        try {
+            const supabase = createClient()
+            const { error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        role: 'admin' // Por defecto, los nuevos usuarios son admin
+                    }
+                }
+            })
 
-        if (error) {
-            setError(error.message)
-            setLoading(false)
-        } else {
-            setSuccess(true)
+            if (error) {
+                setError(error.message)
+                setLoading(false)
+            } else {
+                setSuccess(true)
+                setLoading(false)
+            }
+        } catch (err) {
+            setError('Error al crear la cuenta')
             setLoading(false)
         }
     }
 
     if (success) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-                <div className="max-w-md w-full space-y-8">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-center text-green-600">¡Registro Exitoso!</CardTitle>
-                            <CardDescription className="text-center">
-                                Revisa tu email para confirmar tu cuenta
+            <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10 bg-zinc-950">
+                <div className="w-full max-w-md">
+                    <AuthHeader subtitle="Tu cuenta ha sido creada exitosamente" />
+
+                    <Card className="bg-zinc-900/50 border-zinc-800">
+                        <CardHeader className="space-y-3 text-center">
+                            <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                            </div>
+                            <CardTitle className="text-xl text-zinc-100">¡Registro Exitoso!</CardTitle>
+                            <CardDescription className="text-zinc-400">
+                                Revisa tu correo para confirmar tu cuenta
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="text-center">
-                            <p className="text-sm text-gray-600 mb-4">
-                                Te hemos enviado un enlace de confirmación a tu email.
+                        <CardContent className="space-y-4">
+                            <p className="text-sm text-zinc-400 text-center">
+                                Te hemos enviado un enlace de confirmación a tu correo electrónico.
+                                Por favor, verifica tu bandeja de entrada y haz clic en el enlace para activar tu cuenta.
                             </p>
-                            <Button onClick={() => router.push('/login')} className="w-full">
-                                Ir a Iniciar Sesión
-                            </Button>
+
+                            <div className="pt-2 space-y-3">
+                                <Button
+                                    onClick={() => router.push('/login')}
+                                    className="w-full bg-emerald-700 hover:bg-emerald-600 text-white"
+                                >
+                                    Ir a Iniciar Sesión
+                                </Button>
+
+                                <Button
+                                    onClick={() => router.push('/')}
+                                    variant="outline"
+                                    className="w-full bg-transparent border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                                >
+                                    Volver al inicio
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
+
+                    <AuthFooter />
                 </div>
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8">
-                <div className="text-center">
-                    <h1 className="text-3xl font-bold text-gray-900">ProSocial Platform</h1>
-                    <p className="mt-2 text-sm text-gray-600">
-                        Crea tu cuenta de administrador
-                    </p>
-                </div>
+        <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10 bg-zinc-950">
+            <div className="w-full max-w-md">
+                <AuthHeader subtitle="Crea tu cuenta para gestionar tu estudio fotográfico" />
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Registrarse</CardTitle>
-                        <CardDescription>
-                            Crea una cuenta para acceder al panel de administración
+                <Card className="bg-zinc-900/50 border-zinc-800">
+                    <CardHeader className="space-y-1">
+                        <CardTitle className="text-xl text-zinc-100">Crear Cuenta</CardTitle>
+                        <CardDescription className="text-zinc-400">
+                            Completa los datos para registrarte
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {error && (
-                                <Alert variant="destructive">
-                                    <AlertDescription>{error}</AlertDescription>
-                                </Alert>
+                                <div className="text-sm text-red-400 bg-red-950/20 p-3 rounded border border-red-900/20">
+                                    {error}
+                                </div>
                             )}
 
                             <div className="space-y-2">
-                                <Label htmlFor="email">Email</Label>
+                                <Label htmlFor="email" className="text-zinc-300">Email</Label>
                                 <Input
                                     id="email"
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="admin@prosocial.mx"
+                                    placeholder="tu@email.com"
                                     required
+                                    className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="password">Contraseña</Label>
+                                <Label htmlFor="password" className="text-zinc-300">Contraseña</Label>
                                 <Input
                                     id="password"
                                     type="password"
@@ -122,11 +152,12 @@ export default function SignUpPage() {
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
                                     required
+                                    className="bg-zinc-800 border-zinc-700 text-zinc-100"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                                <Label htmlFor="confirmPassword" className="text-zinc-300">Confirmar Contraseña</Label>
                                 <Input
                                     id="confirmPassword"
                                     type="password"
@@ -134,37 +165,39 @@ export default function SignUpPage() {
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     placeholder="••••••••"
                                     required
+                                    className="bg-zinc-800 border-zinc-700 text-zinc-100"
                                 />
                             </div>
 
-                            <Button type="submit" className="w-full" disabled={loading}>
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Creando cuenta...
-                                    </>
-                                ) : (
-                                    'Crear Cuenta'
-                                )}
+                            <Button
+                                type="submit"
+                                className="w-full bg-emerald-700 hover:bg-emerald-600 text-white"
+                                disabled={loading}
+                            >
+                                {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
+                            </Button>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => router.back()}
+                                className="w-full bg-transparent border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                                disabled={loading}
+                            >
+                                Cancelar
                             </Button>
                         </form>
 
-                        <div className="mt-6 text-center">
-                            <p className="text-sm text-gray-600">
-                                ¿Ya tienes cuenta?{' '}
-                                <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
-                                    Inicia sesión aquí
-                                </Link>
-                            </p>
+                        <div className="mt-4 text-center text-sm text-zinc-400">
+                            ¿Ya tienes cuenta?{' '}
+                            <Link href="/login" className="text-emerald-500 hover:text-emerald-400 underline underline-offset-4">
+                                Inicia sesión aquí
+                            </Link>
                         </div>
                     </CardContent>
                 </Card>
 
-                <div className="text-center">
-                    <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">
-                        ← Volver al inicio
-                    </Link>
-                </div>
+                <AuthFooter />
             </div>
         </div>
     )

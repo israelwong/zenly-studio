@@ -40,7 +40,7 @@ export default async function ProtectedPage() {
     case 'suscriptor':
       // Para suscriptores, necesitamos obtener el studio_slug
       const studioSlug = user.user_metadata?.studio_slug
-      redirectPath = studioSlug ? `/studio/${studioSlug}` : '/unauthorized'
+      redirectPath = studioSlug ? `/${studioSlug}` : '/unauthorized'
       break
     default:
       redirectPath = '/unauthorized'

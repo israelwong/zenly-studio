@@ -1,18 +1,18 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/shadcn/button";
+import { ZenInput } from "@/components/ui/zen";
+import { Label } from "@/components/ui/shadcn/label";
+import { Textarea } from "@/components/ui/shadcn/textarea";
+import { Switch } from "@/components/ui/shadcn/switch";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/ui/shadcn/dialog";
 import {
     Save,
     X,
@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Service, ServiceCategory } from '../types';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/shadcn/select';
 
 interface ServiceModalProps {
     isOpen: boolean;
@@ -166,19 +166,17 @@ export function ServiceModal({ isOpen, onClose, service, onSave, existingService
                     {/* Formulario */}
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
+                            <ZenInput
+                                id="name"
+                                label="Nombre del Servicio"
+                                placeholder="ej: Catálogos, Proyectos Aprobados"
+                                value={formData.name}
+                                onChange={(e) => handleInputChange('name', e.target.value)}
+                            />
                             <div>
-                                <Label htmlFor="name" className="mb-2 block">Nombre del Servicio</Label>
-                                <Input
-                                    id="name"
-                                    placeholder="ej: Catálogos, Proyectos Aprobados"
-                                    value={formData.name}
-                                    onChange={(e) => handleInputChange('name', e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="slug" className="mb-2 block">Slug (identificador único)</Label>
-                                <Input
+                                <ZenInput
                                     id="slug"
+                                    label="Slug (identificador único)"
                                     placeholder="ej: catalogos, proyectos_aprobados"
                                     value={formData.slug}
                                     onChange={(e) => handleInputChange('slug', e.target.value)}

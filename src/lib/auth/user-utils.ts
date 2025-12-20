@@ -164,3 +164,11 @@ export function canManageStudio(profile: UserProfile, studioId: string): boolean
 
     return false
 }
+
+/**
+ * Obtiene el usuario autenticado y su perfil
+ * Útil para páginas que requieren autenticación
+ */
+export async function getAuthenticatedUser(slug?: string): Promise<AuthUser | null> {
+    return await getCurrentUser();
+}

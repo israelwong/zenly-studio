@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { SectionNavigation } from '@/components/ui/section-navigation';
+import { Card, CardContent } from '@/components/ui/shadcn/card';
+import { Button } from '@/components/ui/shadcn/button';
+import { SectionNavigation } from '@/components/ui/shadcn/section-navigation';
 import { Plus, Eye, Users, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CanalesList, CanalModal } from './components';

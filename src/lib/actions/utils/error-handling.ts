@@ -15,7 +15,9 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-    constructor(message: string, details?: any) {
+    public details?: unknown;
+
+    constructor(message: string, details?: unknown) {
         super(message, 400);
         this.name = "ValidationError";
         if (details) {
@@ -61,7 +63,7 @@ export class RateLimitError extends AppError {
 
 // Función para manejar errores de Zod
 export function handleZodError(error: ZodError): string {
-    const errorMessages = error.errors.map((err) => {
+    const errorMessages = error.issues.map((err) => {
         const path = err.path.join(".");
         return `${path}: ${err.message}`;
     });
@@ -70,31 +72,36 @@ export function handleZodError(error: ZodError): string {
 }
 
 // Función para manejar errores de Prisma
-export function handlePrismaError(error: any): AppError {
-    // Error de registro único duplicado
-    if (error.code === "P2002") {
-        const field = error.meta?.target?.[0] || "campo";
-        return new ConflictError(`El ${field} ya existe`);
-    }
+export function handlePrismaError(error: unknown): AppError {
+    // Type guard para verificar si es un error de Prisma
+    if (typeof error === 'object' && error !== null && 'code' in error) {
+        const prismaError = error as { code: string; meta?: { target?: string[] } };
 
-    // Error de registro no encontrado
-    if (error.code === "P2025") {
-        return new NotFoundError("Registro no encontrado");
-    }
+        // Error de registro único duplicado
+        if (prismaError.code === "P2002") {
+            const field = prismaError.meta?.target?.[0] || "campo";
+            return new ConflictError(`El ${field} ya existe`);
+        }
 
-    // Error de relación no encontrada
-    if (error.code === "P2003") {
-        return new ValidationError("Referencia a registro inexistente");
-    }
+        // Error de registro no encontrado
+        if (prismaError.code === "P2025") {
+            return new NotFoundError("Registro no encontrado");
+        }
 
-    // Error de conexión
-    if (error.code === "P1001") {
-        return new AppError("Error de conexión a la base de datos", 503);
-    }
+        // Error de relación no encontrada
+        if (prismaError.code === "P2003") {
+            return new ValidationError("Referencia a registro inexistente");
+        }
 
-    // Error de timeout
-    if (error.code === "P1008") {
-        return new AppError("Timeout de operación", 408);
+        // Error de conexión
+        if (prismaError.code === "P1001") {
+            return new AppError("Error de conexión a la base de datos", 503);
+        }
+
+        // Error de timeout
+        if (prismaError.code === "P1008") {
+            return new AppError("Timeout de operación", 408);
+        }
     }
 
     // Error genérico de Prisma
@@ -102,42 +109,52 @@ export function handlePrismaError(error: any): AppError {
 }
 
 // Función para manejar errores de Supabase
-export function handleSupabaseError(error: any): AppError {
-    if (error.message?.includes("Invalid login credentials")) {
-        return new AuthenticationError("Credenciales inválidas");
-    }
+export function handleSupabaseError(error: unknown): AppError {
+    // Type guard para verificar si tiene message
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+        const errorMessage = (error as { message: string }).message;
 
-    if (error.message?.includes("Email not confirmed")) {
-        return new AuthenticationError("Email no confirmado");
-    }
+        if (errorMessage.includes("Invalid login credentials")) {
+            return new AuthenticationError("Credenciales inválidas");
+        }
 
-    if (error.message?.includes("User not found")) {
-        return new NotFoundError("Usuario no encontrado");
-    }
+        if (errorMessage.includes("Email not confirmed")) {
+            return new AuthenticationError("Email no confirmado");
+        }
 
-    if (error.message?.includes("Email already registered")) {
-        return new ConflictError("Email ya registrado");
+        if (errorMessage.includes("User not found")) {
+            return new NotFoundError("Usuario no encontrado");
+        }
+
+        if (errorMessage.includes("Email already registered")) {
+            return new ConflictError("Email ya registrado");
+        }
     }
 
     return new AppError("Error de autenticación", 500);
 }
 
 // Función para manejar errores de Stripe
-export function handleStripeError(error: any): AppError {
-    if (error.type === "StripeCardError") {
-        return new ValidationError("Error en la tarjeta de crédito");
-    }
+export function handleStripeError(error: unknown): AppError {
+    // Type guard para verificar si tiene type
+    if (typeof error === 'object' && error !== null && 'type' in error) {
+        const errorType = (error as { type: string }).type;
 
-    if (error.type === "StripeRateLimitError") {
-        return new RateLimitError("Demasiadas solicitudes a Stripe");
-    }
+        if (errorType === "StripeCardError") {
+            return new ValidationError("Error en la tarjeta de crédito");
+        }
 
-    if (error.type === "StripeInvalidRequestError") {
-        return new ValidationError("Solicitud inválida a Stripe");
-    }
+        if (errorType === "StripeRateLimitError") {
+            return new RateLimitError("Demasiadas solicitudes a Stripe");
+        }
 
-    if (error.type === "StripeAPIError") {
-        return new AppError("Error del servicio de pagos", 502);
+        if (errorType === "StripeInvalidRequestError") {
+            return new ValidationError("Solicitud inválida a Stripe");
+        }
+
+        if (errorType === "StripeAPIError") {
+            return new AppError("Error del servicio de pagos", 502);
+        }
     }
 
     return new AppError("Error de procesamiento de pago", 500);

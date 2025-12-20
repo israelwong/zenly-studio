@@ -1,0 +1,2 @@
+export { TerminosCondicionesManager } from './TerminosCondicionesManager';
+

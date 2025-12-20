@@ -7,53 +7,39 @@ import { prisma } from "@/lib/prisma";
 // Métodos de pago básicos que se siembran automáticamente
 const METODOS_PAGO_BASICOS = [
     {
-        metodo_pago: "Efectivo",
+        payment_method_name: "Efectivo",
         payment_method: "cash",
-        comision_porcentaje_base: 0,
-        comision_fija_monto: 0,
-        tipo: "manual",
-        requiere_stripe: false,
+        base_commission_percentage: 0,
+        fixed_commission_amount: 0,
+        is_manual: true,
+        available_for_quotes: false, // NO disponible en cotizaciones para prospectos
         status: "active",
-        orden: 1,
+        order: 1,
+        banco: null,
+        beneficiario: null,
+        cuenta_clabe: null,
     },
     {
-        metodo_pago: "SPEI Directo",
-        payment_method: "spei_directo",
-        comision_porcentaje_base: 0,
-        comision_fija_monto: 0,
-        tipo: "manual",
-        requiere_stripe: false,
-        status: "active",
-        orden: 2,
-    },
-    {
-        metodo_pago: "Transferencia Bancaria",
+        payment_method_name: "Transferencia a cuenta del negocio",
         payment_method: "transferencia",
-        comision_porcentaje_base: 0,
-        comision_fija_monto: 0,
-        tipo: "manual",
-        requiere_stripe: false,
-        status: "active",
-        orden: 3,
-    },
-    {
-        metodo_pago: "Depósito Bancario",
-        payment_method: "deposito",
-        comision_porcentaje_base: 0,
-        comision_fija_monto: 0,
-        tipo: "manual",
-        requiere_stripe: false,
-        status: "active",
-        orden: 4,
+        base_commission_percentage: 0,
+        fixed_commission_amount: 0,
+        is_manual: true,
+        available_for_quotes: true, // SÍ disponible en cotizaciones para prospectos
+        status: "inactive", // Inactivo hasta que se configure (banco, beneficiario, CLABE)
+        order: 2,
+        banco: null, // Requiere configuración
+        beneficiario: null,
+        cuenta_clabe: null,
     },
 ];
 
-// Sembrar métodos de pago básicos para un studio
-export async function sembrarMetodosPagoBasicos(projectId: string) {
+// Sembrar métodos de pago básicos para un studio (por ID)
+export async function sembrarMetodosPagoBasicos(studio_id: string) {
     try {
         // Verificar si ya existen métodos para este studio
-        const metodosExistentes = await prisma.project_metodos_pago.findFirst({
-            where: { projectId },
+        const metodosExistentes = await prisma.studio_metodos_pago.findFirst({
+            where: { studio_id },
         });
 
         if (metodosExistentes) {
@@ -64,11 +50,21 @@ export async function sembrarMetodosPagoBasicos(projectId: string) {
         }
 
         // Crear métodos básicos
-        await prisma.project_metodos_pago.createMany({
+        await prisma.studio_metodos_pago.createMany({
             data: METODOS_PAGO_BASICOS.map(metodo => ({
-                projectId,
-                ...metodo,
-                updatedAt: new Date(),
+                studio_id,
+                payment_method_name: metodo.payment_method_name,
+                payment_method: metodo.payment_method,
+                base_commission_percentage: metodo.base_commission_percentage,
+                fixed_commission_amount: metodo.fixed_commission_amount,
+                is_manual: metodo.is_manual,
+                available_for_quotes: metodo.available_for_quotes,
+                status: metodo.status,
+                order: metodo.order,
+                banco: metodo.banco,
+                beneficiario: metodo.beneficiario,
+                cuenta_clabe: metodo.cuenta_clabe,
+                updated_at: new Date(),
             })),
         });
 
@@ -86,10 +82,10 @@ export async function sembrarMetodosPagoBasicos(projectId: string) {
 }
 
 // Verificar si un studio tiene métodos de pago configurados
-export async function verificarMetodosPagoConfigurados(projectId: string) {
+export async function verificarMetodosPagoConfigurados(studio_id: string) {
     try {
-        const metodosExistentes = await prisma.project_metodos_pago.findFirst({
-            where: { projectId },
+        const metodosExistentes = await prisma.studio_metodos_pago.findFirst({
+            where: { studio_id },
         });
 
         return {
@@ -106,14 +102,14 @@ export async function verificarMetodosPagoConfigurados(projectId: string) {
 }
 
 // Obtener métodos de pago activos de un studio
-export async function obtenerMetodosPagoActivos(projectId: string) {
+export async function obtenerMetodosPagoActivos(studio_id: string) {
     try {
-        const metodos = await prisma.project_metodos_pago.findMany({
+        const metodos = await prisma.studio_metodos_pago.findMany({
             where: {
-                projectId,
+                studio_id,
                 status: "active",
             },
-            orderBy: { orden: 'asc' },
+            orderBy: { order: 'asc' },
         });
 
         return {
@@ -125,6 +121,31 @@ export async function obtenerMetodosPagoActivos(projectId: string) {
         return {
             success: false,
             error: "Error al obtener métodos de pago activos",
+        };
+    }
+}
+
+// Sembrar métodos de pago básicos para un studio (por slug)
+export async function sembrarMetodosPagoBasicosPorSlug(studioSlug: string) {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+
+        if (!studio) {
+            return {
+                success: false,
+                error: "Studio no encontrado",
+            };
+        }
+
+        return await sembrarMetodosPagoBasicos(studio.id);
+    } catch (error) {
+        console.error("Error al sembrar métodos de pago por slug:", error);
+        return {
+            success: false,
+            error: "Error al sembrar métodos de pago",
         };
     }
 }

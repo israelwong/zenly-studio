@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/shadcn/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { ZenInput } from '@/components/ui/zen';
+import { Dialog, DialogTrigger } from '@/components/ui/shadcn/dialog';
 import { Plus, Edit, Trash2, Play, Pause, Search, DollarSign, Users, Target, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { CampanaModal } from './components';
@@ -269,13 +269,12 @@ export default function CampanasActivasPage() {
             {/* Filtros y Acciones */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 h-4 w-4" />
-                        <Input
+                    <div className="flex-1 max-w-sm">
+                        <ZenInput
                             placeholder="Buscar campañas..."
+                            icon={Search}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10"
                         />
                     </div>
                 </div>

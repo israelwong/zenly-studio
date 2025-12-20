@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { ZenInput } from '@/components/ui/zen';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/shadcn/dialog';
+import { Label } from '@/components/ui/shadcn/label';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/shadcn/select';
 import { Search, Plus, Edit, Trash2, Target, Palette, Type } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -188,13 +188,12 @@ export default function PlataformasPage() {
             {/* Filtros y Acciones */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 h-4 w-4" />
-                        <Input
+                    <div className="flex-1 max-w-sm">
+                        <ZenInput
                             placeholder="Buscar plataformas..."
+                            icon={Search}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10"
                         />
                     </div>
                 </div>
@@ -212,16 +211,14 @@ export default function PlataformasPage() {
                             </DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
-                            <div>
-                                <Label htmlFor="nombre" className="text-zinc-300">Nombre</Label>
-                                <Input
-                                    id="nombre"
-                                    value={formData.nombre}
-                                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                                    placeholder="Ej: Facebook Ads"
-                                    className="bg-zinc-800 border-zinc-700 text-white"
-                                />
-                            </div>
+                            <ZenInput
+                                id="nombre"
+                                label="Nombre"
+                                value={formData.nombre}
+                                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                                placeholder="Ej: Facebook Ads"
+                                className="bg-zinc-800 border-zinc-700 text-white"
+                            />
                             <div>
                                 <Label htmlFor="tipo" className="text-zinc-300">Tipo</Label>
                                 <Select value={formData.tipo} onValueChange={(value) => setFormData({ ...formData, tipo: value })}>
@@ -258,16 +255,14 @@ export default function PlataformasPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div>
-                                <Label htmlFor="icono" className="text-zinc-300">Icono (opcional)</Label>
-                                <Input
-                                    id="icono"
-                                    value={formData.icono}
-                                    onChange={(e) => setFormData({ ...formData, icono: e.target.value })}
-                                    placeholder="Ej: facebook, instagram, google"
-                                    className="bg-zinc-800 border-zinc-700 text-white"
-                                />
-                            </div>
+                            <ZenInput
+                                id="icono"
+                                label="Icono (opcional)"
+                                value={formData.icono}
+                                onChange={(e) => setFormData({ ...formData, icono: e.target.value })}
+                                placeholder="Ej: facebook, instagram, google"
+                                className="bg-zinc-800 border-zinc-700 text-white"
+                            />
                             <div>
                                 <Label htmlFor="descripcion" className="text-zinc-300">Descripción (opcional)</Label>
                                 <Textarea

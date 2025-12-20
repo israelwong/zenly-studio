@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
+import { Button } from '@/components/ui/shadcn/button';
+import { ZenInput } from '@/components/ui/zen';
+import { Label } from '@/components/ui/shadcn/label';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Switch } from '@/components/ui/shadcn/switch';
 import { Loader2 } from 'lucide-react';
 
 interface PlataformaRedSocial {
@@ -150,28 +150,24 @@ export function PlataformaModal({ isOpen, onClose, plataforma, onSave }: Platafo
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="nombre" className="text-white">Nombre *</Label>
-              <Input
-                id="nombre"
-                value={formData.nombre}
-                onChange={handleNombreChange}
-                placeholder="Facebook, Instagram, etc."
-                className="bg-zinc-800 border-zinc-700 text-white"
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="slug" className="text-white">Slug *</Label>
-              <Input
-                id="slug"
-                value={formData.slug}
-                onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-                placeholder="facebook, instagram, etc."
-                className="bg-zinc-800 border-zinc-700 text-white"
-                required
-              />
-            </div>
+            <ZenInput
+              id="nombre"
+              label="Nombre"
+              required
+              value={formData.nombre}
+              onChange={handleNombreChange}
+              placeholder="Facebook, Instagram, etc."
+              className="bg-zinc-800 border-zinc-700 text-white"
+            />
+            <ZenInput
+              id="slug"
+              label="Slug"
+              required
+              value={formData.slug}
+              onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+              placeholder="facebook, instagram, etc."
+              className="bg-zinc-800 border-zinc-700 text-white"
+            />
           </div>
 
           <div>
@@ -205,7 +201,7 @@ export function PlataformaModal({ isOpen, onClose, plataforma, onSave }: Platafo
             <div>
               <Label htmlFor="color" className="text-white">Color</Label>
               <div className="flex space-x-2">
-                <Input
+                <ZenInput
                   id="color"
                   type="color"
                   value={formData.color}
@@ -227,19 +223,15 @@ export function PlataformaModal({ isOpen, onClose, plataforma, onSave }: Platafo
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="urlBase" className="text-white">URL Base</Label>
-            <Input
-              id="urlBase"
-              value={formData.urlBase}
-              onChange={(e) => setFormData(prev => ({ ...prev, urlBase: e.target.value }))}
-              placeholder="https://facebook.com/"
-              className="bg-zinc-800 border-zinc-700 text-white"
-            />
-            <p className="text-xs text-zinc-400 mt-1">
-              URL base para validación de enlaces (opcional)
-            </p>
-          </div>
+          <ZenInput
+            id="urlBase"
+            label="URL Base"
+            value={formData.urlBase}
+            onChange={(e) => setFormData(prev => ({ ...prev, urlBase: e.target.value }))}
+            placeholder="https://facebook.com/"
+            className="bg-zinc-800 border-zinc-700 text-white"
+            hint="URL base para validación de enlaces (opcional)"
+          />
 
           <div className="flex items-center space-x-2">
             <Switch

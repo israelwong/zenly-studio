@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { ZenButton } from '@/components/ui/zen';
 import {
     Users,
     Target,
@@ -19,7 +19,8 @@ import {
     MessageSquare,
     Phone,
     Mail,
-    MapPin
+    MapPin,
+    Plus
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -265,14 +266,12 @@ export default function AgentDashboardPage() {
                     <p className="text-muted-foreground">Resumen de tu actividad y leads</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                        <Calendar className="h-4 w-4 mr-2" />
+                    <ZenButton variant="outline" size="sm" icon={Calendar} iconPosition="left">
                         Ver Calendario
-                    </Button>
-                    <Button size="sm">
-                        <Plus className="h-4 w-4 mr-2" />
+                    </ZenButton>
+                    <ZenButton size="sm" icon={Plus} iconPosition="left">
                         Nuevo Lead
-                    </Button>
+                    </ZenButton>
                 </div>
             </div>
 
@@ -375,15 +374,9 @@ export default function AgentDashboardPage() {
                                             {lead.lastActivity}
                                         </div>
                                         <div className="flex gap-1 mt-2">
-                                            <Button variant="outline" size="sm">
-                                                <Phone className="h-3 w-3" />
-                                            </Button>
-                                            <Button variant="outline" size="sm">
-                                                <Mail className="h-3 w-3" />
-                                            </Button>
-                                            <Button variant="outline" size="sm">
-                                                <MessageSquare className="h-3 w-3" />
-                                            </Button>
+                                            <ZenButton variant="outline" size="sm" icon={Phone} />
+                                            <ZenButton variant="outline" size="sm" icon={Mail} />
+                                            <ZenButton variant="outline" size="sm" icon={MessageSquare} />
                                         </div>
                                     </div>
                                 </div>
@@ -391,9 +384,9 @@ export default function AgentDashboardPage() {
                         </div>
                         <div className="mt-4 pt-4 border-t">
                             <Link href="/agente/leads">
-                                <Button variant="outline" className="w-full">
+                                <ZenButton variant="outline" fullWidth>
                                     Ver Todos los Leads
-                                </Button>
+                                </ZenButton>
                             </Link>
                         </div>
                     </CardContent>
@@ -439,9 +432,9 @@ export default function AgentDashboardPage() {
                         </div>
                         <div className="mt-4 pt-4 border-t">
                             <Link href="/agente/actividades">
-                                <Button variant="outline" className="w-full">
+                                <ZenButton variant="outline" fullWidth>
                                     Ver Todas las Actividades
-                                </Button>
+                                </ZenButton>
                             </Link>
                         </div>
                     </CardContent>
@@ -490,9 +483,9 @@ export default function AgentDashboardPage() {
                     </div>
                     <div className="mt-4 pt-4 border-t">
                         <Link href="/agente/studios">
-                            <Button variant="outline" className="w-full">
+                            <ZenButton variant="outline" fullWidth>
                                 Ver Todos los Studios
-                            </Button>
+                            </ZenButton>
                         </Link>
                     </div>
                 </CardContent>

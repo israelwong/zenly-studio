@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
+import { ZenButton } from '@/components/ui/zen';
 import { Plus } from 'lucide-react';
 
 interface KanbanHeaderProps {
@@ -13,10 +13,9 @@ export function KanbanHeader({ onNewLead }: KanbanHeaderProps) {
                 <h1 className="text-3xl font-bold">CRM Kanban</h1>
                 <p className="text-muted-foreground">Gestiona tus leads de manera visual</p>
             </div>
-            <Button onClick={onNewLead}>
-                <Plus className="h-4 w-4 mr-2" />
+            <ZenButton onClick={onNewLead} icon={Plus} iconPosition="left">
                 Nuevo Lead
-            </Button>
+            </ZenButton>
         </div>
     );
 }
