@@ -32,6 +32,8 @@ export interface Transaction {
     nominaId?: string; // ID de la nómina si viene de "Por Pagar"
     nominaPaymentType?: string; // Tipo de pago de nómina ('individual' | 'consolidado')
     isGastoOperativo?: boolean; // Si es gasto operativo personalizado
+    totalDiscounts?: number; // Descuentos aplicados (solo para nóminas)
+    personalId?: string; // ID del personal si el gasto recurrente está asociado a un crew member
 }
 
 interface PendingItem {
@@ -531,6 +533,8 @@ export async function obtenerMovimientosPorRango(
                 updated_at: true,
                 concept: true,
                 net_amount: true,
+                gross_amount: true,
+                total_discounts: true,
                 payment_type: true,
                 consolidated_payment_id: true,
                 personal_id: true,
@@ -609,6 +613,7 @@ export async function obtenerMovimientosPorRango(
                 concept: true,
                 amount: true,
                 category: true,
+                personal_id: true,
             },
             orderBy: {
                 date: 'desc',
@@ -636,6 +641,7 @@ export async function obtenerMovimientosPorRango(
                 nominaId: nomina.id,
                 nominaPaymentType: nomina.payment_type,
                 isGastoOperativo: false,
+                totalDiscounts: nomina.total_discounts ? Number(nomina.total_discounts) : undefined,
             })),
             ...gastos.map((gasto) => ({
                 id: gasto.id,
@@ -645,6 +651,7 @@ export async function obtenerMovimientosPorRango(
                 categoria: gasto.category,
                 monto: -gasto.amount,
                 isGastoOperativo: gasto.category === 'Operativo' || gasto.category === 'Recurrente',
+                personalId: gasto.personal_id || undefined, // ID del personal si el gasto está asociado
             })),
         ];
 
@@ -849,6 +856,7 @@ export async function obtenerMovimientos(
                 concept: true,
                 amount: true,
                 category: true,
+                personal_id: true,
             },
             orderBy: {
                 date: 'desc',
@@ -876,6 +884,7 @@ export async function obtenerMovimientos(
                 nominaId: nomina.id, // Identificar que viene de nómina pagada
                 nominaPaymentType: nomina.payment_type, // Tipo de pago
                 isGastoOperativo: false,
+                totalDiscounts: nomina.total_discounts ? Number(nomina.total_discounts) : undefined,
             })),
             ...gastos.map((gasto) => ({
                 id: gasto.id,
@@ -885,6 +894,7 @@ export async function obtenerMovimientos(
                 categoria: gasto.category,
                 monto: -gasto.amount,
                 isGastoOperativo: gasto.category === 'Operativo' || gasto.category === 'Recurrente', // Identificar gastos personalizados
+                personalId: gasto.personal_id || undefined, // ID del personal si el gasto está asociado
             })),
         ];
 
@@ -1540,11 +1550,19 @@ export async function marcarNominaPagada(
 /**
  * Pagar nóminas consolidadas de un personal
  * Crea una nómina consolidada y marca las individuales como pagadas
+ * Soporta pagos parciales con múltiples métodos y descuentos
  */
 export async function pagarNominasPersonal(
     studioSlug: string,
     personalId: string,
-    nominaIds: string[]
+    nominaIds: string[],
+    options?: {
+        partialPayments?: Array<{
+            payment_method: 'transferencia' | 'efectivo';
+            amount: number;
+        }>;
+        totalDiscounts?: number;
+    }
 ): Promise<{ success: boolean; data?: { nominaConsolidadaId: string }; error?: string }> {
     try {
         const studioId = await getStudioId(studioSlug);
@@ -1675,6 +1693,19 @@ export async function pagarNominasPersonal(
         const serviciosParaCrear = Array.from(serviciosAgrupados.values());
         const paymentDate = new Date();
 
+        // Extraer opciones de pago
+        const totalDiscounts = options?.totalDiscounts ?? 0;
+        const partialPayments = options?.partialPayments ?? [];
+        const totalToPay = totalNetAmount - totalDiscounts;
+
+        // Validar que si hay pagos parciales, la suma coincida con el total a pagar
+        if (partialPayments.length > 0) {
+            const partialTotal = partialPayments.reduce((sum, p) => sum + p.amount, 0);
+            if (Math.abs(partialTotal - totalToPay) > 0.01) {
+                return { success: false, error: `La suma de los pagos parciales (${partialTotal.toFixed(2)}) debe coincidir con el total a pagar (${totalToPay.toFixed(2)})` };
+            }
+        }
+
         // Crear nómina consolidada y marcar individuales como pagadas en transacción optimizada
         const resultado = await prisma.$transaction(
             async (tx) => {
@@ -1686,20 +1717,35 @@ export async function pagarNominasPersonal(
                         user_id: studioUser.id,
                         status: 'pagado',
                         concept: `Pago consolidado - ${personal.name}`,
-                        description: `Pago consolidado de ${nominas.length} servicio${nominas.length > 1 ? 's' : ''}`,
+                        description: `Pago consolidado de ${nominas.length} servicio${nominas.length > 1 ? 's' : ''}${totalDiscounts > 0 ? ` (Descuento: $${totalDiscounts.toFixed(2)})` : ''}`,
                         gross_amount: totalGrossAmount,
-                        net_amount: totalNetAmount,
+                        net_amount: totalToPay, // Monto neto después de descuentos
                         total_cost_snapshot: totalGrossAmount,
                         expense_total_snapshot: 0,
                         deductions: 0,
+                        total_discounts: totalDiscounts,
                         payment_type: 'consolidado',
                         services_included: totalServices,
                         assignment_date: paymentDate,
                         payment_date: paymentDate,
                         paid_by: studioUser.id,
-                        payment_method: 'transferencia',
+                        // Si hay pagos parciales, usar el primer método como default (para compatibilidad)
+                        // El método real se guarda en los pagos parciales
+                        payment_method: partialPayments.length > 0 ? partialPayments[0].payment_method : 'transferencia',
                     },
                 });
+
+                // 1.1. Crear pagos parciales si existen
+                if (partialPayments.length > 0) {
+                    await tx.studio_nomina_pagos_parciales.createMany({
+                        data: partialPayments.map(payment => ({
+                            nomina_id: nominaConsolidada.id,
+                            payment_method: payment.payment_method,
+                            amount: payment.amount,
+                            payment_date: paymentDate,
+                        })),
+                    });
+                }
 
                 // 2. Marcar todas las nóminas individuales como pagadas en una sola operación
                 // Asignar consolidated_payment_id para agruparlas en movimientos
@@ -2058,7 +2104,11 @@ export async function crearGastoRecurrente(
  */
 export async function pagarGastoRecurrente(
     studioSlug: string,
-    expenseId: string
+    expenseId: string,
+    options?: {
+        totalDiscounts?: number;
+        partialPayments?: Array<{ payment_method: string; amount: number }>;
+    }
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const studioId = await getStudioId(studioSlug);
@@ -2068,7 +2118,7 @@ export async function pagarGastoRecurrente(
 
         // Verificar si es un crew member (ID empieza con "crew-")
         const isCrewMember = expenseId.startsWith('crew-');
-        let gastoRecurrente: { name: string; amount: number; description: string | null } | null = null;
+        let gastoRecurrente: { name: string; amount: number; description: string | null; crewMemberId?: string } | null = null;
 
         if (isCrewMember) {
             // Es un crew member, obtener datos del crew member
@@ -2080,6 +2130,7 @@ export async function pagarGastoRecurrente(
                     fixed_salary: { not: null },
                 },
                 select: {
+                    id: true,
                     name: true,
                     fixed_salary: true,
                 },
@@ -2093,6 +2144,7 @@ export async function pagarGastoRecurrente(
                 name: crewMember.name,
                 amount: crewMember.fixed_salary ? Number(crewMember.fixed_salary) : 0,
                 description: `Salario fijo de ${crewMember.name}`,
+                crewMemberId: crewMember.id,
             };
         } else {
             // Es un gasto recurrente normal
@@ -2173,17 +2225,32 @@ export async function pagarGastoRecurrente(
             });
         }
 
+        // Calcular total a pagar (después de descuentos)
+        const totalDiscounts = options?.totalDiscounts ?? 0;
+        const totalToPay = gastoRecurrente.amount - totalDiscounts;
+        const partialPayments = options?.partialPayments ?? [];
+
+        // Determinar método de pago
+        let paymentMethod = 'transferencia'; // Default
+        if (partialPayments.length > 0) {
+            paymentMethod = partialPayments.length > 1 ? 'combinado' : partialPayments[0].payment_method;
+        }
+
         // Crear el gasto operativo asociado al gasto recurrente
         const gasto = await prisma.studio_gastos.create({
             data: {
                 studio_id: studioId,
                 user_id: studioUser.id,
                 concept: gastoRecurrente.name,
-                amount: gastoRecurrente.amount,
+                amount: totalToPay, // Monto neto después de descuentos
                 category: 'Recurrente',
                 date: new Date(),
                 description: gastoRecurrente.description || null,
                 status: 'activo',
+                personal_id: gastoRecurrente.crewMemberId || null, // Asociar con personal si es crew member
+                payment_method: paymentMethod,
+                // Nota: Para guardar descuentos y pagos parciales, necesitaríamos campos adicionales
+                // Por ahora solo guardamos el monto neto y el método de pago
             },
             select: {
                 id: true,
@@ -2621,6 +2688,60 @@ export async function cancelarPagoGastoRecurrente(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al cancelar pago de gasto recurrente',
+        };
+    }
+}
+
+/**
+ * Cancelar pago recurrente por ID del gasto pagado
+ * Elimina el gasto de movimientos y automáticamente regresa a gastos recurrentes
+ */
+export async function cancelarPagoRecurrentePorGastoId(
+    studioSlug: string,
+    gastoId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const studioId = await getStudioId(studioSlug);
+        if (!studioId) {
+            return { success: false, error: 'Studio no encontrado' };
+        }
+
+        // Obtener el gasto pagado
+        const gasto = await prisma.studio_gastos.findFirst({
+            where: {
+                id: gastoId,
+                studio_id: studioId,
+                category: 'Recurrente',
+            },
+            select: {
+                id: true,
+                concept: true,
+                personal_id: true,
+                date: true,
+            },
+        });
+
+        if (!gasto) {
+            return { success: false, error: 'Gasto recurrente no encontrado' };
+        }
+
+        // Eliminar el gasto pagado
+        await prisma.studio_gastos.delete({
+            where: {
+                id: gasto.id,
+            },
+        });
+
+        revalidatePath(`/${studioSlug}/studio/business/finanzas`);
+
+        return {
+            success: true,
+        };
+    } catch (error) {
+        console.error('Error cancelando pago recurrente:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al cancelar pago recurrente',
         };
     }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { User, DollarSign, FileText, Download, Calendar, List } from 'lucide-react';
+import { User, DollarSign, FileText, Download, Calendar, List, CreditCard } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { obtenerDatosComprobanteNomina, type NominaReceiptData } from '@/lib/actions/studio/business/finanzas/nomina-receipt.actions';
@@ -156,18 +156,80 @@ export function NominaReceipt({
                 <div className="max-h-[calc(90vh-200px)] overflow-y-auto pr-2 -mr-2">
                     {loading && (
                         <div className="space-y-6">
+                            {/* Grid de 2 columnas: Personal y Detalles del Pago */}
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-3">
-                                    <Skeleton className="h-6 w-32 bg-zinc-800 animate-pulse" />
-                                    <Skeleton className="h-4 w-full bg-zinc-800 animate-pulse" />
-                                    <Skeleton className="h-4 w-3/4 bg-zinc-800 animate-pulse" />
-                                </div>
-                                <div className="space-y-3">
-                                    <Skeleton className="h-6 w-32 bg-zinc-800 animate-pulse" />
-                                    <Skeleton className="h-4 w-full bg-zinc-800 animate-pulse" />
-                                    <Skeleton className="h-4 w-3/4 bg-zinc-800 animate-pulse" />
-                                </div>
+                                {/* Card Personal */}
+                                <ZenCard variant="outlined">
+                                    <ZenCardContent className="p-4">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Skeleton className="h-4 w-4 bg-zinc-800 animate-pulse rounded" />
+                                            <Skeleton className="h-4 w-20 bg-zinc-800 animate-pulse" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Skeleton className="h-4 w-32 bg-zinc-800 animate-pulse" />
+                                            <div className="flex flex-wrap gap-3">
+                                                <Skeleton className="h-3 w-24 bg-zinc-800 animate-pulse" />
+                                                <Skeleton className="h-3 w-32 bg-zinc-800 animate-pulse" />
+                                            </div>
+                                        </div>
+                                    </ZenCardContent>
+                                </ZenCard>
+
+                                {/* Card Detalles del Pago */}
+                                <ZenCard variant="outlined">
+                                    <ZenCardContent className="p-4">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Skeleton className="h-4 w-4 bg-zinc-800 animate-pulse rounded" />
+                                            <Skeleton className="h-4 w-28 bg-zinc-800 animate-pulse" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div>
+                                                <Skeleton className="h-3 w-20 mb-1 bg-zinc-800 animate-pulse" />
+                                                <Skeleton className="h-4 w-32 bg-zinc-800 animate-pulse" />
+                                            </div>
+                                        </div>
+                                    </ZenCardContent>
+                                </ZenCard>
                             </div>
+
+                            {/* Card Concepto y Monto unificado */}
+                            <ZenCard variant="outlined">
+                                <ZenCardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Skeleton className="h-4 w-4 bg-zinc-800 animate-pulse rounded" />
+                                        <Skeleton className="h-4 w-36 bg-zinc-800 animate-pulse" />
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <Skeleton className="h-3 w-20 mb-1 bg-zinc-800 animate-pulse" />
+                                            <Skeleton className="h-3 w-full bg-zinc-800 animate-pulse" />
+                                        </div>
+                                        <div className="pt-4 mt-4 border-t border-l-2 border-zinc-700/30 border-l-emerald-500/50 pl-4">
+                                            <Skeleton className="h-3 w-32 mb-3 bg-zinc-800 animate-pulse" />
+                                            <div className="space-y-2">
+                                                {[1, 2, 3].map((index) => (
+                                                    <div
+                                                        key={index}
+                                                        className={`flex items-center justify-between py-2.5 px-3 rounded-md bg-zinc-900/30 ${index < 3 ? 'mb-2' : ''}`}
+                                                    >
+                                                        <div className="flex-1 min-w-0">
+                                                            <Skeleton className="h-3 w-40 mb-1 bg-zinc-800 animate-pulse" />
+                                                            <Skeleton className="h-3 w-24 bg-zinc-800 animate-pulse" />
+                                                        </div>
+                                                        <div className="text-right ml-4 shrink-0">
+                                                            <Skeleton className="h-4 w-16 bg-zinc-800 animate-pulse" />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-2 border-t border-zinc-700/30">
+                                            <Skeleton className="h-3 w-20 bg-zinc-800 animate-pulse" />
+                                            <Skeleton className="h-6 w-24 bg-zinc-800 animate-pulse" />
+                                        </div>
+                                    </div>
+                                </ZenCardContent>
+                            </ZenCard>
                         </div>
                     )}
                     {!loading && data && (
@@ -202,16 +264,6 @@ export function NominaReceipt({
                                                 <p className="text-xs text-zinc-400 mb-1">Fecha de Pago</p>
                                                 <p className="text-sm font-medium text-zinc-100">{formatDate(data.nomina.payment_date)}</p>
                                             </div>
-                                            <div>
-                                                <p className="text-xs text-zinc-400 mb-1">Método de Pago</p>
-                                                <p className="text-sm font-medium text-zinc-100 capitalize">{data.nomina.payment_method}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-zinc-400 mb-1">Tipo</p>
-                                                <p className="text-sm font-medium text-zinc-100 capitalize">
-                                                    {data.nomina.payment_type === 'consolidado' ? 'Pago Consolidado' : 'Pago Individual'}
-                                                </p>
-                                            </div>
                                         </div>
                                     </ZenCardContent>
                                 </ZenCard>
@@ -221,25 +273,63 @@ export function NominaReceipt({
                                 <ZenCardContent className="p-4">
                                     <div className="flex items-center gap-2 mb-3">
                                         <DollarSign className="h-4 w-4 text-emerald-400" />
-                                        <h3 className="text-sm font-semibold text-zinc-200">Concepto y Monto</h3>
+                                        <h3 className="text-sm font-semibold text-zinc-200">Resumen del pago</h3>
                                     </div>
                                     <div className="space-y-3">
-                                        <div>
-                                            <p className="text-xs text-zinc-400 mb-1">Concepto</p>
-                                            <p className="text-sm font-medium text-zinc-100">{data.nomina.concept}</p>
-                                        </div>
                                         {data.nomina.description && (
                                             <div>
-                                                <p className="text-xs text-zinc-400 mb-1">Descripción</p>
-                                                <p className="text-sm text-zinc-300">{data.nomina.description}</p>
+                                                <p className="text-xs text-zinc-400 mb-1">Concepto</p>
+                                                <p className="text-sm text-zinc-300">
+                                                    {data.nomina.description.replace(/consolidado/gi, '').trim()}
+                                                </p>
                                             </div>
                                         )}
+
+                                        {data.servicios.length > 0 && (
+                                            <div className="pt-4 mt-4 border-t border-l-2 border-zinc-700/30 border-l-emerald-500/50 pl-4">
+                                                <p className="text-xs font-medium text-zinc-400 mb-3">Conceptos incluidos:</p>
+                                                <div className="space-y-2">
+                                                    {data.servicios.map((servicio, index) => (
+                                                        <div
+                                                            key={index}
+                                                            className={`flex items-center justify-between py-2.5 px-3 rounded-md bg-zinc-900/30 ${index < data.servicios.length - 1 ? 'mb-2' : ''}`}
+                                                        >
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-xs font-medium text-zinc-200 truncate">
+                                                                    {servicio.service_name}
+                                                                    {servicio.assigned_quantity > 1 && ` x${servicio.assigned_quantity}`}
+                                                                </p>
+                                                                {servicio.category_name && (
+                                                                    <p className="text-xs text-zinc-500 mt-0.5">{servicio.category_name}</p>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-right ml-4 shrink-0">
+                                                                <p className="text-sm font-semibold text-zinc-200">
+                                                                    {formatAmount(servicio.assigned_cost)}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {data.totalDiscounts && data.totalDiscounts > 0 && (
+                                            <div className="flex items-center justify-between ">
+                                                <span className="text-xs text-zinc-400">Descuentos</span>
+                                                <span className="text-sm font-medium text-red-400">
+                                                    -{formatAmount(data.totalDiscounts)}
+                                                </span>
+                                            </div>
+                                        )}
+
                                         <div className="flex items-center justify-between pt-2 border-t border-zinc-700/30">
                                             <span className="text-xs text-zinc-400">Monto Neto</span>
                                             <span className="text-lg font-semibold text-emerald-200">
                                                 {formatAmount(data.nomina.net_amount)}
                                             </span>
                                         </div>
+
                                         {data.nomina.gross_amount !== data.nomina.net_amount && (
                                             <div className="flex items-center justify-between">
                                                 <span className="text-xs text-zinc-400">Monto Bruto</span>
@@ -252,33 +342,28 @@ export function NominaReceipt({
                                 </ZenCardContent>
                             </ZenCard>
 
-                            {data.servicios.length > 0 && (
+                            {/* Pagos parciales */}
+                            {data.partialPayments && data.partialPayments.length > 0 && (
                                 <ZenCard variant="outlined">
                                     <ZenCardContent className="p-4">
                                         <div className="flex items-center gap-2 mb-3">
-                                            <List className="h-4 w-4 text-purple-400" />
-                                            <h3 className="text-sm font-semibold text-zinc-200">Conceptos Incluidos</h3>
+                                            <CreditCard className="h-4 w-4 text-blue-400" />
+                                            <h3 className="text-sm font-semibold text-zinc-200">Métodos de Pago</h3>
                                         </div>
                                         <div className="space-y-2">
-                                            {data.servicios.map((servicio, index) => (
+                                            {data.partialPayments.map((payment, index) => (
                                                 <div
                                                     key={index}
-                                                    className={`flex items-center justify-between py-2 ${index < data.servicios.length - 1 ? 'border-b border-zinc-700/30' : ''}`}
+                                                    className={`flex items-center justify-between py-2 ${index < data.partialPayments!.length - 1 ? 'border-b border-zinc-700/30' : ''}`}
                                                 >
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-xs font-medium text-zinc-200 truncate">
-                                                            {servicio.service_name}
+                                                        <p className="text-xs font-medium text-zinc-200 capitalize">
+                                                            {payment.payment_method}
                                                         </p>
-                                                        {servicio.category_name && (
-                                                            <p className="text-xs text-zinc-500 mt-0.5">{servicio.category_name}</p>
-                                                        )}
                                                     </div>
                                                     <div className="text-right ml-4">
-                                                        <p className="text-xs text-zinc-400">
-                                                            {servicio.assigned_quantity > 1 && `${servicio.assigned_quantity}x `}
-                                                        </p>
                                                         <p className="text-sm font-semibold text-zinc-200">
-                                                            {formatAmount(servicio.assigned_cost)}
+                                                            {formatAmount(payment.amount)}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -416,7 +501,7 @@ export function NominaReceipt({
                             </div>
                         )}
 
-                        {/* Payment Details */}
+                        {/* Resumen del Pago */}
                         <div style={{ marginBottom: '36px', pageBreakInside: 'avoid' }}>
                             <h3 style={{
                                 fontSize: '12px',
@@ -424,84 +509,156 @@ export function NominaReceipt({
                                 color: '#6b7280',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.05em',
-                                marginBottom: '12px',
+                                marginBottom: '16px',
                                 marginTop: 0
-                            }}>Detalles del Pago</h3>
-                            <table style={{
-                                width: '100%',
-                                textAlign: 'left',
-                                borderCollapse: 'collapse',
-                                tableLayout: 'fixed'
+                            }}>Resumen del Pago</h3>
+                            <div style={{
+                                backgroundColor: '#f9fafb',
+                                padding: '20px',
+                                borderRadius: '8px',
+                                border: '1px solid #f3f4f6'
                             }}>
-                                <colgroup>
-                                    <col style={{ width: '45%' }} />
-                                    <col style={{ width: '35%' }} />
-                                    <col style={{ width: '20%' }} />
-                                </colgroup>
-                                <thead>
-                                    <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                        <th style={{
-                                            padding: '12px 8px',
+                                {data.nomina.description && (
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <p style={{
+                                            fontSize: '12px',
+                                            color: '#6b7280',
+                                            margin: '0 0 4px 0',
+                                            fontWeight: '500'
+                                        }}>Concepto</p>
+                                        <p style={{
                                             fontSize: '14px',
-                                            fontWeight: '600',
-                                            color: '#374151',
-                                            textAlign: 'left'
-                                        }}>Concepto</th>
-                                        <th style={{
-                                            padding: '12px 8px',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            color: '#374151',
-                                            textAlign: 'left'
-                                        }}>Método</th>
-                                        <th style={{
-                                            padding: '12px 8px',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            color: '#374151',
-                                            textAlign: 'right'
-                                        }}>Monto</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={{
-                                            padding: '16px 8px',
                                             color: '#1f2937',
+                                            margin: 0,
                                             wordBreak: 'break-word'
                                         }}>
-                                            <div style={{ fontWeight: '500', marginBottom: '4px' }}>{data.nomina.concept}</div>
-                                            {data.nomina.description && (
-                                                <div style={{
-                                                    fontSize: '12px',
-                                                    color: '#6b7280',
-                                                    wordBreak: 'break-word'
-                                                }}>{data.nomina.description}</div>
-                                            )}
-                                        </td>
-                                        <td style={{
-                                            padding: '16px 8px',
-                                            color: '#1f2937',
-                                            textTransform: 'capitalize',
-                                            wordBreak: 'break-word'
-                                        }}>{data.nomina.payment_method}</td>
-                                        <td style={{
-                                            padding: '16px 8px',
-                                            color: '#111827',
+                                            {data.nomina.description.replace(/consolidado/gi, '').trim()}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Conceptos Incluidos */}
+                                {data.servicios.length > 0 && (
+                                    <div style={{
+                                        paddingTop: '16px',
+                                        marginTop: '16px',
+                                        borderTop: '1px solid #e5e7eb',
+                                        borderLeft: '3px solid #10b981',
+                                        paddingLeft: '16px'
+                                    }}>
+                                        <p style={{
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            color: '#6b7280',
+                                            margin: '0 0 12px 0',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em'
+                                        }}>Conceptos incluidos:</p>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {data.servicios.map((servicio, index) => (
+                                                <div key={index} style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    padding: '10px 12px',
+                                                    backgroundColor: '#ffffff',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #f3f4f6'
+                                                }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <p style={{
+                                                            fontSize: '13px',
+                                                            fontWeight: '500',
+                                                            color: '#1f2937',
+                                                            margin: 0,
+                                                            wordBreak: 'break-word'
+                                                        }}>
+                                                            {servicio.service_name}
+                                                            {servicio.assigned_quantity > 1 && ` x${servicio.assigned_quantity}`}
+                                                        </p>
+                                                        {servicio.category_name && (
+                                                            <p style={{
+                                                                fontSize: '12px',
+                                                                color: '#6b7280',
+                                                                margin: '4px 0 0 0'
+                                                            }}>{servicio.category_name}</p>
+                                                        )}
+                                                    </div>
+                                                    <div style={{
+                                                        textAlign: 'right',
+                                                        marginLeft: '16px',
+                                                        flexShrink: 0
+                                                    }}>
+                                                        <p style={{
+                                                            fontSize: '14px',
+                                                            fontWeight: '600',
+                                                            color: '#1f2937',
+                                                            margin: 0,
+                                                            whiteSpace: 'nowrap'
+                                                        }}>
+                                                            {formatAmount(servicio.assigned_cost)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Descuentos y Montos */}
+                                <div style={{
+                                    marginTop: '16px',
+                                    paddingTop: '16px',
+                                    borderTop: '1px solid #e5e7eb'
+                                }}>
+                                    {data.totalDiscounts && data.totalDiscounts > 0 && (
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            fontSize: '14px',
+                                            marginBottom: '12px',
+                                            gap: '16px'
+                                        }}>
+                                            <span style={{ color: '#6b7280', margin: 0 }}>Descuentos:</span>
+                                            <span style={{ fontWeight: '500', color: '#dc2626', margin: 0, textAlign: 'right' }}>-{formatAmount(data.totalDiscounts)}</span>
+                                        </div>
+                                    )}
+                                    <div style={{
+                                        borderTop: data.totalDiscounts && data.totalDiscounts > 0 ? '1px solid #e5e7eb' : 'none',
+                                        paddingTop: data.totalDiscounts && data.totalDiscounts > 0 ? '12px' : '0',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        fontSize: '16px',
+                                        gap: '16px',
+                                        marginBottom: data.nomina.gross_amount !== data.nomina.net_amount ? '8px' : '0'
+                                    }}>
+                                        <span style={{ fontWeight: 'bold', color: '#1f2937', margin: 0 }}>Monto Neto:</span>
+                                        <span style={{
                                             fontWeight: 'bold',
-                                            textAlign: 'right',
-                                            fontSize: '18px',
-                                            whiteSpace: 'nowrap'
+                                            color: '#16a34a',
+                                            margin: 0,
+                                            textAlign: 'right'
                                         }}>
                                             {formatAmount(data.nomina.net_amount)}
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                                        </span>
+                                    </div>
+                                    {data.nomina.gross_amount !== data.nomina.net_amount && (
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            fontSize: '14px',
+                                            gap: '16px'
+                                        }}>
+                                            <span style={{ color: '#6b7280', margin: 0 }}>Monto Bruto:</span>
+                                            <span style={{ fontWeight: '500', color: '#4b5563', margin: 0, textAlign: 'right' }}>{formatAmount(data.nomina.gross_amount)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Services Breakdown */}
-                        {data.servicios.length > 0 && (
+                        {/* Partial Payments */}
+                        {data.partialPayments && data.partialPayments.length > 0 && (
                             <div style={{ marginBottom: '36px', pageBreakInside: 'avoid' }}>
                                 <h3 style={{
                                     fontSize: '12px',
@@ -511,7 +668,7 @@ export function NominaReceipt({
                                     letterSpacing: '0.05em',
                                     marginBottom: '16px',
                                     marginTop: 0
-                                }}>Conceptos Incluidos</h3>
+                                }}>Métodos de Pago</h3>
                                 <table style={{
                                     width: '100%',
                                     textAlign: 'left',
@@ -520,8 +677,7 @@ export function NominaReceipt({
                                 }}>
                                     <colgroup>
                                         <col style={{ width: '50%' }} />
-                                        <col style={{ width: '20%' }} />
-                                        <col style={{ width: '30%' }} />
+                                        <col style={{ width: '50%' }} />
                                     </colgroup>
                                     <thead>
                                         <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
@@ -533,16 +689,7 @@ export function NominaReceipt({
                                                 textAlign: 'left',
                                                 textTransform: 'uppercase',
                                                 letterSpacing: '0.05em'
-                                            }}>Concepto</th>
-                                            <th style={{
-                                                padding: '12px 8px',
-                                                fontSize: '12px',
-                                                fontWeight: '600',
-                                                color: '#374151',
-                                                textAlign: 'center',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.05em'
-                                            }}>Cantidad</th>
+                                            }}>Método</th>
                                             <th style={{
                                                 padding: '12px 8px',
                                                 fontSize: '12px',
@@ -555,31 +702,16 @@ export function NominaReceipt({
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {data.servicios.map((servicio, index) => (
+                                        {data.partialPayments.map((payment, index) => (
                                             <tr key={index} style={{
-                                                borderBottom: index < data.servicios.length - 1 ? '1px solid #f3f4f6' : 'none'
+                                                borderBottom: index < data.partialPayments!.length - 1 ? '1px solid #f3f4f6' : 'none'
                                             }}>
                                                 <td style={{
                                                     padding: '12px 8px',
                                                     color: '#1f2937',
-                                                    wordBreak: 'break-word',
+                                                    textTransform: 'capitalize',
                                                     fontSize: '14px'
-                                                }}>
-                                                    <div style={{ fontWeight: '500' }}>{servicio.service_name}</div>
-                                                    {servicio.category_name && (
-                                                        <div style={{
-                                                            fontSize: '12px',
-                                                            color: '#6b7280',
-                                                            marginTop: '4px'
-                                                        }}>{servicio.category_name}</div>
-                                                    )}
-                                                </td>
-                                                <td style={{
-                                                    padding: '12px 8px',
-                                                    color: '#4b5563',
-                                                    fontSize: '13px',
-                                                    textAlign: 'center'
-                                                }}>{servicio.assigned_quantity}</td>
+                                                }}>{payment.payment_method}</td>
                                                 <td style={{
                                                     padding: '12px 8px',
                                                     color: '#111827',
@@ -588,7 +720,7 @@ export function NominaReceipt({
                                                     fontSize: '14px',
                                                     whiteSpace: 'nowrap'
                                                 }}>
-                                                    {formatAmount(servicio.assigned_cost)}
+                                                    {formatAmount(payment.amount)}
                                                 </td>
                                             </tr>
                                         ))}
@@ -596,63 +728,6 @@ export function NominaReceipt({
                                 </table>
                             </div>
                         )}
-
-                        {/* Total Summary */}
-                        <div style={{
-                            marginTop: '48px',
-                            marginBottom: '48px',
-                            pageBreakInside: 'avoid'
-                        }}>
-                            <div style={{ maxWidth: '55%', marginLeft: 'auto' }}>
-                                <h3 style={{
-                                    fontSize: '12px',
-                                    fontWeight: 'bold',
-                                    color: '#6b7280',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em',
-                                    marginBottom: '16px',
-                                    textAlign: 'right',
-                                    marginTop: 0
-                                }}>Resumen</h3>
-                                <div style={{
-                                    backgroundColor: '#f9fafb',
-                                    padding: '20px',
-                                    borderRadius: '8px',
-                                    border: '1px solid #f3f4f6'
-                                }}>
-                                    {data.nomina.gross_amount !== data.nomina.net_amount && (
-                                        <div style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            fontSize: '14px',
-                                            marginBottom: '8px',
-                                            gap: '16px'
-                                        }}>
-                                            <span style={{ color: '#6b7280', margin: 0 }}>Monto Bruto:</span>
-                                            <span style={{ fontWeight: '500', color: '#4b5563', margin: 0, textAlign: 'right' }}>{formatAmount(data.nomina.gross_amount)}</span>
-                                        </div>
-                                    )}
-                                    <div style={{
-                                        borderTop: data.nomina.gross_amount !== data.nomina.net_amount ? '1px solid #e5e7eb' : 'none',
-                                        paddingTop: data.nomina.gross_amount !== data.nomina.net_amount ? '12px' : '0',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        fontSize: '16px',
-                                        gap: '16px'
-                                    }}>
-                                        <span style={{ fontWeight: 'bold', color: '#1f2937', margin: 0 }}>Total Pagado:</span>
-                                        <span style={{
-                                            fontWeight: 'bold',
-                                            color: '#16a34a',
-                                            margin: 0,
-                                            textAlign: 'right'
-                                        }}>
-                                            {formatAmount(data.nomina.net_amount)}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
                         {/* Footer */}
                         <div style={{

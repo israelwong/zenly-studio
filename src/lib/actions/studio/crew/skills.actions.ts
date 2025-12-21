@@ -136,6 +136,44 @@ export async function actualizarCrewSkill(
 }
 
 /**
+ * Contar cuántos miembros tienen una skill asignada
+ */
+export async function contarMiembrosConSkill(
+  studioSlug: string,
+  skillId: string
+) {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const count = await prisma.studio_crew_member_skills.count({
+      where: {
+        skill_id: skillId,
+        crew_member: {
+          studio_id: studio.id,
+          status: 'activo',
+        },
+      },
+    });
+
+    return { success: true, count };
+  } catch (error) {
+    console.error('[CREW SKILLS] Error contando miembros:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al contar miembros',
+      count: 0,
+    };
+  }
+}
+
+/**
  * Eliminar skill (soft delete)
  */
 export async function eliminarCrewSkill(

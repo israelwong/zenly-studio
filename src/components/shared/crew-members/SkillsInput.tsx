@@ -57,15 +57,25 @@ export function SkillsInput({
 
   // Cerrar dropdown al hacer click afuera
   useEffect(() => {
+    if (!showDropdown) return;
+
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
+        setSearchTerm('');
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    // Usar timeout para evitar que se cierre inmediatamente al hacer click
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDropdown]);
 
   const handleAddSkill = (skillId: string) => {
     if (!selectedSkillIds.includes(skillId)) {
@@ -127,6 +137,14 @@ export function SkillsInput({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onFocus={() => setShowDropdown(true)}
+            onBlur={(e) => {
+              // Cerrar solo si el siguiente elemento no es parte del dropdown
+              setTimeout(() => {
+                if (dropdownRef.current && !dropdownRef.current.contains(document.activeElement)) {
+                  setShowDropdown(false);
+                }
+              }, 200);
+            }}
             placeholder='Escribe para buscar o crear (Ej: "Fotografía", "Edición")'
             className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 pr-10"
           />

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Edit2, Check, X } from 'lucide-react';
-import { ZenInput, ZenButton, ZenDialog, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenInput, ZenButton, ZenDialog, ZenConfirmModal, ZenBadge } from '@/components/ui/zen';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { toast } from 'sonner';
 import {
@@ -10,6 +10,7 @@ import {
     crearCrewSkill,
     actualizarCrewSkill,
     eliminarCrewSkill,
+    contarMiembrosConSkill,
 } from '@/lib/actions/studio/crew';
 
 interface CrewSkill {
@@ -41,6 +42,11 @@ export function CrewSkillsManageModal({
     const [isSavingEdit, setIsSavingEdit] = useState(false);
     const [skillToDelete, setSkillToDelete] = useState<CrewSkill | null>(null);
     const [isDeletingSkill, setIsDeletingSkill] = useState(false);
+    const [membersCount, setMembersCount] = useState<number | null>(null);
+    const [loadingMembersCount, setLoadingMembersCount] = useState(false);
+    const [showRenameOption, setShowRenameOption] = useState(false);
+    const [skillsMembersCount, setSkillsMembersCount] = useState<Record<string, number>>({});
+    const [loadingCounts, setLoadingCounts] = useState(false);
 
     const loadSkills = useCallback(async () => {
         setIsLoading(true);
@@ -48,6 +54,20 @@ export function CrewSkillsManageModal({
             const result = await obtenerCrewSkills(studioSlug);
             if (result.success && result.data) {
                 setSkills(result.data);
+                
+                // Cargar conteos de miembros para cada habilidad
+                setLoadingCounts(true);
+                const counts: Record<string, number> = {};
+                await Promise.all(
+                    result.data.map(async (skill) => {
+                        const countResult = await contarMiembrosConSkill(studioSlug, skill.id);
+                        if (countResult.success) {
+                            counts[skill.id] = countResult.count || 0;
+                        }
+                    })
+                );
+                setSkillsMembersCount(counts);
+                setLoadingCounts(false);
             }
         } catch (error) {
             console.error('Error cargando habilidades:', error);
@@ -124,7 +144,18 @@ export function CrewSkillsManageModal({
                 const withoutTemp = prev.filter((s) => !s.isPending);
                 const existingIds = new Set(withoutTemp.map((s) => s.id));
                 const newRealSkills = successfulSkills.filter((s) => !existingIds.has(s.id));
-                return [...withoutTemp, ...newRealSkills];
+                const updated = [...withoutTemp, ...newRealSkills];
+                
+                // Actualizar conteos: nuevas habilidades tienen 0 miembros
+                setSkillsMembersCount((prev) => {
+                    const updated = { ...prev };
+                    newRealSkills.forEach((skill) => {
+                        updated[skill.id] = 0;
+                    });
+                    return updated;
+                });
+                
+                return updated;
             });
 
             if (errors.length > 0) {
@@ -141,10 +172,24 @@ export function CrewSkillsManageModal({
         }
     }, [studioSlug, skills, isCreatingSkills, newSkillInput, loadSkills]);
 
-    const handleStartEdit = (skill: CrewSkill) => {
+    const handleStartEdit = async (skill: CrewSkill) => {
         setEditingSkillId(skill.id);
         setEditingSkillName(skill.name);
         setEditingSkillColor(skill.color || '#6366F1');
+        
+        // Cargar conteo de miembros
+        setLoadingMembersCount(true);
+        setMembersCount(null);
+        try {
+            const result = await contarMiembrosConSkill(studioSlug, skill.id);
+            if (result.success) {
+                setMembersCount(result.count || 0);
+            }
+        } catch (error) {
+            console.error('Error contando miembros:', error);
+        } finally {
+            setLoadingMembersCount(false);
+        }
     };
 
     const handleSaveEdit = useCallback(async () => {
@@ -172,6 +217,7 @@ export function CrewSkillsManageModal({
                 setSkills((prev) =>
                     prev.map((s) => (s.id === editingSkillId ? result.data : s))
                 );
+                // Mantener el conteo existente al editar
                 setEditingSkillId(null);
                 setEditingSkillName('');
                 toast.success('Habilidad actualizada');
@@ -190,7 +236,26 @@ export function CrewSkillsManageModal({
         setEditingSkillId(null);
         setEditingSkillName('');
         setEditingSkillColor('#6366F1');
+        setMembersCount(null);
     };
+
+    const handleDeleteClick = useCallback(async (skill: CrewSkill) => {
+        setSkillToDelete(skill);
+        setShowRenameOption(false);
+        
+        // Cargar conteo de miembros
+        setLoadingMembersCount(true);
+        try {
+            const result = await contarMiembrosConSkill(studioSlug, skill.id);
+            if (result.success) {
+                setMembersCount(result.count || 0);
+            }
+        } catch (error) {
+            console.error('Error contando miembros:', error);
+        } finally {
+            setLoadingMembersCount(false);
+        }
+    }, [studioSlug]);
 
     const handleDeleteSkill = useCallback(async () => {
         if (!skillToDelete || isDeletingSkill) return;
@@ -200,7 +265,15 @@ export function CrewSkillsManageModal({
             const result = await eliminarCrewSkill(studioSlug, skillToDelete.id);
             if (result.success) {
                 setSkills((prev) => prev.filter((s) => s.id !== skillToDelete.id));
+                // Remover conteo de la habilidad eliminada
+                setSkillsMembersCount((prev) => {
+                    const updated = { ...prev };
+                    delete updated[skillToDelete.id];
+                    return updated;
+                });
                 toast.success('Habilidad eliminada');
+                setSkillToDelete(null);
+                setMembersCount(null);
             } else {
                 toast.error(result.error || 'Error al eliminar habilidad');
             }
@@ -209,9 +282,31 @@ export function CrewSkillsManageModal({
             toast.error('Error al eliminar habilidad');
         } finally {
             setIsDeletingSkill(false);
-            setSkillToDelete(null);
         }
     }, [studioSlug, skillToDelete, isDeletingSkill]);
+
+    const handleRenameInstead = useCallback(async () => {
+        if (!skillToDelete) return;
+        setShowRenameOption(true);
+        setEditingSkillId(skillToDelete.id);
+        setEditingSkillName(skillToDelete.name);
+        setEditingSkillColor(skillToDelete.color || '#6366F1');
+        
+        // Cargar conteo de miembros
+        setLoadingMembersCount(true);
+        try {
+            const result = await contarMiembrosConSkill(studioSlug, skillToDelete.id);
+            if (result.success) {
+                setMembersCount(result.count || 0);
+            }
+        } catch (error) {
+            console.error('Error contando miembros:', error);
+        } finally {
+            setLoadingMembersCount(false);
+        }
+        
+        setSkillToDelete(null);
+    }, [studioSlug, skillToDelete]);
 
     return (
         <>
@@ -282,11 +377,14 @@ export function CrewSkillsManageModal({
                                         key={i}
                                         className="flex items-center gap-3 p-3 rounded-lg border border-zinc-700 bg-zinc-800/30"
                                     >
-                                        <Skeleton className="w-3 h-3 rounded-full flex-shrink-0" />
-                                        <Skeleton className="h-4 flex-1 max-w-[200px]" />
-                                        <div className="flex items-center gap-1 ml-auto">
-                                            <Skeleton className="h-8 w-8 rounded" />
-                                            <Skeleton className="h-8 w-8 rounded" />
+                                        <Skeleton className="w-3 h-3 rounded-full flex-shrink-0 bg-zinc-600" />
+                                        <Skeleton className="h-4 flex-1 max-w-[150px] bg-zinc-700" />
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <Skeleton className="h-5 w-20 rounded-md bg-zinc-700" />
+                                            <div className="flex items-center gap-1">
+                                                <Skeleton className="h-8 w-8 rounded bg-zinc-700" />
+                                                <Skeleton className="h-8 w-8 rounded bg-zinc-700" />
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -338,78 +436,100 @@ export function CrewSkillsManageModal({
                                             />
 
                                             {isEditing ? (
-                                                <>
-                                                    <div
-                                                        className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm ring-2 ring-emerald-400/50"
-                                                        style={{ backgroundColor: editingSkillColor }}
-                                                    />
-                                                    <div className="flex items-center gap-2 flex-1">
-                                                        <input
-                                                            type="color"
-                                                            value={editingSkillColor}
-                                                            onChange={(e) => setEditingSkillColor(e.target.value)}
-                                                            className="w-8 h-8 rounded border border-zinc-600 bg-zinc-800 cursor-pointer flex-shrink-0"
-                                                            title="Cambiar color"
+                                                <div className="flex flex-col gap-2 flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <div
+                                                            className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm ring-2 ring-emerald-400/50"
+                                                            style={{ backgroundColor: editingSkillColor }}
                                                         />
-                                                        <ZenInput
-                                                            value={editingSkillName}
-                                                            onChange={(e) => setEditingSkillName(e.target.value)}
-                                                            className="flex-1"
-                                                            autoFocus
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') {
-                                                                    e.preventDefault();
-                                                                    handleSaveEdit();
-                                                                } else if (e.key === 'Escape') {
-                                                                    handleCancelEdit();
-                                                                }
-                                                            }}
-                                                        />
+                                                        <div className="flex items-center gap-2 flex-1">
+                                                            <input
+                                                                type="color"
+                                                                value={editingSkillColor}
+                                                                onChange={(e) => setEditingSkillColor(e.target.value)}
+                                                                className="w-8 h-8 rounded border border-zinc-600 bg-zinc-800 cursor-pointer flex-shrink-0"
+                                                                title="Cambiar color"
+                                                            />
+                                                            <ZenInput
+                                                                value={editingSkillName}
+                                                                onChange={(e) => setEditingSkillName(e.target.value)}
+                                                                className="flex-1"
+                                                                autoFocus
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        handleSaveEdit();
+                                                                    } else if (e.key === 'Escape') {
+                                                                        handleCancelEdit();
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <ZenButton
+                                                            type="button"
+                                                            onClick={handleSaveEdit}
+                                                            disabled={isSavingEdit}
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
+                                                        >
+                                                            <Check className="h-4 w-4" />
+                                                        </ZenButton>
+                                                        <ZenButton
+                                                            type="button"
+                                                            onClick={handleCancelEdit}
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="text-zinc-500 hover:text-zinc-400"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </ZenButton>
                                                     </div>
-                                                    <ZenButton
-                                                        type="button"
-                                                        onClick={handleSaveEdit}
-                                                        disabled={isSavingEdit}
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
-                                                    >
-                                                        <Check className="h-4 w-4" />
-                                                    </ZenButton>
-                                                    <ZenButton
-                                                        type="button"
-                                                        onClick={handleCancelEdit}
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="text-zinc-500 hover:text-zinc-400"
-                                                    >
-                                                        <X className="h-4 w-4" />
-                                                    </ZenButton>
-                                                </>
+                                                    {loadingMembersCount ? (
+                                                        <p className="text-xs text-zinc-500 ml-11">Cargando...</p>
+                                                    ) : membersCount !== null && membersCount > 0 ? (
+                                                        <p className="text-xs text-zinc-400 ml-11">
+                                                            Esta habilidad está asignada a {membersCount} {membersCount === 1 ? 'miembro' : 'miembros'}. El cambio se aplicará a todos.
+                                                        </p>
+                                                    ) : null}
+                                                </div>
                                             ) : (
                                                 <>
                                                     <span className="flex-1 text-sm font-medium text-zinc-200">
                                                         {skill.name}
                                                     </span>
-                                                    <div className="flex items-center gap-1">
-                                                        <ZenButton
-                                                            type="button"
-                                                            onClick={() => handleStartEdit(skill)}
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-300"
-                                                        >
-                                                            <Edit2 className="h-3.5 w-3.5" />
-                                                        </ZenButton>
-                                                        <ZenButton
-                                                            type="button"
-                                                            onClick={() => setSkillToDelete(skill)}
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            className="h-8 w-8 p-0 text-zinc-400 hover:text-red-400"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </ZenButton>
+                                                    <div className="flex items-center gap-2">
+                                                        {loadingCounts ? (
+                                                            <span className="text-xs text-zinc-500">...</span>
+                                                        ) : (
+                                                            <ZenBadge
+                                                                size="sm"
+                                                                variant={skillsMembersCount[skill.id] === 0 ? 'success' : 'warning'}
+                                                                className="text-xs"
+                                                            >
+                                                                {skillsMembersCount[skill.id] ?? 0} {skillsMembersCount[skill.id] === 1 ? 'miembro' : 'miembros'}
+                                                            </ZenBadge>
+                                                        )}
+                                                        <div className="flex items-center gap-1">
+                                                            <ZenButton
+                                                                type="button"
+                                                                onClick={() => handleStartEdit(skill)}
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-300"
+                                                            >
+                                                                <Edit2 className="h-3.5 w-3.5" />
+                                                            </ZenButton>
+                                                            <ZenButton
+                                                                type="button"
+                                                                onClick={() => handleDeleteClick(skill)}
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-8 w-8 p-0 text-zinc-400 hover:text-red-400"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </ZenButton>
+                                                        </div>
                                                     </div>
                                                 </>
                                             )}
@@ -425,10 +545,46 @@ export function CrewSkillsManageModal({
             {/* Modal de confirmación de eliminación */}
             <ZenConfirmModal
                 isOpen={!!skillToDelete}
-                onClose={() => setSkillToDelete(null)}
+                onClose={() => {
+                    setSkillToDelete(null);
+                    setMembersCount(null);
+                    setShowRenameOption(false);
+                }}
                 onConfirm={handleDeleteSkill}
                 title="Eliminar Habilidad"
-                description={`¿Eliminar "${skillToDelete?.name}"? Esta acción no se puede deshacer.`}
+                description={
+                    <div className="space-y-3">
+                        <p>¿Eliminar "{skillToDelete?.name}"?</p>
+                        {loadingMembersCount ? (
+                            <p className="text-sm text-zinc-400">Verificando miembros...</p>
+                        ) : membersCount !== null && membersCount > 0 ? (
+                            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 space-y-2">
+                                <p className="text-sm font-medium text-yellow-400">
+                                    ⚠️ Esta habilidad está asignada a {membersCount} {membersCount === 1 ? 'miembro' : 'miembros'}
+                                </p>
+                                <p className="text-xs text-zinc-400">
+                                    Si eliminas esta habilidad, se eliminará de todos los miembros que la tienen.
+                                </p>
+                                <div className="pt-2 border-t border-yellow-500/20">
+                                    <p className="text-xs text-zinc-400 mb-2">
+                                        Alternativa: puedes renombrar la habilidad en lugar de eliminarla.
+                                    </p>
+                                    <ZenButton
+                                        type="button"
+                                        onClick={handleRenameInstead}
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/10"
+                                    >
+                                        Renombrar en lugar de eliminar
+                                    </ZenButton>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-zinc-400">Esta acción no se puede deshacer.</p>
+                        )}
+                    </div>
+                }
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 loading={isDeletingSkill}

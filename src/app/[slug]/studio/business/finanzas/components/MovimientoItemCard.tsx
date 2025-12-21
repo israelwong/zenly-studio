@@ -15,11 +15,11 @@ import {
 } from '@/components/ui/zen';
 import { PaymentReceipt } from '@/components/shared/payments/PaymentReceipt';
 import { NominaReceipt } from '@/components/shared/payments/NominaReceipt';
+import { RecurrenteReceipt } from '@/components/shared/payments/RecurrenteReceipt';
 import { eliminarGastoOperativo, obtenerServiciosNomina } from '@/lib/actions/studio/business/finanzas/finanzas.actions';
 import { RegistrarMovimientoModal } from './RegistrarMovimientoModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, List } from 'lucide-react';
 
 interface Transaction {
     id: string;
@@ -31,6 +31,8 @@ interface Transaction {
     nominaId?: string; // ID de la nómina si viene de "Por Pagar"
     nominaPaymentType?: string; // Tipo de pago de nómina ('individual' | 'consolidado')
     isGastoOperativo?: boolean; // Si es gasto operativo personalizado
+    totalDiscounts?: number; // Descuentos aplicados (solo para nóminas)
+    personalId?: string; // ID del personal si el gasto recurrente está asociado a un crew member
 }
 
 interface MovimientoItemCardProps {
@@ -53,19 +55,18 @@ export function MovimientoItemCard({
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [showCancelNominaModal, setShowCancelNominaModal] = useState(false);
+    const [showCancelRecurrenteModal, setShowCancelRecurrenteModal] = useState(false);
     const [showEliminarNominaModal, setShowEliminarNominaModal] = useState(false);
     const [showEliminarPagoModal, setShowEliminarPagoModal] = useState(false);
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
     const [isNominaReceiptModalOpen, setIsNominaReceiptModalOpen] = useState(false);
+    const [isRecurrenteReceiptModalOpen, setIsRecurrenteReceiptModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isCancellingNomina, setIsCancellingNomina] = useState(false);
     const [isEliminandoNomina, setIsEliminandoNomina] = useState(false);
     const [isEliminandoPago, setIsEliminandoPago] = useState(false);
-    const [showServiciosDesglose, setShowServiciosDesglose] = useState(false);
-    const [servicios, setServicios] = useState<Array<{ service_name: string; assigned_cost: number; assigned_quantity: number }>>([]);
-    const [loadingServicios, setLoadingServicios] = useState(false);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-MX', {
@@ -92,34 +93,13 @@ export function MovimientoItemCard({
     const isIngresoPersonalizado = isIngreso && transaction.categoria === 'manual';
 
     // Determinar tipo de badge
-    const isManual = transaction.categoria === 'manual' || isIngresoPersonalizado || (isGastoPersonalizado && transaction.categoria !== 'Recurrente');
-    const isNomina = transaction.categoria === 'Nómina' || isNominaPagada;
     const isRecurrente = transaction.categoria === 'Recurrente';
+    const isNomina = transaction.categoria === 'Nómina' || isNominaPagada;
+    const isManual = transaction.categoria === 'manual' || isIngresoPersonalizado || (isGastoPersonalizado && transaction.categoria !== 'Recurrente');
 
-    const handleToggleServiciosDesglose = async () => {
-        if (showServiciosDesglose) {
-            setShowServiciosDesglose(false);
-            return;
-        }
+    // Gasto recurrente con personal asociado (para mostrar comprobante y ocultar eliminar)
+    const isRecurrenteConPersonal = isRecurrente && !!transaction.personalId;
 
-        if (!transaction.nominaId || !isNominaConsolidada) return;
-
-        setLoadingServicios(true);
-        try {
-            const result = await obtenerServiciosNomina(studioSlug, transaction.nominaId);
-            if (result.success && result.data) {
-                setServicios(result.data);
-                setShowServiciosDesglose(true);
-            } else {
-                toast.error(result.error || 'Error al cargar conceptos');
-            }
-        } catch (error) {
-            console.error('Error cargando conceptos:', error);
-            toast.error('Error al cargar conceptos');
-        } finally {
-            setLoadingServicios(false);
-        }
-    };
 
     const handleViewReceipt = () => {
         setIsReceiptModalOpen(true);
@@ -127,6 +107,10 @@ export function MovimientoItemCard({
 
     const handleViewNominaReceipt = () => {
         setIsNominaReceiptModalOpen(true);
+    };
+
+    const handleViewRecurrenteReceipt = () => {
+        setIsRecurrenteReceiptModalOpen(true);
     };
 
     const handleCancelarClick = () => {
@@ -142,6 +126,31 @@ export function MovimientoItemCard({
             setShowConfirmModal(false);
         } catch (error) {
             console.error('Error cancelando pago:', error);
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
+    const handleCancelarRecurrenteClick = () => {
+        setShowCancelRecurrenteModal(true);
+    };
+
+    const handleConfirmCancelRecurrente = async () => {
+        setIsCancelling(true);
+        try {
+            const { cancelarPagoRecurrentePorGastoId } = await import('@/lib/actions/studio/business/finanzas/finanzas.actions');
+            const result = await cancelarPagoRecurrentePorGastoId(studioSlug, transaction.id);
+
+            if (result.success) {
+                toast.success('Pago recurrente cancelado correctamente');
+                setShowCancelRecurrenteModal(false);
+                await onGastoEliminado?.();
+            } else {
+                toast.error(result.error || 'Error al cancelar pago recurrente');
+            }
+        } catch (error) {
+            console.error('Error cancelando pago recurrente:', error);
+            toast.error('Error al cancelar pago recurrente');
         } finally {
             setIsCancelling(false);
         }
@@ -320,7 +329,7 @@ export function MovimientoItemCard({
                                         )}
                                     </>
                                 )}
-                                {isGastoPersonalizado && (
+                                {isGastoPersonalizado && !isRecurrenteConPersonal && (
                                     <ZenDropdownMenuItem
                                         onClick={handleEditarGastoClick}
                                         className="gap-2"
@@ -329,20 +338,30 @@ export function MovimientoItemCard({
                                         Editar
                                     </ZenDropdownMenuItem>
                                 )}
-                                {isNominaPagada && isNominaConsolidada && (
+                                <ZenDropdownMenuSeparator />
+                                {/* Comprobante - disponible para nóminas y gastos recurrentes con personal */}
+                                {(isNominaPagada || isRecurrenteConPersonal) && (
                                     <ZenDropdownMenuItem
-                                        onClick={handleToggleServiciosDesglose}
+                                        onClick={isNominaPagada ? handleViewNominaReceipt : handleViewRecurrenteReceipt}
                                         className="gap-2"
                                     >
-                                        <List className="h-4 w-4" />
-                                        {showServiciosDesglose ? 'Ocultar' : 'Ver'} Desglose
+                                        <FileText className="h-4 w-4" />
+                                        Comprobante
                                     </ZenDropdownMenuItem>
                                 )}
-                                <ZenDropdownMenuSeparator />
                                 {/* Cancelar - disponible para todos */}
                                 {isNominaPagada && (
                                     <ZenDropdownMenuItem
                                         onClick={handleCancelarNominaClick}
+                                        className="gap-2"
+                                    >
+                                        <X className="h-4 w-4" />
+                                        Cancelar
+                                    </ZenDropdownMenuItem>
+                                )}
+                                {isRecurrente && (
+                                    <ZenDropdownMenuItem
+                                        onClick={handleCancelarRecurrenteClick}
                                         className="gap-2"
                                     >
                                         <X className="h-4 w-4" />
@@ -358,18 +377,8 @@ export function MovimientoItemCard({
                                         Cancelar
                                     </ZenDropdownMenuItem>
                                 )}
-                                {/* Comprobante - disponible para nóminas */}
-                                {isNominaPagada && (
-                                    <ZenDropdownMenuItem
-                                        onClick={handleViewNominaReceipt}
-                                        className="gap-2"
-                                    >
-                                        <FileText className="h-4 w-4" />
-                                        Comprobante
-                                    </ZenDropdownMenuItem>
-                                )}
                                 <ZenDropdownMenuSeparator />
-                                {/* Eliminar - disponible para todos */}
+                                {/* Eliminar - disponible para todos EXCEPTO pagos recurrentes con personal */}
                                 {isNominaPagada && (
                                     <ZenDropdownMenuItem
                                         onClick={handleEliminarNominaClick}
@@ -388,7 +397,8 @@ export function MovimientoItemCard({
                                         Eliminar
                                     </ZenDropdownMenuItem>
                                 )}
-                                {isGastoPersonalizado && (
+                                {/* No mostrar Eliminar para gastos recurrentes con personal (solo se puede cancelar) */}
+                                {isGastoPersonalizado && !isRecurrenteConPersonal && (
                                     <ZenDropdownMenuItem
                                         onClick={handleEliminarGastoClick}
                                         className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
@@ -397,7 +407,7 @@ export function MovimientoItemCard({
                                         Eliminar
                                     </ZenDropdownMenuItem>
                                 )}
-                                {isEgresoOperativo && !isGastoPersonalizado && (
+                                {isEgresoOperativo && !isGastoPersonalizado && !isRecurrente && (
                                     <ZenDropdownMenuItem
                                         onClick={handleEliminarGastoClick}
                                         className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
@@ -409,28 +419,6 @@ export function MovimientoItemCard({
                             </ZenDropdownMenuContent>
                         </ZenDropdownMenu>
                     </div>
-                    {isNominaConsolidada && showServiciosDesglose && (
-                        <div className="mt-3 pt-3 border-t border-zinc-800">
-                            <div className="space-y-2">
-                                <p className="text-xs font-medium text-zinc-400 mb-2">Conceptos incluidos:</p>
-                                {loadingServicios ? (
-                                    <p className="text-xs text-zinc-500">Cargando...</p>
-                                ) : servicios.length > 0 ? (
-                                    servicios.map((servicio, index) => (
-                                        <div key={index} className="flex items-center justify-between text-xs">
-                                            <span className="text-zinc-300">{servicio.service_name}</span>
-                                            <span className="text-zinc-400">
-                                                {servicio.assigned_quantity > 1 && `${servicio.assigned_quantity}x `}
-                                                {formatCurrency(servicio.assigned_cost)}
-                                            </span>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <p className="text-xs text-zinc-500">No hay conceptos registrados</p>
-                                )}
-                            </div>
-                        </div>
-                    )}
                 </ZenCardContent>
             </ZenCard>
 
@@ -473,6 +461,20 @@ export function MovimientoItemCard({
                 loadingText="Cancelando..."
             />
 
+            {/* Modal de confirmación cancelar pago recurrente */}
+            <ZenConfirmModal
+                isOpen={showCancelRecurrenteModal}
+                onClose={() => setShowCancelRecurrenteModal(false)}
+                onConfirm={handleConfirmCancelRecurrente}
+                title="¿Cancelar pago recurrente?"
+                description={`Esta acción cancelará el pago de "${transaction.concepto}" por ${formatCurrency(Math.abs(transaction.monto))} y lo regresará a gastos recurrentes del mes.`}
+                confirmText="Sí, cancelar"
+                cancelText="Cancelar"
+                variant="default"
+                loading={isCancelling}
+                loadingText="Cancelando..."
+            />
+
             {/* Modal de comprobante de pago */}
             {isReceiptModalOpen && (
                 <PaymentReceipt
@@ -490,6 +492,16 @@ export function MovimientoItemCard({
                     onClose={() => setIsNominaReceiptModalOpen(false)}
                     studioSlug={studioSlug}
                     nominaId={transaction.nominaId}
+                />
+            )}
+
+            {/* Modal de comprobante de gasto recurrente con personal */}
+            {isRecurrenteReceiptModalOpen && isRecurrenteConPersonal && transaction.personalId && (
+                <RecurrenteReceipt
+                    isOpen={isRecurrenteReceiptModalOpen}
+                    onClose={() => setIsRecurrenteReceiptModalOpen(false)}
+                    studioSlug={studioSlug}
+                    gastoId={transaction.id}
                 />
             )}
 

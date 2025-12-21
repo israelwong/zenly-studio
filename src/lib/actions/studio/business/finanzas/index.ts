@@ -12,6 +12,7 @@ export {
     marcarNominaPagada,
     cancelarNominaPagada,
     eliminarNominaPagada,
+    cancelarPagoRecurrentePorGastoId,
 } from './finanzas.actions';
 
 export type { PorPagarPersonal } from './finanzas.actions';

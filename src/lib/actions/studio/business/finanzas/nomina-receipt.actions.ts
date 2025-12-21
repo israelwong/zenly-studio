@@ -35,6 +35,12 @@ export interface NominaReceiptData {
         assigned_quantity: number;
         category_name: string | null;
     }>;
+    partialPayments?: Array<{
+        payment_method: string;
+        amount: number;
+        payment_date: Date;
+    }>;
+    totalDiscounts?: number;
 }
 
 export async function obtenerDatosComprobanteNomina(
@@ -91,6 +97,16 @@ export async function obtenerDatosComprobanteNomina(
                         category_name: true,
                     },
                 },
+                partial_payments: {
+                    select: {
+                        payment_method: true,
+                        amount: true,
+                        payment_date: true,
+                    },
+                    orderBy: {
+                        payment_date: 'asc',
+                    },
+                },
             },
         });
 
@@ -133,6 +149,12 @@ export async function obtenerDatosComprobanteNomina(
                     assigned_quantity: s.assigned_quantity,
                     category_name: s.category_name,
                 })),
+                partialPayments: nomina.partial_payments.map(p => ({
+                    payment_method: p.payment_method,
+                    amount: Number(p.amount),
+                    payment_date: p.payment_date,
+                })),
+                totalDiscounts: nomina.total_discounts ? Number(nomina.total_discounts) : undefined,
             },
         };
     } catch (error) {

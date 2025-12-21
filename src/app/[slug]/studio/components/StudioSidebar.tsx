@@ -55,7 +55,6 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
                 { id: 'scheduler', name: 'Cronograma', href: `/business/scheduler`, icon: Calendar },
                 { id: 'personal', name: 'Personal', href: `/business/personel`, icon: Users },
                 { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
-                // { id: 'reportes', name: 'Reportes', href: `/business/reportes`, icon: BarChart3 },
             ],
         },
 
@@ -67,19 +66,9 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
             items: [
                 // { id: 'tipo_evento', name: 'Tipo de Evento', href: `/commercial/tipo-evento`, icon: ShoppingBagIcon },
                 { id: 'contracts', name: 'Contratos', href: `/commercial/contracts`, icon: FileText },
-                { id: 'recordatorios', name: 'Recordatorios', href: `/commercial/recordatorios`, icon: Bell },
+                { id: 'subscriptions', name: 'Suscripción', href: `/account/suscripcion`, icon: CreditCard },
                 // { id: 'integraciones', name: 'Integraciones', href: `/business/integraciones/tracking`, icon: Plug },
                 // { id: 'magic', name: 'ZEN Magic', href: `/magic`, icon: Sparkles },
-            ],
-        },
-
-        // Account
-        {
-            id: 'account',
-            title: 'Cuenta',
-            icon: User,
-            items: [
-                { id: 'subscriptions', name: 'Suscripción', href: `/account/suscripcion`, icon: CreditCard },
             ],
         },
 

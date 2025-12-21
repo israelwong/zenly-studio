@@ -105,7 +105,7 @@ export function ZenDialog({
         )}
         style={{
           zIndex: overlayZIndex,
-          pointerEvents: 'auto'
+          pointerEvents: closeOnClickOutside ? 'auto' : 'auto'
         }}
         onClick={(e) => {
           // Solo cerrar si closeOnClickOutside está habilitado
@@ -113,6 +113,7 @@ export function ZenDialog({
             onClose();
           }
           // Si no, simplemente bloquear el clic (no hacer nada)
+          e.stopPropagation();
         }}
       />
       {/* Contenido del modal */}
@@ -129,14 +130,21 @@ export function ZenDialog({
       >
         <div
           className={cn(
-            'shadow-xl w-full flex flex-col relative pointer-events-auto',
+            'shadow-xl w-full flex flex-col relative',
             fullScreen
               ? 'h-screen rounded-none'
               : 'rounded-lg max-h-[90vh]',
             title ? 'bg-zinc-900' : 'bg-zinc-950/50 backdrop-blur-md border border-zinc-800/50',
             !fullScreen && maxWidthClasses[maxWidth]
           )}
+          style={{
+            pointerEvents: 'auto',
+            zIndex: contentZIndex + 1,
+            isolation: 'isolate'
+          }}
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           {/* Header - Solo mostrar si hay título */}
           {title && (
@@ -175,7 +183,8 @@ export function ZenDialog({
           )} style={{
             maxHeight: fullScreen
               ? (title ? 'calc(100vh - 140px)' : 'calc(100vh - 80px)')
-              : (title ? 'calc(90vh - 140px)' : 'calc(90vh - 80px)')
+              : (title ? 'calc(90vh - 140px)' : 'calc(90vh - 80px)'),
+            pointerEvents: 'auto'
           }}>
             {children}
           </ZenCardContent>

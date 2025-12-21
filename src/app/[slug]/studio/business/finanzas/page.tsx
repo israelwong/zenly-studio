@@ -388,15 +388,19 @@ export default function FinanzasPage() {
                                         onGastoEliminado={async () => {
                                             // Recargar datos después de eliminar gasto
                                             try {
-                                                const [kpisResult, transactionsResult] = await Promise.all([
+                                                const [kpisResult, transactionsResult, expensesResult] = await Promise.all([
                                                     obtenerKPIsFinancieros(studioSlug, currentMonth!),
                                                     obtenerMovimientos(studioSlug, currentMonth!),
+                                                    obtenerGastosRecurrentes(studioSlug, currentMonth),
                                                 ]);
                                                 if (kpisResult.success) {
                                                     setKpis(kpisResult.data);
                                                 }
                                                 if (transactionsResult.success && transactionsResult.data) {
                                                     setTransactions(transactionsResult.data);
+                                                }
+                                                if (expensesResult.success && expensesResult.data) {
+                                                    setRecurringExpenses(expensesResult.data);
                                                 }
                                             } catch (error) {
                                                 console.error('Error recargando datos:', error);

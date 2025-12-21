@@ -12,6 +12,7 @@ export {
   crearCrewSkill,
   actualizarCrewSkill,
   eliminarCrewSkill,
+  contarMiembrosConSkill,
   asignarSkillAlCrew,
   removerSkillDelCrew,
   reordenarCrewSkills,

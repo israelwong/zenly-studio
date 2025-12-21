@@ -263,9 +263,7 @@ export function CrewMemberForm({
     }
     // Para honorarios variables, el monto es opcional (se calcula según presupuesto)
     // No validamos variable_salary aquí ya que no hay campo visible
-    if (formData.skill_ids.length === 0) {
-      newErrors.skill_ids = 'Selecciona al menos una habilidad';
-    }
+    // Las habilidades son opcionales
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -339,7 +337,7 @@ export function CrewMemberForm({
       {/* Nombre */}
       <div>
         <label className="block text-sm font-medium text-zinc-200 mb-2">
-          Nombre *
+          Nombre <span className="text-red-400">*</span>
         </label>
         <ZenInput
           name="name"
@@ -356,7 +354,7 @@ export function CrewMemberForm({
         {/* Teléfono */}
         <div>
           <label className="block text-sm font-medium text-zinc-200 mb-2">
-            Teléfono *
+            Teléfono <span className="text-red-400">*</span>
           </label>
           <ZenInput
             name="phone"
@@ -391,7 +389,7 @@ export function CrewMemberForm({
       {/* Tipo */}
       <div>
         <label className="block text-sm font-medium text-zinc-200 mb-2">
-          Tipo de Personal *
+          Tipo de Personal <span className="text-red-400">*</span>
         </label>
         <ZenSelect
           value={formData.tipo}
@@ -409,7 +407,7 @@ export function CrewMemberForm({
       {/* Tipo de Honorarios - Radio Buttons */}
       <div>
         <label className="block text-sm font-medium text-zinc-200 mb-3">
-          Tipo de Honorarios *
+          Tipo de Honorarios <span className="text-red-400">*</span>
         </label>
         <div className="space-y-3">
 
@@ -463,7 +461,7 @@ export function CrewMemberForm({
         <>
           <div>
             <label className="block text-sm font-medium text-zinc-200 mb-2">
-              Monto *
+              Monto <span className="text-red-400">*</span>
             </label>
             <ZenInput
               name="fixed_salary"
@@ -481,7 +479,7 @@ export function CrewMemberForm({
           {/* Selector de Frecuencia */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-zinc-300 pb-2">
-              Frecuencia de Pago *
+              Frecuencia de Pago <span className="text-red-400">*</span>
             </label>
             {errors.salary_frequency && (
               <p className="text-xs text-red-400 -mt-1 mb-1">{errors.salary_frequency}</p>
@@ -604,7 +602,7 @@ export function CrewMemberForm({
       <div className="border-t border-zinc-700 pt-6">
         <div className="flex items-center justify-between mb-4">
           <label className="block text-sm font-medium text-zinc-200">
-            Habilidades/Roles *
+            Habilidades
           </label>
           <button
             type="button"

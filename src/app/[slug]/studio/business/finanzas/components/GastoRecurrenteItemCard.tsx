@@ -15,6 +15,7 @@ import {
 import { Calendar, User, MoreVertical, Edit, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { RegistrarGastoRecurrenteModal } from './RegistrarGastoRecurrenteModal';
+import { RecurrentePagoDetalleSheet } from './RecurrentePagoDetalleSheet';
 
 interface GastoRecurrente {
     id: string;
@@ -55,6 +56,7 @@ export const GastoRecurrenteItemCard = React.memo(function GastoRecurrenteItemCa
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showDeleteOptionsModal, setShowDeleteOptionsModal] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isPagoSheetOpen, setIsPagoSheetOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -106,7 +108,13 @@ export const GastoRecurrenteItemCard = React.memo(function GastoRecurrenteItemCa
     };
 
     const handlePagarClick = () => {
-        setShowConfirmModal(true);
+        // Si es un crew member, abrir sheet de pago detallado
+        if (expense.isCrewMember) {
+            setIsPagoSheetOpen(true);
+        } else {
+            // Para gastos recurrentes normales, usar modal simple
+            setShowConfirmModal(true);
+        }
     };
 
     const handleConfirmPago = async () => {
@@ -126,6 +134,13 @@ export const GastoRecurrenteItemCard = React.memo(function GastoRecurrenteItemCa
             toast.error('Error al pagar gasto recurrente');
         } finally {
             setIsProcessing(false);
+        }
+    };
+
+    const handlePagoConfirmado = async () => {
+        setIsPagoSheetOpen(false);
+        if (onPagoConfirmado) {
+            await onPagoConfirmado();
         }
     };
 
@@ -371,6 +386,18 @@ export const GastoRecurrenteItemCard = React.memo(function GastoRecurrenteItemCa
                         await onEditado?.();
                         setIsEditModalOpen(false);
                     }}
+                />
+            )}
+            {/* Sheet de pago detallado para crew members */}
+            {expense.isCrewMember && (
+                <RecurrentePagoDetalleSheet
+                    isOpen={isPagoSheetOpen}
+                    onClose={() => setIsPagoSheetOpen(false)}
+                    expenseId={expense.id}
+                    expenseName={expense.name}
+                    expenseAmount={expense.amount}
+                    studioSlug={studioSlug}
+                    onPagoConfirmado={handlePagoConfirmado}
                 />
             )}
         </>
