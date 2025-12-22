@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Image, Video, Download, Folder, Loader2, ArrowLeft, Play } from 'lucide-react';
 import { ZenButton, ZenCard } from '@/components/ui/zen';
 import Lightbox from 'yet-another-react-lightbox';
@@ -25,10 +26,16 @@ export function DeliverablesGallery({
   entregables,
   loading = false,
 }: DeliverablesGalleryProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Leer carpeta actual desde URL
+  const folderIdFromUrl = searchParams.get('folder');
+  
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(folderIdFromUrl);
   const [folderPath, setFolderPath] = useState<Array<{ id: string; name: string }>>([]);
   const [currentFolderData, setCurrentFolderData] = useState<{
     folder: { id: string; name: string };
@@ -69,6 +76,17 @@ export function DeliverablesGallery({
     return folders;
   }, [entregables]);
 
+  // Sincronizar carpeta desde URL al cargar (solo una vez al montar)
+  useEffect(() => {
+    const folderIdFromUrl = searchParams.get('folder');
+    if (folderIdFromUrl && folderIdFromUrl !== currentFolderId) {
+      setCurrentFolderId(folderIdFromUrl);
+      // Limpiar path cuando se carga desde URL (se reconstruirá al navegar)
+      setFolderPath([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo ejecutar al montar
+
   // Cargar contenido de carpeta dinámicamente
   useEffect(() => {
     if (currentFolderId && eventId && clientId) {
@@ -89,6 +107,14 @@ export function DeliverablesGallery({
       const result = await obtenerContenidoCarpetaCliente(eventId, clientId, folderId);
       if (result.success && result.data) {
         setCurrentFolderData(result.data);
+        
+        // Reconstruir path desde la carpeta actual si no existe
+        // Esto es útil cuando se carga desde URL
+        if (folderPath.length === 0 && result.data.folder) {
+          // Si estamos cargando desde URL y no tenemos path, necesitamos reconstruirlo
+          // Por ahora, solo establecemos el folder actual
+          // El path completo se puede reconstruir navegando hacia atrás si es necesario
+        }
       } else {
         console.error('[DeliverablesGallery] Error cargando carpeta:', result.error);
       }
@@ -131,31 +157,64 @@ export function DeliverablesGallery({
     return currentItems;
   }, [currentItems, filterType]);
 
+  // Helper para convertir webContentLink al formato que funciona
+  const convertToDirectDownloadUrl = (webContentLink: string | undefined, fileId: string | undefined): string | undefined => {
+    if (!webContentLink || !fileId) return undefined;
+    
+    // Si ya es el formato correcto, retornarlo
+    if (webContentLink.includes('drive.usercontent.google.com')) {
+      return webContentLink;
+    }
+    
+    // Convertir de formato: https://drive.google.com/uc?id=FILE_ID&export=download
+    // A formato: https://drive.usercontent.google.com/download?id=FILE_ID
+    try {
+      const url = new URL(webContentLink);
+      const idParam = url.searchParams.get('id');
+      if (idParam) {
+        return `https://drive.usercontent.google.com/download?id=${idParam}`;
+      }
+      // Si no tiene id en params, usar el fileId directamente
+      return `https://drive.usercontent.google.com/download?id=${fileId}`;
+    } catch {
+      // Si falla el parsing, usar fileId directamente
+      return `https://drive.usercontent.google.com/download?id=${fileId}`;
+    }
+  };
+
   // Preparar slides para lightbox
+  // Usar proxy API (preferido) o convertir webContentLink al formato directo
   const lightboxSlides = useMemo(() => {
     return filteredItems.map((item) => {
+      // Generar URL del proxy API para el archivo completo
+      const proxyUrl = item.id ? `${window.location.origin}/api/cliente/drive/${eventId}/${item.id}?clientId=${encodeURIComponent(clientId)}` : '';
+      
+      // También generar URL directa como fallback
+      const directUrl = convertToDirectDownloadUrl(item.webContentLink, item.id);
+      
       if (item.mimeType.startsWith('video/')) {
         return {
           type: 'video' as const,
           sources: [
             {
-              src: item.webViewLink || item.webContentLink || '',
+              src: proxyUrl || directUrl || item.webViewLink || item.webContentLink || '',
               type: item.mimeType,
             },
           ],
-          poster: item.thumbnailLink,
+          poster: item.thumbnailLink || '',
           autoPlay: false,
           muted: false,
           controls: true,
           playsInline: true,
         };
       }
+      // Para imágenes, priorizar proxy API, luego URL directa, luego thumbnail
       return {
-        src: item.webContentLink || item.webViewLink || item.thumbnailLink || '',
+        src: proxyUrl || directUrl || item.thumbnailLink || item.webViewLink || '',
         alt: item.name,
       };
     });
-  }, [filteredItems]);
+  }, [filteredItems, eventId, clientId]);
 
   const handleItemClick = (index: number) => {
     setLightboxIndex(index);
@@ -171,10 +230,23 @@ export function DeliverablesGallery({
     }
   };
 
+  // Actualizar URL cuando cambia la carpeta
+  const updateUrl = (folderId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (folderId) {
+      params.set('folder', folderId);
+    } else {
+      params.delete('folder');
+    }
+    const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+    router.push(newUrl, { scroll: false });
+  };
+
   const handleFolderClick = async (folderId: string, folderName: string) => {
     setCurrentFolderId(folderId);
     setFolderPath([...folderPath, { id: folderId, name: folderName }]);
     setFilterType('all'); // Resetear filtro al cambiar de carpeta
+    updateUrl(folderId);
   };
 
   const handleBack = () => {
@@ -182,12 +254,16 @@ export function DeliverablesGallery({
       const newPath = folderPath.slice(0, -1);
       setFolderPath(newPath);
       if (newPath.length > 0) {
-        setCurrentFolderId(newPath[newPath.length - 1].id);
+        const newFolderId = newPath[newPath.length - 1].id;
+        setCurrentFolderId(newFolderId);
+        updateUrl(newFolderId);
       } else {
         setCurrentFolderId(null);
+        updateUrl(null);
       }
     } else {
       setCurrentFolderId(null);
+      updateUrl(null);
     }
     setFilterType('all');
   };
