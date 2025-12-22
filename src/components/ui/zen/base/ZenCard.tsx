@@ -39,6 +39,11 @@ export interface ZenCardDescriptionProps extends React.HTMLAttributes<HTMLParagr
     className?: string;
 }
 
+export interface ZenCardFooterProps extends React.HTMLAttributes<HTMLDivElement> {
+    children: React.ReactNode;
+    className?: string;
+}
+
 // =============================================================================
 // COMPONENTS
 // =============================================================================
@@ -203,6 +208,30 @@ const ZenCardDescription = React.forwardRef<HTMLParagraphElement, ZenCardDescrip
 );
 ZenCardDescription.displayName = 'ZenCardDescription';
 
+/**
+ * ZenCardFooter - Footer del card con espaciado consistente
+ */
+const ZenCardFooter = React.forwardRef<HTMLDivElement, ZenCardFooterProps>(
+    ({ children, className, ...props }, ref) => {
+        return (
+            <div
+                ref={ref}
+                className={cn(
+                    ZEN_SPACING.padding.card.md,
+                    'pt-4', // Padding top para separar del content
+                    'border-t',
+                    ZEN_COLORS.border.default,
+                    className
+                )}
+                {...props}
+            >
+                {children}
+            </div>
+        );
+    }
+);
+ZenCardFooter.displayName = 'ZenCardFooter';
+
 // =============================================================================
 // EXPORTS
 // =============================================================================
@@ -211,5 +240,6 @@ export {
     ZenCardHeader,
     ZenCardContent,
     ZenCardTitle,
-    ZenCardDescription
+    ZenCardDescription,
+    ZenCardFooter
 };

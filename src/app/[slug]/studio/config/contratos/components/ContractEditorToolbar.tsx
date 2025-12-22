@@ -1,17 +1,25 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Heading1, Heading2, Type, Bold, Italic, List, ListOrdered, Quote, Indent } from "lucide-react";
+import { Heading1, Heading2, Type, Bold, Italic, List, ListOrdered, Quote, Indent, Outdent, Undo, Redo } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ContractEditorToolbarProps {
   editorRef: React.RefObject<HTMLDivElement | null>;
   className?: string;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export function ContractEditorToolbar({
   editorRef,
   className = "",
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: ContractEditorToolbarProps) {
   const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set());
 
@@ -221,50 +229,66 @@ export function ContractEditorToolbar({
           break;
         }
         case "ul": {
-          if (isActive) {
-            // Si está en una lista, convertir todos los li seleccionados a párrafos
+          // Verificar si está en una lista ordenada (ol) - si es así, convertir a ul
+          const isInOl = activeFormats.has("ol");
+          
+          if (isInOl) {
+            // Convertir de ol a ul preservando todo el contenido
             const range = selection?.getRangeAt(0);
-            if (range) {
+            if (range && editorRef.current) {
               const container = range.commonAncestorContainer;
-              const walker = document.createTreeWalker(
-                container.nodeType === Node.TEXT_NODE ? container.parentElement || container : container as Node,
-                NodeFilter.SHOW_ELEMENT,
-                null
-              );
+              const list = container.nodeType === Node.TEXT_NODE 
+                ? (container.parentElement?.closest('ol'))
+                : (container as Element).closest('ol');
               
-              const listItems: HTMLElement[] = [];
-              let node: Node | null;
-              while ((node = walker.nextNode())) {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                  const el = node as HTMLElement;
-                  if (el.tagName.toLowerCase() === 'li' && range.intersectsNode(el)) {
-                    listItems.push(el);
-                  }
+              if (list && list.tagName.toLowerCase() === 'ol' && list.parentNode) {
+                const ul = document.createElement('ul');
+                // Clonar todos los li con su contenido completo
+                Array.from(list.children).forEach(li => {
+                  const clonedLi = li.cloneNode(true) as HTMLElement;
+                  ul.appendChild(clonedLi);
+                });
+                list.parentNode.replaceChild(ul, list);
+              }
+            }
+          } else if (isActive) {
+            // Si está en ul y se presiona ul, toggle: convertir a párrafos
+            const range = selection?.getRangeAt(0);
+            if (range && editorRef.current) {
+              const container = range.commonAncestorContainer;
+              const list = container.nodeType === Node.TEXT_NODE 
+                ? (container.parentElement?.closest('ul'))
+                : (container as Element).closest('ul');
+              
+              if (list && list.tagName.toLowerCase() === 'ul') {
+                // Convertir todos los li a párrafos preservando el contenido
+                const listItems = Array.from(list.querySelectorAll('li'));
+                const parent = list.parentNode;
+                
+                if (parent && listItems.length > 0) {
+                  // Crear todos los párrafos primero
+                  const paragraphs: HTMLElement[] = [];
+                  listItems.forEach((li) => {
+                    const p = document.createElement('p');
+                    // Preservar todo el contenido HTML del li
+                    p.innerHTML = li.innerHTML;
+                    paragraphs.push(p);
+                  });
+                  
+                  // Reemplazar la lista con el primer párrafo
+                  parent.replaceChild(paragraphs[0], list);
+                  
+                  // Insertar los párrafos restantes después del primero
+                  paragraphs.slice(1).forEach((p) => {
+                    parent.insertBefore(p, paragraphs[0].nextSibling);
+                  });
                 }
               }
-              
-              // Convertir cada li a párrafo
-              listItems.forEach(li => {
-                const p = document.createElement('p');
-                p.innerHTML = li.innerHTML;
-                li.parentNode?.replaceChild(p, li);
-              });
-              
-              // Si la lista queda vacía, eliminarla
-              const list = container.nodeType === Node.TEXT_NODE 
-                ? (container.parentElement?.closest('ul, ol'))
-                : (container as Element).closest('ul, ol');
-              if (list && list.children.length === 0) {
-                list.remove();
-              }
-            } else {
-              document.execCommand("formatBlock", false, "<p>");
             }
           } else {
-            // Convertir párrafos seleccionados a lista
+            // No está en lista, crear ul
             const range = selection?.getRangeAt(0);
             if (range && !range.collapsed && editorRef.current) {
-              // Buscar todos los párrafos que intersectan con el rango
               const allParagraphs = editorRef.current.querySelectorAll('p');
               const paragraphs: HTMLElement[] = [];
               
@@ -275,14 +299,12 @@ export function ContractEditorToolbar({
               });
               
               if (paragraphs.length > 0) {
-                // Crear lista y convertir párrafos
                 const ul = document.createElement('ul');
                 paragraphs.forEach((p, index) => {
                   const li = document.createElement('li');
                   li.innerHTML = p.innerHTML;
                   ul.appendChild(li);
                   
-                  // Reemplazar el párrafo con la lista (solo el primero)
                   if (index === 0) {
                     p.parentNode?.replaceChild(ul, p);
                   } else {
@@ -290,61 +312,75 @@ export function ContractEditorToolbar({
                   }
                 });
               } else {
-                // Si no hay párrafos, usar el comando estándar
                 document.execCommand("insertUnorderedList", false, undefined);
               }
             } else {
-              // Sin selección, usar comando estándar
               document.execCommand("insertUnorderedList", false, undefined);
             }
           }
           break;
         }
         case "ol": {
-          if (isActive) {
-            // Si está en una lista, convertir todos los li seleccionados a párrafos
+          // Verificar si está en una lista desordenada (ul) - si es así, convertir a ol
+          const isInUl = activeFormats.has("ul");
+          
+          if (isInUl) {
+            // Convertir de ul a ol preservando todo el contenido
             const range = selection?.getRangeAt(0);
-            if (range) {
+            if (range && editorRef.current) {
               const container = range.commonAncestorContainer;
-              const walker = document.createTreeWalker(
-                container.nodeType === Node.TEXT_NODE ? container.parentElement || container : container as Node,
-                NodeFilter.SHOW_ELEMENT,
-                null
-              );
+              const list = container.nodeType === Node.TEXT_NODE 
+                ? (container.parentElement?.closest('ul'))
+                : (container as Element).closest('ul');
               
-              const listItems: HTMLElement[] = [];
-              let node: Node | null;
-              while ((node = walker.nextNode())) {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                  const el = node as HTMLElement;
-                  if (el.tagName.toLowerCase() === 'li' && range.intersectsNode(el)) {
-                    listItems.push(el);
-                  }
+              if (list && list.tagName.toLowerCase() === 'ul' && list.parentNode) {
+                const ol = document.createElement('ol');
+                // Clonar todos los li con su contenido completo
+                Array.from(list.children).forEach(li => {
+                  const clonedLi = li.cloneNode(true) as HTMLElement;
+                  ol.appendChild(clonedLi);
+                });
+                list.parentNode.replaceChild(ol, list);
+              }
+            }
+          } else if (isActive) {
+            // Si está en ol y se presiona ol, toggle: convertir a párrafos
+            const range = selection?.getRangeAt(0);
+            if (range && editorRef.current) {
+              const container = range.commonAncestorContainer;
+              const list = container.nodeType === Node.TEXT_NODE 
+                ? (container.parentElement?.closest('ol'))
+                : (container as Element).closest('ol');
+              
+              if (list && list.tagName.toLowerCase() === 'ol') {
+                // Convertir todos los li a párrafos preservando el contenido
+                const listItems = Array.from(list.querySelectorAll('li'));
+                const parent = list.parentNode;
+                
+                if (parent && listItems.length > 0) {
+                  // Crear todos los párrafos primero
+                  const paragraphs: HTMLElement[] = [];
+                  listItems.forEach((li) => {
+                    const p = document.createElement('p');
+                    // Preservar todo el contenido HTML del li
+                    p.innerHTML = li.innerHTML;
+                    paragraphs.push(p);
+                  });
+                  
+                  // Reemplazar la lista con el primer párrafo
+                  parent.replaceChild(paragraphs[0], list);
+                  
+                  // Insertar los párrafos restantes después del primero
+                  paragraphs.slice(1).forEach((p) => {
+                    parent.insertBefore(p, paragraphs[0].nextSibling);
+                  });
                 }
               }
-              
-              // Convertir cada li a párrafo
-              listItems.forEach(li => {
-                const p = document.createElement('p');
-                p.innerHTML = li.innerHTML;
-                li.parentNode?.replaceChild(p, li);
-              });
-              
-              // Si la lista queda vacía, eliminarla
-              const list = container.nodeType === Node.TEXT_NODE 
-                ? (container.parentElement?.closest('ul, ol'))
-                : (container as Element).closest('ul, ol');
-              if (list && list.children.length === 0) {
-                list.remove();
-              }
-            } else {
-              document.execCommand("formatBlock", false, "<p>");
             }
           } else {
-            // Convertir párrafos seleccionados a lista
+            // No está en lista, crear ol
             const range = selection?.getRangeAt(0);
             if (range && !range.collapsed && editorRef.current) {
-              // Buscar todos los párrafos que intersectan con el rango
               const allParagraphs = editorRef.current.querySelectorAll('p');
               const paragraphs: HTMLElement[] = [];
               
@@ -355,14 +391,12 @@ export function ContractEditorToolbar({
               });
               
               if (paragraphs.length > 0) {
-                // Crear lista y convertir párrafos
                 const ol = document.createElement('ol');
                 paragraphs.forEach((p, index) => {
                   const li = document.createElement('li');
                   li.innerHTML = p.innerHTML;
                   ol.appendChild(li);
                   
-                  // Reemplazar el párrafo con la lista (solo el primero)
                   if (index === 0) {
                     p.parentNode?.replaceChild(ol, p);
                   } else {
@@ -370,11 +404,9 @@ export function ContractEditorToolbar({
                   }
                 });
               } else {
-                // Si no hay párrafos, usar el comando estándar
                 document.execCommand("insertOrderedList", false, undefined);
               }
             } else {
-              // Sin selección, usar comando estándar
               document.execCommand("insertOrderedList", false, undefined);
             }
           }
@@ -421,10 +453,50 @@ export function ContractEditorToolbar({
   return (
     <div
       className={cn(
-        "flex items-center gap-1 flex-wrap p-2 bg-zinc-900/50 border-b border-zinc-800 shrink-0",
+        "sticky top-0 z-10 flex items-center gap-1 flex-wrap p-2 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 shrink-0",
         className
       )}
     >
+      {/* Botones Undo/Redo */}
+      {onUndo && onRedo && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              onUndo();
+            }}
+            disabled={!canUndo}
+            className={cn(
+              "p-1.5 rounded transition-colors",
+              canUndo
+                ? "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800"
+                : "text-zinc-600 cursor-not-allowed opacity-50"
+            )}
+            title="Deshacer (Ctrl+Z / Cmd+Z)"
+          >
+            <Undo className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              onRedo();
+            }}
+            disabled={!canRedo}
+            className={cn(
+              "p-1.5 rounded transition-colors",
+              canRedo
+                ? "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800"
+                : "text-zinc-600 cursor-not-allowed opacity-50"
+            )}
+            title="Rehacer (Ctrl+Shift+Z / Cmd+Shift+Z)"
+          >
+            <Redo className="h-4 w-4" />
+          </button>
+          <div className="w-px h-6 bg-zinc-700" />
+        </>
+      )}
       <button
         type="button"
         onClick={() => applyFormat("h1")}
@@ -525,6 +597,14 @@ export function ContractEditorToolbar({
         title="Indentar (Tabulador)"
       >
         <Indent className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => applyFormat("outdent")}
+        className="p-1.5 rounded text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+        title="Reducir tabulación"
+      >
+        <Outdent className="h-4 w-4" />
       </button>
       <div className="w-px h-6 bg-zinc-700" />
       <button

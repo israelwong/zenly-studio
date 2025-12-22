@@ -35,13 +35,13 @@ export function ContractVariables({ onVariableClick, className = "", showCard = 
   };
 
   const content = (
-    <div className={cn("space-y-6", !showCard && "p-0", className)}>
+    <div className={cn("space-y-5", !showCard && "p-0", className)}>
       {/* Datos del Cliente */}
       <div>
-        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-2">
+        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-1">
           Datos del Cliente
         </h4>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {CONTRACT_VARIABLES.filter((v) => v.key.includes("cliente")).map((variable) => (
             <VariableItem
               key={variable.key}
@@ -56,10 +56,10 @@ export function ContractVariables({ onVariableClick, className = "", showCard = 
 
       {/* Datos del Evento */}
       <div>
-        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-2">
+        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-1">
           Datos del Evento
         </h4>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {CONTRACT_VARIABLES.filter(
             (v) => v.key.includes("evento") || v.key.includes("tipo")
           ).map((variable) => (
@@ -76,10 +76,10 @@ export function ContractVariables({ onVariableClick, className = "", showCard = 
 
       {/* Datos Comerciales */}
       <div>
-        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-2">
+        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-1">
           Datos Comerciales
         </h4>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {CONTRACT_VARIABLES.filter(
             (v) => v.key.includes("total") || v.key.includes("condiciones")
           ).map((variable) => (
@@ -96,10 +96,10 @@ export function ContractVariables({ onVariableClick, className = "", showCard = 
 
       {/* Datos del Studio */}
       <div>
-        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-2">
+        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-1">
           Datos del Studio
         </h4>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {CONTRACT_VARIABLES.filter((v) => v.key.includes("studio")).map((variable) => (
             <VariableItem
               key={variable.key}
@@ -114,10 +114,10 @@ export function ContractVariables({ onVariableClick, className = "", showCard = 
 
       {/* Bloques Especiales */}
       <div>
-        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-2">
+        <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-1">
           Bloques Especiales
         </h4>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {CONTRACT_VARIABLES.filter((v) => v.key.includes("[")).map((variable) => (
             <VariableItem
               key={variable.key}
@@ -159,14 +159,7 @@ export function ContractVariables({ onVariableClick, className = "", showCard = 
 }
 
 interface VariableItemProps {
-  variable: { key: string; label: string; description: string; example: string };
-  isCopied: boolean;
-  onClick: () => void;
-  isBlock?: boolean;
-}
-
-interface VariableItemProps {
-  variable: { key: string; label: string; description: string; example: string };
+  variable: { key: string; label: string; description: string };
   isCopied: boolean;
   onClick: () => void;
   isBlock?: boolean;
@@ -177,7 +170,7 @@ function VariableItem({ variable, isCopied, onClick, isBlock = false, hasInsertH
   return (
     <button
       onClick={onClick}
-      className="w-full text-left p-2 rounded-md hover:bg-zinc-800/50 transition-colors group relative z-0"
+      className="w-full text-left p-1.5 rounded-md hover:bg-zinc-800/50 transition-colors group relative z-0"
       title={variable.description}
     >
       <div className="flex items-start justify-between gap-2">
@@ -190,10 +183,7 @@ function VariableItem({ variable, isCopied, onClick, isBlock = false, hasInsertH
           >
             {variable.key}
           </code>
-          <p className="text-xs text-zinc-500 mt-1 line-clamp-1">{variable.description}</p>
-          <p className="text-xs text-zinc-600 mt-0.5 italic">
-            Ej: {variable.example}
-          </p>
+          <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{variable.description}</p>
         </div>
         <div className="shrink-0">
           {hasInsertHandler ? (

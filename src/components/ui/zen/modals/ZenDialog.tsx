@@ -27,6 +27,7 @@ export interface ZenDialogProps {
   zIndex?: number;
   headerActions?: React.ReactNode;
   fullScreen?: boolean;
+  footerLeftContent?: React.ReactNode;
 }
 
 const maxWidthClasses = {
@@ -61,7 +62,8 @@ export function ZenDialog({
   showDeleteButton = false,
   zIndex = 10050,
   headerActions,
-  fullScreen = false
+  fullScreen = false,
+  footerLeftContent
 }: ZenDialogProps) {
   const [mounted, setMounted] = React.useState(false);
   const [isAnimating, setIsAnimating] = React.useState(false);
@@ -190,19 +192,22 @@ export function ZenDialog({
           </ZenCardContent>
 
           {/* Footer */}
-          {(onSave || onCancel || showDeleteButton) && (
+          {(onSave || onCancel || showDeleteButton || footerLeftContent) && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-700">
-              {/* Botón eliminar a la izquierda */}
-              {showDeleteButton && onDelete && (
-                <ZenButton
-                  variant="ghost"
-                  onClick={onDelete}
-                  disabled={isLoading}
-                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                >
-                  {deleteLabel}
-                </ZenButton>
-              )}
+              {/* Contenido izquierdo (tips o botón eliminar) */}
+              <div className="flex items-center gap-4">
+                {footerLeftContent}
+                {showDeleteButton && onDelete && (
+                  <ZenButton
+                    variant="ghost"
+                    onClick={onDelete}
+                    disabled={isLoading}
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  >
+                    {deleteLabel}
+                  </ZenButton>
+                )}
+              </div>
               {/* Botones de acción a la derecha */}
               <div className="flex items-center gap-3 ml-auto">
                 {onCancel && (

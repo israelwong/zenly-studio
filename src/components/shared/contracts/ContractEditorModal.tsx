@@ -8,6 +8,7 @@ import {
   ContractEditorRef,
   ContractEditorToolbar,
   type ContractVariable,
+  parseVariables,
 } from "@/app/[slug]/studio/config/contratos/components";
 import { ContractVariables } from "@/components/ui/zen";
 import { CONTRACT_VARIABLES } from "@/types/contracts";
@@ -76,14 +77,49 @@ export function ContractEditorModal({
   const [templateDescription, setTemplateDescription] = useState(initialDescription);
   const [isDefault, setIsDefault] = useState(initialIsDefault);
   const editorRef = useRef<ContractEditorRef>(null);
+  const modalContentRef = useRef<HTMLDivElement>(null);
 
-  // Resetear estados cuando se abre/cierra
+  // Anular el overflow del ZenCardContent para que los scrolls funcionen en las columnas
   React.useEffect(() => {
     if (isOpen) {
-      setContent(initialContent || templateContent || "");
+      // Buscar el ZenCardContent padre usando un timeout para asegurar que el DOM esté listo
+      const timer = setTimeout(() => {
+        if (modalContentRef.current) {
+          let parent = modalContentRef.current.parentElement;
+          // Buscar el ZenCardContent (puede estar a varios niveles)
+          while (parent && parent !== document.body) {
+            const hasOverflow = window.getComputedStyle(parent).overflowY === 'auto' ||
+              window.getComputedStyle(parent).overflowY === 'scroll';
+            if (hasOverflow && parent.classList.toString().includes('flex')) {
+              (parent as HTMLElement).style.overflow = 'hidden';
+              break;
+            }
+            parent = parent.parentElement;
+          }
+        }
+      }, 10);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  // Resetear estados cuando se abre/cierra o cuando cambian los props iniciales
+  React.useEffect(() => {
+    if (isOpen) {
+      const newContent = initialContent || templateContent || "";
+      setContent(newContent);
       setName(initialName);
       setTemplateDescription(initialDescription);
       setIsDefault(initialIsDefault);
+
+      // Si el editor ya está montado, forzar actualización del contenido
+      // Usar un timeout más largo para asegurar que el DOM esté listo
+      if (editorRef.current && newContent) {
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.setContent(newContent);
+          }
+        }, 200);
+      }
     }
   }, [
     isOpen,
@@ -92,7 +128,19 @@ export function ContractEditorModal({
     initialName,
     initialDescription,
     initialIsDefault,
+    mode,
   ]);
+
+  // Generar key única basada en el contenido inicial y el modo para forzar re-mount
+  // Solo remontar cuando realmente cambia el contenido o el modo
+  const editorKey = React.useMemo(() => {
+    const currentContent = initialContent || templateContent || "";
+    // Usar hash simple del contenido en lugar de Date.now() para evitar remontar innecesario
+    const contentHash = currentContent.length > 0
+      ? currentContent.substring(0, 50).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+      : 0;
+    return `editor-${mode}-${isOpen}-${contentHash}-${initialName || 'new'}`;
+  }, [mode, isOpen, initialContent, templateContent, initialName]);
 
   const handleVariableClick = useCallback(
     (variable: string) => {
@@ -206,48 +254,22 @@ export function ContractEditorModal({
       isLoading={isLoading}
       closeOnClickOutside={false}
     >
-      <div className="flex h-full min-h-0">
-        {/* Editor (flex-1) */}
-        <div className="flex-1 flex flex-col min-w-0 border-r border-zinc-800 overflow-hidden">
-          {/* Metadata para templates */}
-          {(mode === "create-template" || mode === "edit-template") && (
-            <div className="p-4 border-b border-zinc-800 space-y-4 shrink-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <ZenLabel htmlFor="modal-name">Nombre de la Plantilla *</ZenLabel>
-                  <ZenInput
-                    id="modal-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ej: Contrato General"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <ZenLabel htmlFor="modal-description">Descripción</ZenLabel>
-                  <ZenInput
-                    id="modal-description"
-                    value={templateDescription}
-                    onChange={(e) => setTemplateDescription(e.target.value)}
-                    placeholder="Descripción breve de la plantilla"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
-                <div>
-                  <p className="font-medium text-zinc-200">Plantilla por defecto</p>
-                  <p className="text-sm text-zinc-500">
-                    Se usará automáticamente si no se especifica otra
-                  </p>
-                </div>
-                <ZenSwitch checked={isDefault} onCheckedChange={setIsDefault} />
-              </div>
-            </div>
-          )}
-
-          {/* Editor con Toolbar */}
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Wrapper para anular el overflow del ZenCardContent y crear scrolls independientes */}
+      <div
+        ref={modalContentRef}
+        className="flex h-full min-h-0 -m-6"
+        style={{
+          height: 'calc(90vh - 140px)',
+          maxHeight: 'calc(90vh - 140px)',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        {/* Columna Izquierda: Editor con su propio scroll */}
+        <div className="flex-1 flex flex-col min-w-0 border-r border-zinc-800 overflow-hidden h-full">
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto h-full relative pb-4" id="editor-scroll-container">
             <ContractEditor
+              key={editorKey}
               ref={editorRef}
               content={content}
               onChange={setContent}
@@ -258,11 +280,49 @@ export function ContractEditorModal({
           </div>
         </div>
 
-        {/* Variables Panel (400px fijo) */}
-        <div className="w-[400px] flex-shrink-0 overflow-y-auto bg-zinc-900/30 border-l border-zinc-800">
-          <div className="p-6">
-            <h3 className="text-sm font-semibold text-zinc-300 mb-4">Variables Disponibles</h3>
-            <ContractVariables showCard={false} onVariableClick={handleVariableClick} />
+        {/* Columna Derecha: Form + Variables con su propio scroll */}
+        <div className="w-[400px] shrink-0 flex flex-col min-h-0 overflow-hidden bg-zinc-900/30 border-l border-zinc-800 h-full">
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto h-full">
+            {/* Metadata para templates */}
+            {(mode === "create-template" || mode === "edit-template") && (
+              <div className="p-6 border-b border-zinc-800 space-y-4 shrink-0 bg-zinc-900/30">
+                <h3 className="text-sm font-semibold text-zinc-300 mb-4">Información de la Plantilla</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <ZenLabel htmlFor="modal-name">Nombre de la Plantilla *</ZenLabel>
+                    <ZenInput
+                      id="modal-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Ej: Contrato General"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <ZenLabel htmlFor="modal-description">Descripción</ZenLabel>
+                    <ZenInput
+                      id="modal-description"
+                      value={templateDescription}
+                      onChange={(e) => setTemplateDescription(e.target.value)}
+                      placeholder="Descripción breve de la plantilla"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Variables Panel con header sticky */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="sticky top-0 z-10 p-6 pb-4 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 shrink-0">
+                <h3 className="text-sm font-semibold text-zinc-300 mb-1">Variables Disponibles</h3>
+                <p className="text-xs text-zinc-500">Selecciona una variable para insertar en el editor</p>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-6 pt-4">
+                  <ContractVariables showCard={false} onVariableClick={handleVariableClick} />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

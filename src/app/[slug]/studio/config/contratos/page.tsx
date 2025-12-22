@@ -69,6 +69,7 @@ export default function ContratosPage() {
   const handleEdit = async (templateId: string) => {
     try {
       const result = await getContractTemplate(studioSlug, templateId);
+
       if (result.success && result.data) {
         setEditingTemplate(result.data);
         setEditModalOpen(true);

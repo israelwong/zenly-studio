@@ -40,10 +40,10 @@ export interface CondicionesComercialesData {
 }
 
 export interface ParsedVariable {
-  fullMatch: string; // @nombre_cliente o {nombre_cliente}
-  key: string; // nombre_cliente
+  fullMatch: string; // @nombre_cliente, {nombre_cliente} o [BLOQUE_ESPECIAL]
+  key: string; // nombre_cliente o BLOQUE_ESPECIAL
   startIndex: number;
   endIndex: number;
-  syntax: "@" | "{";
+  syntax: "@" | "{" | "[";
 }
 

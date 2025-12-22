@@ -3,7 +3,7 @@
 import { ContractVariable, ParsedVariable } from "../types";
 
 /**
- * Parsea variables en el texto (soporta @variable y {variable})
+ * Parsea variables en el texto (soporta @variable, {variable} y [BLOQUE_ESPECIAL])
  */
 export function parseVariables(text: string): ParsedVariable[] {
   const variables: ParsedVariable[] = [];
@@ -31,6 +31,19 @@ export function parseVariables(text: string): ParsedVariable[] {
       startIndex: match.index,
       endIndex: match.index + match[0].length,
       syntax: "{",
+    });
+  }
+  
+  // Regex para [BLOQUE_ESPECIAL] - bloques que empiezan con [ y terminan con ]
+  // Ejemplo: [SERVICIOS_INCLUIDOS], [CONDICIONES_COMERCIALES]
+  const blockPattern = /\[([A-Z][A-Z0-9_]*)\]/g;
+  while ((match = blockPattern.exec(text)) !== null) {
+    variables.push({
+      fullMatch: match[0],
+      key: match[1],
+      startIndex: match.index,
+      endIndex: match.index + match[0].length,
+      syntax: "[",
     });
   }
   

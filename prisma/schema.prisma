@@ -1458,6 +1458,7 @@ model studio_contract_templates {
   name          String
   slug          String
   description   String?
+  order         Int      @default(0)
   event_type_id String?
   content       String   @db.Text
   is_active     Boolean  @default(true)
