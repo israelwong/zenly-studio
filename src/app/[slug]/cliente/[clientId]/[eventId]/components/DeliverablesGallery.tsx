@@ -201,7 +201,7 @@ export function DeliverablesGallery({
             },
           ],
           poster: item.thumbnailLink || '',
-          autoPlay: false,
+          autoPlay: true, // Reproducir automáticamente al abrir en lightbox
           muted: false,
           controls: true,
           playsInline: true,
@@ -632,8 +632,15 @@ export function DeliverablesGallery({
   }
 
   // Vista de carpetas (cuando no hay carpeta seleccionada)
-  // Solo mostrar subcarpetas, no la carpeta raíz
+  // Determinar qué carpetas mostrar según la cantidad de entregables
+  // Si hay 1 entregable: mostrar solo subcarpetas (comportamiento actual)
+  // Si hay más de 1 entregable: mostrar las carpetas raíz
+  const rootFolders = allFolders.filter(f => f.isRoot);
   const subFolders = allFolders.filter(f => !f.isRoot);
+  const googleDriveDeliverablesCount = googleDriveDeliverables.length;
+  
+  // Si hay más de 1 entregable, mostrar carpetas raíz; si hay 1, mostrar subcarpetas
+  const foldersToShow = googleDriveDeliverablesCount > 1 ? rootFolders : subFolders;
 
   return (
     <div className="space-y-6">
@@ -673,14 +680,16 @@ export function DeliverablesGallery({
         </div>
       )}
 
-      {/* Vista de carpetas de Google Drive - Solo subcarpetas */}
+      {/* Vista de carpetas de Google Drive */}
       {hasGoogleDriveContent && (
         <div>
-          <h3 className="text-sm font-medium text-zinc-300 mb-4">Carpetas de entregables</h3>
+          <h3 className="text-sm font-medium text-zinc-300 mb-4">
+            {googleDriveDeliverablesCount > 1 ? 'Carpetas de entregables' : 'Carpetas de entregables'}
+          </h3>
           
-          {subFolders.length > 0 ? (
+          {foldersToShow.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {subFolders.map((folder) => {
+              {foldersToShow.map((folder) => {
                 const photosCount = folder.items.filter(i => i.mimeType.startsWith('image/')).length;
                 const videosCount = folder.items.filter(i => i.mimeType.startsWith('video/')).length;
                 const itemsCount = folder.items.length;
@@ -727,7 +736,9 @@ export function DeliverablesGallery({
               <div className="p-8 text-center">
                 <Folder className="h-12 w-12 text-zinc-500 mx-auto mb-4" />
                 <p className="text-sm text-zinc-400">
-                  No hay subcarpetas disponibles en este entregable.
+                  {googleDriveDeliverablesCount > 1 
+                    ? 'No hay carpetas disponibles.' 
+                    : 'No hay subcarpetas disponibles en este entregable.'}
                 </p>
               </div>
             </ZenCard>

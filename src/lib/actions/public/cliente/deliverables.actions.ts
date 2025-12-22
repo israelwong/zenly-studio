@@ -172,6 +172,10 @@ export async function obtenerEntregablesCliente(
               const folders: Array<{ id: string; name: string; items: GoogleDriveFile[] }> = [];
               const allItems: GoogleDriveFile[] = [];
 
+              // Obtener detalles de la carpeta raíz para obtener su nombre real
+              const { obtenerDetallesCarpeta } = await import('@/lib/actions/studio/integrations/google-drive.actions');
+              const rootFolderDetails = await obtenerDetallesCarpeta(studioSlug, entregable.google_folder_id);
+              
               // Contenido de la carpeta raíz
               const rootContentResult = await obtenerContenidoCarpeta(studioSlug, entregable.google_folder_id);
               console.log(`[obtenerEntregablesCliente] Contenido raíz:`, {
@@ -181,10 +185,16 @@ export async function obtenerEntregablesCliente(
               });
               
               if (rootContentResult.success && rootContentResult.data) {
+                // Usar el nombre real de la carpeta desde Google Drive, o el nombre del entregable como fallback
+                const folderName = rootFolderDetails.success && rootFolderDetails.data 
+                  ? rootFolderDetails.data.name 
+                  : entregable.name;
+                
                 folders.push({
                   id: entregable.google_folder_id,
-                  name: entregable.name,
+                  name: folderName,
                   items: rootContentResult.data,
+                  subfoldersCount: subcarpetas.length, // Agregar conteo de subcarpetas para la carpeta raíz
                 });
                 allItems.push(...rootContentResult.data);
               }
