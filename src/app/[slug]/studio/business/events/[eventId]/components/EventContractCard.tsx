@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { FileText, Plus, Eye, Edit, Loader2, CheckCircle2, Clock } from 'lucide-react';
+import { FileText, Plus, Eye, Edit, Loader2, CheckCircle2, Clock, Trash2, MoreVertical, Send, Info } from 'lucide-react';
 import {
   ZenCard,
   ZenCardHeader,
@@ -10,14 +9,21 @@ import {
   ZenCardContent,
   ZenButton,
   ZenBadge,
+  ZenConfirmModal,
+  ZenDropdownMenu,
+  ZenDropdownMenuTrigger,
+  ZenDropdownMenuContent,
+  ZenDropdownMenuItem,
+  ZenDropdownMenuSeparator,
 } from '@/components/ui/zen';
 import type { EventContract } from '@/types/contracts';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { ContractTemplateSelectorModal } from './ContractTemplateSelectorModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
+import { EventContractViewModal } from './EventContractViewModal';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
-import { getEventContract, generateEventContract, updateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { getEventContract, generateEventContract, updateEventContract, deleteEventContract, publishEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
 
 interface EventContractCardProps {
   studioSlug: string;
@@ -32,12 +38,15 @@ export function EventContractCard({
   eventTypeId,
   onContractUpdated,
 }: EventContractCardProps) {
-  const router = useRouter();
   const [contract, setContract] = useState<EventContract | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showEditorModal, setShowEditorModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [selectedTemplateContent, setSelectedTemplateContent] = useState<string>('');
 
   useEffect(() => {
@@ -92,28 +101,46 @@ export function EventContractCard({
   }) => {
     setIsGenerating(true);
     try {
-      // Generar contrato
-      const result = await generateEventContract(studioSlug, {
-        event_id: eventId,
-      });
-
-      if (result.success && result.data) {
-        // Actualizar el contenido del contrato generado con el editado
-        const updateResult = await updateEventContract(studioSlug, result.data.id, {
+      if (isEditing && contract) {
+        // Actualizar contrato existente
+        const updateResult = await updateEventContract(studioSlug, contract.id, {
           content: data.content,
         });
 
         if (updateResult.success) {
-          toast.success('Contrato generado correctamente');
+          toast.success('Contrato actualizado correctamente');
           setShowEditorModal(false);
           setSelectedTemplateContent('');
+          setIsEditing(false);
           await loadContract();
           onContractUpdated?.();
         } else {
           toast.error(updateResult.error || 'Error al actualizar contrato');
         }
       } else {
-        toast.error(result.error || 'Error al generar contrato');
+        // Generar nuevo contrato
+        const result = await generateEventContract(studioSlug, {
+          event_id: eventId,
+        });
+
+        if (result.success && result.data) {
+          // Actualizar el contenido del contrato generado con el editado
+          const updateResult = await updateEventContract(studioSlug, result.data.id, {
+            content: data.content,
+          });
+
+          if (updateResult.success) {
+            toast.success('Contrato generado correctamente');
+            setShowEditorModal(false);
+            setSelectedTemplateContent('');
+            await loadContract();
+            onContractUpdated?.();
+          } else {
+            toast.error(updateResult.error || 'Error al actualizar contrato');
+          }
+        } else {
+          toast.error(result.error || 'Error al generar contrato');
+        }
       }
     } catch (error) {
       console.error('Error generating contract:', error);
@@ -124,29 +151,92 @@ export function EventContractCard({
   };
 
   const handleViewContract = () => {
-    router.push(`/${studioSlug}/studio/business/events/${eventId}/contrato`);
+    setShowViewModal(true);
+  };
+
+  const handleEditContract = () => {
+    setShowViewModal(false);
+    if (contract) {
+      setSelectedTemplateContent(contract.content);
+      setIsEditing(true);
+      setShowEditorModal(true);
+    }
+  };
+
+  const handleEditClick = () => {
+    if (contract?.status === 'signed') {
+      toast.error('Este contrato está firmado y no puede ser modificado');
+      return;
+    }
+    setShowTemplateModal(true);
+  };
+
+  const handleDeleteClick = () => {
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!contract) return;
+
+    setIsDeleting(true);
+    try {
+      const result = await deleteEventContract(studioSlug, contract.id);
+
+      if (result.success) {
+        toast.success('Contrato eliminado correctamente');
+        setShowDeleteModal(false);
+        await loadContract();
+        onContractUpdated?.();
+      } else {
+        toast.error(result.error || 'Error al eliminar contrato');
+      }
+    } catch (error) {
+      console.error('Error deleting contract:', error);
+      toast.error('Error al eliminar contrato');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!contract) return;
+
+    try {
+      const result = await publishEventContract(studioSlug, contract.id);
+
+      if (result.success) {
+        toast.success('Contrato publicado correctamente. El cliente ya puede verlo y firmarlo.');
+        await loadContract();
+        onContractUpdated?.();
+      } else {
+        toast.error(result.error || 'Error al publicar contrato');
+      }
+    } catch (error) {
+      console.error('Error publishing contract:', error);
+      toast.error('Error al publicar contrato');
+    }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft':
         return (
-          <ZenBadge variant="outline" className="text-amber-400 border-amber-500/30 bg-amber-950/20">
-            <Clock className="h-3 w-3 mr-1" />
+          <ZenBadge variant="outline" className="text-amber-400 border-amber-500/30 bg-amber-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+            <Clock className="h-2.5 w-2.5 mr-0.5" />
             Borrador
           </ZenBadge>
         );
       case 'published':
         return (
-          <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20">
-            <Eye className="h-3 w-3 mr-1" />
+          <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+            <Eye className="h-2.5 w-2.5 mr-0.5" />
             Publicado
           </ZenBadge>
         );
       case 'signed':
         return (
-          <ZenBadge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-950/20">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
+          <ZenBadge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+            <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
             Firmado
           </ZenBadge>
         );
@@ -181,57 +271,175 @@ export function EventContractCard({
           <ZenButton
             variant="ghost"
             size="sm"
-            onClick={contract ? handleViewContract : handleGenerateClick}
+            onClick={contract ? handleEditClick : handleGenerateClick}
             disabled={isGenerating}
             className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
           >
-            <Plus className="h-3 w-3 mr-1" />
-            Anexar
+            {contract ? (
+              <>
+                <Edit className="h-3 w-3 mr-1" />
+                Editar
+              </>
+            ) : (
+              <>
+                <Plus className="h-3 w-3 mr-1" />
+                Anexar
+              </>
+            )}
           </ZenButton>
         </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4">
         {contract ? (
-          <div className="space-y-4">
-            {/* Estado del contrato */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-400">Estado</span>
-              {getStatusBadge(contract.status)}
+          <div className="space-y-3">
+            <div
+              className="p-3 bg-zinc-900 rounded border border-zinc-800 relative group hover:border-zinc-700 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-3 pr-8">
+                <div
+                  className="flex-1 min-w-0 cursor-pointer"
+                  onClick={handleViewContract}
+                >
+                  <p className="text-sm font-medium text-zinc-100 mb-1">
+                    Contrato
+                  </p>
+
+                  {/* Estado en línea dedicada */}
+                  <div className="mb-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-zinc-500">Estado:</span>
+                      {getStatusBadge(contract.status)}
+                    </div>
+                  </div>
+
+                  {/* Información compacta */}
+                  <div className="space-y-0.5 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-500">Versión:</span>
+                      <span className="text-zinc-300">{contract.version}</span>
+                    </div>
+                    {contract.created_at && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-zinc-500">Creado:</span>
+                        <span className="text-zinc-300">{formatDate(contract.created_at)}</span>
+                      </div>
+                    )}
+                    {contract.signed_at && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-zinc-500">Firmado:</span>
+                        <span className="text-zinc-300">{formatDate(contract.signed_at)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Botón Publicar visible cuando es draft */}
+                  {contract.status === 'draft' && (
+                    <div className="mt-3 w-full" onClick={(e) => e.stopPropagation()}>
+                      <ZenButton
+                        variant="ghost"
+                        onClick={handlePublish}
+                        className="bg-transparent focus-visible:ring-zinc-500/50 px-3 py-1.5 h-8 rounded-md w-full gap-2 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-950/20"
+                      >
+                        <Send className="h-4 w-4" />
+                        Publicar para revisión del cliente
+                      </ZenButton>
+                    </div>
+                  )}
+                </div>
+
+                {/* Menú dropdown */}
+                <div className="absolute top-2 right-2">
+                  <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                      <ZenButton
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-zinc-400 hover:text-zinc-300"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </ZenButton>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end">
+                      {contract.status === 'draft' && (
+                        <>
+                          <ZenDropdownMenuItem onClick={handleEditClick}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Editar
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem onClick={handlePublish}>
+                            <Send className="mr-2 h-4 w-4" />
+                            Publicar
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem
+                            onClick={handleDeleteClick}
+                            className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Eliminar
+                          </ZenDropdownMenuItem>
+                        </>
+                      )}
+                      {contract.status === 'published' && (
+                        <>
+                          <ZenDropdownMenuItem onClick={handleEditClick}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Editar
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem
+                            onClick={handleDeleteClick}
+                            className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Eliminar
+                          </ZenDropdownMenuItem>
+                        </>
+                      )}
+                      {contract.status === 'signed' && (
+                        <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
+                          <FileText className="mr-2 h-4 w-4" />
+                          Contrato firmado (solo lectura)
+                        </ZenDropdownMenuItem>
+                      )}
+                    </ZenDropdownMenuContent>
+                  </ZenDropdownMenu>
+                </div>
+              </div>
             </div>
 
-            {/* Versión */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-400">Versión</span>
-              <span className="text-xs text-zinc-300 font-medium">v{contract.version}</span>
-            </div>
-
-            {/* Fecha de creación */}
-            {contract.created_at && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-zinc-400">Creado</span>
-                <span className="text-xs text-zinc-300">{formatDate(contract.created_at)}</span>
+            {/* Card informativo de estados */}
+            <div className="p-3 bg-zinc-900/50 rounded border border-zinc-800/50">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-zinc-500 mt-0.5 shrink-0" />
+                <div className="flex-1 space-y-2 text-xs">
+                  <p className="text-zinc-400 font-medium">Estados del contrato:</p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <ZenBadge variant="outline" className="text-amber-400 border-amber-500/30 bg-amber-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+                        <Clock className="h-2.5 w-2.5 mr-0.5" />
+                        Borrador
+                      </ZenBadge>
+                      <span className="text-zinc-500">Solo visible para el estudio. Puede editarse o eliminarse.</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+                        <Eye className="h-2.5 w-2.5 mr-0.5" />
+                        Publicado
+                      </ZenBadge>
+                      <span className="text-zinc-500">Visible para el cliente. Puede ser firmado o editado (crea nueva versión).</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ZenBadge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+                        <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                        Firmado
+                      </ZenBadge>
+                      <span className="text-zinc-500">Contrato firmado por el cliente. No puede modificarse (documento legal).</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
-
-            {/* Fecha de firma */}
-            {contract.signed_at && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-zinc-400">Firmado</span>
-                <span className="text-xs text-zinc-300">{formatDate(contract.signed_at)}</span>
-              </div>
-            )}
-
-            {/* Botones de acción */}
-            <div className="pt-2 space-y-2">
-              <ZenButton
-                variant="default"
-                size="sm"
-                onClick={handleViewContract}
-                className="w-full"
-              >
-                <Eye className="h-3.5 w-3.5 mr-2" />
-                Ver contrato
-              </ZenButton>
             </div>
           </div>
         ) : (
@@ -262,14 +470,48 @@ export function EventContractCard({
         onClose={() => {
           setShowEditorModal(false);
           setSelectedTemplateContent('');
+          setIsEditing(false);
         }}
-        mode="create-event-contract"
+        mode={isEditing ? "edit-event-contract" : "create-event-contract"}
         studioSlug={studioSlug}
         eventId={eventId}
-        templateContent={selectedTemplateContent}
+        initialContent={isEditing ? contract?.content : undefined}
+        templateContent={!isEditing ? selectedTemplateContent : undefined}
         onSave={handleGenerateContract}
         isLoading={isGenerating}
       />
+
+      {contract && (
+        <>
+          <EventContractViewModal
+            isOpen={showViewModal}
+            onClose={() => setShowViewModal(false)}
+            onContractUpdated={async () => {
+              await loadContract();
+              onContractUpdated?.();
+            }}
+            studioSlug={studioSlug}
+            eventId={eventId}
+            contract={contract}
+          />
+
+          <ZenConfirmModal
+            isOpen={showDeleteModal}
+            onClose={() => {
+              if (!isDeleting) {
+                setShowDeleteModal(false);
+              }
+            }}
+            onConfirm={handleDeleteConfirm}
+            title="Eliminar Contrato"
+            description="¿Estás seguro de eliminar este contrato? Esta acción no se puede deshacer."
+            confirmText="Eliminar"
+            cancelText="Cancelar"
+            variant="destructive"
+            loading={isDeleting}
+          />
+        </>
+      )}
     </ZenCard>
   );
 }

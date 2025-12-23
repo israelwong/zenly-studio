@@ -151,7 +151,6 @@ export async function generateEventContract(
     });
 
     revalidatePath(`/${studioSlug}/studio/business/events/${validated.event_id}`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${validated.event_id}/contrato`);
 
     return { success: true, data: contract as EventContract };
   } catch (error) {
@@ -221,7 +220,6 @@ export async function updateEventContract(
     }
 
     revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}`);
-    revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}/contrato`);
 
     return { success: true, data: updated as EventContract };
   } catch (error) {
@@ -306,6 +304,11 @@ export async function regenerateEventContract(
       return { success: false, error: "El contrato no tiene plantilla asociada" };
     }
 
+    // No se puede regenerar un contrato firmado
+    if (contract.status === "signed") {
+      return { success: false, error: "No se puede regenerar un contrato firmado" };
+    }
+
     // Obtener datos actualizados del evento
     const eventDataResult = await getEventContractData(studioSlug, eventId);
 
@@ -320,20 +323,176 @@ export async function regenerateEventContract(
       return { success: false, error: renderResult.error || "Error al renderizar contrato" };
     }
 
-    // Actualizar contrato
+    // Actualizar contrato (si está publicado, regenerar crea nueva versión en draft)
     const updated = await prisma.studio_event_contracts.update({
       where: { id: contract.id },
       data: {
         content: renderResult.data,
+        status: contract.status === "published" ? "draft" : contract.status,
         version: contract.version + 1,
       },
     });
 
-    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/contrato`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
 
     return { success: true, data: updated as EventContract };
   } catch (error) {
     console.error("Error al regenerar contrato:", error);
     return { success: false, error: "Error al regenerar contrato" };
+  }
+}
+
+// Publicar contrato (cambiar de draft a published)
+export async function publishEventContract(
+  studioSlug: string,
+  contractId: string
+): Promise<ActionResponse<EventContract>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    const contract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        id: contractId,
+        studio_id: studio.id,
+      },
+    });
+
+    if (!contract) {
+      return { success: false, error: "Contrato no encontrado" };
+    }
+
+    if (contract.status !== "draft") {
+      return { success: false, error: "Solo se pueden publicar contratos en borrador" };
+    }
+
+    const updated = await prisma.studio_event_contracts.update({
+      where: { id: contractId },
+      data: {
+        status: "published",
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}`);
+
+    return { success: true, data: updated as EventContract };
+  } catch (error) {
+    console.error("Error al publicar contrato:", error);
+    return { success: false, error: "Error al publicar contrato" };
+  }
+}
+
+// Firmar contrato (cambiar de published a signed)
+export async function signEventContract(
+  studioSlug: string,
+  contractId: string,
+  signatureUrl?: string
+): Promise<ActionResponse<EventContract>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    const contract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        id: contractId,
+        studio_id: studio.id,
+      },
+    });
+
+    if (!contract) {
+      return { success: false, error: "Contrato no encontrado" };
+    }
+
+    if (contract.status !== "published") {
+      return { success: false, error: "Solo se pueden firmar contratos publicados" };
+    }
+
+    const updated = await prisma.studio_event_contracts.update({
+      where: { id: contractId },
+      data: {
+        status: "signed",
+        signed_by_client: true,
+        signed_at: new Date(),
+        ...(signatureUrl && { client_signature_url: signatureUrl }),
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}`);
+
+    return { success: true, data: updated as EventContract };
+  } catch (error) {
+    console.error("Error al firmar contrato:", error);
+    return { success: false, error: "Error al firmar contrato" };
+  }
+}
+
+// Obtener contrato para el cliente (con validación de acceso)
+export async function getEventContractForClient(
+  studioSlug: string,
+  eventId: string,
+  clientId: string
+): Promise<ActionResponse<EventContract>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    // Verificar que el cliente tiene acceso al evento
+    const event = await prisma.studio_events.findFirst({
+      where: {
+        id: eventId,
+        studio_id: studio.id,
+        promise: {
+          contact_id: clientId,
+        },
+      },
+      include: {
+        promise: {
+          include: {
+            contact: true,
+          },
+        },
+      },
+    });
+
+    if (!event) {
+      return { success: false, error: "Evento no encontrado o sin acceso" };
+    }
+
+    const contract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        event_id: eventId,
+        studio_id: studio.id,
+        status: {
+          in: ["published", "signed"],
+        },
+      },
+    });
+
+    if (!contract) {
+      return { success: false, error: "No hay contrato disponible para este evento" };
+    }
+
+    return { success: true, data: contract as EventContract };
+  } catch (error) {
+    console.error("Error al obtener contrato para cliente:", error);
+    return { success: false, error: "Error al obtener contrato" };
   }
 }
