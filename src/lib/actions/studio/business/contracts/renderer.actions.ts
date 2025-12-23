@@ -4,10 +4,57 @@ import { prisma } from "@/lib/prisma";
 import { ActionResponse } from "@/types";
 import { EventContractData, ServiceCategory } from "@/types/contracts";
 import type { CondicionesComercialesData } from "@/app/[slug]/studio/config/contratos/components/types";
+import { renderCondicionesComercialesBlock } from "@/app/[slug]/studio/config/contratos/components/utils/contract-renderer";
 
 // Tipo extendido que incluye condiciones comerciales
 export interface EventContractDataWithConditions extends EventContractData {
   condicionesData?: CondicionesComercialesData;
+}
+
+// Helper: Obtener event_id real desde promise_id o event_id
+export async function getRealEventId(
+  studioSlug: string,
+  eventIdOrPromiseId: string
+): Promise<ActionResponse<string>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    // Buscar primero como event_id
+    let event = await prisma.studio_events.findFirst({
+      where: {
+        id: eventIdOrPromiseId,
+        studio_id: studio.id,
+      },
+      select: { id: true },
+    });
+
+    // Si no se encuentra, buscar por promise_id
+    if (!event) {
+      event = await prisma.studio_events.findFirst({
+        where: {
+          promise_id: eventIdOrPromiseId,
+          studio_id: studio.id,
+        },
+        select: { id: true },
+      });
+    }
+
+    if (!event) {
+      return { success: false, error: "Evento no encontrado" };
+    }
+
+    return { success: true, data: event.id };
+  } catch (error) {
+    console.error('[getRealEventId] Error:', error);
+    return { success: false, error: "Error al obtener event_id" };
+  }
 }
 
 // Obtener datos del evento para el contrato
@@ -25,9 +72,17 @@ export async function getEventContractData(
       return { success: false, error: "Studio no encontrado" };
     }
 
+    // El eventId puede ser un promise_id, obtener el event_id real
+    const realEventIdResult = await getRealEventId(studioSlug, eventId);
+    if (!realEventIdResult.success || !realEventIdResult.data) {
+      return { success: false, error: realEventIdResult.error || "Evento no encontrado" };
+    }
+
+    const realEventId = realEventIdResult.data;
+
     const event = await prisma.studio_events.findFirst({
       where: {
-        id: eventId,
+        id: realEventId,
         studio_id: studio.id,
       },
       include: {
@@ -108,42 +163,6 @@ export async function getEventContractData(
     if (!event.cotizacion) {
       return { success: false, error: "El evento no tiene una cotización autorizada" };
     }
-
-    console.log('[getEventContractData] Datos obtenidos:', {
-      eventId: event.id,
-      eventDate: event.event_date,
-      promiseEventDate: event.promise?.event_date,
-      promiseName: event.promise?.name,
-      cotizacion: {
-        id: event.cotizacion.id,
-        name: event.cotizacion.name,
-        price: event.cotizacion.price,
-        discount: event.cotizacion.discount,
-        status: event.cotizacion.status,
-        selected_by_prospect: event.cotizacion.selected_by_prospect,
-        tyc_accepted: event.cotizacion.tyc_accepted,
-        condiciones_comerciales_id: event.cotizacion.condiciones_comerciales_id,
-        tiene_condiciones_comerciales: !!event.cotizacion.condiciones_comerciales,
-      },
-      condicionesComerciales: event.cotizacion.condiciones_comerciales ? {
-        id: event.cotizacion.condiciones_comerciales.id,
-        name: event.cotizacion.condiciones_comerciales.name,
-        description: event.cotizacion.condiciones_comerciales.description,
-        discount_percentage: event.cotizacion.condiciones_comerciales.discount_percentage,
-        advance_percentage: event.cotizacion.condiciones_comerciales.advance_percentage,
-        advance_type: event.cotizacion.condiciones_comerciales.advance_type,
-        advance_amount: event.cotizacion.condiciones_comerciales.advance_amount,
-      } : null,
-      itemsCount: event.cotizacion.cotizacion_items.length,
-      firstItem: event.cotizacion.cotizacion_items[0] ? {
-        name: event.cotizacion.cotizacion_items[0].name,
-        name_snapshot: event.cotizacion.cotizacion_items[0].name_snapshot,
-        unit_price: event.cotizacion.cotizacion_items[0].unit_price,
-        unit_price_snapshot: event.cotizacion.cotizacion_items[0].unit_price_snapshot,
-        subtotal: event.cotizacion.cotizacion_items[0].subtotal,
-        quantity: event.cotizacion.cotizacion_items[0].quantity,
-      } : null,
-    });
 
     // Formatear fecha - leer de promise.event_date primero, luego event.event_date
     const eventDate = event.promise?.event_date || event.event_date;
@@ -278,29 +297,6 @@ export async function getEventContractData(
       condicionesData,
     };
 
-    console.log('[getEventContractData] ContractData generado:', {
-      nombre_cliente: contractData.nombre_cliente,
-      fecha_evento: contractData.fecha_evento,
-      tipo_evento: contractData.tipo_evento,
-      nombre_evento: contractData.nombre_evento,
-      total_contrato: contractData.total_contrato,
-      condiciones_pago: contractData.condiciones_pago,
-      nombre_studio: contractData.nombre_studio,
-      servicios_incluidos_count: contractData.servicios_incluidos.length,
-      cotizacion_status: event.cotizacion.status,
-      cotizacion_selected_by_prospect: event.cotizacion.selected_by_prospect,
-      cotizacion_tyc_accepted: event.cotizacion.tyc_accepted,
-      tiene_condiciones_comerciales: !!event.cotizacion.condiciones_comerciales,
-      condiciones_comerciales_id: event.cotizacion.condiciones_comerciales_id,
-      condiciones_comerciales_name: event.cotizacion.condiciones_comerciales?.name,
-      condicionesData: condicionesData ? {
-        nombre: condicionesData.nombre,
-        tiene_descripcion: !!condicionesData.descripcion,
-        tiene_anticipo: condicionesData.porcentaje_anticipo !== undefined || condicionesData.monto_anticipo !== undefined,
-        tiene_descuento: condicionesData.porcentaje_descuento !== undefined,
-      } : null,
-    });
-
     return { success: true, data: contractData };
   } catch (error) {
     console.error("Error al obtener datos del evento:", error);
@@ -311,7 +307,8 @@ export async function getEventContractData(
 // Renderizar contenido del contrato con variables
 export async function renderContractContent(
   content: string,
-  eventData: EventContractData
+  eventData: EventContractData,
+  condicionesData?: CondicionesComercialesData
 ): Promise<ActionResponse<string>> {
   try {
     let rendered = content;
@@ -327,9 +324,39 @@ export async function renderContractContent(
       "@nombre_studio": eventData.nombre_studio,
     };
 
+    // También soportar sintaxis {variable}
+    const braceVariables: Record<string, string> = {
+      "{nombre_cliente}": eventData.nombre_cliente,
+      "{fecha_evento}": eventData.fecha_evento,
+      "{tipo_evento}": eventData.tipo_evento,
+      "{nombre_evento}": eventData.nombre_evento,
+      "{total_contrato}": eventData.total_contrato,
+      "{condiciones_pago}": eventData.condiciones_pago,
+      "{nombre_studio}": eventData.nombre_studio,
+    };
+
+    // Reemplazar variables @variable
     Object.entries(variables).forEach(([key, value]) => {
       rendered = rendered.replaceAll(key, value);
     });
+
+    // Reemplazar variables {variable}
+    Object.entries(braceVariables).forEach(([key, value]) => {
+      rendered = rendered.replaceAll(key, value);
+    });
+
+    // Renderizar bloque de condiciones comerciales
+    if (condicionesData) {
+      const condicionesHtml = renderCondicionesComercialesBlock(condicionesData);
+      rendered = rendered.replace("@condiciones_comerciales", condicionesHtml);
+      rendered = rendered.replace("{condiciones_comerciales}", condicionesHtml);
+    } else {
+      // Placeholder si no hay datos
+      const placeholder =
+        '<div class="p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg"><p class="text-zinc-500 italic">No hay condiciones comerciales disponibles</p></div>';
+      rendered = rendered.replace("@condiciones_comerciales", placeholder);
+      rendered = rendered.replace("{condiciones_comerciales}", placeholder);
+    }
 
     // Renderizar bloque especial de servicios
     if (rendered.includes("[SERVICIOS_INCLUIDOS]")) {

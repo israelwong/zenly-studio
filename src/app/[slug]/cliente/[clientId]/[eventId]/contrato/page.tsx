@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { Loader2, FileText, CheckCircle2, Download } from 'lucide-react';
@@ -26,13 +26,7 @@ export default function EventoContratoPage() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [eventData, setEventData] = useState<any>(null);
 
-  useEffect(() => {
-    if (isAuthenticated && cliente && eventId && slug) {
-      loadContract();
-    }
-  }, [isAuthenticated, cliente, eventId, slug]);
-
-  const loadContract = async () => {
+  const loadContract = useCallback(async () => {
     if (!slug || !eventId || !cliente?.id) return;
 
     setLoading(true);
@@ -50,11 +44,16 @@ export default function EventoContratoPage() {
           // Renderizar contenido
           const renderResult = await renderContractContent(
             contractResult.data.content,
-            dataResult.data
+            dataResult.data,
+            dataResult.data.condicionesData
           );
           if (renderResult.success && renderResult.data) {
             setRenderedContent(renderResult.data);
+          } else {
+            toast.error(renderResult.error || 'Error al renderizar el contrato');
           }
+        } else {
+          toast.error(dataResult.error || 'Error al obtener datos del evento');
         }
       } else {
         toast.error(contractResult.error || 'No hay contrato disponible para este evento');
@@ -65,7 +64,13 @@ export default function EventoContratoPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [slug, eventId, cliente?.id]);
+
+  useEffect(() => {
+    if (isAuthenticated && cliente && eventId && slug) {
+      loadContract();
+    }
+  }, [isAuthenticated, cliente, eventId, slug, loadContract]);
 
   const handleSign = async () => {
     if (!contract || !slug) return;

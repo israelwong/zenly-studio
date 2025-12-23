@@ -47,7 +47,8 @@ export function EventContractViewModal({
         // Renderizar contenido
         const renderResult = await renderContractContent(
           contract.content,
-          dataResult.data
+          dataResult.data,
+          dataResult.data.condicionesData
         );
         if (renderResult.success && renderResult.data) {
           setRenderedContent(renderResult.data);
