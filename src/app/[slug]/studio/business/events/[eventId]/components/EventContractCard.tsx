@@ -245,9 +245,14 @@ export function EventContractCard({
 
       <ContractTemplateSelectorModal
         isOpen={showTemplateModal}
-        onClose={() => setShowTemplateModal(false)}
+        onClose={async () => {
+          setShowTemplateModal(false);
+          await loadContract();
+          onContractUpdated?.();
+        }}
         onSelect={handleTemplateSelect}
         studioSlug={studioSlug}
+        eventId={eventId}
         eventTypeId={eventTypeId}
         isLoading={false}
       />

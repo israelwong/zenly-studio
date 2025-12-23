@@ -94,12 +94,13 @@ export function ZenDialog({
     }
   };
 
+  // Asegurar que el overlay esté debajo del contenido
   const overlayZIndex = zIndex;
   const contentZIndex = zIndex + 1;
 
   const modalContent = (
     <>
-      {/* Overlay separado - SIEMPRE bloquea clics */}
+      {/* Overlay separado - DEBE estar debajo del contenido (z-index menor) */}
       <div
         className={cn(
           "fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-200",
@@ -114,11 +115,10 @@ export function ZenDialog({
           if (closeOnClickOutside && e.target === e.currentTarget) {
             onClose();
           }
-          // Si no, simplemente bloquear el clic (no hacer nada)
-          e.stopPropagation();
+          // No hacer stopPropagation para permitir que dropdowns dentro del modal funcionen
         }}
       />
-      {/* Contenido del modal */}
+      {/* Contenido del modal - DEBE estar encima del overlay (z-index mayor) */}
       <div
         className={cn(
           "fixed inset-0 flex items-center justify-center transition-all duration-200",
@@ -141,12 +141,28 @@ export function ZenDialog({
           )}
           style={{
             pointerEvents: 'auto',
-            zIndex: contentZIndex + 1,
-            isolation: 'isolate'
+            zIndex: 1,
+            position: 'relative'
           }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            // No bloquear eventos de dropdowns dentro del modal
+            const target = e.target as HTMLElement;
+            if (!target.closest('[role="menu"]') && !target.closest('[data-radix-dropdown-menu-trigger]')) {
+              e.stopPropagation();
+            }
+          }}
+          onMouseDown={(e) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest('[role="menu"]') && !target.closest('[data-radix-dropdown-menu-trigger]')) {
+              e.stopPropagation();
+            }
+          }}
+          onPointerDown={(e) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest('[role="menu"]') && !target.closest('[data-radix-dropdown-menu-trigger]')) {
+              e.stopPropagation();
+            }
+          }}
         >
           {/* Header - Solo mostrar si hay título */}
           {title && (

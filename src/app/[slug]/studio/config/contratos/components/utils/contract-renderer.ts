@@ -82,7 +82,7 @@ export function renderCotizacionBlock(
 export function renderCondicionesComercialesBlock(
   condiciones: CondicionesComercialesData
 ): string {
-  let html = '<div class="condiciones-comerciales space-y-4">';
+  let html = '<div class="condiciones-comerciales space-y-4 p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg">';
 
   html += `<h3 class="text-lg font-semibold text-zinc-200 mb-3">${condiciones.nombre}</h3>`;
 
@@ -92,30 +92,77 @@ export function renderCondicionesComercialesBlock(
 
   html += '<div class="detalles space-y-3">';
 
-  // Anticipo
-  if (condiciones.porcentaje_anticipo !== undefined) {
-    if (condiciones.tipo_anticipo === "percentage") {
-      html += `<p class="text-zinc-300">`;
-      html += `<span class="font-medium">Anticipo:</span> `;
-      html += `${condiciones.porcentaje_anticipo}%`;
-      html += `</p>`;
-    } else if (condiciones.monto_anticipo !== undefined) {
-      const montoFormateado = new Intl.NumberFormat("es-MX", {
+  // Mostrar cálculo completo si hay totales
+  if (condiciones.total_contrato !== undefined && condiciones.total_final !== undefined) {
+    html += '<div class="calculo-total space-y-2 mb-4 pt-3 border-t border-zinc-800">';
+    
+    // Total del contrato
+    const totalContratoFormateado = new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(condiciones.total_contrato);
+    html += `<div class="flex justify-between items-center">`;
+    html += `<span class="text-zinc-400">Total del contrato:</span>`;
+    html += `<span class="text-zinc-300 font-medium">${totalContratoFormateado}</span>`;
+    html += `</div>`;
+
+    // Descuento aplicado
+    if (condiciones.descuento_aplicado !== undefined && condiciones.descuento_aplicado > 0) {
+      const descuentoFormateado = new Intl.NumberFormat("es-MX", {
         style: "currency",
         currency: "MXN",
-      }).format(condiciones.monto_anticipo);
-      html += `<p class="text-zinc-300">`;
-      html += `<span class="font-medium">Anticipo:</span> ${montoFormateado}`;
-      html += `</p>`;
+      }).format(condiciones.descuento_aplicado);
+      const porcentajeDescuento = condiciones.porcentaje_descuento 
+        ? ` (${condiciones.porcentaje_descuento}%)`
+        : '';
+      html += `<div class="flex justify-between items-center text-emerald-400">`;
+      html += `<span>Descuento${porcentajeDescuento}:</span>`;
+      html += `<span class="font-medium">-${descuentoFormateado}</span>`;
+      html += `</div>`;
     }
+
+    // Total final
+    const totalFinalFormateado = new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(condiciones.total_final);
+    html += `<div class="flex justify-between items-center pt-2 border-t border-zinc-800">`;
+    html += `<span class="text-zinc-200 font-semibold">Total a pagar:</span>`;
+    html += `<span class="text-emerald-400 font-bold text-lg">${totalFinalFormateado}</span>`;
+    html += `</div>`;
+    html += '</div>';
   }
 
-  // Descuento
-  if (condiciones.porcentaje_descuento !== undefined) {
-    html += `<p class="text-zinc-300">`;
-    html += `<span class="font-medium">Descuento:</span> `;
-    html += `${condiciones.porcentaje_descuento}%`;
-    html += `</p>`;
+  // Anticipo
+  if (condiciones.monto_anticipo !== undefined && condiciones.monto_anticipo > 0) {
+    const montoAnticipoFormateado = new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(condiciones.monto_anticipo);
+    
+    html += '<div class="anticipo pt-3 border-t border-zinc-800">';
+    html += `<div class="flex justify-between items-center mb-2">`;
+    html += `<span class="text-zinc-300 font-medium">Anticipo`;
+    if (condiciones.porcentaje_anticipo && condiciones.tipo_anticipo === "percentage") {
+      html += ` (${condiciones.porcentaje_anticipo}%)`;
+    }
+    html += `:</span>`;
+    html += `<span class="text-emerald-400 font-semibold">${montoAnticipoFormateado}</span>`;
+    html += `</div>`;
+    
+    // Restante a pagar
+    if (condiciones.total_final !== undefined) {
+      const restante = condiciones.total_final - condiciones.monto_anticipo;
+      const restanteFormateado = new Intl.NumberFormat("es-MX", {
+        style: "currency",
+        currency: "MXN",
+      }).format(restante);
+      html += `<div class="flex justify-between items-center mt-2 pt-2 border-t border-zinc-800/50">`;
+      html += `<span class="text-zinc-400">Restante a pagar:</span>`;
+      html += `<span class="text-zinc-300 font-medium">${restanteFormateado}</span>`;
+      html += `</div>`;
+    }
+    html += '</div>';
   }
 
   // Métodos de pago
@@ -123,7 +170,7 @@ export function renderCondicionesComercialesBlock(
     condiciones.condiciones_metodo_pago &&
     condiciones.condiciones_metodo_pago.length > 0
   ) {
-    html += `<div class="metodos-pago mt-4">`;
+    html += `<div class="metodos-pago mt-4 pt-3 border-t border-zinc-800">`;
     html += `<p class="font-medium text-zinc-300 mb-2">Métodos de Pago:</p>`;
     html += `<ul class="list-disc list-inside space-y-1 text-zinc-400 ml-4">`;
     condiciones.condiciones_metodo_pago.forEach((metodo) => {

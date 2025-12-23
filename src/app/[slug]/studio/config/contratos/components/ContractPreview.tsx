@@ -40,71 +40,90 @@ export function ContractPreview({
       <ZenCardContent className="p-4 flex-1 overflow-y-auto relative z-0">
         <style dangerouslySetInnerHTML={{
           __html: `
+          .contract-preview {
+            color: rgb(161 161 170);
+            font-size: 0.875rem;
+            line-height: 1.5;
+          }
           .contract-preview br {
             display: block;
-            margin: 0 !important;
-            padding: 0 !important;
-            line-height: 1.2 !important;
-            height: 0 !important;
+            margin: 0;
+            padding: 0;
+            line-height: 1.2;
+            height: 0;
             content: "";
           }
-          .contract-preview h1 + *,
-          .contract-preview h2 + *,
-          .contract-preview h3 + *,
-          .contract-preview h1 + p,
-          .contract-preview h2 + p,
-          .contract-preview h3 + p,
-          .contract-preview h1 + ul,
-          .contract-preview h2 + ul,
-          .contract-preview h3 + ul,
-          .contract-preview h1 + ol,
-          .contract-preview h2 + ol,
-          .contract-preview h3 + ol,
-          .contract-preview h1 + div,
-          .contract-preview h2 + div,
-          .contract-preview h3 + div {
-            margin-top: 0 !important;
-            padding-top: 0 !important;
-          }
-          .contract-preview ul {
-            list-style-position: outside !important;
-            padding-left: 1.5rem !important;
-          }
-          .contract-preview ol {
-            list-style-position: outside !important;
-            padding-left: 1.5rem !important;
-          }
-          .contract-preview ul li {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            padding-left: 0.5rem !important;
+          .contract-preview h1 {
+            font-size: 1.5rem !important;
+            font-weight: 700 !important;
             line-height: 1.2 !important;
-            list-style-type: disc !important;
-            list-style-position: outside !important;
-            display: list-item !important;
+            margin-top: 1.5rem !important;
+            margin-bottom: 1rem !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding: 0 !important;
+            color: rgb(244, 244, 245) !important;
+            text-align: left !important;
+            text-transform: uppercase;
           }
-          .contract-preview ol li {
+          .contract-preview h1:first-child {
             margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            padding-left: 0.5rem !important;
-            line-height: 1.2 !important;
-            list-style-type: decimal !important;
-            list-style-position: outside !important;
-            display: list-item !important;
+          }
+          .contract-preview h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            color: rgb(244 244 245);
+          }
+          .contract-preview h3 {
+            font-size: 1.125rem;
+            font-weight: 500;
+            margin-top: 0.75rem;
+            margin-bottom: 0.5rem;
+            color: rgb(212 212 216);
+          }
+          .contract-preview p {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+            color: rgb(161 161 170);
           }
           .contract-preview ul,
           .contract-preview ol {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
+            list-style-position: outside;
+            padding-left: 1.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            color: rgb(161 161 170);
           }
-          .contract-preview p {
-            line-height: 1.6 !important;
+          .contract-preview ul {
+            list-style-type: disc;
+          }
+          .contract-preview ol {
+            list-style-type: decimal;
+          }
+          .contract-preview ul li,
+          .contract-preview ol li {
+            margin-top: 0.25rem;
+            margin-bottom: 0.25rem;
+            padding-left: 0.5rem;
+            line-height: 1.5;
+            display: list-item;
+          }
+          .contract-preview strong {
+            font-weight: 600;
+            color: rgb(228 228 231);
+          }
+          .contract-preview em {
+            font-style: italic;
+            color: rgb(113 113 122);
+          }
+          .contract-preview blockquote {
+            margin: 0.5rem 0;
+            padding-left: 1rem;
+            border-left: 2px solid rgb(63 63 70);
+            color: rgb(161 161 170);
           }
           .contract-preview [class*="copy"],
           .contract-preview [class*="Copy"],
@@ -119,23 +138,7 @@ export function ContractPreview({
           }
         `}} />
         <div
-          className="contract-preview prose prose-invert prose-zinc max-w-none
-            prose-headings:text-zinc-100
-            prose-h1:text-2xl prose-h1:font-bold prose-h1:mb-0 prose-h1:mt-0 prose-h1:uppercase
-            prose-h2:text-xl prose-h2:font-semibold prose-h2:mb-0 prose-h2:mt-0 prose-h2:flex prose-h2:items-center
-            prose-h3:text-lg prose-h3:font-medium prose-h3:text-zinc-300 prose-h3:mb-0 prose-h3:mt-0
-            prose-p:text-zinc-400 prose-p:mb-1 prose-p:mt-0 prose-p:leading-loose
-            prose-ul:list-disc prose-ul:list-outside prose-ul:space-y-0 prose-ul:text-zinc-400 prose-ul:mb-0 prose-ul:mt-0 prose-ul:pl-6
-            prose-ol:list-decimal prose-ol:list-outside prose-ol:space-y-0 prose-ol:text-zinc-400 prose-ol:mb-0 prose-ol:mt-0 prose-ol:pl-6
-            prose-li:mb-0 prose-li:mt-0
-            prose-strong:text-zinc-200 prose-strong:font-semibold
-            prose-em:text-zinc-500 prose-em:italic
-            [&>div]:mb-0 [&>div]:mt-0
-            [&_h1+*]:mt-0 [&_h2+*]:mt-0 [&_h3+*]:mt-0
-            scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
-          style={{
-            lineHeight: '1.2',
-          }}
+          className="contract-preview scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
           dangerouslySetInnerHTML={{ __html: renderedContent }}
         />
 

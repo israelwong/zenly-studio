@@ -43,8 +43,13 @@ export function ContractTemplateList({
       {templates.map((template) => (
         <div
           key={template.id}
+          onClick={() => {
+            if (onSelect) {
+              onSelect(template.id);
+            }
+          }}
           className={`
-            w-full p-4 rounded-lg border transition-all
+            w-full p-4 rounded-lg border transition-all cursor-pointer
             ${selectedTemplateId === template.id
               ? 'border-emerald-500 bg-emerald-950/20'
               : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 hover:bg-zinc-900'
@@ -73,21 +78,20 @@ export function ContractTemplateList({
             </div>
             <div className="flex items-center gap-2">
               {onSelect && (
-                <button
-                  onClick={() => onSelect(template.id)}
+                <div
                   className={`
-                    p-2 rounded transition-colors
+                    p-2 rounded transition-colors pointer-events-none
                     ${selectedTemplateId === template.id
                       ? 'text-emerald-400'
-                      : 'text-zinc-400 hover:text-zinc-300'
+                      : 'text-zinc-400'
                     }
                   `}
                 >
                   <Check className="h-5 w-5" />
-                </button>
+                </div>
               )}
               {showActions && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                   {onEdit && (
                     <ZenButton
                       variant="ghost"

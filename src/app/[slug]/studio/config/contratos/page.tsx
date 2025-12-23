@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { FileText, Plus, Loader2 } from 'lucide-react';
+import { FileText, Plus } from 'lucide-react';
+import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { createContractTemplate } from '@/lib/actions/studio/business/contracts';
 import { DEFAULT_CONTRACT_TEMPLATE } from '@/lib/constants/contract-template';
@@ -210,8 +211,59 @@ export default function ContratosPage() {
             </div>
           </ZenCardHeader>
           <ZenCardContent className="p-6">
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-zinc-600" />
+            <div className="relative rounded-lg border border-zinc-800 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="w-8 py-3 px-4"></th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-zinc-400 uppercase w-[200px] min-w-[200px]">
+                        Nombre
+                      </th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-zinc-400 uppercase">
+                        Descripción
+                      </th>
+                      <th className="text-center py-3 px-4 text-xs font-semibold text-zinc-400 uppercase">
+                        Estado
+                      </th>
+                      <th className="text-center py-3 px-4 text-xs font-semibold text-zinc-400 uppercase">
+                        Versión
+                      </th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-zinc-400 uppercase">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <tr key={i} className="border-b border-zinc-800/50">
+                        <td className="py-4 px-4">
+                          <div className="h-5 w-5 rounded bg-zinc-700 animate-pulse" />
+                        </td>
+                        <td className="py-4 px-4 w-[200px] min-w-[200px]">
+                          <div className="h-5 w-32 rounded bg-zinc-700 animate-pulse" />
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="h-4 w-48 rounded bg-zinc-700 animate-pulse" />
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="h-6 w-16 rounded bg-zinc-700 animate-pulse" />
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <div className="h-4 w-8 rounded bg-zinc-700 animate-pulse mx-auto" />
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center justify-end">
+                            <div className="h-8 w-8 rounded bg-zinc-700 animate-pulse" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </ZenCardContent>
         </ZenCard>

@@ -35,13 +35,35 @@ export async function getContractTemplates(
       return { success: false, error: "Studio no encontrado" };
     }
 
+    // Si hay eventTypeId, incluir plantillas específicas del tipo Y plantillas generales (sin event_type_id)
+    const whereClause: any = {
+      studio_id: studio.id,
+      ...(filters?.isActive !== undefined && { is_active: filters.isActive }),
+    };
+
+    // Agregar filtro de eventTypeId: incluir específicas del tipo Y generales (null)
+    if (filters?.eventTypeId) {
+      whereClause.OR = [
+        { event_type_id: filters.eventTypeId },
+        { event_type_id: null },
+      ];
+    }
+
+    console.log('[getContractTemplates] Query:', {
+      studioSlug,
+      studioId: studio.id,
+      filters,
+      whereClause,
+    });
+
     const templates = await prisma.studio_contract_templates.findMany({
-      where: {
-        studio_id: studio.id,
-        ...(filters?.eventTypeId && { event_type_id: filters.eventTypeId }),
-        ...(filters?.isActive !== undefined && { is_active: filters.isActive }),
-      },
+      where: whereClause,
       orderBy: [{ is_default: "desc" }, { created_at: "desc" }],
+    });
+
+    console.log('[getContractTemplates] Result:', {
+      count: templates.length,
+      templates: templates.map(t => ({ id: t.id, name: t.name, is_active: t.is_active, is_default: t.is_default })),
     });
 
     return { success: true, data: templates as ContractTemplate[] };
@@ -334,10 +356,9 @@ export async function deleteContractTemplate(
       return { success: false, error: "No puedes eliminar la única plantilla activa" };
     }
 
-    // Desactivar en lugar de eliminar
-    await prisma.studio_contract_templates.update({
+    // Eliminar físicamente la plantilla
+    await prisma.studio_contract_templates.delete({
       where: { id: templateId },
-      data: { is_active: false },
     });
 
     revalidatePath(`/${studioSlug}/studio/config/contratos`);

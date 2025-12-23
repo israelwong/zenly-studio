@@ -1,18 +1,23 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { Eye, Code } from "lucide-react";
 import { ZenDialog } from "@/components/ui/zen/modals/ZenDialog";
 import { ZenButton, ZenInput, ZenLabel, ZenSwitch } from "@/components/ui/zen";
 import {
   ContractEditor,
   ContractEditorRef,
   ContractEditorToolbar,
+  ContractPreview,
   type ContractVariable,
   parseVariables,
 } from "@/app/[slug]/studio/config/contratos/components";
 import { ContractVariables } from "@/components/ui/zen";
 import { CONTRACT_VARIABLES } from "@/types/contracts";
+import { getEventContractData } from "@/lib/actions/studio/business/contracts";
+import type { EventContractData } from "@/types/contracts";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export type ContractEditorModalMode =
   | "create-template"
@@ -76,6 +81,9 @@ export function ContractEditorModal({
   const [name, setName] = useState(initialName);
   const [templateDescription, setTemplateDescription] = useState(initialDescription);
   const [isDefault, setIsDefault] = useState(initialIsDefault);
+  const [eventData, setEventData] = useState<EventContractData | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [loadingEventData, setLoadingEventData] = useState(false);
   const editorRef = useRef<ContractEditorRef>(null);
   const modalContentRef = useRef<HTMLDivElement>(null);
 
@@ -102,14 +110,60 @@ export function ContractEditorModal({
     }
   }, [isOpen]);
 
+  // Cargar datos del evento para preview
+  useEffect(() => {
+    if (isOpen && eventId && (mode === "create-event-contract" || mode === "edit-event-contract")) {
+      loadEventData();
+    }
+  }, [isOpen, eventId, mode, studioSlug]);
+
+  const loadEventData = async () => {
+    if (!eventId) return;
+    setLoadingEventData(true);
+    try {
+      console.log('[ContractEditorModal] Cargando datos del evento:', { studioSlug, eventId, mode });
+      const result = await getEventContractData(studioSlug, eventId);
+      console.log('[ContractEditorModal] Resultado:', {
+        success: result.success,
+        hasData: !!result.data,
+        data: result.data ? {
+          fecha_evento: result.data.fecha_evento,
+          condiciones_pago: result.data.condiciones_pago,
+          nombre_cliente: result.data.nombre_cliente,
+          servicios_count: result.data.servicios_incluidos.length,
+        } : null,
+        error: result.error,
+      });
+      if (result.success && result.data) {
+        setEventData(result.data);
+      } else {
+        toast.error(result.error || "Error al cargar datos del evento");
+      }
+    } catch (error) {
+      console.error("Error loading event data:", error);
+      toast.error("Error al cargar datos del evento");
+    } finally {
+      setLoadingEventData(false);
+    }
+  };
+
   // Resetear estados cuando se abre/cierra o cuando cambian los props iniciales
   React.useEffect(() => {
     if (isOpen) {
       const newContent = initialContent || templateContent || "";
+      console.log('[ContractEditorModal] Inicializando editor:', {
+        mode,
+        initialContentLength: initialContent?.length || 0,
+        templateContentLength: templateContent?.length || 0,
+        newContentLength: newContent.length,
+        newContentPreview: newContent.substring(0, 200),
+        hasFechaEvento: newContent.includes('@fecha_evento') || newContent.includes('fecha_evento'),
+      });
       setContent(newContent);
       setName(initialName);
       setTemplateDescription(initialDescription);
       setIsDefault(initialIsDefault);
+      setShowPreview(false);
 
       // Si el editor ya está montado, forzar actualización del contenido
       // Usar un timeout más largo para asegurar que el DOM esté listo
@@ -152,13 +206,27 @@ export function ContractEditorModal({
   );
 
   const handleSave = async () => {
+    // Obtener el contenido actual del editor directamente usando el método getContent
+    let currentContent = content;
+    if (editorRef.current && editorRef.current.getContent) {
+      currentContent = editorRef.current.getContent();
+    }
+
+    console.log('[ContractEditorModal] Guardando:', {
+      mode,
+      contentLength: currentContent.length,
+      contentPreview: currentContent.substring(0, 200),
+      hasFechaEvento: currentContent.includes('@fecha_evento') || currentContent.includes('fecha_evento'),
+      contentEnd: currentContent.substring(Math.max(0, currentContent.length - 200)),
+    });
+
     const data: {
       content: string;
       name?: string;
       description?: string;
       is_default?: boolean;
     } = {
-      content,
+      content: currentContent,
     };
 
     if (mode === "create-template" || mode === "edit-template") {
@@ -253,6 +321,7 @@ export function ContractEditorModal({
       cancelLabel={cancelLabel}
       isLoading={isLoading}
       closeOnClickOutside={false}
+      zIndex={10070}
     >
       {/* Wrapper para anular el overflow del ZenCardContent y crear scrolls independientes */}
       <div
@@ -311,18 +380,66 @@ export function ContractEditorModal({
               </div>
             )}
 
-            {/* Variables Panel con header sticky */}
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="sticky top-0 z-10 p-6 pb-4 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 shrink-0">
-                <h3 className="text-sm font-semibold text-zinc-300 mb-1">Variables Disponibles</h3>
-                <p className="text-xs text-zinc-500">Selecciona una variable para insertar en el editor</p>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                <div className="p-6 pt-4">
-                  <ContractVariables showCard={false} onVariableClick={handleVariableClick} />
+            {/* Toggle para event-contract: Variables o Preview */}
+            {(mode === "create-event-contract" || mode === "edit-event-contract") ? (
+              <>
+                <div className="sticky top-0 z-10 p-4 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <ZenButton
+                      variant={showPreview ? "ghost" : "default"}
+                      size="sm"
+                      onClick={() => setShowPreview(false)}
+                      className="flex-1"
+                    >
+                      <Code className="h-4 w-4 mr-2" />
+                      Variables
+                    </ZenButton>
+                    <ZenButton
+                      variant={showPreview ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setShowPreview(true)}
+                      className="flex-1"
+                      disabled={loadingEventData || !eventData}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Vista Previa
+                    </ZenButton>
+                  </div>
+                </div>
+                <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+                  {showPreview ? (
+                    <div className="p-4 h-full">
+                      <ContractPreview
+                        content={content}
+                        eventData={eventData || undefined}
+                        className="h-full"
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-6 pt-4">
+                      <div className="mb-4">
+                        <h3 className="text-sm font-semibold text-zinc-300 mb-1">Variables Disponibles</h3>
+                        <p className="text-xs text-zinc-500">Selecciona una variable para insertar en el editor</p>
+                      </div>
+                      <ContractVariables showCard={false} onVariableClick={handleVariableClick} />
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Variables Panel con header sticky para templates */
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="sticky top-0 z-10 p-6 pb-4 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 shrink-0">
+                  <h3 className="text-sm font-semibold text-zinc-300 mb-1">Variables Disponibles</h3>
+                  <p className="text-xs text-zinc-500">Selecciona una variable para insertar en el editor</p>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  <div className="p-6 pt-4">
+                    <ContractVariables showCard={false} onVariableClick={handleVariableClick} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

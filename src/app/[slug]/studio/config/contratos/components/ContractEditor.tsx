@@ -19,6 +19,7 @@ interface ContractEditorProps {
 export interface ContractEditorRef {
   insertVariableAtCursor: (variable: string) => void;
   setContent: (content: string) => void;
+  getContent: () => string;
 }
 
 export const ContractEditor = forwardRef<ContractEditorRef, ContractEditorProps>(({
@@ -167,9 +168,40 @@ export const ContractEditor = forwardRef<ContractEditorRef, ContractEditorProps>
     }, 50);
   }, []);
 
+  const getContent = useCallback(() => {
+    if (!editorRef.current) return '';
+    
+    // Extraer HTML del editor directamente (preservando todos los formatos)
+    let html = editorRef.current.innerHTML;
+    
+    // Limpiar estilos inline no deseados que el navegador pueda agregar
+    html = cleanInlineStyles(html);
+    
+    // Crear un elemento temporal para procesar
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // Reemplazar badges con su texto plano (preservando el HTML alrededor)
+    const badges = tempDiv.querySelectorAll('.variable-badge');
+    badges.forEach((badge) => {
+      const variable = badge.getAttribute('data-variable') || '';
+      const textNode = document.createTextNode(variable);
+      badge.parentNode?.replaceChild(textNode, badge);
+    });
+    
+    // Obtener HTML final (con formatos preservados pero variables como texto)
+    let finalHtml = tempDiv.innerHTML;
+    
+    // Limpiar saltos de línea entre tags de bloque y entre <li>
+    finalHtml = cleanHtmlContent(finalHtml);
+    
+    return finalHtml;
+  }, []);
+
   useImperativeHandle(ref, () => ({
     insertVariableAtCursor,
     setContent: setContentMethod,
+    getContent,
   }));
 
   const cleanHtmlContent = (html: string) => {

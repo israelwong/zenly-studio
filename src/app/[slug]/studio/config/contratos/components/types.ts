@@ -33,6 +33,9 @@ export interface CondicionesComercialesData {
   tipo_anticipo?: "percentage" | "fixed_amount";
   monto_anticipo?: number;
   porcentaje_descuento?: number;
+  total_contrato?: number; // Total antes de descuento
+  total_final?: number; // Total después de descuento
+  descuento_aplicado?: number; // Monto del descuento aplicado
   condiciones_metodo_pago?: Array<{
     metodo_pago: string;
     descripcion?: string;

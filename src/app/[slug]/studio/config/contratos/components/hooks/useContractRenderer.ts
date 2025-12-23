@@ -32,14 +32,10 @@ export function useContractRenderer({
     // Si el contenido es HTML, preservar saltos de línea entre elementos
     let rendered = content;
 
-    // Si es HTML, convertir saltos de línea entre tags en <br>
-    if (/<[^>]+>/.test(rendered)) {
-      // EXCEPTO entre </li> y <li> (items de lista no deben tener salto de línea entre ellos)
-      // Primero, preservar los saltos de línea entre </li> y <li> sin convertirlos
-      rendered = rendered.replace(/(<\/li>)\s*\n\s*(<li[^>]*>)/gi, '$1$2');
-      // Ahora convertir el resto de saltos de línea entre tags en <br>
-      rendered = rendered.replace(/>\s*\n\s*</g, '><br><');
-    } else {
+    // Si es HTML, NO convertir saltos de línea entre tags en <br>
+    // El HTML ya tiene su estructura y los saltos de línea entre tags no deben convertirse
+    // Solo convertir saltos de línea dentro de elementos de texto
+    if (!/<[^>]+>/.test(rendered)) {
       // Si es texto plano, convertir saltos de línea a <br>
       rendered = rendered.replace(/\n/g, '<br>');
     }
@@ -115,13 +111,24 @@ export function useContractRenderer({
       "{nombre_studio}": eventData.nombre_studio,
     };
 
+    // Reemplazar variables @variable
     Object.entries(variables).forEach(([key, value]) => {
-      rendered = rendered.replaceAll(key, value);
+      // Usar regex para reemplazar incluso si hay espacios alrededor
+      const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      rendered = rendered.replace(regex, value);
     });
 
+    // Reemplazar variables {variable}
     Object.entries(braceVariables).forEach(([key, value]) => {
-      rendered = rendered.replaceAll(key, value);
+      // Usar regex para reemplazar incluso si hay espacios alrededor
+      const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      rendered = rendered.replace(regex, value);
     });
+    
+    // Debug: verificar si @fecha_evento fue reemplazado
+    if (rendered.includes("@fecha_evento") || rendered.includes("{fecha_evento}")) {
+      console.warn('[useContractRenderer] Variable fecha_evento no reemplazada. Contenido:', rendered.substring(0, 500));
+    }
 
     // Renderizar bloque de cotización
     if (cotizacionData) {
@@ -158,16 +165,17 @@ export function useContractRenderer({
     // Limitar múltiples <br> seguidos a máximo 1 (saltos de línea simples)
     rendered = rendered.replace(/(<br>\s*){2,}/g, '<br>');
 
-    // Agregar espaciado mínimo entre bloques HTML solo si no hay ya un <br>
+    // NO agregar <br> entre elementos HTML - los márgenes CSS ya manejan el espaciado
+    // Solo limpiar <br> que puedan estar entre elementos de bloque
     rendered = rendered
-      .replace(/<\/p>(?!<br>)\s*<p/g, '</p><br><p')
-      .replace(/<\/h1>(?!<br>)\s*<h2/g, '</h1><br><h2')
-      .replace(/<\/h2>(?!<br>)\s*<h3/g, '</h2><br><h3')
-      .replace(/<\/h3>(?!<br>)\s*<p/g, '</h3><br><p')
-      .replace(/<\/ul>(?!<br>)\s*<h/g, '</ul><br><h')
-      .replace(/<\/ol>(?!<br>)\s*<h/g, '</ol><br><h')
-      // Solo un <br> para bloques especiales
-      .replace(/(<\/div>)\s*(<div class="(?:cotizacion|condiciones))/g, '$1<br>$2');
+      .replace(/<\/h1>\s*<br>\s*<h2/g, '</h1><h2')
+      .replace(/<\/h2>\s*<br>\s*<h3/g, '</h2><h3')
+      .replace(/<\/h3>\s*<br>\s*<p/g, '</h3><p')
+      .replace(/<\/h1>\s*<br>\s*<p/g, '</h1><p')
+      .replace(/<\/h2>\s*<br>\s*<p/g, '</h2><p')
+      .replace(/<\/ul>\s*<br>\s*<h/g, '</ul><h')
+      .replace(/<\/ol>\s*<br>\s*<h/g, '</ol><h')
+      .replace(/<\/p>\s*<br>\s*<h/g, '</p><h');
 
     return rendered;
   }, [content, eventData, cotizacionData, condicionesData, showVariables]);
@@ -191,15 +199,8 @@ function renderServiciosBlock(servicios: any[]): string {
     `;
 
     categoria.servicios.forEach((servicio: any) => {
-      const precio =
-        servicio.precio > 0
-          ? ` - ${new Intl.NumberFormat("es-MX", {
-            style: "currency",
-            currency: "MXN",
-          }).format(servicio.precio)}`
-          : "";
-
-      html += `<li>${servicio.nombre}${precio}</li>`;
+      // NO mostrar precios en el preview
+      html += `<li>${servicio.nombre}</li>`;
 
       if (servicio.descripcion) {
         html += `<p class="text-sm text-zinc-500 ml-6">${servicio.descripcion}</p>`;
