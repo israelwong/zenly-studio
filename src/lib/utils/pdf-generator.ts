@@ -399,15 +399,130 @@ export async function generatePDFFromElement(
   const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
   if (!iframeDoc) throw new Error('Cannot access iframe document');
 
-  // Write minimal HTML without any stylesheets (exactamente como PaymentReceipt)
+  // Write HTML with professional styles for PDF
   iframeDoc.open();
   iframeDoc.write(`
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        body {
+          margin: 0;
+          padding: 40px 50px;
+          width: 210mm;
+          min-height: 297mm;
+          background: white;
+          color: #1a1a1a;
+          font-family: 'Georgia', 'Times New Roman', serif;
+          font-size: 11pt;
+          line-height: 1.7;
+        }
+        h1 {
+          font-size: 18pt;
+          font-weight: 700;
+          line-height: 1.3;
+          margin-top: 24pt;
+          margin-bottom: 12pt;
+          color: #000000;
+          text-transform: uppercase;
+          letter-spacing: 0.5pt;
+          page-break-after: avoid;
+        }
+        h1:first-child {
+          margin-top: 0;
+        }
+        h2 {
+          font-size: 14pt;
+          font-weight: 600;
+          margin-top: 18pt;
+          margin-bottom: 10pt;
+          color: #1a1a1a;
+          border-bottom: 1px solid #e5e5e5;
+          padding-bottom: 4pt;
+          page-break-after: avoid;
+        }
+        h3 {
+          font-size: 12pt;
+          font-weight: 600;
+          margin-top: 14pt;
+          margin-bottom: 8pt;
+          color: #2a2a2a;
+          page-break-after: avoid;
+        }
+        p {
+          margin-top: 8pt;
+          margin-bottom: 8pt;
+          line-height: 1.7;
+          color: #1a1a1a;
+          text-align: justify;
+          orphans: 3;
+          widows: 3;
+        }
+        p:empty {
+          display: none;
+        }
+        ul, ol {
+          margin-top: 10pt;
+          margin-bottom: 10pt;
+          padding-left: 24pt;
+          color: #1a1a1a;
+        }
+        ul {
+          list-style-type: disc;
+        }
+        ol {
+          list-style-type: decimal;
+        }
+        li {
+          margin-top: 4pt;
+          margin-bottom: 4pt;
+          line-height: 1.7;
+          padding-left: 4pt;
+        }
+        strong, b {
+          font-weight: 600;
+          color: #000000;
+        }
+        em, i {
+          font-style: italic;
+        }
+        blockquote {
+          margin: 12pt 0;
+          padding-left: 16pt;
+          border-left: 3px solid #d0d0d0;
+          color: #3a3a3a;
+          font-style: italic;
+        }
+        br {
+          line-height: 1.7;
+        }
+        hr {
+          border: none;
+          border-top: 1px solid #e5e5e5;
+          margin: 16pt 0;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 12pt 0;
+        }
+        table td, table th {
+          padding: 6pt;
+          border: 1px solid #e5e5e5;
+        }
+        table th {
+          background-color: #f5f5f5;
+          font-weight: 600;
+        }
+      </style>
     </head>
-    <body style="margin: 0; padding: 32px; width: 210mm; min-height: 297mm; background: white;">
+    <body>
       ${clone.innerHTML}
     </body>
     </html>

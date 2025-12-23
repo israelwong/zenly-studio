@@ -35,6 +35,10 @@ export function EventContractViewModal({
   useEffect(() => {
     if (isOpen && contract) {
       loadContractData();
+    } else if (!isOpen) {
+      // Resetear estados cuando se cierra el modal
+      setRenderedContent('');
+      setEventData(null);
     }
   }, [isOpen, contract, studioSlug, eventId]);
 
@@ -43,7 +47,7 @@ export function EventContractViewModal({
     // Crear un contenedor temporal para procesar el HTML
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
-    
+
     // Procesar todos los elementos
     const allElements = tempDiv.querySelectorAll('*');
     allElements.forEach((el) => {
@@ -51,7 +55,7 @@ export function EventContractViewModal({
       const textContent = htmlEl.textContent?.trim() || '';
       const innerHTML = htmlEl.innerHTML.trim();
       const tagName = htmlEl.tagName.toLowerCase();
-      
+
       // Si el elemento tiene textContent pero innerHTML está vacío o solo tiene espacios,
       // reconstruir el contenido
       if (textContent && (!innerHTML || /^\s*$/.test(innerHTML))) {
@@ -60,7 +64,7 @@ export function EventContractViewModal({
         const hasTextNodes = childNodes.some(
           (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
         );
-        
+
         if (hasTextNodes) {
           // Reconstruir el contenido del elemento
           if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'span', 'strong', 'b', 'em', 'i', 'blockquote'].includes(tagName)) {
@@ -69,7 +73,7 @@ export function EventContractViewModal({
         }
       }
     });
-    
+
     return tempDiv.innerHTML;
   };
 
@@ -84,7 +88,7 @@ export function EventContractViewModal({
             const htmlEl = el as HTMLElement;
             const textContent = htmlEl.textContent?.trim() || '';
             const innerHTML = htmlEl.innerHTML.trim();
-            
+
             // Si tiene textContent pero innerHTML está vacío, reconstruir
             if (textContent && (!innerHTML || /^\s*$/.test(innerHTML))) {
               const tagName = htmlEl.tagName.toLowerCase();
@@ -95,7 +99,7 @@ export function EventContractViewModal({
           });
         }
       }, 200);
-      
+
       return () => clearTimeout(timer);
     }
   }, [renderedContent]);
@@ -115,12 +119,21 @@ export function EventContractViewModal({
         );
         if (renderResult.success && renderResult.data) {
           setRenderedContent(renderResult.data);
+        } else {
+          // Si falla el renderizado, usar el contenido del contrato como fallback
+          const fallbackContent = contract.content.replace(/\n/g, '<br>');
+          setRenderedContent(fallbackContent || contract.content);
         }
       } else {
+        // Si no hay datos del evento, usar el contenido del contrato sin renderizar
+        const fallbackContent = contract.content.replace(/\n/g, '<br>');
+        setRenderedContent(fallbackContent || contract.content);
         toast.error(dataResult.error || "Error al cargar datos del evento");
       }
     } catch (error) {
-      console.error("Error loading contract data:", error);
+      // En caso de error, usar el contenido del contrato como fallback
+      const fallbackContent = contract.content.replace(/\n/g, '<br>');
+      setRenderedContent(fallbackContent || contract.content);
       toast.error("Error al cargar datos del contrato");
     } finally {
       setLoading(false);
@@ -128,19 +141,16 @@ export function EventContractViewModal({
   };
 
   const handleExportPDF = async () => {
-    if (!eventData || !renderedContent || !printableRef.current) {
-      toast.error("No hay datos del contrato disponibles");
+    if (!renderedContent || !printableRef.current) {
+      toast.error("No hay contenido disponible para exportar");
       return;
     }
 
     setIsExportingPDF(true);
     try {
-      // Esperar un momento para asegurar que el DOM se haya renderizado
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
       const filename = generateContractFilename(
-        eventData.nombre_evento,
-        eventData.nombre_cliente
+        eventData?.nombre_evento || 'Contrato',
+        eventData?.nombre_cliente || 'Cliente'
       );
 
       await generatePDFFromElement(printableRef.current, {
@@ -150,7 +160,6 @@ export function EventContractViewModal({
 
       toast.success("Contrato exportado a PDF correctamente");
     } catch (error) {
-      console.error("Error exporting PDF:", error);
       toast.error("Error al exportar PDF");
     } finally {
       setIsExportingPDF(false);
@@ -158,37 +167,50 @@ export function EventContractViewModal({
   };
 
   return (
-    <ZenDialog
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Contrato - Versión ${contract.version}`}
-      description={`Estado: ${contract.status === 'draft' ? 'Borrador' : contract.status === 'published' ? 'Publicado' : 'Firmado'}`}
-      maxWidth="5xl"
-      onCancel={onClose}
-      cancelLabel="Cerrar"
-      closeOnClickOutside={false}
-      footerLeftContent={
-        <ZenButton
-          variant="outline"
-          size="sm"
-          onClick={handleExportPDF}
-          disabled={true}
-          title="Funcionalidad temporalmente deshabilitada"
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Descargar PDF
-        </ZenButton>
-      }
-    >
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
-        </div>
-      ) : (
-        <>
-          <div className="h-[calc(90vh-200px)] min-h-[500px] overflow-y-auto">
-            <style dangerouslySetInnerHTML={{
-              __html: `
+    <>
+      <ZenDialog
+        isOpen={isOpen}
+        onClose={onClose}
+        title={`Contrato - Versión ${contract.version}`}
+        description={`Estado: ${contract.status === 'draft' ? 'Borrador' : contract.status === 'published' ? 'Publicado' : 'Firmado'}`}
+        maxWidth="5xl"
+        onCancel={onClose}
+        cancelLabel="Cerrar"
+        closeOnClickOutside={false}
+        footerLeftContent={
+          <ZenButton
+            variant="outline"
+            size="sm"
+            onClick={handleExportPDF}
+            disabled={isExportingPDF || loading || !renderedContent}
+            title={
+              loading
+                ? "Cargando datos..."
+                : !renderedContent
+                  ? "No hay contenido disponible"
+                  : isExportingPDF
+                    ? "Generando PDF..."
+                    : "Descargar PDF"
+            }
+          >
+            {isExportingPDF ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            Descargar PDF
+          </ZenButton>
+        }
+      >
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+          </div>
+        ) : (
+          <>
+            <div className="h-[calc(90vh-200px)] min-h-[500px] overflow-y-auto">
+              <style dangerouslySetInnerHTML={{
+                __html: `
               .contract-preview-modal {
                 color: rgb(161 161 170);
                 font-size: 0.875rem;
@@ -268,33 +290,35 @@ export function EventContractViewModal({
                 color: rgb(161 161 170);
               }
             `}} />
-            <div
-              className="contract-preview-modal"
-              dangerouslySetInnerHTML={{ __html: renderedContent || contract.content }}
-            />
-          </div>
-          {/* Hidden Printable Version - Sin clases Tailwind para PDF */}
-          {renderedContent && (
-            <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '210mm' }}>
               <div
-                ref={printableRef}
-                style={{
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                  padding: '32px',
-                  width: '210mm',
-                  minHeight: '297mm',
-                  fontFamily: 'Arial, sans-serif',
-                  fontSize: '14px',
-                  lineHeight: '1.6'
-                }}
-                dangerouslySetInnerHTML={{ __html: cleanHTMLContent(renderedContent) }}
+                className="contract-preview-modal"
+                dangerouslySetInnerHTML={{ __html: renderedContent || contract.content }}
               />
             </div>
-          )}
-        </>
+          </>
+        )}
+      </ZenDialog>
+
+      {/* Hidden Printable Version - Fuera del dialog para asegurar renderizado */}
+      {isOpen && renderedContent && (
+        <div style={{ position: 'fixed', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }}>
+          <div
+            ref={printableRef}
+            style={{
+              backgroundColor: '#ffffff',
+              color: '#000000',
+              padding: '32px',
+              width: '210mm',
+              minHeight: '297mm',
+              fontFamily: 'Arial, sans-serif',
+              fontSize: '14px',
+              lineHeight: '1.6'
+            }}
+            dangerouslySetInnerHTML={{ __html: renderedContent }}
+          />
+        </div>
       )}
-    </ZenDialog>
+    </>
   );
 }
 

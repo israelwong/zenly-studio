@@ -60,7 +60,6 @@ export default function EventoContratoPage() {
         toast.error(contractResult.error || 'No hay contrato disponible para este evento');
       }
     } catch (error) {
-      console.error('Error loading contract:', error);
       toast.error('Error al cargar el contrato');
     } finally {
       setLoading(false);
@@ -87,7 +86,6 @@ export default function EventoContratoPage() {
         toast.error(result.error || 'Error al firmar contrato');
       }
     } catch (error) {
-      console.error('Error signing contract:', error);
       toast.error('Error al firmar contrato');
     } finally {
       setIsSigning(false);
@@ -114,7 +112,6 @@ export default function EventoContratoPage() {
 
       toast.success('Contrato exportado a PDF correctamente');
     } catch (error) {
-      console.error('Error exporting PDF:', error);
       toast.error('Error al exportar PDF');
     } finally {
       setIsExportingPDF(false);

@@ -124,11 +124,6 @@ export function useContractRenderer({
       const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       rendered = rendered.replace(regex, value);
     });
-    
-    // Debug: verificar si @fecha_evento fue reemplazado
-    if (rendered.includes("@fecha_evento") || rendered.includes("{fecha_evento}")) {
-      console.warn('[useContractRenderer] Variable fecha_evento no reemplazada. Contenido:', rendered.substring(0, 500));
-    }
 
     // Renderizar bloque de cotización
     if (cotizacionData) {
