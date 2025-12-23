@@ -8,6 +8,9 @@ import { Menu } from "lucide-react";
 interface ZenSidebarProps {
   children: React.ReactNode;
   className?: string;
+  isHovered?: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 interface ZenSidebarProviderProps {
@@ -87,17 +90,37 @@ const ZenSidebarContext = React.createContext<{
   setIsOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   isMobile: boolean;
+  isCollapsed: boolean;
+  setIsCollapsed: (collapsed: boolean) => void;
+  toggleCollapse: () => void;
 }>({
   isOpen: false,
   setIsOpen: () => { },
   toggleSidebar: () => { },
   isMobile: false,
+  isCollapsed: false,
+  setIsCollapsed: () => { },
+  toggleCollapse: () => { },
 });
 
 // Provider del sidebar
 export function ZenSidebarProvider({ children, defaultOpen = false }: ZenSidebarProviderProps) {
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
   const [isMobile, setIsMobile] = React.useState(false);
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
+
+  // Cargar estado de collapsed desde localStorage
+  React.useEffect(() => {
+    const saved = localStorage.getItem('zen-sidebar-collapsed');
+    if (saved !== null) {
+      setIsCollapsed(JSON.parse(saved));
+    }
+  }, []);
+
+  // Guardar estado de collapsed en localStorage
+  React.useEffect(() => {
+    localStorage.setItem('zen-sidebar-collapsed', JSON.stringify(isCollapsed));
+  }, [isCollapsed]);
 
   // Detectar si es mobile
   React.useEffect(() => {
@@ -128,8 +151,20 @@ export function ZenSidebarProvider({ children, defaultOpen = false }: ZenSidebar
     });
   }, [isOpen]);
 
+  const toggleCollapse = React.useCallback(() => {
+    setIsCollapsed(prev => !prev);
+  }, []);
+
   return (
-    <ZenSidebarContext.Provider value={{ isOpen, setIsOpen, toggleSidebar, isMobile }}>
+    <ZenSidebarContext.Provider value={{ 
+      isOpen, 
+      setIsOpen, 
+      toggleSidebar, 
+      isMobile,
+      isCollapsed,
+      setIsCollapsed,
+      toggleCollapse
+    }}>
       {children}
     </ZenSidebarContext.Provider>
   );
@@ -145,20 +180,30 @@ export function useZenSidebar() {
 }
 
 // Componente principal del sidebar
-export function ZenSidebar({ children, className }: ZenSidebarProps) {
-  const { isOpen } = useZenSidebar();
+export function ZenSidebar({ children, className, isHovered = false, onMouseEnter, onMouseLeave }: ZenSidebarProps) {
+  const { isOpen, isCollapsed, isMobile } = useZenSidebar();
+
+  // Ancho dinámico: 64px colapsado, 240px expandido (solo desktop)
+  // Si está colapsado pero con hover, expandir temporalmente
+  const shouldExpand = isHovered && isCollapsed && !isMobile;
+  const desktopWidth = shouldExpand ? 'lg:w-60' : (isCollapsed ? 'lg:w-16' : 'lg:w-60');
 
   return (
     <div
       className={cn(
-        "fixed left-0 top-0 z-50 h-screen w-72 transform transition-transform duration-300 ease-in-out",
+        "fixed left-0 top-0 z-50 h-screen transform transition-all duration-150 ease-in-out",
+        // Mobile: ancho fijo
         "max-w-[80vw] sm:w-72",
-        isOpen ? "translate-x-0" : "-translate-x-full",
+        // Desktop: ancho dinámico con prioridad
         "lg:translate-x-0 lg:static lg:z-auto lg:max-w-none",
+        desktopWidth,
+        isOpen ? "translate-x-0" : "-translate-x-full",
         // Ajustar para header global - sidebar debe usar altura completa disponible
         "lg:h-full",
         className
       )}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <ZenCard
         variant="default"

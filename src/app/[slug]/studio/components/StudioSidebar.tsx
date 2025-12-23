@@ -8,6 +8,7 @@ import {
 import { ZenButton } from '@/components/ui/zen';
 import { ActiveLink } from './ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
+import { cn } from '@/lib/utils';
 import {
     File,
     Briefcase, Users, Sparkles, Mail, FileText,
@@ -20,6 +21,8 @@ import {
     X,
     Calendar,
     FolderOpen,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from 'lucide-react';
 
 interface StudioSidebarProps {
@@ -27,11 +30,26 @@ interface StudioSidebarProps {
     studioSlug: string;
 }
 
-// Componente para grupo de menú sin colapsable
-const MenuGroup = ({ group, children }: {
+// Componente para grupo de menú con soporte para modo colapsado
+const MenuGroup = ({ 
+    group, 
+    children, 
+    isCollapsed 
+}: {
     group: { id: string; title: string; icon: React.ComponentType<{ className?: string }> },
-    children: React.ReactNode
+    children: React.ReactNode,
+    isCollapsed: boolean
 }) => {
+    if (isCollapsed) {
+        return (
+            <div className="mb-4">
+                <div className="space-y-1">
+                    {children}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="mb-6">
             {/* Header del grupo - sin icono */}
@@ -48,7 +66,11 @@ const MenuGroup = ({ group, children }: {
 };
 
 export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
-    const { isOpen, toggleSidebar } = useZenSidebar();
+    const { isOpen, toggleSidebar, isCollapsed, toggleCollapse, isMobile } = useZenSidebar();
+    const [isHovered, setIsHovered] = React.useState(false);
+    
+    // En desktop, si está colapsado y se hace hover, expandir temporalmente
+    const isExpandedOnHover = !isMobile && isCollapsed && isHovered;
 
     // Configuración de navegación modular según Plan Maestro ZEN
     // Nota: Profile y Content ahora están en /profile/edit/ con su propio sidebar
@@ -96,45 +118,109 @@ export function StudioSidebar({ className, studioSlug }: StudioSidebarProps) {
     ];
 
     return (
-        <ZenSidebar className={`${className} ${isOpen ? '' : 'hidden lg:block'} w-60 lg:w-60 sm:w-60`}>
-            <ZenSidebarContent className="px-4">
-                {/* Botón de cerrar - Solo visible en mobile */}
-                <div className="flex justify-end pt-4 pb-2 lg:hidden">
-                    <ZenButton
-                        variant="ghost"
-                        size="icon"
-                        onClick={toggleSidebar}
-                        className="text-zinc-400 hover:text-white"
-                    >
-                        <X className="h-5 w-5" />
-                    </ZenButton>
+        <ZenSidebar 
+            className={`${className} ${isOpen ? '' : 'hidden lg:block'}`}
+            isHovered={isExpandedOnHover}
+            onMouseEnter={() => !isMobile && setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            <ZenSidebarContent className={isCollapsed && !isExpandedOnHover ? "px-1.5" : "px-4"}>
+                    {/* Botón toggle collapse - Solo visible en desktop */}
+                    <div className={cn(
+                        "flex items-center justify-between pt-4 pb-2",
+                        isCollapsed ? "px-1.5 lg:px-1.5" : "px-3 lg:px-3"
+                    )}>
+                    {/* Botón de cerrar - Solo visible en mobile */}
+                    <div className="flex justify-end lg:hidden">
+                        <ZenButton
+                            variant="ghost"
+                            size="icon"
+                            onClick={toggleSidebar}
+                            className="text-zinc-400 hover:text-white"
+                        >
+                            <X className="h-5 w-5" />
+                        </ZenButton>
+                    </div>
+                    {/* Botón toggle collapse - Solo visible en desktop */}
+                    <div className="hidden lg:block">
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleCollapse();
+                            }}
+                            className={cn(
+                                "w-full flex items-center p-2 text-zinc-400 hover:text-white hover:bg-zinc-800/40 rounded-md transition-colors",
+                                isCollapsed ? "justify-center" : "justify-start gap-2"
+                            )}
+                            title={isCollapsed ? "Expandir sidebar" : "Contraer sidebar"}
+                        >
+                            {isCollapsed ? (
+                                <PanelLeftOpen className="h-4 w-4" />
+                            ) : (
+                                <>
+                                    <PanelLeftClose className="h-4 w-4" />
+                                    <span className="text-sm">Contraer</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
-                <ZenSidebarMenu className="pt-4">
-                    {/* Sección Studio */}
-                    {builderNavItems.map(group => (
-                        <MenuGroup key={group.id} group={group}>
-                            {group.items.map(item => (
-                                <ZenSidebarMenuItem key={item.id}>
-                                    <ActiveLink
-                                        href={item.href.startsWith('/studio/')
-                                            ? `/${studioSlug}${item.href}`
-                                            : `/${studioSlug}/studio${item.href}`}
-                                        className="flex items-center gap-2.5 px-3 py-1 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/40 transition-all duration-200 rounded-md group"
-                                    >
-                                        <item.icon className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 shrink-0" />
-                                        <span className="text-zinc-300 group-hover:text-white">{item.name}</span>
-                                    </ActiveLink>
-                                </ZenSidebarMenuItem>
-                            ))}
-                        </MenuGroup>
+                
+                {/* Divisor debajo del botón toggle */}
+                <div className="hidden lg:block">
+                    <div className="h-[0.5px] bg-zinc-900 mx-3 my-2" />
+                </div>
+
+                <ZenSidebarMenu className={isCollapsed && !isExpandedOnHover ? "pt-2" : "pt-4"}>
+                    {builderNavItems.map((group, groupIndex) => (
+                        <React.Fragment key={group.id}>
+                            {/* Separador antes de cada grupo (excepto el primero) cuando está colapsado */}
+                            {isCollapsed && !isExpandedOnHover && groupIndex > 0 && (
+                                <div className="h-px bg-zinc-800 mx-1.5 my-3" />
+                            )}
+                            <MenuGroup group={group} isCollapsed={isCollapsed && !isExpandedOnHover}>
+                                {group.items.map(item => (
+                                    <ZenSidebarMenuItem key={item.id}>
+                                        <ActiveLink
+                                            href={item.href.startsWith('/studio/')
+                                                ? `/${studioSlug}${item.href}`
+                                                : `/${studioSlug}/studio${item.href}`}
+                                            className={cn(
+                                                "flex items-center transition-all duration-200 rounded-md group",
+                                                isCollapsed && !isExpandedOnHover
+                                                    ? "justify-center px-0 py-2 mx-0"
+                                                    : "gap-2.5 px-3 py-1",
+                                                "text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/40"
+                                            )}
+                                            title={isCollapsed && !isExpandedOnHover ? item.name : undefined}
+                                        >
+                                            <item.icon className={cn(
+                                                "shrink-0 text-zinc-500 group-hover:text-zinc-300",
+                                                isCollapsed && !isExpandedOnHover ? "w-5 h-5" : "w-4 h-4"
+                                            )} />
+                                            {(!isCollapsed || isExpandedOnHover) && (
+                                                <span className="text-zinc-300 group-hover:text-white">{item.name}</span>
+                                            )}
+                                        </ActiveLink>
+                                    </ZenSidebarMenuItem>
+                                ))}
+                            </MenuGroup>
+                        </React.Fragment>
                     ))}
                 </ZenSidebarMenu>
             </ZenSidebarContent>
 
-            <ZenSidebarFooter>
+            <ZenSidebarFooter className={isCollapsed && !isExpandedOnHover ? "px-1.5" : "px-4"}>
+                {/* Separador antes del footer cuando está colapsado */}
+                {isCollapsed && !isExpandedOnHover && (
+                    <div className="h-px bg-zinc-800 mx-1.5 mb-3" />
+                )}
                 <ZenSidebarMenu>
                     <ZenSidebarMenuItem>
-                        <LogoutButton />
+                        <div className={isCollapsed && !isExpandedOnHover ? "flex justify-center px-0" : ""}>
+                            <LogoutButton isCollapsed={isCollapsed && !isExpandedOnHover} />
+                        </div>
                     </ZenSidebarMenuItem>
                 </ZenSidebarMenu>
             </ZenSidebarFooter>

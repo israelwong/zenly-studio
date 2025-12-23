@@ -9,9 +9,10 @@ import { ZenSidebarMenuButton } from "@/components/ui/zen";
 interface LogoutButtonProps {
     className?: string;
     children?: React.ReactNode;
+    isCollapsed?: boolean;
 }
 
-export function LogoutButton({ className, children }: LogoutButtonProps) {
+export function LogoutButton({ className, children, isCollapsed = false }: LogoutButtonProps) {
     const [isLoading, setIsLoading] = useState(false);
 
     const handleLogout = async () => {
@@ -34,10 +35,13 @@ export function LogoutButton({ className, children }: LogoutButtonProps) {
         <ZenSidebarMenuButton
             onClick={handleLogout}
             disabled={isLoading}
-            className={`text-zinc-400 hover:text-white hover:bg-zinc-800 ${className || ""}`}
+            className={`text-zinc-400 hover:text-white hover:bg-zinc-800 ${isCollapsed ? "justify-center px-0" : ""} ${className || ""}`}
+            title={isCollapsed ? (isLoading ? "Cerrando..." : "Cerrar Sesión") : undefined}
         >
-            <LogOut className="w-4 h-4" />
-            <span>{isLoading ? "Cerrando..." : "Cerrar Sesión"}</span>
+            <LogOut className={isCollapsed ? "w-5 h-5" : "w-4 h-4"} />
+            {!isCollapsed && (
+                <span>{isLoading ? "Cerrando..." : "Cerrar Sesión"}</span>
+            )}
             {children}
         </ZenSidebarMenuButton>
     );
