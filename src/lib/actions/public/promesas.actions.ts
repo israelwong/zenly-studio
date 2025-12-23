@@ -285,7 +285,8 @@ interface PublicPaquete {
 function filtrarCatalogoPorItems(
   catalogo: SeccionData[],
   itemIds: Set<string>,
-  itemsData: Map<string, { price?: number; quantity?: number; description?: string | null }>
+  itemsData: Map<string, { price?: number; quantity?: number; description?: string | null }>,
+  itemsMedia?: Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>
 ): PublicSeccionData[] {
   return catalogo
     .map((seccion) => ({
@@ -301,6 +302,7 @@ function filtrarCatalogoPorItems(
             .filter((servicio) => itemIds.has(servicio.id))
             .map((servicio) => {
               const itemData = itemsData.get(servicio.id);
+              const media = itemsMedia?.get(servicio.id);
               return {
                 id: servicio.id,
                 name: servicio.nombre,
@@ -317,6 +319,8 @@ function filtrarCatalogoPorItems(
                       quantity: itemData.quantity,
                     }
                     : {}),
+                // Incluir multimedia si existe
+                ...(media && media.length > 0 ? { media } : {}),
               };
             }),
         }))
@@ -596,11 +600,61 @@ export async function getPublicPromiseData(
       })
       : [];
 
-    // 5. Mapear cotizaciones con estructura jerárquica (igual que ResumenCotizacionAutorizada)
+    // 5. Obtener multimedia de todos los items únicos de cotizaciones y paquetes
+    const allItemIds = new Set<string>();
+    promise.quotes.forEach((cot) => {
+      cot.cotizacion_items.forEach((item) => {
+        if (item.item_id) allItemIds.add(item.item_id);
+      });
+    });
+    paquetes.forEach((paq) => {
+      // Incluir TODOS los items del paquete para obtener multimedia, no solo los filtrados
+      paq.paquete_items.forEach((item) => {
+        if (item.item_id) allItemIds.add(item.item_id);
+      });
+    });
+
+    // Obtener multimedia de items (solo si hay item_ids)
+    const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
+    
+    if (allItemIds.size > 0) {
+      const itemsMediaData = await prisma.studio_item_media.findMany({
+        where: {
+          item_id: { in: Array.from(allItemIds) },
+          studio_id: studio.id,
+        },
+        select: {
+          id: true,
+          item_id: true,
+          file_url: true,
+          file_type: true,
+          display_order: true,
+        },
+        orderBy: {
+          display_order: 'asc',
+        },
+      });
+
+      // Crear mapa de multimedia por item_id
+      itemsMediaData.forEach((media) => {
+        if (!itemsMediaMap.has(media.item_id)) {
+          itemsMediaMap.set(media.item_id, []);
+        }
+        itemsMediaMap.get(media.item_id)!.push({
+          id: media.id,
+          file_url: media.file_url,
+          file_type: media.file_type as 'IMAGE' | 'VIDEO',
+          thumbnail_url: undefined, // No existe en el schema
+        });
+      });
+    }
+
+    // 6. Mapear cotizaciones con estructura jerárquica (igual que ResumenCotizacionAutorizada)
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot) => {
       // Crear Set de item_ids incluidos en la cotización
       const itemIds = new Set<string>();
       const itemsData = new Map<string, { price: number; quantity: number; description: string | null }>();
+      const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
 
       cot.cotizacion_items.forEach((item) => {
         // Solo incluir items con item_id válido (igual que paquetes)
@@ -611,6 +665,11 @@ export async function getPublicPromiseData(
             quantity: item.quantity,
             description: item.description,
           });
+          // Agregar multimedia del item a la lista agregada
+          const itemMedia = itemsMediaMap.get(item.item_id);
+          if (itemMedia) {
+            cotizacionMedia.push(...itemMedia);
+          }
         }
       });
 
@@ -620,7 +679,7 @@ export async function getPublicPromiseData(
         description: cot.description,
         price: cot.price,
         discount: cot.discount,
-        servicios: filtrarCatalogoPorItems(catalogo, itemIds, itemsData),
+        servicios: filtrarCatalogoPorItems(catalogo, itemIds, itemsData, itemsMediaMap),
         condiciones_comerciales: cot.condiciones_comerciales
           ? {
             metodo_pago: cot.condiciones_comerciales_metodo_pago?.[0]?.metodos_pago?.payment_method_name || null,
@@ -634,14 +693,16 @@ export async function getPublicPromiseData(
           }
           : null,
         selected_by_prospect: cot.selected_by_prospect || false,
+        items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
       };
     });
 
-    // 6. Mapear paquetes con estructura jerárquica (igual que ResumenCotizacionAutorizada)
+    // 7. Mapear paquetes con estructura jerárquica (igual que ResumenCotizacionAutorizada)
     const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
       // Crear Set de item_ids incluidos en el paquete
       const itemIds = new Set<string>();
       const itemsData = new Map<string, { description?: string | null; quantity?: number; price?: number }>();
+      const paqueteMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
 
       // Verificar que paquete_items existe y tiene datos
       if (!paq.paquete_items || paq.paquete_items.length === 0) {
@@ -689,10 +750,16 @@ export async function getPublicPromiseData(
             quantity: item.quantity,
             price: precioItem,
           });
+
+          // Agregar multimedia del item a la lista agregada
+          const itemMedia = itemsMediaMap.get(item.item_id);
+          if (itemMedia && itemMedia.length > 0) {
+            paqueteMedia.push(...itemMedia);
+          }
         }
       });
 
-      const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
+      const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData, itemsMediaMap);
 
       return {
         id: paq.id,
@@ -703,10 +770,11 @@ export async function getPublicPromiseData(
         recomendado: paq.is_featured || false,
         servicios: serviciosFiltrados,
         tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual
+        items_media: paqueteMedia.length > 0 ? paqueteMedia : undefined,
       };
     });
 
-    // 7. Obtener portafolios según tipo de evento (si está habilitado)
+    // 8. Obtener portafolios según tipo de evento (si está habilitado)
     let portafolios: Array<{
       id: string;
       title: string;
@@ -759,7 +827,7 @@ export async function getPublicPromiseData(
       }));
     }
 
-    // 8. Validar que haya contenido disponible (cotizaciones o paquetes)
+    // 9. Validar que haya contenido disponible (cotizaciones o paquetes)
     if (mappedCotizaciones.length === 0 && mappedPaquetes.length === 0) {
       return {
         success: false,
@@ -767,7 +835,7 @@ export async function getPublicPromiseData(
       };
     }
 
-    // 9. Obtener condiciones comerciales disponibles y términos y condiciones
+    // 10. Obtener condiciones comerciales disponibles y términos y condiciones
     const [condicionesResult, terminosResult] = await Promise.all([
       obtenerCondicionesComercialesPublicas(studioSlug),
       obtenerTerminosCondicionesPublicos(studioSlug),

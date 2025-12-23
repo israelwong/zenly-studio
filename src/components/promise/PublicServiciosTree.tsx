@@ -1,8 +1,12 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Image as ImageIcon, Video, Images } from 'lucide-react';
 import type { PublicSeccionData, PublicServicioData } from '@/types/public-promise';
+import Lightbox from 'yet-another-react-lightbox';
+import VideoPlugin from 'yet-another-react-lightbox/plugins/video';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
+import 'yet-another-react-lightbox/styles.css';
 
 interface PublicServiciosTreeProps {
   servicios: PublicSeccionData[];
@@ -28,6 +32,9 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(initialExpandedSections);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(initialExpandedCategories);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [currentServiceMedia, setCurrentServiceMedia] = useState<PublicServicioData['media']>(undefined);
 
   // Actualizar estados cuando cambien los servicios
   useEffect(() => {
@@ -71,6 +78,85 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
   // Función para verificar si un servicio es de tipo cotización
   const isCotizacionServicio = (servicio: PublicServicioData): boolean => {
     return 'quantity' in servicio && 'price' in servicio && servicio.quantity !== undefined && servicio.price !== undefined;
+  };
+
+  // Función para obtener información de multimedia de un servicio
+  const getServiceMediaInfo = (servicio: PublicServicioData) => {
+    if (!servicio.media || servicio.media.length === 0) {
+      return null;
+    }
+
+    const fotos = servicio.media.filter(m => m.file_type === 'IMAGE');
+    const videos = servicio.media.filter(m => m.file_type === 'VIDEO');
+
+    return {
+      fotos: fotos.length > 0 ? fotos : null,
+      videos: videos.length > 0 ? videos : null,
+      tieneFotos: fotos.length > 0,
+      tieneVideos: videos.length > 0,
+      tieneAmbos: fotos.length > 0 && videos.length > 0,
+    };
+  };
+
+  // Preparar slides para Lightbox
+  const prepareLightboxSlides = (media: PublicServicioData['media']) => {
+    if (!media || media.length === 0) return [];
+
+    const slides: Array<{ src?: string; alt?: string; type?: 'video'; sources?: Array<{ src: string; type: string }>; poster?: string; autoPlay?: boolean; muted?: boolean; controls?: boolean; playsInline?: boolean }> = [];
+
+    const fotos = media.filter(m => m.file_type === 'IMAGE');
+    const videos = media.filter(m => m.file_type === 'VIDEO');
+
+    // Agregar fotos primero
+    fotos.forEach((foto) => {
+      slides.push({
+        src: foto.file_url,
+        alt: 'Imagen',
+      });
+    });
+
+    // Agregar videos después
+    videos.forEach((video) => {
+      slides.push({
+        type: 'video',
+        sources: [{
+          src: video.file_url,
+          type: 'video/mp4',
+        }],
+        poster: video.file_url,
+        autoPlay: true,
+        muted: false,
+        controls: true,
+        playsInline: true,
+      });
+    });
+
+    return slides;
+  };
+
+  const handleOpenLightbox = (servicio: PublicServicioData, startIndex: number = 0) => {
+    setCurrentServiceMedia(servicio.media);
+    setLightboxIndex(startIndex);
+    setLightboxOpen(true);
+  };
+
+  const handleOpenFotos = (servicio: PublicServicioData) => {
+    if (!servicio.media) return;
+    const fotos = servicio.media.filter(m => m.file_type === 'IMAGE');
+    if (fotos.length === 0) return;
+    handleOpenLightbox(servicio, 0);
+  };
+
+  const handleOpenVideos = (servicio: PublicServicioData) => {
+    if (!servicio.media) return;
+    const fotos = servicio.media.filter(m => m.file_type === 'IMAGE');
+    const videos = servicio.media.filter(m => m.file_type === 'VIDEO');
+    if (videos.length === 0) return;
+    handleOpenLightbox(servicio, fotos.length);
+  };
+
+  const handleOpenGaleria = (servicio: PublicServicioData) => {
+    handleOpenLightbox(servicio, 0);
   };
 
   return (
@@ -150,6 +236,7 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                   const subtotal = esCotizacion
                                     ? (servicio.price || 0) * cantidad
                                     : 0;
+                                  const mediaInfo = getServiceMediaInfo(servicio);
 
                                   return (
                                     <div
@@ -157,7 +244,7 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                       className={`py-3 px-4 pl-6 hover:bg-zinc-700/20 transition-colors ${servicioIndex === 0 ? 'pt-3' : ''
                                         }`}
                                     >
-                                      <div className="flex items-start justify-between">
+                                      <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
                                           <h6 className="text-sm text-zinc-300 leading-tight">
                                             {servicio.name}
@@ -169,6 +256,52 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                             <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                                               {servicio.description}
                                             </p>
+                                          )}
+                                          {/* Botones de media condicionales */}
+                                          {mediaInfo && (
+                                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                              {mediaInfo.tieneAmbos ? (
+                                                <>
+                                                  <button
+                                                    onClick={() => handleOpenFotos(servicio)}
+                                                    className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-300 transition-colors rounded hover:bg-zinc-800/50"
+                                                  >
+                                                    <ImageIcon className="w-3.5 h-3.5" />
+                                                    Ver imágenes ({mediaInfo.fotos?.length || 0})
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleOpenVideos(servicio)}
+                                                    className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-300 transition-colors rounded hover:bg-zinc-800/50"
+                                                  >
+                                                    <Video className="w-3.5 h-3.5" />
+                                                    Ver videos ({mediaInfo.videos?.length || 0})
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleOpenGaleria(servicio)}
+                                                    className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-300 transition-colors rounded hover:bg-zinc-800/50"
+                                                  >
+                                                    <Images className="w-3.5 h-3.5" />
+                                                    Ver galería
+                                                  </button>
+                                                </>
+                                              ) : mediaInfo.tieneFotos ? (
+                                                <button
+                                                  onClick={() => handleOpenFotos(servicio)}
+                                                  className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-300 transition-colors rounded hover:bg-zinc-800/50"
+                                                >
+                                                  <ImageIcon className="w-3.5 h-3.5" />
+                                                  Ver imágenes ({mediaInfo.fotos?.length || 0})
+                                                </button>
+                                              ) : mediaInfo.tieneVideos ? (
+                                                <button
+                                                  onClick={() => handleOpenVideos(servicio)}
+                                                  className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-300 transition-colors rounded hover:bg-zinc-800/50"
+                                                >
+                                                  <Video className="w-3.5 h-3.5" />
+                                                  Ver videos ({mediaInfo.videos?.length || 0})
+                                                </button>
+                                              ) : null}
+                                            </div>
                                           )}
                                         </div>
                                         {/* Mostrar precio individual solo si showPrices está activo */}
@@ -192,6 +325,36 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
             </div>
           );
         })}
+      
+      {/* Lightbox */}
+      {currentServiceMedia && currentServiceMedia.length > 0 && (
+        <Lightbox
+          open={lightboxOpen}
+          close={() => setLightboxOpen(false)}
+          index={lightboxIndex}
+          slides={prepareLightboxSlides(currentServiceMedia)}
+          plugins={[VideoPlugin, Zoom]}
+          video={{
+            controls: true,
+            playsInline: true,
+            autoPlay: true,
+            muted: false,
+            loop: false
+          }}
+          on={{
+            view: ({ index }) => setLightboxIndex(index),
+          }}
+          controller={{
+            closeOnPullDown: true,
+            closeOnBackdropClick: true
+          }}
+          styles={{
+            container: {
+              backgroundColor: 'rgba(0, 0, 0, .98)',
+            },
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { X, Clock, Send, Edit } from 'lucide-react';
+import { X, Clock, Send, Edit, Image as ImageIcon, Video, Images } from 'lucide-react';
 import { ZenButton, SeparadorZen } from '@/components/ui/zen';
 import type { PublicPaquete } from '@/types/public-promise';
 import { PublicServiciosTree } from './PublicServiciosTree';
@@ -12,6 +12,10 @@ import { PrecioDesglose } from './shared/PrecioDesglose';
 import { TerminosCondiciones } from './shared/TerminosCondiciones';
 import { obtenerCondicionesComercialesPublicas, obtenerTerminosCondicionesPublicos, filtrarCondicionesPorPreferencias } from '@/lib/actions/public/promesas.actions';
 import { formatCurrency } from '@/lib/actions/utils/formatting';
+import Lightbox from 'yet-another-react-lightbox';
+import VideoPlugin from 'yet-another-react-lightbox/plugins/video';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
+import 'yet-another-react-lightbox/styles.css';
 
 interface CondicionComercial {
   id: string;
@@ -77,6 +81,8 @@ export function PaqueteDetailSheet({
   const [selectedMetodoPagoId, setSelectedMetodoPagoId] = useState<string | null>(null);
   const [loadingCondiciones, setLoadingCondiciones] = useState(true);
   const precioDesgloseRef = useRef<HTMLDivElement>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const loadCondicionesYTerminos = useCallback(async () => {
     setLoadingCondiciones(true);
@@ -158,14 +164,16 @@ export function PaqueteDetailSheet({
       : precioBase;
 
     // Calcular anticipo según tipo
-    const advanceType = condicion.advance_type || 'percentage';
+    const advanceType: 'percentage' | 'fixed_amount' = (condicion.advance_type === 'fixed_amount' || condicion.advance_type === 'percentage')
+      ? condicion.advance_type
+      : 'percentage';
     const anticipo = advanceType === 'fixed_amount' && condicion.advance_amount
       ? condicion.advance_amount
       : (condicion.advance_percentage ?? 0) > 0
         ? (precioConDescuento * (condicion.advance_percentage ?? 0)) / 100
         : 0;
     const anticipoPorcentaje = advanceType === 'percentage' ? (condicion.advance_percentage ?? 0) : null;
-    const anticipoMontoFijo = advanceType === 'fixed_amount' ? condicion.advance_amount : null;
+    const anticipoMontoFijo: number | null = advanceType === 'fixed_amount' ? (condicion.advance_amount ?? null) : null;
 
     // Calcular diferido
     const diferido = precioConDescuento - anticipo;
@@ -203,6 +211,90 @@ export function PaqueteDetailSheet({
       }, 100);
     }
   }, [precioCalculado]);
+
+  // Determinar multimedia disponible de los items
+  const mediaInfo = useMemo(() => {
+    if (!paquete.items_media || paquete.items_media.length === 0) {
+      return null;
+    }
+
+    const fotos = paquete.items_media.filter(m => m.file_type === 'IMAGE');
+    const videos = paquete.items_media.filter(m => m.file_type === 'VIDEO');
+
+    return {
+      fotos: fotos.length > 0 ? fotos : null,
+      videos: videos.length > 0 ? videos : null,
+      tieneFotos: fotos.length > 0,
+      tieneVideos: videos.length > 0,
+      tieneAmbos: fotos.length > 0 && videos.length > 0,
+    };
+  }, [paquete.items_media]);
+
+  // Preparar slides para Lightbox
+  const lightboxSlides = useMemo(() => {
+    if (!mediaInfo) return [];
+
+    const slides: Array<{ src?: string; alt?: string; type?: 'video'; sources?: Array<{ src: string; type: string }>; poster?: string; autoPlay?: boolean; muted?: boolean; controls?: boolean; playsInline?: boolean }> = [];
+
+    // Agregar fotos primero
+    if (mediaInfo.fotos) {
+      mediaInfo.fotos.forEach((foto) => {
+        slides.push({
+          src: foto.file_url,
+          alt: paquete.name,
+        });
+      });
+    }
+
+    // Agregar videos después
+    if (mediaInfo.videos) {
+      mediaInfo.videos.forEach((video) => {
+        slides.push({
+          type: 'video',
+          sources: [{
+            src: video.file_url,
+            type: 'video/mp4',
+          }],
+          poster: video.file_url,
+          autoPlay: true,
+          muted: false,
+          controls: true,
+          playsInline: true,
+        });
+      });
+    }
+
+    return slides;
+  }, [mediaInfo, paquete.name]);
+
+  const handleOpenLightbox = (startIndex: number = 0) => {
+    setLightboxIndex(startIndex);
+    setLightboxOpen(true);
+  };
+
+  const handleOpenFotos = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    if (!mediaInfo?.fotos) return;
+    // Encontrar el índice de la primera foto
+    const firstFotoIndex = 0; // Las fotos siempre van primero
+    handleOpenLightbox(firstFotoIndex);
+  };
+
+  const handleOpenVideos = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    if (!mediaInfo?.videos) return;
+    // Encontrar el índice del primer video (después de todas las fotos)
+    const firstVideoIndex = mediaInfo.fotos?.length || 0;
+    handleOpenLightbox(firstVideoIndex);
+  };
+
+  const handleOpenGaleria = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    handleOpenLightbox(0);
+  };
 
   if (!isOpen) return null;
 
@@ -356,6 +448,36 @@ export function PaqueteDetailSheet({
           promiseId={promiseId}
           studioSlug={studioSlug}
           showPackages={showPackages}
+        />
+      )}
+
+      {/* Lightbox */}
+      {mediaInfo && lightboxSlides.length > 0 && (
+        <Lightbox
+          open={lightboxOpen}
+          close={() => setLightboxOpen(false)}
+          index={lightboxIndex}
+          slides={lightboxSlides}
+          plugins={[VideoPlugin, Zoom]}
+          video={{
+            controls: true,
+            playsInline: true,
+            autoPlay: true,
+            muted: false,
+            loop: false
+          }}
+          on={{
+            view: ({ index }) => setLightboxIndex(index),
+          }}
+          controller={{
+            closeOnPullDown: true,
+            closeOnBackdropClick: true
+          }}
+          styles={{
+            container: {
+              backgroundColor: 'rgba(0, 0, 0, .98)',
+            },
+          }}
         />
       )}
     </>

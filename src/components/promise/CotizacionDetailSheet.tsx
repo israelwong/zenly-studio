@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Edit } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Edit, Image as ImageIcon, Video, Images } from 'lucide-react';
 import { ZenButton, ZenBadge, SeparadorZen } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { PublicServiciosTree } from './PublicServiciosTree';
@@ -13,6 +13,10 @@ import { TerminosCondiciones } from './shared/TerminosCondiciones';
 import { obtenerCondicionesComercialesPublicas, obtenerTerminosCondicionesPublicos, filtrarCondicionesPorPreferencias } from '@/lib/actions/public/promesas.actions';
 import { formatCurrency } from '@/lib/actions/utils/formatting';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
+import Lightbox from 'yet-another-react-lightbox';
+import VideoPlugin from 'yet-another-react-lightbox/plugins/video';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
+import 'yet-another-react-lightbox/styles.css';
 
 interface CondicionComercial {
   id: string;
@@ -50,6 +54,7 @@ interface CotizacionDetailSheetProps {
   showStandardConditions?: boolean;
   showOfferConditions?: boolean;
   showPackages?: boolean;
+  paquetes?: Array<{ id: string; cover_url: string | null }>;
 }
 
 export function CotizacionDetailSheet({
@@ -65,6 +70,7 @@ export function CotizacionDetailSheet({
   showStandardConditions = true,
   showOfferConditions = false,
   showPackages = false,
+  paquetes = [],
 }: CotizacionDetailSheetProps) {
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
   const [showPersonalizacionModal, setShowPersonalizacionModal] = useState(false);
@@ -75,6 +81,8 @@ export function CotizacionDetailSheet({
   const [loadingCondiciones, setLoadingCondiciones] = useState(true);
   const [currentCotizacion, setCurrentCotizacion] = useState(cotizacion);
   const precioDesgloseRef = useRef<HTMLDivElement>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Actualizar cotización cuando cambia la prop
   useEffect(() => {
@@ -170,14 +178,16 @@ export function CotizacionDetailSheet({
       : precioBase;
 
     // Calcular anticipo según tipo
-    const advanceType = condicion.advance_type || 'percentage';
+    const advanceType: 'percentage' | 'fixed_amount' = (condicion.advance_type === 'fixed_amount' || condicion.advance_type === 'percentage')
+      ? condicion.advance_type
+      : 'percentage';
     const anticipo = advanceType === 'fixed_amount' && condicion.advance_amount
       ? condicion.advance_amount
       : (condicion.advance_percentage ?? 0) > 0
         ? (precioConDescuento * (condicion.advance_percentage ?? 0)) / 100
         : 0;
     const anticipoPorcentaje = advanceType === 'percentage' ? (condicion.advance_percentage ?? 0) : null;
-    const anticipoMontoFijo = advanceType === 'fixed_amount' ? condicion.advance_amount : null;
+    const anticipoMontoFijo: number | null = advanceType === 'fixed_amount' ? (condicion.advance_amount ?? null) : null;
 
     // Calcular diferido
     const diferido = precioConDescuento - anticipo;
@@ -186,7 +196,7 @@ export function CotizacionDetailSheet({
       precioBase,
       descuentoCondicion,
       precioConDescuento,
-      advanceType: advanceType as 'percentage' | 'fixed_amount',
+      advanceType,
       anticipoPorcentaje,
       anticipoMontoFijo,
       anticipo,
@@ -251,6 +261,90 @@ export function CotizacionDetailSheet({
     promiseId,
     onCotizacionUpdated: handleCotizacionUpdated,
   });
+
+  // Determinar multimedia disponible de los items
+  const mediaInfo = useMemo(() => {
+    if (!currentCotizacion.items_media || currentCotizacion.items_media.length === 0) {
+      return null;
+    }
+
+    const fotos = currentCotizacion.items_media.filter(m => m.file_type === 'IMAGE');
+    const videos = currentCotizacion.items_media.filter(m => m.file_type === 'VIDEO');
+
+    return {
+      fotos: fotos.length > 0 ? fotos : null,
+      videos: videos.length > 0 ? videos : null,
+      tieneFotos: fotos.length > 0,
+      tieneVideos: videos.length > 0,
+      tieneAmbos: fotos.length > 0 && videos.length > 0,
+    };
+  }, [currentCotizacion.items_media]);
+
+  // Preparar slides para Lightbox
+  const lightboxSlides = useMemo(() => {
+    if (!mediaInfo) return [];
+
+    const slides: Array<{ src?: string; alt?: string; type?: 'video'; sources?: Array<{ src: string; type: string }>; poster?: string; autoPlay?: boolean; muted?: boolean; controls?: boolean; playsInline?: boolean }> = [];
+
+    // Agregar fotos primero
+    if (mediaInfo.fotos) {
+      mediaInfo.fotos.forEach((foto) => {
+        slides.push({
+          src: foto.file_url,
+          alt: currentCotizacion.name,
+        });
+      });
+    }
+
+    // Agregar videos después
+    if (mediaInfo.videos) {
+      mediaInfo.videos.forEach((video) => {
+        slides.push({
+          type: 'video',
+          sources: [{
+            src: video.file_url,
+            type: 'video/mp4',
+          }],
+          poster: video.file_url,
+          autoPlay: true,
+          muted: false,
+          controls: true,
+          playsInline: true,
+        });
+      });
+    }
+
+    return slides;
+  }, [mediaInfo, currentCotizacion.name]);
+
+  const handleOpenLightbox = (startIndex: number = 0) => {
+    setLightboxIndex(startIndex);
+    setLightboxOpen(true);
+  };
+
+  const handleOpenFotos = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    if (!mediaInfo?.fotos) return;
+    // Encontrar el índice de la primera foto
+    const firstFotoIndex = 0; // Las fotos siempre van primero
+    handleOpenLightbox(firstFotoIndex);
+  };
+
+  const handleOpenVideos = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    if (!mediaInfo?.videos) return;
+    // Encontrar el índice del primer video (después de todas las fotos)
+    const firstVideoIndex = mediaInfo.fotos?.length || 0;
+    handleOpenLightbox(firstVideoIndex);
+  };
+
+  const handleOpenGaleria = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    handleOpenLightbox(0);
+  };
 
   if (!isOpen) return null;
 
@@ -424,6 +518,36 @@ export function CotizacionDetailSheet({
           promiseId={promiseId}
           studioSlug={studioSlug}
           showPackages={showPackages}
+        />
+      )}
+
+      {/* Lightbox */}
+      {mediaInfo && lightboxSlides.length > 0 && (
+        <Lightbox
+          open={lightboxOpen}
+          close={() => setLightboxOpen(false)}
+          index={lightboxIndex}
+          slides={lightboxSlides}
+          plugins={[VideoPlugin, Zoom]}
+          video={{
+            controls: true,
+            playsInline: true,
+            autoPlay: true,
+            muted: false,
+            loop: false
+          }}
+          on={{
+            view: ({ index }) => setLightboxIndex(index),
+          }}
+          controller={{
+            closeOnPullDown: true,
+            closeOnBackdropClick: true
+          }}
+          styles={{
+            container: {
+              backgroundColor: 'rgba(0, 0, 0, .98)',
+            },
+          }}
         />
       )}
     </>

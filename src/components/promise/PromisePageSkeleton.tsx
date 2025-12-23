@@ -1,5 +1,7 @@
 'use client';
 
+import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
+
 export function PromisePageSkeleton() {
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -51,7 +53,7 @@ export function PromisePageSkeleton() {
           </div>
         </section>
 
-        {/* Fecha sugerida skeleton */}
+        {/* Fecha sugerida skeleton (condicional) */}
         <section className="py-4 px-4">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900/30 border border-zinc-800 rounded-lg">
@@ -61,7 +63,7 @@ export function PromisePageSkeleton() {
           </div>
         </section>
 
-        {/* Cotizaciones skeleton */}
+        {/* Cotizaciones skeleton (condicional) */}
         <section className="py-6 px-4">
           <div className="max-w-4xl mx-auto space-y-4">
             <div className="h-8 w-48 bg-zinc-800 rounded-lg animate-pulse" />
@@ -88,7 +90,7 @@ export function PromisePageSkeleton() {
           </div>
         </section>
 
-        {/* Paquetes skeleton */}
+        {/* Paquetes skeleton (condicional) */}
         <section className="py-6 px-4">
           <div className="max-w-4xl mx-auto space-y-4">
             <div className="h-8 w-40 bg-zinc-800 rounded-lg animate-pulse" />
@@ -105,7 +107,7 @@ export function PromisePageSkeleton() {
           </div>
         </section>
 
-        {/* Portafolios skeleton */}
+        {/* Portafolios skeleton (condicional) */}
         <section className="py-6 px-4">
           <div className="max-w-4xl mx-auto">
             <div className="h-8 w-36 bg-zinc-800 rounded-lg animate-pulse mb-4" />
@@ -119,18 +121,15 @@ export function PromisePageSkeleton() {
           </div>
         </section>
 
-        {/* Comparador skeleton */}
+        {/* Comparador skeleton (condicional) */}
         <section className="py-6 px-4">
           <div className="max-w-4xl mx-auto flex justify-center">
             <div className="h-10 w-40 bg-zinc-800 rounded-lg animate-pulse" />
           </div>
         </section>
 
-        {/* Footer skeleton */}
-        <footer className="border-t border-zinc-800/30 p-6 text-center">
-          <div className="h-3 w-48 mx-auto bg-zinc-800 rounded animate-pulse mb-1" />
-          <div className="h-3 w-32 mx-auto bg-zinc-800 rounded animate-pulse" />
-        </footer>
+        {/* Footer */}
+        <PublicPageFooter />
       </div>
     </div>
   );

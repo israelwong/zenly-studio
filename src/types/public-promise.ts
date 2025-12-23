@@ -22,6 +22,13 @@ export interface PublicServicioData {
   // Para cotizaciones
   price?: number;
   quantity?: number;
+  // Multimedia del item
+  media?: Array<{
+    id: string;
+    file_url: string;
+    file_type: 'IMAGE' | 'VIDEO';
+    thumbnail_url?: string | null;
+  }>;
 }
 
 export interface PublicPromiseData {
@@ -59,6 +66,13 @@ export interface PublicCotizacion {
     name: string;
   } | null;
   selected_by_prospect?: boolean;
+  // Multimedia agregada de todos los items
+  items_media?: Array<{
+    id: string;
+    file_url: string;
+    file_type: 'IMAGE' | 'VIDEO';
+    thumbnail_url?: string | null;
+  }>;
 }
 
 export interface PublicPaquete {
@@ -70,5 +84,12 @@ export interface PublicPaquete {
   recomendado: boolean;
   servicios: PublicSeccionData[];
   tiempo_minimo_contratacion: number | null;
+  // Multimedia agregada de todos los items
+  items_media?: Array<{
+    id: string;
+    file_url: string;
+    file_type: 'IMAGE' | 'VIDEO';
+    thumbnail_url?: string | null;
+  }>;
 }
 
