@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FileText, Plus, Eye, Edit, Loader2, CheckCircle2, Clock, Trash2, MoreVertical, Send, Info, X, GitBranch, MessageSquare, AlertCircle } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { createRealtimeChannel, subscribeToChannel, setupRealtimeAuth } from '@/lib/realtime/core';
 import {
   ZenCard,
   ZenCardHeader,
@@ -63,10 +65,74 @@ export function EventContractCard({
   const [isEditing, setIsEditing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [selectedTemplateContent, setSelectedTemplateContent] = useState<string>('');
+  const supabase = createClient();
+  const contractsChannelRef = useRef<any>(null);
 
   useEffect(() => {
     loadContract();
   }, [eventId, studioSlug]);
+
+  // Configurar realtime para escuchar cambios en contratos
+  useEffect(() => {
+    if (!studioSlug || !contract?.id) return;
+
+    const setupRealtime = async () => {
+      try {
+        const requiresAuth = false;
+        const authResult = await setupRealtimeAuth(supabase, requiresAuth);
+
+        if (!authResult.success && requiresAuth) {
+          return;
+        }
+
+        const contractsChannel = createRealtimeChannel(supabase, {
+          channelName: `studio:${studioSlug}:contracts`,
+          isPrivate: false,
+          requiresAuth: false,
+          self: true,
+          ack: true,
+        });
+
+        contractsChannel
+          .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            const p = payload as any;
+            const contractNew = p.record || p.new || p.payload?.record || p.payload?.new;
+
+            // Verificar si es el contrato del evento actual
+            if (contractNew && contractNew.id === contract.id) {
+              // Recargar contrato para obtener la versión actualizada
+              loadContract();
+              onContractUpdated?.();
+            }
+          })
+          .on('broadcast', { event: '*' }, (payload: unknown) => {
+            const p = payload as any;
+            const operation = p.operation || p.event;
+            if (operation === 'UPDATE') {
+              const contractNew = p.record || p.new || p.payload?.record || p.payload?.new;
+              if (contractNew && contractNew.id === contract.id) {
+                loadContract();
+                onContractUpdated?.();
+              }
+            }
+          });
+
+        await subscribeToChannel(contractsChannel);
+        contractsChannelRef.current = contractsChannel;
+      } catch (error) {
+        console.error('[EventContractCard] Error configurando realtime:', error);
+      }
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (contractsChannelRef.current) {
+        supabase.removeChannel(contractsChannelRef.current);
+        contractsChannelRef.current = null;
+      }
+    };
+  }, [studioSlug, contract?.id, supabase, onContractUpdated]);
 
   useEffect(() => {
     const fetchModificationRequests = async () => {

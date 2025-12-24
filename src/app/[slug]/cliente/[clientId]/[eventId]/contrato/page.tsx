@@ -5,8 +5,8 @@ import { useParams } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { Loader2, FileText, CheckCircle2, Download, X, Clock, User, Calendar, Edit } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea } from '@/components/ui/zen';
-import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, requestContractModificationByClient } from '@/lib/actions/studio/business/contracts/contracts.actions';
-import { getEventContractData, renderContractContent } from '@/lib/actions/studio/business/contracts/renderer.actions';
+import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, requestContractModificationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { getEventContractData, renderContractContent, getRealEventId } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
 import { CONTRACT_PREVIEW_STYLES } from '@/lib/utils/contract-styles';
 import { toast } from 'sonner';
@@ -43,9 +43,32 @@ export default function EventoContratoPage() {
   const [showModificationRequestModal, setShowModificationRequestModal] = useState(false);
   const [modificationMessage, setModificationMessage] = useState('');
   const [isRequestingModification, setIsRequestingModification] = useState(false);
+  // Estados locales para datos del cliente (se actualizan cuando cliente cambia o se actualiza el perfil)
+  const [currentClientName, setCurrentClientName] = useState(cliente?.name || '');
+  const [currentClientPhone, setCurrentClientPhone] = useState(cliente?.phone || '');
+  const [currentClientEmail, setCurrentClientEmail] = useState(cliente?.email || null);
+  const [currentClientAddress, setCurrentClientAddress] = useState(cliente?.address || null);
+  const [currentClientAvatarUrl, setCurrentClientAvatarUrl] = useState(cliente?.avatar_url || null);
   const supabase = createClient();
   const promisesChannelRef = useRef<any>(null);
   const contactsChannelRef = useRef<any>(null);
+  const contractRef = useRef<EventContract | null>(null);
+
+  // Mantener referencia actualizada del contrato
+  useEffect(() => {
+    contractRef.current = contract;
+  }, [contract]);
+
+  // Actualizar estados locales cuando cliente cambia
+  useEffect(() => {
+    if (cliente) {
+      setCurrentClientName(cliente.name || '');
+      setCurrentClientPhone(cliente.phone || '');
+      setCurrentClientEmail(cliente.email || null);
+      setCurrentClientAddress(cliente.address || null);
+      setCurrentClientAvatarUrl(cliente.avatar_url || null);
+    }
+  }, [cliente]);
 
   const loadContract = useCallback(async () => {
     if (!slug || !eventId || !cliente?.id) return;
@@ -134,8 +157,36 @@ export default function EventoContratoPage() {
               const locationChanged = promiseNew.event_location !== promiseOld?.event_location;
 
               if (nameChanged || locationChanged) {
-                // Recargar contrato para reflejar cambios
-                loadContract();
+                // Regenerar contrato con datos actualizados
+                // Solo si el contrato existe y no está firmado
+                const currentContract = contractRef.current;
+                if (currentContract && currentContract.status !== 'SIGNED' && currentContract.status !== 'CANCELLED') {
+                  setTimeout(async () => {
+                    try {
+                      // Obtener el event_id real (puede ser promise_id o event_id)
+                      const realEventIdResult = await getRealEventId(slug, eventId);
+                      if (realEventIdResult.success && realEventIdResult.data) {
+                        const changeReason = nameChanged && locationChanged
+                          ? "Regeneración automática: cliente actualizó nombre y sede del evento"
+                          : nameChanged
+                          ? "Regeneración automática: cliente actualizó nombre del evento"
+                          : "Regeneración automática: cliente actualizó sede del evento";
+                        const regenerateResult = await regenerateEventContract(slug, realEventIdResult.data, changeReason);
+                        if (regenerateResult.success) {
+                          // Recargar contrato después de regenerar
+                          await loadContract();
+                        }
+                      }
+                    } catch (error) {
+                      console.error('[EventoContratoPage] Error regenerando contrato:', error);
+                      // Fallback: solo recargar
+                      loadContract();
+                    }
+                  }, 200);
+                } else {
+                  // Si está firmado, solo recargar (no regenerar)
+                  loadContract();
+                }
               }
             }
           });
@@ -164,10 +215,38 @@ export default function EventoContratoPage() {
               const addressChanged = contactNew.address !== contactOld?.address;
 
               if (nameChanged || phoneChanged || emailChanged || addressChanged) {
-                // Pequeño delay para asegurar que la BD se actualizó
-                setTimeout(() => {
+                // Regenerar contrato con datos actualizados
+                // Solo si el contrato existe y no está firmado
+                const currentContract = contractRef.current;
+                if (currentContract && currentContract.status !== 'SIGNED' && currentContract.status !== 'CANCELLED') {
+                  setTimeout(async () => {
+                    try {
+                      // Obtener el event_id real (puede ser promise_id o event_id)
+                      const realEventIdResult = await getRealEventId(slug, eventId);
+                      if (realEventIdResult.success && realEventIdResult.data) {
+                        // Construir mensaje descriptivo de qué cambió
+                        const fieldsChanged: string[] = [];
+                        if (nameChanged) fieldsChanged.push('nombre');
+                        if (phoneChanged) fieldsChanged.push('teléfono');
+                        if (emailChanged) fieldsChanged.push('email');
+                        if (addressChanged) fieldsChanged.push('dirección');
+                        const changeReason = `Regeneración automática: cliente actualizó ${fieldsChanged.join(', ')}`;
+                        const regenerateResult = await regenerateEventContract(slug, realEventIdResult.data, changeReason);
+                        if (regenerateResult.success) {
+                          // Recargar contrato después de regenerar
+                          await loadContract();
+                        }
+                      }
+                    } catch (error) {
+                      console.error('[EventoContratoPage] Error regenerando contrato:', error);
+                      // Fallback: solo recargar
+                      loadContract();
+                    }
+                  }, 200);
+                } else {
+                  // Si está firmado, solo recargar (no regenerar)
                   loadContract();
-                }, 100);
+                }
               }
             }
           });
@@ -197,7 +276,68 @@ export default function EventoContratoPage() {
         contactsChannelRef.current = null;
       }
     };
-  }, [slug, eventId, cliente?.id, supabase, loadContract]);
+  }, [slug, eventId, cliente?.id, contract, supabase, loadContract, evento]);
+
+  // Configurar realtime para escuchar cambios en contratos
+  useEffect(() => {
+    if (!slug || !contract?.id) return;
+
+    const setupRealtime = async () => {
+      try {
+        const requiresAuth = false;
+        const authResult = await setupRealtimeAuth(supabase, requiresAuth);
+
+        if (!authResult.success && requiresAuth) {
+          return;
+        }
+
+        const contractsChannel = createRealtimeChannel(supabase, {
+          channelName: `studio:${slug}:contracts`,
+          isPrivate: false,
+          requiresAuth: false,
+          self: true,
+          ack: true,
+        });
+
+        contractsChannel
+          .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            const p = payload as any;
+            const contractNew = p.record || p.new || p.payload?.record || p.payload?.new;
+
+            // Verificar si es el contrato del evento actual
+            if (contractNew && contractNew.id === contract.id) {
+              // Solo recargar si el contrato está publicado (el cliente solo ve contratos publicados)
+              if (contractNew.status === 'PUBLISHED' || contractNew.status === 'SIGNED') {
+                // Recargar contrato después de un pequeño delay para asegurar que la BD está actualizada
+                setTimeout(() => {
+                  loadContract();
+                }, 300);
+              }
+            }
+          })
+          .on('broadcast', { event: '*' }, (payload: unknown) => {
+            const p = payload as any;
+            const operation = p.operation || p.event;
+            if (operation === 'UPDATE') {
+              const contractNew = p.record || p.new || p.payload?.record || p.payload?.new;
+              if (contractNew && contractNew.id === contract.id) {
+                if (contractNew.status === 'PUBLISHED' || contractNew.status === 'SIGNED') {
+                  setTimeout(() => {
+                    loadContract();
+                  }, 300);
+                }
+              }
+            }
+          });
+
+        await subscribeToChannel(contractsChannel);
+      } catch (error) {
+        console.error('[EventoContratoPage] Error configurando realtime para contratos:', error);
+      }
+    };
+
+    setupRealtime();
+  }, [slug, contract?.id, supabase, loadContract]);
 
   const handleSign = async () => {
     if (!contract || !slug) return;
@@ -707,11 +847,11 @@ export default function EventoContratoPage() {
           onClose={() => setShowProfileModal(false)}
           cliente={cliente}
           slug={slug}
-          initialName={cliente.name}
-          initialPhone={cliente.phone}
-          initialEmail={cliente.email}
-          initialAddress={cliente.address}
-          initialAvatarUrl={cliente.avatar_url}
+          initialName={currentClientName}
+          initialPhone={currentClientPhone}
+          initialEmail={currentClientEmail}
+          initialAddress={currentClientAddress}
+          initialAvatarUrl={currentClientAvatarUrl}
           onUpdate={async (name, phone, email, address, avatarUrl) => {
             // Actualizar perfil primero
             const { actualizarPerfilCliente } = await import('@/lib/actions/cliente/perfil.actions');
@@ -723,7 +863,13 @@ export default function EventoContratoPage() {
               avatar_url: avatarUrl || '',
             });
 
-            if (result.success) {
+            if (result.success && result.data) {
+              // Actualizar estados locales con los nuevos valores
+              setCurrentClientName(result.data.name);
+              setCurrentClientPhone(result.data.phone);
+              setCurrentClientEmail(result.data.email);
+              setCurrentClientAddress(result.data.address);
+              setCurrentClientAvatarUrl(result.data.avatar_url);
               // Recargar contrato después de actualizar
               await loadContract();
             } else {

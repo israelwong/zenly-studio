@@ -42,6 +42,21 @@ export async function notifyClientProfileUpdated(
       return fieldNames[field] || field;
     }).join(", ");
 
+    // Buscar el evento más reciente asociado a este contacto para redirigir a su página
+    const event = await prisma.studio_events.findFirst({
+      where: {
+        contact_id: contactId,
+        studio_id: contact.studio_id,
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+
     return createStudioNotification({
       scope: StudioNotificationScope.STUDIO,
       type: StudioNotificationType.CLIENT_PROFILE_UPDATED,
@@ -50,11 +65,12 @@ export async function notifyClientProfileUpdated(
       message: `${contact.name} actualizó su ${fieldsDisplay}`,
       category: "contacts",
       priority: NotificationPriority.MEDIUM,
-      route: `/{slug}/studio/commercial/contacts/{contact_id}`,
-      route_params: {
+      // Redirigir a la página del evento si existe, sino no incluir ruta
+      route: event ? `/{slug}/studio/business/events/{event_id}` : null,
+      route_params: event ? {
         slug: contact.studio.slug,
-        contact_id: contactId,
-      },
+        event_id: event.id,
+      } : null,
       metadata: {
         contact_name: contact.name,
         fields_changed: fieldsChanged,
@@ -62,6 +78,7 @@ export async function notifyClientProfileUpdated(
         new_values: newValues,
       },
       contact_id: contactId,
+      event_id: event?.id || null,
     });
   } catch (error) {
     console.error("[notifyClientProfileUpdated] Error:", error);
@@ -107,20 +124,49 @@ export async function notifyClientEventInfoUpdated(
       return null;
     }
 
-    const fieldsDisplay = fieldsChanged.map((field) => {
+    // Construir mensaje detallado con valores antiguos y nuevos
+    const messageParts: string[] = [];
+    
+    fieldsChanged.forEach((field) => {
       const fieldNames: Record<string, string> = {
-        name: "nombre del evento",
-        event_location: "sede del evento",
+        name: "nombre",
+        event_location: "sede",
       };
-      return fieldNames[field] || field;
-    }).join(", ");
+      const fieldDisplay = fieldNames[field] || field;
+      
+      const oldValue = oldValues[field];
+      const newValue = newValues[field];
+      
+      // Formatear valores para mostrar
+      const formatValue = (value: unknown): string => {
+        if (value === null || value === undefined || value === '') return 'vacío';
+        return String(value);
+      };
+      
+      const oldValueDisplay = formatValue(oldValue);
+      const newValueDisplay = formatValue(newValue);
+      
+      if (oldValueDisplay === 'vacío') {
+        messageParts.push(`${fieldDisplay} a "${newValueDisplay}"`);
+      } else if (newValueDisplay === 'vacío') {
+        messageParts.push(`${fieldDisplay} de "${oldValueDisplay}" a vacío`);
+      } else {
+        messageParts.push(`${fieldDisplay} de "${oldValueDisplay}" a "${newValueDisplay}"`);
+      }
+    });
+    
+    const fieldsMessage = messageParts.join(", ");
+    const eventName = event.promise?.name || 'Sin nombre';
+    
+    // Construir mensaje: "actualizó [campo] del evento '[nombre]'"
+    const message = `${event.contact.name} actualizó ${fieldsMessage} del evento "${eventName}"`;
 
     return createStudioNotification({
       scope: StudioNotificationScope.STUDIO,
       type: StudioNotificationType.CLIENT_EVENT_INFO_UPDATED,
       studio_id: event.studio_id,
       title: "Cliente actualizó datos del evento",
-      message: `${event.contact.name} actualizó ${fieldsDisplay} del evento "${event.promise?.name || 'Sin nombre'}"`,
+      message,
       category: "events",
       priority: NotificationPriority.MEDIUM,
       route: `/{slug}/studio/business/events/{event_id}`,

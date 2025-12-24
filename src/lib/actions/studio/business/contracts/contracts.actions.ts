@@ -329,6 +329,11 @@ export async function deleteEventContract(
         id: contractId,
         studio_id: studio.id,
       },
+      select: {
+        id: true,
+        event_id: true,
+        status: true,
+      },
     });
 
     if (!contract) {
@@ -340,11 +345,15 @@ export async function deleteEventContract(
       return { success: false, error: "No se puede eliminar un contrato firmado o cancelado" };
     }
 
+    // Guardar event_id antes de eliminar
+    const eventId = contract.event_id;
+
+    // Eliminar contrato
     await prisma.studio_event_contracts.delete({
       where: { id: contractId },
     });
 
-    revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
 
     return { success: true };
   } catch (error) {
@@ -356,7 +365,8 @@ export async function deleteEventContract(
 // Regenerar contrato con datos actualizados
 export async function regenerateEventContract(
   studioSlug: string,
-  eventId: string
+  eventId: string,
+  changeReason?: string
 ): Promise<ActionResponse<EventContract>> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -407,39 +417,65 @@ export async function regenerateEventContract(
       return { success: false, error: renderResult.error || "Error al renderizar contrato" };
     }
 
-    // Guardar versión anterior
-    await prisma.studio_contract_versions.create({
-      data: {
+    // Guardar versión anterior (solo si no existe ya)
+    const existingPreviousVersion = await prisma.studio_contract_versions.findFirst({
+      where: {
         contract_id: contract.id,
         version: contract.version,
-        content: contract.content,
-        status: contract.status,
-        change_type: "AUTO_REGENERATE",
-        change_reason: "Regeneración automática por cambios en datos del evento",
       },
     });
 
-    // Actualizar contrato (si está publicado, regenerar crea nueva versión en draft)
+    if (!existingPreviousVersion) {
+      await prisma.studio_contract_versions.create({
+        data: {
+          contract_id: contract.id,
+          version: contract.version,
+          content: contract.content,
+          status: contract.status,
+          change_type: "AUTO_REGENERATE",
+          change_reason: changeReason || "Regeneración automática por cambios en datos del cliente o evento",
+        },
+      });
+    }
+
+    // Calcular nueva versión
+    const newVersion = contract.version + 1;
+
+    // Actualizar contrato
+    // Si está publicado, mantenerlo publicado (regeneración automática por cambios del cliente)
+    // Si está en draft, mantenerlo en draft
+    // Si está firmado o cancelado, no debería llegar aquí (ya se valida arriba)
     const updated = await prisma.studio_event_contracts.update({
       where: { id: contract.id },
       data: {
         content: renderResult.data,
-        status: contract.status === "PUBLISHED" ? "DRAFT" : contract.status,
-        version: contract.version + 1,
+        // Mantener el estado actual (PUBLISHED permanece PUBLISHED, DRAFT permanece DRAFT)
+        status: contract.status,
+        version: newVersion,
       },
     });
 
-    // Crear nueva versión
-    await prisma.studio_contract_versions.create({
-      data: {
+    // Crear nueva versión (solo si no existe ya)
+    const existingNewVersion = await prisma.studio_contract_versions.findFirst({
+      where: {
         contract_id: contract.id,
-        version: contract.version + 1,
-        content: renderResult.data,
-        status: contract.status === "PUBLISHED" ? "DRAFT" : contract.status,
-        change_type: "AUTO_REGENERATE",
-        change_reason: "Regeneración automática por cambios en datos del evento",
+        version: newVersion,
       },
     });
+
+    if (!existingNewVersion) {
+      await prisma.studio_contract_versions.create({
+        data: {
+          contract_id: contract.id,
+          version: newVersion,
+          content: renderResult.data,
+          // Mantener el mismo estado que el contrato
+          status: contract.status,
+          change_type: "AUTO_REGENERATE",
+          change_reason: changeReason || "Regeneración automática por cambios en datos del cliente o evento",
+        },
+      });
+    }
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);
 
@@ -601,12 +637,12 @@ export async function publishEventContract(
         id: contractId,
         studio_id: studio.id,
       },
-      include: {
-        event: {
-          include: {
-            contact: true,
-          },
-        },
+      select: {
+        id: true,
+        event_id: true,
+        version: true,
+        status: true,
+        studio_id: true,
       },
     });
 
@@ -636,9 +672,14 @@ export async function publishEventContract(
       },
     });
 
-    // Notificar al cliente
-    const { notifyContractAvailable } = await import("@/lib/notifications/client/helpers/contract-notifications");
-    await notifyContractAvailable(contractId, contract.version);
+    // Notificar al cliente (obtener datos del evento para la notificación)
+    try {
+      const { notifyContractAvailable } = await import("@/lib/notifications/client/helpers/contract-notifications");
+      await notifyContractAvailable(contractId, updated.version);
+    } catch (error) {
+      console.error("[publishEventContract] Error enviando notificación:", error);
+      // No fallar la publicación si falla la notificación
+    }
 
     revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}`);
 
@@ -729,6 +770,10 @@ export async function getEventContractForClient(
     // El eventId puede ser un promise_id, obtener el event_id real
     const realEventIdResult = await getRealEventId(studioSlug, eventId);
     if (!realEventIdResult.success || !realEventIdResult.data) {
+      console.error('[getEventContractForClient] Error obteniendo realEventId:', {
+        eventId,
+        error: realEventIdResult.error,
+      });
       return { success: false, error: realEventIdResult.error || "Evento no encontrado" };
     }
 
@@ -744,9 +789,15 @@ export async function getEventContractForClient(
     });
 
     if (!event) {
+      console.error('[getEventContractForClient] Evento no encontrado o sin acceso:', {
+        realEventId,
+        studioId: studio.id,
+        clientId,
+      });
       return { success: false, error: "Evento no encontrado o no tienes acceso" };
     }
 
+    // Buscar contrato (incluyendo DRAFT para debugging)
     const contract = await prisma.studio_event_contracts.findFirst({
       where: {
         event_id: realEventId,
@@ -758,6 +809,27 @@ export async function getEventContractForClient(
     });
 
     if (!contract) {
+      // Verificar si existe un contrato en DRAFT para dar un mensaje más específico
+      const draftContract = await prisma.studio_event_contracts.findFirst({
+        where: {
+          event_id: realEventId,
+          studio_id: studio.id,
+          status: "DRAFT",
+        },
+      });
+
+      if (draftContract) {
+        console.log('[getEventContractForClient] Contrato encontrado pero está en DRAFT:', {
+          contractId: draftContract.id,
+          status: draftContract.status,
+        });
+        return { success: false, error: "El contrato aún no ha sido publicado" };
+      }
+
+      console.error('[getEventContractForClient] No hay contrato disponible:', {
+        realEventId,
+        studioId: studio.id,
+      });
       return { success: false, error: "No hay contrato disponible para este evento" };
     }
 

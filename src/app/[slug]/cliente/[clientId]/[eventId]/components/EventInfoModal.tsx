@@ -54,14 +54,41 @@ export function EventInfoModal({
             return;
         }
 
+        // Normalizar valores para comparación
+        const normalizeValue = (value: string | null | undefined): string | null => {
+            if (value === null || value === undefined) return null;
+            const trimmed = value.trim();
+            return trimmed === '' ? null : trimmed;
+        };
+
+        const normalizedName = normalizeValue(name);
+        const normalizedLocation = normalizeValue(location);
+        const normalizedInitialName = normalizeValue(initialName);
+        const normalizedInitialLocation = normalizeValue(initialLocation);
+
+        // Solo enviar campos que realmente cambiaron
+        const updateData: { name?: string | null; event_location?: string | null } = {};
+        
+        if (normalizedName !== normalizedInitialName) {
+            updateData.name = normalizedName;
+        }
+        
+        if (normalizedLocation !== normalizedInitialLocation) {
+            updateData.event_location = normalizedLocation;
+        }
+
+        // Si no hay cambios, no hacer nada
+        if (Object.keys(updateData).length === 0) {
+            toast.info('No hay cambios para guardar');
+            onClose();
+            return;
+        }
+
         setIsSaving(true);
         const loadingToast = toast.loading('Actualizando información del evento...');
 
         try {
-            const result = await actualizarEventoInfo(eventId, clientId, {
-                name: name.trim() || null,
-                event_location: location.trim() || null,
-            });
+            const result = await actualizarEventoInfo(eventId, clientId, updateData);
 
             toast.dismiss(loadingToast);
 

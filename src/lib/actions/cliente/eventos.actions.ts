@@ -451,19 +451,28 @@ export async function actualizarEventoInfo(
       };
     }
 
-    // Guardar valores anteriores
+    // Guardar valores anteriores (normalizados para comparación)
+    const normalizeValue = (value: string | null | undefined): string | null => {
+      if (value === null || value === undefined) return null;
+      const trimmed = value.trim();
+      return trimmed === '' ? null : trimmed;
+    };
+
+    const oldName = normalizeValue(promise.name);
+    const oldLocation = normalizeValue(promise.event_location);
+
     const oldValues: Record<string, unknown> = {
-      name: promise.name,
-      event_location: promise.event_location,
+      name: oldName,
+      event_location: oldLocation,
     };
 
     // Actualizar solo los campos proporcionados
     const updateData: { name?: string | null; event_location?: string | null } = {};
     if (data.name !== undefined) {
-      updateData.name = data.name?.trim() || null;
+      updateData.name = normalizeValue(data.name);
     }
     if (data.event_location !== undefined) {
-      updateData.event_location = data.event_location?.trim() || null;
+      updateData.event_location = normalizeValue(data.event_location);
     }
 
     const updatedPromise = await prisma.studio_promises.update({
@@ -475,18 +484,30 @@ export async function actualizarEventoInfo(
       },
     });
 
+    // Normalizar valores actualizados para comparación
+    const newName = normalizeValue(updatedPromise.name);
+    const newLocation = normalizeValue(updatedPromise.event_location);
+
     // Detectar campos cambiados y enviar notificación
+    // Solo detectar cambios en campos que realmente se intentaron actualizar
     if (promise.event?.id) {
       const fieldsChanged: string[] = [];
       const newValues: Record<string, unknown> = {};
 
-      if (oldValues.name !== updatedPromise.name) {
-        fieldsChanged.push('name');
-        newValues.name = updatedPromise.name;
+      // Solo verificar name si se intentó actualizar
+      if (data.name !== undefined) {
+        if (oldName !== newName) {
+          fieldsChanged.push('name');
+          newValues.name = newName;
+        }
       }
-      if (oldValues.event_location !== updatedPromise.event_location) {
-        fieldsChanged.push('event_location');
-        newValues.event_location = updatedPromise.event_location;
+
+      // Solo verificar event_location si se intentó actualizar
+      if (data.event_location !== undefined) {
+        if (oldLocation !== newLocation) {
+          fieldsChanged.push('event_location');
+          newValues.event_location = newLocation;
+        }
       }
 
       // Enviar notificación si hay cambios
