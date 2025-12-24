@@ -31,6 +31,9 @@ export enum StudioNotificationType {
   AGENDA_UPDATED = 'AGENDA_UPDATED',
   AGENDA_CANCELLED = 'AGENDA_CANCELLED',
   STUDIO_SETTINGS_UPDATED = 'STUDIO_SETTINGS_UPDATED',
+  CONTRACT_CANCELLATION_REQUESTED_BY_CLIENT = 'CONTRACT_CANCELLATION_REQUESTED_BY_CLIENT',
+  CONTRACT_CANCELLATION_CONFIRMED = 'CONTRACT_CANCELLATION_CONFIRMED',
+  CONTRACT_CANCELLATION_REJECTED = 'CONTRACT_CANCELLATION_REJECTED',
 }
 
 export enum NotificationPriority {
@@ -74,18 +77,18 @@ export interface CreateStudioNotificationInput {
   message: string;
   category?: string;
   priority?: NotificationPriority;
-  
+
   // Destinatarios (según scope)
   user_id?: string;
   role?: StudioRole;
-  
+
   // Navegación
   route?: string;
   route_params?: NotificationRouteParams;
-  
+
   // Metadata
   metadata?: NotificationMetadata;
-  
+
   // Relaciones
   promise_id?: string;
   event_id?: string;
@@ -95,7 +98,7 @@ export interface CreateStudioNotificationInput {
   contact_id?: string;
   lead_id?: string;
   agenda_id?: string;
-  
+
   // Control
   expires_at?: Date;
   scheduled_for?: Date;

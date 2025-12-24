@@ -6,7 +6,7 @@ import { ZenDialog } from "@/components/ui/zen/modals/ZenDialog";
 import { ZenButton } from "@/components/ui/zen";
 import { ContractPreview } from "@/app/[slug]/studio/config/contratos/components";
 import { getEventContractData, renderContractContent, type EventContractDataWithConditions } from "@/lib/actions/studio/business/contracts/renderer.actions";
-import { generateEventContract } from "@/lib/actions/studio/business/contracts/contracts.actions";
+import { generateEventContract, getEventContract, updateEventContractTemplate } from "@/lib/actions/studio/business/contracts/contracts.actions";
 import { generatePDFFromElement, generateContractFilename } from "@/lib/utils/pdf-generator";
 import type { EventContractData } from "@/types/contracts";
 import { toast } from "sonner";
@@ -92,21 +92,43 @@ export function ContractPreviewModal({
   const handleConfirm = async () => {
     setIsGenerating(true);
     try {
-      const result = await generateEventContract(studioSlug, {
-        event_id: eventId,
-        template_id: templateId,
-      });
+      // Verificar si ya existe un contrato para este evento
+      const existingContractResult = await getEventContract(studioSlug, eventId);
 
-      if (result.success && result.data) {
-        toast.success('Contrato generado correctamente');
-        onContractGenerated?.();
-        onConfirm?.();
-        onClose();
+      if (existingContractResult.success && existingContractResult.data) {
+        // Actualizar contrato existente con nueva plantilla
+        const updateResult = await updateEventContractTemplate(studioSlug, existingContractResult.data.id, {
+          template_id: templateId,
+          change_reason: `Plantilla cambiada a: ${templateName || 'Nueva plantilla'}`,
+        });
+
+        if (updateResult.success && updateResult.data) {
+          toast.success('Plantilla actualizada correctamente');
+          onContractGenerated?.();
+          onConfirm?.();
+          onClose();
+        } else {
+          toast.error(updateResult.error || 'Error al actualizar plantilla');
+        }
       } else {
-        toast.error(result.error || 'Error al generar contrato');
+        // Crear nuevo contrato
+        const result = await generateEventContract(studioSlug, {
+          event_id: eventId,
+          template_id: templateId,
+        });
+
+        if (result.success && result.data) {
+          toast.success('Contrato generado correctamente');
+          onContractGenerated?.();
+          onConfirm?.();
+          onClose();
+        } else {
+          toast.error(result.error || 'Error al generar contrato');
+        }
       }
     } catch (error) {
-      toast.error('Error al generar contrato');
+      console.error('Error en handleConfirm:', error);
+      toast.error('Error al procesar contrato');
     } finally {
       setIsGenerating(false);
     }

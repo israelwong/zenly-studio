@@ -35,12 +35,12 @@ model platform_config {
   support_phone         String?
 
   // Google OAuth (genérico, reutilizable para Drive, Gmail, Calendar, etc.)
-  google_oauth_client_id       String?
-  google_oauth_client_secret   String?  // Encriptado
-  google_oauth_redirect_uri     String?
-  
+  google_oauth_client_id     String?
+  google_oauth_client_secret String? // Encriptado
+  google_oauth_redirect_uri  String?
+
   // API Keys específicas por servicio
-  google_drive_api_key         String?  // Para Google Picker API
+  google_drive_api_key String? // Para Google Picker API
   // Futuro: google_gmail_api_key, google_calendar_api_key, etc.
 }
 
@@ -699,25 +699,25 @@ model platform_agent_discount_codes {
 }
 
 model studios {
-  id                                              String                           @id @default(cuid())
+  id                                              String             @id @default(cuid())
   studio_name                                     String
-  slug                                            String                           @unique
-  email                                           String                           @unique
+  slug                                            String             @unique
+  email                                           String             @unique
   address                                         String?
   website                                         String?
   logo_url                                        String?
   plan_id                                         String?
-  subscription_status                             SubscriptionStatus               @default(TRIAL)
+  subscription_status                             SubscriptionStatus @default(TRIAL)
   subscription_start                              DateTime?
   subscription_end                                DateTime?
-  stripe_customer_id                              String?                          @unique
-  stripe_subscription_id                          String?                          @unique
-  stripe_account_id                               String?                          @unique
-  stripe_onboarding_complete                      Boolean                          @default(false)
-  commission_rate                                 Decimal                          @default(0.30)
-  is_active                                       Boolean                          @default(true)
-  created_at                                      DateTime                         @default(now())
-  updated_at                                      DateTime                         @updatedAt
+  stripe_customer_id                              String?            @unique
+  stripe_subscription_id                          String?            @unique
+  stripe_account_id                               String?            @unique
+  stripe_onboarding_complete                      Boolean            @default(false)
+  commission_rate                                 Decimal            @default(0.30)
+  is_active                                       Boolean            @default(true)
+  created_at                                      DateTime           @default(now())
+  updated_at                                      DateTime           @updatedAt
   isotipo_url                                     String?
   slogan                                          String?
   account_holder                                  String?
@@ -734,79 +734,80 @@ model studios {
   gtm_id                                          String?
   facebook_pixel_id                               String?
   // Preferencias por defecto para compartir promesas (para "recordar preferencias")
-  promise_share_default_show_packages             Boolean                          @default(true)
-  promise_share_default_show_categories_subtotals Boolean                          @default(false)
-  promise_share_default_show_items_prices         Boolean                          @default(false)
-  promise_share_default_min_days_to_hire          Int                              @default(30)
-  promise_share_default_show_standard_conditions Boolean                          @default(true)
-  promise_share_default_show_offer_conditions    Boolean                          @default(false)
-  promise_share_default_portafolios              Boolean                          @default(true)
-  
-  manager_pipeline_stages                         studio_manager_pipeline_stages[]
-  platform_campaigns                              platform_campaigns[]
-  platform_leads                                  platform_leads?
-  platform_user_profiles                          platform_user_profiles[]
-  agenda                                          studio_agenda[]
-  business_hours                                  studio_business_hours[]
-  crew_skills                                     studio_crew_skills[]
-  category_media                                  studio_category_media[]          @relation("category_media")
-  client_portal_access                            studio_client_portal_access[]
-  contacts                                        studio_contacts[]
-  promise_pipeline_stages                         studio_promise_pipeline_stages[]
-  promise_tags                                    studio_promise_tags[]
-  condiciones_comerciales                         studio_condiciones_comerciales[]
-  configuraciones                                 studio_configuraciones[]
-  cotizaciones                                    studio_cotizaciones[]
-  event_types                                     studio_event_types[]
-  eventos                                         studio_events[]
-  promises                                        studio_promises[]
-  studio_notifications                            studio_notifications[]
-  studio_client_notifications                     studio_client_notifications[]
-  faq                                             studio_faq[]
-  gastos                                          studio_gastos[]
-  recurring_expenses                              studio_recurring_expenses[]
-  item_media                                      studio_item_media[]              @relation("item_media")
-  items                                           studio_items[]
-  lead_forms                                      studio_lead_forms[]
-  metodos_pago                                    studio_metodos_pago[]
-  studio_modules                                  studio_modules[]
-  nominas                                         studio_nominas[]
-  paquetes                                        studio_paquetes[]
-  crew_members                                    studio_crew_members[]
-  phones                                          studio_phones[]
-  portfolio_media                                 studio_portfolio_media[]         @relation("portfolio_media")
-  portfolios                                      studio_portfolios[]
-  offer_media                                     studio_offer_media[]             @relation("offer_media")
-  post_media                                      studio_post_media[]              @relation("post_media")
-  posts                                           studio_posts[]
-  revenue_transactions                            studio_revenue_transactions[]
-  studio_role_permissions                         studio_role_permissions[]
-  scheduling_rules                                studio_scheduling_rules[]
-  section_media                                   studio_section_media[]           @relation("section_media")
-  setup_status                                    studio_setup_status?
-  social_networks                                 studio_social_networks[]
-  storage_log                                     studio_storage_log[]
-  storage_usage                                   studio_storage_usage?
-  studio_revenue_products                         studio_studio_revenue_products[]
-  terminos_condiciones                            studio_terminos_condiciones[]
-  user_profiles                                   studio_user_profiles[]
-  studio_users                                    studio_users[]
-  zonas_trabajo                                   studio_zonas_trabajo[]
-  contract_templates                              studio_contract_templates[]
-  event_contracts                                 studio_event_contracts[]
-  offers                                          studio_offers[]
-  content_analytics                               studio_content_analytics[]
-  plan                                            platform_plans?                  @relation(fields: [plan_id], references: [id])
-  subscriptions                                   subscriptions[]
-  usage_tracking                                  usage_tracking[]
-  user_studio_roles                               user_studio_roles[]
+  promise_share_default_show_packages             Boolean            @default(true)
+  promise_share_default_show_categories_subtotals Boolean            @default(false)
+  promise_share_default_show_items_prices         Boolean            @default(false)
+  promise_share_default_min_days_to_hire          Int                @default(30)
+  promise_share_default_show_standard_conditions  Boolean            @default(true)
+  promise_share_default_show_offer_conditions     Boolean            @default(false)
+  promise_share_default_portafolios               Boolean            @default(true)
+
+  manager_pipeline_stages     studio_manager_pipeline_stages[]
+  platform_campaigns          platform_campaigns[]
+  platform_leads              platform_leads?
+  platform_user_profiles      platform_user_profiles[]
+  agenda                      studio_agenda[]
+  business_hours              studio_business_hours[]
+  crew_skills                 studio_crew_skills[]
+  category_media              studio_category_media[]          @relation("category_media")
+  client_portal_access        studio_client_portal_access[]
+  contacts                    studio_contacts[]
+  promise_pipeline_stages     studio_promise_pipeline_stages[]
+  promise_tags                studio_promise_tags[]
+  condiciones_comerciales     studio_condiciones_comerciales[]
+  configuraciones             studio_configuraciones[]
+  cotizaciones                studio_cotizaciones[]
+  event_types                 studio_event_types[]
+  eventos                     studio_events[]
+  promises                    studio_promises[]
+  studio_notifications        studio_notifications[]
+  studio_client_notifications studio_client_notifications[]
+  faq                         studio_faq[]
+  gastos                      studio_gastos[]
+  recurring_expenses          studio_recurring_expenses[]
+  item_media                  studio_item_media[]              @relation("item_media")
+  items                       studio_items[]
+  lead_forms                  studio_lead_forms[]
+  metodos_pago                studio_metodos_pago[]
+  studio_modules              studio_modules[]
+  nominas                     studio_nominas[]
+  paquetes                    studio_paquetes[]
+  crew_members                studio_crew_members[]
+  phones                      studio_phones[]
+  portfolio_media             studio_portfolio_media[]         @relation("portfolio_media")
+  portfolios                  studio_portfolios[]
+  offer_media                 studio_offer_media[]             @relation("offer_media")
+  post_media                  studio_post_media[]              @relation("post_media")
+  posts                       studio_posts[]
+  revenue_transactions        studio_revenue_transactions[]
+  studio_role_permissions     studio_role_permissions[]
+  scheduling_rules            studio_scheduling_rules[]
+  section_media               studio_section_media[]           @relation("section_media")
+  setup_status                studio_setup_status?
+  social_networks             studio_social_networks[]
+  storage_log                 studio_storage_log[]
+  storage_usage               studio_storage_usage?
+  studio_revenue_products     studio_studio_revenue_products[]
+  terminos_condiciones        studio_terminos_condiciones[]
+  avisos_privacidad           studio_avisos_privacidad[]
+  user_profiles               studio_user_profiles[]
+  studio_users                studio_users[]
+  zonas_trabajo               studio_zonas_trabajo[]
+  contract_templates          studio_contract_templates[]
+  event_contracts             studio_event_contracts[]
+  offers                      studio_offers[]
+  content_analytics           studio_content_analytics[]
+  plan                        platform_plans?                  @relation(fields: [plan_id], references: [id])
+  subscriptions               subscriptions[]
+  usage_tracking              usage_tracking[]
+  user_studio_roles           user_studio_roles[]
 
   // Google OAuth Integration (genérico, puede tener múltiples scopes)
-  google_oauth_refresh_token                      String?  // Encrypted, genérico para todas las APIs
-  google_oauth_email                              String?
-  google_oauth_scopes                             String?  // JSON array: ["drive.readonly", "gmail.send"]
-  is_google_connected                             Boolean                          @default(false)
-  google_integrations_config                      Json?   // { drive: { enabled: true }, gmail: { enabled: false } }
+  google_oauth_refresh_token String? // Encrypted, genérico para todas las APIs
+  google_oauth_email         String?
+  google_oauth_scopes        String? // JSON array: ["drive.readonly", "gmail.send"]
+  is_google_connected        Boolean @default(false)
+  google_integrations_config Json? // { drive: { enabled: true }, gmail: { enabled: false } }
 
   @@index([plan_id])
   @@index([slug])
@@ -1281,7 +1282,7 @@ model studio_contact_logs {
 //! PROMISES
 
 model studio_promises {
-  id                              String                          @id @default(cuid())
+  id                              String    @id @default(cuid())
   studio_id                       String
   contact_id                      String
   offer_id                        String? // Oferta de origen (null si es prospecto manual)
@@ -1291,10 +1292,10 @@ model studio_promises {
   address                         String? // Dirección del evento (movido desde studio_events)
   event_date                      DateTime? // Fecha del evento confirmada (consolidado con defined_date)
   pipeline_stage_id               String?
-  status                          String                          @default("pending")
+  status                          String    @default("pending")
   defined_date                    DateTime? // Mantener para compatibilidad con fechas tentativas
   tentative_dates                 Json?
-  is_test                         Boolean                         @default(false) // Marca promesas de prueba del preview
+  is_test                         Boolean   @default(false) // Marca promesas de prueba del preview
   test_created_at                 DateTime? // Timestamp de creación para tracking
   // Override opcional de preferencias de compartir (null = usar default del studio)
   share_show_packages             Boolean?
@@ -1304,22 +1305,22 @@ model studio_promises {
   share_show_standard_conditions  Boolean?
   share_show_offer_conditions     Boolean?
   share_portafolios               Boolean?
-  
-  created_at                      DateTime                        @default(now())
-  updated_at                      DateTime                        @updatedAt
-  studio                          studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  contact                         studio_contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
-  offer                           studio_offers?                  @relation(fields: [offer_id], references: [id], onDelete: SetNull)
-  event_type                      studio_event_types?             @relation(fields: [event_type_id], references: [id])
-  pipeline_stage                  studio_promise_pipeline_stages? @relation(fields: [pipeline_stage_id], references: [id])
-  quotes                          studio_cotizaciones[]
-  event                           studio_events?
-  logs                            studio_promise_logs[]
-  tags                            studio_promises_tags[]
-  notifications                   studio_notifications[]
-  client_notifications            studio_client_notifications[]
-  agenda                          studio_agenda[]
-  pagos                           studio_pagos[]
+
+  created_at           DateTime                        @default(now())
+  updated_at           DateTime                        @updatedAt
+  studio               studios                         @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  contact              studio_contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  offer                studio_offers?                  @relation(fields: [offer_id], references: [id], onDelete: SetNull)
+  event_type           studio_event_types?             @relation(fields: [event_type_id], references: [id])
+  pipeline_stage       studio_promise_pipeline_stages? @relation(fields: [pipeline_stage_id], references: [id])
+  quotes               studio_cotizaciones[]
+  event                studio_events?
+  logs                 studio_promise_logs[]
+  tags                 studio_promises_tags[]
+  notifications        studio_notifications[]
+  client_notifications studio_client_notifications[]
+  agenda               studio_agenda[]
+  pagos                studio_pagos[]
 
   @@index([studio_id, contact_id])
   @@index([studio_id, status])
@@ -1484,28 +1485,94 @@ model studio_contract_templates {
 }
 
 model studio_event_contracts {
-  id                   String    @id @default(cuid())
+  id                   String         @id @default(cuid())
   studio_id            String
-  event_id             String    @unique
+  event_id             String         @unique
   template_id          String?
-  content              String    @db.Text
-  status               String    @default("draft")
-  version              Int       @default(1)
+  content              String         @db.Text // Contenido renderizado (para mostrar)
+  custom_template_content String?     @db.Text // Contenido personalizado editado (con variables, para editar)
+  status               ContractStatus @default(DRAFT)
+  version              Int            @default(1)
   signed_at            DateTime?
-  signed_by_client     Boolean   @default(false)
+  signed_by_client     Boolean        @default(false)
   client_signature_url String?
   created_by           String?
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
+  created_at           DateTime       @default(now())
+  updated_at           DateTime       @updatedAt
 
-  studio          studios                    @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  event           studio_events              @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  template        studio_contract_templates? @relation(fields: [template_id], references: [id])
-  created_by_user studio_users?              @relation(fields: [created_by], references: [id])
+  // Campos para cancelación
+  cancelled_at              DateTime?
+  cancellation_reason       String?   @db.Text
+  cancellation_initiated_by String? // 'studio' | 'client'
+
+  studio            studios                             @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  event             studio_events                       @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  template          studio_contract_templates?          @relation(fields: [template_id], references: [id])
+  created_by_user   studio_users?                       @relation(fields: [created_by], references: [id])
+  versions          studio_contract_versions[]
+  cancellation_logs studio_contract_cancellation_logs[]
 
   @@index([studio_id, status])
   @@index([event_id])
   @@index([template_id])
+  @@index([status, cancelled_at])
+}
+
+model studio_contract_versions {
+  id             String         @id @default(cuid())
+  contract_id    String
+  version        Int // Versión específica (1, 2, 3...)
+  content        String         @db.Text // Contenido renderizado de esta versión
+  status         ContractStatus // Estado en el que estaba esta versión
+  change_reason  String?        @db.Text // Motivo del cambio (manual o automático)
+  change_type    ChangeType // Tipo de cambio
+  changed_fields Json? // Campos que cambiaron (snapshot de datos)
+  created_by     String? // Usuario que creó esta versión (null si fue automático)
+  created_at     DateTime       @default(now())
+
+  contract        studio_event_contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+  created_by_user studio_users?          @relation(fields: [created_by], references: [id])
+
+  @@unique([contract_id, version])
+  @@index([contract_id, created_at])
+  @@index([change_type])
+}
+
+model studio_contract_cancellation_logs {
+  id           String             @id @default(cuid())
+  contract_id  String
+  action       CancellationAction // 'request', 'confirm', 'reject'
+  initiated_by String // 'studio' | 'client'
+  reason       String?            @db.Text
+  metadata     Json? // Información adicional
+  created_at   DateTime           @default(now())
+
+  contract studio_event_contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@index([contract_id, created_at])
+  @@index([initiated_by])
+}
+
+enum ContractStatus {
+  DRAFT
+  PUBLISHED
+  SIGNED
+  CANCELLATION_REQUESTED_BY_STUDIO
+  CANCELLATION_REQUESTED_BY_CLIENT
+  CANCELLED
+}
+
+enum CancellationAction {
+  REQUEST
+  CONFIRM
+  REJECT
+}
+
+enum ChangeType {
+  MANUAL_EDIT
+  AUTO_REGENERATE
+  TEMPLATE_UPDATE
+  DATA_UPDATE
 }
 
 model studio_manager_pipeline_stages {
@@ -1561,9 +1628,9 @@ model studio_event_deliverables {
   event              studio_events   @relation(fields: [event_id], references: [id], onDelete: Cascade)
 
   // Google Drive Integration
-  google_folder_id      String?
-  delivery_mode         DeliveryMode  @default(native)
-  drive_metadata_cache  Json?
+  google_folder_id     String?
+  delivery_mode        DeliveryMode @default(native)
+  drive_metadata_cache Json?
 
   @@index([event_id, type])
   @@index([delivered_at])
@@ -1767,7 +1834,7 @@ model studio_agenda {
   notifications    studio_notifications[]
 
   // Google Calendar Integration
-  google_event_id  String?
+  google_event_id String?
 
   @@index([studio_id])
   @@index([evento_id])
@@ -1882,25 +1949,25 @@ model studio_client_notifications {
   metadata Json?
 
   // Relaciones con entidades
-  promise_id    String?
-  event_id      String?
-  payment_id    String?
-  quote_id      String?
+  promise_id     String?
+  event_id       String?
+  payment_id     String?
+  quote_id       String?
   deliverable_id String?
-  contract_id   String?
+  contract_id    String?
 
   // Control de ciclo de vida
-  is_active     Boolean   @default(true)
-  expires_at    DateTime?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  is_active  Boolean   @default(true)
+  expires_at DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
 
   // Relaciones
-  contact  studio_contacts @relation(fields: [contact_id], references: [id], onDelete: Cascade)
-  studio   studios        @relation(fields: [studio_id], references: [id], onDelete: Cascade)
-  promise  studio_promises? @relation(fields: [promise_id], references: [id], onDelete: SetNull)
-  event    studio_events?   @relation(fields: [event_id], references: [id], onDelete: SetNull)
-  payment  studio_pagos?    @relation(fields: [payment_id], references: [id], onDelete: SetNull)
+  contact studio_contacts  @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  studio  studios          @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  promise studio_promises? @relation(fields: [promise_id], references: [id], onDelete: SetNull)
+  event   studio_events?   @relation(fields: [event_id], references: [id], onDelete: SetNull)
+  payment studio_pagos?    @relation(fields: [payment_id], references: [id], onDelete: SetNull)
 
   // Índices
   @@index([contact_id, is_read, created_at])
@@ -1958,6 +2025,21 @@ model studio_terminos_condiciones {
 
   @@index([studio_id, is_active])
   @@index([studio_id, order])
+}
+
+model studio_avisos_privacidad {
+  id          String   @id @default(cuid())
+  studio_id   String
+  title       String   @default("Aviso de Privacidad")
+  content     String
+  version     String   @default("1.0")
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  studio      studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id, is_active])
+  @@index([studio_id, version])
 }
 
 model studio_condiciones_comerciales_metodo_pago {
@@ -2194,42 +2276,42 @@ model studio_pagos {
 //! NOMINAS
 
 model studio_nominas {
-  id                     String                    @id @default(cuid())
-  studio_id              String
-  status                 String                    @default("pendiente")
-  created_at             DateTime                  @default(now())
-  evento_id              String?
-  personal_id            String?
-  updated_at             DateTime                  @updatedAt
-  user_id                String
-  assignment_date        DateTime                  @default(now())
-  authorization_date     DateTime?
-  authorized_by          String?
-  commission_percentage  Float?
-  concept                String
-  deductions             Float                     @default(0)
-  total_discounts        Float                     @default(0) // Descuentos aplicados al pago consolidado
-  description            String?
-  end_period             DateTime?
-  expense_total_snapshot Float                     @default(0)
-  gross_amount           Float
-  net_amount             Float
-  paid_by                String?
-  payment_date           DateTime?
-  payment_method         String?                   @default("transferencia")
-  payment_type           String                    @default("individual")
-  consolidated_payment_id String?                  // ID de la nómina consolidada si esta nómina fue parte de un pago consolidado
-  services_included      Int                       @default(1)
-  start_period           DateTime?
-  total_cost_snapshot    Float                     @default(0)
-  payroll_services       studio_nomina_servicios[]
+  id                      String                          @id @default(cuid())
+  studio_id               String
+  status                  String                          @default("pendiente")
+  created_at              DateTime                        @default(now())
+  evento_id               String?
+  personal_id             String?
+  updated_at              DateTime                        @updatedAt
+  user_id                 String
+  assignment_date         DateTime                        @default(now())
+  authorization_date      DateTime?
+  authorized_by           String?
+  commission_percentage   Float?
+  concept                 String
+  deductions              Float                           @default(0)
+  total_discounts         Float                           @default(0) // Descuentos aplicados al pago consolidado
+  description             String?
+  end_period              DateTime?
+  expense_total_snapshot  Float                           @default(0)
+  gross_amount            Float
+  net_amount              Float
+  paid_by                 String?
+  payment_date            DateTime?
+  payment_method          String?                         @default("transferencia")
+  payment_type            String                          @default("individual")
+  consolidated_payment_id String? // ID de la nómina consolidada si esta nómina fue parte de un pago consolidado
+  services_included       Int                             @default(1)
+  start_period            DateTime?
+  total_cost_snapshot     Float                           @default(0)
+  payroll_services        studio_nomina_servicios[]
   partial_payments        studio_nomina_pagos_parciales[]
-  authorized_by_user     studio_users?             @relation("nominas_autorizado_porTostudio_users", fields: [authorized_by], references: [id])
-  eventos                studio_events?            @relation(fields: [evento_id], references: [id])
-  paid_by_user           studio_users?             @relation("nominas_pagado_porTostudio_users", fields: [paid_by], references: [id])
-  personal               studio_crew_members?      @relation(fields: [personal_id], references: [id])
-  studio                 studios                   @relation(fields: [studio_id], references: [id])
-  user                   studio_users              @relation("nominas_userIdTostudio_users", fields: [user_id], references: [id])
+  authorized_by_user      studio_users?                   @relation("nominas_autorizado_porTostudio_users", fields: [authorized_by], references: [id])
+  eventos                 studio_events?                  @relation(fields: [evento_id], references: [id])
+  paid_by_user            studio_users?                   @relation("nominas_pagado_porTostudio_users", fields: [paid_by], references: [id])
+  personal                studio_crew_members?            @relation(fields: [personal_id], references: [id])
+  studio                  studios                         @relation(fields: [studio_id], references: [id])
+  user                    studio_users                    @relation("nominas_userIdTostudio_users", fields: [user_id], references: [id])
 
   @@index([studio_id])
   @@index([status])
@@ -2254,12 +2336,12 @@ model studio_nomina_servicios {
 }
 
 model studio_nomina_pagos_parciales {
-  id             String        @id @default(cuid())
+  id             String         @id @default(cuid())
   nomina_id      String
-  payment_method String        // 'transferencia' | 'efectivo'
+  payment_method String // 'transferencia' | 'efectivo'
   amount         Float
-  payment_date   DateTime      @default(now())
-  created_at     DateTime      @default(now())
+  payment_date   DateTime       @default(now())
+  created_at     DateTime       @default(now())
   payroll        studio_nominas @relation(fields: [nomina_id], references: [id], onDelete: Cascade)
 
   @@index([nomina_id])
@@ -2267,16 +2349,16 @@ model studio_nomina_pagos_parciales {
 }
 
 model studio_gastos {
-  id             String         @id @default(cuid())
+  id             String               @id @default(cuid())
   studio_id      String
-  status         String         @default("activo")
-  created_at     DateTime       @default(now())
+  status         String               @default("activo")
+  created_at     DateTime             @default(now())
   evento_id      String?
-  updated_at     DateTime       @updatedAt
+  updated_at     DateTime             @updatedAt
   amount         Float
   category       String
   concept        String
-  date           DateTime       @default(now())
+  date           DateTime             @default(now())
   description    String?
   invoice_date   DateTime?
   invoice_number String?
@@ -2285,10 +2367,10 @@ model studio_gastos {
   subcategory    String?
   supplier       String?
   user_id        String
-  personal_id    String?        // ID del personal si el gasto está asociado a un crew member (para gastos recurrentes de salario fijo)
-  eventos        studio_events? @relation(fields: [evento_id], references: [id])
-  studio         studios        @relation(fields: [studio_id], references: [id])
-  user           studio_users   @relation(fields: [user_id], references: [id])
+  personal_id    String? // ID del personal si el gasto está asociado a un crew member (para gastos recurrentes de salario fijo)
+  eventos        studio_events?       @relation(fields: [evento_id], references: [id])
+  studio         studios              @relation(fields: [studio_id], references: [id])
+  user           studio_users         @relation(fields: [user_id], references: [id])
   personal       studio_crew_members? @relation(fields: [personal_id], references: [id])
 
   @@index([evento_id])
@@ -2677,6 +2759,8 @@ model studio_users {
   eventos                                      studio_events[]
   gastos                                       studio_gastos[]
   nominas_nominas_autorizado_porTostudio_users studio_nominas[]            @relation("nominas_autorizado_porTostudio_users")
+  created_event_contracts                      studio_event_contracts[]
+  created_contract_versions                    studio_contract_versions[]
   nominas_nominas_pagado_porTostudio_users     studio_nominas[]            @relation("nominas_pagado_porTostudio_users")
   nominas_nominas_userIdTostudio_users         studio_nominas[]            @relation("nominas_userIdTostudio_users")
   pagos                                        studio_pagos[]
@@ -2684,7 +2768,6 @@ model studio_users {
   contact_logs                                 studio_contact_logs[]
   promise_logs                                 studio_promise_logs[]
   created_contract_templates                   studio_contract_templates[]
-  created_event_contracts                      studio_event_contracts[]
   studio                                       studios                     @relation(fields: [studio_id], references: [id])
 
   @@index([studio_id, status])

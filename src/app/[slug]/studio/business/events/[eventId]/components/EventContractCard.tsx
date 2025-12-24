@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Eye, Edit, Loader2, CheckCircle2, Clock, Trash2, MoreVertical, Send, Info } from 'lucide-react';
+import { FileText, Plus, Eye, Edit, Loader2, CheckCircle2, Clock, Trash2, MoreVertical, Send, Info, X, GitBranch } from 'lucide-react';
 import {
   ZenCard,
   ZenCardHeader,
@@ -16,6 +16,8 @@ import {
   ZenDropdownMenuContent,
   ZenDropdownMenuItem,
   ZenDropdownMenuSeparator,
+  ZenInput,
+  ZenTextarea,
 } from '@/components/ui/zen';
 import type { EventContract } from '@/types/contracts';
 import { toast } from 'sonner';
@@ -23,8 +25,9 @@ import { formatDate } from '@/lib/actions/utils/formatting';
 import { ContractTemplateSelectorModal } from './ContractTemplateSelectorModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { EventContractViewModal } from './EventContractViewModal';
+import { ContractVersionsModal } from './ContractVersionsModal';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
-import { getEventContract, generateEventContract, updateEventContract, deleteEventContract, publishEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { getEventContract, generateEventContract, updateEventContract, deleteEventContract, publishEventContract, requestContractCancellationByStudio, confirmContractCancellationByStudio, rejectContractCancellationByStudio, getContractCancellationLogs, getContractVersions } from '@/lib/actions/studio/business/contracts/contracts.actions';
 
 interface EventContractCardProps {
   studioSlug: string;
@@ -48,9 +51,14 @@ export function EventContractCard({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showCancellationModal, setShowCancellationModal] = useState(false);
+  const [showCancellationConfirmModal, setShowCancellationConfirmModal] = useState(false);
+  const [showVersionsModal, setShowVersionsModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [selectedTemplateContent, setSelectedTemplateContent] = useState<string>('');
 
   useEffect(() => {
@@ -167,9 +175,52 @@ export function EventContractCard({
     }
   };
 
-  const handleEditClick = () => {
-    if (contract?.status === 'signed') {
-      toast.error('Este contrato está firmado y no puede ser modificado');
+  const handleEditContent = async () => {
+    if (contract?.status === 'SIGNED' || contract?.status === 'CANCELLED') {
+      toast.error('Este contrato está firmado o cancelado y no puede ser modificado');
+      return;
+    }
+    if (contract) {
+      // Si no tiene plantilla, mostrar error
+      if (!contract.template_id) {
+        toast.error('Este contrato no tiene una plantilla asociada. No se puede editar el contenido.');
+        return;
+      }
+
+      // Prioridad: usar contenido personalizado editado si existe, sino usar la plantilla original
+      let contentToEdit: string | null = null;
+
+      if (contract.custom_template_content) {
+        // Usar el contenido personalizado editado (con variables)
+        contentToEdit = contract.custom_template_content;
+      } else {
+        // Cargar la plantilla original asociada
+        try {
+          const templateResult = await getContractTemplate(studioSlug, contract.template_id);
+          if (templateResult.success && templateResult.data) {
+            contentToEdit = templateResult.data.content;
+          } else {
+            toast.error(templateResult.error || 'Error al cargar la plantilla del contrato');
+            return;
+          }
+        } catch (error) {
+          console.error('Error loading template:', error);
+          toast.error('Error al cargar la plantilla del contrato');
+          return;
+        }
+      }
+
+      if (contentToEdit) {
+        setSelectedTemplateContent(contentToEdit);
+        setIsEditing(true);
+        setShowEditorModal(true);
+      }
+    }
+  };
+
+  const handleChangeTemplate = () => {
+    if (contract?.status === 'SIGNED' || contract?.status === 'CANCELLED') {
+      toast.error('Este contrato está firmado o cancelado y no puede ser modificado');
       return;
     }
     setShowTemplateModal(true);
@@ -229,27 +280,131 @@ export function EventContractCard({
     }
   };
 
+  const handleRequestCancellation = () => {
+    if (!contract || contract.status !== 'SIGNED') {
+      toast.error('Solo se puede solicitar cancelación de contratos firmados');
+      return;
+    }
+    setCancellationReason('');
+    setShowCancellationModal(true);
+  };
+
+  const handleCancellationConfirm = async () => {
+    if (!contract || !cancellationReason.trim() || cancellationReason.trim().length < 10) {
+      toast.error('El motivo debe tener al menos 10 caracteres');
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      const result = await requestContractCancellationByStudio(studioSlug, contract.id, {
+        reason: cancellationReason.trim(),
+      });
+
+      if (result.success) {
+        toast.success('Solicitud de cancelación enviada al cliente');
+        setShowCancellationModal(false);
+        setCancellationReason('');
+        await loadContract();
+        onContractUpdated?.();
+      } else {
+        toast.error(result.error || 'Error al solicitar cancelación');
+      }
+    } catch (error) {
+      console.error('Error requesting cancellation:', error);
+      toast.error('Error al solicitar cancelación');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleConfirmCancellation = async () => {
+    if (!contract) return;
+
+    setIsCancelling(true);
+    try {
+      const result = await confirmContractCancellationByStudio(studioSlug, contract.id);
+
+      if (result.success) {
+        toast.success('Contrato cancelado correctamente');
+        setShowCancellationConfirmModal(false);
+        await loadContract();
+        onContractUpdated?.();
+      } else {
+        toast.error(result.error || 'Error al confirmar cancelación');
+      }
+    } catch (error) {
+      console.error('Error confirming cancellation:', error);
+      toast.error('Error al confirmar cancelación');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleRejectCancellation = async () => {
+    if (!contract) return;
+
+    setIsCancelling(true);
+    try {
+      const result = await rejectContractCancellationByStudio(studioSlug, contract.id);
+
+      if (result.success) {
+        toast.success('Solicitud de cancelación rechazada');
+        await loadContract();
+        onContractUpdated?.();
+      } else {
+        toast.error(result.error || 'Error al rechazar cancelación');
+      }
+    } catch (error) {
+      console.error('Error rejecting cancellation:', error);
+      toast.error('Error al rechazar cancelación');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'draft':
+      case 'DRAFT':
         return (
           <ZenBadge variant="outline" className="text-amber-400 border-amber-500/30 bg-amber-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
             <Clock className="h-2.5 w-2.5 mr-0.5" />
             Borrador
           </ZenBadge>
         );
-      case 'published':
+      case 'PUBLISHED':
         return (
           <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
             <Eye className="h-2.5 w-2.5 mr-0.5" />
             Publicado
           </ZenBadge>
         );
-      case 'signed':
+      case 'SIGNED':
         return (
           <ZenBadge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
             <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
             Firmado
+          </ZenBadge>
+        );
+      case 'CANCELLATION_REQUESTED_BY_STUDIO':
+        return (
+          <ZenBadge variant="outline" className="text-orange-400 border-orange-500/30 bg-orange-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+            <Clock className="h-2.5 w-2.5 mr-0.5" />
+            Cancelación solicitada
+          </ZenBadge>
+        );
+      case 'CANCELLATION_REQUESTED_BY_CLIENT':
+        return (
+          <ZenBadge variant="outline" className="text-orange-400 border-orange-500/30 bg-orange-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+            <Clock className="h-2.5 w-2.5 mr-0.5" />
+            Cliente solicita cancelar
+          </ZenBadge>
+        );
+      case 'CANCELLED':
+        return (
+          <ZenBadge variant="outline" className="text-red-400 border-red-500/30 bg-red-950/20 rounded-full text-[10px] px-1.5 py-0 h-4">
+            <X className="h-2.5 w-2.5 mr-0.5" />
+            Cancelado
           </ZenBadge>
         );
       default:
@@ -341,9 +496,23 @@ export function EventContractCard({
 
                   {/* Información compacta */}
                   <div className="space-y-0.5 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-zinc-500">Versión:</span>
-                      <span className="text-zinc-300">{contract.version}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-zinc-500">Versión:</span>
+                        <span className="text-zinc-300">{contract.version}</span>
+                      </div>
+                      <ZenButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowVersionsModal(true);
+                        }}
+                        className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-300"
+                      >
+                        <GitBranch className="h-3 w-3 mr-1" />
+                        Historial
+                      </ZenButton>
                     </div>
                     {contract.created_at && (
                       <div className="flex items-center gap-2">
@@ -360,7 +529,7 @@ export function EventContractCard({
                   </div>
 
                   {/* Botón Publicar visible cuando es draft */}
-                  {contract.status === 'draft' && (
+                  {contract.status === 'DRAFT' && (
                     <div className="mt-3 w-full" onClick={(e) => e.stopPropagation()}>
                       <ZenButton
                         variant="ghost"
@@ -387,11 +556,15 @@ export function EventContractCard({
                       </ZenButton>
                     </ZenDropdownMenuTrigger>
                     <ZenDropdownMenuContent align="end">
-                      {contract.status === 'draft' && (
+                      {contract.status === 'DRAFT' && (
                         <>
-                          <ZenDropdownMenuItem onClick={handleEditClick}>
+                          <ZenDropdownMenuItem onClick={handleEditContent}>
                             <Edit className="mr-2 h-4 w-4" />
-                            Editar
+                            Editar contenido
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuItem onClick={handleChangeTemplate}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            Cambiar plantilla
                           </ZenDropdownMenuItem>
                           <ZenDropdownMenuSeparator />
                           <ZenDropdownMenuItem onClick={handlePublishClick}>
@@ -408,11 +581,15 @@ export function EventContractCard({
                           </ZenDropdownMenuItem>
                         </>
                       )}
-                      {contract.status === 'published' && (
+                      {contract.status === 'PUBLISHED' && (
                         <>
-                          <ZenDropdownMenuItem onClick={handleEditClick}>
+                          <ZenDropdownMenuItem onClick={handleEditContent}>
                             <Edit className="mr-2 h-4 w-4" />
-                            Editar
+                            Editar contenido
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuItem onClick={handleChangeTemplate}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            Cambiar plantilla
                           </ZenDropdownMenuItem>
                           <ZenDropdownMenuSeparator />
                           <ZenDropdownMenuItem
@@ -424,10 +601,42 @@ export function EventContractCard({
                           </ZenDropdownMenuItem>
                         </>
                       )}
-                      {contract.status === 'signed' && (
+                      {contract.status === 'SIGNED' && (
+                        <>
+                          <ZenDropdownMenuItem onClick={handleRequestCancellation}>
+                            <X className="mr-2 h-4 w-4" />
+                            Solicitar cancelación
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
+                            <FileText className="mr-2 h-4 w-4" />
+                            Contrato firmado (solo lectura)
+                          </ZenDropdownMenuItem>
+                        </>
+                      )}
+                      {contract.status === 'CANCELLATION_REQUESTED_BY_STUDIO' && (
                         <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
-                          <FileText className="mr-2 h-4 w-4" />
-                          Contrato firmado (solo lectura)
+                          <Clock className="mr-2 h-4 w-4" />
+                          Esperando confirmación del cliente
+                        </ZenDropdownMenuItem>
+                      )}
+                      {contract.status === 'CANCELLATION_REQUESTED_BY_CLIENT' && (
+                        <>
+                          <ZenDropdownMenuItem onClick={() => setShowCancellationConfirmModal(true)}>
+                            <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-400" />
+                            Confirmar cancelación
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem onClick={handleRejectCancellation}>
+                            <X className="mr-2 h-4 w-4 text-red-400" />
+                            Rechazar cancelación
+                          </ZenDropdownMenuItem>
+                        </>
+                      )}
+                      {contract.status === 'CANCELLED' && (
+                        <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
+                          <X className="mr-2 h-4 w-4" />
+                          Contrato cancelado
                         </ZenDropdownMenuItem>
                       )}
                     </ZenDropdownMenuContent>
@@ -470,7 +679,7 @@ export function EventContractCard({
         mode={isEditing ? "edit-event-contract" : "create-event-contract"}
         studioSlug={studioSlug}
         eventId={eventId}
-        initialContent={isEditing ? contract?.content : undefined}
+        initialContent={isEditing ? selectedTemplateContent : undefined}
         templateContent={!isEditing ? selectedTemplateContent : undefined}
         onSave={handleGenerateContract}
         isLoading={isGenerating}
@@ -516,12 +725,33 @@ export function EventContractCard({
             onConfirm={handlePublishConfirm}
             title="Publicar Contrato"
             description={
-              <div className="space-y-2 text-sm">
+              <div className="space-y-3 text-sm">
                 <p>Una vez publicado, el cliente podrá visualizar el contrato en su portal para autorizarlo.</p>
-                <p className="text-amber-400 font-medium">
-                  ⚠️ Una vez autorizado (firmado), el contrato no podrá ser eliminado ni editado, ya que se convierte en un documento legal.
-                </p>
-                <p>¿Deseas continuar con la publicación?</p>
+                
+                <div className="p-3 bg-amber-950/20 border border-amber-800/30 rounded-lg space-y-2">
+                  <p className="text-amber-400 font-medium flex items-center gap-2">
+                    <span className="text-base">⚠️</span>
+                    Restricciones después de firmar
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-zinc-300 ml-5">
+                    <li>El contrato no podrá ser eliminado ni editado</li>
+                    <li>Se convierte en un documento legal vinculante</li>
+                  </ul>
+                </div>
+
+                <div className="p-3 bg-blue-950/20 border border-blue-800/30 rounded-lg space-y-2">
+                  <p className="text-blue-400 font-medium flex items-center gap-2">
+                    <span className="text-base">ℹ️</span>
+                    Cancelación mutua
+                  </p>
+                  <p className="text-zinc-300 text-xs">
+                    Si es necesario cancelar un contrato firmado, cualquiera de las partes puede solicitar la cancelación. 
+                    Ambas partes (estudio y cliente) deben estar de acuerdo para que la cancelación se complete. 
+                    Todas las acciones de cancelación quedan registradas en el historial.
+                  </p>
+                </div>
+
+                <p className="text-zinc-400 text-xs pt-2">¿Deseas continuar con la publicación?</p>
               </div>
             }
             confirmText="Sí, publicar"
@@ -583,8 +813,123 @@ export function EventContractCard({
                   </div>
                 </div>
               </div>
+
+              <div className="p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                <div className="flex items-start gap-3">
+                  <ZenBadge variant="outline" className="text-orange-400 border-orange-500/30 bg-orange-950/20 rounded-full text-[10px] px-1.5 py-0 h-4 shrink-0 mt-0.5">
+                    <Clock className="h-2.5 w-2.5 mr-0.5" />
+                    Cancelación solicitada
+                  </ZenBadge>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-zinc-200 mb-1">Cancelación Solicitada</p>
+                    <p className="text-xs text-zinc-400">
+                      Una de las partes ha solicitado cancelar el contrato. Esperando confirmación de la otra parte para completar la cancelación.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                <div className="flex items-start gap-3">
+                  <ZenBadge variant="outline" className="text-red-400 border-red-500/30 bg-red-950/20 rounded-full text-[10px] px-1.5 py-0 h-4 shrink-0 mt-0.5">
+                    <X className="h-2.5 w-2.5 mr-0.5" />
+                    Cancelado
+                  </ZenBadge>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-zinc-200 mb-1">Cancelado</p>
+                    <p className="text-xs text-zinc-400">
+                      El contrato ha sido cancelado por mutuo acuerdo. Es un documento legal y no puede ser modificado ni eliminado. Solo puedes verlo y descargarlo como PDF.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </ZenDialog>
+
+          {/* Modal de solicitud de cancelación */}
+          <ZenDialog
+            isOpen={showCancellationModal}
+            onClose={() => {
+              if (!isCancelling) {
+                setShowCancellationModal(false);
+                setCancellationReason('');
+              }
+            }}
+            title="Solicitar Cancelación de Contrato"
+            description="Ingresa el motivo de la cancelación. El cliente deberá confirmar para completar la cancelación."
+            maxWidth="md"
+            onCancel={() => {
+              if (!isCancelling) {
+                setShowCancellationModal(false);
+                setCancellationReason('');
+              }
+            }}
+            cancelLabel="Cancelar"
+            onSave={handleCancellationConfirm}
+            saveLabel="Enviar Solicitud"
+            isLoading={isCancelling}
+          >
+            <div className="space-y-4">
+              <ZenTextarea
+                label="Motivo de cancelación"
+                required
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                placeholder="Describe el motivo de la cancelación (mínimo 10 caracteres)"
+                minRows={4}
+                maxLength={1000}
+                disabled={isCancelling}
+                error={cancellationReason.length > 0 && cancellationReason.length < 10 ? 'El motivo debe tener al menos 10 caracteres' : undefined}
+                hint="El cliente recibirá una notificación y deberá confirmar la cancelación"
+              />
+              <div className="p-3 bg-amber-950/20 border border-amber-800/30 rounded-lg">
+                <p className="text-xs text-amber-300">
+                  ⚠️ El cliente recibirá una notificación y deberá confirmar la cancelación para que se complete.
+                </p>
+              </div>
+            </div>
+          </ZenDialog>
+
+          {/* Modal de confirmación de cancelación (cuando el cliente solicita) */}
+          <ZenConfirmModal
+            isOpen={showCancellationConfirmModal}
+            onClose={() => {
+              if (!isCancelling) {
+                setShowCancellationConfirmModal(false);
+              }
+            }}
+            onConfirm={handleConfirmCancellation}
+            title="Confirmar Cancelación"
+            description={
+              <div className="space-y-2">
+                <p>El cliente ha solicitado cancelar el contrato.</p>
+                {contract?.cancellation_reason && (
+                  <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800 mt-3">
+                    <p className="text-sm font-medium text-zinc-300 mb-1">Motivo:</p>
+                    <p className="text-sm text-zinc-400">{contract.cancellation_reason}</p>
+                  </div>
+                )}
+                <p className="text-amber-400 font-medium mt-3">
+                  ⚠️ Esta acción no se puede deshacer. El contrato quedará cancelado por mutuo acuerdo.
+                </p>
+                <p>¿Deseas confirmar la cancelación?</p>
+              </div>
+            }
+            confirmText="Sí, confirmar cancelación"
+            cancelText="Cancelar"
+            variant="destructive"
+            loading={isCancelling}
+          />
+
+          {/* Modal de historial de versiones */}
+          {contract && (
+            <ContractVersionsModal
+              isOpen={showVersionsModal}
+              onClose={() => setShowVersionsModal(false)}
+              studioSlug={studioSlug}
+              contractId={contract.id}
+            />
+          )}
         </>
       )}
     </ZenCard>

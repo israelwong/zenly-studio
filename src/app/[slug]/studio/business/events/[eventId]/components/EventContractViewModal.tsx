@@ -6,6 +6,7 @@ import { ZenDialog } from "@/components/ui/zen/modals/ZenDialog";
 import { ZenButton } from "@/components/ui/zen";
 import { getEventContractData, renderContractContent, type EventContractDataWithConditions } from "@/lib/actions/studio/business/contracts/renderer.actions";
 import { generatePDFFromElement, generateContractFilename } from "@/lib/utils/pdf-generator";
+import { CONTRACT_PREVIEW_STYLES } from "@/lib/utils/contract-styles";
 import type { EventContract } from "@/types/contracts";
 import { toast } from "sonner";
 
@@ -172,7 +173,7 @@ export function EventContractViewModal({
         isOpen={isOpen}
         onClose={onClose}
         title={`Contrato - Versión ${contract.version}`}
-        description={`Estado: ${contract.status === 'draft' ? 'Borrador' : contract.status === 'published' ? 'Publicado' : 'Firmado'}`}
+        description={`Estado: ${contract.status === 'DRAFT' ? 'Borrador' : contract.status === 'PUBLISHED' ? 'Publicado' : contract.status === 'SIGNED' ? 'Firmado' : contract.status === 'CANCELLED' ? 'Cancelado' : 'En proceso de cancelación'}`}
         maxWidth="5xl"
         onCancel={onClose}
         cancelLabel="Cerrar"
@@ -208,90 +209,10 @@ export function EventContractViewModal({
           </div>
         ) : (
           <>
-            <div className="h-[calc(90vh-200px)] min-h-[500px] overflow-y-auto">
-              <style dangerouslySetInnerHTML={{
-                __html: `
-              .contract-preview-modal {
-                color: rgb(161 161 170);
-                font-size: 0.875rem;
-                line-height: 1.5;
-                padding: 1rem;
-              }
-              .contract-preview-modal h1 {
-                font-size: 1.5rem !important;
-                font-weight: 700 !important;
-                line-height: 1.2 !important;
-                margin-top: 1.5rem !important;
-                margin-bottom: 1rem !important;
-                margin-left: 0 !important;
-                margin-right: 0 !important;
-                padding: 0 !important;
-                color: rgb(244, 244, 245) !important;
-                text-align: left !important;
-                text-transform: uppercase;
-              }
-              .contract-preview-modal h1:first-child {
-                margin-top: 0 !important;
-              }
-              .contract-preview-modal h2 {
-                font-size: 1.25rem;
-                font-weight: 600;
-                margin-top: 1rem;
-                margin-bottom: 0.5rem;
-                color: rgb(244 244 245);
-              }
-              .contract-preview-modal h3 {
-                font-size: 1.125rem;
-                font-weight: 500;
-                margin-top: 0.75rem;
-                margin-bottom: 0.5rem;
-                color: rgb(212 212 216);
-              }
-              .contract-preview-modal p {
-                margin-top: 0.5rem;
-                margin-bottom: 0.5rem;
-                line-height: 1.6;
-                color: rgb(161 161 170);
-              }
-              .contract-preview-modal ul,
-              .contract-preview-modal ol {
-                list-style-position: outside;
-                padding-left: 1.5rem;
-                margin-top: 0.5rem;
-                margin-bottom: 0.5rem;
-                color: rgb(161 161 170);
-              }
-              .contract-preview-modal ul {
-                list-style-type: disc;
-              }
-              .contract-preview-modal ol {
-                list-style-type: decimal;
-              }
-              .contract-preview-modal ul li,
-              .contract-preview-modal ol li {
-                margin-top: 0.25rem;
-                margin-bottom: 0.25rem;
-                padding-left: 0.5rem;
-                line-height: 1.5;
-                display: list-item;
-              }
-              .contract-preview-modal strong {
-                font-weight: 600;
-                color: rgb(228 228 231);
-              }
-              .contract-preview-modal em {
-                font-style: italic;
-                color: rgb(113 113 122);
-              }
-              .contract-preview-modal blockquote {
-                margin: 0.5rem 0;
-                padding-left: 1rem;
-                border-left: 2px solid rgb(63 63 70);
-                color: rgb(161 161 170);
-              }
-            `}} />
+            <div className="h-[calc(90vh-200px)] min-h-[500px] overflow-y-auto p-4">
+              <style dangerouslySetInnerHTML={{ __html: CONTRACT_PREVIEW_STYLES }} />
               <div
-                className="contract-preview-modal"
+                className="contract-preview"
                 dangerouslySetInnerHTML={{ __html: renderedContent || contract.content }}
               />
             </div>

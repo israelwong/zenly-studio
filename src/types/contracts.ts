@@ -21,7 +21,8 @@ export interface EventContract {
   studio_id: string;
   event_id: string;
   template_id?: string;
-  content: string;
+  content: string; // Contenido renderizado (para mostrar)
+  custom_template_content?: string | null; // Contenido personalizado editado (con variables, para editar)
   status: ContractStatus;
   version: number;
   signed_at?: Date;
@@ -30,9 +31,56 @@ export interface EventContract {
   created_by?: string;
   created_at: Date;
   updated_at: Date;
+  // Campos para cancelación
+  cancelled_at?: Date;
+  cancellation_reason?: string;
+  cancellation_initiated_by?: 'studio' | 'client';
+  // Relación con plantilla (opcional, solo cuando se incluye)
+  template?: {
+    id: string;
+    content: string;
+    name: string;
+  };
 }
 
-export type ContractStatus = "draft" | "published" | "signed";
+export type ContractStatus = 
+  | "DRAFT" 
+  | "PUBLISHED" 
+  | "SIGNED" 
+  | "CANCELLATION_REQUESTED_BY_STUDIO"
+  | "CANCELLATION_REQUESTED_BY_CLIENT"
+  | "CANCELLED";
+
+export type CancellationAction = "REQUEST" | "CONFIRM" | "REJECT";
+
+export type ChangeType = "MANUAL_EDIT" | "AUTO_REGENERATE" | "TEMPLATE_UPDATE" | "DATA_UPDATE";
+
+export interface ContractVersion {
+  id: string;
+  contract_id: string;
+  version: number;
+  content: string;
+  status: ContractStatus;
+  change_reason?: string;
+  change_type: ChangeType;
+  changed_fields?: Record<string, { old: any; new: any }>;
+  created_by?: string;
+  created_at: Date;
+  created_by_user?: {
+    id: string;
+    full_name: string;
+  };
+}
+
+export interface CancellationLog {
+  id: string;
+  contract_id: string;
+  action: CancellationAction;
+  initiated_by: 'studio' | 'client';
+  reason?: string;
+  metadata?: Record<string, any>;
+  created_at: Date;
+}
 
 export interface EventContractData {
   nombre_cliente: string;

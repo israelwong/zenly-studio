@@ -360,7 +360,8 @@ export async function renderContractContent(
 
     // Renderizar bloque especial de servicios
     if (rendered.includes("[SERVICIOS_INCLUIDOS]")) {
-      const serviciosHtml = renderServiciosBlock(eventData.servicios_incluidos);
+      const servicios = eventData.servicios_incluidos || [];
+      const serviciosHtml = renderServiciosBlock(servicios);
       rendered = rendered.replace("[SERVICIOS_INCLUIDOS]", serviciosHtml);
     }
 
@@ -372,8 +373,8 @@ export async function renderContractContent(
 }
 
 // Renderizar bloque de servicios
-function renderServiciosBlock(servicios: ServiceCategory[]): string {
-  if (servicios.length === 0) {
+function renderServiciosBlock(servicios: ServiceCategory[] | undefined | null): string {
+  if (!servicios || servicios.length === 0) {
     return "<p><em>No hay servicios incluidos</em></p>";
   }
 

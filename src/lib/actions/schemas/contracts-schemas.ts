@@ -36,11 +36,27 @@ export type GenerateEventContractInput = z.infer<typeof GenerateEventContractSch
 // Schema para actualizar contrato
 export const UpdateEventContractSchema = z.object({
   content: z.string().min(1, "El contenido es requerido").max(50000, "Máximo 50,000 caracteres"),
-  status: z.enum(["draft", "published", "signed"]).optional(),
+  status: z.enum(["DRAFT", "PUBLISHED", "SIGNED", "CANCELLATION_REQUESTED_BY_STUDIO", "CANCELLATION_REQUESTED_BY_CLIENT", "CANCELLED"]).optional(),
   update_template: z.boolean().default(false),
+  change_reason: z.string().min(10, "El motivo debe tener al menos 10 caracteres").max(500, "Máximo 500 caracteres").optional(),
 });
 
+// Schema para solicitar cancelación
+export const RequestContractCancellationSchema = z.object({
+  reason: z.string().min(10, "El motivo debe tener al menos 10 caracteres").max(1000, "Máximo 1000 caracteres"),
+});
+
+export type RequestContractCancellationInput = z.infer<typeof RequestContractCancellationSchema>;
+
 export type UpdateEventContractInput = z.infer<typeof UpdateEventContractSchema>;
+
+// Schema para cambiar plantilla de contrato
+export const UpdateEventContractTemplateSchema = z.object({
+  template_id: z.string().cuid("ID de plantilla inválido"),
+  change_reason: z.string().min(10, "El motivo debe tener al menos 10 caracteres").max(500, "Máximo 500 caracteres").optional(),
+});
+
+export type UpdateEventContractTemplateInput = z.infer<typeof UpdateEventContractTemplateSchema>;
 
 // Schema para duplicar plantilla
 export const DuplicateContractTemplateSchema = z.object({

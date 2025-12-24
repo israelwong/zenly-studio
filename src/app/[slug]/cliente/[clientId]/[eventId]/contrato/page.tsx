@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
-import { Loader2, FileText, CheckCircle2, Download } from 'lucide-react';
-import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge } from '@/components/ui/zen';
-import { getEventContractForClient, signEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { Loader2, FileText, CheckCircle2, Download, X, Clock } from 'lucide-react';
+import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea } from '@/components/ui/zen';
+import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { getEventContractData, renderContractContent } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
+import { CONTRACT_PREVIEW_STYLES } from '@/lib/utils/contract-styles';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import type { EventContract } from '@/types/contracts';
@@ -26,6 +27,10 @@ export default function EventoContratoPage() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [eventData, setEventData] = useState<any>(null);
   const printableRef = useRef<HTMLDivElement>(null);
+  const [showCancellationModal, setShowCancellationModal] = useState(false);
+  const [showCancellationConfirmModal, setShowCancellationConfirmModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const loadContract = useCallback(async () => {
     if (!slug || !eventId || !cliente?.id) return;
@@ -118,6 +123,86 @@ export default function EventoContratoPage() {
     }
   };
 
+  const handleRequestCancellation = () => {
+    if (!contract || contract.status !== 'SIGNED') {
+      toast.error('Solo se puede solicitar cancelación de contratos firmados');
+      return;
+    }
+    setCancellationReason('');
+    setShowCancellationModal(true);
+  };
+
+  const handleCancellationConfirm = async () => {
+    if (!contract || !slug || !cliente?.id || !cancellationReason.trim() || cancellationReason.trim().length < 10) {
+      toast.error('El motivo debe tener al menos 10 caracteres');
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      const result = await requestContractCancellationByClient(slug, contract.id, cliente.id, {
+        reason: cancellationReason.trim(),
+      });
+
+      if (result.success) {
+        toast.success('Solicitud de cancelación enviada al estudio');
+        setShowCancellationModal(false);
+        setCancellationReason('');
+        await loadContract();
+      } else {
+        toast.error(result.error || 'Error al solicitar cancelación');
+      }
+    } catch (error) {
+      console.error('Error requesting cancellation:', error);
+      toast.error('Error al solicitar cancelación');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleConfirmCancellation = async () => {
+    if (!contract || !slug || !cliente?.id) return;
+
+    setIsCancelling(true);
+    try {
+      const result = await confirmContractCancellationByClient(slug, contract.id, cliente.id);
+
+      if (result.success) {
+        toast.success('Contrato cancelado correctamente');
+        setShowCancellationConfirmModal(false);
+        await loadContract();
+      } else {
+        toast.error(result.error || 'Error al confirmar cancelación');
+      }
+    } catch (error) {
+      console.error('Error confirming cancellation:', error);
+      toast.error('Error al confirmar cancelación');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleRejectCancellation = async () => {
+    if (!contract || !slug || !cliente?.id) return;
+
+    setIsCancelling(true);
+    try {
+      const result = await rejectContractCancellationByClient(slug, contract.id, cliente.id);
+
+      if (result.success) {
+        toast.success('Solicitud de cancelación rechazada');
+        await loadContract();
+      } else {
+        toast.error(result.error || 'Error al rechazar cancelación');
+      }
+    } catch (error) {
+      console.error('Error rejecting cancellation:', error);
+      toast.error('Error al rechazar cancelación');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -166,8 +251,11 @@ export default function EventoContratoPage() {
     );
   }
 
-  const isSigned = contract.status === 'signed';
-  const isPublished = contract.status === 'published';
+  const isSigned = contract.status === 'SIGNED';
+  const isPublished = contract.status === 'PUBLISHED';
+  const isCancellationRequestedByStudio = contract.status === 'CANCELLATION_REQUESTED_BY_STUDIO';
+  const isCancellationRequestedByClient = contract.status === 'CANCELLATION_REQUESTED_BY_CLIENT';
+  const isCancelled = contract.status === 'CANCELLED';
 
   return (
     <div className="mb-8">
@@ -229,92 +317,63 @@ export default function EventoContratoPage() {
                   Firmar contrato
                 </ZenButton>
               )}
+              {isSigned && !isCancellationRequestedByStudio && !isCancellationRequestedByClient && !isCancelled && (
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRequestCancellation}
+                  className="text-red-400 border-red-500/30 hover:bg-red-950/20"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Solicitar cancelación
+                </ZenButton>
+              )}
+              {isCancellationRequestedByStudio && (
+                <>
+                  <ZenButton
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowCancellationConfirmModal(true)}
+                    disabled={isCancelling}
+                  >
+                    {isCancelling ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                    )}
+                    Confirmar cancelación
+                  </ZenButton>
+                  <ZenButton
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRejectCancellation}
+                    disabled={isCancelling}
+                    className="text-zinc-400"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Rechazar
+                  </ZenButton>
+                </>
+              )}
+              {isCancellationRequestedByClient && (
+                <ZenBadge variant="outline" className="text-orange-400 border-orange-500/30 bg-orange-950/20">
+                  <Clock className="h-3 w-3 mr-1" />
+                  Esperando confirmación del estudio
+                </ZenBadge>
+              )}
+              {isCancelled && (
+                <ZenBadge variant="outline" className="text-red-400 border-red-500/30 bg-red-950/20">
+                  <X className="h-3 w-3 mr-1" />
+                  Cancelado
+                </ZenBadge>
+              )}
             </div>
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-6">
           {renderedContent ? (
             <>
-              <style dangerouslySetInnerHTML={{
-                __html: `
-                .contract-preview {
-                  color: rgb(161 161 170);
-                  font-size: 0.875rem;
-                  line-height: 1.5;
-                }
-                .contract-preview h1 {
-                  font-size: 1.5rem !important;
-                  font-weight: 700 !important;
-                  line-height: 1.2 !important;
-                  margin-top: 1.5rem !important;
-                  margin-bottom: 1rem !important;
-                  margin-left: 0 !important;
-                  margin-right: 0 !important;
-                  padding: 0 !important;
-                  color: rgb(244, 244, 245) !important;
-                  text-align: left !important;
-                  text-transform: uppercase;
-                }
-                .contract-preview h1:first-child {
-                  margin-top: 0 !important;
-                }
-                .contract-preview h2 {
-                  font-size: 1.25rem;
-                  font-weight: 600;
-                  margin-top: 1rem;
-                  margin-bottom: 0.5rem;
-                  color: rgb(244 244 245);
-                }
-                .contract-preview h3 {
-                  font-size: 1.125rem;
-                  font-weight: 500;
-                  margin-top: 0.75rem;
-                  margin-bottom: 0.5rem;
-                  color: rgb(212 212 216);
-                }
-                .contract-preview p {
-                  margin-top: 0.5rem;
-                  margin-bottom: 0.5rem;
-                  line-height: 1.6;
-                  color: rgb(161 161 170);
-                }
-                .contract-preview ul,
-                .contract-preview ol {
-                  list-style-position: outside;
-                  padding-left: 1.5rem;
-                  margin-top: 0.5rem;
-                  margin-bottom: 0.5rem;
-                  color: rgb(161 161 170);
-                }
-                .contract-preview ul {
-                  list-style-type: disc;
-                }
-                .contract-preview ol {
-                  list-style-type: decimal;
-                }
-                .contract-preview ul li,
-                .contract-preview ol li {
-                  margin-top: 0.25rem;
-                  margin-bottom: 0.25rem;
-                  padding-left: 0.5rem;
-                  line-height: 1.5;
-                  display: list-item;
-                }
-                .contract-preview strong {
-                  font-weight: 600;
-                  color: rgb(228 228 231);
-                }
-                .contract-preview em {
-                  font-style: italic;
-                  color: rgb(113 113 122);
-                }
-                .contract-preview blockquote {
-                  margin: 0.5rem 0;
-                  padding-left: 1rem;
-                  border-left: 2px solid rgb(63 63 70);
-                  color: rgb(161 161 170);
-                }
-              `}} />
+              <style dangerouslySetInnerHTML={{ __html: CONTRACT_PREVIEW_STYLES }} />
               <div
                 className="contract-preview scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
                 dangerouslySetInnerHTML={{ __html: renderedContent }}
@@ -355,6 +414,81 @@ export default function EventoContratoPage() {
           />
         </div>
       )}
+
+      {/* Modal de solicitud de cancelación */}
+      <ZenDialog
+        isOpen={showCancellationModal}
+        onClose={() => {
+          if (!isCancelling) {
+            setShowCancellationModal(false);
+            setCancellationReason('');
+          }
+        }}
+        title="Solicitar Cancelación de Contrato"
+        description="Ingresa el motivo de la cancelación. El estudio deberá confirmar para completar la cancelación."
+        maxWidth="md"
+        onCancel={() => {
+          if (!isCancelling) {
+            setShowCancellationModal(false);
+            setCancellationReason('');
+          }
+        }}
+        cancelLabel="Cancelar"
+        onSave={handleCancellationConfirm}
+        saveLabel="Enviar Solicitud"
+        isLoading={isCancelling}
+      >
+        <div className="space-y-4">
+          <ZenTextarea
+            label="Motivo de cancelación"
+            required
+            value={cancellationReason}
+            onChange={(e) => setCancellationReason(e.target.value)}
+            placeholder="Describe el motivo de la cancelación (mínimo 10 caracteres)"
+            minRows={4}
+            maxLength={1000}
+            disabled={isCancelling}
+            error={cancellationReason.length > 0 && cancellationReason.length < 10 ? 'El motivo debe tener al menos 10 caracteres' : undefined}
+            hint="El estudio recibirá una notificación y deberá confirmar la cancelación"
+          />
+          <div className="p-3 bg-amber-950/20 border border-amber-800/30 rounded-lg">
+            <p className="text-xs text-amber-300">
+              ⚠️ El estudio recibirá una notificación y deberá confirmar la cancelación para que se complete.
+            </p>
+          </div>
+        </div>
+      </ZenDialog>
+
+      {/* Modal de confirmación de cancelación (cuando el studio solicita) */}
+      <ZenConfirmModal
+        isOpen={showCancellationConfirmModal}
+        onClose={() => {
+          if (!isCancelling) {
+            setShowCancellationConfirmModal(false);
+          }
+        }}
+        onConfirm={handleConfirmCancellation}
+        title="Confirmar Cancelación"
+        description={
+          <div className="space-y-2">
+            <p>El estudio ha solicitado cancelar el contrato.</p>
+            {contract?.cancellation_reason && (
+              <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800 mt-3">
+                <p className="text-sm font-medium text-zinc-300 mb-1">Motivo:</p>
+                <p className="text-sm text-zinc-400">{contract.cancellation_reason}</p>
+              </div>
+            )}
+            <p className="text-amber-400 font-medium mt-3">
+              ⚠️ Esta acción no se puede deshacer. El contrato quedará cancelado por mutuo acuerdo.
+            </p>
+            <p>¿Deseas confirmar la cancelación?</p>
+          </div>
+        }
+        confirmText="Sí, confirmar cancelación"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={isCancelling}
+      />
     </div>
   );
 }
