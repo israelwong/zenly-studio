@@ -159,6 +159,17 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
         id: true,
         promise_id: true,
         contact_id: true,
+        stage_id: true,
+        stage: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
+            order: true,
+            stage_type: true,
+          },
+        },
       },
     });
 
@@ -198,6 +209,22 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
           select: {
             id: true,
             name: true,
+          },
+        },
+        event: {
+          select: {
+            id: true,
+            stage_id: true,
+            stage: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                color: true,
+                order: true,
+                stage_type: true,
+              },
+            },
           },
         },
         quotes: {
@@ -276,6 +303,16 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
     const pendienteConsolidado = cotizaciones.reduce((sum, cot) => sum + cot.pendiente, 0);
     const descuentoConsolidado = cotizaciones.reduce((sum, cot) => sum + (cot.descuento || 0), 0);
 
+    // Obtener pipeline stage del evento (si existe)
+    const pipelineStage = promise.event?.stage ? {
+      id: promise.event.stage.id,
+      name: promise.event.stage.name,
+      slug: promise.event.stage.slug,
+      color: promise.event.stage.color,
+      order: promise.event.stage.order,
+      stage_type: promise.event.stage.stage_type,
+    } : null;
+
     const eventoDetalle: ClientEventDetail = {
       id: promise.id,
       name: promise.name,
@@ -288,6 +325,7 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
       pagado: pagadoConsolidado,
       pendiente: pendienteConsolidado,
       descuento: descuentoConsolidado > 0 ? descuentoConsolidado : null,
+      pipeline_stage: pipelineStage,
     };
 
     return {

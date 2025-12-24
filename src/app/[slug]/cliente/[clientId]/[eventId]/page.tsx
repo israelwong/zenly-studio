@@ -1,9 +1,16 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { Calendar, MapPin, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { useEvento } from './context/EventoContext';
 import { ToastContainer } from '@/components/client';
+import { obtenerDashboardInfo } from '@/lib/actions/public/cliente/dashboard.actions';
+import { BalanceFinancieroCard } from './components/BalanceFinancieroCard';
+import { EstatusEntregablesCard } from './components/EstatusEntregablesCard';
+import { EntregaDigitalCard } from './components/EntregaDigitalCard';
+import type { DashboardInfo } from '@/lib/actions/public/cliente/dashboard.actions';
 
 function formatFecha(fecha: string): string {
   try {
@@ -24,6 +31,31 @@ function formatFecha(fecha: string): string {
 export default function EventoResumenPage() {
   const { evento } = useEvento();
   const { toasts, removeToast } = useToast();
+  const params = useParams();
+  const slug = params.slug as string;
+  const clientId = params.clientId as string;
+  const eventId = params.eventId as string;
+
+  const [dashboardInfo, setDashboardInfo] = useState<DashboardInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDashboardInfo = async () => {
+      try {
+        setLoading(true);
+        const result = await obtenerDashboardInfo(eventId, clientId, slug);
+        if (result.success && result.data) {
+          setDashboardInfo(result.data);
+        }
+      } catch (error) {
+        console.error('Error cargando dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardInfo();
+  }, [eventId, clientId, slug]);
 
   return (
     <>
@@ -59,6 +91,49 @@ export default function EventoResumenPage() {
         {evento.address && (
           <p className="text-sm text-zinc-400 mt-2">{evento.address}</p>
         )}
+      </div>
+
+      {/* Dashboard Cards */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <BalanceFinancieroCard
+          evento={evento}
+          slug={slug}
+          clientId={clientId}
+          eventId={eventId}
+        />
+
+        <EstatusEntregablesCard
+          dashboardInfo={dashboardInfo}
+          loading={loading}
+        />
+
+        <EntregaDigitalCard
+          dashboardInfo={dashboardInfo}
+          loading={loading}
+          slug={slug}
+          clientId={clientId}
+          eventId={eventId}
+        />
+
+        {/* Invitación - Próximamente */}
+        {/* <ZenCard className="opacity-75">
+          <ZenCardHeader>
+            <ZenCardTitle className="flex items-center gap-2">
+              <Gift className="h-5 w-5 text-pink-400" />
+              Invitación Digital
+            </ZenCardTitle>
+          </ZenCardHeader>
+          <ZenCardContent>
+            <div className="text-center py-6 space-y-3">
+              <ZenBadge variant="secondary" className="text-xs">
+                Próximamente
+              </ZenBadge>
+              <p className="text-sm text-zinc-400">
+                Esta funcionalidad estará disponible próximamente
+              </p>
+            </div>
+          </ZenCardContent>
+        </ZenCard> */}
       </div>
     </>
   );

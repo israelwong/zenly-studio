@@ -37,6 +37,15 @@ export interface ClientEvent {
   cotizacion: ClientCotizacion;
 }
 
+export interface ClientPipelineStage {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  order: number;
+  stage_type: string;
+}
+
 export interface ClientEventDetail extends Omit<ClientEvent, 'cotizacion'> {
   address: string | null;
   cotizaciones: ClientCotizacion[]; // Array de cotizaciones
@@ -45,6 +54,8 @@ export interface ClientEventDetail extends Omit<ClientEvent, 'cotizacion'> {
   pagado: number;
   pendiente: number;
   descuento: number | null;
+  // Pipeline stage del evento
+  pipeline_stage: ClientPipelineStage | null;
 }
 
 export interface ClientPago {

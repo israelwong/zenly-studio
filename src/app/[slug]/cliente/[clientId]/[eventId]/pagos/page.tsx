@@ -79,7 +79,8 @@ export default function EventoPagosPage() {
     if (isAuthenticated && cliente && clientId === cliente.id && eventId) {
       fetchData();
     }
-  }, [isAuthenticated, cliente, clientId, eventId, showError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, cliente, clientId, eventId]);
 
   if (isLoading || loading) {
     return (

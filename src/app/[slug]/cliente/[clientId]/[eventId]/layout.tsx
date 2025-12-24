@@ -69,52 +69,10 @@ export default async function EventoLayout({ children, params }: EventoLayoutPro
     obtenerStudioPublicInfo(slug),
   ]);
 
-  // Si no se encuentra el evento completo, verificar al menos existencia básica
+  // Si no se encuentra el evento completo, redirigir al dashboard del cliente
+  // Esto evita loops infinitos cuando el evento no tiene cotizaciones aprobadas
   if (!eventoResponse.success || !eventoResponse.data) {
-    const promiseExists = await prisma.studio_promises.findFirst({
-      where: {
-        id: promiseId,
-        contact_id: cliente.id,
-      },
-      select: { id: true },
-    });
-
-    if (!promiseExists) {
-      redirect(`/${slug}/cliente/${clientId}`);
-    }
-    
-    // Si existe pero no tiene datos completos, crear un evento mínimo para el layout
-    // Las páginas individuales manejarán su propia lógica
-    const eventoMinimo: ClientEventDetail = {
-      id: eventId,
-      name: 'Evento',
-      event_date: '',
-      event_location: null,
-      address: null,
-      event_type: null,
-      cotizaciones: [],
-      total: 0,
-      pagado: 0,
-      pendiente: 0,
-      descuento: null,
-    };
-
-    return (
-      <EventoLayoutClient studioInfo={studioInfo}>
-        <EventoProvider evento={eventoMinimo}>
-          <ZenSidebarProvider>
-            <ClientLayoutWrapper
-              slug={slug}
-              cliente={cliente}
-              evento={eventoMinimo}
-              studioInfo={studioInfo}
-            >
-              {children}
-            </ClientLayoutWrapper>
-          </ZenSidebarProvider>
-        </EventoProvider>
-      </EventoLayoutClient>
-    );
+    redirect(`/${slug}/cliente/${clientId}`);
   }
 
   const evento: ClientEventDetail = eventoResponse.data;

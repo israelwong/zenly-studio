@@ -220,11 +220,12 @@ export async function GET(
     }
 
     // Retornar el stream con headers de caché optimizados
+    // Usar 'attachment' para forzar descarga en lugar de 'inline'
     return new NextResponse(stream, {
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `inline; filename="${encodeURIComponent(fileName)}"`,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
         // Caché agresivo: 24 horas para archivos, revalidación en background
         'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
         // Headers adicionales para Vercel Edge Cache

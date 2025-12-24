@@ -43,6 +43,7 @@ export function DeliverablesGallery({
     items: GoogleDriveFile[];
   } | null>(null);
   const [loadingFolder, setLoadingFolder] = useState(false);
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
 
@@ -197,16 +198,44 @@ export function DeliverablesGallery({
     setLightboxOpen(true);
   };
 
-  const handleDownload = (item: GoogleDriveFile) => {
-    // Usar webContentLink para descarga directa
-    if (item.webContentLink) {
-      window.open(item.webContentLink, '_blank');
-    } else {
-      // Si no hay webContentLink (documentos de Google), usar proxy API
-      // El proxy API maneja la exportación automática para documentos de Google
-      const proxyUrl = `${window.location.origin}/api/cliente/drive/${eventId}/${item.id}?clientId=${encodeURIComponent(clientId)}`;
-      window.open(proxyUrl, '_blank');
+  const handleDownload = (item: GoogleDriveFile, e?: React.MouseEvent) => {
+    // Prevenir que se abra el lightbox
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
     }
+
+    setDownloadingFileId(item.id);
+
+    // Siempre usar el proxy API para asegurar que funcione correctamente
+    // El proxy API maneja tanto archivos normales como documentos de Google
+    // y devuelve Content-Disposition: attachment para forzar descarga
+    const downloadUrl = `${window.location.origin}/api/cliente/drive/${eventId}/${item.id}?clientId=${encodeURIComponent(clientId)}`;
+    const fileName = item.name || 'download';
+
+    // Crear link temporal para descargar
+    // Como el API está en el mismo origen y devuelve Content-Disposition: attachment,
+    // el navegador descargará el archivo automáticamente
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fileName;
+    // No usar target="_blank" para evitar abrir nueva pestaña
+    link.style.position = 'fixed';
+    link.style.top = '-9999px';
+    link.style.left = '-9999px';
+    link.style.opacity = '0';
+    link.style.pointerEvents = 'none';
+
+    document.body.appendChild(link);
+    link.click();
+
+    // Remover el link y resetear estado después de un breve delay
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      setDownloadingFileId(null);
+    }, 1000);
   };
 
   // Actualizar URL cuando cambia la carpeta
@@ -526,70 +555,80 @@ export function DeliverablesGallery({
                       <div
                         key={`${item.id}-${index}`}
                         className="group relative aspect-square bg-zinc-800/50 rounded-lg border border-zinc-800 overflow-hidden cursor-pointer hover:border-emerald-500/50 transition-all"
-                        onClick={() => handleItemClick(index)}
                       >
-                        {thumbnailUrl ? (
-                          <img
-                            src={thumbnailUrl}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            crossOrigin="anonymous"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              // Si el thumbnail falla, mostrar placeholder
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const parent = target.parentElement;
-                              if (parent) {
-                                const placeholder = parent.querySelector('.thumbnail-placeholder') as HTMLElement;
-                                if (placeholder) placeholder.style.display = 'flex';
-                              }
-                            }}
-                          />
-                        ) : null}
+                        {/* Contenido clickeable para lightbox */}
+                        <div
+                          className="absolute inset-0 z-[1]"
+                          onClick={() => handleItemClick(index)}
+                        >
+                          {thumbnailUrl ? (
+                            <img
+                              src={thumbnailUrl}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              crossOrigin="anonymous"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                // Si el thumbnail falla, mostrar placeholder
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  const placeholder = parent.querySelector('.thumbnail-placeholder') as HTMLElement;
+                                  if (placeholder) placeholder.style.display = 'flex';
+                                }
+                              }}
+                            />
+                          ) : null}
 
-                        {/* Placeholder si no hay thumbnail o falla */}
-                        <div className="thumbnail-placeholder w-full h-full flex items-center justify-center bg-zinc-800" style={{ display: thumbnailUrl ? 'none' : 'flex' }}>
-                          {isVideo ? (
-                            <div className="relative w-full h-full flex items-center justify-center">
-                              <Video className="h-12 w-12 text-zinc-500" />
-                              <Play className="absolute h-8 w-8 text-white/80" fill="currentColor" />
-                            </div>
-                          ) : isImage ? (
-                            <Image className="h-12 w-12 text-zinc-500" />
-                          ) : (
-                            <Download className="h-12 w-12 text-zinc-500" />
-                          )}
+                          {/* Placeholder si no hay thumbnail o falla */}
+                          <div className="thumbnail-placeholder w-full h-full flex items-center justify-center bg-zinc-800" style={{ display: thumbnailUrl ? 'none' : 'flex' }}>
+                            {isVideo ? (
+                              <div className="relative w-full h-full flex items-center justify-center">
+                                <Video className="h-12 w-12 text-zinc-500" />
+                                <Play className="absolute h-8 w-8 text-white/80" fill="currentColor" />
+                              </div>
+                            ) : isImage ? (
+                              <Image className="h-12 w-12 text-zinc-500" />
+                            ) : (
+                              <Download className="h-12 w-12 text-zinc-500" />
+                            )}
+                          </div>
+
+                          {/* Overlay con acciones */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
 
-                        {/* Overlay con acciones */}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {/* Botón de descarga en el lado derecho inferior */}
-                          <div className="absolute bottom-2 right-2">
-                            <ZenButton
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDownload(item);
-                              }}
-                              className="text-white hover:text-emerald-400 bg-black/50 hover:bg-black/70"
-                            >
+                        {/* Botón de descarga - debe estar arriba del contenido clickeable */}
+                        <div
+                          className="absolute bottom-2 right-2 z-10"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ZenButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleDownload(item, e)}
+                            disabled={downloadingFileId === item.id}
+                            className="text-white hover:text-emerald-400 bg-black/50 hover:bg-emerald-500/20 transition-colors"
+                          >
+                            {downloadingFileId === item.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
                               <Download className="h-4 w-4" />
-                            </ZenButton>
-                          </div>
+                            )}
+                          </ZenButton>
                         </div>
 
                         {/* Badge de tipo */}
                         {isVideo && (
-                          <div className="absolute top-2 right-2 bg-black/70 rounded px-1.5 py-0.5">
+                          <div className="absolute top-2 right-2 z-10 bg-black/70 rounded px-1.5 py-0.5">
                             <Video className="h-3 w-3 text-white" />
                           </div>
                         )}
 
                         {/* Nombre del archivo */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute bottom-0 left-0 right-0 z-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                           <p className="text-xs text-white truncate">{item.name}</p>
                         </div>
                       </div>
