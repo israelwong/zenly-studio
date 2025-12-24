@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { FileText, CheckCircle2, Clock, ArrowRight } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
-import type { DashboardInfo } from '@/lib/actions/public/cliente/dashboard.actions';
+import type { DashboardInfo } from '@/lib/actions/cliente/dashboard.actions';
 
 interface EntregaDigitalCardProps {
   dashboardInfo: DashboardInfo | null;

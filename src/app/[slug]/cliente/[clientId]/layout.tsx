@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
-import { getClienteSession, obtenerStudioPublicInfo } from '@/lib/actions/public/cliente';
+import { getClienteSession, obtenerStudioPublicInfo } from '@/lib/actions/cliente';
 import { ClientHeader } from './components/ClientHeader';
-import type { StudioPublicInfo } from '@/lib/actions/public/cliente';
+import type { StudioPublicInfo } from '@/lib/actions/cliente';
 
 interface ClienteLayoutProps {
   children: React.ReactNode;
@@ -27,9 +27,9 @@ export default async function ClienteLayout({ children, params }: ClienteLayoutP
   const studioInfo: StudioPublicInfo | null = await obtenerStudioPublicInfo(slug);
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col overflow-hidden">
+    <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden">
       <ClientHeader slug={slug} cliente={cliente} studioInfo={studioInfo} />
-      <main className="flex-1 overflow-y-auto overflow-x-hidden bg-zinc-900/40">
+      <main className="flex-1 min-h-0 overflow-hidden bg-zinc-900/40">
         {children}
       </main>
     </div>

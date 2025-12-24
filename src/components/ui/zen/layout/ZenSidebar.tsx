@@ -11,6 +11,7 @@ interface ZenSidebarProps {
   isHovered?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  sticky?: boolean;
 }
 
 interface ZenSidebarProviderProps {
@@ -180,7 +181,7 @@ export function useZenSidebar() {
 }
 
 // Componente principal del sidebar
-export function ZenSidebar({ children, className, isHovered = false, onMouseEnter, onMouseLeave }: ZenSidebarProps) {
+export function ZenSidebar({ children, className, isHovered = false, onMouseEnter, onMouseLeave, sticky = false }: ZenSidebarProps) {
   const { isOpen, isCollapsed, isMobile } = useZenSidebar();
 
   // Ancho dinámico: 64px colapsado, 240px expandido (solo desktop)
@@ -195,11 +196,10 @@ export function ZenSidebar({ children, className, isHovered = false, onMouseEnte
         // Mobile: ancho fijo
         "max-w-[80vw] sm:w-72",
         // Desktop: ancho dinámico con prioridad
-        "lg:translate-x-0 lg:static lg:z-auto lg:max-w-none",
+        "lg:translate-x-0 lg:z-auto lg:max-w-none",
+        sticky ? "lg:relative lg:h-full" : "lg:static lg:h-full",
         desktopWidth,
         isOpen ? "translate-x-0" : "-translate-x-full",
-        // Ajustar para header global - sidebar debe usar altura completa disponible
-        "lg:h-full",
         className
       )}
       onMouseEnter={onMouseEnter}

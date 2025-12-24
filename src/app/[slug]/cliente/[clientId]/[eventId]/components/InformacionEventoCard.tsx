@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Edit2, Check, X, Calendar, MapPin, Tag } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenInput, ZenButton } from '@/components/ui/zen';
 import { useEvento } from '../context/EventoContext';
-import { actualizarEventoInfo } from '@/lib/actions/public/cliente/eventos.actions';
+import { actualizarEventoInfo } from '@/lib/actions/cliente/eventos.actions';
 import { useToast } from '@/hooks/useToast';
 import type { ClientEventDetail } from '@/types/client';
 

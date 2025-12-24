@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { getClienteSession } from '@/lib/actions/public/cliente';
+import { getClienteSession } from '@/lib/actions/cliente';
 import { DashboardSkeleton } from '@/components/client';
 import { ToastProvider } from './components/ToastProvider';
 import { EventosList } from './components/EventosList';

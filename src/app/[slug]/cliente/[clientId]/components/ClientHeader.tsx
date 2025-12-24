@@ -7,7 +7,7 @@ import { useFavicon } from '@/hooks/useFavicon';
 import { NotificationsDropdown } from '@/components/client/notifications/NotificationsDropdown';
 import { ClientAvatar } from './ClientAvatar';
 import type { ClientSession } from '@/types/client';
-import type { StudioPublicInfo } from '@/lib/actions/public/cliente';
+import type { StudioPublicInfo } from '@/lib/actions/cliente';
 
 interface ClientHeaderProps {
   slug: string;

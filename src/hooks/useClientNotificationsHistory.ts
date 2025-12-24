@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as React from 'react';
-import { getNotificationsHistoryAction } from '@/lib/actions/public/cliente/notifications.actions';
+import { getNotificationsHistoryAction } from '@/lib/actions/cliente/notifications.actions';
 import type { studio_client_notifications } from '@prisma/client';
 
 interface UseClientNotificationsHistoryOptions {

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, User, Edit } from 'lucide-react';
 import Image from 'next/image';
-import { logoutCliente, actualizarPerfilCliente } from '@/lib/actions/public/cliente';
+import { logoutCliente, actualizarPerfilCliente } from '@/lib/actions/cliente';
 import { ZenButton } from '@/components/ui/zen';
 import {
   ZenDropdownMenu,

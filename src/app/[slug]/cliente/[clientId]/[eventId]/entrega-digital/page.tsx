@@ -5,10 +5,10 @@ import { useParams } from 'next/navigation';
 import { ZenCard } from '@/components/ui/zen';
 import { ToastContainer } from '@/components/client';
 import { useToast } from '@/hooks/useToast';
-import { obtenerEntregablesCliente } from '@/lib/actions/public/cliente/deliverables.actions';
+import { obtenerEntregablesCliente } from '@/lib/actions/cliente/deliverables.actions';
 import { DeliverablesGallery } from '../components/DeliverablesGallery';
 import { Loader2 } from 'lucide-react';
-import type { ClienteDeliverable } from '@/lib/actions/public/cliente/deliverables.actions';
+import type { ClienteDeliverable } from '@/lib/actions/cliente/deliverables.actions';
 
 export default function EntregaDigitalPage() {
   const { toasts, removeToast } = useToast();

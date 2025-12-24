@@ -1,6 +1,6 @@
 import { CalendarDays } from 'lucide-react';
 import { ZenCard } from '@/components/ui/zen';
-import { obtenerEventosCliente } from '@/lib/actions/public/cliente';
+import { obtenerEventosCliente } from '@/lib/actions/cliente';
 import { EventCard } from '@/components/client';
 import type { ClientEvent } from '@/types/client';
 

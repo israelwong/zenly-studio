@@ -5,12 +5,12 @@ import { useParams } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import { useEvento } from './context/EventoContext';
 import { ToastContainer } from '@/components/client';
-import { obtenerDashboardInfo } from '@/lib/actions/public/cliente/dashboard.actions';
+import { obtenerDashboardInfo } from '@/lib/actions/cliente/dashboard.actions';
 import { BalanceFinancieroCard } from './components/BalanceFinancieroCard';
 import { EstatusEntregablesCard } from './components/EstatusEntregablesCard';
 import { EntregaDigitalCard } from './components/EntregaDigitalCard';
 import { InformacionEventoCard } from './components/InformacionEventoCard';
-import type { DashboardInfo } from '@/lib/actions/public/cliente/dashboard.actions';
+import type { DashboardInfo } from '@/lib/actions/cliente/dashboard.actions';
 
 export default function EventoResumenPage() {
   const { evento } = useEvento();
@@ -72,8 +72,8 @@ export default function EventoResumenPage() {
         />
 
         <EstatusEntregablesCard
-          dashboardInfo={dashboardInfo}
-          loading={loading}
+          dashboardInfo={null}
+          loading={false}
         />
 
         <EntregaDigitalCard

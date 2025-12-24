@@ -8,7 +8,7 @@ import Lightbox from 'yet-another-react-lightbox';
 import VideoPlugin from 'yet-another-react-lightbox/plugins/video';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
-import type { ClienteDeliverable } from '@/lib/actions/public/cliente';
+import type { ClienteDeliverable } from '@/lib/actions/cliente';
 import type { GoogleDriveFile } from '@/types/google-drive';
 
 interface DeliverablesGalleryProps {
@@ -91,7 +91,7 @@ export function DeliverablesGallery({
 
     try {
       // Importación dinámica para evitar problemas de chunking
-      const { obtenerContenidoCarpetaCliente } = await import('@/lib/actions/public/cliente/deliverables.actions');
+      const { obtenerContenidoCarpetaCliente } = await import('@/lib/actions/cliente/deliverables.actions');
       const result = await obtenerContenidoCarpetaCliente(eventId, clientId, folderId);
 
       if (result.success && result.data) {

@@ -6,7 +6,7 @@ import { Building2 } from 'lucide-react';
 import { ZenCard, ZenButton, ZenDialog } from '@/components/ui/zen';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { useToast } from '@/hooks/useToast';
-import { obtenerPagosEvento, obtenerInfoBancariaStudio, obtenerEventoDetalle } from '@/lib/actions/public/cliente';
+import { obtenerPagosEvento, obtenerInfoBancariaStudio, obtenerEventoDetalle } from '@/lib/actions/cliente';
 import { ToastContainer } from '@/components/client';
 import { HistorialPagosTable } from './components/HistorialPagosTable';
 import { BankInfoCard } from './components/BankInfoCard';

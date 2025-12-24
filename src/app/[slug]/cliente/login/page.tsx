@@ -7,12 +7,12 @@ import Image from 'next/image';
 import { ZenCard, ZenInput, ZenButton } from '@/components/ui/zen';
 import { useToast } from '@/hooks/useToast';
 import { useFavicon } from '@/hooks/useFavicon';
-import { loginCliente, obtenerStudioPublicInfo, getClienteSession } from '@/lib/actions/public/cliente';
+import { loginCliente, obtenerStudioPublicInfo, getClienteSession } from '@/lib/actions/cliente';
 import { ToastContainer } from '@/components/client';
 import { LoginSkeleton } from '../components/LoginSkeleton';
 import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { PublicPageHeader } from '@/components/shared/PublicPageHeader';
-import type { StudioPublicInfo } from '@/lib/actions/public/cliente';
+import type { StudioPublicInfo } from '@/lib/actions/cliente';
 
 export default function ClientLoginPage() {
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');

@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation';
-import { getClienteSession, obtenerEventoDetalle, obtenerStudioPublicInfo } from '@/lib/actions/public/cliente';
+import { getClienteSession, obtenerEventoDetalle, obtenerStudioPublicInfo } from '@/lib/actions/cliente';
 import { ZenSidebarProvider } from '@/components/ui/zen';
 import { ClientLayoutWrapper } from '../components/ClientLayoutWrapper';
 import { EventoLayoutClient } from './components/EventoLayoutClient';
 import { EventoProvider } from './context/EventoContext';
 import type { ClientEventDetail } from '@/types/client';
-import type { StudioPublicInfo } from '@/lib/actions/public/cliente';
+import type { StudioPublicInfo } from '@/lib/actions/cliente';
 
 interface EventoLayoutProps {
   children: React.ReactNode;
@@ -29,11 +29,11 @@ export default async function EventoLayout({ children, params }: EventoLayoutPro
 
   // Verificar si eventId es un event_id (studio_events) o promise_id (studio_promises)
   const { prisma } = await import('@/lib/prisma');
-  
+
   // Primero intentar como event_id (studio_events)
   const event = await prisma.studio_events.findUnique({
     where: { id: eventId },
-    select: { 
+    select: {
       id: true,
       promise_id: true,
       contact_id: true,
@@ -41,7 +41,7 @@ export default async function EventoLayout({ children, params }: EventoLayoutPro
   });
 
   let promiseId = eventId; // Por defecto asumir que es promise_id
-  
+
   if (event) {
     // Es un event_id, usar el promise_id asociado
     if (event.contact_id !== cliente.id) {

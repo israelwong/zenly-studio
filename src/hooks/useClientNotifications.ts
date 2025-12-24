@@ -8,7 +8,7 @@ import {
   markNotificationAsRead,
   markNotificationAsClicked,
   deleteNotificationAction,
-} from '@/lib/actions/public/cliente/notifications.actions';
+} from '@/lib/actions/cliente/notifications.actions';
 import {
   setupRealtimeAuth,
   createRealtimeChannel,

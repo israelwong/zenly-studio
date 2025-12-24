@@ -189,7 +189,7 @@ export function ImageCropModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl !z-[10001]" overlayZIndex={10000}>
+      <DialogContent className="max-w-2xl !z-[10060]" overlayZIndex={10059}>
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">
             {title}

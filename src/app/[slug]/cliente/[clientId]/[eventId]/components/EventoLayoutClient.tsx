@@ -1,7 +1,7 @@
 'use client';
 
 import { useFavicon } from '@/hooks/useFavicon';
-import type { StudioPublicInfo } from '@/lib/actions/public/cliente';
+import type { StudioPublicInfo } from '@/lib/actions/cliente';
 
 interface EventoLayoutClientProps {
   children: React.ReactNode;

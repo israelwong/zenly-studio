@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { LogOut, User, Building2 } from 'lucide-react';
 import Image from 'next/image';
 import { ZenButton } from '@/components/ui/zen';
-import { logoutCliente } from '@/lib/actions/public/cliente';
+import { logoutCliente } from '@/lib/actions/cliente';
 import type { ClientSession } from '@/types/client';
 
 interface ClientNavbarProps {

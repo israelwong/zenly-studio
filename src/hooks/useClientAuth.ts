@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getClienteSession } from '@/lib/actions/public/cliente';
+import { getClienteSession } from '@/lib/actions/cliente';
 import type { ClientSession } from '@/types/client';
 
 export function useClientAuth() {

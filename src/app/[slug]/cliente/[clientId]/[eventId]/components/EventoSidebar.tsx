@@ -73,7 +73,7 @@ export function EventoSidebar({ slug, clientId, eventId, eventoName }: EventoSid
   ];
 
   return (
-    <ZenSidebar className={`${isOpen ? '' : 'hidden lg:block'} w-60 lg:w-60 sm:w-60`}>
+    <ZenSidebar sticky className={`${isOpen ? '' : 'hidden lg:block'} w-60 lg:w-60 sm:w-60 h-full`}>
       <ZenSidebarContent className="px-4">
         {/* Botón de cerrar - Solo visible en mobile */}
         <div className="flex justify-end pt-4 pb-2 lg:hidden">
