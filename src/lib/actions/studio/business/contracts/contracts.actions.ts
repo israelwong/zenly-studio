@@ -2,15 +2,17 @@
 
 import { prisma } from "@/lib/prisma";
 import { ActionResponse } from "@/types";
-import { EventContract, CancellationLog, ContractVersion } from "@/types/contracts";
+import { EventContract, CancellationLog, ContractVersion, ContractModificationRequest } from "@/types/contracts";
 import {
   GenerateEventContractSchema,
   UpdateEventContractSchema,
   RequestContractCancellationSchema,
   UpdateEventContractTemplateSchema,
+  RequestContractModificationSchema,
+  RespondContractModificationSchema,
 } from "@/lib/actions/schemas/contracts-schemas";
 import { revalidatePath } from "next/cache";
-import { getEventContractData, renderContractContent } from "./renderer.actions";
+import { getEventContractData, renderContractContent, getRealEventId } from "./renderer.actions";
 import { getDefaultContractTemplate } from "./templates.actions";
 import { notifyContractCancellationRequestedByStudio, notifyContractCancellationRequestedByClient, notifyContractCancellationConfirmed, notifyContractCancellationRejected } from "@/lib/notifications/client/helpers/contract-notifications";
 
@@ -724,10 +726,18 @@ export async function getEventContractForClient(
       return { success: false, error: "Studio no encontrado" };
     }
 
+    // El eventId puede ser un promise_id, obtener el event_id real
+    const realEventIdResult = await getRealEventId(studioSlug, eventId);
+    if (!realEventIdResult.success || !realEventIdResult.data) {
+      return { success: false, error: realEventIdResult.error || "Evento no encontrado" };
+    }
+
+    const realEventId = realEventIdResult.data;
+
     // Verificar que el evento pertenece al cliente
     const event = await prisma.studio_events.findFirst({
       where: {
-        id: eventId,
+        id: realEventId,
         studio_id: studio.id,
         contact_id: clientId,
       },
@@ -739,7 +749,7 @@ export async function getEventContractForClient(
 
     const contract = await prisma.studio_event_contracts.findFirst({
       where: {
-        event_id: eventId,
+        event_id: realEventId,
         studio_id: studio.id,
         status: {
           in: ["PUBLISHED", "SIGNED", "CANCELLATION_REQUESTED_BY_STUDIO", "CANCELLATION_REQUESTED_BY_CLIENT", "CANCELLED"],
@@ -1294,5 +1304,276 @@ export async function getContractVersions(
   } catch (error) {
     console.error("Error al obtener versiones:", error);
     return { success: false, error: "Error al obtener versiones" };
+  }
+}
+
+// ============================================
+// SOLICITUDES DE MODIFICACIÓN
+// ============================================
+
+/**
+ * Solicitar modificación de contrato (Cliente)
+ */
+export async function requestContractModificationByClient(
+  studioSlug: string,
+  contractId: string,
+  clientId: string,
+  data: unknown
+): Promise<ActionResponse<ContractModificationRequest>> {
+  try {
+    const validated = RequestContractModificationSchema.parse(data);
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    const contract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        id: contractId,
+        studio_id: studio.id,
+      },
+      include: {
+        event: {
+          include: {
+            contact: true,
+          },
+        },
+      },
+    });
+
+    if (!contract) {
+      return { success: false, error: "Contrato no encontrado" };
+    }
+
+    // Validaciones
+    if (contract.event.contact_id !== clientId) {
+      return { success: false, error: "No tienes acceso a este contrato" };
+    }
+
+    if (contract.status !== "PUBLISHED") {
+      return { success: false, error: "Solo se puede solicitar modificación de contratos publicados" };
+    }
+
+    // Crear solicitud
+    const request = await prisma.studio_contract_modification_requests.create({
+      data: {
+        contract_id: contractId,
+        requested_by: "client",
+        status: "pending",
+        message: validated.message,
+        metadata: validated.metadata || null,
+      },
+    });
+
+    // Notificar al studio
+    try {
+      const { notifyContractModificationRequested } = await import("@/lib/notifications/studio/helpers/contract-modification-notifications");
+      await notifyContractModificationRequested(contractId, request.id, validated.message);
+    } catch (error) {
+      console.error("[requestContractModificationByClient] Error enviando notificación:", error);
+      // No fallar la creación si falla la notificación
+    }
+
+    revalidatePath(`/${studioSlug}/cliente/${clientId}/${contract.event_id}/contrato`);
+
+    return { success: true, data: request as ContractModificationRequest };
+  } catch (error) {
+    console.error("Error al solicitar modificación:", error);
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: "Error al solicitar modificación" };
+  }
+}
+
+/**
+ * Solicitar modificación de contrato (Studio)
+ */
+export async function requestContractModificationByStudio(
+  studioSlug: string,
+  contractId: string,
+  data: unknown
+): Promise<ActionResponse<ContractModificationRequest>> {
+  try {
+    const validated = RequestContractModificationSchema.parse(data);
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    const contract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        id: contractId,
+        studio_id: studio.id,
+      },
+    });
+
+    if (!contract) {
+      return { success: false, error: "Contrato no encontrado" };
+    }
+
+    // Validaciones
+    if (contract.status === "SIGNED" || contract.status === "CANCELLED") {
+      return { success: false, error: "No se puede solicitar modificación de contratos firmados o cancelados" };
+    }
+
+    // Crear solicitud
+    const request = await prisma.studio_contract_modification_requests.create({
+      data: {
+        contract_id: contractId,
+        requested_by: "studio",
+        status: "pending",
+        message: validated.message,
+        metadata: validated.metadata || null,
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}`);
+
+    return { success: true, data: request as ContractModificationRequest };
+  } catch (error) {
+    console.error("Error al solicitar modificación:", error);
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: "Error al solicitar modificación" };
+  }
+}
+
+/**
+ * Obtener solicitudes de modificación de un contrato
+ */
+export async function getContractModificationRequests(
+  studioSlug: string,
+  contractId: string
+): Promise<ActionResponse<ContractModificationRequest[]>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    const contract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        id: contractId,
+        studio_id: studio.id,
+      },
+    });
+
+    if (!contract) {
+      return { success: false, error: "Contrato no encontrado" };
+    }
+
+    const requests = await prisma.studio_contract_modification_requests.findMany({
+      where: { contract_id: contractId },
+      orderBy: { created_at: "desc" },
+    });
+
+    return { success: true, data: requests as ContractModificationRequest[] };
+  } catch (error) {
+    console.error("Error al obtener solicitudes de modificación:", error);
+    return { success: false, error: "Error al obtener solicitudes de modificación" };
+  }
+}
+
+/**
+ * Responder a solicitud de modificación (Studio)
+ */
+export async function respondContractModification(
+  studioSlug: string,
+  contractId: string,
+  data: unknown
+): Promise<ActionResponse<ContractModificationRequest>> {
+  try {
+    const validated = RespondContractModificationSchema.parse(data);
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    const contract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        id: contractId,
+        studio_id: studio.id,
+      },
+      include: {
+        event: {
+          include: {
+            contact: true,
+          },
+        },
+      },
+    });
+
+    if (!contract) {
+      return { success: false, error: "Contrato no encontrado" };
+    }
+
+    const request = await prisma.studio_contract_modification_requests.findFirst({
+      where: {
+        id: validated.request_id,
+        contract_id: contractId,
+      },
+    });
+
+    if (!request) {
+      return { success: false, error: "Solicitud no encontrada" };
+    }
+
+    if (request.status !== "pending") {
+      return { success: false, error: "La solicitud ya fue procesada" };
+    }
+
+    // Actualizar solicitud
+    const updated = await prisma.studio_contract_modification_requests.update({
+      where: { id: validated.request_id },
+      data: {
+        status: validated.status,
+        response: validated.response || null,
+      },
+    });
+
+    // Notificar al cliente
+    try {
+      const { notifyContractModificationResponded } = await import("@/lib/notifications/client/helpers/contract-modification-notifications");
+      await notifyContractModificationResponded(
+        contractId,
+        request.id,
+        validated.status,
+        validated.response || undefined
+      );
+    } catch (error) {
+      console.error("[respondContractModification] Error enviando notificación:", error);
+      // No fallar la actualización si falla la notificación
+    }
+
+    revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}`);
+
+    return { success: true, data: updated as ContractModificationRequest };
+  } catch (error) {
+    console.error("Error al responder solicitud de modificación:", error);
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: "Error al responder solicitud de modificación" };
   }
 }

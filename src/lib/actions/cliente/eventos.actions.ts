@@ -5,6 +5,7 @@
  * Adaptado de migrate/cliente/_lib/actions/evento.actions.ts
  */
 
+import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -429,6 +430,18 @@ export async function actualizarEventoInfo(
           },
         },
       },
+      include: {
+        event: {
+          select: {
+            id: true,
+          },
+        },
+        studio: {
+          select: {
+            slug: true,
+          },
+        },
+      },
     });
 
     if (!promise) {
@@ -437,6 +450,12 @@ export async function actualizarEventoInfo(
         message: 'No tienes acceso a este evento',
       };
     }
+
+    // Guardar valores anteriores
+    const oldValues: Record<string, unknown> = {
+      name: promise.name,
+      event_location: promise.event_location,
+    };
 
     // Actualizar solo los campos proporcionados
     const updateData: { name?: string | null; event_location?: string | null } = {};
@@ -455,6 +474,38 @@ export async function actualizarEventoInfo(
         event_location: true,
       },
     });
+
+    // Detectar campos cambiados y enviar notificación
+    if (promise.event?.id) {
+      const fieldsChanged: string[] = [];
+      const newValues: Record<string, unknown> = {};
+
+      if (oldValues.name !== updatedPromise.name) {
+        fieldsChanged.push('name');
+        newValues.name = updatedPromise.name;
+      }
+      if (oldValues.event_location !== updatedPromise.event_location) {
+        fieldsChanged.push('event_location');
+        newValues.event_location = updatedPromise.event_location;
+      }
+
+      // Enviar notificación si hay cambios
+      if (fieldsChanged.length > 0) {
+        try {
+          const { notifyClientEventInfoUpdated } = await import('@/lib/notifications/studio/helpers/client-updates-notifications');
+          await notifyClientEventInfoUpdated(promise.event.id, fieldsChanged, oldValues, newValues);
+        } catch (error) {
+          console.error('[actualizarEventoInfo] Error enviando notificación:', error);
+          // No fallar la actualización si falla la notificación
+        }
+      }
+
+      // Revalidar páginas relacionadas con el evento
+      if (promise.studio?.slug) {
+        revalidatePath(`/${promise.studio.slug}/cliente/${contactId}/${promise.event.id}`, 'page');
+        revalidatePath(`/${promise.studio.slug}/cliente/${contactId}/${promiseId}`, 'page');
+      }
+    }
 
     return {
       success: true,

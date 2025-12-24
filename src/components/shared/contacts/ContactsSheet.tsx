@@ -17,6 +17,7 @@ import { getContacts, deleteContact } from '@/lib/actions/studio/commercial/cont
 import type { Contact } from '@/lib/actions/schemas/contacts-schemas';
 import { toast } from 'sonner';
 import { useContactRefresh, useContactUpdateListener } from '@/hooks/useContactRefresh';
+import { useContactsRealtime } from '@/hooks/useContactsRealtime';
 
 interface ContactsSheetProps {
   open: boolean;
@@ -89,6 +90,24 @@ export function ContactsSheet({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, statusFilter, page]);
+
+  // Escuchar cambios en tiempo real de contactos
+  useContactsRealtime({
+    studioSlug,
+    enabled: open, // Solo escuchar cuando el sheet está abierto
+    onContactUpdated: (contactId) => {
+      // Recargar contactos cuando se actualiza uno
+      loadContacts();
+    },
+    onContactInserted: (contactId) => {
+      // Recargar contactos cuando se inserta uno nuevo
+      loadContacts();
+    },
+    onContactDeleted: (contactId) => {
+      // Remover contacto del estado local
+      setContacts((prev) => prev.filter((c) => c.id !== contactId));
+    },
+  });
 
   // Abrir modal automáticamente si hay initialContactId
   const initialContactIdRef = useRef(initialContactId);

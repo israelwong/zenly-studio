@@ -1,0 +1,11 @@
+-- ============================================
+-- Agregar tipos de notificación faltantes al enum StudioNotificationType
+-- ============================================
+-- Agrega CLIENT_PROFILE_UPDATED, CLIENT_EVENT_INFO_UPDATED, 
+-- CONTRACT_CANCELLATION_REQUESTED_BY_CLIENT, CONTRACT_MODIFICATION_REQUESTED
+
+ALTER TYPE "StudioNotificationType" ADD VALUE IF NOT EXISTS 'CLIENT_PROFILE_UPDATED';
+ALTER TYPE "StudioNotificationType" ADD VALUE IF NOT EXISTS 'CLIENT_EVENT_INFO_UPDATED';
+ALTER TYPE "StudioNotificationType" ADD VALUE IF NOT EXISTS 'CONTRACT_CANCELLATION_REQUESTED_BY_CLIENT';
+ALTER TYPE "StudioNotificationType" ADD VALUE IF NOT EXISTS 'CONTRACT_MODIFICATION_REQUESTED';
+

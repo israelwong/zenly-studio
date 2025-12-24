@@ -248,6 +248,60 @@ export async function obtenerTerminosCondicionesPublicos(
   }
 }
 
+/**
+ * Obtener aviso de privacidad activo para promesa pública
+ */
+export async function obtenerAvisoPrivacidadPublico(
+  studioSlug: string
+): Promise<{
+  success: boolean;
+  data?: {
+    id: string;
+    title: string;
+    content: string;
+    version: string;
+  };
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return {
+        success: false,
+        error: "Studio no encontrado",
+      };
+    }
+
+    const aviso = await prisma.studio_avisos_privacidad.findFirst({
+      where: {
+        studio_id: studio.id,
+        is_active: true,
+      },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        version: true,
+      },
+    });
+
+    return {
+      success: true,
+      data: aviso || undefined,
+    };
+  } catch (error) {
+    console.error("Error al obtener aviso de privacidad público:", error);
+    return {
+      success: false,
+      error: "Error al obtener aviso de privacidad",
+    };
+  }
+}
+
 // Tipos para cotizaciones públicas
 interface PublicCotizacion {
   id: string;

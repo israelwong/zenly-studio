@@ -205,11 +205,11 @@ export const ContractEditor = forwardRef<ContractEditorRef, ContractEditorProps>
   }));
 
   const cleanHtmlContent = (html: string) => {
-    // Eliminar saltos de línea entre tags de cierre y apertura de bloque
-    // Pero convertir a <br> para mantener separación visual
-    let cleaned = html.replace(/(<\/[^>]+?>)\s*\n\s*(<[^/][^>]+?>)/g, '$1<br>$2');
-    // Eliminar saltos de línea entre <li> tags
-    cleaned = cleaned.replace(/(<\/li>)\s*\n\s*(<li>)/g, '$1$2');
+    // Solo eliminar saltos de línea entre <li> tags (no agregar <br> adicionales)
+    // Preservar el HTML tal como está para evitar saltos de línea adicionales
+    let cleaned = html.replace(/(<\/li>)\s*\n\s*(<li>)/g, '$1$2');
+    // Eliminar saltos de línea entre tags de cierre y apertura, pero sin agregar <br>
+    cleaned = cleaned.replace(/(<\/[^>]+?>)\s*\n\s*(<[^/][^>]+?>)/g, '$1$2');
     return cleaned;
   };
 

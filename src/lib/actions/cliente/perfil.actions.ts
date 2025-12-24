@@ -39,6 +39,18 @@ export async function actualizarPerfilCliente(
 
     const clienteData = JSON.parse(session.value) as { id: string; studio_id: string; phone: string; email: string | null };
 
+    // Obtener valores anteriores para comparar
+    const oldContact = await prisma.studio_contacts.findUnique({
+      where: { id: clienteData.id },
+      select: {
+        name: true,
+        phone: true,
+        email: true,
+        address: true,
+        avatar_url: true,
+      },
+    });
+
     const validatedData = UpdatePerfilSchema.parse(data);
 
     const contact = await prisma.studio_contacts.update({
@@ -65,6 +77,50 @@ export async function actualizarPerfilCliente(
       },
     });
 
+    // Detectar campos cambiados y enviar notificación
+    if (oldContact) {
+      const fieldsChanged: string[] = [];
+      const oldValues: Record<string, unknown> = {};
+      const newValues: Record<string, unknown> = {};
+
+      if (oldContact.name !== contact.name) {
+        fieldsChanged.push('name');
+        oldValues.name = oldContact.name;
+        newValues.name = contact.name;
+      }
+      if (oldContact.phone !== contact.phone) {
+        fieldsChanged.push('phone');
+        oldValues.phone = oldContact.phone;
+        newValues.phone = contact.phone;
+      }
+      if (oldContact.email !== contact.email) {
+        fieldsChanged.push('email');
+        oldValues.email = oldContact.email;
+        newValues.email = contact.email;
+      }
+      if (oldContact.address !== contact.address) {
+        fieldsChanged.push('address');
+        oldValues.address = oldContact.address;
+        newValues.address = contact.address;
+      }
+      if (oldContact.avatar_url !== contact.avatar_url) {
+        fieldsChanged.push('avatar_url');
+        oldValues.avatar_url = oldContact.avatar_url;
+        newValues.avatar_url = contact.avatar_url;
+      }
+
+      // Enviar notificación si hay cambios
+      if (fieldsChanged.length > 0) {
+        try {
+          const { notifyClientProfileUpdated } = await import('@/lib/notifications/studio/helpers/client-updates-notifications');
+          await notifyClientProfileUpdated(clienteData.id, fieldsChanged, oldValues, newValues);
+        } catch (error) {
+          console.error('[actualizarPerfilCliente] Error enviando notificación:', error);
+          // No fallar la actualización si falla la notificación
+        }
+      }
+    }
+
     // Actualizar cookie de sesión con datos actualizados
     cookieStore.set(
       'cliente-session',
@@ -85,6 +141,10 @@ export async function actualizarPerfilCliente(
     );
 
     revalidatePath(`/${slug}/cliente/${clienteData.id}`, 'layout');
+    // Revalidar todas las páginas del cliente que puedan mostrar datos del contacto (incluyendo contratos)
+    revalidatePath(`/${slug}/cliente/${clienteData.id}`, 'page');
+    // Revalidar todas las rutas de eventos del cliente (para contratos)
+    revalidatePath(`/${slug}/cliente/${clienteData.id}`, 'page');
 
     return {
       success: true,

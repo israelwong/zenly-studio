@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Eye, Edit, Loader2, CheckCircle2, Clock, Trash2, MoreVertical, Send, Info, X, GitBranch } from 'lucide-react';
+import { FileText, Plus, Eye, Edit, Loader2, CheckCircle2, Clock, Trash2, MoreVertical, Send, Info, X, GitBranch, MessageSquare, AlertCircle } from 'lucide-react';
 import {
   ZenCard,
   ZenCardHeader,
@@ -26,8 +26,9 @@ import { ContractTemplateSelectorModal } from './ContractTemplateSelectorModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { EventContractViewModal } from './EventContractViewModal';
 import { ContractVersionsModal } from './ContractVersionsModal';
+import { ContractModificationRequestsModal } from './ContractModificationRequestsModal';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
-import { getEventContract, generateEventContract, updateEventContract, deleteEventContract, publishEventContract, requestContractCancellationByStudio, confirmContractCancellationByStudio, rejectContractCancellationByStudio, getContractCancellationLogs, getContractVersions } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { getEventContract, generateEventContract, updateEventContract, deleteEventContract, publishEventContract, requestContractCancellationByStudio, confirmContractCancellationByStudio, rejectContractCancellationByStudio, getContractCancellationLogs, getContractVersions, getContractModificationRequests } from '@/lib/actions/studio/business/contracts/contracts.actions';
 
 interface EventContractCardProps {
   studioSlug: string;
@@ -54,6 +55,8 @@ export function EventContractCard({
   const [showCancellationModal, setShowCancellationModal] = useState(false);
   const [showCancellationConfirmModal, setShowCancellationConfirmModal] = useState(false);
   const [showVersionsModal, setShowVersionsModal] = useState(false);
+  const [showModificationRequestsModal, setShowModificationRequestsModal] = useState(false);
+  const [pendingModificationCount, setPendingModificationCount] = useState(0);
   const [cancellationReason, setCancellationReason] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -64,6 +67,18 @@ export function EventContractCard({
   useEffect(() => {
     loadContract();
   }, [eventId, studioSlug]);
+
+  useEffect(() => {
+    const fetchModificationRequests = async () => {
+      if (contract?.id) {
+        const result = await getContractModificationRequests(studioSlug, contract.id);
+        if (result.success && result.data) {
+          setPendingModificationCount(result.data.filter(req => req.status === 'PENDING').length);
+        }
+      }
+    };
+    fetchModificationRequests();
+  }, [contract?.id, studioSlug]);
 
   const loadContract = async () => {
     setLoading(true);
@@ -432,8 +447,14 @@ export function EventContractCard({
     <ZenCard>
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
         <div className="flex items-center justify-between">
-          <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
+          <ZenCardTitle className="text-sm font-medium flex items-center gap-2 pt-1">
             Contrato
+            {pendingModificationCount > 0 && (
+              <ZenBadge variant="warning" className="rounded-full text-[10px] px-1.5 py-0 h-4">
+                <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
+                {pendingModificationCount}
+              </ZenBadge>
+            )}
           </ZenCardTitle>
           <ZenButton
             variant="ghost"
@@ -639,6 +660,27 @@ export function EventContractCard({
                           Contrato cancelado
                         </ZenDropdownMenuItem>
                       )}
+                      {(contract.status === 'PUBLISHED' || contract.status === 'SIGNED') && (
+                        <>
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem onClick={() => setShowModificationRequestsModal(true)}>
+                            <MessageSquare className="mr-2 h-4 w-4" />
+                            Ver Solicitudes
+                            {pendingModificationCount > 0 && (
+                              <ZenBadge variant="warning" className="ml-auto rounded-full text-[10px] px-1.5 py-0 h-4">
+                                {pendingModificationCount}
+                              </ZenBadge>
+                            )}
+                          </ZenDropdownMenuItem>
+                        </>
+                      )}
+                      <ZenDropdownMenuSeparator />
+                      <ZenDropdownMenuItem
+                        onClick={() => setShowVersionsModal(true)}
+                      >
+                        <GitBranch className="mr-2 h-4 w-4" />
+                        Historial de Versiones
+                      </ZenDropdownMenuItem>
                     </ZenDropdownMenuContent>
                   </ZenDropdownMenu>
                 </div>
@@ -923,12 +965,30 @@ export function EventContractCard({
 
           {/* Modal de historial de versiones */}
           {contract && (
-            <ContractVersionsModal
-              isOpen={showVersionsModal}
-              onClose={() => setShowVersionsModal(false)}
-              studioSlug={studioSlug}
-              contractId={contract.id}
-            />
+            <>
+              <ContractVersionsModal
+                isOpen={showVersionsModal}
+                onClose={() => setShowVersionsModal(false)}
+                studioSlug={studioSlug}
+                contractId={contract.id}
+              />
+              <ContractModificationRequestsModal
+                isOpen={showModificationRequestsModal}
+                onClose={() => {
+                  setShowModificationRequestsModal(false);
+                  loadModificationRequests();
+                }}
+                studioSlug={studioSlug}
+                contractId={contract.id}
+                onRequestResponded={() => {
+                  loadModificationRequests();
+                  loadContract();
+                  if (onContractUpdated) {
+                    onContractUpdated();
+                  }
+                }}
+              />
+            </>
           )}
         </>
       )}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Edit, ExternalLink, Loader2, ContactRound, Calendar, Phone, Mail } from 'lucide-react';
 import { useContactsSheet } from '@/components/shared/contacts/ContactsSheetContext';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, SeparadorZen, ZenBadge } from '@/components/ui/zen';
@@ -12,6 +12,8 @@ import { formatDate } from '@/lib/actions/utils/formatting';
 import { getContactById } from '@/lib/actions/studio/commercial/contacts/contacts.actions';
 import { logWhatsAppSent, logCallMade, logEmailSent } from '@/lib/actions/studio/commercial/promises';
 import { ContactEventFormModal } from './ContactEventFormModal';
+import { createClient } from '@/lib/supabase/client';
+import { createRealtimeChannel, subscribeToChannel, setupRealtimeAuth } from '@/lib/realtime/core';
 
 /**
  * Determina el color del badge de fecha según días restantes
@@ -406,8 +408,8 @@ function ContactHoverCard({
 export function ContactEventInfoCard({
   studioSlug,
   contactId,
-  contactData,
-  eventData,
+  contactData: initialContactData,
+  eventData: initialEventData,
   acquisitionData,
   promiseId,
   eventId,
@@ -417,6 +419,129 @@ export function ContactEventInfoCard({
   context = 'promise',
 }: ContactEventInfoCardProps) {
   const [showPromiseModal, setShowPromiseModal] = useState(false);
+  const [contactData, setContactData] = useState(initialContactData);
+  const [eventData, setEventData] = useState(initialEventData);
+  const supabase = createClient();
+  const contactsChannelRef = useRef<any>(null);
+  const promisesChannelRef = useRef<any>(null);
+
+  // Sincronizar props cuando cambian
+  useEffect(() => {
+    setContactData(initialContactData);
+  }, [initialContactData]);
+
+  useEffect(() => {
+    setEventData(initialEventData);
+  }, [initialEventData]);
+
+  // Escuchar cambios en tiempo real de contactos
+  useEffect(() => {
+    if (!studioSlug || !contactId) return;
+
+    const setupRealtime = async () => {
+      try {
+        const requiresAuth = false;
+        const authResult = await setupRealtimeAuth(supabase, requiresAuth);
+
+        if (!authResult.success && requiresAuth) {
+          return;
+        }
+
+        // Canal para contacts
+        const contactsChannel = createRealtimeChannel(supabase, {
+          channelName: `studio:${studioSlug}:contacts`,
+          isPrivate: false,
+          requiresAuth: false,
+          self: true,
+          ack: true,
+        });
+
+        contactsChannel
+          .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            const p = payload as any;
+            const contactNew = p.record || p.new || p.payload?.record || p.payload?.new;
+
+            if (contactNew && contactNew.id === contactId) {
+              // Actualizar datos del contacto
+              setContactData((prev) => ({
+                ...prev,
+                name: contactNew.name || prev.name,
+                phone: contactNew.phone || prev.phone,
+                email: contactNew.email !== undefined ? contactNew.email : prev.email,
+              }));
+            }
+          });
+
+        await subscribeToChannel(contactsChannel);
+        contactsChannelRef.current = contactsChannel;
+      } catch (error) {
+        console.error('[ContactEventInfoCard] Error configurando realtime para contactos:', error);
+      }
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (contactsChannelRef.current) {
+        supabase.removeChannel(contactsChannelRef.current);
+        contactsChannelRef.current = null;
+      }
+    };
+  }, [studioSlug, contactId, supabase]);
+
+  // Escuchar cambios en tiempo real de promises (eventos)
+  useEffect(() => {
+    if (!studioSlug || !promiseId) return;
+
+    const setupRealtime = async () => {
+      try {
+        const requiresAuth = false;
+        const authResult = await setupRealtimeAuth(supabase, requiresAuth);
+
+        if (!authResult.success && requiresAuth) {
+          return;
+        }
+
+        // Canal para promises
+        const promisesChannel = createRealtimeChannel(supabase, {
+          channelName: `studio:${studioSlug}:promises`,
+          isPrivate: false,
+          requiresAuth: false,
+          self: true,
+          ack: true,
+        });
+
+        promisesChannel
+          .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            const p = payload as any;
+            const promiseNew = p.record || p.new || p.payload?.record || p.payload?.new;
+
+            if (promiseNew && promiseNew.id === promiseId) {
+              // Actualizar datos del evento
+              setEventData((prev) => ({
+                ...prev,
+                event_name: promiseNew.name || prev.event_name,
+                event_location: promiseNew.event_location !== undefined ? promiseNew.event_location : prev.event_location,
+              }));
+            }
+          });
+
+        await subscribeToChannel(promisesChannel);
+        promisesChannelRef.current = promisesChannel;
+      } catch (error) {
+        console.error('[ContactEventInfoCard] Error configurando realtime para promises:', error);
+      }
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (promisesChannelRef.current) {
+        supabase.removeChannel(promisesChannelRef.current);
+        promisesChannelRef.current = null;
+      }
+    };
+  }, [studioSlug, promiseId, supabase]);
 
   const handleEdit = () => {
     if (onEdit) {

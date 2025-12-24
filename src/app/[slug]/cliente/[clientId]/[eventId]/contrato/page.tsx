@@ -3,19 +3,26 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
-import { Loader2, FileText, CheckCircle2, Download, X, Clock } from 'lucide-react';
+import { Loader2, FileText, CheckCircle2, Download, X, Clock, User, Calendar, Edit } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea } from '@/components/ui/zen';
-import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, requestContractModificationByClient } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { getEventContractData, renderContractContent } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
 import { CONTRACT_PREVIEW_STYLES } from '@/lib/utils/contract-styles';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
+import { ClientProfileModal } from '@/app/[slug]/cliente/[clientId]/components/ClientProfileModal';
+import { EventInfoModal } from '../components/EventInfoModal';
+import { useEvento } from '../context/EventoContext';
 import type { EventContract } from '@/types/contracts';
+import { createClient } from '@/lib/supabase/client';
+import { createRealtimeChannel, subscribeToChannel, setupRealtimeAuth } from '@/lib/realtime/core';
+import { actualizarPerfilCliente } from '@/lib/actions/cliente/perfil.actions';
 
 export default function EventoContratoPage() {
   const params = useParams();
   const { cliente, isAuthenticated, isLoading: authLoading } = useClientAuth();
+  const { evento } = useEvento();
   const slug = params?.slug as string;
   const clientId = params?.clientId as string;
   const eventId = params?.eventId as string;
@@ -31,6 +38,14 @@ export default function EventoContratoPage() {
   const [showCancellationConfirmModal, setShowCancellationConfirmModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showEventInfoModal, setShowEventInfoModal] = useState(false);
+  const [showModificationRequestModal, setShowModificationRequestModal] = useState(false);
+  const [modificationMessage, setModificationMessage] = useState('');
+  const [isRequestingModification, setIsRequestingModification] = useState(false);
+  const supabase = createClient();
+  const promisesChannelRef = useRef<any>(null);
+  const contactsChannelRef = useRef<any>(null);
 
   const loadContract = useCallback(async () => {
     if (!slug || !eventId || !cliente?.id) return;
@@ -76,6 +91,113 @@ export default function EventoContratoPage() {
       loadContract();
     }
   }, [isAuthenticated, cliente?.id, eventId, slug, loadContract]);
+
+  // Configurar realtime para escuchar cambios en datos de contacto y evento
+  useEffect(() => {
+    if (!slug || !eventId || !cliente?.id) return;
+
+    const setupRealtime = async () => {
+      try {
+        const requiresAuth = false;
+        const authResult = await setupRealtimeAuth(supabase, requiresAuth);
+
+        if (!authResult.success && requiresAuth) {
+          return;
+        }
+
+        // Canal para promises (cambios en nombre/sede del evento)
+        const promisesChannel = createRealtimeChannel(supabase, {
+          channelName: `studio:${slug}:promises`,
+          isPrivate: false,
+          requiresAuth: false,
+          self: true,
+          ack: true,
+        });
+
+        promisesChannel
+          .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            const p = payload as any;
+            const promiseNew = p.record || p.new || p.payload?.record || p.payload?.new;
+            const promiseOld = p.old || p.old_record || p.payload?.old || p.payload?.old_record;
+
+            // Verificar si es el promise del evento actual
+            // eventId puede ser promise_id o event_id, pero en promises siempre es promise_id
+            // Comparar directamente con eventId (que puede ser promise_id) o con el id del evento del contexto
+            const isCurrentPromise = promiseNew && (
+              promiseNew.id === eventId || 
+              (evento && promiseNew.id === evento.id)
+            );
+
+            if (isCurrentPromise) {
+              // Verificar si cambió nombre o sede del evento
+              const nameChanged = promiseNew.name !== promiseOld?.name;
+              const locationChanged = promiseNew.event_location !== promiseOld?.event_location;
+
+              if (nameChanged || locationChanged) {
+                // Recargar contrato para reflejar cambios
+                loadContract();
+              }
+            }
+          });
+
+        // Canal para contacts (cambios en datos del cliente)
+        const contactsChannel = createRealtimeChannel(supabase, {
+          channelName: `studio:${slug}:contacts`,
+          isPrivate: false,
+          requiresAuth: false,
+          self: true,
+          ack: true,
+        });
+
+        contactsChannel
+          .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            const p = payload as any;
+            const contactNew = p.record || p.new || p.payload?.record || p.payload?.new;
+            const contactOld = p.old || p.old_record || p.payload?.old || p.payload?.old_record;
+
+            // Verificar si es el contacto del cliente actual
+            if (contactNew && contactNew.id === cliente?.id) {
+              // Verificar si cambió algún campo relevante para el contrato
+              const nameChanged = contactNew.name !== contactOld?.name;
+              const phoneChanged = contactNew.phone !== contactOld?.phone;
+              const emailChanged = contactNew.email !== contactOld?.email;
+              const addressChanged = contactNew.address !== contactOld?.address;
+
+              if (nameChanged || phoneChanged || emailChanged || addressChanged) {
+                // Pequeño delay para asegurar que la BD se actualizó
+                setTimeout(() => {
+                  loadContract();
+                }, 100);
+              }
+            }
+          });
+
+        await Promise.all([
+          subscribeToChannel(promisesChannel),
+          subscribeToChannel(contactsChannel),
+        ]);
+        
+        // Guardar ambos canales
+        promisesChannelRef.current = promisesChannel;
+        contactsChannelRef.current = contactsChannel;
+      } catch (error) {
+        console.error('[EventoContratoPage] Error configurando realtime:', error);
+      }
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (promisesChannelRef.current) {
+        supabase.removeChannel(promisesChannelRef.current);
+        promisesChannelRef.current = null;
+      }
+      if (contactsChannelRef.current) {
+        supabase.removeChannel(contactsChannelRef.current);
+        contactsChannelRef.current = null;
+      }
+    };
+  }, [slug, eventId, cliente?.id, supabase, loadContract]);
 
   const handleSign = async () => {
     if (!contract || !slug) return;
@@ -203,6 +325,36 @@ export default function EventoContratoPage() {
     }
   };
 
+  const handleRequestModification = async () => {
+    if (!contract || !slug || !cliente?.id || !modificationMessage.trim() || modificationMessage.trim().length < 20) {
+      toast.error('El mensaje debe tener al menos 20 caracteres');
+      return;
+    }
+
+    setIsRequestingModification(true);
+    const loadingToast = toast.loading('Enviando solicitud de modificación...');
+
+    try {
+      const result = await requestContractModificationByClient(slug, contract.id, cliente.id, {
+        message: modificationMessage.trim(),
+      });
+
+      if (result.success) {
+        toast.success('Solicitud de modificación enviada al estudio', { id: loadingToast });
+        setShowModificationRequestModal(false);
+        setModificationMessage('');
+        await loadContract();
+      } else {
+        toast.error(result.error || 'Error al enviar solicitud de modificación', { id: loadingToast });
+      }
+    } catch (error) {
+      console.error('Error requesting modification:', error);
+      toast.error('Error al enviar solicitud de modificación', { id: loadingToast });
+    } finally {
+      setIsRequestingModification(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -281,6 +433,64 @@ export default function EventoContratoPage() {
           )}
         </div>
       </div>
+
+      {/* Sección: ¿Necesitas actualizar información? */}
+      {isPublished && (
+        <ZenCard className="mb-6">
+          <ZenCardHeader>
+            <ZenCardTitle>¿Necesitas actualizar información?</ZenCardTitle>
+          </ZenCardHeader>
+          <ZenCardContent className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <User className="h-5 w-5 text-zinc-400" />
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">Datos de contacto</p>
+                  <p className="text-xs text-zinc-400">
+                    Nombre, teléfono, email, dirección
+                  </p>
+                </div>
+              </div>
+              <ZenButton
+                size="sm"
+                variant="outline"
+                onClick={() => setShowProfileModal(true)}
+              >
+                Modificar
+              </ZenButton>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Calendar className="h-5 w-5 text-zinc-400" />
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">Datos del evento</p>
+                  <p className="text-xs text-zinc-400">Nombre del evento, sede</p>
+                </div>
+              </div>
+              <ZenButton
+                size="sm"
+                variant="outline"
+                onClick={() => setShowEventInfoModal(true)}
+              >
+                Modificar
+              </ZenButton>
+            </div>
+
+            {isPublished && !isSigned && (
+              <ZenButton
+                variant="outline"
+                size="sm"
+                onClick={() => setShowModificationRequestModal(true)}
+                className="w-full text-blue-400 border-blue-500/30 hover:bg-blue-950/20"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Solicitar modificación del contrato
+              </ZenButton>
+            )}
+          </ZenCardContent>
+        </ZenCard>
+      )}
 
       <ZenCard>
         <ZenCardHeader className="border-b border-zinc-800">
@@ -489,6 +699,99 @@ export default function EventoContratoPage() {
         variant="destructive"
         loading={isCancelling}
       />
+
+      {/* Modal de perfil de cliente */}
+      {cliente && (
+        <ClientProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          cliente={cliente}
+          slug={slug}
+          initialName={cliente.name}
+          initialPhone={cliente.phone}
+          initialEmail={cliente.email}
+          initialAddress={cliente.address}
+          initialAvatarUrl={cliente.avatar_url}
+          onUpdate={async (name, phone, email, address, avatarUrl) => {
+            // Actualizar perfil primero
+            const { actualizarPerfilCliente } = await import('@/lib/actions/cliente/perfil.actions');
+            const result = await actualizarPerfilCliente(slug, {
+              name,
+              phone,
+              email: email || '',
+              address: address || '',
+              avatar_url: avatarUrl || '',
+            });
+
+            if (result.success) {
+              // Recargar contrato después de actualizar
+              await loadContract();
+            } else {
+              toast.error(result.message || 'Error al actualizar el perfil');
+            }
+          }}
+        />
+      )}
+
+      {/* Modal de información del evento */}
+      {eventId && clientId && evento && (
+        <EventInfoModal
+          isOpen={showEventInfoModal}
+          onClose={() => setShowEventInfoModal(false)}
+          eventId={eventId}
+          clientId={clientId}
+          initialName={evento.name}
+          initialLocation={evento.event_location}
+          onUpdate={async () => {
+            // Recargar contrato después de actualizar evento
+            await loadContract();
+          }}
+        />
+      )}
+
+      {/* Modal de solicitud de modificación de contrato */}
+      <ZenDialog
+        isOpen={showModificationRequestModal}
+        onClose={() => {
+          if (!isRequestingModification) {
+            setShowModificationRequestModal(false);
+            setModificationMessage('');
+          }
+        }}
+        title="Solicitar Modificación del Contrato"
+        description="Describe los cambios que necesitas en el contrato. El estudio revisará tu solicitud."
+        maxWidth="md"
+        onCancel={() => {
+          if (!isRequestingModification) {
+            setShowModificationRequestModal(false);
+            setModificationMessage('');
+          }
+        }}
+        cancelLabel="Cancelar"
+        onSave={handleRequestModification}
+        saveLabel="Enviar Solicitud"
+        isLoading={isRequestingModification}
+      >
+        <div className="space-y-4">
+          <ZenTextarea
+            label="Detalles de la modificación"
+            required
+            value={modificationMessage}
+            onChange={(e) => setModificationMessage(e.target.value)}
+            placeholder="Ej: 'Cambiar la fecha del evento al 15 de marzo', 'Ajustar la cantidad del servicio X a 3 unidades', 'Eliminar la cláusula Y'."
+            minRows={5}
+            maxLength={1500}
+            disabled={isRequestingModification}
+            error={modificationMessage.length > 0 && modificationMessage.length < 20 ? 'La descripción debe tener al menos 20 caracteres' : undefined}
+            hint="El estudio recibirá una notificación con tu solicitud."
+          />
+          <div className="p-3 bg-blue-950/20 border border-blue-800/30 rounded-lg">
+            <p className="text-xs text-blue-300">
+              ℹ️ El estudio revisará tu solicitud y se pondrá en contacto contigo para discutir los cambios.
+            </p>
+          </div>
+        </div>
+      </ZenDialog>
     </div>
   );
 }

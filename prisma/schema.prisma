@@ -1511,6 +1511,7 @@ model studio_event_contracts {
   created_by_user   studio_users?                       @relation(fields: [created_by], references: [id])
   versions          studio_contract_versions[]
   cancellation_logs studio_contract_cancellation_logs[]
+  modification_requests studio_contract_modification_requests[]
 
   @@index([studio_id, status])
   @@index([event_id])
@@ -1551,6 +1552,24 @@ model studio_contract_cancellation_logs {
 
   @@index([contract_id, created_at])
   @@index([initiated_by])
+}
+
+model studio_contract_modification_requests {
+  id           String   @id @default(cuid())
+  contract_id  String
+  requested_by String   // 'studio' | 'client'
+  status       String   @default("pending") // 'pending', 'approved', 'rejected', 'completed'
+  message      String   @db.Text
+  response     String?  @db.Text // Respuesta del estudio
+  metadata     Json?    // Campos específicos que se quieren modificar
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  contract studio_event_contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+
+  @@index([contract_id, status])
+  @@index([contract_id, created_at])
+  @@index([status])
 }
 
 enum ContractStatus {
@@ -3075,6 +3094,10 @@ enum StudioNotificationType {
   AGENDA_UPDATED
   AGENDA_CANCELLED
   STUDIO_SETTINGS_UPDATED
+  CLIENT_PROFILE_UPDATED
+  CLIENT_EVENT_INFO_UPDATED
+  CONTRACT_CANCELLATION_REQUESTED_BY_CLIENT
+  CONTRACT_MODIFICATION_REQUESTED
 }
 
 enum ClientNotificationType {

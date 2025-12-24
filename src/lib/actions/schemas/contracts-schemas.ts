@@ -65,3 +65,20 @@ export const DuplicateContractTemplateSchema = z.object({
 });
 
 export type DuplicateContractTemplateInput = z.infer<typeof DuplicateContractTemplateSchema>;
+
+// Schema para solicitar modificación de contrato
+export const RequestContractModificationSchema = z.object({
+  message: z.string().min(10, "El mensaje debe tener al menos 10 caracteres").max(2000, "Máximo 2000 caracteres"),
+  metadata: z.record(z.unknown()).optional(), // Campos específicos que se quieren modificar
+});
+
+export type RequestContractModificationInput = z.infer<typeof RequestContractModificationSchema>;
+
+// Schema para responder a solicitud de modificación
+export const RespondContractModificationSchema = z.object({
+  request_id: z.string().cuid("ID de solicitud inválido"),
+  status: z.enum(["approved", "rejected"]),
+  response: z.string().min(10, "La respuesta debe tener al menos 10 caracteres").max(1000, "Máximo 1000 caracteres").optional(),
+});
+
+export type RespondContractModificationInput = z.infer<typeof RespondContractModificationSchema>;
