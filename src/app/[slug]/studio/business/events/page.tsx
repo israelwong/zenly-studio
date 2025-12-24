@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { Calendar, CreditCard } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { EventsWrapper } from './components/EventsWrapper';
-import { PaymentMethodsModal } from '@/components/shared/payments';
+import { PaymentMethodsModal } from '@/components/shared/payments/PaymentMethodsModal';
 import { verificarMetodosSinConfigurar } from '@/lib/actions/studio/config/metodos-pago.actions';
 
 export default function EventsPage() {

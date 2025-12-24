@@ -67,10 +67,10 @@ export default function EventoContratoPage() {
   }, [slug, eventId, cliente?.id]);
 
   useEffect(() => {
-    if (isAuthenticated && cliente && eventId && slug) {
+    if (isAuthenticated && cliente?.id && eventId && slug) {
       loadContract();
     }
-  }, [isAuthenticated, cliente, eventId, slug, loadContract]);
+  }, [isAuthenticated, cliente?.id, eventId, slug, loadContract]);
 
   const handleSign = async () => {
     if (!contract || !slug) return;

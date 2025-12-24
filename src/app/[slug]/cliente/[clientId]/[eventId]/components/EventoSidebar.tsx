@@ -30,15 +30,6 @@ export function EventoSidebar({ slug, clientId, eventId, eventoName }: EventoSid
   };
 
 
-  const serviciosAdicionalesItems = [
-    {
-      id: 'invitacion',
-      name: 'Invitación Digital',
-      href: `/${slug}/cliente/${clientId}/${eventId}/invitacion`,
-      icon: Gift,
-    },
-  ];
-
   const menuItems = [
     {
       id: 'evento',
@@ -70,6 +61,12 @@ export function EventoSidebar({ slug, clientId, eventId, eventoName }: EventoSid
       href: `/${slug}/cliente/${clientId}/${eventId}/contrato`,
       icon: Package,
     },
+    // {
+    //   id: 'invitacion',
+    //   name: 'Invitación Digital',
+    //   href: `/${slug}/cliente/${clientId}/${eventId}/invitacion`,
+    //   icon: Gift,
+    // },
   ];
 
   return (
@@ -108,27 +105,7 @@ export function EventoSidebar({ slug, clientId, eventId, eventoName }: EventoSid
             <div className="h-px bg-zinc-800" />
           </div>
 
-          {/* Secciones del evento */}
-          <div className="px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-            Secciones
-          </div>
           {menuItems.map((item) => (
-            <ZenSidebarMenuItem key={item.id}>
-              <ZenSidebarMenuButton
-                isActive={isActive(item.href)}
-                onClick={() => router.push(item.href)}
-              >
-                <item.icon className="h-4 w-4" />
-                <span>{item.name}</span>
-              </ZenSidebarMenuButton>
-            </ZenSidebarMenuItem>
-          ))}
-
-          {/* Servicios Adicionales */}
-          <div className="px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 mt-6">
-            Servicios Adicionales
-          </div>
-          {serviciosAdicionalesItems.map((item) => (
             <ZenSidebarMenuItem key={item.id}>
               <ZenSidebarMenuButton
                 isActive={isActive(item.href)}

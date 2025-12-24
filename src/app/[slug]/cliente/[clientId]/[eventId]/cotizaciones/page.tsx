@@ -4,7 +4,7 @@ import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent } from '@/componen
 import { ToastContainer } from '@/components/client';
 import { useToast } from '@/hooks/useToast';
 import { useEvento } from '../context/EventoContext';
-import { ServiciosContratadosTree } from '../components/ServiciosContratadosTree';
+import { ServiciosContratadosTree } from './components/ServiciosContratadosTree';
 import { ResumenPago } from '../components/ResumenPago';
 
 export default function EventoCotizacionesPage() {
