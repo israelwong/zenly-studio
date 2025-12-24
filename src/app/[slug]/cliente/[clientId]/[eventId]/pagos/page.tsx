@@ -136,13 +136,13 @@ export default function EventoPagosPage() {
             <p className="text-zinc-400">Consulta tus pagos e información bancaria</p>
           </div>
           <ZenButton
-            variant="ghost"
+            variant="primary"
             size="sm"
             onClick={() => setIsBankModalOpen(true)}
             disabled={!bankInfo}
           >
             <Building2 className="h-4 w-4 mr-2" />
-            Información bancaria
+            Información bancaria para pagos
           </ZenButton>
         </div>
       </div>

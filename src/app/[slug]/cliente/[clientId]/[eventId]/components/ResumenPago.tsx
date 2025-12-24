@@ -31,8 +31,14 @@ export function ResumenPago({ eventoId, total, pagado, pendiente, descuento, sho
     }).format(amount);
   };
 
-  const isPagado = pendiente <= 0;
-  const porcentajePagado = total > 0 ? (pagado / total) * 100 : 0;
+  // Calcular precio sin descuento (igual que BalanceFinancieroCard)
+  const precioSinDescuento = total + (descuento || 0);
+  const descuentoTotal = descuento || 0;
+  const totalAPagar = total;
+  const totalPagado = pagado;
+  const totalPendiente = pendiente;
+  const todoPagado = totalPendiente === 0;
+  const porcentajePagado = totalAPagar > 0 ? (totalPagado / totalAPagar) * 100 : 0;
 
   return (
     <ZenCard>
@@ -42,45 +48,49 @@ export function ResumenPago({ eventoId, total, pagado, pendiente, descuento, sho
             <Receipt className="h-5 w-5" />
             Resumen de Pago
           </h3>
-          <ZenBadge variant={isPagado ? 'success' : 'warning'}>
-            {isPagado ? 'Pagado' : 'Pendiente'}
+          <ZenBadge variant={todoPagado ? 'success' : 'warning'}>
+            {todoPagado ? 'Pagado' : 'Pendiente'}
           </ZenBadge>
         </div>
 
         <div className="space-y-3">
-          {/* Precio original */}
+          {/* Precio sin descuento */}
           <div className="flex justify-between text-sm">
-            <span className="text-zinc-400">Precio original:</span>
-            <span className="text-zinc-300">{formatMoney(total)}</span>
+            <span className="text-zinc-400">Precio</span>
+            <span className="text-zinc-300">{formatMoney(precioSinDescuento)}</span>
           </div>
 
           {/* Descuento si existe */}
-          {descuento && descuento > 0 && (
-            <>
-              <div className="flex justify-between text-sm">
-                <span className="text-zinc-400">Descuento:</span>
-                <span className="text-emerald-400">-{formatMoney(descuento)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-semibold">
-                <span className="text-zinc-300">Total a pagar:</span>
-                <span className="text-zinc-100">{formatMoney(total)}</span>
-              </div>
-            </>
+          {descuentoTotal > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-400">Descuento</span>
+              <span className="text-blue-400">-{formatMoney(descuentoTotal)}</span>
+            </div>
           )}
 
           <SeparadorZen />
 
-          {/* Pagado */}
-          <div className="flex justify-between text-sm">
-            <span className="text-zinc-400">Pagado:</span>
-            <span className="text-emerald-400 font-semibold">{formatMoney(pagado)}</span>
+          {/* Total a pagar */}
+          <div className="flex justify-between text-sm font-semibold">
+            <span className="text-zinc-400">Total a pagar</span>
+            <span className="text-zinc-100">{formatMoney(totalAPagar)}</span>
           </div>
 
-          {/* Pendiente */}
-          {!isPagado && (
-            <div className="flex justify-between text-base font-bold">
-              <span className="text-zinc-100">Pendiente:</span>
-              <span className="text-yellow-400">{formatMoney(pendiente)}</span>
+          {/* Total pagado */}
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-400">Total pagado</span>
+            <span className="text-emerald-400 font-medium">{formatMoney(totalPagado)}</span>
+          </div>
+
+          {/* Total pendiente o Todo pagado */}
+          {todoPagado ? (
+            <div className="flex justify-between text-sm">
+              <span className="text-emerald-400 font-medium">Todo pagado</span>
+            </div>
+          ) : (
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-400">Total pendiente</span>
+              <span className="text-amber-400 font-medium">{formatMoney(totalPendiente)}</span>
             </div>
           )}
 

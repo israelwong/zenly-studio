@@ -4,6 +4,31 @@ import { prisma } from '@/lib/prisma';
 import { createClientNotification } from '../studio-client-notification.service';
 import { ClientNotificationType, NotificationPriority } from '../types';
 
+// Mapeo de slugs a mensajes personalizados (igual que en EstatusEntregablesCard)
+function getStageDisplayName(slug: string | null, name: string): string {
+  if (!slug) return name;
+  
+  const slugLower = slug.toLowerCase();
+  
+  if (slugLower === 'planeacion' || slugLower === 'planning') {
+    return 'Planeación';
+  }
+  if (slugLower === 'produccion' || slugLower === 'production') {
+    return 'Cobertura del evento';
+  }
+  if (slugLower === 'revision' || slugLower === 'review') {
+    return 'Revisión interna';
+  }
+  if (slugLower === 'entrega' || slugLower === 'delivery') {
+    return 'Preparando entrega';
+  }
+  if (slugLower === 'archivado' || slugLower === 'archived') {
+    return 'Entregado';
+  }
+  
+  return name;
+}
+
 /**
  * Notifica cuando cambia la etapa/estatus de un evento
  */
@@ -23,7 +48,7 @@ export async function notifyEventStageChanged(
         select: { id: true },
       },
       stage: {
-        select: { name: true },
+        select: { name: true, slug: true },
       },
     },
   });
@@ -35,9 +60,28 @@ export async function notifyEventStageChanged(
   const studioSlug = event.studio.slug;
   const eventName = event.promise?.name || 'tu evento';
 
-  let message = `El estatus de "${eventName}" cambió a "${newStageName}"`;
+  // Obtener stage anterior para su slug
+  let previousStageSlug: string | null = null;
   if (previousStageName) {
-    message = `El estatus de "${eventName}" cambió de "${previousStageName}" a "${newStageName}"`;
+    const previousStage = await prisma.studio_manager_pipeline_stages.findFirst({
+      where: {
+        studio_id: event.studio_id,
+        name: previousStageName,
+      },
+      select: { slug: true },
+    });
+    previousStageSlug = previousStage?.slug || null;
+  }
+
+  // Usar labels personalizadas
+  const newStageDisplayName = getStageDisplayName(event.stage?.slug || null, newStageName);
+  const previousStageDisplayName = previousStageName 
+    ? getStageDisplayName(previousStageSlug, previousStageName)
+    : undefined;
+
+  let message = `El estatus de "${eventName}" cambió a "${newStageDisplayName}"`;
+  if (previousStageDisplayName) {
+    message = `El estatus de "${eventName}" cambió de "${previousStageDisplayName}" a "${newStageDisplayName}"`;
   }
 
   return createClientNotification({
@@ -56,8 +100,8 @@ export async function notifyEventStageChanged(
     },
     metadata: {
       event_name: eventName,
-      event_stage: newStageName,
-      event_stage_previous: previousStageName,
+      event_stage: newStageDisplayName,
+      event_stage_previous: previousStageDisplayName,
     },
     event_id: eventId,
     promise_id: event.promise_id,
