@@ -3,14 +3,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
-import { Loader2, FileText, CheckCircle2, Download, X, Clock, User, Calendar, Edit } from 'lucide-react';
+import { Loader2, FileText, CheckCircle2, Download, X, Clock, User, Calendar, Edit, Eye } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
-import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { getEventContractForClient, getAllEventContractsForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { getEventContractData, renderContractContent, getRealEventId } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
 import { CONTRACT_PREVIEW_STYLES } from '@/lib/utils/contract-styles';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
+
+// Función para formatear fecha con hora incluyendo segundos
+const formatDateTime = (date: Date | string): string => {
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  } catch (error) {
+    return 'Fecha no disponible';
+  }
+};
 import { ClientProfileModal } from '@/app/[slug]/cliente/[clientId]/components/ClientProfileModal';
 import { EventInfoModal } from '../components/EventInfoModal';
 import { useEvento } from '../context/EventoContext';
@@ -28,8 +46,13 @@ export default function EventoContratoPage() {
   const eventId = params?.eventId as string;
 
   const [contract, setContract] = useState<EventContract | null>(null);
+  const [allContracts, setAllContracts] = useState<EventContract[]>([]);
+  const [cancelledContracts, setCancelledContracts] = useState<EventContract[]>([]);
   const [renderedContent, setRenderedContent] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showCancelledContractModal, setShowCancelledContractModal] = useState(false);
+  const [selectedCancelledContract, setSelectedCancelledContract] = useState<EventContract | null>(null);
+  const [cancelledContractContent, setCancelledContractContent] = useState('');
   const [isSigning, setIsSigning] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [eventData, setEventData] = useState<any>(null);
@@ -73,35 +96,57 @@ export default function EventoContratoPage() {
 
     setLoading(true);
     try {
-      const contractResult = await getEventContractForClient(slug, eventId, cliente.id);
+      // Cargar todos los contratos (publicados y cancelados)
+      const allContractsResult = await getAllEventContractsForClient(slug, eventId, cliente.id);
 
-      if (contractResult.success && contractResult.data) {
-        setContract(contractResult.data);
+      if (allContractsResult.success && allContractsResult.data) {
+        setAllContracts(allContractsResult.data);
+        
+        // Separar contratos activos de cancelados
+        const activeContracts = allContractsResult.data.filter(c => c.status !== 'CANCELLED');
+        const cancelled = allContractsResult.data.filter(c => c.status === 'CANCELLED');
+        
+        setCancelledContracts(cancelled);
+        
+        // El contrato activo es el primero (publicado/firmado)
+        const activeContract = activeContracts[0] || null;
+        setContract(activeContract);
 
-        // Obtener datos del evento para renderizar
-        const dataResult = await getEventContractData(slug, eventId);
-        if (dataResult.success && dataResult.data) {
-          setEventData(dataResult.data);
+        // Si hay contrato activo, renderizar su contenido
+        if (activeContract) {
+          // Obtener datos del evento para renderizar
+          const dataResult = await getEventContractData(slug, eventId);
+          if (dataResult.success && dataResult.data) {
+            setEventData(dataResult.data);
 
-          // Renderizar contenido
-          const renderResult = await renderContractContent(
-            contractResult.data.content,
-            dataResult.data,
-            dataResult.data.condicionesData
-          );
-          if (renderResult.success && renderResult.data) {
-            setRenderedContent(renderResult.data);
+            // Renderizar contenido
+            const renderResult = await renderContractContent(
+              activeContract.content,
+              dataResult.data,
+              dataResult.data.condicionesData
+            );
+            if (renderResult.success && renderResult.data) {
+              setRenderedContent(renderResult.data);
+            } else {
+              toast.error(renderResult.error || 'Error al renderizar el contrato');
+            }
           } else {
-            toast.error(renderResult.error || 'Error al renderizar el contrato');
+            toast.error(dataResult.error || 'Error al obtener datos del evento');
           }
         } else {
-          toast.error(dataResult.error || 'Error al obtener datos del evento');
+          setRenderedContent('');
         }
       } else {
-        toast.error(contractResult.error || 'No hay contrato disponible para este evento');
+        toast.error(allContractsResult.error || 'No hay contratos disponibles para este evento');
+        setAllContracts([]);
+        setCancelledContracts([]);
+        setContract(null);
       }
     } catch (error) {
-      toast.error('Error al cargar el contrato');
+      toast.error('Error al cargar los contratos');
+      setAllContracts([]);
+      setCancelledContracts([]);
+      setContract(null);
     } finally {
       setLoading(false);
     }
@@ -517,28 +562,38 @@ export default function EventoContratoPage() {
     );
   }
 
-  if (!contract) {
-    return (
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
-        <p className="text-zinc-400">No hay contrato disponible para este evento</p>
-        <ZenCard className="mt-6">
-          <ZenCardContent className="p-12 text-center">
-            <FileText className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
-            <p className="text-zinc-400">
-              El estudio aún no ha publicado un contrato para este evento.
-            </p>
-          </ZenCardContent>
-        </ZenCard>
-      </div>
-    );
-  }
+  // Función para cargar contenido de contrato cancelado
+  const loadCancelledContractContent = async (cancelledContract: EventContract) => {
+    try {
+      const dataResult = await getEventContractData(slug, eventId);
+      if (dataResult.success && dataResult.data) {
+        const renderResult = await renderContractContent(
+          cancelledContract.content,
+          dataResult.data,
+          dataResult.data.condicionesData
+        );
+        if (renderResult.success && renderResult.data) {
+          setCancelledContractContent(renderResult.data);
+        } else {
+          toast.error('Error al renderizar el contrato cancelado');
+        }
+      }
+    } catch (error) {
+      toast.error('Error al cargar el contrato cancelado');
+    }
+  };
 
-  const isSigned = contract.status === 'SIGNED';
-  const isPublished = contract.status === 'PUBLISHED';
-  const isCancellationRequestedByStudio = contract.status === 'CANCELLATION_REQUESTED_BY_STUDIO';
-  const isCancellationRequestedByClient = contract.status === 'CANCELLATION_REQUESTED_BY_CLIENT';
-  const isCancelled = contract.status === 'CANCELLED';
+  const handleViewCancelledContract = async (cancelledContract: EventContract) => {
+    setSelectedCancelledContract(cancelledContract);
+    setShowCancelledContractModal(true);
+    await loadCancelledContractContent(cancelledContract);
+  };
+
+  const isSigned = contract?.status === 'SIGNED';
+  const isPublished = contract?.status === 'PUBLISHED';
+  const isCancellationRequestedByStudio = contract?.status === 'CANCELLATION_REQUESTED_BY_STUDIO';
+  const isCancellationRequestedByClient = contract?.status === 'CANCELLATION_REQUESTED_BY_CLIENT';
+  const isCancelled = contract?.status === 'CANCELLED';
 
   return (
     <div className="mb-8">
@@ -546,11 +601,15 @@ export default function EventoContratoPage() {
         <div>
           <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
           <p className="text-zinc-400">
-            {isSigned && contract.signed_at
-              ? `Contrato firmado digitalmente el ${formatDate(contract.signed_at)}`
-              : isPublished
-                ? 'Revisa y firma el contrato'
-                : 'Contrato en revisión'}
+            {contract ? (
+              isSigned && contract.signed_at
+                ? `Contrato firmado digitalmente el ${formatDate(contract.signed_at)}`
+                : isPublished
+                  ? 'Revisa y firma el contrato'
+                  : 'Contrato en revisión'
+            ) : (
+              'No hay contrato publicado'
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -589,8 +648,9 @@ export default function EventoContratoPage() {
         </div>
       </div>
 
-
-      <ZenCard>
+      {/* Contrato publicado */}
+      {contract && (
+        <ZenCard>
         <ZenCardHeader className="border-b border-zinc-800">
           <div className="flex items-center justify-between">
             <ZenCardTitle className="text-lg">
@@ -702,6 +762,42 @@ export default function EventoContratoPage() {
           )}
         </ZenCardContent>
       </ZenCard>
+      )}
+
+      {/* Contratos cancelados */}
+      {cancelledContracts.length > 0 && (
+        <div className="mt-6 space-y-3">
+          {cancelledContracts.map((cancelledContract) => (
+            <div
+              key={cancelledContract.id}
+              className="p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-lg"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <X className="h-4 w-4 text-red-400" />
+                    <span className="text-sm font-medium text-zinc-400">Contrato Cancelado</span>
+                  </div>
+                  {cancelledContract.cancelled_at && (
+                    <p className="text-xs text-zinc-500 ml-6">
+                      {formatDateTime(cancelledContract.cancelled_at)}
+                    </p>
+                  )}
+                </div>
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleViewCancelledContract(cancelledContract)}
+                  className="text-zinc-400 hover:text-zinc-300 shrink-0"
+                >
+                  <Eye className="h-4 w-4 mr-1.5" />
+                  Ver
+                </ZenButton>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Hidden Printable Version - Sin clases Tailwind para PDF */}
       {renderedContent && (
@@ -868,6 +964,43 @@ export default function EventoContratoPage() {
           }}
         />
       )}
+
+      {/* Modal para ver contrato cancelado */}
+      <ZenDialog
+        isOpen={showCancelledContractModal}
+        onClose={() => {
+          setShowCancelledContractModal(false);
+          setSelectedCancelledContract(null);
+          setCancelledContractContent('');
+        }}
+        title={selectedCancelledContract ? `Contrato Cancelado - Versión ${selectedCancelledContract.version}` : 'Contrato Cancelado'}
+        description={
+          selectedCancelledContract?.cancelled_at
+            ? `Cancelado el ${formatDateTime(selectedCancelledContract.cancelled_at)}`
+            : 'Contrato cancelado'
+        }
+        maxWidth="5xl"
+        onCancel={() => {
+          setShowCancelledContractModal(false);
+          setSelectedCancelledContract(null);
+          setCancelledContractContent('');
+        }}
+        cancelLabel="Cerrar"
+      >
+        {cancelledContractContent ? (
+          <div className="h-[calc(90vh-200px)] min-h-[500px] overflow-y-auto p-4">
+            <style dangerouslySetInnerHTML={{ __html: CONTRACT_PREVIEW_STYLES }} />
+            <div
+              className="contract-preview"
+              dangerouslySetInnerHTML={{ __html: cancelledContractContent }}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+          </div>
+        )}
+      </ZenDialog>
 
     </div>
   );

@@ -931,6 +931,93 @@ export async function getEventContractForClient(
   }
 }
 
+// Obtener todos los contratos para el cliente (publicados y cancelados)
+export async function getAllEventContractsForClient(
+  studioSlug: string,
+  eventId: string,
+  clientId: string
+): Promise<ActionResponse<EventContract[]>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    // El eventId puede ser un promise_id, obtener el event_id real
+    const realEventIdResult = await getRealEventId(studioSlug, eventId);
+    if (!realEventIdResult.success || !realEventIdResult.data) {
+      console.error('[getAllEventContractsForClient] Error obteniendo realEventId:', {
+        eventId,
+        error: realEventIdResult.error,
+      });
+      return { success: false, error: realEventIdResult.error || "Evento no encontrado" };
+    }
+
+    const realEventId = realEventIdResult.data;
+
+    // Verificar que el evento pertenece al cliente
+    const event = await prisma.studio_events.findFirst({
+      where: {
+        id: realEventId,
+        studio_id: studio.id,
+        contact_id: clientId,
+      },
+    });
+
+    if (!event) {
+      console.error('[getAllEventContractsForClient] Evento no encontrado o sin acceso:', {
+        realEventId,
+        studioId: studio.id,
+        clientId,
+      });
+      return { success: false, error: "Evento no encontrado o no tienes acceso" };
+    }
+
+    // Obtener todos los contratos publicados y cancelados
+    const contracts = await prisma.studio_event_contracts.findMany({
+      where: {
+        event_id: realEventId,
+        studio_id: studio.id,
+        status: {
+          in: ["PUBLISHED", "SIGNED", "CANCELLATION_REQUESTED_BY_STUDIO", "CANCELLATION_REQUESTED_BY_CLIENT", "CANCELLED"],
+        },
+      },
+      orderBy: [
+        // Primero los activos (no cancelados), luego los cancelados
+        {
+          status: 'asc', // CANCELLED viene después alfabéticamente
+        },
+        // Dentro de cada grupo, más recientes primero
+        {
+          created_at: 'desc',
+        },
+      ],
+    });
+
+    // Ordenar manualmente: activos primero, luego cancelados
+    const sortedContracts = contracts.sort((a, b) => {
+      const aIsCancelled = a.status === 'CANCELLED';
+      const bIsCancelled = b.status === 'CANCELLED';
+      
+      // Si uno está cancelado y el otro no, el no cancelado va primero
+      if (aIsCancelled && !bIsCancelled) return 1;
+      if (!aIsCancelled && bIsCancelled) return -1;
+      
+      // Si ambos tienen el mismo estado, ordenar por fecha (más reciente primero)
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    return { success: true, data: sortedContracts as EventContract[] };
+  } catch (error) {
+    console.error("Error al obtener contratos para cliente:", error);
+    return { success: false, error: "Error al obtener contratos" };
+  }
+}
+
 // ============================================
 // CANCELACIÓN MUTUA
 // ============================================
