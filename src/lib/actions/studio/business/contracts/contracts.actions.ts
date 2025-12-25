@@ -14,7 +14,7 @@ import { getEventContractData, renderContractContent, getRealEventId } from "./r
 import { getDefaultContractTemplate } from "./templates.actions";
 import { notifyContractCancellationRequestedByStudio, notifyContractCancellationRequestedByClient, notifyContractCancellationConfirmed, notifyContractCancellationRejected } from "@/lib/notifications/client/helpers/contract-notifications";
 
-// Obtener contrato del evento
+// Obtener contrato del evento (solo activo)
 export async function getEventContract(
   studioSlug: string,
   eventId: string
@@ -29,7 +29,57 @@ export async function getEventContract(
       return { success: false, error: "Studio no encontrado" };
     }
 
+    // Buscar el contrato activo más reciente (no cancelado)
     const contract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        event_id: eventId,
+        studio_id: studio.id,
+        status: {
+          not: "CANCELLED",
+        },
+      },
+      include: {
+        template: {
+          select: {
+            id: true,
+            content: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+
+    if (!contract) {
+      return { success: false, error: "No hay contrato activo para este evento" };
+    }
+
+    return { success: true, data: contract as EventContract };
+  } catch (error) {
+    console.error("Error al obtener contrato:", error);
+    return { success: false, error: "Error al obtener contrato" };
+  }
+}
+
+// Obtener todos los contratos del evento (activos y cancelados)
+export async function getAllEventContracts(
+  studioSlug: string,
+  eventId: string
+): Promise<ActionResponse<EventContract[]>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    // Obtener todos los contratos (activos y cancelados)
+    const contracts = await prisma.studio_event_contracts.findMany({
       where: {
         event_id: eventId,
         studio_id: studio.id,
@@ -43,16 +93,29 @@ export async function getEventContract(
           },
         },
       },
+      orderBy: {
+        created_at: 'desc', // Más recientes primero
+      },
     });
 
-    if (!contract) {
-      return { success: false, error: "No hay contrato para este evento" };
-    }
+    // Ordenar manualmente: activos primero, luego cancelados
+    // Dentro de cada grupo, más recientes primero
+    const sortedContracts = contracts.sort((a, b) => {
+      const aIsCancelled = a.status === 'CANCELLED';
+      const bIsCancelled = b.status === 'CANCELLED';
+      
+      // Si uno está cancelado y el otro no, el no cancelado va primero
+      if (aIsCancelled && !bIsCancelled) return 1;
+      if (!aIsCancelled && bIsCancelled) return -1;
+      
+      // Si ambos tienen el mismo estado, ordenar por fecha (más reciente primero)
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
-    return { success: true, data: contract as EventContract };
+    return { success: true, data: sortedContracts as EventContract[] };
   } catch (error) {
-    console.error("Error al obtener contrato:", error);
-    return { success: false, error: "Error al obtener contrato" };
+    console.error("Error al obtener contratos:", error);
+    return { success: false, error: "Error al obtener contratos" };
   }
 }
 
@@ -86,13 +149,20 @@ export async function generateEventContract(
       return { success: false, error: "Evento no encontrado" };
     }
 
-    // Verificar si ya existe un contrato
-    const existingContract = await prisma.studio_event_contracts.findUnique({
-      where: { event_id: validated.event_id },
+    // Verificar si ya existe un contrato activo (no cancelado)
+    // Solo puede haber 1 contrato publicado/activo por evento
+    const existingContract = await prisma.studio_event_contracts.findFirst({
+      where: {
+        event_id: validated.event_id,
+        studio_id: studio.id,
+        status: {
+          not: "CANCELLED",
+        },
+      },
     });
 
     if (existingContract) {
-      return { success: false, error: "Ya existe un contrato para este evento" };
+      return { success: false, error: "Ya existe un contrato activo para este evento. Solo puede haber un contrato publicado por evento." };
     }
 
     // Obtener plantilla (default o específica)
@@ -376,13 +446,20 @@ export async function regenerateEventContract(
       return { success: false, error: "Studio no encontrado" };
     }
 
+    // Buscar el contrato activo más reciente (no cancelado)
     const contract = await prisma.studio_event_contracts.findFirst({
       where: {
         event_id: eventId,
         studio_id: studio.id,
+        status: {
+          not: "CANCELLED",
+        },
       },
       include: {
         template: true,
+      },
+      orderBy: {
+        created_at: 'desc',
       },
     });
 
@@ -391,8 +468,8 @@ export async function regenerateEventContract(
     }
 
     // No se puede regenerar un contrato firmado
-    if (contract.status === "SIGNED" || contract.status === "CANCELLED") {
-      return { success: false, error: "No se puede regenerar un contrato firmado o cancelado" };
+    if (contract.status === "SIGNED") {
+      return { success: false, error: "No se puede regenerar un contrato firmado" };
     }
 
     // Obtener datos actualizados del evento
@@ -740,6 +817,15 @@ export async function signEventContract(
       },
     });
 
+    // Notificar al estudio que el cliente firmó el contrato
+    try {
+      const { notifyContractSigned } = await import("@/lib/notifications/studio/helpers/client-updates-notifications");
+      await notifyContractSigned(contractId);
+    } catch (error) {
+      console.error("[signEventContract] Error enviando notificación:", error);
+      // No fallar la firma si falla la notificación
+    }
+
     revalidatePath(`/${studioSlug}/studio/business/events/${contract.event_id}`);
 
     return { success: true, data: updated as EventContract };
@@ -795,14 +881,18 @@ export async function getEventContractForClient(
       return { success: false, error: "Evento no encontrado o no tienes acceso" };
     }
 
-    // Buscar contrato (incluyendo DRAFT para debugging)
+    // Buscar el contrato activo más reciente (no cancelado)
+    // Priorizar PUBLISHED o SIGNED, pero también mostrar DRAFT si no hay publicado
     const contract = await prisma.studio_event_contracts.findFirst({
       where: {
         event_id: realEventId,
         studio_id: studio.id,
         status: {
-          in: ["PUBLISHED", "SIGNED", "CANCELLATION_REQUESTED_BY_STUDIO", "CANCELLATION_REQUESTED_BY_CLIENT", "CANCELLED"],
+          in: ["PUBLISHED", "SIGNED", "CANCELLATION_REQUESTED_BY_STUDIO", "CANCELLATION_REQUESTED_BY_CLIENT"],
         },
+      },
+      orderBy: {
+        created_at: 'desc',
       },
     });
 
@@ -813,6 +903,9 @@ export async function getEventContractForClient(
           event_id: realEventId,
           studio_id: studio.id,
           status: "DRAFT",
+        },
+        orderBy: {
+          created_at: 'desc',
         },
       });
 

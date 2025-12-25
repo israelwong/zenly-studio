@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { Loader2, FileText, CheckCircle2, Download, X, Clock, User, Calendar, Edit } from 'lucide-react';
-import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea } from '@/components/ui/zen';
+import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { getEventContractData, renderContractContent, getRealEventId } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
@@ -40,6 +40,7 @@ export default function EventoContratoPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showEventInfoModal, setShowEventInfoModal] = useState(false);
+  const [showSignConfirmModal, setShowSignConfirmModal] = useState(false);
   // Estados locales para datos del cliente (se actualizan cuando cliente cambia o se actualiza el perfil)
   const [currentClientName, setCurrentClientName] = useState(cliente?.name || '');
   const [currentClientPhone, setCurrentClientPhone] = useState(cliente?.phone || '');
@@ -144,7 +145,7 @@ export default function EventoContratoPage() {
             // eventId puede ser promise_id o event_id, pero en promises siempre es promise_id
             // Comparar directamente con eventId (que puede ser promise_id) o con el id del evento del contexto
             const isCurrentPromise = promiseNew && (
-              promiseNew.id === eventId || 
+              promiseNew.id === eventId ||
               (evento && promiseNew.id === evento.id)
             );
 
@@ -166,8 +167,8 @@ export default function EventoContratoPage() {
                         const changeReason = nameChanged && locationChanged
                           ? "Regeneración automática: cliente actualizó nombre y sede del evento"
                           : nameChanged
-                          ? "Regeneración automática: cliente actualizó nombre del evento"
-                          : "Regeneración automática: cliente actualizó sede del evento";
+                            ? "Regeneración automática: cliente actualizó nombre del evento"
+                            : "Regeneración automática: cliente actualizó sede del evento";
                         const regenerateResult = await regenerateEventContract(slug, realEventIdResult.data, changeReason);
                         if (regenerateResult.success) {
                           // Recargar contrato después de regenerar
@@ -252,7 +253,7 @@ export default function EventoContratoPage() {
           subscribeToChannel(promisesChannel),
           subscribeToChannel(contactsChannel),
         ]);
-        
+
         // Guardar ambos canales
         promisesChannelRef.current = promisesChannel;
         contactsChannelRef.current = contactsChannel;
@@ -303,12 +304,21 @@ export default function EventoContratoPage() {
 
             // Verificar si es el contrato del evento actual
             if (contractNew && contractNew.id === contract.id) {
-              // Solo recargar si el contrato está publicado (el cliente solo ve contratos publicados)
+              // Solo recargar si el contrato está publicado o firmado
+              // NO recargar cuando el cliente solicita cancelación (CANCELLATION_REQUESTED_BY_CLIENT)
+              // Solo actualizar el estado local para evitar refresh completo
               if (contractNew.status === 'PUBLISHED' || contractNew.status === 'SIGNED') {
                 // Recargar contrato después de un pequeño delay para asegurar que la BD está actualizada
                 setTimeout(() => {
                   loadContract();
                 }, 300);
+              } else if (
+                contractNew.status === 'CANCELLATION_REQUESTED_BY_CLIENT' ||
+                contractNew.status === 'CANCELLATION_REQUESTED_BY_STUDIO' ||
+                contractNew.status === 'CANCELLED'
+              ) {
+                // Solo actualizar el estado local sin recargar todo el componente
+                setContract(contractNew as EventContract);
               }
             }
           })
@@ -322,6 +332,13 @@ export default function EventoContratoPage() {
                   setTimeout(() => {
                     loadContract();
                   }, 300);
+                } else if (
+                  contractNew.status === 'CANCELLATION_REQUESTED_BY_CLIENT' ||
+                  contractNew.status === 'CANCELLATION_REQUESTED_BY_STUDIO' ||
+                  contractNew.status === 'CANCELLED'
+                ) {
+                  // Solo actualizar el estado local sin recargar todo el componente
+                  setContract(contractNew as EventContract);
                 }
               }
             }
@@ -336,7 +353,11 @@ export default function EventoContratoPage() {
     setupRealtime();
   }, [slug, contract?.id, supabase, loadContract]);
 
-  const handleSign = async () => {
+  const handleSign = () => {
+    setShowSignConfirmModal(true);
+  };
+
+  const handleConfirmSign = async () => {
     if (!contract || !slug) return;
 
     setIsSigning(true);
@@ -345,6 +366,7 @@ export default function EventoContratoPage() {
 
       if (result.success) {
         toast.success('Contrato firmado correctamente');
+        setShowSignConfirmModal(false);
         await loadContract();
       } else {
         toast.error(result.error || 'Error al firmar contrato');
@@ -403,11 +425,12 @@ export default function EventoContratoPage() {
         reason: cancellationReason.trim(),
       });
 
-      if (result.success) {
+      if (result.success && result.data) {
         toast.success('Solicitud de cancelación enviada al estudio');
         setShowCancellationModal(false);
         setCancellationReason('');
-        await loadContract();
+        // Actualizar solo el estado local del contrato sin recargar todo
+        setContract(result.data);
       } else {
         toast.error(result.error || 'Error al solicitar cancelación');
       }
@@ -523,7 +546,11 @@ export default function EventoContratoPage() {
         <div>
           <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
           <p className="text-zinc-400">
-            {isSigned ? 'Contrato firmado' : isPublished ? 'Revisa y firma el contrato' : 'Contrato en revisión'}
+            {isSigned && contract.signed_at
+              ? `Contrato firmado digitalmente el ${formatDate(contract.signed_at)}`
+              : isPublished
+                ? 'Revisa y firma el contrato'
+                : 'Contrato en revisión'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -534,60 +561,34 @@ export default function EventoContratoPage() {
             </ZenBadge>
           )}
           {isPublished && (
-            <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20">
-              <FileText className="h-3 w-3 mr-1" />
-              Publicado
-            </ZenBadge>
+            <>
+              <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20">
+                <FileText className="h-3 w-3 mr-1" />
+                Publicado para revisión
+              </ZenBadge>
+              <ZenDropdownMenu>
+                <ZenDropdownMenuTrigger asChild>
+                  <ZenButton variant="ghost" size="sm" className="h-8">
+                    <Edit className="h-3.5 w-3.5 mr-1.5" />
+                    Editar datos
+                  </ZenButton>
+                </ZenDropdownMenuTrigger>
+                <ZenDropdownMenuContent align="end">
+                  <ZenDropdownMenuItem onClick={() => setShowProfileModal(true)}>
+                    <User className="h-4 w-4 mr-2" />
+                    Datos de contacto
+                  </ZenDropdownMenuItem>
+                  <ZenDropdownMenuItem onClick={() => setShowEventInfoModal(true)}>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Datos del evento
+                  </ZenDropdownMenuItem>
+                </ZenDropdownMenuContent>
+              </ZenDropdownMenu>
+            </>
           )}
         </div>
       </div>
 
-      {/* Sección: ¿Necesitas actualizar información? */}
-      {isPublished && (
-        <ZenCard className="mb-6">
-          <ZenCardHeader>
-            <ZenCardTitle>¿Necesitas actualizar información?</ZenCardTitle>
-          </ZenCardHeader>
-          <ZenCardContent className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <User className="h-5 w-5 text-zinc-400" />
-                <div>
-                  <p className="text-sm font-medium text-zinc-200">Datos de contacto</p>
-                  <p className="text-xs text-zinc-400">
-                    Nombre, teléfono, email, dirección
-                  </p>
-                </div>
-              </div>
-              <ZenButton
-                size="sm"
-                variant="outline"
-                onClick={() => setShowProfileModal(true)}
-              >
-                Modificar
-              </ZenButton>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-5 w-5 text-zinc-400" />
-                <div>
-                  <p className="text-sm font-medium text-zinc-200">Datos del evento</p>
-                  <p className="text-xs text-zinc-400">Nombre del evento, sede</p>
-                </div>
-              </div>
-              <ZenButton
-                size="sm"
-                variant="outline"
-                onClick={() => setShowEventInfoModal(true)}
-              >
-                Modificar
-              </ZenButton>
-            </div>
-
-          </ZenCardContent>
-        </ZenCard>
-      )}
 
       <ZenCard>
         <ZenCardHeader className="border-b border-zinc-800">
@@ -596,6 +597,17 @@ export default function EventoContratoPage() {
               Contrato - Versión {contract.version}
             </ZenCardTitle>
             <div className="flex items-center gap-2">
+              {isSigned && !isCancellationRequestedByStudio && !isCancellationRequestedByClient && !isCancelled && (
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRequestCancellation}
+                  className="text-red-400 border-red-500/30 hover:bg-red-950/20"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Solicitar cancelación
+                </ZenButton>
+              )}
               <ZenButton
                 variant="outline"
                 size="sm"
@@ -621,18 +633,7 @@ export default function EventoContratoPage() {
                   ) : (
                     <CheckCircle2 className="h-4 w-4 mr-2" />
                   )}
-                  Firmar contrato
-                </ZenButton>
-              )}
-              {isSigned && !isCancellationRequestedByStudio && !isCancellationRequestedByClient && !isCancelled && (
-                <ZenButton
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRequestCancellation}
-                  className="text-red-400 border-red-500/30 hover:bg-red-950/20"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Solicitar cancelación
+                  Firmar contrato digital
                 </ZenButton>
               )}
               {isCancellationRequestedByStudio && (
@@ -765,6 +766,22 @@ export default function EventoContratoPage() {
           </div>
         </div>
       </ZenDialog>
+
+      {/* Modal de confirmación de firma */}
+      <ZenConfirmModal
+        isOpen={showSignConfirmModal}
+        onClose={() => {
+          if (!isSigning) {
+            setShowSignConfirmModal(false);
+          }
+        }}
+        onConfirm={handleConfirmSign}
+        title="Firmar Contrato Digital"
+        description="Al firmar este contrato, confirmas que has leído y aceptas todos los términos y condiciones establecidos. Esta acción es legalmente vinculante."
+        confirmLabel="Confirmar firma"
+        cancelLabel="Cancelar"
+        isLoading={isSigning}
+      />
 
       {/* Modal de confirmación de cancelación (cuando el studio solicita) */}
       <ZenConfirmModal

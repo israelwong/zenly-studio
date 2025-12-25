@@ -10,7 +10,7 @@ export interface ZenDialogProps {
   isOpen: boolean;
   onClose: () => void;
   title: string | React.ReactNode;
-  description?: string;
+  description?: string | React.ReactNode;
   children: React.ReactNode;
   onSave?: () => void;
   onCancel?: () => void;
@@ -172,9 +172,9 @@ export function ZenDialog({
                   {title}
                 </ZenCardTitle>
                 {description && (
-                  <p className="text-sm text-zinc-400 mt-1">
+                  <div className="text-sm text-zinc-400 mt-1">
                     {description}
-                  </p>
+                  </div>
                 )}
               </div>
               <div className="flex items-center gap-2">

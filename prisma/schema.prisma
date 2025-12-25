@@ -1444,7 +1444,7 @@ model studio_events {
   client_portal_access studio_client_portal_access[]
   notifications        studio_notifications[]
   client_notifications studio_client_notifications[]
-  contract             studio_event_contracts?
+  contracts            studio_event_contracts[]
 
   @@index([contact_id])
   @@index([cotizacion_id])
@@ -1487,7 +1487,7 @@ model studio_contract_templates {
 model studio_event_contracts {
   id                   String         @id @default(cuid())
   studio_id            String
-  event_id             String         @unique
+  event_id             String
   template_id          String?
   content              String         @db.Text // Contenido renderizado (para mostrar)
   custom_template_content String?     @db.Text // Contenido personalizado editado (con variables, para editar)
@@ -1515,6 +1515,7 @@ model studio_event_contracts {
 
   @@index([studio_id, status])
   @@index([event_id])
+  @@index([event_id, status])
   @@index([template_id])
   @@index([status, cancelled_at])
 }
@@ -3098,6 +3099,7 @@ enum StudioNotificationType {
   CLIENT_EVENT_INFO_UPDATED
   CONTRACT_CANCELLATION_REQUESTED_BY_CLIENT
   CONTRACT_MODIFICATION_REQUESTED
+  CONTRACT_SIGNED
 }
 
 enum ClientNotificationType {
@@ -3106,8 +3108,13 @@ enum ClientNotificationType {
   DELIVERABLE_DELETED
   PAYMENT_RECEIVED
   PAYMENT_CANCELLED
+  PAYMENT_UPDATED
+  PAYMENT_DELETED
   CONTRACT_AVAILABLE
   EVENT_STAGE_CHANGED
+  CONTRACT_CANCELLATION_REQUESTED_BY_STUDIO
+  CONTRACT_CANCELLATION_CONFIRMED
+  CONTRACT_CANCELLATION_REJECTED
 }
 
 enum NotificationPriority {

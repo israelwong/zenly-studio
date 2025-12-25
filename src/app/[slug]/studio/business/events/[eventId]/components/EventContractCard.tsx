@@ -29,7 +29,7 @@ import { ContractEditorModal } from '@/components/shared/contracts/ContractEdito
 import { EventContractViewModal } from './EventContractViewModal';
 import { ContractVersionsModal } from './ContractVersionsModal';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
-import { getEventContract, generateEventContract, updateEventContract, deleteEventContract, publishEventContract, requestContractCancellationByStudio, confirmContractCancellationByStudio, rejectContractCancellationByStudio, getContractCancellationLogs, getContractVersions } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { getEventContract, getAllEventContracts, generateEventContract, updateEventContract, deleteEventContract, publishEventContract, requestContractCancellationByStudio, confirmContractCancellationByStudio, rejectContractCancellationByStudio, getContractCancellationLogs, getContractVersions } from '@/lib/actions/studio/business/contracts/contracts.actions';
 
 interface EventContractCardProps {
   studioSlug: string;
@@ -45,6 +45,7 @@ export function EventContractCard({
   onContractUpdated,
 }: EventContractCardProps) {
   const [contract, setContract] = useState<EventContract | null>(null);
+  const [allContracts, setAllContracts] = useState<EventContract[]>([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -135,14 +136,20 @@ export function EventContractCard({
   const loadContract = async () => {
     setLoading(true);
     try {
-      const result = await getEventContract(studioSlug, eventId);
-      if (result.success && result.data) {
-        setContract(result.data);
+      // Cargar todos los contratos (activos y cancelados)
+      const allResult = await getAllEventContracts(studioSlug, eventId);
+      if (allResult.success && allResult.data) {
+        setAllContracts(allResult.data);
+        // El contrato activo es el primero (no cancelado) o null
+        const activeContract = allResult.data.find(c => c.status !== 'CANCELLED') || null;
+        setContract(activeContract);
       } else {
+        setAllContracts([]);
         setContract(null);
       }
     } catch (error) {
       console.error('Error loading contract:', error);
+      setAllContracts([]);
       setContract(null);
     } finally {
       setLoading(false);
@@ -479,6 +486,281 @@ export function EventContractCard({
     }
   };
 
+  const renderContractItem = (contractItem: EventContract, isActive: boolean) => {
+    const isCancelled = contractItem.status === 'CANCELLED';
+    const setCurrentContract = () => setContract(contractItem);
+    const handleViewThisContract = () => {
+      setContract(contractItem);
+      setShowViewModal(true);
+    };
+    const handleEditThisContent = () => {
+      setContract(contractItem);
+      handleEditContent();
+    };
+    const handleChangeThisTemplate = () => {
+      setContract(contractItem);
+      handleChangeTemplate();
+    };
+    const handleDeleteThisContract = () => {
+      setContract(contractItem);
+      handleDeleteClick();
+    };
+    const handlePublishThisContract = () => {
+      setContract(contractItem);
+      handlePublishClick();
+    };
+    const handleRequestThisCancellation = () => {
+      setContract(contractItem);
+      handleRequestCancellation();
+    };
+    const handleConfirmThisCancellation = () => {
+      setContract(contractItem);
+      setShowCancellationConfirmModal(true);
+    };
+    const handleRejectThisCancellation = () => {
+      setContract(contractItem);
+      handleRejectCancellation();
+    };
+    const handleViewThisVersions = () => {
+      setContract(contractItem);
+      setShowVersionsModal(true);
+    };
+
+    return (
+      <div
+        key={contractItem.id}
+        className={`p-3 rounded border relative group transition-colors ${
+          isCancelled
+            ? 'bg-zinc-900/50 border-zinc-800/50 opacity-75'
+            : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3 pr-8">
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-medium mb-1 ${isCancelled ? 'text-zinc-500' : 'text-zinc-100'}`}>
+              {isCancelled ? 'Contrato Cancelado' : 'Contrato'}
+            </p>
+
+            {/* Estado */}
+            <div className="mb-2">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-zinc-500">Estado:</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowHelpModal(true);
+                  }}
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  {getStatusBadge(contractItem.status)}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowHelpModal(true);
+                  }}
+                  className="text-zinc-500 hover:text-zinc-400 transition-colors"
+                  title="Información sobre estados"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Información compacta */}
+            <div className="space-y-0.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500">Versión:</span>
+                  <span className={isCancelled ? 'text-zinc-500' : 'text-zinc-300'}>{contractItem.version}</span>
+                </div>
+                {!isCancelled && (
+                  <ZenButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewThisVersions();
+                    }}
+                    className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-300"
+                  >
+                    <GitBranch className="h-3 w-3 mr-1" />
+                    Historial
+                  </ZenButton>
+                )}
+              </div>
+              {contractItem.created_at && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500">Creado:</span>
+                  <span className={isCancelled ? 'text-zinc-500' : 'text-zinc-300'}>{formatDate(contractItem.created_at)}</span>
+                </div>
+              )}
+              {contractItem.signed_at && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500">Firmado:</span>
+                  <span className={isCancelled ? 'text-zinc-500' : 'text-zinc-300'}>{formatDate(contractItem.signed_at)}</span>
+                </div>
+              )}
+              {isCancelled && contractItem.cancelled_at && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500">Cancelado:</span>
+                  <span className="text-zinc-500">{formatDate(contractItem.cancelled_at)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Botón Publicar visible cuando es draft y activo */}
+            {!isCancelled && contractItem.status === 'DRAFT' && (
+              <div className="mt-3 w-full" onClick={(e) => e.stopPropagation()}>
+                <ZenButton
+                  variant="ghost"
+                  onClick={handlePublishThisContract}
+                  className="bg-transparent focus-visible:ring-zinc-500/50 px-3 py-1.5 h-8 rounded-md w-full gap-2 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-950/20"
+                >
+                  <Send className="h-4 w-4" />
+                  Publicar para revisión del cliente
+                </ZenButton>
+              </div>
+            )}
+          </div>
+
+            {/* Botones de acción - solo para contratos activos */}
+          {!isCancelled && (
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+              {/* Botón Ver */}
+              <ZenButton
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewThisContract();
+                }}
+                className="h-7 w-7 text-zinc-400 hover:text-zinc-300"
+                title="Ver contrato"
+              >
+                <Eye className="h-4 w-4" />
+              </ZenButton>
+              {/* Menú dropdown */}
+              <ZenDropdownMenu>
+                <ZenDropdownMenuTrigger asChild>
+                  <ZenButton
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-zinc-400 hover:text-zinc-300"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </ZenButton>
+                </ZenDropdownMenuTrigger>
+                <ZenDropdownMenuContent align="end">
+                  {contractItem.status === 'DRAFT' && (
+                    <>
+                      <ZenDropdownMenuItem onClick={handleEditThisContent}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Editar contenido
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuItem onClick={handleChangeThisTemplate}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Cambiar plantilla
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuSeparator />
+                      <ZenDropdownMenuItem onClick={handlePublishThisContract}>
+                        <Send className="mr-2 h-4 w-4" />
+                        Publicar
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuSeparator />
+                      <ZenDropdownMenuItem
+                        onClick={handleDeleteThisContract}
+                        className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Eliminar
+                      </ZenDropdownMenuItem>
+                    </>
+                  )}
+                  {contractItem.status === 'PUBLISHED' && (
+                    <>
+                      <ZenDropdownMenuItem onClick={handleEditThisContent}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Editar contenido
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuItem onClick={handleChangeThisTemplate}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Cambiar plantilla
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuSeparator />
+                      <ZenDropdownMenuItem
+                        onClick={handleDeleteThisContract}
+                        className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Eliminar
+                      </ZenDropdownMenuItem>
+                    </>
+                  )}
+                  {contractItem.status === 'SIGNED' && (
+                    <>
+                      <ZenDropdownMenuItem onClick={handleRequestThisCancellation}>
+                        <X className="mr-2 h-4 w-4" />
+                        Solicitar cancelación
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuSeparator />
+                      <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
+                        <FileText className="mr-2 h-4 w-4" />
+                        Contrato firmado (solo lectura)
+                      </ZenDropdownMenuItem>
+                    </>
+                  )}
+                  {contractItem.status === 'CANCELLATION_REQUESTED_BY_STUDIO' && (
+                    <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
+                      <Clock className="mr-2 h-4 w-4" />
+                      Esperando confirmación del cliente
+                    </ZenDropdownMenuItem>
+                  )}
+                  {contractItem.status === 'CANCELLATION_REQUESTED_BY_CLIENT' && (
+                    <>
+                      <ZenDropdownMenuItem onClick={handleConfirmThisCancellation}>
+                        <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-400" />
+                        Confirmar cancelación
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuSeparator />
+                      <ZenDropdownMenuItem onClick={handleRejectThisCancellation}>
+                        <X className="mr-2 h-4 w-4 text-red-400" />
+                        Rechazar cancelación
+                      </ZenDropdownMenuItem>
+                    </>
+                  )}
+                  <ZenDropdownMenuSeparator />
+                  <ZenDropdownMenuItem onClick={handleViewThisVersions}>
+                    <GitBranch className="mr-2 h-4 w-4" />
+                    Historial de Versiones
+                  </ZenDropdownMenuItem>
+                </ZenDropdownMenuContent>
+              </ZenDropdownMenu>
+            </div>
+          )}
+
+          {/* Botón Ver para contratos cancelados */}
+          {isCancelled && (
+            <div className="absolute top-2 right-2">
+              <ZenButton
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewThisContract();
+                }}
+                className="h-7 w-7 text-zinc-400 hover:text-zinc-300"
+                title="Ver contrato cancelado"
+              >
+                <Eye className="h-4 w-4" />
+              </ZenButton>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <ZenCard>
@@ -495,6 +777,10 @@ export function EventContractCard({
     );
   }
 
+  // Determinar si mostrar botón "Anexar" en el header
+  const hasActiveContract = allContracts.some(c => c.status !== 'CANCELLED');
+  const showAddButton = !hasActiveContract; // Mostrar si no hay contrato activo (sin contratos o solo cancelados)
+
   return (
     <ZenCard>
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
@@ -502,233 +788,56 @@ export function EventContractCard({
           <ZenCardTitle className="text-sm font-medium flex items-center gap-2 pt-1">
             Contrato
           </ZenCardTitle>
-          <ZenButton
-            variant="ghost"
-            size="sm"
-            onClick={contract ? handleViewContract : handleGenerateClick}
-            disabled={isGenerating}
-            className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
-          >
-            {contract ? (
-              <>
-                <Eye className="h-3 w-3 mr-1" />
-                Ver contrato
-              </>
-            ) : (
-              <>
-                <Plus className="h-3 w-3 mr-1" />
-                Anexar
-              </>
-            )}
-          </ZenButton>
+          {showAddButton && (
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={handleGenerateClick}
+              disabled={isGenerating}
+              className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Anexar
+            </ZenButton>
+          )}
         </div>
       </ZenCardHeader>
       <ZenCardContent className="p-4">
-        {contract ? (
+        {allContracts.length > 0 ? (
           <div className="space-y-3">
-            <div
-              className="p-3 bg-zinc-900 rounded border border-zinc-800 relative group hover:border-zinc-700 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-3 pr-8">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-100 mb-1">
-                    Contrato
-                  </p>
-
-                  {/* Estado en línea dedicada */}
-                  <div className="mb-2">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-zinc-500">Estado:</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowHelpModal(true);
-                        }}
-                        className="cursor-pointer hover:opacity-80 transition-opacity"
-                      >
-                        {getStatusBadge(contract.status)}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowHelpModal(true);
-                        }}
-                        className="text-zinc-500 hover:text-zinc-400 transition-colors"
-                        title="Información sobre estados"
-                      >
-                        <Info className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Información compacta */}
-                  <div className="space-y-0.5 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-zinc-500">Versión:</span>
-                        <span className="text-zinc-300">{contract.version}</span>
-                      </div>
-                      <ZenButton
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowVersionsModal(true);
-                        }}
-                        className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-300"
-                      >
-                        <GitBranch className="h-3 w-3 mr-1" />
-                        Historial
-                      </ZenButton>
-                    </div>
-                    {contract.created_at && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-zinc-500">Creado:</span>
-                        <span className="text-zinc-300">{formatDate(contract.created_at)}</span>
-                      </div>
-                    )}
-                    {contract.signed_at && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-zinc-500">Firmado:</span>
-                        <span className="text-zinc-300">{formatDate(contract.signed_at)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Botón Publicar visible cuando es draft */}
-                  {contract.status === 'DRAFT' && (
-                    <div className="mt-3 w-full" onClick={(e) => e.stopPropagation()}>
-                      <ZenButton
-                        variant="ghost"
-                        onClick={handlePublishClick}
-                        className="bg-transparent focus-visible:ring-zinc-500/50 px-3 py-1.5 h-8 rounded-md w-full gap-2 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-950/20"
-                      >
-                        <Send className="h-4 w-4" />
-                        Publicar para revisión del cliente
-                      </ZenButton>
-                    </div>
-                  )}
-                </div>
-
-                {/* Menú dropdown */}
-                <div className="absolute top-2 right-2">
-                  <ZenDropdownMenu>
-                    <ZenDropdownMenuTrigger asChild>
-                      <ZenButton
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-zinc-400 hover:text-zinc-300"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </ZenButton>
-                    </ZenDropdownMenuTrigger>
-                    <ZenDropdownMenuContent align="end">
-                      {contract.status === 'DRAFT' && (
-                        <>
-                          <ZenDropdownMenuItem onClick={handleEditContent}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar contenido
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuItem onClick={handleChangeTemplate}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            Cambiar plantilla
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuSeparator />
-                          <ZenDropdownMenuItem onClick={handlePublishClick}>
-                            <Send className="mr-2 h-4 w-4" />
-                            Publicar
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuSeparator />
-                          <ZenDropdownMenuItem
-                            onClick={handleDeleteClick}
-                            className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </ZenDropdownMenuItem>
-                        </>
-                      )}
-                      {contract.status === 'PUBLISHED' && (
-                        <>
-                          <ZenDropdownMenuItem onClick={handleEditContent}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar contenido
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuItem onClick={handleChangeTemplate}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            Cambiar plantilla
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuSeparator />
-                          <ZenDropdownMenuItem
-                            onClick={handleDeleteClick}
-                            className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </ZenDropdownMenuItem>
-                        </>
-                      )}
-                      {contract.status === 'SIGNED' && (
-                        <>
-                          <ZenDropdownMenuItem onClick={handleRequestCancellation}>
-                            <X className="mr-2 h-4 w-4" />
-                            Solicitar cancelación
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuSeparator />
-                          <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
-                            <FileText className="mr-2 h-4 w-4" />
-                            Contrato firmado (solo lectura)
-                          </ZenDropdownMenuItem>
-                        </>
-                      )}
-                      {contract.status === 'CANCELLATION_REQUESTED_BY_STUDIO' && (
-                        <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
-                          <Clock className="mr-2 h-4 w-4" />
-                          Esperando confirmación del cliente
-                        </ZenDropdownMenuItem>
-                      )}
-                      {contract.status === 'CANCELLATION_REQUESTED_BY_CLIENT' && (
-                        <>
-                          <ZenDropdownMenuItem onClick={() => setShowCancellationConfirmModal(true)}>
-                            <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-400" />
-                            Confirmar cancelación
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuSeparator />
-                          <ZenDropdownMenuItem onClick={handleRejectCancellation}>
-                            <X className="mr-2 h-4 w-4 text-red-400" />
-                            Rechazar cancelación
-                          </ZenDropdownMenuItem>
-                        </>
-                      )}
-                      {contract.status === 'CANCELLED' && (
-                        <ZenDropdownMenuItem disabled className="text-zinc-500 cursor-not-allowed">
-                          <X className="mr-2 h-4 w-4" />
-                          Contrato cancelado
-                        </ZenDropdownMenuItem>
-                      )}
-                      {(contract.status === 'PUBLISHED' || contract.status === 'SIGNED') && (
-                        <>
-                        </>
-                      )}
-                      <ZenDropdownMenuSeparator />
-                      <ZenDropdownMenuItem
-                        onClick={() => setShowVersionsModal(true)}
-                      >
-                        <GitBranch className="mr-2 h-4 w-4" />
-                        Historial de Versiones
-                      </ZenDropdownMenuItem>
-                    </ZenDropdownMenuContent>
-                  </ZenDropdownMenu>
-                </div>
+            {/* Contratos activos primero */}
+            {allContracts
+              .filter(c => c.status !== 'CANCELLED')
+              .map((contractItem) => renderContractItem(contractItem, true))}
+            
+            {/* Separador si hay contratos cancelados */}
+            {allContracts.some(c => c.status === 'CANCELLED') && allContracts.some(c => c.status !== 'CANCELLED') && (
+              <div className="pt-2 border-t border-zinc-800">
+                <p className="text-xs text-zinc-500 mb-2">Historial</p>
               </div>
-            </div>
-
+            )}
+            
+            {/* Contratos cancelados después */}
+            {allContracts
+              .filter(c => c.status === 'CANCELLED')
+              .map((contractItem) => renderContractItem(contractItem, false))}
+            
           </div>
         ) : (
-          <div className="text-center py-4">
+          <div className="text-center py-6 space-y-3">
             <p className="text-xs text-zinc-500">
               No hay contrato generado para este evento
             </p>
+            <ZenButton
+              variant="outline"
+              size="sm"
+              onClick={handleGenerateClick}
+              disabled={isGenerating}
+              className="text-emerald-400 border-emerald-500/30 hover:bg-emerald-950/20"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Anexar contrato
+            </ZenButton>
           </div>
         )}
       </ZenCardContent>

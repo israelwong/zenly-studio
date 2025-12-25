@@ -54,10 +54,10 @@ export default function EventDetailPage() {
       }
     };
 
-    if (eventId) {
+    if (eventId && studioSlug) {
       loadEvent();
     }
-  }, [eventId, studioSlug, router]);
+  }, [eventId, studioSlug]);
 
   // Cargar pipeline stages
   useEffect(() => {

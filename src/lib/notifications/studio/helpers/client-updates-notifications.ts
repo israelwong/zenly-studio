@@ -191,3 +191,73 @@ export async function notifyClientEventInfoUpdated(
   }
 }
 
+/**
+ * Notifica al estudio cuando el cliente firma el contrato digitalmente
+ */
+export async function notifyContractSigned(
+  contractId: string
+) {
+  try {
+    const contract = await prisma.studio_event_contracts.findUnique({
+      where: { id: contractId },
+      include: {
+        event: {
+          include: {
+            studio: {
+              select: {
+                id: true,
+                slug: true,
+              },
+            },
+            contact: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            promise: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!contract || !contract.event) {
+      return null;
+    }
+
+    const { event } = contract;
+    const clientName = event.contact.name;
+
+    return createStudioNotification({
+      scope: StudioNotificationScope.STUDIO,
+      type: StudioNotificationType.CONTRACT_SIGNED,
+      studio_id: event.studio_id,
+      title: "Contrato firmado digitalmente",
+      message: `${clientName} ha firmado su contrato digitalmente`,
+      category: "contracts",
+      priority: NotificationPriority.HIGH,
+      route: `/{slug}/studio/business/events/{event_id}`,
+      route_params: {
+        slug: event.studio.slug,
+        event_id: event.id,
+      },
+      metadata: {
+        contact_name: clientName,
+        event_name: event.promise?.name,
+        contract_version: contract.version,
+      },
+      contact_id: event.contact_id,
+      event_id: event.id,
+      promise_id: event.promise_id,
+    });
+  } catch (error) {
+    console.error("[notifyContractSigned] Error:", error);
+    return null;
+  }
+}
+

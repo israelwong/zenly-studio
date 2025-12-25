@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, Clock, Eye, CheckCircle2, X } from "lucide-react";
 import { ZenDialog } from "@/components/ui/zen/modals/ZenDialog";
-import { ZenButton } from "@/components/ui/zen";
+import { ZenButton, ZenBadge } from "@/components/ui/zen";
 import { getEventContractData, renderContractContent, type EventContractDataWithConditions } from "@/lib/actions/studio/business/contracts/renderer.actions";
 import { generatePDFFromElement, generateContractFilename } from "@/lib/utils/pdf-generator";
 import { CONTRACT_PREVIEW_STYLES } from "@/lib/utils/contract-styles";
@@ -167,13 +167,71 @@ export function EventContractViewModal({
     }
   };
 
+  const getStatusDisplay = () => {
+    const status = contract.status;
+    if (status === 'CANCELLED') {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-zinc-400">Estado:</span>
+          <ZenBadge variant="outline" className="text-red-400 border-red-500/30 bg-red-950/20 rounded-full text-xs px-2 py-0.5 h-5">
+            <X className="h-3 w-3 mr-1" />
+            Cancelado
+          </ZenBadge>
+        </div>
+      );
+    }
+    if (status === 'SIGNED') {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-zinc-400">Estado:</span>
+          <ZenBadge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-950/20 rounded-full text-xs px-2 py-0.5 h-5">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            Firmado
+          </ZenBadge>
+        </div>
+      );
+    }
+    if (status === 'PUBLISHED') {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-zinc-400">Estado:</span>
+          <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20 rounded-full text-xs px-2 py-0.5 h-5">
+            <Eye className="h-3 w-3 mr-1" />
+            Publicado
+          </ZenBadge>
+        </div>
+      );
+    }
+    if (status === 'DRAFT') {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-zinc-400">Estado:</span>
+          <ZenBadge variant="outline" className="text-amber-400 border-amber-500/30 bg-amber-950/20 rounded-full text-xs px-2 py-0.5 h-5">
+            <Clock className="h-3 w-3 mr-1" />
+            Borrador
+          </ZenBadge>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-zinc-400">Estado:</span>
+        <span className="text-sm text-zinc-300">
+          {status === 'CANCELLATION_REQUESTED_BY_STUDIO' ? 'Cancelación solicitada' : 
+           status === 'CANCELLATION_REQUESTED_BY_CLIENT' ? 'Cliente solicita cancelar' : 
+           'En proceso'}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <>
       <ZenDialog
         isOpen={isOpen}
         onClose={onClose}
         title={`Contrato - Versión ${contract.version}`}
-        description={`Estado: ${contract.status === 'DRAFT' ? 'Borrador' : contract.status === 'PUBLISHED' ? 'Publicado' : contract.status === 'SIGNED' ? 'Firmado' : contract.status === 'CANCELLED' ? 'Cancelado' : 'En proceso de cancelación'}`}
+        description={getStatusDisplay()}
         maxWidth="5xl"
         onCancel={onClose}
         cancelLabel="Cerrar"
