@@ -1,16 +1,23 @@
 'use client';
 
 import { useFavicon } from '@/hooks/useFavicon';
+import { EventoProvider } from '../context/EventoContext';
 import type { StudioPublicInfo } from '@/lib/actions/cliente';
+import type { ClientEventDetail } from '@/types/client';
 
 interface EventoLayoutClientProps {
   children: React.ReactNode;
   studioInfo: StudioPublicInfo | null;
+  evento: ClientEventDetail;
 }
 
-export function EventoLayoutClient({ children, studioInfo }: EventoLayoutClientProps) {
+export function EventoLayoutClient({ children, studioInfo, evento }: EventoLayoutClientProps) {
   // Actualizar favicon dinámicamente (solo necesita ser client)
   useFavicon(studioInfo?.isotipo_url || studioInfo?.logo_url, studioInfo?.studio_name);
 
-  return <>{children}</>;
+  return (
+    <EventoProvider evento={evento}>
+      {children}
+    </EventoProvider>
+  );
 }

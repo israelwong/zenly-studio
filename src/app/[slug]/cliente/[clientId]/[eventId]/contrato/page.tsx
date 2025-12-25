@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { Loader2, FileText, CheckCircle2, Download, X, Clock, User, Calendar, Edit, Eye, MoreVertical } from 'lucide-react';
-import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
+import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenSidebarTrigger } from '@/components/ui/zen';
 import { getEventContractForClient, getAllEventContractsForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { getEventContractData, renderContractContent, getRealEventId } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
@@ -543,7 +543,10 @@ export default function EventoContratoPage() {
   if (loading) {
     return (
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
+        <div className="flex items-center gap-3 mb-2">
+          <ZenSidebarTrigger className="lg:hidden" />
+          <h1 className="text-3xl font-bold text-zinc-100">Contrato</h1>
+        </div>
         <p className="text-zinc-400">Cargando contrato...</p>
         <ZenCard className="mt-6">
           <ZenCardContent className="p-12">
@@ -592,8 +595,10 @@ export default function EventoContratoPage() {
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
+        <div className="flex items-center gap-3">
+          <ZenSidebarTrigger className="lg:hidden" />
+          <div>
+            <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
           <p className="text-zinc-400">
             {contract ? (
               isSigned && contract.signed_at

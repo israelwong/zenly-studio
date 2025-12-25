@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit2, Calendar, MapPin, Tag } from 'lucide-react';
+import { Edit2, Calendar, Tag } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import { useEvento } from '../context/EventoContext';
 import { EventInfoModal } from './EventInfoModal';
@@ -45,12 +45,12 @@ export function InformacionEventoCard({ slug, clientId, eventId }: InformacionEv
           <div className="flex items-center justify-between">
             <ZenCardTitle>Información del Evento</ZenCardTitle>
             <ZenButton
-              size="sm"
-              variant="outline"
+              size="icon"
+              variant="ghost"
               onClick={() => setShowEventInfoModal(true)}
+              className="h-8 w-8"
             >
-              <Edit2 className="h-4 w-4 mr-2" />
-              Editar
+              <Edit2 className="h-4 w-4" />
             </ZenButton>
           </div>
         </ZenCardHeader>
@@ -82,13 +82,6 @@ export function InformacionEventoCard({ slug, clientId, eventId }: InformacionEv
               <div className="flex items-center gap-2 text-sm text-zinc-300">
                 <Tag className="h-4 w-4 text-zinc-500" />
                 <span>{evento.event_type.name}</span>
-              </div>
-            )}
-
-            {evento.address && (
-              <div className="flex items-start gap-2 text-sm text-zinc-300">
-                <MapPin className="h-4 w-4 text-zinc-500 mt-0.5" />
-                <span>{evento.address}</span>
               </div>
             )}
           </div>

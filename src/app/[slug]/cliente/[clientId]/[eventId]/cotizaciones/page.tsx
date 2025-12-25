@@ -1,6 +1,6 @@
 'use client';
 
-import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent } from '@/components/ui/zen';
+import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenSidebarTrigger } from '@/components/ui/zen';
 import { ToastContainer } from '@/components/client';
 import { useToast } from '@/hooks/useToast';
 import { useEvento } from '../context/EventoContext';
@@ -19,9 +19,12 @@ export default function EventoCotizacionesPage() {
 
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-100 mb-2">
-          {tieneMultiplesCotizaciones ? 'Cotizaciones' : 'Cotización'}
-        </h1>
+        <div className="flex items-center gap-3 mb-2">
+          <ZenSidebarTrigger className="lg:hidden" />
+          <h1 className="text-3xl font-bold text-zinc-100">
+            {tieneMultiplesCotizaciones ? 'Cotizaciones' : 'Cotización'}
+          </h1>
+        </div>
         <p className="text-zinc-400">Detalles de servicios y pagos</p>
       </div>
 

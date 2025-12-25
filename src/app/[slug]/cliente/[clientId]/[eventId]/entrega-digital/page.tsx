@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { ZenCard } from '@/components/ui/zen';
+import { ZenCard, ZenSidebarTrigger } from '@/components/ui/zen';
 import { ToastContainer } from '@/components/client';
 import { useToast } from '@/hooks/useToast';
 import { obtenerEntregablesCliente } from '@/lib/actions/cliente/deliverables.actions';
@@ -49,7 +49,10 @@ export default function EntregaDigitalPage() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-100 mb-2">Entrega Digital</h1>
+        <div className="flex items-center gap-3 mb-2">
+          <ZenSidebarTrigger className="lg:hidden" />
+          <h1 className="text-3xl font-bold text-zinc-100">Entrega Digital</h1>
+        </div>
         <p className="text-zinc-400">Descarga tus archivos digitales</p>
       </div>
 

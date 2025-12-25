@@ -192,7 +192,7 @@ export function ZenSidebar({ children, className, isHovered = false, onMouseEnte
   return (
     <div
       className={cn(
-        "fixed left-0 top-0 z-50 h-screen transform transition-all duration-150 ease-in-out",
+        "fixed left-0 top-0 z-[60] h-screen transform transition-all duration-150 ease-in-out",
         // Mobile: ancho fijo
         "max-w-[80vw] sm:w-72",
         // Desktop: ancho dinámico con prioridad
@@ -428,7 +428,7 @@ export function ZenSidebarOverlay() {
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-black/50"
+      className="fixed inset-0 z-[55] bg-black/50"
       onClick={() => setIsOpen(false)}
     />
   );

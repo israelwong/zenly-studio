@@ -277,8 +277,13 @@ export function EstatusEntregablesCard({ dashboardInfo: initialDashboardInfo, lo
                     <div className="flex-1 min-w-0 pt-0.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
-                          className={`text-sm font-medium transition-colors ${isCompleted ? 'text-zinc-100' : 'text-zinc-500'
-                            }`}
+                          className={`text-sm transition-colors ${
+                            isCurrent 
+                              ? 'text-zinc-100' 
+                              : isCompleted 
+                                ? 'text-zinc-100' 
+                                : 'text-zinc-500'
+                          }`}
                         >
                           {displayName}
                         </span>

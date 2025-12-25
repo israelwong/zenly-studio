@@ -64,8 +64,11 @@ export function EventCard({ evento }: EventCardProps) {
               </div>
             )}
           </div>
-          <ZenBadge variant={isPagado ? 'success' : 'warning'}>
-            {isPagado ? 'Pagado' : 'Pendiente'}
+          <ZenBadge 
+            variant={isPagado ? 'success' : 'warning'}
+            className="rounded-full text-xs px-2 py-0.5"
+          >
+            {isPagado ? 'Pagado' : 'Saldo pendiente'}
           </ZenBadge>
         </div>
 

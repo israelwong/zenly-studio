@@ -78,19 +78,17 @@ export default async function EventoLayout({ children, params }: EventoLayoutPro
   const evento: ClientEventDetail = eventoResponse.data;
 
   return (
-    <EventoLayoutClient studioInfo={studioInfo}>
-      <EventoProvider evento={evento}>
-        <ZenSidebarProvider>
-          <ClientLayoutWrapper
-            slug={slug}
-            cliente={cliente}
-            evento={evento}
-            studioInfo={studioInfo}
-          >
-            {children}
-          </ClientLayoutWrapper>
-        </ZenSidebarProvider>
-      </EventoProvider>
+    <EventoLayoutClient studioInfo={studioInfo} evento={evento}>
+      <ZenSidebarProvider>
+        <ClientLayoutWrapper
+          slug={slug}
+          cliente={cliente}
+          evento={evento}
+          studioInfo={studioInfo}
+        >
+          {children}
+        </ClientLayoutWrapper>
+      </ZenSidebarProvider>
     </EventoLayoutClient>
   );
 }

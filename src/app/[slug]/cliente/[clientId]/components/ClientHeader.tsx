@@ -36,9 +36,9 @@ export function ClientHeader({ slug, cliente, studioInfo }: ClientHeaderProps) {
       <div className="flex items-center gap-3 min-w-0">
         {/* Studio Icon + Name */}
         {isMounted ? (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 min-w-0">
             {studioInfo?.logo_url ? (
-              <div className="relative w-6 h-6 rounded-md overflow-hidden bg-zinc-800 flex-shrink-0">
+              <div className="relative w-7 h-7 rounded-full overflow-hidden bg-zinc-800 flex-shrink-0">
                 <Image
                   src={studioInfo.logo_url}
                   alt={studioInfo.studio_name || 'Logo'}
@@ -47,19 +47,23 @@ export function ClientHeader({ slug, cliente, studioInfo }: ClientHeaderProps) {
                 />
               </div>
             ) : (
-              <div className="w-6 h-6 bg-zinc-800 rounded-md flex items-center justify-center flex-shrink-0">
-                <User className="h-3 w-3 text-zinc-500" />
+              <div className="w-7 h-7 bg-zinc-800 rounded-full flex items-center justify-center flex-shrink-0">
+                <User className="h-3.5 w-3.5 text-zinc-500" />
               </div>
             )}
-            <span className="text-sm font-medium text-zinc-300 truncate">
-              {studioInfo?.studio_name || 'Portal Cliente'}
-            </span>
+            <div className="flex flex-col gap-0 min-w-0">
+              <span className="text-sm font-medium text-zinc-300 truncate">
+                {studioInfo?.studio_name || 'Portal Cliente'}
+              </span>
+              <span className="text-[10px] text-zinc-500">Portal del cliente</span>
+            </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-col gap-0 shrink-0 min-w-0">
             <span className="text-sm font-medium text-zinc-300 truncate">
               {studioInfo?.studio_name || 'Portal Cliente'}
             </span>
+            <span className="text-[10px] text-zinc-500">Portal del cliente</span>
           </div>
         )}
       </div>

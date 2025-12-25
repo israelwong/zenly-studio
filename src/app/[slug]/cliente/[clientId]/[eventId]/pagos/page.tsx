@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Building2 } from 'lucide-react';
-import { ZenCard, ZenButton, ZenDialog } from '@/components/ui/zen';
+import { ZenCard, ZenButton, ZenDialog, ZenSidebarTrigger } from '@/components/ui/zen';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { useToast } from '@/hooks/useToast';
 import { obtenerPagosEvento, obtenerInfoBancariaStudio, obtenerEventoDetalle } from '@/lib/actions/cliente';
@@ -131,9 +131,12 @@ export default function EventoPagosPage() {
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-100 mb-2">Historial de Pagos</h1>
-            <p className="text-zinc-400">Consulta tus pagos e información bancaria</p>
+          <div className="flex items-center gap-3">
+            <ZenSidebarTrigger className="lg:hidden" />
+            <div>
+              <h1 className="text-3xl font-bold text-zinc-100 mb-2">Historial de Pagos</h1>
+              <p className="text-zinc-400">Consulta tus pagos e información bancaria</p>
+            </div>
           </div>
           <ZenButton
             variant="primary"

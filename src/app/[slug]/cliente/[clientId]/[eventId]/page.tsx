@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import { useEvento } from './context/EventoContext';
 import { ToastContainer } from '@/components/client';
+import { ZenSidebarTrigger } from '@/components/ui/zen';
 import { obtenerDashboardInfo } from '@/lib/actions/cliente/dashboard.actions';
 import { BalanceFinancieroCard } from './components/BalanceFinancieroCard';
 import { EstatusEntregablesCard } from './components/EstatusEntregablesCard';
@@ -47,9 +48,12 @@ export default function EventoResumenPage() {
 
       {/* Page Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-zinc-100">
-          Resumen del evento
-        </h1>
+        <div className="flex items-center gap-3 mb-2">
+          <ZenSidebarTrigger className="lg:hidden" />
+          <h1 className="text-3xl font-bold text-zinc-100">
+            Resumen del evento
+          </h1>
+        </div>
         <p className="text-sm text-zinc-400 mt-2">Revisa la información del evento y los entregables</p>
       </div>
 
