@@ -2375,14 +2375,7 @@ export async function actualizarSchedulerTask(
     // Si se completó la tarea, intentar crear nómina automáticamente
     // Retornar información de nómina para mostrar toast en el cliente
     let payrollResult: { success: boolean; personalNombre?: string; error?: string } | null = null;
-    console.log('[SCHEDULER] 🔍 Verificando si debe crear nómina:', {
-      isCompleted: data.isCompleted,
-      skipPayroll: data.skipPayroll,
-      cotizacion_item_id: task.cotizacion_item_id,
-      taskId,
-    });
     if (data.isCompleted === true && task.cotizacion_item_id && !data.skipPayroll) {
-      console.log('[SCHEDULER] ✅ Condiciones cumplidas, creando nómina...');
       // Importar dinámicamente para evitar dependencias circulares
       const { crearNominaDesdeTareaCompletada } = await import('./payroll-actions');
 
@@ -2395,13 +2388,11 @@ export async function actualizarSchedulerTask(
           data.itemData // Pasar datos del item si están disponibles
         );
         if (result.success && result.data) {
-          console.log('[GANTT] ✅ Nómina creada automáticamente:', result.data.nominaId);
           payrollResult = {
             success: true,
             personalNombre: result.data.personalNombre,
           };
         } else {
-          console.warn('[GANTT] ⚠️ No se pudo crear nómina automática:', result.error);
           payrollResult = {
             success: false,
             error: result.error,
@@ -2427,12 +2418,7 @@ export async function actualizarSchedulerTask(
 
       // Eliminar nómina (await para evitar revalidaciones durante render)
       try {
-        const result = await eliminarNominaDesdeTareaDesmarcada(studioSlug, eventId, taskId);
-        if (result.success) {
-          console.log('[SCHEDULER] ✅ Nómina eliminada automáticamente');
-        } else {
-          console.warn('[SCHEDULER] ⚠️ No se pudo eliminar nómina automática:', result.error);
-        }
+        await eliminarNominaDesdeTareaDesmarcada(studioSlug, eventId, taskId);
       } catch (error) {
         // Log error pero no bloquear la actualización de la tarea
         console.error(
@@ -2643,7 +2629,9 @@ export interface EventoSchedulerItem {
   contactName: string;
   status: string;
   totalItems: number; // Total de items de todas las cotizaciones del evento
-  scheduler: {
+  schedulers: Array<{
+    cotizacionId: string;
+    cotizacionName: string;
     startDate: Date;
     endDate: Date;
     tasks: Array<{
@@ -2656,7 +2644,7 @@ export interface EventoSchedulerItem {
       category: string;
       assignedToUserId: string | null;
     }>;
-  } | null;
+  }>;
 }
 
 export interface EventosSchedulerResponse {
@@ -2696,35 +2684,31 @@ export async function obtenerEventosConSchedulers(
             name: true,
             event_date: true,
             quotes: {
-              select: {
-                id: true,
-                cotizacion_items: {
-                  select: {
-                    id: true,
-                  },
+              where: {
+                status: {
+                  in: ['aprobada', 'autorizada', 'approved', 'seleccionada'],
                 },
               },
-            },
-          },
-        },
-        scheduler: {
-          select: {
-            id: true,
-            start_date: true,
-            end_date: true,
-            tasks: {
               select: {
                 id: true,
                 name: true,
-                start_date: true,
-                end_date: true,
-                status: true,
-                progress_percent: true,
-                category: true,
-                assigned_to_user_id: true,
-              },
-              orderBy: {
-                start_date: 'asc',
+                cotizacion_items: {
+                  select: {
+                    id: true,
+                    scheduler_task: {
+                      select: {
+                        id: true,
+                        name: true,
+                        start_date: true,
+                        end_date: true,
+                        status: true,
+                        progress_percent: true,
+                        category: true,
+                        assigned_to_user_id: true,
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -2778,18 +2762,31 @@ export async function obtenerEventosConSchedulers(
         0
       ) || 0;
 
-      return {
-        id: evento.id,
-        name: evento.promise?.name || evento.contact?.name || 'Evento sin nombre',
-        eventDate: evento.event_date,
-        contactName: evento.contact?.name || 'Sin contacto',
-        status: evento.status,
-        totalItems,
-        scheduler: evento.scheduler
-          ? {
-            startDate: evento.scheduler.start_date,
-            endDate: evento.scheduler.end_date,
-            tasks: evento.scheduler.tasks.map((task) => ({
+      // Agrupar tareas por cotización
+      const schedulersPorCotizacion: Array<{
+        cotizacionId: string;
+        cotizacionName: string;
+        startDate: Date;
+        endDate: Date;
+        tasks: Array<{
+          id: string;
+          name: string;
+          startDate: Date;
+          endDate: Date;
+          status: string;
+          progress: number;
+          category: string;
+          assignedToUserId: string | null;
+        }>;
+      }> = [];
+
+      evento.promise?.quotes?.forEach((cotizacion) => {
+        // Filtrar items que tienen tareas del scheduler
+        const tasks = cotizacion.cotizacion_items
+          ?.filter((item) => item.scheduler_task)
+          .map((item) => {
+            const task = item.scheduler_task!;
+            return {
               id: task.id,
               name: task.name,
               startDate: task.start_date,
@@ -2798,9 +2795,34 @@ export async function obtenerEventosConSchedulers(
               progress: task.progress_percent,
               category: mapTaskCategory(task.category),
               assignedToUserId: task.assigned_to_user_id,
-            })),
-          }
-          : null,
+            };
+          }) || [];
+
+        // Solo agregar si hay tareas
+        if (tasks.length > 0) {
+          // Calcular rango de fechas del cronograma de esta cotización
+          const dates = tasks.map((t) => [t.startDate, t.endDate]).flat();
+          const startDate = new Date(Math.min(...dates.map((d) => d.getTime())));
+          const endDate = new Date(Math.max(...dates.map((d) => d.getTime())));
+
+          schedulersPorCotizacion.push({
+            cotizacionId: cotizacion.id,
+            cotizacionName: cotizacion.name || `Cotización ${cotizacion.id.slice(0, 8)}`,
+            startDate,
+            endDate,
+            tasks,
+          });
+        }
+      });
+
+      return {
+        id: evento.id,
+        name: evento.promise?.name || evento.contact?.name || 'Evento sin nombre',
+        eventDate: evento.event_date,
+        contactName: evento.contact?.name || 'Sin contacto',
+        status: evento.status,
+        totalItems,
+        schedulers: schedulersPorCotizacion,
       };
     });
 

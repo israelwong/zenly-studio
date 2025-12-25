@@ -16,22 +16,7 @@ import { obtenerEventosConSchedulers, type EventoSchedulerItem } from '@/lib/act
 import { toast } from 'sonner';
 
 // Tipo para compatibilidad con el componente
-type EventoConScheduler = EventoSchedulerItem & {
-  scheduler: {
-    startDate: Date;
-    endDate: Date;
-    tasks: Array<{
-      id: string;
-      name: string;
-      startDate: Date;
-      endDate: Date;
-      status: string;
-      progress: number;
-      category: string;
-      assignedToUserId: string | null;
-    }>;
-  } | null;
-};
+type EventoConScheduler = EventoSchedulerItem;
 
 const categoryLabels: Record<string, string> = {
   PLANNING: 'Planificación',
@@ -44,9 +29,18 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 }
 
-function calculateProgress(tasks: typeof mockEventos[0]['scheduler']['tasks']): number {
+function calculateProgress(tasks: Array<{
+  id: string;
+  name: string;
+  startDate: Date;
+  endDate: Date;
+  status: string;
+  progress: number;
+  category: string;
+  assignedToUserId: string | null;
+}>): number {
   if (tasks.length === 0) return 0;
-  const total = tasks.reduce((sum, task) => sum + task.progress, 0);
+  const total = tasks.reduce((sum: number, task) => sum + task.progress, 0);
   return Math.round(total / tasks.length);
 }
 
@@ -57,8 +51,13 @@ function getTimelineRange(eventos: EventoConScheduler[]): { start: Date; end: Da
   }
 
   const allDates = eventos
-    .filter(e => e.scheduler)
-    .flatMap(e => [e.scheduler!.startDate, e.scheduler!.endDate]);
+    .flatMap(e => e.schedulers)
+    .flatMap(s => [s.startDate, s.endDate]);
+
+  if (allDates.length === 0) {
+    const today = new Date();
+    return { start: today, end: today };
+  }
 
   return {
     start: new Date(Math.min(...allDates.map(d => d.getTime()))),
@@ -115,17 +114,17 @@ export default function SchedulerPage() {
           const eventosConFechas = result.data.map(evento => ({
             ...evento,
             eventDate: new Date(evento.eventDate),
-            scheduler: evento.scheduler ? {
-              ...evento.scheduler,
-              startDate: new Date(evento.scheduler.startDate),
-              endDate: new Date(evento.scheduler.endDate),
-              tasks: evento.scheduler.tasks.map(task => ({
+            schedulers: evento.schedulers.map(scheduler => ({
+              ...scheduler,
+              startDate: new Date(scheduler.startDate),
+              endDate: new Date(scheduler.endDate),
+              tasks: scheduler.tasks.map(task => ({
                 ...task,
                 startDate: new Date(task.startDate),
                 endDate: new Date(task.endDate),
                 assignedToUserId: task.assignedToUserId || null,
               })),
-            } : null,
+            })),
           }));
           setEventos(eventosConFechas);
         } else {
@@ -146,12 +145,12 @@ export default function SchedulerPage() {
     }
   }, [studioSlug]);
 
-  const toggleEvent = (eventId: string) => {
+  const toggleScheduler = (schedulerKey: string) => {
     const newExpanded = new Set(expandedEvents);
-    if (newExpanded.has(eventId)) {
-      newExpanded.delete(eventId);
+    if (newExpanded.has(schedulerKey)) {
+      newExpanded.delete(schedulerKey);
     } else {
-      newExpanded.add(eventId);
+      newExpanded.add(schedulerKey);
     }
     setExpandedEvents(newExpanded);
   };
@@ -178,45 +177,47 @@ export default function SchedulerPage() {
       const eventoTotalItems = evento.totalItems || 0;
       totalItems += eventoTotalItems;
 
-      if (!evento.scheduler) {
-        // Si no hay scheduler, todos los items están sin asignar (sin fecha definida)
+      if (evento.schedulers.length === 0) {
+        // Si no hay schedulers, todos los items están sin asignar (sin fecha definida)
         unassignedTasks += eventoTotalItems;
         return;
       }
 
       let itemsConTareas = 0;
-      evento.scheduler.tasks.forEach((task) => {
-        itemsConTareas++;
-        totalProgress += task.progress;
+      evento.schedulers.forEach((scheduler) => {
+        scheduler.tasks.forEach((task) => {
+          itemsConTareas++;
+          totalProgress += task.progress;
 
-        const taskStartDate = new Date(task.startDate);
-        const taskEndDate = new Date(task.endDate);
-        taskStartDate.setHours(0, 0, 0, 0);
-        taskEndDate.setHours(0, 0, 0, 0);
+          const taskStartDate = new Date(task.startDate);
+          const taskEndDate = new Date(task.endDate);
+          taskStartDate.setHours(0, 0, 0, 0);
+          taskEndDate.setHours(0, 0, 0, 0);
 
-        const hasCrew = !!task.assignedToUserId;
+          const hasCrew = !!task.assignedToUserId;
 
-        // Completadas
-        if (task.status === 'COMPLETED') {
-          completedTasks++;
-          return;
-        }
+          // Completadas
+          if (task.status === 'COMPLETED') {
+            completedTasks++;
+            return;
+          }
 
-        // Sin personal asignado (tareas activas sin crew)
-        if (!hasCrew) {
-          withoutCrewTasks++;
-        }
+          // Sin personal asignado (tareas activas sin crew)
+          if (!hasCrew) {
+            withoutCrewTasks++;
+          }
 
-        // Retrasadas: no completadas y fecha de fin ya pasó
-        if (today > taskEndDate) {
-          delayedTasks++;
-        } else if (today >= taskStartDate && today <= taskEndDate) {
-          // En proceso: dentro del rango de fechas
-          inProgressTasks++;
-        } else if (today < taskStartDate) {
-          // Programadas: aún no han comenzado
-          pendingTasks++;
-        }
+          // Retrasadas: no completadas y fecha de fin ya pasó
+          if (today > taskEndDate) {
+            delayedTasks++;
+          } else if (today >= taskStartDate && today <= taskEndDate) {
+            // En proceso: dentro del rango de fechas
+            inProgressTasks++;
+          } else if (today < taskStartDate) {
+            // Programadas: aún no han comenzado
+            pendingTasks++;
+          }
+        });
       });
 
       // Sin asignar: Items que existen pero aún no tienen fecha definida (no tienen scheduler_task)
@@ -239,11 +240,9 @@ export default function SchedulerPage() {
     };
   }, [eventos]);
 
-  // Calcular stats para un evento individual
-  const getEventStats = (evento: EventoConScheduler) => {
-    const totalItems = evento.totalItems || 0;
-
-    if (!evento.scheduler || evento.scheduler.tasks.length === 0) {
+  // Calcular stats para un scheduler (cotización) individual
+  const getSchedulerStats = (scheduler: EventoConScheduler['schedulers'][0], totalItems: number) => {
+    if (scheduler.tasks.length === 0) {
       return {
         total: totalItems,
         completed: 0,
@@ -251,7 +250,7 @@ export default function SchedulerPage() {
         inProgress: 0,
         delayed: 0,
         pending: 0,
-        unassigned: totalItems, // Todos los items sin asignar si no hay tareas programadas
+        unassigned: totalItems,
         withoutCrew: 0,
       };
     }
@@ -266,7 +265,7 @@ export default function SchedulerPage() {
     let withoutCrewTasks = 0;
     let totalProgress = 0;
 
-    evento.scheduler.tasks.forEach((task) => {
+    scheduler.tasks.forEach((task) => {
       totalProgress += task.progress;
 
       const taskStartDate = new Date(task.startDate);
@@ -300,11 +299,10 @@ export default function SchedulerPage() {
     });
 
     // Sin asignar: Items que existen pero aún no tienen fecha definida (no tienen scheduler_task)
-    const itemsSinTareas = totalItems - evento.scheduler.tasks.length;
+    const itemsSinTareas = totalItems - scheduler.tasks.length;
     const unassignedTasks = itemsSinTareas;
 
     // Calcular porcentaje basado en el promedio del campo progress de todas las tareas programadas
-    // Si hay items sin tareas, su progreso es 0
     const totalProgressConItemsSinTareas = totalProgress + (itemsSinTareas * 0);
     const percentage = totalItems > 0 ? Math.round(totalProgressConItemsSinTareas / totalItems) : 0;
 
@@ -321,7 +319,16 @@ export default function SchedulerPage() {
   };
 
   // Agrupar tareas por categoría (garantiza todas las categorías)
-  const getTasksByCategory = (tasks: NonNullable<EventoConScheduler['scheduler']>['tasks']) => {
+  const getTasksByCategory = (tasks: Array<{
+    id: string;
+    name: string;
+    startDate: Date;
+    endDate: Date;
+    status: string;
+    progress: number;
+    category: string;
+    assignedToUserId: string | null;
+  }>) => {
     const grouped: Record<string, typeof tasks> = {
       PLANNING: [],
       PRE_PRODUCTION: [],
@@ -337,14 +344,14 @@ export default function SchedulerPage() {
     return grouped;
   };
 
-  // Obtener etapa actual (categoría con más tareas activas)
-  const getCurrentStage = (evento: EventoConScheduler): { category: string; label: string; count: number } | null => {
-    if (!evento.scheduler) return null;
+  // Obtener etapa actual (categoría con más tareas activas) para un scheduler
+  const getCurrentStage = (scheduler: EventoConScheduler['schedulers'][0]): { category: string; label: string; count: number } | null => {
+    if (scheduler.tasks.length === 0) return null;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const categories = getTasksByCategory(evento.scheduler.tasks);
+    const categories = getTasksByCategory(scheduler.tasks);
     let currentStage: { category: string; label: string; count: number } | null = null;
     let maxActiveCount = 0;
 
@@ -538,112 +545,123 @@ export default function SchedulerPage() {
                   </div>
                 </div>
 
-                {/* Barras de eventos */}
+                {/* Cards de cronogramas (uno por cotización) */}
                 <div className="p-4 space-y-4">
                   {eventos.length === 0 ? (
                     <div className="text-center py-8 text-zinc-400">No hay eventos activos con cronogramas</div>
                   ) : (
-                    eventos.map((evento) => {
-                      if (!evento.scheduler) return null;
+                    eventos.flatMap((evento) =>
+                      evento.schedulers.map((scheduler) => {
+                        const schedulerKey = `${evento.id}-${scheduler.cotizacionId}`;
+                        const isExpanded = expandedEvents.has(schedulerKey);
+                        const position = getEventPosition(
+                          scheduler.startDate,
+                          scheduler.endDate,
+                          timelineRange.start,
+                          timelineRange.end
+                        );
+                        const progress = calculateProgress(scheduler.tasks);
+                        const schedulerStats = getSchedulerStats(scheduler, scheduler.tasks.length);
+                        const currentStage = getCurrentStage(scheduler);
 
-                      const position = getEventPosition(
-                        evento.scheduler.startDate,
-                        evento.scheduler.endDate,
-                        timelineRange.start,
-                        timelineRange.end
-                      );
-                      const progress = calculateProgress(evento.scheduler.tasks);
-                      const isExpanded = expandedEvents.has(evento.id);
+                        // Asegurar que la barra no se salga de los límites
+                        const safeLeft = Math.max(0, Math.min(position.left, 100));
+                        const safeWidth = Math.min(position.width, 100 - safeLeft);
 
-                      // Asegurar que la barra no se salga de los límites
-                      const safeLeft = Math.max(0, Math.min(position.left, 100));
-                      const safeWidth = Math.min(position.width, 100 - safeLeft);
+                        // Colores diferentes por cotización para distinguirlas
+                        const colors = [
+                          { bg: 'bg-blue-600/20', border: 'border-blue-500/60', dot: 'bg-blue-500', ring: 'ring-blue-400/50' },
+                          { bg: 'bg-purple-600/20', border: 'border-purple-500/60', dot: 'bg-purple-500', ring: 'ring-purple-400/50' },
+                          { bg: 'bg-emerald-600/20', border: 'border-emerald-500/60', dot: 'bg-emerald-500', ring: 'ring-emerald-400/50' },
+                          { bg: 'bg-amber-600/20', border: 'border-amber-500/60', dot: 'bg-amber-500', ring: 'ring-amber-400/50' },
+                        ];
+                        const colorIndex = evento.schedulers.findIndex(s => s.cotizacionId === scheduler.cotizacionId);
+                        const colorScheme = colors[colorIndex % colors.length];
 
-                      return (
-                        <div key={evento.id} className="space-y-2">
-                          {/* Barra del evento */}
-                          <div
-                            className="relative h-16 bg-zinc-900 rounded-lg border border-zinc-800 cursor-pointer hover:border-blue-500/50 transition-colors overflow-hidden"
-                            onClick={() => toggleEvent(evento.id)}
-                          >
-                            {/* Línea de fondo del timeline */}
-                            <div className="absolute inset-0 flex items-center">
-                              <div className="w-full h-px bg-zinc-800/50" />
-                            </div>
-
-                            {/* Rango de fechas del cronograma - con límites seguros */}
+                        return (
+                          <div key={schedulerKey} className="space-y-2">
+                            {/* Card del cronograma */}
                             <div
-                              className="absolute top-0 h-full rounded-md bg-blue-600/20 border-2 border-blue-500/60 flex flex-col justify-between px-3 py-1.5 shadow-lg z-10"
-                              style={{
-                                left: `${safeLeft}%`,
-                                width: `${safeWidth}%`,
-                                minWidth: '140px',
-                                maxWidth: 'calc(100% - 8px)',
-                              }}
+                              className="relative h-16 bg-zinc-900 rounded-lg border border-zinc-800 cursor-pointer hover:border-blue-500/50 transition-colors overflow-hidden"
+                              onClick={() => toggleScheduler(schedulerKey)}
                             >
-                              {/* Parte superior: Nombre y fechas */}
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 ring-2 ring-blue-400/50" />
-                                  <span className="text-xs font-semibold text-zinc-100 truncate">{evento.name}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <span className="text-[10px] text-zinc-300 font-medium">
-                                    {formatDate(evento.scheduler.startDate)}
-                                  </span>
-                                  <span className="text-zinc-500 text-xs">→</span>
-                                  <span className="text-[10px] text-zinc-300 font-medium">
-                                    {formatDate(evento.scheduler.endDate)}
-                                  </span>
-                                </div>
+                              {/* Línea de fondo del timeline */}
+                              <div className="absolute inset-0 flex items-center pointer-events-none">
+                                <div className="w-full h-px bg-zinc-800/50" />
                               </div>
 
-                              {/* Parte inferior: Barra de progreso y porcentaje */}
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex-1 h-1.5 bg-zinc-800/60 rounded-full overflow-hidden border border-zinc-700/50">
-                                  <div
-                                    className="h-full bg-emerald-500 transition-all"
-                                    style={{ width: `${progress}%` }}
-                                  />
-                                </div>
-                                <span className="text-[10px] font-semibold text-emerald-400 shrink-0 min-w-[32px] text-right">
-                                  {progress}%
-                                </span>
-                                <div className="shrink-0">
-                                  {isExpanded ? (
-                                    <ChevronUp className="h-3.5 w-3.5 text-zinc-400" />
-                                  ) : (
-                                    <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Barra de progreso visual dentro del rango del cronograma (fondo) */}
-                            {progress > 0 && (
+                              {/* Barra del cronograma */}
                               <div
-                                className="absolute bottom-0 h-1 rounded-b-md bg-emerald-500/30 z-0"
+                                className={`absolute top-0 h-full rounded-md ${colorScheme.bg} border-2 ${colorScheme.border} flex flex-col justify-between px-3 py-1.5 shadow-lg z-10`}
                                 style={{
                                   left: `${safeLeft}%`,
-                                  width: `${(safeWidth * progress) / 100}%`,
-                                  minWidth: progress > 0 ? '4px' : '0',
+                                  width: `${safeWidth}%`,
+                                  minWidth: '140px',
+                                  maxWidth: 'calc(100% - 8px)',
                                 }}
-                              />
-                            )}
-                          </div>
+                              >
+                                {/* Parte superior: Nombre evento - Nombre cotización */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${colorScheme.dot} shrink-0 ring-2 ${colorScheme.ring}`} />
+                                    <span className="text-xs font-semibold text-zinc-100 truncate">
+                                      {evento.name} - {scheduler.cotizacionName}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className="text-[10px] text-zinc-300 font-medium">
+                                      {formatDate(scheduler.startDate)}
+                                    </span>
+                                    <span className="text-zinc-500 text-xs">→</span>
+                                    <span className="text-[10px] text-zinc-300 font-medium">
+                                      {formatDate(scheduler.endDate)}
+                                    </span>
+                                  </div>
+                                </div>
 
-                          {/* Detalles expandidos */}
-                          {isExpanded && (() => {
-                            const eventStats = getEventStats(evento);
-                            const currentStage = getCurrentStage(evento);
-                            return (
+                                {/* Parte inferior: Barra de progreso y porcentaje */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex-1 h-1.5 bg-zinc-800/60 rounded-full overflow-hidden border border-zinc-700/50">
+                                    <div
+                                      className="h-full bg-emerald-500 transition-all"
+                                      style={{ width: `${progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-semibold text-emerald-400 shrink-0 min-w-[32px] text-right">
+                                    {progress}%
+                                  </span>
+                                  <div className="shrink-0">
+                                    {isExpanded ? (
+                                      <ChevronUp className="h-3.5 w-3.5 text-zinc-400" />
+                                    ) : (
+                                      <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Barra de progreso visual dentro del rango del cronograma (fondo) */}
+                              {progress > 0 && (
+                                <div
+                                  className="absolute bottom-0 h-1 rounded-b-md bg-emerald-500/30 z-0"
+                                  style={{
+                                    left: `${safeLeft}%`,
+                                    width: `${(safeWidth * progress) / 100}%`,
+                                    minWidth: progress > 0 ? '4px' : '0',
+                                  }}
+                                />
+                              )}
+                            </div>
+
+                            {/* Detalles expandidos */}
+                            {isExpanded && (
                               <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-3">
-                                {/* Primera fila: [nombre contacto rango fecha evento] [progreso] [etapa actual] [gestionar evento] */}
+                                {/* Primera fila: [nombre evento - nombre cotización] [progreso] [etapa actual] [gestionar] */}
                                 <div className="flex items-center justify-between gap-4">
-                                  {/* Info del evento */}
+                                  {/* Info del cronograma */}
                                   <div className="flex items-center gap-4 text-sm flex-1">
                                     <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
-                                      {evento.name}
+                                      {evento.name} - {scheduler.cotizacionName}
                                     </div>
                                     <div className="flex items-center gap-1.5 text-zinc-400">
                                       <Users className="h-4 w-4" />
@@ -651,7 +669,7 @@ export default function SchedulerPage() {
                                     </div>
                                     <div className="flex items-center gap-1.5 text-zinc-400">
                                       <Calendar className="h-4 w-4" />
-                                      {formatDate(evento.scheduler.startDate)} → {formatDate(evento.scheduler.endDate)}
+                                      {formatDate(scheduler.startDate)} → {formatDate(scheduler.endDate)}
                                     </div>
                                     <div className="flex items-center gap-1.5 text-zinc-400">
                                       <Clock className="h-4 w-4" />
@@ -666,7 +684,7 @@ export default function SchedulerPage() {
                                   >
                                     <CheckCircle2 className="h-3 w-3" />
                                     <span className="text-xs font-medium">
-                                      Progreso: {eventStats.completed}/{eventStats.total} ({eventStats.percentage}%)
+                                      Progreso: {schedulerStats.completed}/{schedulerStats.total} ({schedulerStats.percentage}%)
                                     </span>
                                   </ZenBadge>
 
@@ -687,7 +705,7 @@ export default function SchedulerPage() {
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      router.push(`/${studioSlug}/studio/business/events/${evento.id}/scheduler`);
+                                      router.push(`/${studioSlug}/studio/business/events/${evento.id}/scheduler?cotizacion=${scheduler.cotizacionId}`);
                                     }}
                                     className="gap-1 px-2 py-1 h-7 text-xs shrink-0"
                                   >
@@ -701,13 +719,13 @@ export default function SchedulerPage() {
                                   {/* Sin asignar */}
                                   <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
                                     <div className="text-xs font-medium text-zinc-400 mb-1">Sin asignar</div>
-                                    <div className="text-2xl font-semibold text-zinc-300">{eventStats.unassigned}</div>
+                                    <div className="text-2xl font-semibold text-zinc-300">{schedulerStats.unassigned}</div>
                                   </div>
 
                                   {/* Asignadas */}
                                   <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
                                     <div className="text-xs font-medium text-zinc-400 mb-1">Asignadas</div>
-                                    <div className="text-2xl font-semibold text-zinc-300">{eventStats.pending}</div>
+                                    <div className="text-2xl font-semibold text-zinc-300">{schedulerStats.pending}</div>
                                   </div>
 
                                   {/* Sin personal */}
@@ -716,7 +734,7 @@ export default function SchedulerPage() {
                                       <Users className="h-3.5 w-3.5" />
                                       Sin personal
                                     </div>
-                                    <div className="text-2xl font-semibold text-amber-400">{eventStats.withoutCrew}</div>
+                                    <div className="text-2xl font-semibold text-amber-400">{schedulerStats.withoutCrew}</div>
                                   </div>
 
                                   {/* En proceso */}
@@ -725,7 +743,7 @@ export default function SchedulerPage() {
                                       <Clock className="h-3.5 w-3.5" />
                                       En proceso
                                     </div>
-                                    <div className="text-2xl font-semibold text-blue-400">{eventStats.inProgress}</div>
+                                    <div className="text-2xl font-semibold text-blue-400">{schedulerStats.inProgress}</div>
                                   </div>
 
                                   {/* Completadas */}
@@ -734,7 +752,7 @@ export default function SchedulerPage() {
                                       <CheckCircle2 className="h-3.5 w-3.5" />
                                       Completadas
                                     </div>
-                                    <div className="text-2xl font-semibold text-emerald-400">{eventStats.completed}</div>
+                                    <div className="text-2xl font-semibold text-emerald-400">{schedulerStats.completed}</div>
                                   </div>
 
                                   {/* Atrasadas */}
@@ -743,15 +761,15 @@ export default function SchedulerPage() {
                                       <AlertCircle className="h-3.5 w-3.5" />
                                       Atrasadas
                                     </div>
-                                    <div className="text-2xl font-semibold text-red-400">{eventStats.delayed}</div>
+                                    <div className="text-2xl font-semibold text-red-400">{schedulerStats.delayed}</div>
                                   </div>
                                 </div>
                               </div>
-                            );
-                          })()}
-                        </div>
-                      );
-                    })
+                            )}
+                          </div>
+                        );
+                      })
+                    )
                   )}
                 </div>
               </>

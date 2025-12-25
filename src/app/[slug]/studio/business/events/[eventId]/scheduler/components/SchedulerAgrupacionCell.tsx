@@ -53,7 +53,7 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
     return (
         <div className="flex items-center gap-2 flex-1 min-w-0 pl-4">
             {/* Avatar */}
-            <ZenAvatar className="h-7 w-7 flex-shrink-0">
+            <ZenAvatar className="h-7 w-7 shrink-0">
                 {hasAssigned && assignedCrewMember ? (
                     <ZenAvatarFallback className={isCompleted ? "bg-emerald-600/20 text-emerald-400 text-[10px]" : getAvatarColor()}>
                         {getInitials(assignedCrewMember.name)}
@@ -67,7 +67,7 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
 
             {/* Nombre del servicio con duración */}
             <div className="flex-1 min-w-0">
-                <p className={`text-sm break-words cursor-pointer transition-colors ${isCompleted
+                <p className={`text-sm line-clamp-2 cursor-pointer transition-colors ${isCompleted
                     ? 'text-zinc-500 line-through decoration-zinc-600 hover:text-zinc-400'
                     : 'text-zinc-300 hover:text-zinc-200'
                     }`}>
