@@ -82,18 +82,6 @@ export interface CancellationLog {
   created_at: Date;
 }
 
-export interface ContractModificationRequest {
-  id: string;
-  contract_id: string;
-  requested_by: 'studio' | 'client';
-  status: 'pending' | 'approved' | 'rejected' | 'completed';
-  message: string;
-  response?: string | null;
-  metadata?: Record<string, any> | null;
-  created_at: Date;
-  updated_at: Date;
-}
-
 export interface EventContractData {
   nombre_cliente: string;
   fecha_evento: string;

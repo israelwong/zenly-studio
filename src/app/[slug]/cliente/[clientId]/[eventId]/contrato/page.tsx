@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { Loader2, FileText, CheckCircle2, Download, X, Clock, User, Calendar, Edit } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea } from '@/components/ui/zen';
-import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, requestContractModificationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
+import { getEventContractForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
 import { getEventContractData, renderContractContent, getRealEventId } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
 import { CONTRACT_PREVIEW_STYLES } from '@/lib/utils/contract-styles';
@@ -40,9 +40,6 @@ export default function EventoContratoPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showEventInfoModal, setShowEventInfoModal] = useState(false);
-  const [showModificationRequestModal, setShowModificationRequestModal] = useState(false);
-  const [modificationMessage, setModificationMessage] = useState('');
-  const [isRequestingModification, setIsRequestingModification] = useState(false);
   // Estados locales para datos del cliente (se actualizan cuando cliente cambia o se actualiza el perfil)
   const [currentClientName, setCurrentClientName] = useState(cliente?.name || '');
   const [currentClientPhone, setCurrentClientPhone] = useState(cliente?.phone || '');
@@ -465,35 +462,6 @@ export default function EventoContratoPage() {
     }
   };
 
-  const handleRequestModification = async () => {
-    if (!contract || !slug || !cliente?.id || !modificationMessage.trim() || modificationMessage.trim().length < 20) {
-      toast.error('El mensaje debe tener al menos 20 caracteres');
-      return;
-    }
-
-    setIsRequestingModification(true);
-    const loadingToast = toast.loading('Enviando solicitud de modificación...');
-
-    try {
-      const result = await requestContractModificationByClient(slug, contract.id, cliente.id, {
-        message: modificationMessage.trim(),
-      });
-
-      if (result.success) {
-        toast.success('Solicitud de modificación enviada al estudio', { id: loadingToast });
-        setShowModificationRequestModal(false);
-        setModificationMessage('');
-        await loadContract();
-      } else {
-        toast.error(result.error || 'Error al enviar solicitud de modificación', { id: loadingToast });
-      }
-    } catch (error) {
-      console.error('Error requesting modification:', error);
-      toast.error('Error al enviar solicitud de modificación', { id: loadingToast });
-    } finally {
-      setIsRequestingModification(false);
-    }
-  };
 
   if (authLoading) {
     return (
@@ -617,17 +585,6 @@ export default function EventoContratoPage() {
               </ZenButton>
             </div>
 
-            {isPublished && !isSigned && (
-              <ZenButton
-                variant="outline"
-                size="sm"
-                onClick={() => setShowModificationRequestModal(true)}
-                className="w-full text-blue-400 border-blue-500/30 hover:bg-blue-950/20"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Solicitar modificación del contrato
-              </ZenButton>
-            )}
           </ZenCardContent>
         </ZenCard>
       )}
@@ -895,49 +852,6 @@ export default function EventoContratoPage() {
         />
       )}
 
-      {/* Modal de solicitud de modificación de contrato */}
-      <ZenDialog
-        isOpen={showModificationRequestModal}
-        onClose={() => {
-          if (!isRequestingModification) {
-            setShowModificationRequestModal(false);
-            setModificationMessage('');
-          }
-        }}
-        title="Solicitar Modificación del Contrato"
-        description="Describe los cambios que necesitas en el contrato. El estudio revisará tu solicitud."
-        maxWidth="md"
-        onCancel={() => {
-          if (!isRequestingModification) {
-            setShowModificationRequestModal(false);
-            setModificationMessage('');
-          }
-        }}
-        cancelLabel="Cancelar"
-        onSave={handleRequestModification}
-        saveLabel="Enviar Solicitud"
-        isLoading={isRequestingModification}
-      >
-        <div className="space-y-4">
-          <ZenTextarea
-            label="Detalles de la modificación"
-            required
-            value={modificationMessage}
-            onChange={(e) => setModificationMessage(e.target.value)}
-            placeholder="Ej: 'Cambiar la fecha del evento al 15 de marzo', 'Ajustar la cantidad del servicio X a 3 unidades', 'Eliminar la cláusula Y'."
-            minRows={5}
-            maxLength={1500}
-            disabled={isRequestingModification}
-            error={modificationMessage.length > 0 && modificationMessage.length < 20 ? 'La descripción debe tener al menos 20 caracteres' : undefined}
-            hint="El estudio recibirá una notificación con tu solicitud."
-          />
-          <div className="p-3 bg-blue-950/20 border border-blue-800/30 rounded-lg">
-            <p className="text-xs text-blue-300">
-              ℹ️ El estudio revisará tu solicitud y se pondrá en contacto contigo para discutir los cambios.
-            </p>
-          </div>
-        </div>
-      </ZenDialog>
     </div>
   );
 }
