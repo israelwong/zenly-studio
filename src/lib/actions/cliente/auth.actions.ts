@@ -142,6 +142,12 @@ export async function logoutCliente(studioSlug: string): Promise<void> {
   redirect(`/${studioSlug}/cliente/login`);
 }
 
+export async function clearClienteSession(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete('cliente-session');
+  cookieStore.delete('cliente-id');
+}
+
 export async function getClienteSession(): Promise<ClientSession | null> {
   try {
     const cookieStore = await cookies();

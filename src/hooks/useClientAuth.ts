@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { getClienteSession } from '@/lib/actions/cliente';
 import type { ClientSession } from '@/types/client';
 
@@ -16,9 +16,17 @@ export function useClientAuth() {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = params?.slug as string;
+  const phoneParam = searchParams.get('phone');
 
   useEffect(() => {
+    // Si hay parámetro phone, no verificar sesión (se limpiará en el componente padre)
+    if (phoneParam) {
+      setIsLoading(false);
+      return;
+    }
+
     const checkAuth = async () => {
       try {
         const session = await getClienteSession();
@@ -47,7 +55,7 @@ export function useClientAuth() {
     };
 
     checkAuth();
-  }, [router, slug]);
+  }, [router, slug, phoneParam]);
 
   return {
     cliente,

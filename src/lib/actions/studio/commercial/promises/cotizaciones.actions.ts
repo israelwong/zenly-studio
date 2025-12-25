@@ -1282,12 +1282,25 @@ export async function autorizarCotizacion(
       // Actualizar promesa con address y event_date si existe
       if (validatedData.promise_id) {
         const address = cotizacion.contact?.address || cotizacion.promise?.contact?.address || null;
+        
+        // Obtener nombre actual de la promesa para no reescribirlo si ya está definido
+        const promiseActual = await prisma.studio_promises.findUnique({
+          where: { id: validatedData.promise_id },
+          select: { name: true },
+        });
+        
+        // Solo actualizar nombre si es null, undefined, o "Pendiente"
+        const nombreActualizar = 
+          !promiseActual?.name || promiseActual.name === 'Pendiente'
+            ? (cotizacion.promise?.name || 'Pendiente')
+            : promiseActual.name;
+        
         await prisma.studio_promises.update({
           where: { id: validatedData.promise_id },
           data: {
             address: address || undefined,
             event_date: eventDate,
-            name: cotizacion.promise?.name || 'Pendiente',
+            name: nombreActualizar,
           },
         });
       }
@@ -1308,12 +1321,24 @@ export async function autorizarCotizacion(
       }
 
       // Actualizar promesa con address y event_date antes de crear evento
+      // Obtener nombre actual de la promesa para no reescribirlo si ya está definido
+      const promiseActual = await prisma.studio_promises.findUnique({
+        where: { id: validatedData.promise_id },
+        select: { name: true },
+      });
+      
+      // Solo actualizar nombre si es null, undefined, o "Pendiente"
+      const nombreActualizar = 
+        !promiseActual?.name || promiseActual.name === 'Pendiente'
+          ? (cotizacion.promise?.name || 'Pendiente')
+          : promiseActual.name;
+      
       await prisma.studio_promises.update({
         where: { id: validatedData.promise_id },
         data: {
           address: address || undefined,
           event_date: eventDate,
-          name: cotizacion.promise?.name || 'Pendiente',
+          name: nombreActualizar,
         },
       });
 

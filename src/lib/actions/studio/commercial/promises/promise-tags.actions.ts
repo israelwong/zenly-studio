@@ -312,8 +312,6 @@ export async function getPromiseTagsByPromiseId(
   promiseId: string
 ): Promise<PromiseTagsResponse> {
   try {
-    console.log('getPromiseTagsByPromiseId:', promiseId);
-
     const promiseTags = await prisma.studio_promises_tags.findMany({
       where: { promise_id: promiseId },
       include: {
@@ -321,9 +319,6 @@ export async function getPromiseTagsByPromiseId(
       },
       orderBy: { created_at: 'asc' },
     });
-
-    console.log('Relaciones encontradas:', promiseTags.length);
-    console.log('Relaciones:', promiseTags.map(pt => ({ id: pt.id, tagId: pt.tag_id, tagName: pt.tag.name })));
 
     const tags: PromiseTag[] = promiseTags
       .map((pt) => pt.tag)
@@ -340,9 +335,6 @@ export async function getPromiseTagsByPromiseId(
         created_at: tag.created_at,
         updated_at: tag.updated_at,
       }));
-
-    console.log('Tags activos retornados:', tags.length);
-    console.log('Tags:', tags.map(t => ({ id: t.id, name: t.name })));
 
     return { success: true, data: tags };
   } catch (error) {

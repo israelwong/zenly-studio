@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { ZenCard, ZenInput, ZenButton } from '@/components/ui/zen';
 import { useToast } from '@/hooks/useToast';
 import { useFavicon } from '@/hooks/useFavicon';
-import { loginCliente, obtenerStudioPublicInfo, getClienteSession } from '@/lib/actions/cliente';
+import { loginCliente, obtenerStudioPublicInfo, getClienteSession, clearClienteSession } from '@/lib/actions/cliente';
 import { ToastContainer } from '@/components/client';
 import { LoginSkeleton } from '../components/LoginSkeleton';
 import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
@@ -37,6 +37,15 @@ export default function ClientLoginPage() {
   useEffect(() => {
     const checkSession = async () => {
       if (slug) {
+        const phoneParam = searchParams.get('phone');
+        
+        // Si hay parámetro phone, limpiar sesión primero y no verificar más
+        if (phoneParam) {
+          await clearClienteSession();
+          setIsCheckingSession(false);
+          return;
+        }
+        
         const session = await getClienteSession();
         if (session) {
           // Si hay sesión activa, redirigir automáticamente al clientId
@@ -47,7 +56,8 @@ export default function ClientLoginPage() {
       }
     };
     checkSession();
-  }, [slug, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 
   useEffect(() => {
     const fetchStudioInfo = async () => {

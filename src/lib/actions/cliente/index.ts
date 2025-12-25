@@ -6,6 +6,7 @@ export {
   loginCliente,
   logoutCliente,
   getClienteSession,
+  clearClienteSession,
 } from './auth.actions';
 
 export {
