@@ -145,12 +145,8 @@ export function ZenSidebarProvider({ children, defaultOpen = false }: ZenSidebar
   }, [isOpen]);
 
   const toggleSidebar = React.useCallback(() => {
-    console.log('Toggle sidebar clicked, current state:', isOpen);
-    setIsOpen(prev => {
-      console.log('Setting sidebar to:', !prev);
-      return !prev;
-    });
-  }, [isOpen]);
+    setIsOpen(prev => !prev);
+  }, []);
 
   const toggleCollapse = React.useCallback(() => {
     setIsCollapsed(prev => !prev);
@@ -223,7 +219,6 @@ export function ZenSidebarTrigger({ className }: ZenSidebarTriggerProps) {
   const { toggleSidebar, isOpen } = useZenSidebar();
 
   const handleClick = () => {
-    console.log('Trigger clicked, current state:', isOpen);
     toggleSidebar();
   };
 

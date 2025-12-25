@@ -129,24 +129,13 @@ export default function EventoPagosPage() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Page Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ZenSidebarTrigger className="lg:hidden" />
-            <div>
-              <h1 className="text-3xl font-bold text-zinc-100 mb-2">Historial de Pagos</h1>
-              <p className="text-zinc-400">Consulta tus pagos e información bancaria</p>
-            </div>
+      <div className="sticky top-0 z-20 bg-zinc-900/10 backdrop-blur-sm -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 pt-4 pb-4 mb-8 lg:static lg:bg-transparent lg:backdrop-blur-none">
+        <div className="flex items-center gap-3">
+          <ZenSidebarTrigger className="lg:hidden" />
+          <div>
+            <h1 className="text-3xl font-bold text-zinc-100 mb-2">Historial de Pagos</h1>
+            <p className="text-zinc-400">Consulta tus pagos</p>
           </div>
-          <ZenButton
-            variant="primary"
-            size="sm"
-            onClick={() => setIsBankModalOpen(true)}
-            disabled={!bankInfo}
-          >
-            <Building2 className="h-4 w-4 mr-2" />
-            Información bancaria para pagos
-          </ZenButton>
         </div>
       </div>
 
@@ -154,6 +143,19 @@ export default function EventoPagosPage() {
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Historial de pagos */}
         <div>
+          {/* Botón de información bancaria - arriba del card */}
+          <div className="mb-4">
+            <ZenButton
+              variant="primary"
+              size="sm"
+              onClick={() => setIsBankModalOpen(true)}
+              disabled={!bankInfo}
+              className="w-full lg:w-auto"
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Información bancaria para pagos
+            </ZenButton>
+          </div>
           <HistorialPagosTable pagos={pagos} />
         </div>
 

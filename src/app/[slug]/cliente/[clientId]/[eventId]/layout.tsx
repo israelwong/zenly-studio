@@ -3,7 +3,6 @@ import { getClienteSession, obtenerEventoDetalle, obtenerStudioPublicInfo } from
 import { ZenSidebarProvider } from '@/components/ui/zen';
 import { ClientLayoutWrapper } from '../components/ClientLayoutWrapper';
 import { EventoLayoutClient } from './components/EventoLayoutClient';
-import { EventoProvider } from './context/EventoContext';
 import type { ClientEventDetail } from '@/types/client';
 import type { StudioPublicInfo } from '@/lib/actions/cliente';
 
@@ -78,7 +77,7 @@ export default async function EventoLayout({ children, params }: EventoLayoutPro
   const evento: ClientEventDetail = eventoResponse.data;
 
   return (
-    <EventoLayoutClient studioInfo={studioInfo} evento={evento}>
+    <EventoLayoutClient evento={evento} studioInfo={studioInfo}>
       <ZenSidebarProvider>
         <ClientLayoutWrapper
           slug={slug}

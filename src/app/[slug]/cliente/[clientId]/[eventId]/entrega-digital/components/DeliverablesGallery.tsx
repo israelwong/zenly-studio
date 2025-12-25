@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Image, Video, Download, Folder, Loader2, ArrowLeft, Play } from 'lucide-react';
+import { Image, Video, Download, Folder, Loader2, ArrowLeft, Play, Files } from 'lucide-react';
 import { ZenButton, ZenCard } from '@/components/ui/zen';
 import Lightbox from 'yet-another-react-lightbox';
 import VideoPlugin from 'yet-another-react-lightbox/plugins/video';
@@ -475,18 +475,37 @@ export function DeliverablesGallery({
             variant="ghost"
             size="sm"
             onClick={handleBack}
-            className="text-zinc-400 hover:text-zinc-100"
+            className="text-zinc-400 hover:text-zinc-100 shrink-0"
           >
             <ArrowLeft className="h-4 w-4 mr-1" />
             Volver
           </ZenButton>
-          <div className="flex items-center gap-1 text-sm text-zinc-400">
-            {folderPath.map((pathItem, index) => (
-              <React.Fragment key={`${pathItem.id}-${index}`}>
-                {index > 0 && <span>/</span>}
-                <span>{pathItem.name}</span>
-              </React.Fragment>
-            ))}
+          <div className="flex items-center gap-1 text-sm text-zinc-400 min-w-0 flex-1">
+            {folderPath.length > 3 ? (
+              // En mobile, si hay más de 3 carpetas, mostrar solo las últimas 2 con "..."
+              <>
+                <span className="text-zinc-500">...</span>
+                <span>/</span>
+                {folderPath.slice(-2).map((pathItem, index) => (
+                  <React.Fragment key={`${pathItem.id}-${index}`}>
+                    {index > 0 && <span>/</span>}
+                    <span className="truncate max-w-[120px] sm:max-w-[200px]" title={pathItem.name}>
+                      {pathItem.name}
+                    </span>
+                  </React.Fragment>
+                ))}
+              </>
+            ) : (
+              // Si hay 3 o menos carpetas, mostrar todas pero truncar nombres largos
+              folderPath.map((pathItem, index) => (
+                <React.Fragment key={`${pathItem.id}-${index}`}>
+                  {index > 0 && <span>/</span>}
+                  <span className="truncate max-w-[120px] sm:max-w-[200px]" title={pathItem.name}>
+                    {pathItem.name}
+                  </span>
+                </React.Fragment>
+              ))
+            )}
           </div>
         </div>
 
@@ -549,24 +568,28 @@ export function DeliverablesGallery({
               variant={filterType === 'all' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setFilterType('all')}
+              title="Todos los archivos"
             >
+              <Files className="h-4 w-4 mr-1" />
               Todos ({totalAll})
             </ZenButton>
             <ZenButton
               variant={filterType === 'photos' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setFilterType('photos')}
+              title="Fotos"
             >
               <Image className="h-4 w-4 mr-1" />
-              Fotos ({photosCount} de {totalAll})
+              {photosCount}
             </ZenButton>
             <ZenButton
               variant={filterType === 'videos' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setFilterType('videos')}
+              title="Videos"
             >
               <Video className="h-4 w-4 mr-1" />
-              Videos ({videosCount} de {totalAll})
+              {videosCount}
             </ZenButton>
           </div>
         )}

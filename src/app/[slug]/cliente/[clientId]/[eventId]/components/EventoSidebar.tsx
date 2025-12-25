@@ -23,10 +23,18 @@ interface EventoSidebarProps {
 export function EventoSidebar({ slug, clientId, eventId, eventoName }: EventoSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isOpen, toggleSidebar } = useZenSidebar();
+  const { isOpen, toggleSidebar, isMobile } = useZenSidebar();
 
   const isActive = (path: string) => {
     return pathname === path;
+  };
+
+  const handleMenuItemClick = (href: string) => {
+    router.push(href);
+    // Cerrar sidebar en mobile después de navegar
+    if (isMobile && isOpen) {
+      toggleSidebar();
+    }
   };
 
 
@@ -89,7 +97,13 @@ export function EventoSidebar({ slug, clientId, eventId, eventoName }: EventoSid
           {/* Volver a eventos */}
           <div className="px-3 mb-4">
             <button
-              onClick={() => router.push(`/${slug}/cliente/${clientId}`)}
+              onClick={() => {
+                router.push(`/${slug}/cliente/${clientId}`);
+                // Cerrar sidebar en mobile después de navegar
+                if (isMobile && isOpen) {
+                  toggleSidebar();
+                }
+              }}
               className="flex items-center gap-2 text-sm text-zinc-300 hover:text-zinc-100 transition-colors w-full py-2 px-2 rounded-md hover:bg-zinc-800/40"
             >
               <ArrowLeft className="h-4 w-4 shrink-0" />
@@ -109,7 +123,7 @@ export function EventoSidebar({ slug, clientId, eventId, eventoName }: EventoSid
             <ZenSidebarMenuItem key={item.id}>
               <ZenSidebarMenuButton
                 isActive={isActive(item.href)}
-                onClick={() => router.push(item.href)}
+                onClick={() => handleMenuItemClick(item.href)}
               >
                 <item.icon className="h-4 w-4" />
                 <span>{item.name}</span>

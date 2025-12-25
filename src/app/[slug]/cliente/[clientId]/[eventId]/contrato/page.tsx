@@ -101,13 +101,13 @@ export default function EventoContratoPage() {
 
       if (allContractsResult.success && allContractsResult.data) {
         setAllContracts(allContractsResult.data);
-        
+
         // Separar contratos activos de cancelados
-        const activeContracts = allContractsResult.data.filter(c => c.status !== 'CANCELLED');
-        const cancelled = allContractsResult.data.filter(c => c.status === 'CANCELLED');
-        
+        const activeContracts = allContractsResult.data.filter((c: EventContract) => c.status !== 'CANCELLED');
+        const cancelled = allContractsResult.data.filter((c: EventContract) => c.status === 'CANCELLED');
+
         setCancelledContracts(cancelled);
-        
+
         // El contrato activo es el primero (publicado/firmado)
         const activeContract = activeContracts[0] || null;
         setContract(activeContract);
@@ -542,7 +542,7 @@ export default function EventoContratoPage() {
 
   if (loading) {
     return (
-      <div className="mb-8">
+      <div className="sticky top-0 z-20 bg-zinc-900/10 backdrop-blur-sm -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 pt-4 pb-4 mb-8 lg:static lg:bg-transparent lg:backdrop-blur-none">
         <div className="flex items-center gap-3 mb-2">
           <ZenSidebarTrigger className="lg:hidden" />
           <h1 className="text-3xl font-bold text-zinc-100">Contrato</h1>
@@ -593,145 +593,41 @@ export default function EventoContratoPage() {
   const isCancelled = contract?.status === 'CANCELLED';
 
   return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <ZenSidebarTrigger className="lg:hidden" />
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
-          <p className="text-zinc-400">
-            {contract ? (
-              isSigned && contract.signed_at
-                ? `Contrato firmado digitalmente el ${formatDate(contract.signed_at)}`
-                : isPublished
-                  ? 'Revisa y firma el contrato'
-                  : 'Contrato en revisión'
-            ) : (
-              'No hay contrato publicado'
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {isSigned && (
-            <ZenBadge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-950/20">
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              Firmado
-            </ZenBadge>
-          )}
-          {isPublished && (
-            <>
-              <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20">
-                <FileText className="h-3 w-3 mr-1" />
-                Publicado para revisión
-              </ZenBadge>
-              <ZenDropdownMenu>
-                <ZenDropdownMenuTrigger asChild>
-                  <ZenButton variant="ghost" size="sm" className="h-8">
-                    <Edit className="h-3.5 w-3.5 mr-1.5" />
-                    Editar datos
-                  </ZenButton>
-                </ZenDropdownMenuTrigger>
-                <ZenDropdownMenuContent align="end">
-                  <ZenDropdownMenuItem onClick={() => setShowProfileModal(true)}>
-                    <User className="h-4 w-4 mr-2" />
-                    Datos de contacto
-                  </ZenDropdownMenuItem>
-                  <ZenDropdownMenuItem onClick={() => setShowEventInfoModal(true)}>
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Datos del evento
-                  </ZenDropdownMenuItem>
-                </ZenDropdownMenuContent>
-              </ZenDropdownMenu>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Contrato publicado */}
-      {contract && (
-        <ZenCard>
-        <ZenCardHeader className="border-b border-zinc-800">
-          <div className="flex items-center justify-between">
-            <ZenCardTitle className="text-lg">
-              Contrato - Versión {contract.version}
-            </ZenCardTitle>
-            <div className="flex items-center gap-2">
-              <ZenButton
-                variant="outline"
-                size="sm"
-                onClick={handleExportPDF}
-                disabled={isExportingPDF}
-              >
-                {isExportingPDF ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+    <>
+      {/* Page Header */}
+      <div className="sticky top-0 z-20 bg-zinc-900/10 backdrop-blur-sm -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 pt-4 pb-4 mb-8 lg:static lg:bg-transparent lg:backdrop-blur-none">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <ZenSidebarTrigger className="lg:hidden" />
+            <div className="min-w-0 flex-1">
+              <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
+              <p className="text-zinc-400">
+                {contract ? (
+                  isSigned && contract.signed_at
+                    ? `Contrato firmado digitalmente el ${formatDate(contract.signed_at)}`
+                    : isPublished
+                      ? 'Revisa y firma el contrato'
+                      : 'Contrato en revisión'
                 ) : (
-                  <Download className="h-4 w-4 mr-2" />
+                  'No hay contrato publicado'
                 )}
-                Descargar PDF
-              </ZenButton>
-              {isSigned && !isCancellationRequestedByStudio && !isCancellationRequestedByClient && !isCancelled && (
-                <ZenDropdownMenu>
-                  <ZenDropdownMenuTrigger asChild>
-                    <ZenButton
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </ZenButton>
-                  </ZenDropdownMenuTrigger>
-                  <ZenDropdownMenuContent align="end">
-                    <ZenDropdownMenuItem
-                      onClick={handleRequestCancellation}
-                      className="text-red-400 focus:text-red-300"
-                    >
-                      <X className="h-4 w-4 mr-2" />
-                      Cancelar contrato
-                    </ZenDropdownMenuItem>
-                  </ZenDropdownMenuContent>
-                </ZenDropdownMenu>
+              </p>
+            </div>
+          </div>
+          {/* Badge de estatus - solo desktop */}
+          {contract && (
+            <div className="hidden lg:flex shrink-0">
+              {isSigned && (
+                <ZenBadge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-950/20">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Firmado
+                </ZenBadge>
               )}
               {isPublished && !isSigned && (
-                <ZenButton
-                  variant="primary"
-                  size="sm"
-                  onClick={handleSign}
-                  disabled={isSigning}
-                >
-                  {isSigning ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                  )}
-                  Firmar contrato digital
-                </ZenButton>
-              )}
-              {isCancellationRequestedByStudio && (
-                <>
-                  <ZenButton
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowCancellationConfirmModal(true)}
-                    disabled={isCancelling}
-                  >
-                    {isCancelling ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                    )}
-                    Confirmar cancelación
-                  </ZenButton>
-                  <ZenButton
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRejectCancellation}
-                    disabled={isCancelling}
-                    className="text-zinc-400"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Rechazar
-                  </ZenButton>
-                </>
+                <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20">
+                  <FileText className="h-3 w-3 mr-1" />
+                  Publicado para revisión
+                </ZenBadge>
               )}
               {isCancellationRequestedByClient && (
                 <ZenBadge variant="outline" className="text-orange-400 border-orange-500/30 bg-orange-950/20">
@@ -746,32 +642,164 @@ export default function EventoContratoPage() {
                 </ZenBadge>
               )}
             </div>
-          </div>
-        </ZenCardHeader>
-        <ZenCardContent className="p-6">
-          {renderedContent ? (
-            <>
-              <style dangerouslySetInnerHTML={{ __html: CONTRACT_PREVIEW_STYLES }} />
-              <div
-                className="contract-preview scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
-                dangerouslySetInnerHTML={{ __html: renderedContent }}
-              />
-            </>
-          ) : (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
-            </div>
           )}
+        </div>
+      </div>
 
-          {isSigned && contract.signed_at && (
-            <div className="mt-6 pt-6 border-t border-zinc-800">
-              <p className="text-sm text-zinc-500">
-                Firmado el {formatDate(contract.signed_at)}
-              </p>
+      {/* Badges y botones arriba del preview */}
+      {contract && (
+        <div className="mb-6 lg:hidden">
+          {/* Badges de estado - solo mobile */}
+          <div className="flex flex-col gap-2">
+            {isSigned && (
+              <ZenBadge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-950/20 w-full">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Firmado
+              </ZenBadge>
+            )}
+            {isPublished && !isSigned && (
+              <ZenBadge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-950/20 w-full">
+                <FileText className="h-3 w-3 mr-1" />
+                Publicado para revisión
+              </ZenBadge>
+            )}
+            {isCancellationRequestedByClient && (
+              <ZenBadge variant="outline" className="text-orange-400 border-orange-500/30 bg-orange-950/20 w-full">
+                <Clock className="h-3 w-3 mr-1" />
+                Esperando confirmación del estudio
+              </ZenBadge>
+            )}
+            {isCancelled && (
+              <ZenBadge variant="outline" className="text-red-400 border-red-500/30 bg-red-950/20 w-full">
+                <X className="h-3 w-3 mr-1" />
+                Cancelado
+              </ZenBadge>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Contrato publicado */}
+      {contract && (
+        <ZenCard>
+          <ZenCardHeader className="border-b border-zinc-800">
+            <div className="flex items-center justify-between gap-3">
+              <ZenCardTitle className="text-lg min-w-0 flex-1 truncate">
+                Contrato - Versión {contract.version}
+              </ZenCardTitle>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Botón firmar y menú para desktop */}
+                {isPublished && !isSigned && (
+                  <>
+                    <ZenButton
+                      variant="primary"
+                      size="sm"
+                      onClick={handleSign}
+                      disabled={isSigning}
+                      className="hidden lg:flex"
+                    >
+                      {isSigning ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                      )}
+                      Firmar contrato digital
+                    </ZenButton>
+                    <ZenDropdownMenu>
+                      <ZenDropdownMenuTrigger asChild>
+                        <ZenButton
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </ZenButton>
+                      </ZenDropdownMenuTrigger>
+                      <ZenDropdownMenuContent align="end">
+                        <ZenDropdownMenuItem onClick={() => setShowProfileModal(true)}>
+                          <User className="h-4 w-4 mr-2" />
+                          Editar datos de contacto
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuItem onClick={() => setShowEventInfoModal(true)}>
+                          <Calendar className="h-4 w-4 mr-2" />
+                          Editar datos del evento
+                        </ZenDropdownMenuItem>
+                        <ZenDropdownMenuItem
+                          onClick={handleExportPDF}
+                          disabled={isExportingPDF}
+                        >
+                          {isExportingPDF ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4 mr-2" />
+                          )}
+                          Descargar PDF
+                        </ZenDropdownMenuItem>
+                      </ZenDropdownMenuContent>
+                    </ZenDropdownMenu>
+                  </>
+                )}
+                {/* Menú para contrato firmado */}
+                {isSigned && !isCancellationRequestedByStudio && !isCancellationRequestedByClient && !isCancelled && (
+                  <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                      <ZenButton
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </ZenButton>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end">
+                      <ZenDropdownMenuItem
+                        onClick={handleExportPDF}
+                        disabled={isExportingPDF}
+                      >
+                        {isExportingPDF ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4 mr-2" />
+                        )}
+                        Descargar PDF
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuItem
+                        onClick={handleRequestCancellation}
+                        className="text-red-400 focus:text-red-300"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Cancelar contrato
+                      </ZenDropdownMenuItem>
+                    </ZenDropdownMenuContent>
+                  </ZenDropdownMenu>
+                )}
+              </div>
             </div>
-          )}
-        </ZenCardContent>
-      </ZenCard>
+          </ZenCardHeader>
+          <ZenCardContent className="p-6">
+            {renderedContent ? (
+              <>
+                <style dangerouslySetInnerHTML={{ __html: CONTRACT_PREVIEW_STYLES }} />
+                <div
+                  className="contract-preview scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
+                  dangerouslySetInnerHTML={{ __html: renderedContent }}
+                />
+              </>
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+              </div>
+            )}
+
+            {isSigned && contract.signed_at && (
+              <div className="mt-6 pt-6 border-t border-zinc-800">
+                <p className="text-sm text-zinc-500">
+                  Firmado el {formatDate(contract.signed_at)}
+                </p>
+              </div>
+            )}
+          </ZenCardContent>
+        </ZenCard>
       )}
 
       {/* Contratos cancelados */}
@@ -806,6 +834,26 @@ export default function EventoContratoPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Botón sticky para firmar contrato - solo en mobile */}
+      {isPublished && !isSigned && (
+        <div className="sticky bottom-0 z-30 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 py-4 lg:hidden">
+          <ZenButton
+            variant="primary"
+            size="sm"
+            onClick={handleSign}
+            disabled={isSigning}
+            className="w-full"
+          >
+            {isSigning ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+            )}
+            Firmar contrato digital
+          </ZenButton>
         </div>
       )}
 
@@ -884,9 +932,9 @@ export default function EventoContratoPage() {
         onConfirm={handleConfirmSign}
         title="Firmar Contrato Digital"
         description="Al firmar este contrato, confirmas que has leído y aceptas todos los términos y condiciones establecidos. Esta acción es legalmente vinculante."
-        confirmLabel="Confirmar firma"
-        cancelLabel="Cancelar"
-        isLoading={isSigning}
+        confirmText="Confirmar firma"
+        cancelText="Cancelar"
+        loading={isSigning}
       />
 
       {/* Modal de confirmación de cancelación (cuando el studio solicita) */}
@@ -1011,8 +1059,7 @@ export default function EventoContratoPage() {
           </div>
         )}
       </ZenDialog>
-
-    </div>
+    </>
   );
 }
 

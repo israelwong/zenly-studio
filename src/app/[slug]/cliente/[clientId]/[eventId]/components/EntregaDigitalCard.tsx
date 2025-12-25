@@ -26,7 +26,17 @@ export function EntregaDigitalCard({ dashboardInfo, loading, slug, clientId, eve
       </ZenCardHeader>
       <ZenCardContent className="space-y-4">
         {loading ? (
-          <div className="text-sm text-zinc-400">Cargando...</div>
+          <div className="space-y-3 animate-pulse">
+            {/* Estado skeleton */}
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 bg-zinc-800 rounded-full" />
+              <div className="h-4 bg-zinc-800 rounded w-48" />
+            </div>
+            {/* Fecha skeleton */}
+            <div className="h-3 bg-zinc-800 rounded w-32" />
+            {/* Botón skeleton */}
+            <div className="h-10 bg-zinc-800 rounded w-full" />
+          </div>
         ) : dashboardInfo?.entregables_status ? (
           <div className="space-y-3">
             {dashboardInfo.entregables_status.has_entregables ? (
