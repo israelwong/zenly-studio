@@ -32,6 +32,7 @@ const formatDateTime = (date: Date | string): string => {
 import { ClientProfileModal } from '@/app/[slug]/cliente/[clientId]/components/ClientProfileModal';
 import { EventInfoModal } from '../components/EventInfoModal';
 import { useEvento } from '../context/EventoContext';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import type { EventContract } from '@/types/contracts';
 import { createClient } from '@/lib/supabase/client';
 import { createRealtimeChannel, subscribeToChannel, setupRealtimeAuth } from '@/lib/realtime/core';
@@ -40,7 +41,8 @@ import { actualizarPerfilCliente } from '@/lib/actions/cliente/perfil.actions';
 export default function EventoContratoPage() {
   const params = useParams();
   const { cliente, isAuthenticated, isLoading: authLoading } = useClientAuth();
-  const { evento } = useEvento();
+  const { evento, studioInfo } = useEvento();
+  usePageTitle({ sectionName: 'contrato', studioName: studioInfo?.studio_name });
   const slug = params?.slug as string;
   const clientId = params?.clientId as string;
   const eventId = params?.eventId as string;

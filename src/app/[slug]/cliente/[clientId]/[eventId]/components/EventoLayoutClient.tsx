@@ -17,7 +17,7 @@ export function EventoLayoutClient({ children, studioInfo, evento }: EventoLayou
   useFavicon(studioInfo?.isotipo_url || studioInfo?.logo_url, studioInfo?.studio_name);
 
   return (
-    <EventoProvider evento={evento}>
+    <EventoProvider evento={evento} studioInfo={studioInfo}>
       {children}
     </EventoProvider>
   );

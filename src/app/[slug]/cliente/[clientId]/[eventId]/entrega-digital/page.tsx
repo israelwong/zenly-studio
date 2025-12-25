@@ -7,10 +7,14 @@ import { ToastContainer } from '@/components/client';
 import { useToast } from '@/hooks/useToast';
 import { obtenerEntregablesCliente } from '@/lib/actions/cliente/deliverables.actions';
 import { DeliverablesGallery } from './components/DeliverablesGallery';
+import { useEvento } from '../context/EventoContext';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { Loader2 } from 'lucide-react';
 import type { ClienteDeliverable } from '@/lib/actions/cliente/deliverables.actions';
 
 export default function EntregaDigitalPage() {
+  const { studioInfo } = useEvento();
+  usePageTitle({ sectionName: 'entrega-digital', studioName: studioInfo?.studio_name });
   const { toasts, removeToast } = useToast();
   const params = useParams();
   const eventId = params?.eventId as string;

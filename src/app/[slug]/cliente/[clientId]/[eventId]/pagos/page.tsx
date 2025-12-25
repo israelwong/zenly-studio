@@ -11,9 +11,13 @@ import { ToastContainer } from '@/components/client';
 import { HistorialPagosTable } from './components/HistorialPagosTable';
 import { BankInfoCard } from './components/BankInfoCard';
 import { ResumenPago } from '../components/ResumenPago';
+import { useEvento } from '../context/EventoContext';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import type { ClientPago, StudioBankInfo } from '@/types/client';
 
 export default function EventoPagosPage() {
+  const { studioInfo } = useEvento();
+  usePageTitle({ sectionName: 'pagos', studioName: studioInfo?.studio_name });
   const [pagos, setPagos] = useState<ClientPago[]>([]);
   const [bankInfo, setBankInfo] = useState<StudioBankInfo | null>(null);
   const [balance, setBalance] = useState<{

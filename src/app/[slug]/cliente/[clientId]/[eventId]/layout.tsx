@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import type { Metadata } from 'next';
 import { getClienteSession, obtenerEventoDetalle, obtenerStudioPublicInfo } from '@/lib/actions/cliente';
 import { ZenSidebarProvider } from '@/components/ui/zen';
 import { ClientLayoutWrapper } from '../components/ClientLayoutWrapper';
@@ -90,4 +91,56 @@ export default async function EventoLayout({ children, params }: EventoLayoutPro
       </ZenSidebarProvider>
     </EventoLayoutClient>
   );
+}
+
+/**
+ * Generar metadata para SEO
+ */
+export async function generateMetadata({ params }: EventoLayoutProps): Promise<Metadata> {
+  const { slug } = await params;
+
+  try {
+    const studioInfo = await obtenerStudioPublicInfo(slug);
+
+    if (!studioInfo) {
+      return {
+        title: 'Evento',
+        description: 'Información del evento',
+      };
+    }
+
+    const baseTitle = studioInfo.studio_name || 'ZEN Platform';
+    const title = `Evento - ${baseTitle}`;
+    const description = `Gestiona tu evento con ${baseTitle}`;
+
+    // Configurar favicon dinámico usando el logo del studio
+    const icons = studioInfo.logo_url ? {
+      icon: [
+        { url: studioInfo.logo_url, type: 'image/png' },
+        { url: studioInfo.logo_url, sizes: '32x32', type: 'image/png' },
+        { url: studioInfo.logo_url, sizes: '16x16', type: 'image/png' },
+      ],
+      apple: [
+        { url: studioInfo.logo_url, sizes: '180x180', type: 'image/png' },
+      ],
+      shortcut: studioInfo.logo_url,
+    } : undefined;
+
+    return {
+      title,
+      description,
+      icons,
+      openGraph: {
+        title,
+        description,
+        type: 'website',
+      },
+    };
+  } catch (error) {
+    console.error('[generateMetadata] Error:', error);
+    return {
+      title: 'Evento',
+      description: 'Información del evento',
+    };
+  }
 }

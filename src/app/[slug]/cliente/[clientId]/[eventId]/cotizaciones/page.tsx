@@ -4,11 +4,13 @@ import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenSidebarTrigger
 import { ToastContainer } from '@/components/client';
 import { useToast } from '@/hooks/useToast';
 import { useEvento } from '../context/EventoContext';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { ServiciosContratadosTree } from './components/ServiciosContratadosTree';
 import { ResumenPago } from '../components/ResumenPago';
 
 export default function EventoCotizacionesPage() {
-  const { evento } = useEvento();
+  const { evento, studioInfo } = useEvento();
+  usePageTitle({ sectionName: 'cotizaciones', studioName: studioInfo?.studio_name });
   const { toasts, removeToast } = useToast();
 
   const tieneMultiplesCotizaciones = evento.cotizaciones.length > 1;

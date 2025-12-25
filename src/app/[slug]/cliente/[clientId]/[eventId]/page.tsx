@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import { useEvento } from './context/EventoContext';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { ToastContainer } from '@/components/client';
 import { ZenSidebarTrigger, ZenCard, ZenCardHeader, ZenCardContent } from '@/components/ui/zen';
 import { obtenerDashboardInfo } from '@/lib/actions/cliente/dashboard.actions';
@@ -14,7 +15,8 @@ import { InformacionEventoCard } from './components/InformacionEventoCard';
 import type { DashboardInfo } from '@/lib/actions/cliente/dashboard.actions';
 
 export default function EventoResumenPage() {
-  const { evento } = useEvento();
+  const { evento, studioInfo } = useEvento();
+  usePageTitle({ sectionName: '', studioName: studioInfo?.studio_name });
   const { toasts, removeToast } = useToast();
   const params = useParams();
   const slug = params.slug as string;
