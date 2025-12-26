@@ -35,9 +35,15 @@ export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContacts
     useEffect(() => {
         if (!isMounted || !onTareasOperativasClick) return;
 
+        let isMountedRef = true;
+
         const checkConnection = () => {
+            if (!isMountedRef) return;
+            
             obtenerEstadoConexion(studioSlug)
                 .then((result) => {
+                    if (!isMountedRef) return;
+                    
                     if (result.success && result.isConnected) {
                         // Verificar que tenga scopes de Calendar
                         const hasCalendarScope =
@@ -51,6 +57,7 @@ export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContacts
                     }
                 })
                 .catch(() => {
+                    if (!isMountedRef) return;
                     setHasGoogleCalendar(false);
                 });
         };
@@ -58,17 +65,21 @@ export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContacts
         // Verificar inmediatamente
         checkConnection();
 
-        // Verificar cada 5 segundos para reaccionar a cambios en tiempo real
-        const interval = setInterval(checkConnection, 5000);
-
-        // Escuchar eventos personalizados de cambio de conexión
+        // Escuchar eventos personalizados de cambio de conexión (más eficiente que polling)
         const handleConnectionChange = () => {
-            checkConnection();
+            if (isMountedRef) {
+                checkConnection();
+            }
         };
         window.addEventListener('google-calendar-connection-changed', handleConnectionChange);
 
+        // Eliminar el polling cada 5 segundos - solo usar eventos personalizados
+        // Si necesitas polling, aumentar el intervalo a 30 segundos o más
+        // const interval = setInterval(checkConnection, 30000);
+
         return () => {
-            clearInterval(interval);
+            isMountedRef = false;
+            // clearInterval(interval);
             window.removeEventListener('google-calendar-connection-changed', handleConnectionChange);
         };
     }, [isMounted, studioSlug, onTareasOperativasClick]);

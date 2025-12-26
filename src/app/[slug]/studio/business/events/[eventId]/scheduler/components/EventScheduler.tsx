@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { type DateRange } from 'react-day-picker';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -73,10 +73,17 @@ export const EventScheduler = React.memo(function EventScheduler({
   } | null>(null);
 
   // Sincronizar localEventData solo cuando eventData cambia desde el padre
-  // No sincronizar en cada re-render
+  // Usar referencia para evitar actualizaciones innecesarias
+  const eventDataRef = React.useRef(eventData);
+  
   useEffect(() => {
-    setLocalEventData(eventData);
-  }, [eventData]);
+    // Solo actualizar si eventData realmente cambió (comparación profunda de ID)
+    if (eventDataRef.current?.id !== eventData?.id || 
+        eventDataRef.current?.scheduler?.id !== eventData?.scheduler?.id) {
+      eventDataRef.current = eventData;
+      setLocalEventData(eventData);
+    }
+  }, [eventData?.id, eventData?.scheduler?.id]);
 
   // Cargar preferencia de crew al montar
   useEffect(() => {

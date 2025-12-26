@@ -43,12 +43,21 @@ export function SchedulerWrapper({
   }, [eventData.cotizaciones, cotizacionId]);
 
   // Crear eventData filtrado para pasar al scheduler
+  // Usar una comparación más estable para evitar recálculos innecesarios
+  const cotizacionesIds = useMemo(() => {
+    return filteredCotizaciones?.map(c => c.id).join(',') || '';
+  }, [filteredCotizaciones]);
+  
   const filteredEventData = useMemo(() => {
     return {
       ...eventData,
       cotizaciones: filteredCotizaciones,
     };
-  }, [eventData, filteredCotizaciones]);
+  }, [
+    eventData?.id,
+    eventData?.scheduler?.id,
+    cotizacionesIds,
+  ]);
 
   // Validar si hay tareas fuera del nuevo rango
   const validateDateRangeChange = useCallback((newRange: DateRange | undefined): boolean => {
@@ -98,7 +107,7 @@ export function SchedulerWrapper({
     }
 
     return true; // No hay conflictos, permitir cambio
-  }, [eventData]);
+  }, [filteredCotizaciones]);
 
 
   // Memoizar el callback de setDateRange para evitar re-renders innecesarios
@@ -242,7 +251,6 @@ export function SchedulerWrapper({
 
       {/* Scheduler */}
       <EventSchedulerView
-        key={dateRange ? `${dateRange.from?.getTime()}-${dateRange.to?.getTime()}` : 'no-range'}
         studioSlug={studioSlug}
         eventId={eventId}
         eventData={filteredEventData}

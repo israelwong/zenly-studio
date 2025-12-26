@@ -37,7 +37,7 @@ export function TareasOperativasSheet({
   const [loading, setLoading] = useState(true);
   const [filterEventId, setFilterEventId] = useState<string | undefined>(undefined);
   const [googleCalendarUrl, setGoogleCalendarUrl] = useState<string | null>(null);
-  const [hasCalendarEnabled, setHasCalendarEnabled] = useState(false);
+  const [hasCalendarEnabled, setHasCalendarEnabled] = useState<boolean | null>(null); // null = verificando, true/false = resultado
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [googleName, setGoogleName] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -102,6 +102,8 @@ export function TareasOperativasSheet({
       }
     } catch (error) {
       console.error('Error verificando Google Calendar:', error);
+      // Si hay error, asumir que no está conectado (pero ya verificamos)
+      setHasCalendarEnabled(false);
     }
   }, [studioSlug]);
 
@@ -214,10 +216,50 @@ export function TareasOperativasSheet({
     });
   };
 
+  const formatDateRange = (startDate: Date, endDate: Date) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Si es el mismo día, mostrar solo una fecha con hora
+    if (start.toDateString() === end.toDateString()) {
+      return formatDateTime(start);
+    }
+
+    // Si es rango, mostrar ambas fechas
+    const startStr = formatDate(start);
+    const endStr = formatDate(end);
+    return `${startStr} - ${endStr}`;
+  };
+
+  const getStatusLabel = (status: string) => {
+    const statusMap: Record<string, string> = {
+      PENDING: 'Pendiente',
+      IN_PROGRESS: 'En progreso',
+      COMPLETED: 'Conformada',
+      CANCELLED: 'Cancelada',
+    };
+    return statusMap[status] || status;
+  };
+
   // Obtener eventos únicos para el filtro
   const eventosUnicos = Array.from(
     new Map(tareas.map((t) => [t.event.id, t.event])).values()
   );
+
+  // Agrupar tareas por evento
+  const tareasPorEvento = tareas.reduce((acc, tarea) => {
+    const eventId = tarea.event.id;
+    if (!acc[eventId]) {
+      acc[eventId] = {
+        event: tarea.event,
+        tareas: [],
+      };
+    }
+    acc[eventId].tareas.push(tarea);
+    return acc;
+  }, {} as Record<string, { event: TareaOperativa['event']; tareas: TareaOperativa[] }>);
+
+  const gruposEventos = Object.values(tareasPorEvento);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -301,8 +343,8 @@ export function TareasOperativasSheet({
               </div>
             )}
 
-            {/* Estado de conexión */}
-            {!hasCalendarEnabled && (
+            {/* Estado de conexión - Solo mostrar si se verificó y NO está conectado */}
+            {hasCalendarEnabled === false && (
               <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-3">
                 <p className="text-sm text-yellow-400">
                   Google Calendar no está conectado. Ve a{' '}
@@ -369,81 +411,84 @@ export function TareasOperativasSheet({
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {tareas.map((tarea) => (
-                  <div
-                    key={tarea.id}
-                    className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 hover:border-zinc-600 transition-colors cursor-pointer"
-                    onClick={() => handleViewTask(tarea.event.id, tarea.id)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-medium text-white truncate">{tarea.name}</h3>
-                          <ZenBadge
-                            variant="secondary"
-                            className={`text-xs border ${getStatusColor(tarea.status)}`}
-                          >
-                            {tarea.status}
-                          </ZenBadge>
-                          {tarea.priority !== 'MEDIUM' && (
-                            <ZenBadge
-                              variant="secondary"
-                              className={`text-xs border ${getPriorityColor(tarea.priority)}`}
-                            >
-                              {tarea.priority}
-                            </ZenBadge>
-                          )}
-                        </div>
+              <div className="space-y-6">
+                {gruposEventos.map((grupo) => (
+                  <div key={grupo.event.id} className="space-y-3">
+                    {/* Encabezado del evento */}
+                    <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
+                      <h3 className="text-sm font-semibold text-zinc-200">
+                        {grupo.event.name}
+                      </h3>
+                      <ZenBadge variant="secondary" size="sm" className="text-xs">
+                        {grupo.tareas.length} {grupo.tareas.length === 1 ? 'tarea' : 'tareas'}
+                      </ZenBadge>
+                    </div>
 
-                        {tarea.description && (
-                          <p className="text-sm text-zinc-400 mb-2 line-clamp-2">
-                            {tarea.description}
-                          </p>
-                        )}
+                    {/* Tareas del evento */}
+                    <div className="space-y-2 pl-2">
+                      {grupo.tareas.map((tarea) => (
+                        <div
+                          key={tarea.id}
+                          className="bg-zinc-800/30 border border-zinc-700/50 rounded-md p-3 hover:border-zinc-600 hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                          onClick={() => handleViewTask(tarea.event.id, tarea.id)}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <h4 className="text-sm font-medium text-zinc-200 truncate">
+                                  {tarea.name}
+                                </h4>
+                                <ZenBadge
+                                  variant="secondary"
+                                  size="sm"
+                                  className={`text-xs border shrink-0 ${getStatusColor(tarea.status)}`}
+                                >
+                                  {getStatusLabel(tarea.status)}
+                                </ZenBadge>
+                              </div>
 
-                        <div className="flex items-center gap-4 text-xs text-zinc-500">
-                          <div className="flex items-center gap-1">
-                            <CalendarIcon className="h-3 w-3" />
-                            <span>{formatDateTime(tarea.start_date)}</span>
-                          </div>
-                          {tarea.cotizacion_item?.assigned_to_crew_member && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-zinc-600">•</span>
-                              <span>{tarea.cotizacion_item.assigned_to_crew_member.name}</span>
+                              <div className="flex items-center gap-3 text-xs text-zinc-400">
+                                {tarea.cotizacion_item?.assigned_to_crew_member && (
+                                  <span>
+                                    Asignada a{' '}
+                                    <span className="text-zinc-300 font-medium">
+                                      {tarea.cotizacion_item.assigned_to_crew_member.name}
+                                    </span>
+                                  </span>
+                                )}
+                                <span className="text-zinc-600">•</span>
+                                <div className="flex items-center gap-1">
+                                  <CalendarIcon className="h-3 w-3" />
+                                  <span>
+                                    {new Date(tarea.start_date).toDateString() === new Date(tarea.end_date).toDateString()
+                                      ? formatDateTime(new Date(tarea.start_date))
+                                      : formatDateRange(new Date(tarea.start_date), new Date(tarea.end_date))}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                          )}
+
+                            {tarea.google_event_id && (
+                              <ZenButton
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (tarea.google_calendar_id && tarea.google_event_id) {
+                                    window.open(
+                                      `https://calendar.google.com/calendar/u/0/r/eventedit/${tarea.google_event_id}`,
+                                      '_blank'
+                                    );
+                                  }
+                                }}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5 text-purple-400" />
+                              </ZenButton>
+                            )}
+                          </div>
                         </div>
-
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewEvent(tarea.event.id);
-                          }}
-                          className="mt-2 text-xs text-purple-400 hover:text-purple-300 hover:underline"
-                        >
-                          {tarea.event.name}
-                        </button>
-                      </div>
-
-                      {tarea.google_event_id && (
-                        <ZenButton
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (tarea.google_calendar_id && tarea.google_event_id) {
-                              window.open(
-                                `https://calendar.google.com/calendar/u/0/r/eventedit/${tarea.google_event_id}`,
-                                '_blank'
-                              );
-                            }
-                          }}
-                        >
-                          <ExternalLink className="h-4 w-4 text-purple-400" />
-                        </ZenButton>
-                      )}
+                      ))}
                     </div>
                   </div>
                 ))}

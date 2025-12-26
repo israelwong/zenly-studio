@@ -26,37 +26,52 @@ export default function EventSchedulerPage() {
     document.title = 'ZEN Studio - Scheduler';
   }, []);
 
-  const loadEvent = useCallback(async () => {
-    try {
-      setLoading(true);
-      const result = await obtenerEventoDetalle(studioSlug, eventId);
-
-      if (result.success && result.data) {
-        setEventData(result.data);
-        // Inicializar dateRange si existe scheduler configurado (solo la primera vez)
-        if (!dateRange && result.data.scheduler?.start_date && result.data.scheduler?.end_date) {
-          setDateRange({
-            from: result.data.scheduler.start_date,
-            to: result.data.scheduler.end_date,
-          });
-        }
-      } else {
-        toast.error(result.error || 'Evento no encontrado');
-        router.push(`/${studioSlug}/studio/business/events/${eventId}`);
-      }
-    } catch (error) {
-      toast.error('Error al cargar el evento');
-      router.push(`/${studioSlug}/studio/business/events/${eventId}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [eventId, studioSlug, router, dateRange]);
-
+  // Cargar evento solo una vez al montar o cuando cambia eventId/studioSlug
   useEffect(() => {
-    if (eventId) {
-      loadEvent();
-    }
-  }, [eventId, loadEvent]);
+    if (!eventId || !studioSlug) return;
+
+    let isMounted = true;
+
+    const loadEvent = async () => {
+      try {
+        setLoading(true);
+        const result = await obtenerEventoDetalle(studioSlug, eventId);
+
+        if (!isMounted) return;
+
+        if (result.success && result.data) {
+          setEventData(result.data);
+          // Inicializar dateRange si existe scheduler configurado (solo la primera vez)
+          setDateRange(prev => {
+            if (!prev && result.data?.scheduler?.start_date && result.data?.scheduler?.end_date) {
+              return {
+                from: result.data.scheduler.start_date,
+                to: result.data.scheduler.end_date,
+              };
+            }
+            return prev;
+          });
+        } else {
+          toast.error(result.error || 'Evento no encontrado');
+          router.push(`/${studioSlug}/studio/business/events/${eventId}`);
+        }
+      } catch (error) {
+        if (!isMounted) return;
+        toast.error('Error al cargar el evento');
+        router.push(`/${studioSlug}/studio/business/events/${eventId}`);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadEvent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [eventId, studioSlug, router]);
 
   if (loading) {
     return (
@@ -239,7 +254,14 @@ export default function EventSchedulerPage() {
             eventId={eventId}
             eventData={eventData}
             initialDateRange={dateRange}
-            onDataChange={setEventData}
+            onDataChange={(newData) => {
+              // Solo actualizar si realmente cambió el ID o scheduler
+              if (!eventData || 
+                  eventData.id !== newData.id || 
+                  eventData.scheduler?.id !== newData.scheduler?.id) {
+                setEventData(newData);
+              }
+            }}
             cotizacionId={cotizacionId || undefined}
           />
         </ZenCardContent>

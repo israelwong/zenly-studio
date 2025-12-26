@@ -103,8 +103,18 @@ export function GoogleCalendarIntegration({
         setGoogleEmail(result.email || null);
         setGoogleName(result.name || null);
         
-        // Cargar eventos pendientes de sincronizar
-        cargarEventosPendientes();
+        // Cargar eventos pendientes de sincronizar (llamar directamente sin dependencia)
+        try {
+          const eventosResult = await contarEventosPendientesSincronizar(studioSlug);
+          if (eventosResult.success && eventosResult.pendientes !== undefined) {
+            setEventosPendientes(eventosResult.pendientes);
+          } else {
+            setEventosPendientes(0);
+          }
+        } catch (error) {
+          console.error('Error cargando eventos pendientes:', error);
+          setEventosPendientes(0);
+        }
       } else if (result.isConnected && !hasCalendarScope) {
         // Conectado pero sin scopes de Calendar - mostrar como desconectado para Calendar
         setState('disconnected');
@@ -119,7 +129,7 @@ export function GoogleCalendarIntegration({
       console.error('[GoogleCalendarIntegration] Error cargando estado de conexión:', error);
       setState('error');
     }
-  }, [studioSlug, cargarEventosPendientes]);
+  }, [studioSlug]);
 
   useEffect(() => {
     loadConnectionStatus();
@@ -166,7 +176,8 @@ export function GoogleCalendarIntegration({
       toast.success('Google Calendar conectado exitosamente');
       loadConnectionStatus();
     }
-  }, [searchParams, loadConnectionStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleConnectClick = () => {
     // Mostrar modal informativo primero

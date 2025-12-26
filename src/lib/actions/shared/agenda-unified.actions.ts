@@ -966,6 +966,23 @@ export async function crearAgendamiento(
             // No fallar la creación del agendamiento si falla la notificación
         }
 
+        // Sincronizar con Google Calendar si es fecha principal del evento y el evento existe
+        if (isMainEventDate && agenda.evento_id) {
+            try {
+                const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
+                    await import('@/lib/integrations/google-calendar/helpers');
+                
+                if (await tieneGoogleCalendarHabilitado(studioSlug)) {
+                    sincronizarEventoPrincipalEnBackground(agenda.evento_id, studioSlug);
+                }
+            } catch (error) {
+                console.error(
+                    '[Google Calendar] Error sincronizando evento en crearAgendamiento (no crítico):',
+                    error
+                );
+            }
+        }
+
         return {
             success: true,
             data: item,
