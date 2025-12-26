@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 import { ZenCard } from "@/components/ui/zen/base/ZenCard";
 import { Menu } from "lucide-react";
@@ -317,26 +318,10 @@ export function ZenSidebarMenuButton({
   isActive = false,
   ...props
 }: ZenSidebarMenuButtonProps) {
-  if (asChild) {
-    return (
-      <div
-        className={cn(
-          "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-          "hover:bg-zinc-800 hover:text-white",
-          "focus:bg-zinc-800 focus:text-white focus:outline-none",
-          isActive && "bg-zinc-800 text-white",
-          !isActive && "text-zinc-400",
-          className
-        )}
-        {...(props as React.HTMLAttributes<HTMLDivElement>)}
-      >
-        {children}
-      </div>
-    );
-  }
+  const Comp = asChild ? Slot : 'button';
 
   return (
-    <button
+    <Comp
       className={cn(
         "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
         "hover:bg-zinc-800 hover:text-white",
@@ -349,7 +334,7 @@ export function ZenSidebarMenuButton({
       {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
     >
       {children}
-    </button>
+    </Comp>
   );
 }
 
@@ -379,26 +364,10 @@ export function ZenSidebarMenuSubButton({
   isActive = false,
   ...props
 }: ZenSidebarMenuSubButtonProps) {
-  if (asChild) {
-    return (
-      <div
-        className={cn(
-          "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-          "hover:bg-zinc-800 hover:text-white",
-          "focus:bg-zinc-800 focus:text-white focus:outline-none",
-          isActive && "bg-zinc-800 text-white",
-          !isActive && "text-zinc-400",
-          className
-        )}
-        {...(props as React.HTMLAttributes<HTMLDivElement>)}
-      >
-        {children}
-      </div>
-    );
-  }
+  const Comp = asChild ? Slot : 'button';
 
   return (
-    <button
+    <Comp
       className={cn(
         "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
         "hover:bg-zinc-800 hover:text-white",
@@ -411,7 +380,7 @@ export function ZenSidebarMenuSubButton({
       {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
     >
       {children}
-    </button>
+    </Comp>
   );
 }
 

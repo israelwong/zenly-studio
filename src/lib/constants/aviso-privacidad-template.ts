@@ -91,7 +91,6 @@ Usted tiene derecho a:
 Sus datos personales pueden ser compartidos con:
 
 - **Plataforma ZEN:** Como procesador de datos para la gestión del sistema
-- **Proveedores de servicios:** Empresas que nos ayudan a operar nuestro negocio (hosting, email, procesamiento de pagos)
 - **Autoridades:** Cuando sea requerido por disposición legal o judicial
 
 Todas las transferencias se realizan con las medidas de seguridad adecuadas y únicamente para las finalidades descritas en este aviso.

@@ -15,7 +15,7 @@ export function ClientFooter({ studioSlug }: ClientFooterProps) {
         <div className="flex flex-col items-center gap-2">
           <div className="flex items-center gap-4 text-sm text-zinc-400">
             <Link
-              href={`/${studioSlug}/cliente/aviso-privacidad`}
+              href={`/${studioSlug}/aviso-privacidad`}
               className="hover:text-white transition-colors"
             >
               Aviso de Privacidad

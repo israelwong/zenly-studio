@@ -41,6 +41,7 @@ export function TerminosCondicionesPreview({
             onClick={(e) => {
               e.stopPropagation();
             }}
+            prefetch={false}
           >
             {part}
             <ExternalLink className="w-3 h-3" />

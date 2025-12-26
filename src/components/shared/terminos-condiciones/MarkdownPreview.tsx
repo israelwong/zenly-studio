@@ -187,6 +187,7 @@ export function MarkdownPreview({ content, className = '' }: MarkdownPreviewProp
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 underline transition-colors"
           onClick={(e) => e.stopPropagation()}
+          prefetch={false}
         >
           {url}
           <ExternalLink className="w-3 h-3" />

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { obtenerCatalogo } from "@/lib/actions/studio/config/catalogo.actions";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/config/configuracion-precios.actions";
 import { calcularPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
+import { DEFAULT_AVISO_PRIVACIDAD_TITLE, DEFAULT_AVISO_PRIVACIDAD_VERSION, DEFAULT_AVISO_PRIVACIDAD_CONTENT } from "@/lib/constants/aviso-privacidad-default";
 import type { PublicSeccionData, PublicCategoriaData, PublicServicioData } from "@/types/public-promise";
 import type { SeccionData } from "@/lib/actions/schemas/catalogo-schemas";
 
@@ -260,6 +261,7 @@ export async function obtenerAvisoPrivacidadPublico(
     title: string;
     content: string;
     version: string;
+    updated_at: Date;
   };
   error?: string;
 }> {
@@ -276,7 +278,7 @@ export async function obtenerAvisoPrivacidadPublico(
       };
     }
 
-    const aviso = await prisma.studio_avisos_privacidad.findFirst({
+    let aviso = await prisma.studio_avisos_privacidad.findFirst({
       where: {
         studio_id: studio.id,
         is_active: true,
@@ -286,12 +288,40 @@ export async function obtenerAvisoPrivacidadPublico(
         title: true,
         content: true,
         version: true,
+        updated_at: true,
       },
     });
 
+    // Si no existe, crear uno por defecto (lazy creation)
+    if (!aviso) {
+      const nuevoAviso = await prisma.studio_avisos_privacidad.create({
+        data: {
+          studio_id: studio.id,
+          title: DEFAULT_AVISO_PRIVACIDAD_TITLE,
+          content: DEFAULT_AVISO_PRIVACIDAD_CONTENT,
+          version: DEFAULT_AVISO_PRIVACIDAD_VERSION,
+          is_active: true,
+        },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          version: true,
+          updated_at: true,
+        },
+      });
+      aviso = nuevoAviso;
+    }
+
     return {
       success: true,
-      data: aviso || undefined,
+      data: aviso as {
+        id: string;
+        title: string;
+        content: string;
+        version: string;
+        updated_at: Date;
+      },
     };
   } catch (error) {
     console.error("Error al obtener aviso de privacidad público:", error);

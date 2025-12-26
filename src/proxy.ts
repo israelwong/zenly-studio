@@ -224,7 +224,8 @@ export async function proxy(request: NextRequest) {
     // - /[slug]/profile (perfil público)
     // - /[slug]/offer (ofertas públicas)
     // - /[slug]/promise (promesas públicas)
-    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/cliente') || subPath.startsWith('/preview') || subPath.startsWith('/post') || subPath.startsWith('/profile') || subPath.startsWith('/offer') || subPath.startsWith('/promise')) {
+    // - /[slug]/aviso-privacidad (aviso de privacidad público)
+    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/cliente') || subPath.startsWith('/preview') || subPath.startsWith('/post') || subPath.startsWith('/profile') || subPath.startsWith('/offer') || subPath.startsWith('/promise') || subPath.startsWith('/aviso-privacidad')) {
       return NextResponse.next();
     }
 

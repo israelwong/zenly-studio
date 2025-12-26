@@ -347,7 +347,7 @@ export function RichTextEditor({
           <p className="text-xs text-red-400">{error}</p>
         ) : (
           <p className="text-xs text-zinc-400">
-            Estos términos se mostrarán en el detalle del paquete con letras pequeñas. Los enlaces se detectarán automáticamente y se mostrarán en azul.
+            Los enlaces se detectarán automáticamente y se mostrarán en azul.
           </p>
         )}
         <p className={`text-xs ${maxLength && remainingChars !== null && remainingChars < 50 ? 'text-amber-400' : 'text-zinc-400'}`}>

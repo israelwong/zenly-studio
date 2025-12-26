@@ -1,16 +1,12 @@
-import Link from 'next/link';
 import { ZenButton } from '@/components/ui/zen';
+import { LoginButton } from './components/LoginButton';
 
 export default function HomePage() {
     return (
         <div className="min-h-screen bg-zinc-900 text-white">
             {/* Header con botón de iniciar sesión */}
             <header className="sticky top-0 z-50 flex items-center justify-end px-4 py-4 md:px-8">
-                <Link href="/login">
-                    <ZenButton variant="outline" size="sm">
-                        Iniciar Sesión
-                    </ZenButton>
-                </Link>
+                <LoginButton />
             </header>
 
             {/* Hero Section */}

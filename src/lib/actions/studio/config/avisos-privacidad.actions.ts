@@ -205,6 +205,19 @@ export async function actualizarAvisoPrivacidad(
       };
     }
 
+    // Contar total de avisos del studio
+    const totalAvisos = await prisma.studio_avisos_privacidad.count({
+      where: { studio_id: studio.id },
+    });
+
+    // Si solo hay 1 aviso, incrementar versión automáticamente
+    let nuevaVersion = validationResult.data.version ?? avisoExistente.version;
+    if (totalAvisos === 1) {
+      // Incrementar versión automáticamente (1.0 -> 1.1, 1.1 -> 1.2, etc.)
+      const [major, minor] = avisoExistente.version.split('.').map(Number);
+      nuevaVersion = `${major}.${minor + 1}`;
+    }
+
     // Si se activa, desactivar otros
     if (validationResult.data.is_active === true) {
       await prisma.studio_avisos_privacidad.updateMany({
@@ -224,7 +237,7 @@ export async function actualizarAvisoPrivacidad(
       data: {
         title: validationResult.data.title,
         content: validationResult.data.content,
-        version: validationResult.data.version ?? avisoExistente.version,
+        version: nuevaVersion,
         is_active: validationResult.data.is_active ?? avisoExistente.is_active,
         updated_at: new Date(),
       },

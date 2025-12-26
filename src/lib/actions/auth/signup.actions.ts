@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { DEFAULT_AVISO_PRIVACIDAD_TITLE, DEFAULT_AVISO_PRIVACIDAD_VERSION, DEFAULT_AVISO_PRIVACIDAD_CONTENT } from "@/lib/constants/aviso-privacidad-default";
 
 // ============================================
 // SCHEMAS VALIDACIÓN
@@ -164,6 +165,17 @@ export async function createStudioAndSubscription(
     // Sembrar métodos de pago básicos
     const { sembrarMetodosPagoBasicos } = await import('@/lib/actions/studio/config/metodos-pago-sembrados.actions');
     await sembrarMetodosPagoBasicos(studio.id);
+
+    // Crear aviso de privacidad por defecto
+    await prisma.studio_avisos_privacidad.create({
+      data: {
+        studio_id: studio.id,
+        title: DEFAULT_AVISO_PRIVACIDAD_TITLE,
+        content: DEFAULT_AVISO_PRIVACIDAD_CONTENT,
+        version: DEFAULT_AVISO_PRIVACIDAD_VERSION,
+        is_active: true,
+      },
+    });
 
     // Actualizar metadata de Supabase Auth con studio_slug
     await supabase.auth.updateUser({

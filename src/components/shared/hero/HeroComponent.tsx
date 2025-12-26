@@ -595,6 +595,7 @@ export default function HeroComponent({
                                                 target={button.target || (button.linkType === 'external' ? '_blank' : '_self')}
                                                 onClick={button.onClick}
                                                 className="block"
+                                                prefetch={false}
                                             >
                                                 {button.text}
                                             </Link>
