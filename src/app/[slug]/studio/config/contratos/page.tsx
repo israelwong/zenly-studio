@@ -50,6 +50,10 @@ export default function ContratosPage() {
   const [isReordering, setIsReordering] = useState(false);
 
   useEffect(() => {
+    document.title = 'ZEN Studio - Contratos';
+  }, []);
+
+  useEffect(() => {
     loadTemplates();
   }, [studioSlug]);
 

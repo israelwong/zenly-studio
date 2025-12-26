@@ -48,7 +48,6 @@ Implementar integración con Google APIs para optimizar entrega de contenido y s
 - `google_oauth_client_secret` - Client Secret (encriptado)
 - `google_api_key` - API Key para Google Picker
 - `google_oauth_redirect_uri` - URI de callback
-
 - **`studios`**: Tokens específicos de cada estudio (cada estudio conecta su propia cuenta)
 - `google_refresh_token` - Token de refresh (encriptado, específico del estudio)
 - `google_email` - Email de la cuenta Google del estudio
@@ -200,9 +199,7 @@ npm install @types/googleapis --save-dev
 # No requiere npm install, se carga dinámicamente
 ```
 
-**Script de Google Picker:**
-
-Agregar en `app/layout.tsx` o componente específico:
+**Script de Google Picker:**Agregar en `app/layout.tsx` o componente específico:
 
 ```tsx
 <Script
@@ -498,21 +495,21 @@ model studio_agenda {
 
 1. **`crearAgendamiento`** - Después de crear en DB:
    ```typescript
-      // Después de crear agenda en DB
-      if (studio.is_google_connected && google_integrations_config?.calendar?.enabled) {
-        try {
-          const { crearEventoCalendar } = await import('@/lib/actions/studio/integrations/google-calendar.actions');
-          const googleEventId = await crearEventoCalendar(studioSlug, agenda.id);
-          // Actualizar agenda con google_event_id
-          await prisma.studio_agenda.update({
-            where: { id: agenda.id },
-            data: { google_event_id: googleEventId }
-          });
-        } catch (error) {
-          // Log error pero no fallar la creación
-          console.error('Error sincronizando con Google Calendar:', error);
-        }
-      }
+         // Después de crear agenda en DB
+         if (studio.is_google_connected && google_integrations_config?.calendar?.enabled) {
+           try {
+             const { crearEventoCalendar } = await import('@/lib/actions/studio/integrations/google-calendar.actions');
+             const googleEventId = await crearEventoCalendar(studioSlug, agenda.id);
+             // Actualizar agenda con google_event_id
+             await prisma.studio_agenda.update({
+               where: { id: agenda.id },
+               data: { google_event_id: googleEventId }
+             });
+           } catch (error) {
+             // Log error pero no fallar la creación
+             console.error('Error sincronizando con Google Calendar:', error);
+           }
+         }
    ```
 
 
@@ -520,13 +517,13 @@ model studio_agenda {
 
 2. **`actualizarAgendamiento`** - Después de actualizar en DB:
    ```typescript
-      // Después de actualizar agenda en DB
-      if (agenda.google_event_id) {
-        await actualizarEventoCalendar(studioSlug, agendaId);
-      } else if (studio.is_google_connected && google_integrations_config?.calendar?.enabled) {
-        // Crear si no existe pero está habilitado
-        await crearEventoCalendar(studioSlug, agendaId);
-      }
+         // Después de actualizar agenda en DB
+         if (agenda.google_event_id) {
+           await actualizarEventoCalendar(studioSlug, agendaId);
+         } else if (studio.is_google_connected && google_integrations_config?.calendar?.enabled) {
+           // Crear si no existe pero está habilitado
+           await crearEventoCalendar(studioSlug, agendaId);
+         }
    ```
 
 
@@ -534,10 +531,10 @@ model studio_agenda {
 
 3. **`eliminarAgendamiento`** - Antes de eliminar en DB:
    ```typescript
-      // Antes de eliminar agenda en DB
-      if (agenda.google_event_id) {
-        await eliminarEventoCalendar(studioSlug, agendaId);
-      }
+         // Antes de eliminar agenda en DB
+         if (agenda.google_event_id) {
+           await eliminarEventoCalendar(studioSlug, agendaId);
+         }
    ```
 
 
@@ -836,5 +833,3 @@ export interface GoogleDriveFolder {
 - ⏳ Testing completo end-to-end de Google Drive
 - ⏳ Testing de OAuth flow
 - ⏳ Testing de edge cases (tokens expirados, carpetas eliminadas)
-
----**Última actualización:** 2025-01-XX

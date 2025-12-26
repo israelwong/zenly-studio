@@ -30,6 +30,10 @@ export default function IdentityPage() {
     const tabFromUrl = (searchParams.get('tab') as TabValue) || 'brand';
     const [currentTab, setCurrentTab] = useState<TabValue>(tabFromUrl);
 
+    useEffect(() => {
+        document.title = 'ZEN Studio - Identidad';
+    }, []);
+
     // Control de hidratación
     useEffect(() => {
         setMounted(true);

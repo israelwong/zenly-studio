@@ -28,6 +28,10 @@ interface Integration {
 
 export default function IntegracionesPage() {
   const params = useParams();
+
+  useEffect(() => {
+    document.title = 'ZEN Studio - Integraciones';
+  }, []);
   const studioSlug = params?.slug as string;
 
   const [scopes, setScopes] = useState<string[]>([]);

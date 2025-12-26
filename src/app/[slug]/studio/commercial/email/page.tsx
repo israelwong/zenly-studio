@@ -17,6 +17,10 @@ export default function EmailPage() {
     const [builderData, setBuilderData] = useState<BuilderProfileData | null>(null);
 
     useEffect(() => {
+        document.title = 'ZEN Studio - Email';
+    }, []);
+
+    useEffect(() => {
         const loadBuilderData = async () => {
             try {
                 setLoading(true);

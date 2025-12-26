@@ -72,6 +72,10 @@ export default function FinanzasPage() {
     const [historialOpen, setHistorialOpen] = useState(false);
 
     useEffect(() => {
+        document.title = 'ZEN Studio - Finanzas';
+    }, []);
+
+    useEffect(() => {
         setMounted(true);
         setCurrentMonth(new Date());
     }, []);

@@ -47,6 +47,10 @@ export default function OfertasPage() {
     }>>({});
 
     useEffect(() => {
+        document.title = 'ZEN Studio - Ofertas';
+    }, []);
+
+    useEffect(() => {
         loadOffers();
     }, [studioSlug]);
 

@@ -15,6 +15,10 @@ export default function EventsPage() {
   const [metodosSinConfigurar, setMetodosSinConfigurar] = useState(0);
 
   useEffect(() => {
+    document.title = 'ZEN Studio - Eventos';
+  }, []);
+
+  useEffect(() => {
     const checkMetodos = async () => {
       const result = await verificarMetodosSinConfigurar(studioSlug);
       if (result.success && result.count !== undefined) {

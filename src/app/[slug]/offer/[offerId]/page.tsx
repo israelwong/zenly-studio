@@ -204,16 +204,21 @@ export async function generateMetadata({
     }
 
     const offer = offerResult.data;
-    const title = offer.name;
-    const description =
-      offer.description ||
-      `Oferta especial`;
-
-    // Obtener logo del estudio para favicon dinámico
+    
+    // Obtener información completa del estudio
     const studio = await prisma.studios.findUnique({
       where: { slug },
-      select: { logo_url: true },
+      select: { studio_name: true, logo_url: true },
     });
+
+    const title = studio?.studio_name 
+      ? `${offer.name} - ${studio.studio_name}`
+      : offer.name;
+    const description =
+      offer.description ||
+      (studio?.studio_name 
+        ? `Oferta especial de ${studio.studio_name}`
+        : `Oferta especial`);
 
     // Configurar favicon dinámico usando el logo del studio
     const icons = studio?.logo_url ? {

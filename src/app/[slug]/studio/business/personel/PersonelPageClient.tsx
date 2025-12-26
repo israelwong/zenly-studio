@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, Users, Edit, Trash2, MoreVertical } from 'lucide-react';
-import { ZenButton, ZenInput, ZenBadge, ZenConfirmModal } from '@/components/ui/zen';
+import { ZenButton, ZenInput, ZenBadge, ZenConfirmModal, ZenCard, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
 import {
   Table,
   TableBody,
@@ -249,21 +249,27 @@ export function PersonelPageClient({ studioSlug }: PersonelPageClientProps) {
     <>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-600/20 rounded-lg">
-              <Users className="h-5 w-5 text-emerald-400" />
+        <ZenCard variant="default" padding="none">
+          <ZenCardHeader className="border-b border-zinc-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-600/20 rounded-lg">
+                  <Users className="h-5 w-5 text-emerald-400" />
+                </div>
+                <div>
+                  <ZenCardTitle>Personal</ZenCardTitle>
+                  <ZenCardDescription>
+                    Gestiona tu equipo de trabajo
+                  </ZenCardDescription>
+                </div>
+              </div>
+              <ZenButton onClick={handleCreate}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo
+              </ZenButton>
             </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-white">Personal</h1>
-              <p className="text-sm text-zinc-400">Gestiona tu equipo de trabajo</p>
-            </div>
-          </div>
-          <ZenButton onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo
-          </ZenButton>
-        </div>
+          </ZenCardHeader>
+        </ZenCard>
 
         {/* Búsqueda */}
         <div className="flex items-center gap-4">

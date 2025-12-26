@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ShoppingBag, Package, Percent } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenButton, ZenDialog, ZenTabs } from '@/components/ui/zen';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDialog, ZenTabs } from '@/components/ui/zen';
 import { CatalogoTab } from './components';
 import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
 import { PaquetesTab } from './paquetes/components';
@@ -18,6 +18,11 @@ export default function CatalogoPage() {
     const tabFromUrl = searchParams.get('tab') || 'catalogo';
     const [activeTab, setActiveTab] = useState(tabFromUrl);
     const [isUtilidadModalOpen, setIsUtilidadModalOpen] = useState(false);
+
+    // Actualizar título de la pestaña
+    useEffect(() => {
+        document.title = 'ZEN Studio - Catálogo';
+    }, []);
 
     // Sincronizar con URL cuando cambia el parámetro
     useEffect(() => {
@@ -49,30 +54,34 @@ export default function CatalogoPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-3 bg-purple-600/20 rounded-lg">
-                        <ShoppingBag className="h-6 w-6 text-purple-400" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-white">Oferta Comercial</h1>
-                        <p className="text-sm text-zinc-400">Gestiona tu catálogo y paquetes de servicios</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <ZenButton
-                        variant="outline"
-                        onClick={() => setIsUtilidadModalOpen(true)}
-                        className="flex items-center gap-2"
-                    >
-                        <Percent className="h-4 w-4" />
-                        Margen de utilidad
-                    </ZenButton>
-                </div>
-            </div>
-
-            {/* Tabs y Contenido */}
             <ZenCard variant="default" padding="none">
+                <ZenCardHeader className="border-b border-zinc-800">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-purple-600/20 rounded-lg">
+                                <ShoppingBag className="h-5 w-5 text-purple-400" />
+                            </div>
+                            <div>
+                                <ZenCardTitle>Catálogo</ZenCardTitle>
+                                <ZenCardDescription>
+                                    Gestiona tu catálogo y paquetes de servicios
+                                </ZenCardDescription>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <ZenButton
+                                variant="outline"
+                                onClick={() => setIsUtilidadModalOpen(true)}
+                                className="flex items-center gap-2"
+                            >
+                                <Percent className="h-4 w-4" />
+                                Margen de utilidad
+                            </ZenButton>
+                        </div>
+                    </div>
+                </ZenCardHeader>
+
+                {/* Tabs y Contenido */}
                 <ZenTabs
                     tabs={tabs}
                     activeTab={activeTab}

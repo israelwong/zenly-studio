@@ -1,9 +1,15 @@
 import React, { Suspense } from 'react';
+import { Metadata } from 'next';
 import { getStudioProfileBySlug } from '@/lib/actions/public/profile.actions';
 import { getStudioAnalyticsSummary, getTopContent } from '@/lib/actions/studio/analytics/analytics-dashboard.actions';
 import { AnalyticsOverviewCards, TopContentList, AnalyticsSkeleton } from './components';
 import { LayoutDashboard, BarChart3, TrendingUp } from 'lucide-react';
-import { ZenCard } from '@/components/ui/zen';
+import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
+
+export const metadata: Metadata = {
+  title: 'ZEN Studio - Dashboard',
+  description: 'Vista general de tu estudio y contenido',
+};
 
 interface DashboardPageProps {
     params: Promise<{
@@ -95,14 +101,21 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     return (
         <div className="p-6 max-w-7xl mx-auto">
             {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-white mb-1">
-                    Dashboard
-                </h1>
-                <p className="text-sm text-zinc-400">
-                    Vista general de tu estudio y contenido
-                </p>
-            </div>
+            <ZenCard variant="default" padding="none" className="mb-6">
+                <ZenCardHeader className="border-b border-zinc-800">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-600/20 rounded-lg">
+                            <LayoutDashboard className="h-5 w-5 text-emerald-400" />
+                        </div>
+                        <div>
+                            <ZenCardTitle>Dashboard</ZenCardTitle>
+                            <ZenCardDescription>
+                                Vista general de tu estudio y contenido
+                            </ZenCardDescription>
+                        </div>
+                    </div>
+                </ZenCardHeader>
+            </ZenCard>
 
             {/* Content */}
             <Suspense fallback={<AnalyticsSkeleton />}>

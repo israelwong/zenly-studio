@@ -172,16 +172,22 @@ export async function generateMetadata({
     }
 
     const offer = offerResult.data;
-    const title = offer.leadform?.title || `Solicita información - ${offer.name}`;
-    const description =
-      offer.leadform?.description ||
-      `Completa el formulario para obtener más información sobre ${offer.name}`;
-
-    // Obtener logo del estudio para favicon dinámico
+    
+    // Obtener información completa del estudio
     const studio = await prisma.studios.findUnique({
       where: { slug },
-      select: { logo_url: true },
+      select: { studio_name: true, logo_url: true },
     });
+
+    const baseTitle = offer.leadform?.title || `Solicita información - ${offer.name}`;
+    const title = studio?.studio_name 
+      ? `${baseTitle} - ${studio.studio_name}`
+      : baseTitle;
+    const description =
+      offer.leadform?.description ||
+      (studio?.studio_name
+        ? `Completa el formulario para obtener más información sobre ${offer.name} de ${studio.studio_name}`
+        : `Completa el formulario para obtener más información sobre ${offer.name}`);
 
     // Configurar favicon dinámico usando el logo del studio
     const icons = studio?.logo_url ? {

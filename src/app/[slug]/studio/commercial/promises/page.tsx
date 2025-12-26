@@ -23,6 +23,10 @@ export default function PromisesPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  useEffect(() => {
+    document.title = 'ZEN Studio - Promesas';
+  }, []);
+
   // Cargar conteo de promesas de prueba
   useEffect(() => {
     const loadTestCount = async () => {
