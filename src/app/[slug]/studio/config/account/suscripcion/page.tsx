@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { CreditCard } from 'lucide-react';
 import { SubscriptionDataLoader } from './components';
@@ -8,6 +8,10 @@ import { SubscriptionDataLoader } from './components';
 export default function SuscripcionPage() {
   const params = useParams();
   const studioSlug = params.slug as string;
+
+  useEffect(() => {
+    document.title = 'ZEN Studio - Suscripción';
+  }, []);
 
   return (
     <div className="space-y-6">

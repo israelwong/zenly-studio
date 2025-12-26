@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
@@ -14,6 +14,10 @@ export default function NuevaCotizacionPage() {
   const promiseId = params.promiseId as string;
   const packageId = searchParams.get('paqueteId') || null;
   const contactId = searchParams.get('contactId') || null;
+
+  useEffect(() => {
+    document.title = 'ZEN Studio - Nueva Cotización';
+  }, []);
 
   return (
     <div className="w-full max-w-7xl mx-auto">

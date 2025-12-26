@@ -1,6 +1,11 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect } from 'react';
 
 export default function PlanPage() {
+  useEffect(() => {
+    document.title = 'ZEN Studio - Plan';
+  }, []);
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-white mb-4">plan</h1>

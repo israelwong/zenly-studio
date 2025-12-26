@@ -135,27 +135,10 @@ export function AgendaItemHoverCard({
             </div>
           )}
 
-          {/* Estado de sincronización con Google Calendar (solo eventos principales) */}
-          {item.contexto === 'evento' && item.is_main_event_date && (
-            <div className="flex items-center gap-2 text-xs">
-              {item.google_event_id ? (
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>Sincronizado con Google Calendar</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-zinc-500">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span>No sincronizado</span>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Botones de acción */}
           <div className="flex flex-col gap-2 mt-2">
             {(item.contexto === 'promise' && item.promise_id) ||
-            (item.contexto === 'evento' && item.evento_id) ? (
+              (item.contexto === 'evento' && item.evento_id) ? (
               <ZenButton
                 variant="ghost"
                 size="sm"
@@ -169,8 +152,8 @@ export function AgendaItemHoverCard({
 
             {/* Botón para abrir en Google Calendar (solo si está sincronizado) */}
             {item.contexto === 'evento' &&
-            item.is_main_event_date &&
-            item.google_event_id ? (
+              item.is_main_event_date &&
+              item.google_event_id ? (
               <ZenButton
                 variant="outline"
                 size="sm"

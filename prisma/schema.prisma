@@ -805,6 +805,7 @@ model studios {
   // Google OAuth Integration (genérico, puede tener múltiples scopes)
   google_oauth_refresh_token     String? // Encrypted, genérico para todas las APIs
   google_oauth_email             String?
+  google_oauth_name               String? // Nombre de la cuenta de Google conectada
   google_oauth_scopes            String? // JSON array: ["drive.readonly", "gmail.send"]
   is_google_connected            Boolean @default(false)
   google_integrations_config     Json? // { drive: { enabled: true }, gmail: { enabled: false } }

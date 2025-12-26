@@ -23,6 +23,10 @@ export default function NuevaPromesaPage() {
   } | null>(null);
 
   useEffect(() => {
+    document.title = 'ZEN Studio - Nueva Promesa';
+  }, []);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       if (formRef.current?.contactData) {
         setContactData(formRef.current.contactData as {

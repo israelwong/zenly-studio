@@ -99,6 +99,10 @@ export default function SchedulerPage() {
   const params = useParams();
   const router = useRouter();
   const studioSlug = params.slug as string;
+
+  useEffect(() => {
+    document.title = 'ZEN Studio - Scheduler';
+  }, []);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [eventos, setEventos] = useState<EventoConScheduler[]>([]);
   const [loading, setLoading] = useState(true);

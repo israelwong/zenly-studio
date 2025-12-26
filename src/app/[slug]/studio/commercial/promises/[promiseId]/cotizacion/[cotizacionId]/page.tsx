@@ -19,6 +19,10 @@ export default function EditarCotizacionPage() {
   const promiseId = params.promiseId as string;
   const cotizacionId = params.cotizacionId as string;
   const contactId = searchParams.get('contactId');
+
+  useEffect(() => {
+    document.title = 'ZEN Studio - Cotización';
+  }, []);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isFormLoading, setIsFormLoading] = useState(true);

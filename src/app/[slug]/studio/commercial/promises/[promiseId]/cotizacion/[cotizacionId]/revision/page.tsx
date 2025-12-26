@@ -26,6 +26,10 @@ export default function EditarRevisionPage() {
   const cotizacionId = params.cotizacionId as string;
   const originalId = searchParams.get('originalId');
 
+  useEffect(() => {
+    document.title = 'ZEN Studio - Revisión';
+  }, []);
+
   const isNewRevision = cotizacionId === 'new' && originalId !== null;
 
   const [cotizacion, setCotizacion] = useState<{

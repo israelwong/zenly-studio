@@ -225,3 +225,39 @@ export async function sincronizarTodosEventosPrincipales(
   }
 }
 
+/**
+ * Cuenta cuántos eventos principales están pendientes de sincronizar
+ * @param studioSlug - Slug del estudio
+ * @returns Número de eventos pendientes
+ */
+export async function contarEventosPendientesSincronizar(
+  studioSlug: string
+): Promise<{ success: boolean; pendientes?: number; error?: string }> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    // Contar eventos activos que no tienen google_event_id
+    const pendientes = await prisma.studio_events.count({
+      where: {
+        studio_id: studio.id,
+        status: 'ACTIVE',
+        google_event_id: null,
+      },
+    });
+
+    return { success: true, pendientes };
+  } catch (error) {
+    console.error('[Google Calendar] Error contando eventos pendientes:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al contar eventos pendientes',
+    };
+  }
+}

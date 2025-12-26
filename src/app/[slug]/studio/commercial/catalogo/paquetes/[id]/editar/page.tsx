@@ -1,7 +1,13 @@
+import { Metadata } from 'next';
 import { PaqueteEditor } from '../../components/PaqueteEditor';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/paquetes/paquetes.actions';
 import { notFound } from 'next/navigation';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
+
+export const metadata: Metadata = {
+  title: 'ZEN Studio - Editar Paquete',
+  description: 'Edita un paquete de servicios',
+};
 
 interface EditarPaquetePageProps {
     params: Promise<{

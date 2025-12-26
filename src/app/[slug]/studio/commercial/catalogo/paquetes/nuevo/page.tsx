@@ -1,4 +1,10 @@
+import { Metadata } from 'next';
 import { PaqueteEditor } from '../components/PaqueteEditor';
+
+export const metadata: Metadata = {
+  title: 'ZEN Studio - Nuevo Paquete',
+  description: 'Crea un nuevo paquete de servicios',
+};
 
 interface NuevoPaquetePageProps {
     params: Promise<{

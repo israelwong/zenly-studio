@@ -44,6 +44,24 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
   const [currentMode, setCurrentMode] = useState<"create" | "edit">(mode);
   const [currentOffer, setCurrentOffer] = useState<StudioOffer | undefined>(offer);
 
+  // Asegurar que el título se mantenga como "ZEN Studio"
+  useEffect(() => {
+    const updateTitle = () => {
+      if (offer && offer.name) {
+        document.title = `ZEN Studio - ${offer.name}`;
+      } else if (mode === 'edit') {
+        document.title = 'ZEN Studio - Oferta';
+      } else {
+        document.title = 'ZEN Studio - Nueva Oferta';
+      }
+    };
+
+    // Ejecutar después de que otros efectos se ejecuten
+    const timeoutId = setTimeout(updateTitle, 0);
+    
+    return () => clearTimeout(timeoutId);
+  }, [offer, mode]);
+
   // Estado para detectar cambios sin guardar
   const [isDirty, setIsDirty] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);

@@ -1,8 +1,12 @@
 'use client';
 
+import { useEffect } from 'react';
 import { GuiaDeUso } from './GuiaDeUso';
 
 export default function AyudaPage() {
+  useEffect(() => {
+    document.title = 'ZEN Studio - Ayuda';
+  }, []);
     return (
         <div className="space-y-8">
             <div className="flex items-center gap-3">

@@ -9,7 +9,9 @@ function isReservedPath(path: string): boolean {
     "/forgot-password", "/update-password", "/error", "/redirect", "/sign-up-success",
     "/complete-profile", "/confirm", "/unauthorized", "/protected", "/about",
     "/pricing", "/contact", "/features", "/blog", "/help", "/docs", "/demo",
-    "/terms", "/privacy", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml"
+    "/terms", "/privacy", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml",
+    "/auth/callback", // Callback de Supabase Auth OAuth
+    "/onboarding", // Rutas de onboarding
   ];
 
   return reservedPaths.some((reserved) => {

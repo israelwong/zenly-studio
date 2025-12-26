@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react';
+import { Metadata } from 'next';
 import { Shield } from 'lucide-react';
 import {
   PasswordChangeForm,
@@ -6,6 +7,11 @@ import {
   SessionsHistory,
   SecuritySkeleton
 } from './components';
+
+export const metadata: Metadata = {
+  title: 'ZEN Studio - Seguridad',
+  description: 'Gestiona la seguridad de tu cuenta y configura las opciones de protección',
+};
 
 interface SeguridadPageProps {
   params: {

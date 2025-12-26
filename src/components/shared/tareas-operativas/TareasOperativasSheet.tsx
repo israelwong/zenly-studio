@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckSquare2, ExternalLink, Filter, Calendar as CalendarIcon, RefreshCw } from 'lucide-react';
 import {
@@ -18,7 +18,8 @@ import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { ZenButton, ZenBadge } from '@/components/ui/zen';
 import { obtenerOCrearCalendarioSecundario } from '@/lib/integrations/google-calendar/calendar-manager';
 import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google-calendar/helpers';
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { obtenerEstadoConexion } from '@/lib/actions/studio/integrations/google-drive.actions';
+import { AlertTriangle, Trash2, Settings } from 'lucide-react';
 
 interface TareasOperativasSheetProps {
   open: boolean;
@@ -37,6 +38,8 @@ export function TareasOperativasSheet({
   const [filterEventId, setFilterEventId] = useState<string | undefined>(undefined);
   const [googleCalendarUrl, setGoogleCalendarUrl] = useState<string | null>(null);
   const [hasCalendarEnabled, setHasCalendarEnabled] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [googleName, setGoogleName] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [estadisticas, setEstadisticas] = useState<{
     totalConGoogle: number;
@@ -45,7 +48,6 @@ export function TareasOperativasSheet({
     sinItem: number;
   } | null>(null);
   const [limpiando, setLimpiando] = useState(false);
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadTareas = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -81,6 +83,13 @@ export function TareasOperativasSheet({
     try {
       const enabled = await tieneGoogleCalendarHabilitado(studioSlug);
       setHasCalendarEnabled(enabled);
+
+      // Obtener información de la cuenta conectada
+      const connectionStatus = await obtenerEstadoConexion(studioSlug);
+      if (connectionStatus.success && connectionStatus.email) {
+        setGoogleEmail(connectionStatus.email);
+        setGoogleName(connectionStatus.name || null);
+      }
 
       if (enabled) {
         try {
@@ -133,32 +142,14 @@ export function TareasOperativasSheet({
   // Efecto principal: cargar datos cuando se abre el sheet
   useEffect(() => {
     if (!open) {
-      // Limpiar intervalo cuando se cierra el sheet
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = null;
-      }
       return;
     }
 
-    // Cargar datos iniciales
+    // Cargar datos iniciales solo cuando se abre el sheet
     setLoading(true);
     loadTareas();
     loadGoogleCalendarInfo();
     loadEstadisticas();
-
-    // Configurar actualización automática cada 10 segundos
-    refreshIntervalRef.current = setInterval(() => {
-      loadTareas(false);
-      loadEstadisticas();
-    }, 10000);
-
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = null;
-      }
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -235,48 +226,62 @@ export function TareasOperativasSheet({
         className="w-full sm:max-w-2xl bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
       >
         <div className="p-0">
-          <SheetHeader className="border-b border-zinc-800 pb-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-600/20 rounded-lg">
-                  <CheckSquare2 className="h-5 w-5 text-purple-400" />
+          <SheetHeader className="border-b border-zinc-800 pb-4 px-5 pt-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="p-2 bg-purple-600/20 rounded-lg shrink-0">
+                  <CheckSquare2 className="h-4 w-4 text-purple-400" />
                 </div>
-                <div>
-                  <SheetTitle className="text-xl font-semibold text-white">
-                    Tareas Operativas
-                  </SheetTitle>
-                  <SheetDescription className="text-zinc-400">
-                    Tareas sincronizadas con Google Calendar
-                  </SheetDescription>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <SheetTitle className="text-lg font-semibold text-white">
+                      Tareas Operativas
+                    </SheetTitle>
+                    {googleEmail && (
+                      <ZenBadge variant="success" size="sm" className="shrink-0">
+                        Activo
+                      </ZenBadge>
+                    )}
+                  </div>
+                  {googleEmail ? (
+                    <SheetDescription className="text-xs text-zinc-400">
+                      Sincronizando con{' '}
+                      <span className="text-zinc-300 font-medium break-all">{googleEmail}</span>
+                    </SheetDescription>
+                  ) : (
+                    <SheetDescription className="text-xs text-zinc-400">
+                      Tareas sincronizadas con Google Calendar
+                    </SheetDescription>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <ZenButton
                   variant="ghost"
                   size="sm"
                   onClick={() => loadTareas(false)}
                   disabled={isRefreshing}
-                  className="gap-2 text-zinc-400 hover:text-zinc-300"
+                  className="h-8 w-8 p-0 border-0"
                   title="Actualizar"
                 >
-                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-4 w-4 text-zinc-400 ${isRefreshing ? 'animate-spin' : ''}`} />
                 </ZenButton>
                 {googleCalendarUrl && (
                   <ZenButton
                     variant="ghost"
                     size="sm"
                     onClick={() => window.open(googleCalendarUrl, '_blank')}
-                    className="gap-2 text-purple-400 hover:text-purple-300"
+                    className="h-8 px-3 text-xs text-purple-400 hover:text-purple-300 border-0"
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    <span className="text-xs">Abrir en Google</span>
+                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                    Abrir en Google
                   </ZenButton>
                 )}
               </div>
             </div>
           </SheetHeader>
 
-          <div className="p-5 mt-0 space-y-4">
+          <div className="p-5 space-y-4">
             {/* Filtros */}
             {eventosUnicos.length > 0 && (
               <div className="flex items-center gap-2">
@@ -319,7 +324,7 @@ export function TareasOperativasSheet({
             {estadisticas && (estadisticas.sinPersonal > 0 || estadisticas.sinItem > 0) && (
               <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-3">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                  <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm text-amber-400 font-medium mb-1">
                       Tareas huérfanas detectadas
@@ -358,9 +363,9 @@ export function TareasOperativasSheet({
             ) : tareas.length === 0 ? (
               <div className="text-center py-12">
                 <CheckSquare2 className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
-                <p className="text-zinc-400 mb-2">No hay tareas sincronizadas</p>
+                <p className="text-zinc-400 mb-2">No hay tareas asignadas al personal</p>
                 <p className="text-sm text-zinc-500">
-                  Las tareas aparecerán aquí cuando se sincronicen con Google Calendar
+                  Las tareas aparecerán aquí cuando sean asignadas. Se sincronizarán automáticamente con Google Calendar
                 </p>
               </div>
             ) : (
@@ -425,7 +430,7 @@ export function TareasOperativasSheet({
                         <ZenButton
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 flex-shrink-0"
+                          className="h-8 w-8 shrink-0"
                           onClick={(e) => {
                             e.stopPropagation();
                             if (tarea.google_calendar_id && tarea.google_event_id) {

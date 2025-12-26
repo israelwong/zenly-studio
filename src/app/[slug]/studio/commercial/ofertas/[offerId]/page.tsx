@@ -15,6 +15,25 @@ export default function OfertaPage() {
   const [offer, setOffer] = useState<StudioOffer | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Actualizar título cuando cambie la oferta - usar setTimeout para asegurar que se ejecute después de otros efectos
+  useEffect(() => {
+    const updateTitle = () => {
+      if (offer) {
+        document.title = `ZEN Studio - ${offer.name || 'Oferta'}`;
+      } else {
+        document.title = 'ZEN Studio - Oferta';
+      }
+    };
+
+    // Ejecutar inmediatamente
+    updateTitle();
+
+    // También ejecutar después de un pequeño delay para asegurar que se establezca después de otros efectos
+    const timeoutId = setTimeout(updateTitle, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [offer]);
+
   useEffect(() => {
     const loadOffer = async () => {
       try {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Inbox, Zap, Menu, ChevronDown, Calendar, ContactRound, CheckSquare2 } from 'lucide-react';
+import { Inbox, Zap, Menu, ChevronDown, Calendar, ContactRound, CalendarCheck } from 'lucide-react';
 import Link from 'next/link';
 import { BreadcrumbHeader } from './BreadcrumbHeader';
 import { UserAvatar } from '@/components/auth/user-avatar';
@@ -10,6 +10,7 @@ import { NotificationsDropdown } from '@/components/shared/notifications/Notific
 import { ZenButton, useZenSidebar } from '@/components/ui/zen';
 import { useStudioData } from '@/hooks/useStudioData';
 import { SubscriptionPopover } from './SubscriptionPopover';
+import { obtenerEstadoConexion } from '@/lib/actions/studio/integrations/google-drive.actions';
 
 interface AppHeaderProps {
     studioSlug: string;
@@ -21,6 +22,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContactsClick, onTareasOperativasClick }: AppHeaderProps) {
     const [isMounted, setIsMounted] = useState(false);
+    const [hasGoogleCalendar, setHasGoogleCalendar] = useState(false);
     const { toggleSidebar } = useZenSidebar();
     const { identidadData } = useStudioData({ studioSlug });
 
@@ -28,6 +30,48 @@ export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContacts
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    // Verificar estado de Google Calendar y reaccionar a cambios en tiempo real
+    useEffect(() => {
+        if (!isMounted || !onTareasOperativasClick) return;
+
+        const checkConnection = () => {
+            obtenerEstadoConexion(studioSlug)
+                .then((result) => {
+                    if (result.success && result.isConnected) {
+                        // Verificar que tenga scopes de Calendar
+                        const hasCalendarScope =
+                            result.scopes?.some(
+                                (scope) =>
+                                    scope.includes('calendar') || scope.includes('calendar.events')
+                            ) || false;
+                        setHasGoogleCalendar(hasCalendarScope);
+                    } else {
+                        setHasGoogleCalendar(false);
+                    }
+                })
+                .catch(() => {
+                    setHasGoogleCalendar(false);
+                });
+        };
+
+        // Verificar inmediatamente
+        checkConnection();
+
+        // Verificar cada 5 segundos para reaccionar a cambios en tiempo real
+        const interval = setInterval(checkConnection, 5000);
+
+        // Escuchar eventos personalizados de cambio de conexión
+        const handleConnectionChange = () => {
+            checkConnection();
+        };
+        window.addEventListener('google-calendar-connection-changed', handleConnectionChange);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('google-calendar-connection-changed', handleConnectionChange);
+        };
+    }, [isMounted, studioSlug, onTareasOperativasClick]);
 
     return (
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-900/95 px-4 backdrop-blur-sm">
@@ -131,6 +175,21 @@ export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContacts
                     </ZenButton>
                 )}
 
+                {/* Tareas Operativas - Solo mostrar si Google Calendar está conectado */}
+                {onTareasOperativasClick && hasGoogleCalendar && (
+                    <ZenButton
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-900/20 transition-colors"
+                        onClick={onTareasOperativasClick}
+                        title="Tareas Operativas"
+                    >
+                        <CalendarCheck className="h-5 w-5" />
+                        <span className="sr-only">Tareas Operativas</span>
+                    </ZenButton>
+                )}
+
+
                 {/* Contactos */}
                 {onContactsClick && (
                     <ZenButton
@@ -145,19 +204,6 @@ export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContacts
                     </ZenButton>
                 )}
 
-                {/* Tareas Operativas */}
-                {onTareasOperativasClick && (
-                    <ZenButton
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-900/20 transition-colors"
-                        onClick={onTareasOperativasClick}
-                        title="Tareas Operativas"
-                    >
-                        <CheckSquare2 className="h-5 w-5" />
-                        <span className="sr-only">Tareas Operativas</span>
-                    </ZenButton>
-                )}
 
                 {/* Notificaciones */}
                 <NotificationsDropdown studioSlug={studioSlug} />

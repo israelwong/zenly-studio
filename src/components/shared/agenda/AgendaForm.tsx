@@ -3,18 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarIcon, Clock, FileText, Link as LinkIcon, AlertCircle, Video, MapPin } from 'lucide-react';
 import { ZenInput, ZenButton, ZenCard, ZenCardContent } from '@/components/ui/zen';
-import { ZenCalendar, type ZenCalendarProps } from '@/components/ui/zen';
+import { ZenCalendar } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { es } from 'date-fns/locale';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
-
-// Tipo específico para ZenCalendar con mode="single"
-type ZenCalendarSingleProps = Omit<ZenCalendarProps, 'mode' | 'selected' | 'onSelect'> & {
-    mode: 'single';
-    selected?: Date;
-    onSelect?: (date: Date | undefined) => void;
-};
 
 interface AgendaFormProps {
     studioSlug: string;
@@ -34,6 +27,7 @@ interface AgendaFormProps {
     }) => Promise<void>;
     onCancel?: () => void;
     onCancelCita?: () => Promise<void>;
+    onDelete?: () => void;
     loading?: boolean;
 }
 
@@ -218,18 +212,16 @@ export function AgendaForm({
                             style={{ zIndex: 100000 } as React.CSSProperties}
                         >
                             <ZenCalendar
-                                {...({
-                                    mode: 'single' as const,
-                                    selected: date,
-                                    onSelect: (selectedDate: Date | undefined) => {
-                                        if (selectedDate) {
-                                            setDate(selectedDate);
-                                            setCalendarOpen(false);
-                                            setHasUserModified(true);
-                                        }
-                                    },
-                                    locale: es,
-                                } as ZenCalendarSingleProps)}
+                                mode="single"
+                                selected={date}
+                                onSelect={(selectedDate: Date | undefined) => {
+                                    if (selectedDate) {
+                                        setDate(selectedDate);
+                                        setCalendarOpen(false);
+                                        setHasUserModified(true);
+                                    }
+                                }}
+                                locale={es}
                             />
                         </PopoverContent>
                     </Popover>
@@ -268,7 +260,7 @@ export function AgendaForm({
                     <ZenCard variant="outlined" className="bg-orange-900/20 border-orange-700/50 mt-2">
                         <ZenCardContent className="p-3">
                             <div className="flex items-start gap-2">
-                                <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                                <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
                                 <div className="flex-1">
                                     <p className="text-xs font-medium text-orange-300">
                                         Has seleccionado una fecha que ya ha pasado: {formatDate(date)}
@@ -282,7 +274,7 @@ export function AgendaForm({
                 <ZenCard variant="outlined" className="bg-amber-900/20 border-amber-700/50 mt-2">
                     <ZenCardContent className="p-3">
                         <div className="flex items-start gap-2">
-                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                             <div className="space-y-1.5 flex-1">
                                 <p className="text-xs font-medium text-amber-300">
                                     Esta fecha ya está programada:

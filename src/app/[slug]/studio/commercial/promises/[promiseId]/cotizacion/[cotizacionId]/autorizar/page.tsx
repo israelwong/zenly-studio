@@ -19,6 +19,10 @@ export default function AutorizarCotizacionPage() {
   const promiseId = params.promiseId as string;
   const cotizacionId = params.cotizacionId as string;
 
+  useEffect(() => {
+    document.title = 'ZEN Studio - Autorizar Cotización';
+  }, []);
+
   const [loading, setLoading] = useState(true);
   const [cotizacion, setCotizacion] = useState<{
     id: string;

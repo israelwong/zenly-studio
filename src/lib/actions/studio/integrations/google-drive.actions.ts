@@ -11,6 +11,7 @@ export interface GoogleConnectionStatus {
   success: boolean;
   isConnected: boolean;
   email?: string;
+  name?: string; // Nombre de la cuenta de Google conectada
   scopes?: string[];
   error?: string;
 }
@@ -66,11 +67,10 @@ export async function iniciarConexionGoogle(
 
     const { clientId, redirectUri } = credentialsResult.data;
 
-    // Scopes necesarios para Drive y Calendar
+    // Autorización incremental: Solo pedir scopes de Drive
+    // El usuario verá claramente que solo está dando permiso de lectura para sus archivos
     const scopes = [
       'https://www.googleapis.com/auth/drive.readonly',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events',
     ];
 
     // State contiene el studioSlug y returnUrl para recuperarlos en el callback
@@ -182,8 +182,32 @@ export async function procesarCallbackGoogle(
     // Encriptar refresh_token antes de guardar
     const encryptedRefreshToken = await encryptToken(tokens.refresh_token);
 
-    // Parsear scopes
+    // Parsear scopes que realmente se otorgaron
     const scopes = tokens.scope ? tokens.scope.split(' ') : [];
+
+    // Obtener scopes existentes para combinarlos (autorización incremental)
+    const studioActual = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { google_oauth_scopes: true },
+    });
+
+    let scopesFinales = scopes;
+    if (studioActual?.google_oauth_scopes) {
+      try {
+        const scopesExistentes = JSON.parse(studioActual.google_oauth_scopes) as string[];
+        // Combinar scopes existentes con los nuevos (sin duplicados)
+        scopesFinales = Array.from(new Set([...scopesExistentes, ...scopes]));
+      } catch {
+        // Si no se puede parsear, usar solo los nuevos
+        scopesFinales = scopes;
+      }
+    }
+
+    // Determinar qué integraciones están habilitadas según los scopes
+    const hasDriveScope = scopesFinales.includes('https://www.googleapis.com/auth/drive.readonly');
+    const hasCalendarScope =
+      scopesFinales.includes('https://www.googleapis.com/auth/calendar') ||
+      scopesFinales.includes('https://www.googleapis.com/auth/calendar.events');
 
     // Guardar tokens en DB
     await prisma.studios.update({
@@ -191,11 +215,11 @@ export async function procesarCallbackGoogle(
       data: {
         google_oauth_refresh_token: encryptedRefreshToken,
         google_oauth_email: email,
-        google_oauth_scopes: JSON.stringify(scopes),
+        google_oauth_scopes: JSON.stringify(scopesFinales),
         is_google_connected: true,
         google_integrations_config: {
-          drive: { enabled: true },
-          calendar: { enabled: scopes.includes('https://www.googleapis.com/auth/calendar.events') },
+          drive: { enabled: hasDriveScope },
+          calendar: { enabled: hasCalendarScope },
         },
       },
     });
@@ -260,6 +284,7 @@ export async function obtenerEstadoConexion(studioSlug: string): Promise<GoogleC
       select: {
         is_google_connected: true,
         google_oauth_email: true,
+        google_oauth_name: true,
         google_oauth_scopes: true,
       },
     });
@@ -278,12 +303,15 @@ export async function obtenerEstadoConexion(studioSlug: string): Promise<GoogleC
       }
     }
 
-    return {
+    const result = {
       success: true,
       isConnected: studio.is_google_connected || false,
       email: studio.google_oauth_email || undefined,
+      name: studio.google_oauth_name || undefined,
       scopes: scopes.length > 0 ? scopes : undefined,
     };
+
+    return result;
   } catch (error) {
     // Si el error es de Prisma por campos no encontrados, retornar estado por defecto
     if (error instanceof Error && error.message.includes('Unknown field')) {

@@ -22,6 +22,10 @@ export default function EventSchedulerPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [crewManagerOpen, setCrewManagerOpen] = useState(false);
 
+  useEffect(() => {
+    document.title = 'ZEN Studio - Scheduler';
+  }, []);
+
   const loadEvent = useCallback(async () => {
     try {
       setLoading(true);

@@ -20,6 +20,10 @@ export default function TrackingPage({ params }: TrackingPageProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
+    document.title = 'ZEN Studio - Tracking';
+  }, []);
+
+  useEffect(() => {
     params.then((resolvedParams) => {
       setSlug(resolvedParams.slug);
     });

@@ -27,6 +27,10 @@ export default function EventDetailPage() {
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
 
   useEffect(() => {
+    document.title = 'ZEN Studio - Evento';
+  }, []);
+
+  useEffect(() => {
     const loadEvent = async () => {
       try {
         setLoading(true);

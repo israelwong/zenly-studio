@@ -18,6 +18,10 @@ export default function EditarPromesaPage() {
   const router = useRouter();
   const studioSlug = params.slug as string;
   const promiseId = params.promiseId as string;
+
+  useEffect(() => {
+    document.title = 'ZEN Studio - Promesa';
+  }, []);
   const [loading, setLoading] = useState(true);
   const [isArchived, setIsArchived] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);

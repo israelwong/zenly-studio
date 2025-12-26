@@ -11,12 +11,13 @@ import {
   SheetDescription,
 } from '@/components/ui/shadcn/sheet';
 import { AgendaCalendar } from './AgendaCalendar';
+import { GoogleCalendarIntegration } from './GoogleCalendarIntegration';
 import { obtenerAgendaUnificada } from '@/lib/actions/shared/agenda-unified.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { ZenButton } from '@/components/ui/zen';
-import { tieneGoogleCalendarHabilitado, sincronizarTodosEventosPrincipales } from '@/lib/integrations/google-calendar/helpers';
+import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google-calendar/helpers';
 
 interface AgendaUnifiedSheetProps {
   open: boolean;
@@ -35,7 +36,6 @@ export function AgendaUnifiedSheet({
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'agenda'>('month');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [hasCalendarEnabled, setHasCalendarEnabled] = useState(false);
-  const [sincronizando, setSincronizando] = useState(false);
 
   const loadAgendamientos = useCallback(async () => {
     setLoading(true);
@@ -67,36 +67,6 @@ export function AgendaUnifiedSheet({
     }
   }, [studioSlug]);
 
-  const handleSincronizarTodos = useCallback(async () => {
-    setSincronizando(true);
-    try {
-      const result = await sincronizarTodosEventosPrincipales(studioSlug);
-      
-      if (result.success) {
-        if (result.sincronizados && result.sincronizados > 0) {
-          toast.success(
-            `✅ ${result.sincronizados} evento(s) sincronizado(s) con Google Calendar`
-          );
-        } else {
-          toast.info('Todos los eventos ya están sincronizados');
-        }
-        
-        if (result.errores && result.errores > 0) {
-          toast.warning(`${result.errores} evento(s) tuvieron errores al sincronizar`);
-        }
-        
-        // Recargar agenda para mostrar los cambios
-        await loadAgendamientos();
-      } else {
-        toast.error(result.error || 'Error al sincronizar eventos');
-      }
-    } catch (error) {
-      console.error('Error sincronizando eventos:', error);
-      toast.error('Error al sincronizar eventos');
-    } finally {
-      setSincronizando(false);
-    }
-  }, [studioSlug, loadAgendamientos]);
 
   useEffect(() => {
     if (open) {
@@ -184,39 +154,8 @@ export function AgendaUnifiedSheet({
                     </SheetDescription>
                   </div>
                 </div>
-                
-                {/* Botón de sincronización con Google Calendar */}
-                {hasCalendarEnabled && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                      {hasCalendarEnabled ? (
-                        <>
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                          </span>
-                          <span className="text-emerald-400">Google Calendar</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                          <span className="text-red-400">Desconectado</span>
-                        </>
-                      )}
-                    </div>
-                    <ZenButton
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSincronizarTodos}
-                      disabled={sincronizando}
-                      loading={sincronizando}
-                      className="gap-2 text-xs"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${sincronizando ? 'animate-spin' : ''}`} />
-                      Sincronizar
-                    </ZenButton>
-                  </div>
-                )}
+
+
               </div>
             </SheetHeader>
 
@@ -267,7 +206,13 @@ export function AgendaUnifiedSheet({
                   </div>
                 </div>
               ) : (
-                <div className="">
+                <div className="space-y-4">
+                  {/* Integración de Google Calendar */}
+                  <GoogleCalendarIntegration
+                    studioSlug={studioSlug}
+                    onSync={loadAgendamientos}
+                  />
+
                   <AgendaCalendar
                     events={agendamientos}
                     onSelectEvent={handleSelectEvent}

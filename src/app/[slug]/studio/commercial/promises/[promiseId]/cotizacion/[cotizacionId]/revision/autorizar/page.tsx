@@ -19,6 +19,10 @@ export default function AutorizarRevisionPage() {
   const promiseId = params.promiseId as string;
   const cotizacionId = params.cotizacionId as string;
 
+  useEffect(() => {
+    document.title = 'ZEN Studio - Autorizar Revisión';
+  }, []);
+
   const [loading, setLoading] = useState(true);
   const [cotizacion, setCotizacion] = useState<{
     id: string;

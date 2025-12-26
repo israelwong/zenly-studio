@@ -1,7 +1,13 @@
+'use client';
+
+import { useEffect } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
 import { MessageSquare } from 'lucide-react';
 
 export default function ConversationsPage() {
+  useEffect(() => {
+    document.title = 'ZEN Studio - Conversaciones';
+  }, []);
     return (
         <div className="w-full max-w-7xl mx-auto p-6">
             <ZenCard variant="default">
