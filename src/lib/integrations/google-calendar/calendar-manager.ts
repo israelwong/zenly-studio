@@ -66,6 +66,27 @@ export async function obtenerOCrearCalendarioSecundario(
   try {
     const { calendar } = await getGoogleCalendarClient(studioSlug);
 
+    // Verificar que tenga el scope completo de calendar (necesario para crear calendarios)
+    const studioWithScopes = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { google_oauth_scopes: true },
+    });
+
+    if (studioWithScopes?.google_oauth_scopes) {
+      try {
+        const scopes = JSON.parse(studioWithScopes.google_oauth_scopes) as string[];
+        const hasFullCalendarScope = scopes.includes('https://www.googleapis.com/auth/calendar');
+        
+        if (!hasFullCalendarScope) {
+          throw new Error(
+            'Se requiere el permiso completo de Google Calendar para crear calendarios. Por favor, reconecta tu cuenta de Google con permisos completos de Calendar.'
+          );
+        }
+      } catch (parseError) {
+        // Si no se puede parsear, continuar e intentar crear (fallará con error más claro)
+      }
+    }
+
     // Obtener timezone del estudio
     const timezone = await obtenerTimezoneEstudio(studioSlug);
 
@@ -97,6 +118,14 @@ export async function obtenerOCrearCalendarioSecundario(
     return newCalendarId;
   } catch (error: any) {
     console.error('[Google Calendar] Error creando calendario secundario:', error);
+    
+    // Mejorar mensaje de error para permisos insuficientes
+    if (error?.code === 403 || error?.response?.status === 403 || error?.message?.includes('Insufficient Permission')) {
+      throw new Error(
+        'Permisos insuficientes para crear calendarios. Se requiere el permiso completo de Google Calendar (no solo calendar.events). Por favor, reconecta tu cuenta de Google con permisos completos de Calendar.'
+      );
+    }
+    
     throw new Error(
       `Error al crear calendario secundario: ${error?.message || 'Error desconocido'}`
     );

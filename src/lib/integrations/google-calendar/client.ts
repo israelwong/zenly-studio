@@ -38,17 +38,22 @@ export async function getGoogleCalendarClient(studioSlug: string) {
     throw new Error('Studio no tiene Google conectado');
   }
 
-  // Verificar que tenga scope de Calendar
+  // Verificar que tenga scope de Calendar completo (necesario para crear calendarios)
   if (studio.google_oauth_scopes) {
     try {
       const scopes = JSON.parse(studio.google_oauth_scopes) as string[];
-      const hasCalendarScope =
-        scopes.includes('https://www.googleapis.com/auth/calendar') ||
-        scopes.includes('https://www.googleapis.com/auth/calendar.events');
-      if (!hasCalendarScope) {
+      const hasFullCalendarScope = scopes.includes('https://www.googleapis.com/auth/calendar');
+      const hasEventsOnlyScope = scopes.includes('https://www.googleapis.com/auth/calendar.events');
+      
+      if (!hasFullCalendarScope && !hasEventsOnlyScope) {
         throw new Error(
           'Studio no tiene permisos de Calendar. Por favor, reconecta tu cuenta de Google.'
         );
+      }
+      
+      // Guardar información sobre el scope para usar en operaciones que requieren permisos completos
+      if (!hasFullCalendarScope && hasEventsOnlyScope) {
+        console.warn('[getGoogleCalendarClient] Solo tiene scope calendar.events, algunas operaciones pueden fallar');
       }
     } catch (error) {
       // Si no se puede parsear, asumir que necesita reconectar
