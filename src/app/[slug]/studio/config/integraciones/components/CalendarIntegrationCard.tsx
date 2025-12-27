@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar } from 'lucide-react';
 import { IntegrationCard } from './IntegrationCard';
 import { ZenButton } from '@/components/ui/zen';
 import { GoogleCalendarDisconnectModal } from '@/components/shared/integrations/GoogleCalendarDisconnectModal';
@@ -61,7 +60,6 @@ export function CalendarIntegrationCard({
       <IntegrationCard
         name="Calendar"
         description="Sincroniza tu agenda con Google Calendar automáticamente"
-        icon={Calendar}
         iconColor="text-purple-400"
         isConnected={isConnected}
         isComingSoon={false}

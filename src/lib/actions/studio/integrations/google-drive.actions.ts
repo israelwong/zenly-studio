@@ -844,9 +844,16 @@ export async function obtenerDetallesCarpeta(
 
     return { success: true, data: folder };
   } catch (error) {
-    console.error('[obtenerDetallesCarpeta] Error:', error);
-    const isNotFound = error instanceof Error && error.message === 'CARPETA_NO_ENCONTRADA';
-    const noPermissions = error instanceof Error && error.message === 'CARPETA_SIN_PERMISOS';
+    const errorMessage = error instanceof Error ? error.message : 'Error al obtener detalles de la carpeta';
+    const isNotFound = errorMessage === 'CARPETA_NO_ENCONTRADA';
+    const noPermissions = errorMessage === 'CARPETA_SIN_PERMISOS';
+    const noDriveConnected = errorMessage.includes('Studio no tiene Google Drive conectado') || 
+                             errorMessage.includes('no tiene permisos de Drive');
+    
+    // No loguear errores esperados (Google Drive no conectado)
+    if (!noDriveConnected) {
+      console.error('[obtenerDetallesCarpeta] Error:', error);
+    }
     
     if (isNotFound) {
       return {
@@ -864,9 +871,17 @@ export async function obtenerDetallesCarpeta(
       };
     }
     
+    if (noDriveConnected) {
+      return {
+        success: false,
+        error: 'Google Drive no está conectado',
+        folderNotFound: false,
+      };
+    }
+    
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener detalles de la carpeta',
+      error: errorMessage,
       folderNotFound: false,
     };
   }

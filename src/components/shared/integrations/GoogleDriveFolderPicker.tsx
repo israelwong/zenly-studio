@@ -171,7 +171,7 @@ export function GoogleDriveFolderPicker({
   if (!isOpen) return null;
 
   const content = (
-    <div className={`${inline ? 'bg-zinc-800/30 rounded-lg border border-zinc-800' : 'bg-zinc-900 rounded-lg border border-zinc-800'} w-full ${inline ? '' : 'max-w-2xl'} ${inline ? 'max-h-[400px]' : 'max-h-[80vh]'} flex flex-col`}>
+    <div className={`${inline ? 'bg-zinc-800/30 rounded-lg border border-zinc-800' : 'bg-zinc-900 rounded-lg border border-zinc-800'} w-full ${inline ? '' : 'max-w-2xl'} ${inline ? 'max-h-[300px]' : 'max-h-[80vh]'} flex flex-col`}>
       {/* Header - Solo en modo modal */}
       {!inline && (
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">

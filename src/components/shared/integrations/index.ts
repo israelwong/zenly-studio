@@ -1,5 +1,3 @@
-export { IntegrationCard } from './IntegrationCard';
-export type { IntegrationCardProps } from './IntegrationCard';
 export { GoogleDriveConnection } from './GoogleDriveConnection';
 export { GoogleDriveFolderPicker } from './GoogleDriveFolderPicker';
 export { GoogleDriveIntegrationModal } from './GoogleDriveIntegrationModal';

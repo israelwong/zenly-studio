@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, ExternalLink, Link2, MoreVertical, Edit, Trash2, Loader2 } from 'lucide-react';
 import {
   ZenCard,
@@ -28,8 +28,9 @@ import {
   obtenerEstadoConexion,
   obtenerDetallesCarpeta,
 } from '@/lib/actions/studio/integrations/google-drive.actions';
-import { GoogleDriveConnection } from '@/components/shared/integrations/GoogleDriveConnection';
 import { GoogleDriveFolderPicker } from '@/components/shared/integrations/GoogleDriveFolderPicker';
+import { GoogleDriveConnectionModal } from '@/components/shared/integrations/GoogleDriveConnectionModal';
+import { iniciarVinculacionDriveClient } from '@/lib/actions/auth/oauth-client.actions';
 import { toast } from 'sonner';
 
 interface EventDeliverablesCardProps {
@@ -57,6 +58,9 @@ export function EventDeliverablesCard({
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<{ id: string; name: string; url: string } | null>(null);
   const [folderNotFound, setFolderNotFound] = useState(false);
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -137,39 +141,50 @@ export function EventDeliverablesCard({
       });
       // Si hay carpeta vinculada, obtener el nombre real de la carpeta
       if (entregable.google_folder_id) {
-        try {
-          const folderResult = await obtenerDetallesCarpeta(studioSlug, entregable.google_folder_id);
-          if (folderResult.success && folderResult.data) {
-            setSelectedFolder({
-              id: folderResult.data.id,
-              name: folderResult.data.name,
-              url: `https://drive.google.com/drive/folders/${folderResult.data.id}`,
-            });
-            setFolderNotFound(false);
-          } else {
-            // Si la carpeta no existe, mostrar error y permitir seleccionar nueva
-            if (!folderResult.success && folderResult.folderNotFound) {
-              setFolderNotFound(true);
+        // Solo intentar obtener detalles si Google Drive está conectado
+        if (isGoogleConnected) {
+          try {
+            const folderResult = await obtenerDetallesCarpeta(studioSlug, entregable.google_folder_id);
+            if (folderResult.success && folderResult.data) {
               setSelectedFolder({
-                id: entregable.google_folder_id,
-                name: 'Carpeta no encontrada',
-                url: `https://drive.google.com/drive/folders/${entregable.google_folder_id}`,
+                id: folderResult.data.id,
+                name: folderResult.data.name,
+                url: `https://drive.google.com/drive/folders/${folderResult.data.id}`,
               });
-            } else {
               setFolderNotFound(false);
-              setSelectedFolder({
-                id: entregable.google_folder_id,
-                name: 'Carpeta vinculada',
-                url: `https://drive.google.com/drive/folders/${entregable.google_folder_id}`,
-              });
+            } else {
+              // Si la carpeta no existe, mostrar error y permitir seleccionar nueva
+              if (!folderResult.success && folderResult.folderNotFound) {
+                setFolderNotFound(true);
+                setSelectedFolder({
+                  id: entregable.google_folder_id,
+                  name: 'Carpeta no encontrada',
+                  url: `https://drive.google.com/drive/folders/${entregable.google_folder_id}`,
+                });
+              } else {
+                setFolderNotFound(false);
+                setSelectedFolder({
+                  id: entregable.google_folder_id,
+                  name: 'Carpeta vinculada',
+                  url: `https://drive.google.com/drive/folders/${entregable.google_folder_id}`,
+                });
+              }
             }
+          } catch (error) {
+            // Error silencioso - solo mostrar carpeta vinculada
+            setFolderNotFound(false);
+            setSelectedFolder({
+              id: entregable.google_folder_id,
+              name: 'Carpeta vinculada',
+              url: `https://drive.google.com/drive/folders/${entregable.google_folder_id}`,
+            });
           }
-        } catch (error) {
-          console.error('Error obteniendo detalles de carpeta:', error);
-          setFolderNotFound(true);
+        } else {
+          // Si no está conectado, solo mostrar la carpeta vinculada sin intentar obtener detalles
+          setFolderNotFound(false);
           setSelectedFolder({
             id: entregable.google_folder_id,
-            name: 'Carpeta no encontrada',
+            name: 'Carpeta vinculada',
             url: `https://drive.google.com/drive/folders/${entregable.google_folder_id}`,
           });
         }
@@ -207,6 +222,28 @@ export function EventDeliverablesCard({
   const handleGoogleConnected = async () => {
     // Verificar conexión con las validaciones actuales (scopes de Drive)
     await checkGoogleConnection();
+  };
+
+  const handleConnectClick = () => {
+    setShowConnectionModal(true);
+  };
+
+  const handleConfirmConnect = async () => {
+    try {
+      setIsConnecting(true);
+      setShowConnectionModal(false);
+      const returnUrl = `${window.location.pathname}?google_connected=true&return_to_modal=true`;
+      const result = await iniciarVinculacionDriveClient(studioSlug, returnUrl);
+      if (!result.success) {
+        toast.error(result.error || 'Error al conectar con Google');
+        setIsConnecting(false);
+      }
+      // La redirección ocurre automáticamente con Supabase OAuth
+    } catch (error) {
+      console.error('Error connecting:', error);
+      toast.error('Error al conectar con Google');
+      setIsConnecting(false);
+    }
   };
 
   const handleGoogleDisconnected = async () => {
@@ -455,7 +492,7 @@ export function EventDeliverablesCard({
                                     alt="Google Drive"
                                     className="h-3 w-3 object-contain brightness-0 invert opacity-50"
                                   />
-                                  Google Drive - Desconectado
+                                  Desconectado
                                 </span>
                               )}
                             </>
@@ -525,126 +562,143 @@ export function EventDeliverablesCard({
       {/* Form Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-zinc-900 rounded-lg border border-zinc-800 w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-zinc-200 mb-4">
-              {editingId ? 'Editar Entregable' : 'Nuevo Entregable'}
-            </h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {!isGoogleConnected ? (
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 w-full max-w-md flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="border-b border-zinc-800 px-6 py-4 shrink-0">
+              <h3 className="text-lg font-semibold text-zinc-200">
+                {editingId ? 'Editar Entregable' : 'Nuevo Entregable'}
+              </h3>
+            </div>
+            
+            {/* Content with scroll */}
+            <form ref={formRef} onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+              <div className="p-6 space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
-                    <img
-                      src="https://fhwfdwrrnwkbnwxabkcq.supabase.co/storage/v1/object/public/Studio/icons/google-drive-black.svg"
-                      alt="Google Drive"
-                      className="h-4 w-4 object-contain brightness-0 invert"
-                    />
-                    Carpeta de Google Drive
+                  <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
+                    Nombre *
                   </label>
-                  <p className="text-xs text-zinc-500 mb-2">
-                    Selecciona la carpeta que tu cliente verá en su portal de entregas (fotos y videos)
-                  </p>
-                  {hasGoogleDriveDeliverable && (
-                    <div className="mb-2 p-2 bg-blue-950/20 border border-blue-800/50 rounded text-xs text-blue-300">
-                      💡 Ya tienes una carpeta vinculada. Puedes agregar carpetas adicionales si necesitas organizar por categorías. En el portal del cliente se mostrará el contenido consolidado de todas las carpetas.
-                    </div>
-                  )}
-                  {showFolderPicker || !selectedFolder ? (
-                    <GoogleDriveFolderPicker
-                      studioSlug={studioSlug}
-                      isOpen={true}
-                      onClose={() => {
-                        if (selectedFolder) {
-                          // Solo cerrar si ya hay una carpeta seleccionada
-                          setShowFolderPicker(false);
-                        }
-                      }}
-                      onSelect={handleFolderSelect}
-                      initialFolderId={selectedFolder?.id}
-                      initialFolderName={selectedFolder?.name}
-                      inline={true}
-                      hideCancelButton={true}
-                    />
-                  ) : (
-                    <div className="space-y-2">
-                      <div className={`flex items-center gap-2 p-2 rounded border ${folderNotFound ? 'bg-red-950/20 border-red-800/50' : 'bg-zinc-800/50 border-zinc-800'}`}>
+                  <ZenInput
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Ej: Galería de fotos - Ceremonia"
+                    required
+                  />
+                </div>
+                {isGoogleConnected ? (
+                  <div>
+                    <label className="text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-2">
+                      <img
+                        src="https://fhwfdwrrnwkbnwxabkcq.supabase.co/storage/v1/object/public/Studio/icons/google-drive-black.svg"
+                        alt="Google Drive"
+                        className="h-4 w-4 object-contain brightness-0 invert"
+                      />
+                      Carpeta de Google Drive
+                    </label>
+                    <p className="text-xs text-zinc-500 mb-2">
+                      Selecciona la carpeta que tu cliente verá en su portal de entregas (fotos y videos)
+                    </p>
+                    {hasGoogleDriveDeliverable && (
+                      <div className="mb-2 p-2 bg-blue-950/20 border border-blue-800/50 rounded text-xs text-blue-300">
+                        💡 Ya tienes una carpeta vinculada. Puedes agregar carpetas adicionales si necesitas organizar por categorías. En el portal del cliente se mostrará el contenido consolidado de todas las carpetas.
+                      </div>
+                    )}
+                    {showFolderPicker || !selectedFolder ? (
+                      <GoogleDriveFolderPicker
+                        studioSlug={studioSlug}
+                        isOpen={true}
+                        onClose={() => {
+                          if (selectedFolder) {
+                            // Solo cerrar si ya hay una carpeta seleccionada
+                            setShowFolderPicker(false);
+                          }
+                        }}
+                        onSelect={handleFolderSelect}
+                        initialFolderId={selectedFolder?.id}
+                        initialFolderName={selectedFolder?.name}
+                        inline={true}
+                        hideCancelButton={true}
+                      />
+                    ) : (
+                      <div className="space-y-2">
+                        <div className={`flex items-center gap-2 p-2 rounded border ${folderNotFound ? 'bg-red-950/20 border-red-800/50' : 'bg-zinc-800/50 border-zinc-800'}`}>
+                          <img
+                            src="https://fhwfdwrrnwkbnwxabkcq.supabase.co/storage/v1/object/public/Studio/icons/google-drive-black.svg"
+                            alt="Google Drive"
+                            className={`h-4 w-4 object-contain brightness-0 invert ${folderNotFound ? 'opacity-50' : ''}`}
+                          />
+                          <span className={`text-xs flex-1 truncate ${folderNotFound ? 'text-red-300' : 'text-zinc-300'}`}>
+                            {selectedFolder.name}
+                          </span>
+                          <ZenButton
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowFolderPicker(true)}
+                            className="h-6 px-2 text-xs"
+                          >
+                            {folderNotFound ? 'Seleccionar nueva' : 'Cambiar'}
+                          </ZenButton>
+                        </div>
+                        {folderNotFound && (
+                          <div className="p-2 bg-red-950/20 border border-red-800/50 rounded text-xs text-red-300">
+                            ⚠️ Esta carpeta fue eliminada o movida. Por favor, selecciona una nueva carpeta.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <p className="text-xs text-zinc-500 mt-2">
+                      El cliente verá subcarpetas y contenido en su portal como galería y links de descarga
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-4 bg-zinc-800/50 rounded-lg border border-zinc-800">
+                      <div className="flex items-center gap-3 mb-3">
                         <img
                           src="https://fhwfdwrrnwkbnwxabkcq.supabase.co/storage/v1/object/public/Studio/icons/google-drive-black.svg"
                           alt="Google Drive"
-                          className={`h-4 w-4 object-contain brightness-0 invert ${folderNotFound ? 'opacity-50' : ''}`}
+                          className="h-5 w-5 object-contain brightness-0 invert opacity-50"
                         />
-                        <span className={`text-xs flex-1 truncate ${folderNotFound ? 'text-red-300' : 'text-zinc-300'}`}>
-                          {selectedFolder.name}
-                        </span>
-                        <ZenButton
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowFolderPicker(true)}
-                          className="h-6 px-2 text-xs"
-                        >
-                          {folderNotFound ? 'Seleccionar nueva' : 'Cambiar'}
-                        </ZenButton>
-                      </div>
-                      {folderNotFound && (
-                        <div className="p-2 bg-red-950/20 border border-red-800/50 rounded text-xs text-red-300">
-                          ⚠️ Esta carpeta fue eliminada o movida. Por favor, selecciona una nueva carpeta.
+                        <div className="flex-1">
+                          <h4 className="text-sm font-medium text-zinc-300">
+                            Conecta Google Drive
+                          </h4>
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            Vincula tu cuenta para seleccionar carpetas de entregables
+                          </p>
                         </div>
-                      )}
+                      </div>
+                      <ZenButton
+                        type="button"
+                        variant="primary"
+                        onClick={handleConnectClick}
+                        className="w-full"
+                      >
+                        Conectar Google Drive
+                      </ZenButton>
                     </div>
-                  )}
-                  <p className="text-xs text-zinc-500 mt-2">
-                    El cliente verá subcarpetas y contenido en su portal como galería y links de descarga
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
+                    Enlace manual (URL)
+                  </label>
+                  <ZenInput
+                    type="url"
+                    value={formData.file_url}
+                    onChange={(e) => setFormData({ ...formData, file_url: e.target.value })}
+                    placeholder="https://drive.google.com/..."
+                  />
+                  <p className="text-xs text-zinc-500 mt-1.5">
+                    Con enlace manual, el cliente solo verá un botón para abrir el enlace en Google Drive.
                   </p>
                 </div>
-              ) : (
-                <>
-                  <div>
-                    <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
-                      Nombre *
-                    </label>
-                    <ZenInput
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Ej: Galería de fotos - Ceremonia"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
-                      Descripción
-                    </label>
-                    <ZenInput
-                      value={formData.description}
-                      onChange={(e) =>
-                        setFormData({ ...formData, description: e.target.value })
-                      }
-                      placeholder="Descripción opcional"
-                    />
-                  </div>
-                  <GoogleDriveConnection
-                    studioSlug={studioSlug}
-                    variant="compact"
-                    returnUrl={`${window.location.pathname}?google_connected=true&return_to_modal=true`}
-                    onConnected={handleGoogleConnected}
-                    showDisconnect={false}
-                  />
-                  <div>
-                    <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
-                      Enlace manual (URL)
-                    </label>
-                    <ZenInput
-                      type="url"
-                      value={formData.file_url}
-                      onChange={(e) => setFormData({ ...formData, file_url: e.target.value })}
-                      placeholder="https://drive.google.com/..."
-                    />
-                    <p className="text-xs text-zinc-500 mt-1.5">
-                      Con enlace manual, el cliente solo verá un botón para abrir el enlace en Google Drive.
-                    </p>
-                  </div>
-                </>
-              )}
-              <div className="flex gap-2 pt-2">
+              </div>
+            </form>
+            
+            {/* Footer */}
+            <div className="border-t border-zinc-800 px-6 py-4 shrink-0">
+              <div className="flex gap-2">
                 <ZenButton
                   type="button"
                   variant="ghost"
@@ -654,11 +708,20 @@ export function EventDeliverablesCard({
                 >
                   Cancelar
                 </ZenButton>
-                <ZenButton type="submit" className="flex-1" loading={isSaving}>
+                <ZenButton 
+                  type="button" 
+                  className="flex-1" 
+                  loading={isSaving}
+                  onClick={() => {
+                    if (formRef.current) {
+                      formRef.current.requestSubmit();
+                    }
+                  }}
+                >
                   {editingId ? 'Actualizar' : 'Crear'}
                 </ZenButton>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -678,6 +741,13 @@ export function EventDeliverablesCard({
         cancelText="Cancelar"
         variant="destructive"
         loading={isDeleting}
+      />
+
+      <GoogleDriveConnectionModal
+        isOpen={showConnectionModal}
+        onClose={() => setShowConnectionModal(false)}
+        onConnect={handleConfirmConnect}
+        connecting={isConnecting}
       />
 
     </>

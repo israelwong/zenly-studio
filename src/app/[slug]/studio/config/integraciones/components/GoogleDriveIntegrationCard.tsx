@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Cloud } from 'lucide-react';
 import { IntegrationCard } from './IntegrationCard';
 import { ZenButton } from '@/components/ui/zen';
 
@@ -20,17 +19,16 @@ export function GoogleDriveIntegrationCard({
     <IntegrationCard
       name="Google Drive"
       description="Vincula carpetas de Google Drive a tus entregables para optimizar almacenamiento"
-      icon={Cloud}
       iconColor="text-blue-400"
       isConnected={isConnected}
       isComingSoon={false}
       onConnect={onConnect}
       onManage={onManage}
-      manageLabel="Gestionar"
+      manageLabel="Desconectar"
     >
       {!isConnected ? (
         <ZenButton
-          variant="default"
+          variant="primary"
           size="sm"
           onClick={onConnect}
           className="w-full"
@@ -44,7 +42,7 @@ export function GoogleDriveIntegrationCard({
           onClick={onManage}
           className="w-full"
         >
-          Gestionar
+          Desconectar
         </ZenButton>
       )}
     </IntegrationCard>

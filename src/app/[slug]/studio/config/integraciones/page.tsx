@@ -19,7 +19,9 @@ import {
   ZenMagicIntegrationCard,
 } from './components';
 import { GoogleCalendarConnectionModal } from '@/components/shared/integrations/GoogleCalendarConnectionModal';
+import { GoogleDriveDisconnectModal } from '@/components/shared/integrations/GoogleDriveDisconnectModal';
 import { iniciarVinculacionRecursoGoogleClient } from '@/lib/actions/auth/oauth-client.actions';
+import { desconectarGoogleDrive } from '@/lib/actions/studio/integrations';
 import { toast } from 'sonner';
 
 type IntegrationId = 'google-drive' | 'manychat' | 'stripe' | 'zen-magic';
@@ -28,7 +30,7 @@ export default function IntegracionesPage() {
   const params = useParams();
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Integraciones';
+    document.title = 'Zen Studio - Integraciones';
   }, []);
 
   const studioSlug = params?.slug as string;
@@ -53,6 +55,9 @@ export default function IntegracionesPage() {
   // Estados para modales de Google Calendar
   const [showCalendarConnectionModal, setShowCalendarConnectionModal] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  // Estados para modal de desconexión de Google Drive
+  const [showDriveDisconnectModal, setShowDriveDisconnectModal] = useState(false);
+  const [disconnectingDrive, setDisconnectingDrive] = useState(false);
 
   const loadConnectionStatus = useCallback(async () => {
     if (!studioSlug) return;
@@ -77,7 +82,28 @@ export default function IntegracionesPage() {
   };
 
   const handleManageDrive = () => {
-    setOpenModal('google-drive');
+    setShowDriveDisconnectModal(true);
+  };
+
+  const handleConfirmDisconnectDrive = async (limpiarPermisos: boolean) => {
+    if (!studioSlug) return;
+    
+    setDisconnectingDrive(true);
+    try {
+      const result = await desconectarGoogleDrive(studioSlug, limpiarPermisos);
+      if (result.success) {
+        toast.success('Google Drive desconectado correctamente');
+        setShowDriveDisconnectModal(false);
+        await loadConnectionStatus();
+      } else {
+        toast.error(result.error || 'Error al desconectar Google Drive');
+      }
+    } catch (error) {
+      console.error('Error desconectando Google Drive:', error);
+      toast.error('Error al desconectar Google Drive');
+    } finally {
+      setDisconnectingDrive(false);
+    }
   };
 
   const handleCloseModal = () => {
@@ -178,6 +204,13 @@ export default function IntegracionesPage() {
             onClose={() => setShowCalendarConnectionModal(false)}
             onConnect={handleConfirmConnectCalendar}
             connecting={connecting}
+          />
+          <GoogleDriveDisconnectModal
+            isOpen={showDriveDisconnectModal}
+            onClose={() => setShowDriveDisconnectModal(false)}
+            onConfirm={handleConfirmDisconnectDrive}
+            studioSlug={studioSlug}
+            isDisconnecting={disconnectingDrive}
           />
           <ManychatIntegrationModal
             isOpen={openModal === 'manychat'}
