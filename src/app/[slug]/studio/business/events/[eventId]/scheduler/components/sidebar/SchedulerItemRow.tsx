@@ -3,9 +3,9 @@
 import { useCallback } from 'react';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { SchedulerAgrupacionCell } from './SchedulerAgrupacionCell';
-import { SchedulerTimelineRow } from './SchedulerTimelineRow';
+import { SchedulerTimelineRow } from '../timeline/SchedulerTimelineRow';
 import { SchedulerItemDetailPopover } from './SchedulerItemDetailPopover';
-import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
+import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 
 import { type DateRange } from 'react-day-picker';
 
@@ -74,6 +74,7 @@ export function SchedulerItemRow({
                             isCompleted={isCompleted}
                             assignedCrewMember={localItem.assigned_to_crew_member}
                             duration={duration}
+                            hasSlot={!!localItem.scheduler_task}
                         />
                     </button>
                 </SchedulerItemDetailPopover>

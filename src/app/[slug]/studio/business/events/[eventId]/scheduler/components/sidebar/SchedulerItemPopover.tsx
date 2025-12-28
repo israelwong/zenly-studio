@@ -7,13 +7,13 @@ import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { asignarCrewAItem, obtenerCrewMembers, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
-import { X, CheckCircle2, UserPlus } from 'lucide-react';
+import { X, CheckCircle2, UserPlus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { AssignCrewBeforeCompleteModal } from './AssignCrewBeforeCompleteModal';
-import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
-import { SelectCrewModal } from './SelectCrewModal';
+import { AssignCrewBeforeCompleteModal } from '../task-actions/AssignCrewBeforeCompleteModal';
+import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
+import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 
 interface CrewMember {
@@ -105,41 +105,58 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
         }
     }, [open, members.length, loadingMembers, loadMembers]);
 
+    // Cerrar popover cuando se elimina la tarea (ya no tiene scheduler_task)
+    useEffect(() => {
+        const hadTask = !!item.scheduler_task;
+        const hasTaskNow = !!localItem.scheduler_task;
+
+        // Si tenía tarea y ahora no la tiene, cerrar popover
+        if (hadTask && !hasTaskNow && open) {
+            setOpen(false);
+        }
+    }, [localItem.scheduler_task, item.scheduler_task, open]);
+
     const handleMemberSelect = async (memberId: string | null) => {
         const selectedMember = memberId ? members.find(m => m.id === memberId) : null;
         let payrollNotified = false;
 
-        await updateCrewMember(
-            memberId,
-            selectedMember ? {
-                id: selectedMember.id,
-                name: selectedMember.name,
-                tipo: selectedMember.tipo,
-            } : null,
-            async () => {
-                const result = await asignarCrewAItem(studioSlug, localItem.id, memberId);
-                if (!result.success) {
-                    throw new Error(result.error || 'Error al asignar personal');
-                }
+        try {
+            await updateCrewMember(
+                memberId,
+                selectedMember ? {
+                    id: selectedMember.id,
+                    name: selectedMember.name,
+                    tipo: selectedMember.tipo,
+                } : null,
+                async () => {
+                    const result = await asignarCrewAItem(studioSlug, localItem.id, memberId);
+                    if (!result.success) {
+                        throw new Error(result.error || 'Error al asignar personal');
+                    }
 
-                // Si se asignó personal y la tarea está completada, mostrar notificación de nómina
-                if (memberId && isTaskCompleted && result.payrollResult) {
-                    payrollNotified = true;
-                    if (result.payrollResult.success && result.payrollResult.personalNombre) {
-                        toast.success(`Personal asignado. Se generó pago de nómina para ${result.payrollResult.personalNombre}`);
-                    } else {
-                        toast.warning(`Personal asignado. No se generó pago de nómina: ${result.payrollResult.error || 'Error desconocido'}`);
+                    // Si se asignó personal y la tarea está completada, mostrar notificación de nómina
+                    if (memberId && isTaskCompleted && result.payrollResult) {
+                        payrollNotified = true;
+                        if (result.payrollResult.success && result.payrollResult.personalNombre) {
+                            toast.success(`Personal asignado. Se generó pago de nómina para ${result.payrollResult.personalNombre}`);
+                        } else {
+                            toast.warning(`Personal asignado. No se generó pago de nómina: ${result.payrollResult.error || 'Error desconocido'}`);
+                        }
                     }
                 }
-            }
-        );
+            );
 
-        // Solo mostrar toast genérico si no se mostró el de nómina
-        if (!payrollNotified) {
-            toast.success('Personal asignado correctamente');
+            // Solo mostrar toast genérico si no se mostró el de nómina
+            if (!payrollNotified) {
+                toast.success(memberId ? 'Personal asignado correctamente' : 'Asignación removida');
+            }
+            // Recargar miembros para actualizar la lista
+            await loadMembers();
+            // Cerrar popover después de acción exitosa
+            setOpen(false);
+        } catch (error) {
+            // Error ya manejado por updateCrewMember, no cerrar popover
         }
-        // Recargar miembros para actualizar la lista
-        await loadMembers();
     };
 
     const handleRemoveAssignment = async () => {
@@ -162,8 +179,11 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
             setIsUpdatingCompletion(true);
             try {
                 await onTaskToggleComplete(localItem.scheduler_task.id, checked);
+                // Cerrar popover después de acción exitosa
+                setOpen(false);
             } catch (error) {
                 toast.error(error instanceof Error ? error.message : 'Error al actualizar tarea');
+                // No cerrar popover en caso de error
             } finally {
                 setIsUpdatingCompletion(false);
             }
@@ -215,7 +235,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                 if (result.success) {
                     // Disparar evento para actualizar PublicationBar
                     window.dispatchEvent(new CustomEvent('scheduler-task-updated'));
-                    
+
                     if (skipPayment && checked) {
                         toast.success('Tarea completada (sin generar pago de nómina)');
                     } else if (result.payrollResult?.success && result.payrollResult.personalNombre) {
@@ -229,8 +249,11 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                     throw new Error(result.error || 'Error al actualizar tarea');
                 }
             });
+            // Cerrar popover después de acción exitosa
+            setOpen(false);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Error al actualizar tarea');
+            // No cerrar popover en caso de error
         }
 
         setIsUpdatingCompletion(false);
@@ -239,11 +262,13 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
     const handleConfirmFixedSalary = async () => {
         setShowFixedSalaryConfirmModal(false);
         await completeTask(true, false);
+        // Cerrar popover después de completar (completeTask ya cierra si es exitoso)
     };
 
     const handleSkipPayment = async () => {
         setShowFixedSalaryConfirmModal(false);
         await completeTask(true, true);
+        // Cerrar popover después de completar (completeTask ya cierra si es exitoso)
     };
 
     const handleAssignAndComplete = async (crewMemberId: string, skipPayment: boolean = false) => {
@@ -302,8 +327,11 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                     throw new Error(result.error || 'Error al completar la tarea');
                 }
             });
+            // Cerrar popover después de acción exitosa
+            setOpen(false);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Error al procesar');
+            // No cerrar popover en caso de error
         }
 
         setIsUpdatingCompletion(false);
@@ -332,8 +360,11 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                     throw new Error(result.error || 'Error al actualizar el estado de la tarea');
                 }
             });
+            // Cerrar popover después de acción exitosa
+            setOpen(false);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Error al actualizar tarea');
+            // No cerrar popover en caso de error
         }
 
         setIsUpdatingCompletion(false);
@@ -414,12 +445,22 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                                             htmlFor={`task-completed-${item.id}`}
                                             className={cn(
                                                 "text-sm font-medium cursor-pointer select-none",
-                                                isTaskCompleted ? "text-emerald-400" : "text-zinc-400"
+                                                isTaskCompleted ? "text-emerald-400" : "text-zinc-400",
+                                                isUpdatingCompletion && "opacity-60"
                                             )}
                                         >
                                             <div className="flex items-center gap-1.5">
-                                                {isTaskCompleted && <CheckCircle2 className="h-3.5 w-3.5" />}
-                                                <span>Tarea completada</span>
+                                                {isUpdatingCompletion ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+                                                ) : (
+                                                    isTaskCompleted && <CheckCircle2 className="h-3.5 w-3.5" />
+                                                )}
+                                                <span>
+                                                    {isUpdatingCompletion
+                                                        ? (isTaskCompleted ? 'Desmarcando...' : 'Marcando...')
+                                                        : 'Tarea completada'
+                                                    }
+                                                </span>
                                             </div>
                                         </label>
                                     </div>
@@ -489,7 +530,11 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
             {/* Modal para seleccionar/crear personal */}
             <SelectCrewModal
                 isOpen={selectCrewModalOpen}
-                onClose={() => setSelectCrewModalOpen(false)}
+                onClose={() => {
+                    setSelectCrewModalOpen(false);
+                    // Cerrar popover cuando se cierra el modal
+                    setOpen(false);
+                }}
                 onSelect={handleMemberSelect}
                 studioSlug={studioSlug}
                 currentMemberId={selectedMemberId}
@@ -503,7 +548,11 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
             {localItem.scheduler_task && (
                 <AssignCrewBeforeCompleteModal
                     isOpen={assignCrewModalOpen}
-                    onClose={() => setAssignCrewModalOpen(false)}
+                    onClose={() => {
+                        setAssignCrewModalOpen(false);
+                        // Cerrar popover cuando se cierra el modal
+                        setOpen(false);
+                    }}
                     onCompleteWithoutPayment={handleCompleteWithoutPayment}
                     onAssignAndComplete={handleAssignAndComplete}
                     studioSlug={studioSlug}
@@ -519,8 +568,14 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                 onClose={async () => {
                     // Al cerrar con el botón cancelar, completar sin pasar a pago
                     await handleSkipPayment();
+                    // Cerrar popover cuando se cierra el modal
+                    setOpen(false);
                 }}
-                onConfirm={handleConfirmFixedSalary}
+                onConfirm={async () => {
+                    await handleConfirmFixedSalary();
+                    // Cerrar popover después de confirmar
+                    setOpen(false);
+                }}
                 title="¿Deseas pasar a pago?"
                 description={
                     <div className="space-y-2">
@@ -537,6 +592,7 @@ export function SchedulerItemPopover({ item, studioSlug, eventId, children, onIt
                 variant="default"
                 loading={isUpdatingCompletion}
                 loadingText="Procesando..."
+                zIndex={100010}
             />
         </>
     );

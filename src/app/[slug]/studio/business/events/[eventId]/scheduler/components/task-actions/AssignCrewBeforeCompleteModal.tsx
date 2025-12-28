@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ZenDialog } from '@/components/ui/zen/modals/ZenDialog';
-import { ZenInput, ZenButton, ZenAvatar, ZenAvatarFallback, ZenBadge } from '@/components/ui/zen';
+import { ZenInput, ZenButton, ZenAvatar, ZenAvatarFallback, ZenSwitch } from '@/components/ui/zen';
+import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { obtenerCrewMembers } from '@/lib/actions/studio/business/events';
-import { verificarConflictosColaborador } from '@/lib/actions/studio/business/events/scheduler-actions';
-import { Check, UserPlus, AlertTriangle } from 'lucide-react';
+import { actualizarPreferenciaCrew } from '@/lib/actions/studio/crew/crew.actions';
+import { toast } from 'sonner';
+import { Check, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { QuickAddCrewModal } from './QuickAddCrewModal';
+import { QuickAddCrewModal } from '../crew-assignment/QuickAddCrewModal';
 
 interface CrewMember {
   id: string;
@@ -20,19 +22,15 @@ interface CrewMember {
   variable_salary: number | null;
 }
 
-interface SelectCrewModalProps {
+interface AssignCrewBeforeCompleteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (crewMemberId: string | null) => Promise<void>;
+  onCompleteWithoutPayment: () => void;
+  onAssignAndComplete: (crewMemberId: string, skipPayment?: boolean) => Promise<void>;
   studioSlug: string;
-  currentMemberId?: string | null;
-  title?: string;
-  description?: string;
-  // Props opcionales para verificación de conflictos
-  eventId?: string;
-  taskStartDate?: Date;
-  taskEndDate?: Date;
-  taskId?: string;
+  itemId: string;
+  itemName: string;
+  costoTotal: number;
 }
 
 function getInitials(name: string) {
@@ -54,91 +52,25 @@ function getSalaryType(member: CrewMember): 'fixed' | 'variable' | null {
   return null;
 }
 
-export function SelectCrewModal({
+export function AssignCrewBeforeCompleteModal({
   isOpen,
   onClose,
-  onSelect,
+  onCompleteWithoutPayment,
+  onAssignAndComplete,
   studioSlug,
-  currentMemberId,
-  title = 'Asignar personal',
-  description = 'Selecciona un miembro del equipo para asignar a esta tarea.',
-  eventId,
-  taskStartDate,
-  taskEndDate,
-  taskId,
-}: SelectCrewModalProps) {
+  itemId,
+  itemName,
+  costoTotal,
+}: AssignCrewBeforeCompleteModalProps) {
   const [members, setMembers] = useState<CrewMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(currentMemberId || null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
   const [showQuickAddModal, setShowQuickAddModal] = useState(false);
-  const [conflictCount, setConflictCount] = useState<number | null>(null);
-  const [checkingConflicts, setCheckingConflicts] = useState(false);
-
-  // Usar refs para las fechas para evitar recreación constante
-  const taskStartDateRef = useRef(taskStartDate);
-  const taskEndDateRef = useRef(taskEndDate);
-  
-  useEffect(() => {
-    taskStartDateRef.current = taskStartDate;
-    taskEndDateRef.current = taskEndDate;
-  }, [taskStartDate, taskEndDate]);
-
-  const checkConflicts = useCallback(async (crewMemberId: string) => {
-    const startDate = taskStartDateRef.current;
-    const endDate = taskEndDateRef.current;
-    
-    if (!eventId || !startDate || !endDate) return;
-
-    setCheckingConflicts(true);
-    try {
-      const result = await verificarConflictosColaborador(
-        studioSlug,
-        eventId,
-        crewMemberId,
-        startDate,
-        endDate,
-        taskId
-      );
-
-      if (result.success && result.conflictCount !== undefined) {
-        setConflictCount(result.conflictCount);
-      } else {
-        setConflictCount(null);
-      }
-    } catch (error) {
-      console.error('Error verificando conflictos:', error);
-      setConflictCount(null);
-    } finally {
-      setCheckingConflicts(false);
-    }
-  }, [studioSlug, eventId, taskId]);
-
-  // Sincronizar selectedMemberId con currentMemberId cuando cambia
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedMemberId(currentMemberId || null);
-      setSearchTerm('');
-      setConflictCount(null);
-    }
-  }, [isOpen, currentMemberId]);
-
-  // Verificar conflictos cuando se selecciona un colaborador y hay fechas disponibles
-  useEffect(() => {
-    if (
-      selectedMemberId &&
-      eventId &&
-      taskStartDateRef.current &&
-      taskEndDateRef.current &&
-      selectedMemberId !== currentMemberId
-    ) {
-      checkConflicts(selectedMemberId);
-    } else {
-      setConflictCount(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMemberId, eventId, currentMemberId]); // checkConflicts es estable gracias a useCallback
+  const [rememberPreference, setRememberPreference] = useState(false);
+  const [showFixedSalaryConfirmModal, setShowFixedSalaryConfirmModal] = useState(false);
+  const [pendingCrewMemberId, setPendingCrewMemberId] = useState<string | null>(null);
 
   // Cargar miembros cuando se abre el modal
   useEffect(() => {
@@ -179,28 +111,87 @@ export function SelectCrewModal({
     );
   }, [members, searchTerm]);
 
-  const handleSelect = async () => {
+  const handleAssignAndComplete = async () => {
+    if (!selectedMemberId) {
+      toast.error('Selecciona un miembro del equipo');
+      return;
+    }
+
+    // Verificar si el miembro tiene sueldo fijo
+    const selectedMember = members.find(m => m.id === selectedMemberId);
+    const hasFixedSalary = selectedMember && getSalaryType(selectedMember) === 'fixed';
+
+    if (hasFixedSalary) {
+      // Mostrar modal de confirmación para sueldo fijo
+      setPendingCrewMemberId(selectedMemberId);
+      setShowFixedSalaryConfirmModal(true);
+      return;
+    }
+
+    // Si tiene honorarios variables, proceder normalmente (skipPayment = false por defecto)
     setIsAssigning(true);
     try {
-      await onSelect(selectedMemberId);
+      await onAssignAndComplete(selectedMemberId, false);
+      // Cerrar modal si la operación fue exitosa
       onClose();
     } catch (error) {
-      // Error manejado por el callback
+      // El error ya fue manejado en onAssignAndComplete con toast específico
+      // Solo loguear para debugging, no mostrar toast adicional
+      const errorMessage = error instanceof Error ? error.message : '';
+      console.error('Error capturado en handleAssignAndComplete (ya manejado):', errorMessage);
+      // No cerrar el modal si hubo un error crítico
+      // El usuario puede intentar nuevamente
     } finally {
       setIsAssigning(false);
     }
   };
 
-  const handleRemove = async () => {
+  const handleConfirmFixedSalary = async () => {
+    if (!pendingCrewMemberId) return;
+
     setIsAssigning(true);
     try {
-      await onSelect(null);
+      // Pasar a pago (comportamiento normal, skipPayment = false)
+      await onAssignAndComplete(pendingCrewMemberId, false);
+      setShowFixedSalaryConfirmModal(false);
+      setPendingCrewMemberId(null);
       onClose();
     } catch (error) {
-      // Error manejado por el callback
+      // El error ya se mostró en onAssignAndComplete, solo loguear
+      console.error('Error en handleConfirmFixedSalary:', error);
     } finally {
       setIsAssigning(false);
     }
+  };
+
+  const handleSkipPayment = async () => {
+    if (!pendingCrewMemberId) return;
+
+    setIsAssigning(true);
+    try {
+      // Completar sin pasar a pago (skipPayment = true)
+      await onAssignAndComplete(pendingCrewMemberId, true);
+      setShowFixedSalaryConfirmModal(false);
+      setPendingCrewMemberId(null);
+      onClose();
+    } catch (error) {
+      // El error ya se mostró en onAssignAndComplete, solo loguear
+      console.error('Error en handleSkipPayment:', error);
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleCompleteWithoutPayment = () => {
+    onCompleteWithoutPayment();
+    onClose();
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+    }).format(value);
   };
 
   const hasNoCrew = !loadingMembers && members.length === 0;
@@ -210,15 +201,30 @@ export function SelectCrewModal({
       <ZenDialog
         isOpen={isOpen}
         onClose={onClose}
-        title={title}
-        description={description}
+        title={hasNoCrew ? "¿Deseas agregar personal?" : "Asignar personal para generar pago"}
+        description={
+          hasNoCrew
+            ? "No tienes personal registrado. Puedes agregarlo ahora o completar la tarea sin asignar personal."
+            : "Para generar el pago en nómina, asigna un miembro del equipo a esta tarea."
+        }
         maxWidth="md"
         closeOnClickOutside={false}
         onCancel={onClose}
         cancelLabel="Cancelar"
-        zIndex={10060}
+        zIndex={100010}
       >
         <div className="space-y-4">
+          {/* Información del item */}
+          <div className="bg-zinc-800/50 rounded-lg p-3 space-y-1">
+            <div className="text-sm text-zinc-400">Tarea:</div>
+            <div className="text-sm font-medium text-zinc-200">{itemName}</div>
+            {costoTotal > 0 && (
+              <div className="text-xs text-zinc-500">
+                Costo: <span className="text-emerald-400 font-medium">{formatCurrency(costoTotal)}</span>
+              </div>
+            )}
+          </div>
+
           {/* Selector de personal o opciones cuando no hay crew */}
           {hasNoCrew ? (
             <div className="space-y-3">
@@ -227,7 +233,7 @@ export function SelectCrewModal({
                   <strong>No tienes personal registrado</strong>
                 </p>
                 <p className="text-xs text-amber-300/80">
-                  Agrega personal ahora para asignarlo a esta tarea.
+                  Puedes agregar personal ahora para asignarlo a esta tarea, o completar la tarea sin asignar personal.
                 </p>
               </div>
 
@@ -325,23 +331,6 @@ export function SelectCrewModal({
                 </div>
               )}
 
-              {/* Aviso de conflictos */}
-              {selectedMemberId && conflictCount !== null && conflictCount > 0 && (
-                <div className="bg-amber-950/20 border border-amber-800/30 rounded-lg p-3 mt-2">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-amber-300 font-medium mb-1">
-                        Este colaborador ya tiene {conflictCount} {conflictCount === 1 ? 'tarea' : 'tareas'} en este rango de fechas
-                      </p>
-                      <p className="text-xs text-amber-300/70">
-                        Puedes asignarlo de todas formas. El sistema permite asignación múltiple.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Botón para agregar personal adicional */}
               <ZenButton
                 onClick={() => setShowQuickAddModal(true)}
@@ -358,26 +347,34 @@ export function SelectCrewModal({
           {/* Botones de acción */}
           <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800">
             {!hasNoCrew && (
-              <>
-                <ZenButton
-                  onClick={handleSelect}
-                  disabled={selectedMemberId === currentMemberId || isAssigning}
-                  loading={isAssigning}
-                  className="w-full"
-                >
-                  {currentMemberId ? 'Cambiar asignación' : 'Asignar personal'}
-                </ZenButton>
-                {currentMemberId && (
-                  <ZenButton
-                    onClick={handleRemove}
-                    variant="outline"
-                    className="w-full"
-                    disabled={isAssigning}
-                  >
-                    Quitar asignación
-                  </ZenButton>
-                )}
-              </>
+              <ZenButton
+                onClick={handleAssignAndComplete}
+                disabled={!selectedMemberId || isAssigning}
+                loading={isAssigning}
+                className="w-full"
+              >
+                Asignar y completar
+              </ZenButton>
+            )}
+            <ZenButton
+              onClick={handleCompleteWithoutPayment}
+              variant="outline"
+              className="w-full"
+            >
+              Completar sin pago
+            </ZenButton>
+
+            {/* Checkbox para recordar preferencia cuando no hay crew */}
+            {hasNoCrew && (
+              <div className="flex items-center gap-2 pt-2">
+                <ZenSwitch
+                  checked={rememberPreference}
+                  onCheckedChange={setRememberPreference}
+                />
+                <label className="text-xs text-zinc-400 cursor-pointer">
+                  Recordar que no tengo personal aún
+                </label>
+              </div>
             )}
           </div>
         </div>
@@ -389,6 +386,32 @@ export function SelectCrewModal({
         onClose={() => setShowQuickAddModal(false)}
         onCrewCreated={handleCrewCreated}
         studioSlug={studioSlug}
+      />
+
+      {/* Modal de confirmación para sueldo fijo */}
+      <ZenConfirmModal
+        isOpen={showFixedSalaryConfirmModal}
+        onClose={() => {
+          setShowFixedSalaryConfirmModal(false);
+          setPendingCrewMemberId(null);
+        }}
+        onConfirm={handleConfirmFixedSalary}
+        title="¿Deseas pasar a pago?"
+        description={
+          <div className="space-y-2">
+            <p className="text-sm text-zinc-300">
+              Este miembro del equipo cuenta con <strong className="text-amber-400">sueldo fijo</strong>.
+            </p>
+            <p className="text-sm text-zinc-400">
+              ¿Deseas generar el pago de nómina para esta tarea?
+            </p>
+          </div>
+        }
+        confirmText="Sí, pasar a pago"
+        cancelText="No, solo completar"
+        variant="default"
+        loading={isAssigning}
+        loadingText="Procesando..."
       />
     </>
   );

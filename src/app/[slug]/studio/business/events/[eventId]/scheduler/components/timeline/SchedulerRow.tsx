@@ -4,7 +4,7 @@ import React, { useCallback } from 'react';
 import type { DateRange } from 'react-day-picker';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { TaskBar } from './TaskBar';
-import { getTotalGridWidth, getDateFromPosition } from '../utils/coordinate-utils';
+import { getTotalGridWidth, getDateFromPosition } from '../../utils/coordinate-utils';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 

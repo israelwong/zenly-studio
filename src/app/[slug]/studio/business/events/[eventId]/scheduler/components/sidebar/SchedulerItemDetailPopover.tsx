@@ -8,8 +8,8 @@ import { toast } from 'sonner';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { X, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
-import { SelectCrewModal } from './SelectCrewModal';
+import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
+import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 
 interface CrewMember {
     id: string;
@@ -83,27 +83,44 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
         }
     }, [open, members.length, loadingMembers, loadMembers]);
 
+    // Cerrar popover cuando se elimina la tarea (ya no tiene scheduler_task)
+    useEffect(() => {
+        const hadTask = !!item.scheduler_task;
+        const hasTaskNow = !!localItem.scheduler_task;
+
+        // Si tenía tarea y ahora no la tiene, cerrar popover
+        if (hadTask && !hasTaskNow && open) {
+            setOpen(false);
+        }
+    }, [localItem.scheduler_task, item.scheduler_task, open]);
+
     const handleMemberSelect = async (memberId: string | null) => {
         const selectedMember = memberId ? members.find(m => m.id === memberId) : null;
 
-        await updateCrewMember(
-            memberId,
-            selectedMember ? {
-                id: selectedMember.id,
-                name: selectedMember.name,
-                tipo: selectedMember.tipo,
-            } : null,
-            async () => {
-                const result = await asignarCrewAItem(studioSlug, localItem.id, memberId);
-                if (!result.success) {
-                    throw new Error(result.error || 'Error al asignar personal');
+        try {
+            await updateCrewMember(
+                memberId,
+                selectedMember ? {
+                    id: selectedMember.id,
+                    name: selectedMember.name,
+                    tipo: selectedMember.tipo,
+                } : null,
+                async () => {
+                    const result = await asignarCrewAItem(studioSlug, localItem.id, memberId);
+                    if (!result.success) {
+                        throw new Error(result.error || 'Error al asignar personal');
+                    }
                 }
-            }
-        );
+            );
 
-        toast.success(memberId ? 'Personal asignado correctamente' : 'Asignación removida');
-        // Recargar miembros para actualizar la lista
-        await loadMembers();
+            toast.success(memberId ? 'Personal asignado correctamente' : 'Asignación removida');
+            // Recargar miembros para actualizar la lista
+            await loadMembers();
+            // Cerrar popover después de acción exitosa
+            setOpen(false);
+        } catch (error) {
+            // Error ya manejado por updateCrewMember, no cerrar popover
+        }
     };
 
     const handleRemoveAssignment = async () => {
@@ -217,7 +234,11 @@ export function SchedulerItemDetailPopover({ item, studioSlug, children, onItemU
             {/* Modal para seleccionar/crear personal */}
             <SelectCrewModal
                 isOpen={selectCrewModalOpen}
-                onClose={() => setSelectCrewModalOpen(false)}
+                onClose={() => {
+                    setSelectCrewModalOpen(false);
+                    // Cerrar popover cuando se cierra el modal
+                    setOpen(false);
+                }}
                 onSelect={handleMemberSelect}
                 studioSlug={studioSlug}
                 currentMemberId={selectedMemberId}

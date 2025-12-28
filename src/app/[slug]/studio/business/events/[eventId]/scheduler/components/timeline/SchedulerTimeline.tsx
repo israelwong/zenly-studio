@@ -6,7 +6,7 @@ import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.
 import type { DateRange } from 'react-day-picker';
 import { SchedulerHeader } from './SchedulerHeader';
 import { SchedulerGrid } from './SchedulerGrid';
-import { getTodayPosition } from '../utils/coordinate-utils';
+import { getTodayPosition } from '../../utils/coordinate-utils';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 

@@ -11,12 +11,12 @@ import {
   getDateFromPosition,
   getWidthFromDuration,
   isDateInRange,
-} from '../utils/coordinate-utils';
+} from '../../utils/coordinate-utils';
 import {
   calculateTaskStatus,
   getStatusColor,
-} from '../utils/task-status-utils';
-import { TaskBarContextMenu } from './TaskBarContextMenu';
+} from '../../utils/task-status-utils';
+import { TaskBarContextMenu } from '../task-actions/TaskBarContextMenu';
 import { ZenBadge } from '@/components/ui/zen';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 

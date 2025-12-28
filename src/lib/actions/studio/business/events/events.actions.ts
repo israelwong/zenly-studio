@@ -2756,12 +2756,13 @@ export async function eliminarSchedulerTask(
       return { success: false, error: 'Tarea no encontrada' };
     }
 
-    // Obtener google_event_id antes de eliminar (para sincronización)
+    // Obtener información de la tarea antes de eliminar (para sincronización y limpieza)
     const taskWithGoogle = await prisma.studio_scheduler_event_tasks.findUnique({
       where: { id: taskId },
       select: {
         google_calendar_id: true,
         google_event_id: true,
+        cotizacion_item_id: true,
       },
     });
 
@@ -2769,6 +2770,16 @@ export async function eliminarSchedulerTask(
     await prisma.studio_scheduler_event_tasks.delete({
       where: { id: taskId },
     });
+
+    // Limpiar personal asignado del item si existe
+    if (taskWithGoogle?.cotizacion_item_id) {
+      await prisma.studio_cotizacion_items.update({
+        where: { id: taskWithGoogle.cotizacion_item_id },
+        data: {
+          assigned_to_crew_member_id: null,
+        },
+      });
+    }
 
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}/scheduler`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventId}`);

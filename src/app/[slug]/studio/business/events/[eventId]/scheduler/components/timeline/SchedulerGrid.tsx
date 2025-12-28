@@ -5,7 +5,7 @@ import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
 import { SchedulerRow } from './SchedulerRow';
-import { getTotalGridWidth } from '../utils/coordinate-utils';
+import { getTotalGridWidth } from '../../utils/coordinate-utils';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 

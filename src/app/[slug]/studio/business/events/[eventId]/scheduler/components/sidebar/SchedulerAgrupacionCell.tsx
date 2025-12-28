@@ -1,4 +1,4 @@
-import { User } from 'lucide-react';
+import { User, Calendar } from 'lucide-react';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 
 interface SchedulerAgrupacionCellProps {
@@ -14,9 +14,10 @@ interface SchedulerAgrupacionCellProps {
         } | null;
     } | null;
     duration?: number; // Duración en días
+    hasSlot?: boolean; // Indica si tiene un slot asignado en el cronograma
 }
 
-export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember, duration }: SchedulerAgrupacionCellProps) {
+export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assignedCrewMember, duration, hasSlot = false }: SchedulerAgrupacionCellProps) {
     const hasAssigned = !!assignedCrewMember;
 
     // Generar iniciales del nombre
@@ -67,17 +68,25 @@ export function SchedulerAgrupacionCell({ servicio, isCompleted = false, assigne
 
             {/* Nombre del servicio con duración */}
             <div className="flex-1 min-w-0">
-                <p className={`text-sm line-clamp-2 cursor-pointer transition-colors ${isCompleted
-                    ? 'text-zinc-500 line-through decoration-zinc-600 hover:text-zinc-400'
-                    : 'text-zinc-300 hover:text-zinc-200'
-                    }`}>
-                    {servicio}
+                <div className="flex items-center gap-1.5">
+                    <p className={`text-sm line-clamp-2 cursor-pointer transition-colors ${isCompleted
+                        ? 'text-zinc-500 line-through decoration-zinc-600 hover:text-zinc-400'
+                        : 'text-zinc-300 hover:text-zinc-200'
+                        }`}>
+                        {servicio}
+                    </p>
+                    {/* Indicador de slot asignado */}
+                    {hasSlot && (
+                        <span className="inline-flex items-center" title="Slot asignado en cronograma">
+                            <Calendar className="h-3 w-3 text-blue-400 shrink-0" />
+                        </span>
+                    )}
                     {duration && duration > 0 && (
                         <span className="ml-1.5 text-zinc-600 text-xs font-normal">
                             {duration}d
                         </span>
                     )}
-                </p>
+                </div>
             </div>
         </div>
     );

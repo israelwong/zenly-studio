@@ -4,7 +4,7 @@ import { es } from 'date-fns/locale';
 import { Plus, UserPlus } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { SelectCrewModal } from './SelectCrewModal';
+import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { asignarCrewAItem } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 

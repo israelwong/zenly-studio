@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { type DateRange } from 'react-day-picker';
-import { EventScheduler } from './EventScheduler';
+import { EventScheduler } from '../layout/EventScheduler';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';

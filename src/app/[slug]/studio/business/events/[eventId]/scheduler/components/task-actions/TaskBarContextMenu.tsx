@@ -10,11 +10,11 @@ import {
 import { Trash2, CheckCircle2, Calendar, Circle, UserPlus, UserMinus } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { SelectCrewModal } from './SelectCrewModal';
+import { SelectCrewModal } from '../crew-assignment/SelectCrewModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { asignarCrewAItem, obtenerCrewMembers } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
-import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
+import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
@@ -55,6 +55,7 @@ export function TaskBarContextMenu({
   const [selectCrewModalOpen, setSelectCrewModalOpen] = useState(false);
   const [showRemoveCrewConfirm, setShowRemoveCrewConfirm] = useState(false);
   const [isRemovingCrew, setIsRemovingCrew] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Crear item mínimo válido si no tenemos item (para evitar hooks condicionales)
   // El hook necesita un item válido, pero si no tenemos onItemUpdate, no usaremos updateCrewMember
@@ -77,10 +78,23 @@ export function TaskBarContextMenu({
   // Solo usar updateCrewMember si tenemos onItemUpdate (actualización optimista)
   const canUseOptimisticUpdate = !!onItemUpdate && !!item;
 
+  // Validar antes de eliminar
+  const handleDeleteClick = () => {
+    // Si no tiene personal asignado, eliminar directamente
+    if (!hasCrewMember) {
+      handleDelete();
+      return;
+    }
+
+    // Si tiene personal, mostrar confirmación
+    setShowDeleteConfirm(true);
+  };
+
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
       await onDelete(taskId);
+      setShowDeleteConfirm(false);
     } catch (error) {
       // Error silencioso al eliminar tarea
     } finally {
@@ -250,7 +264,7 @@ export function TaskBarContextMenu({
 
             {/* Eliminar slot */}
             <ContextMenuItem
-              onClick={handleDelete}
+              onClick={handleDeleteClick}
               disabled={isDeleting}
               className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer focus:bg-red-500/10 focus:text-red-300 text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -306,6 +320,65 @@ export function TaskBarContextMenu({
         variant="destructive"
         loading={isRemovingCrew}
         loadingText="Quitando..."
+      />
+
+      {/* Modal de confirmación para vaciar slot */}
+      <ZenConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="¿Vaciar slot de esta tarea?"
+        description={
+          <div className="space-y-2">
+            {(() => {
+              const hasInvitation = effectiveItem?.scheduler_task?.invitation_status === 'PENDING' || 
+                                   effectiveItem?.scheduler_task?.invitation_status === 'ACCEPTED';
+              const syncStatus = effectiveItem?.scheduler_task?.sync_status;
+              const isInvited = syncStatus === 'INVITED';
+
+              return (
+                <>
+                  {hasCrewMember && (
+                    <p className="text-sm text-zinc-300">
+                      Esta tarea tiene personal asignado. ¿Aún así deseas eliminarla?
+                    </p>
+                  )}
+                  {effectiveItem?.assigned_to_crew_member && (
+                    <p className="text-sm text-zinc-400">
+                      Personal asignado: <strong className="text-zinc-200">{effectiveItem.assigned_to_crew_member.name}</strong>
+                    </p>
+                  )}
+                  {(hasInvitation || isInvited) && (
+                    <div className="bg-amber-950/20 border border-amber-800/30 rounded-lg p-3 mt-2">
+                      <p className="text-sm text-amber-300 font-medium mb-1">
+                        ⚠️ Advertencia importante
+                      </p>
+                      <p className="text-xs text-amber-300/80">
+                        Esta tarea tiene una invitación {hasInvitation 
+                          ? (effectiveItem?.scheduler_task?.invitation_status === 'ACCEPTED' ? 'aceptada' : 'pendiente')
+                          : 'enviada'} a Google Calendar.
+                      </p>
+                      <p className="text-xs text-amber-300/80 mt-1">
+                        Si vacías el slot, se quitará el personal asignado y se cancelará la invitación en Google Calendar.
+                      </p>
+                    </div>
+                  )}
+                  {!hasInvitation && !isInvited && hasCrewMember && (
+                    <p className="text-xs text-zinc-500 mt-2">
+                      Se quitará el personal asignado y el slot quedará disponible.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        }
+        confirmText="Sí, vaciar slot"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={isDeleting}
+        loadingText="Eliminando..."
+        zIndex={100010}
       />
     </>
   );

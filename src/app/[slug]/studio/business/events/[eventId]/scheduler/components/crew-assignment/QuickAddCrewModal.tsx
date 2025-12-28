@@ -163,7 +163,7 @@ export function QuickAddCrewModal({
       onSave={handleCreate}
       saveLabel="Agregar personal"
       isLoading={isCreating}
-      zIndex={10070}
+      zIndex={100020}
     >
       <div className="space-y-4">
         <div>

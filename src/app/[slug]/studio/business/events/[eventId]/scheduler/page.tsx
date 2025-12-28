@@ -6,7 +6,7 @@ import { ArrowLeft, Users } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { obtenerEventoDetalle, type EventoDetalle } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
-import { SchedulerWrapper } from './components/SchedulerWrapper';
+import { SchedulerWrapper } from './components/shared/SchedulerWrapper';
 import { CrewMembersManager } from '@/components/shared/crew-members/CrewMembersManager';
 import { type DateRange } from 'react-day-picker';
 

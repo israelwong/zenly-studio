@@ -4,7 +4,7 @@ import React from 'react';
 import { format, isSameMonth, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
-import { getTotalGridWidth } from '../utils/coordinate-utils';
+import { getTotalGridWidth } from '../../utils/coordinate-utils';
 
 interface SchedulerHeaderProps {
   dateRange: DateRange;

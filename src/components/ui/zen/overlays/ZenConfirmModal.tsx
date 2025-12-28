@@ -26,6 +26,7 @@ interface ZenConfirmModalProps {
     loadingText?: string;
     disabled?: boolean;
     hideConfirmButton?: boolean;
+    zIndex?: number;
 }
 
 export function ZenConfirmModal({
@@ -40,7 +41,8 @@ export function ZenConfirmModal({
     loading = false,
     loadingText = 'Procesando...',
     disabled = false,
-    hideConfirmButton = false
+    hideConfirmButton = false,
+    zIndex = 10080
 }: ZenConfirmModalProps) {
     const handleConfirm = () => {
         onConfirm();
@@ -58,8 +60,8 @@ export function ZenConfirmModal({
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent
                 className="sm:max-w-md bg-zinc-900 border-zinc-700"
-                style={{ zIndex: 10080 }}
-                overlayZIndex={10079}
+                style={{ zIndex }}
+                overlayZIndex={zIndex - 1}
             >
                 <DialogHeader>
                     <div className="flex items-center space-x-3">

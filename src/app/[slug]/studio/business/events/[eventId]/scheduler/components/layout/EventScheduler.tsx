@@ -9,8 +9,8 @@ import { actualizarSchedulerTaskFechas } from '@/lib/actions/studio/business/eve
 import { crearSchedulerTask, eliminarSchedulerTask, actualizarSchedulerTask } from '@/lib/actions/studio/business/events';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { SchedulerAgrupacionCell } from './SchedulerAgrupacionCell';
-import { AssignCrewBeforeCompleteModal } from './AssignCrewBeforeCompleteModal';
+import { SchedulerAgrupacionCell } from '../sidebar/SchedulerAgrupacionCell';
+import { AssignCrewBeforeCompleteModal } from '../task-actions/AssignCrewBeforeCompleteModal';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
@@ -407,7 +407,7 @@ export const EventScheduler = React.memo(function EventScheduler({
           return;
         }
 
-        // Actualización optimista: remover la tarea del estado local
+        // Actualización optimista: remover la tarea del estado local y limpiar personal asignado
         let updatedData: EventoDetalle;
         setLocalEventData(prev => {
           const newData = { ...prev };
@@ -420,6 +420,9 @@ export const EventScheduler = React.memo(function EventScheduler({
                   ...item,
                   scheduler_task_id: null,
                   scheduler_task: null,
+                  // Limpiar personal asignado cuando se vacía el slot
+                  assigned_to_crew_member_id: null,
+                  assigned_to_crew_member: null,
                 };
               }
               return item;
@@ -923,6 +926,7 @@ export const EventScheduler = React.memo(function EventScheduler({
         servicio={metadata.servicioNombre}
         isCompleted={isCompleted}
         assignedCrewMember={assignedCrewMember}
+        hasSlot={!!item.scheduler_task}
       />
     );
   };

@@ -4,8 +4,8 @@ import React, { useCallback, useRef } from 'react';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import type { DateRange } from 'react-day-picker';
-import { SchedulerSidebar } from './SchedulerSidebar';
-import { SchedulerTimeline } from './SchedulerTimeline';
+import { SchedulerSidebar } from '../sidebar/SchedulerSidebar';
+import { SchedulerTimeline } from '../timeline/SchedulerTimeline';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 

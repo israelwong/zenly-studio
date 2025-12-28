@@ -5,7 +5,7 @@ import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events/events.actions';
 import { SchedulerItemPopover } from './SchedulerItemPopover';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
-import { useSchedulerItemSync } from '../hooks/useSchedulerItemSync';
+import { useSchedulerItemSync } from '../../hooks/useSchedulerItemSync';
 
 type CotizacionItem = NonNullable<NonNullable<EventoDetalle['cotizaciones']>[0]['cotizacion_items']>[0];
 
