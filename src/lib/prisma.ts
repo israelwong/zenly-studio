@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
-// Patrón Singleton para evitar múltiples instancias
+// Patrón Singleton para evitar múltiples instancias en serverless
 declare global {
   var __prisma: PrismaClient | undefined;
   var __pgPool: Pool | undefined;
@@ -13,20 +13,61 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL no está definida en las variables de entorno');
 }
 
-// WORKAROUND: En desarrollo, usar DIRECT_URL si está disponible para evitar problemas
-// con validación de foreign keys en el pooler de Supabase
-// El pooler (puerto 6543) puede tener schema cacheado que causa problemas
-const connectionString = 
+/**
+ * Normaliza la URL de conexión para Vercel + Supabase pgbouncer
+ * - Detecta si ya tiene parámetros pgbouncer
+ * - Agrega connection_limit=1 si usa pgbouncer (requerido para serverless)
+ * - Preserva otros parámetros existentes
+ */
+function normalizeConnectionString(url: string, isPgbouncer: boolean): string {
+  try {
+    const urlObj = new URL(url);
+    
+    // Si es pgbouncer, asegurar parámetros críticos
+    if (isPgbouncer) {
+      urlObj.searchParams.set('pgbouncer', 'true');
+      urlObj.searchParams.set('connection_limit', '1');
+    }
+    
+    return urlObj.toString();
+  } catch {
+    // Si falla el parsing, retornar original
+    return url;
+  }
+}
+
+/**
+ * Detecta si la URL usa pgbouncer (puerto 6543 o parámetro pgbouncer=true)
+ */
+function isPgbouncerUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    return (
+      urlObj.port === '6543' ||
+      urlObj.searchParams.get('pgbouncer') === 'true' ||
+      urlObj.hostname.includes('pooler')
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Seleccionar URL de conexión según entorno
+// Desarrollo: preferir DIRECT_URL para evitar problemas de schema cacheado
+// Producción/Vercel: usar DATABASE_URL con pgbouncer
+const rawConnectionString = 
   process.env.NODE_ENV === 'development' && process.env.DIRECT_URL
-    ? process.env.DIRECT_URL  // Usar conexión directa en desarrollo
-    : process.env.DATABASE_URL; // Usar pooler en producción
+    ? process.env.DIRECT_URL
+    : process.env.DATABASE_URL;
+
+const isPgbouncer = isPgbouncerUrl(rawConnectionString);
+const connectionString = normalizeConnectionString(rawConnectionString, isPgbouncer);
 
 // En desarrollo, forzar recreación si cambió la conexión
 if (process.env.NODE_ENV !== 'production') {
-  const currentConnection = process.env.DIRECT_URL || process.env.DATABASE_URL;
+  const currentConnection = connectionString;
   const cachedConnection = (globalThis as any).__cachedConnection;
   
-  // Si cambió la conexión, limpiar singleton (sin await en nivel superior)
   if (cachedConnection && cachedConnection !== currentConnection) {
     if (globalThis.__prisma) {
       globalThis.__prisma.$disconnect().catch(() => {});
@@ -40,48 +81,44 @@ if (process.env.NODE_ENV !== 'production') {
   (globalThis as any).__cachedConnection = currentConnection;
 }
 
-// Crear pool de conexiones PostgreSQL (singleton)
+// Pool de conexiones optimizado para serverless
+// CRÍTICO: max=1 para Vercel + pgbouncer (evita MaxClientsInSessionMode)
+const poolMax = isPgbouncer ? 1 : process.env.NODE_ENV === 'production' ? 1 : 5;
+
 const pgPool = globalThis.__pgPool || new Pool({
   connectionString,
-  max: 20, // Máximo de conexiones en el pool (aumentado de 10 a 20)
-  idleTimeoutMillis: 60000, // Cerrar conexiones inactivas después de 60s (aumentado de 30s)
-  connectionTimeoutMillis: 20000, // Timeout para obtener conexión del pool (aumentado de 10s a 20s)
+  max: poolMax, // 1 conexión para pgbouncer/serverless, 5 para desarrollo directo
+  idleTimeoutMillis: 30000, // 30s para liberar conexiones rápidamente
+  connectionTimeoutMillis: 10000, // 10s timeout
+  allowExitOnIdle: true, // Permitir que el proceso termine cuando no hay conexiones activas
 });
 
-// Reutilizar el pool en desarrollo (en producción Next.js cachea los módulos)
 if (process.env.NODE_ENV !== 'production') {
   globalThis.__pgPool = pgPool;
 }
 
-// Crear adapter de Prisma para PostgreSQL
-// El adapter necesita el pool para manejar las conexiones
+// Adapter de Prisma para PostgreSQL
 const adapter = new PrismaPg(pgPool);
 
-// Cliente de Prisma centralizado con singleton
-// Prisma 7.x requiere adapter cuando se usa engineType: "client"
-// En desarrollo, forzar recreación si el cliente existe para evitar problemas de cache
-let prisma: PrismaClient;
+// Singleton de PrismaClient
+// En desarrollo: limpiar si existe para evitar cache de schema
 if (process.env.NODE_ENV !== "production" && globalThis.__prisma) {
-  // En desarrollo, desconectar cliente anterior y crear uno nuevo
-  // Esto ayuda cuando el schema cambia y el cliente está cacheado
   globalThis.__prisma.$disconnect().catch(() => {});
   globalThis.__prisma = undefined;
 }
 
-prisma = globalThis.__prisma || new PrismaClient({
+const prisma = globalThis.__prisma || new PrismaClient({
   adapter,
-  // Configuración optimizada para producción
-  log: ['error'], // Solo errores para mejor rendimiento
+  log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   errorFormat: 'pretty',
 });
 
-// Reutilización del cliente para evitar agotamiento de conexiones
-// En producción Next.js reutiliza el módulo, pero en desarrollo necesitamos singleton explícito
+// Singleton explícito (crítico en serverless)
 if (process.env.NODE_ENV !== "production") {
   globalThis.__prisma = prisma;
 }
 
-// En producción, asegurar que siempre se reutilice la misma instancia
-// Next.js en producción cachea los módulos, pero es seguro mantener el singleton
+// En producción, Next.js cachea módulos pero el singleton garantiza reutilización
+// Esto previene múltiples instancias en funciones serverless concurrentes
 
 export { prisma };

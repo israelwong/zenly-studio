@@ -4,8 +4,8 @@ import { prisma } from '@/lib/prisma';
 import {
   eliminarEventoGoogle,
   eliminarEventoPrincipalGoogle,
-} from '@/lib/integrations/google-calendar/sync-manager';
-import { obtenerOCrearCalendarioSecundario } from '@/lib/integrations/google-calendar/calendar-manager';
+} from '@/lib/integrations/google/clients/calendar/sync-manager';
+import { obtenerOCrearCalendarioSecundario } from '@/lib/integrations/google/clients/calendar/calendar-manager';
 import { createClient } from '@/lib/supabase/server';
 import { StudioRole } from '@prisma/client';
 
@@ -315,10 +315,14 @@ export async function desvincularRecursoGoogle(
       };
     }
 
-    // Obtener studio
+    // Obtener studio con configuración actual
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: { id: true },
+      select: {
+        id: true,
+        google_integrations_config: true,
+        google_oauth_scopes: true,
+      },
     });
 
     if (!studio) {
@@ -338,20 +342,104 @@ export async function desvincularRecursoGoogle(
     if (limpiarEventos && totalEventos > 0) {
       const resultado = await eliminarEventosEnLotes(studioSlug, limpiarEventos);
       eventosEliminados = resultado.tareasEliminadas + resultado.eventosEliminados;
+    } else if (!limpiarEventos) {
+      // Si no se eliminan eventos, solo limpiar google_event_id de la DB
+      await prisma.studio_scheduler_event_tasks.updateMany({
+        where: {
+          scheduler_instance: {
+            event: {
+              studio_id: studio.id,
+            },
+          },
+          google_event_id: {
+            not: null,
+          },
+        },
+        data: {
+          google_event_id: null,
+          google_calendar_id: null,
+        },
+      });
+
+      await prisma.studio_events.updateMany({
+        where: {
+          studio_id: studio.id,
+          google_event_id: {
+            not: null,
+          },
+        },
+        data: {
+          google_event_id: null,
+        },
+      });
     }
 
-    // Reset de integración: limpiar campos de Google
+    // Obtener configuración existente de integraciones
+    let integrationsConfig: any = {};
+    if (studio.google_integrations_config) {
+      try {
+        integrationsConfig =
+          typeof studio.google_integrations_config === 'string'
+            ? JSON.parse(studio.google_integrations_config)
+            : studio.google_integrations_config;
+      } catch {
+        integrationsConfig = {};
+      }
+    }
+
+    // Actualizar configuración: deshabilitar Calendar pero mantener otros recursos
+    integrationsConfig = {
+      ...integrationsConfig,
+      calendar: {
+        enabled: false,
+        secondaryCalendarId: null,
+      },
+    };
+
+    // Obtener scopes existentes y remover Calendar
+    let scopesFinales: string[] = [];
+    if (studio.google_oauth_scopes) {
+      try {
+        const scopes = JSON.parse(studio.google_oauth_scopes) as string[];
+        scopesFinales = scopes.filter(
+          (scope) => !scope.includes('calendar') && !scope.includes('calendar.events')
+        );
+      } catch {
+        // Si no se puede parsear, mantener vacío
+      }
+    }
+
+    // Determinar si aún hay otros recursos conectados
+    const hasDriveScope = scopesFinales.some(
+      (scope) => scope.includes('drive.readonly') || scope.includes('drive')
+    );
+    const hasContactsScope = scopesFinales.some(
+      (scope) => scope.includes('contacts')
+    );
+
+    // Si no hay otros recursos, limpiar todo
+    // Si hay otros recursos, solo limpiar Calendar
+    const updateData: any = {
+      google_integrations_config: integrationsConfig,
+      google_calendar_secondary_id: null, // Limpiar el calendario secundario
+    };
+
+    if (!hasDriveScope && !hasContactsScope) {
+      // No hay otros recursos, limpiar todo
+      updateData.google_oauth_refresh_token = null;
+      updateData.google_oauth_email = null;
+      updateData.google_oauth_name = null;
+      updateData.google_oauth_scopes = null;
+      updateData.is_google_connected = false;
+    } else {
+      // Hay otros recursos, solo actualizar scopes y config
+      updateData.google_oauth_scopes = JSON.stringify(scopesFinales);
+    }
+
+    // Actualizar studio
     await prisma.studios.update({
       where: { slug: studioSlug },
-      data: {
-        google_oauth_refresh_token: null,
-        google_oauth_email: null,
-        google_oauth_name: null,
-        google_oauth_scopes: null,
-        is_google_connected: false,
-        google_integrations_config: null,
-        google_calendar_secondary_id: null, // También limpiar el calendario secundario
-      },
+      data: updateData,
     });
 
     console.log(

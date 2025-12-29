@@ -41,20 +41,20 @@ export function GoogleDriveDisconnectModal({
             Desconectar Google Drive
           </DialogTitle>
           <DialogDescription className="text-zinc-400">
-            Se detendrá la sincronización automática. Los permisos públicos de las carpetas se mantendrán.
+            ¿Estás seguro de que deseas desconectar Google Drive?
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-4">
           <div className="p-4 rounded-lg border bg-zinc-800/50 border-zinc-700">
-            <div className="flex items-start gap-3">
-              <div className="flex-1">
-                <div className="text-sm font-medium text-zinc-200 mb-1">
-                  Solo desconectar
-                </div>
-                <div className="text-xs text-zinc-400">
-                  Mantener los permisos públicos de las carpetas. Solo se detendrá la sincronización automática.
-                </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-zinc-200">
+                Al desconectar:
+              </div>
+              <div className="text-xs text-zinc-400 space-y-1.5">
+                <p>• Se detendrá la sincronización automática de carpetas y entregables.</p>
+                <p>• Los permisos públicos de las carpetas existentes se mantendrán en Google Drive.</p>
+                <p>• Las carpetas vinculadas dejarán de actualizarse automáticamente desde ZEN.</p>
               </div>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { obtenerCredencialesGoogle } from '@/lib/actions/platform/integrations/google.actions';
 import { encryptToken } from '@/lib/utils/encryption';
-import { getGoogleDriveClient, listFolders, listFolderContents, getAccessTokenForPicker } from '@/lib/integrations/google-drive.client';
+import { getGoogleDriveClient, listFolders, listFolderContents, getAccessTokenForPicker } from '@/lib/integrations/google/clients/drive.client';
 import type { GoogleDriveFile, GoogleDriveFolder } from '@/types/google-drive';
 
 export interface GoogleConnectionStatus {

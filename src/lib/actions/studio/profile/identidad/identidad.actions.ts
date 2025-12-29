@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { retryDatabaseOperation } from '@/lib/actions/utils/database-retry';
 import { revalidatePath } from 'next/cache';
-import { renombrarGrupoContactosZEN } from '@/lib/integrations/google-contacts.client';
+import { renombrarGrupoContactosZEN } from '@/lib/integrations/google/clients/contacts.client';
 import {
     IdentidadUpdateSchema,
     LogoUpdateSchema,

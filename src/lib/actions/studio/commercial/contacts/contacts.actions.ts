@@ -381,7 +381,7 @@ export async function createContact(
     // Sincronizar con Google Contacts (si está conectado)
     try {
       const { sincronizarContactoConGoogle } = await import(
-        '@/lib/actions/integrations/google-contacts.actions'
+        '@/lib/integrations/google'
       );
       await sincronizarContactoConGoogle(contact.id, studioSlug);
     } catch (error) {
@@ -555,7 +555,7 @@ export async function updateContact(
     // Sincronizar con Google Contacts (si está conectado)
     try {
       const { sincronizarContactoConGoogle } = await import(
-        '@/lib/actions/integrations/google-contacts.actions'
+        '@/lib/integrations/google'
       );
       await sincronizarContactoConGoogle(contact.id, studioSlug);
     } catch (error) {

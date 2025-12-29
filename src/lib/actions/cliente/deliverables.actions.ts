@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { obtenerContenidoCarpeta, listarSubcarpetas } from '@/lib/actions/studio/integrations/google-drive.actions';
+import { obtenerContenidoCarpeta, listarSubcarpetas } from '@/lib/integrations/google';
 import type { GoogleDriveFile } from '@/types/google-drive';
 
 export interface ClienteDeliverable {

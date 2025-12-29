@@ -186,7 +186,7 @@ export async function publicarCronograma(
 
     // Verificar si hay Google Calendar conectado
     const { tieneGoogleCalendarHabilitado, sincronizarTareaEnBackground } =
-      await import('@/lib/integrations/google-calendar/helpers');
+      await import('@/lib/integrations/google/clients/calendar/helpers');
 
     const tieneGoogle = await tieneGoogleCalendarHabilitado(studioSlug);
 
@@ -198,7 +198,7 @@ export async function publicarCronograma(
           // Si no tiene item asociado, es una tarea eliminada que necesita cancelación
           if (!tarea.cotizacion_item_id && tarea.google_event_id) {
             // Cancelar en Google Calendar y eliminar la tarea
-            const { eliminarEventoEnBackground } = await import('@/lib/integrations/google-calendar/helpers');
+            const { eliminarEventoEnBackground } = await import('@/lib/integrations/google/clients/calendar/helpers');
             if (tarea.google_calendar_id && tarea.google_event_id) {
               await eliminarEventoEnBackground(tarea.google_calendar_id, tarea.google_event_id);
             }
@@ -224,7 +224,7 @@ export async function publicarCronograma(
             // Sin personal asignado
             // Si tiene google_event_id, fue invitada anteriormente, cancelar invitación
             if (tarea.google_event_id && tarea.google_calendar_id) {
-              const { eliminarEventoEnBackground } = await import('@/lib/integrations/google-calendar/helpers');
+              const { eliminarEventoEnBackground } = await import('@/lib/integrations/google/clients/calendar/helpers');
               await eliminarEventoEnBackground(tarea.google_calendar_id, tarea.google_event_id);
               
               // Limpiar referencias de Google Calendar

@@ -11,7 +11,7 @@ import {
 } from '@/lib/actions/studio/integrations';
 import {
   desvincularRecursoGoogle,
-} from '@/lib/actions/auth/desconectar-google-calendar.actions';
+} from '@/lib/integrations/google';
 import { GoogleCalendarDisconnectModal } from './GoogleCalendarDisconnectModal';
 import { GoogleCalendarConnectionModal } from './GoogleCalendarConnectionModal';
 import { iniciarVinculacionRecursoGoogleClient } from '@/lib/actions/auth/oauth-client.actions';

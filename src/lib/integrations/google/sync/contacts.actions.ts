@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import {
   sincronizarContactoGoogle,
   getGoogleContactsClient,
-} from '@/lib/integrations/google-contacts.client';
+} from '@/lib/integrations/google/clients/contacts.client';
 
 /**
  * Sincroniza un Contacto del Estudio con Google Contacts

@@ -16,9 +16,9 @@ import { limpiarTareasGoogleSinPersonal, obtenerEstadisticasTareasGoogle } from 
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { ZenButton, ZenBadge } from '@/components/ui/zen';
-import { obtenerOCrearCalendarioSecundario } from '@/lib/integrations/google-calendar/calendar-manager';
-import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google-calendar/helpers';
-import { obtenerEstadoConexion } from '@/lib/actions/studio/integrations/google-drive.actions';
+import { obtenerOCrearCalendarioSecundario } from '@/lib/integrations/google/clients/calendar/calendar-manager';
+import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
+import { obtenerEstadoConexion } from '@/lib/integrations/google';
 import { AlertTriangle, Trash2, Settings } from 'lucide-react';
 
 interface TareasOperativasSheetProps {

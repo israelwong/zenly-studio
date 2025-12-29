@@ -1,7 +1,6 @@
 'use client';
 
-import { iniciarConexionGoogleCalendar } from '@/lib/actions/auth/oauth-calendar.actions';
-import { iniciarConexionGoogle } from '@/lib/actions/studio/integrations/google-drive.actions';
+import { iniciarConexionGoogleCalendar, iniciarConexionGoogle } from '@/lib/integrations/google';
 
 /**
  * Inicia flujo OAuth para vincular Google Calendar a un Studio

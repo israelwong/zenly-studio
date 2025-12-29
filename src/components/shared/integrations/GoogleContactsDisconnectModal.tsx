@@ -10,63 +10,63 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
-import { obtenerConteoEventosSincronizados } from '@/lib/integrations/google';
+import { obtenerConteoContactosSincronizados } from '@/lib/integrations/google';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 
-interface GoogleCalendarDisconnectModalProps {
+interface GoogleContactsDisconnectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (limpiarEventos: boolean) => Promise<void>;
+  onConfirm: (eliminarContactos: boolean) => Promise<void>;
   studioSlug: string;
   isDisconnecting?: boolean;
 }
 
-export function GoogleCalendarDisconnectModal({
+export function GoogleContactsDisconnectModal({
   isOpen,
   onClose,
   onConfirm,
   studioSlug,
   isDisconnecting = false,
-}: GoogleCalendarDisconnectModalProps) {
-  const [limpiarEventos, setLimpiarEventos] = useState(false);
-  const [eventosSincronizados, setEventosSincronizados] = useState<number | null>(null);
+}: GoogleContactsDisconnectModalProps) {
+  const [eliminarContactos, setEliminarContactos] = useState(false);
+  const [contactosSincronizados, setContactosSincronizados] = useState<number | null>(null);
   const [cargandoConteo, setCargandoConteo] = useState(false);
 
-  // Cargar conteo de eventos cuando se abre el modal
+  // Cargar conteo de contactos cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
-      cargarConteoEventos();
+      cargarConteoContactos();
     } else {
       // Reset al cerrar
-      setLimpiarEventos(false);
-      setEventosSincronizados(null);
+      setEliminarContactos(false);
+      setContactosSincronizados(null);
     }
   }, [isOpen, studioSlug]);
 
-  const cargarConteoEventos = async () => {
+  const cargarConteoContactos = async () => {
     setCargandoConteo(true);
     try {
-      const result = await obtenerConteoEventosSincronizados(studioSlug);
+      const result = await obtenerConteoContactosSincronizados(studioSlug);
       if (result.success && result.total !== undefined) {
-        setEventosSincronizados(result.total);
+        setContactosSincronizados(result.total);
       } else {
-        setEventosSincronizados(0);
+        setContactosSincronizados(0);
       }
     } catch (error) {
-      console.error('Error cargando conteo de eventos:', error);
-      setEventosSincronizados(0);
+      console.error('Error cargando conteo de contactos:', error);
+      setContactosSincronizados(0);
     } finally {
       setCargandoConteo(false);
     }
   };
 
   const handleConfirm = async () => {
-    await onConfirm(limpiarEventos);
+    await onConfirm(eliminarContactos);
   };
 
   const handleClose = () => {
-    setLimpiarEventos(false);
-    setEventosSincronizados(null);
+    setEliminarContactos(false);
+    setContactosSincronizados(null);
     onClose();
   };
 
@@ -79,21 +79,21 @@ export function GoogleCalendarDisconnectModal({
       <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md" overlayZIndex={10100} style={{ zIndex: 10100 }}>
         <DialogHeader>
           <DialogTitle className="text-zinc-100">
-            Desconectar Google Calendar
+            Desconectar Google Contacts
           </DialogTitle>
           <DialogDescription className="text-zinc-400">
             {cargandoConteo ? (
               'Cargando información...'
-            ) : eventosSincronizados !== null && eventosSincronizados > 0 ? (
+            ) : contactosSincronizados !== null && contactosSincronizados > 0 ? (
               <>
-                Tienes <span className="text-zinc-200 font-medium">{eventosSincronizados}</span>{' '}
-                {eventosSincronizados === 1 ? 'tarea sincronizada' : 'tareas sincronizadas'} en
-                tu Google Calendar. ¿Qué deseas hacer con estos eventos?
+                Tienes <span className="text-zinc-200 font-medium">{contactosSincronizados}</span>{' '}
+                {contactosSincronizados === 1 ? 'contacto sincronizado' : 'contactos sincronizados'} en
+                tu Google Contacts. ¿Qué deseas hacer con estos contactos?
               </>
-            ) : eventosSincronizados === 0 ? (
-              'No tienes eventos sincronizados actualmente. ¿Qué deseas hacer al desconectar?'
+            ) : contactosSincronizados === 0 ? (
+              'No tienes contactos sincronizados actualmente. ¿Qué deseas hacer al desconectar?'
             ) : (
-              '¿Estás seguro de que deseas desconectar Google Calendar? Las tareas dejarán de sincronizarse automáticamente.'
+              '¿Estás seguro de que deseas desconectar Google Contacts? Los contactos dejarán de sincronizarse automáticamente.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -121,20 +121,20 @@ export function GoogleCalendarDisconnectModal({
               </div>
             </div>
           </div>
-        ) : eventosSincronizados !== null && (
+        ) : contactosSincronizados !== null && (
           <div className="space-y-3 py-4">
             <div
-              className={`p-4 rounded-lg border cursor-pointer transition-colors ${!limpiarEventos
+              className={`p-4 rounded-lg border cursor-pointer transition-colors ${!eliminarContactos
                 ? 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600'
                 : 'bg-zinc-800 border-zinc-600'
                 }`}
-              onClick={() => setLimpiarEventos(false)}
+              onClick={() => setEliminarContactos(false)}
             >
               <div className="flex items-start gap-3">
                 <input
                   type="radio"
-                  checked={!limpiarEventos}
-                  onChange={() => setLimpiarEventos(false)}
+                  checked={!eliminarContactos}
+                  onChange={() => setEliminarContactos(false)}
                   className="mt-1 h-4 w-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-zinc-900 border-zinc-600 bg-zinc-800"
                 />
                 <div className="flex-1">
@@ -142,7 +142,7 @@ export function GoogleCalendarDisconnectModal({
                     Solo desconectar
                   </div>
                   <div className="text-xs text-zinc-400">
-                    Mantener los eventos actuales en tu Google Calendar. Solo se detendrá la
+                    Mantener los contactos actuales en tu Google Contacts. Solo se detendrá la
                     sincronización automática.
                   </div>
                 </div>
@@ -150,27 +150,26 @@ export function GoogleCalendarDisconnectModal({
             </div>
 
             <div
-              className={`p-4 rounded-lg border cursor-pointer transition-colors ${limpiarEventos
+              className={`p-4 rounded-lg border cursor-pointer transition-colors ${eliminarContactos
                 ? 'bg-red-950/20 border-red-900/50 hover:border-red-900/70'
                 : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600'
                 }`}
-              onClick={() => setLimpiarEventos(true)}
+              onClick={() => setEliminarContactos(true)}
             >
               <div className="flex items-start gap-3">
                 <input
                   type="radio"
-                  checked={limpiarEventos}
-                  onChange={() => setLimpiarEventos(true)}
+                  checked={eliminarContactos}
+                  onChange={() => setEliminarContactos(true)}
                   className="mt-1 h-4 w-4 text-red-600 focus:ring-red-500 focus:ring-offset-zinc-900 border-zinc-600 bg-zinc-800"
                 />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-zinc-200 mb-1">
-                    Limpiar y desconectar
+                    Eliminar y desconectar
                   </div>
                   <div className="text-xs text-zinc-400">
-                    Al elegir esta opción, se eliminarán de tu Google Calendar tanto las fechas
-                    de eventos principales (citas y fechas de cobertura) como las tareas
-                    operativas asignadas a tu equipo (cronograma). Esta acción no se puede
+                    Al elegir esta opción, se eliminarán de tu Google Contacts todos los contactos
+                    y personal del equipo que fueron sincronizados desde ZEN. Esta acción no se puede
                     deshacer.
                   </div>
                 </div>
@@ -192,12 +191,12 @@ export function GoogleCalendarDisconnectModal({
             onClick={handleConfirm}
             loading={isDisconnecting}
             loadingText={
-              limpiarEventos && eventosSincronizados && eventosSincronizados > 0
-                ? 'Limpiando eventos...'
+              eliminarContactos && contactosSincronizados && contactosSincronizados > 0
+                ? 'Eliminando contactos...'
                 : 'Desconectando...'
             }
           >
-            {limpiarEventos ? 'Limpiar y Desconectar' : 'Desconectar'}
+            {eliminarContactos ? 'Eliminar y Desconectar' : 'Desconectar'}
           </ZenButton>
         </DialogFooter>
       </DialogContent>

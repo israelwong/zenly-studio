@@ -17,7 +17,7 @@ import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { ZenButton } from '@/components/ui/zen';
-import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google-calendar/helpers';
+import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
 
 interface AgendaUnifiedSheetProps {
   open: boolean;

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, Users, Edit, Trash2, MoreVertical } from 'lucide-react';
-import { ZenButton, ZenInput, ZenBadge, ZenConfirmModal, ZenCard, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
+import { ZenButton, ZenInput, ZenBadge, ZenConfirmModal, ZenCard, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenCardContent } from '@/components/ui/zen';
 import {
   Table,
   TableBody,
@@ -22,6 +22,9 @@ import { obtenerCrewMembers, eliminarCrewMember, checkCrewMemberAssociations } f
 import { toast } from 'sonner';
 import { CrewMemberFormModal } from '@/components/shared/crew-members/CrewMemberFormModal';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
+import { GoogleBundleModal } from '@/components/shared/integrations/GoogleBundleModal';
+import { obtenerEstadoConexion } from '@/lib/integrations/google';
+import { ExternalLink, Users as UsersIcon } from 'lucide-react';
 
 interface CrewMember {
   id: string;
@@ -55,6 +58,9 @@ export function PersonelPageClient({ studioSlug }: PersonelPageClientProps) {
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isGoogleContactsConnected, setIsGoogleContactsConnected] = useState(false);
+  const [googleContactsEmail, setGoogleContactsEmail] = useState<string | null>(null);
+  const [showGoogleBundleModal, setShowGoogleBundleModal] = useState(false);
   const isModalOpenRef = useRef(false);
 
   const loadMembers = useCallback(async () => {
@@ -77,7 +83,21 @@ export function PersonelPageClient({ studioSlug }: PersonelPageClientProps) {
 
   useEffect(() => {
     loadMembers();
+    verificarEstadoGoogleContacts();
   }, [loadMembers]);
+
+  const verificarEstadoGoogleContacts = async () => {
+    try {
+      const status = await obtenerEstadoConexion(studioSlug);
+      const hasContactsScope = status.scopes?.some((scope) => scope.includes('contacts')) || false;
+      setIsGoogleContactsConnected(hasContactsScope && !!status.email);
+      setGoogleContactsEmail(status.email || null);
+    } catch (error) {
+      console.error('Error verificando estado de Google Contacts:', error);
+      setIsGoogleContactsConnected(false);
+      setGoogleContactsEmail(null);
+    }
+  };
 
   useEffect(() => {
     isModalOpenRef.current = isModalOpen;
@@ -269,141 +289,198 @@ export function PersonelPageClient({ studioSlug }: PersonelPageClientProps) {
               </ZenButton>
             </div>
           </ZenCardHeader>
+          <ZenCardContent className="p-6 space-y-4">
+            {/* Barra de herramientas */}
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <ZenInput
+                  id="search"
+                  placeholder="Buscar por nombre, email, teléfono o tipo..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  icon={Search}
+                  iconClassName="h-4 w-4"
+                />
+              </div>
+              <div className="text-sm text-zinc-400 shrink-0">
+                {loading ? (
+                  <span className="text-zinc-500">Cargando...</span>
+                ) : (
+                  <span>
+                    {filteredMembers.length} {filteredMembers.length === 1 ? 'miembro' : 'miembros'}
+                  </span>
+                )}
+              </div>
+              <div className="h-5 w-px bg-zinc-700 shrink-0" />
+              {isGoogleContactsConnected ? (
+                <ZenBadge variant="success" size="sm" className="gap-1 shrink-0">
+                  <UsersIcon className="h-3 w-3" />
+                  Google Contacts
+                </ZenBadge>
+              ) : (
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowGoogleBundleModal(true)}
+                  className="h-7 px-2 text-xs gap-1 shrink-0"
+                >
+                  <UsersIcon className="h-3 w-3" />
+                  Conectar Google
+                </ZenButton>
+              )}
+            </div>
+
+            {/* Tabla */}
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-zinc-800 bg-zinc-900/80 hover:bg-zinc-900/80">
+                      <TableHead className="text-zinc-400 font-semibold text-xs uppercase tracking-wider py-4 px-6">
+                        Nombre
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-semibold text-xs uppercase tracking-wider py-4 px-6">
+                        Contacto
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-semibold text-xs uppercase tracking-wider py-4 px-6">
+                        Habilidades
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-semibold text-xs uppercase tracking-wider py-4 px-6">
+                        Honorarios
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-semibold text-xs uppercase tracking-wider py-4 px-6 text-right">
+                        Acciones
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <TableRow key={i} className="border-zinc-800/50">
+                          <TableCell className="py-4 px-6">
+                            <Skeleton className="h-5 w-32 bg-zinc-800/50" />
+                          </TableCell>
+                          <TableCell className="py-4 px-6">
+                            <Skeleton className="h-4 w-40 bg-zinc-800/50" />
+                          </TableCell>
+                          <TableCell className="py-4 px-6">
+                            <Skeleton className="h-6 w-24 bg-zinc-800/50" />
+                          </TableCell>
+                          <TableCell className="py-4 px-6">
+                            <Skeleton className="h-4 w-28 bg-zinc-800/50" />
+                          </TableCell>
+                          <TableCell className="py-4 px-6 text-right">
+                            <Skeleton className="h-8 w-8 bg-zinc-800/50 ml-auto" />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : filteredMembers.length === 0 ? (
+                      <TableRow className="border-zinc-800/50">
+                        <TableCell colSpan={5} className="text-center py-12 text-zinc-500">
+                          <div className="flex flex-col items-center gap-2">
+                            <Users className="h-8 w-8 text-zinc-600" />
+                            <span className="text-sm">
+                              {search ? 'No se encontraron miembros' : 'No hay miembros registrados'}
+                            </span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredMembers.map((member, index) => (
+                        <TableRow
+                          key={member.id}
+                          className={`border-zinc-800/50 transition-all group ${
+                            index % 2 === 0 ? 'bg-zinc-900/30' : 'bg-zinc-900/50'
+                          } hover:bg-zinc-800/50 hover:border-zinc-700`}
+                        >
+                          <TableCell className="py-4 px-6">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-semibold text-zinc-100 group-hover:text-white transition-colors">
+                                {member.name}
+                              </span>
+                              <span className="text-xs text-zinc-500">{member.tipo}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4 px-6">
+                            <div className="space-y-1">
+                              {member.email && (
+                                <div className="text-sm text-zinc-300">{member.email}</div>
+                              )}
+                              {member.phone && (
+                                <div className="text-sm text-zinc-400">{member.phone}</div>
+                              )}
+                              {!member.email && !member.phone && (
+                                <span className="text-zinc-600 text-sm">-</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4 px-6">
+                            <div className="flex flex-wrap gap-1.5">
+                              {member.skills.length > 0 ? (
+                                <>
+                                  {member.skills.slice(0, 2).map((skill) => (
+                                    <ZenBadge
+                                      key={skill.id}
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-full text-xs text-zinc-400 border-zinc-700"
+                                    >
+                                      {skill.name}
+                                    </ZenBadge>
+                                  ))}
+                                  {member.skills.length > 2 && (
+                                    <ZenBadge variant="outline" size="sm" className="rounded-full text-xs text-zinc-400 border-zinc-700">
+                                      +{member.skills.length - 2}
+                                    </ZenBadge>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-zinc-600 text-sm">-</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4 px-6">
+                            <span className="text-sm font-medium text-zinc-200">
+                              {formatSalary(member)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-4 px-6 text-right">
+                            <ZenDropdownMenu>
+                              <ZenDropdownMenuTrigger asChild>
+                                <ZenButton 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </ZenButton>
+                              </ZenDropdownMenuTrigger>
+                              <ZenDropdownMenuContent align="end">
+                                <ZenDropdownMenuItem onClick={() => handleEdit(member)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Editar
+                                </ZenDropdownMenuItem>
+                                <ZenDropdownMenuSeparator />
+                                <ZenDropdownMenuItem
+                                  onClick={() => handleDelete(member.id)}
+                                  className="text-red-400 focus:text-red-400"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Eliminar
+                                </ZenDropdownMenuItem>
+                              </ZenDropdownMenuContent>
+                            </ZenDropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </ZenCardContent>
         </ZenCard>
 
-        {/* Búsqueda */}
-        <div className="flex items-center gap-4">
-          <div className="flex-1 max-w-md">
-            <ZenInput
-              id="search"
-              placeholder="Buscar por nombre, email, teléfono o tipo..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              icon={Search}
-              iconClassName="h-4 w-4"
-            />
-          </div>
-          <div className="text-sm text-zinc-400">
-            {loading ? (
-              <span className="text-zinc-500">Cargando...</span>
-            ) : (
-              <span>
-                {filteredMembers.length} {filteredMembers.length === 1 ? 'miembro' : 'miembros'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Tabla */}
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-zinc-800 hover:bg-zinc-800/50">
-                <TableHead className="text-zinc-300">Nombre</TableHead>
-                <TableHead className="text-zinc-300">Contacto</TableHead>
-                <TableHead className="text-zinc-300">Habilidades</TableHead>
-                <TableHead className="text-zinc-300">Honorarios</TableHead>
-                <TableHead className="text-zinc-300 text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i} className="border-zinc-800">
-                    <TableCell><Skeleton className="h-4 w-32 bg-zinc-700" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-40 bg-zinc-700" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-32 bg-zinc-700" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-28 bg-zinc-700" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-4 w-8 bg-zinc-700 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filteredMembers.length === 0 ? (
-                <TableRow className="border-zinc-800">
-                  <TableCell colSpan={5} className="text-center py-8 text-zinc-400">
-                    {search ? 'No se encontraron miembros' : 'No hay miembros registrados'}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredMembers.map((member) => (
-                  <TableRow
-                    key={member.id}
-                    className="border-zinc-800 hover:bg-zinc-800/50 transition-colors"
-                  >
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-white">{member.name}</span>
-                        <span className="text-[10px] text-zinc-400">{member.tipo}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-zinc-400 text-sm">
-                      <div className="space-y-1">
-                        {member.email && (
-                          <div>{member.email}</div>
-                        )}
-                        {member.phone && (
-                          <div>{member.phone}</div>
-                        )}
-                        {!member.email && !member.phone && (
-                          <span className="text-zinc-500">-</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {member.skills.length > 0 ? (
-                          member.skills.slice(0, 2).map((skill) => (
-                            <ZenBadge
-                              key={skill.id}
-                              variant="outline"
-                              size="sm"
-                              className="rounded-full"
-                              style={skill.color ? { borderColor: skill.color, color: skill.color } : undefined}
-                            >
-                              {skill.name}
-                            </ZenBadge>
-                          ))
-                        ) : (
-                          <span className="text-zinc-500 text-sm">-</span>
-                        )}
-                        {member.skills.length > 2 && (
-                          <ZenBadge variant="outline" size="sm" className="rounded-full">
-                            +{member.skills.length - 2}
-                          </ZenBadge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-zinc-300 text-sm">
-                      {formatSalary(member)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <ZenDropdownMenu>
-                        <ZenDropdownMenuTrigger asChild>
-                          <ZenButton variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </ZenButton>
-                        </ZenDropdownMenuTrigger>
-                        <ZenDropdownMenuContent align="end">
-                          <ZenDropdownMenuItem onClick={() => handleEdit(member)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Editar
-                          </ZenDropdownMenuItem>
-                          <ZenDropdownMenuSeparator />
-                          <ZenDropdownMenuItem
-                            onClick={() => handleDelete(member.id)}
-                            className="text-red-400 focus:text-red-400"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Eliminar
-                          </ZenDropdownMenuItem>
-                        </ZenDropdownMenuContent>
-                      </ZenDropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
       </div>
 
       {/* Modal de creación/edición */}
@@ -430,6 +507,14 @@ export function PersonelPageClient({ studioSlug }: PersonelPageClientProps) {
         cancelText="Cancelar"
         variant="destructive"
         loading={isDeleting}
+      />
+
+      {/* Modal de Google Bundle */}
+      <GoogleBundleModal
+        isOpen={showGoogleBundleModal}
+        onClose={() => setShowGoogleBundleModal(false)}
+        studioSlug={studioSlug}
+        context="personel"
       />
     </>
   );

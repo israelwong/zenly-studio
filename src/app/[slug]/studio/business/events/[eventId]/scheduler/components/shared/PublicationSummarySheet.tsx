@@ -13,7 +13,7 @@ import {
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { ZenButton, ZenBadge, ZenCheckbox } from '@/components/ui/zen';
 import { obtenerResumenCambiosPendientes, publicarCronograma } from '@/lib/actions/studio/business/events/scheduler-actions';
-import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google-calendar/helpers';
+import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';

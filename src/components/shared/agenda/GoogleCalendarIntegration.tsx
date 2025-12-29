@@ -21,14 +21,14 @@ import {
   ZenDropdownMenuSeparator,
 } from '@/components/ui/zen';
 import { iniciarVinculacionRecursoGoogleClient } from '@/lib/actions/auth/oauth-client.actions';
-import { obtenerEstadoConexion } from '@/lib/actions/studio/integrations/google-drive.actions';
+import { obtenerEstadoConexion } from '@/lib/integrations/google';
 import {
   desvincularRecursoGoogle,
-} from '@/lib/actions/auth/desconectar-google-calendar.actions';
+} from '@/lib/integrations/google';
 import {
   sincronizarTodosEventosPrincipales,
   contarEventosPendientesSincronizar,
-} from '@/lib/integrations/google-calendar/helpers';
+} from '@/lib/integrations/google/clients/calendar/helpers';
 import { GoogleCalendarConnectionModal } from '@/components/shared/integrations/GoogleCalendarConnectionModal';
 import { toast } from 'sonner';
 import { GoogleCalendarDisconnectModal } from '@/components/shared/integrations/GoogleCalendarDisconnectModal';

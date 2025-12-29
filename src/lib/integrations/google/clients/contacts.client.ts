@@ -100,27 +100,133 @@ export async function getGoogleContactsClient(studioSlug: string) {
 }
 
 /**
- * Crea un grupo de contactos "ZEN: [Studio Name]"
+ * Crea un cliente de Google Contacts directamente con tokens (sin leer DB)
+ * Útil durante el callback OAuth cuando aún no se han guardado los tokens
+ */
+export async function createGoogleContactsClientWithTokens(
+  refreshToken: string,
+  accessToken?: string
+): Promise<ReturnType<typeof google.people>> {
+  // Obtener credenciales OAuth compartidas
+  const credentialsResult = await obtenerCredencialesGoogle();
+  if (!credentialsResult.success || !credentialsResult.data) {
+    throw new Error(
+      credentialsResult.error || 'Credenciales de Google no disponibles'
+    );
+  }
+
+  const { clientId, clientSecret, redirectUri } = credentialsResult.data;
+
+  // Crear OAuth2 client
+  const oauth2Client = new google.auth.OAuth2(
+    clientId,
+    clientSecret,
+    redirectUri
+  );
+
+  // Configurar tokens directamente
+  oauth2Client.setCredentials({
+    refresh_token: refreshToken,
+    access_token: accessToken, // Si se proporciona, usarlo directamente
+  });
+
+  // Si tenemos access_token, no necesitamos refrescar
+  // Si no, el cliente lo refrescará automáticamente cuando sea necesario
+  if (!accessToken) {
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      oauth2Client.setCredentials(credentials);
+    } catch (error) {
+      console.error('[createGoogleContactsClientWithTokens] Error refrescando token:', error);
+      throw new Error('Error al refrescar access token');
+    }
+  }
+
+  // Crear cliente de People API
+  const people = google.people({
+    version: 'v1',
+    auth: oauth2Client,
+  });
+
+  return people;
+}
+
+/**
+ * Busca un grupo de contactos existente por nombre
+ */
+async function buscarGrupoContactosPorNombre(
+  people: ReturnType<typeof google.people>,
+  nombreGrupo: string
+): Promise<string | null> {
+  try {
+    const response = await people.contactGroups.list();
+    const grupos = response.data.contactGroups || [];
+    
+    const grupoEncontrado = grupos.find(
+      (grupo) => grupo.name === nombreGrupo
+    );
+    
+    return grupoEncontrado?.resourceName || null;
+  } catch (error) {
+    console.error('[buscarGrupoContactosPorNombre] Error:', error);
+    return null;
+  }
+}
+
+/**
+ * Crea un grupo de contactos "ZEN: [Studio Name]" o retorna el existente si ya existe
+ * @param studioSlug - Slug del estudio (si se proporciona, lee tokens de DB)
+ * @param studioName - Nombre del estudio
+ * @param peopleClient - Cliente de People API ya inicializado (opcional, para evitar leer DB)
  */
 export async function crearGrupoContactosZEN(
   studioSlug: string,
-  studioName: string
+  studioName: string,
+  peopleClient?: ReturnType<typeof google.people>
 ): Promise<{ resourceName: string }> {
-  const { people } = await getGoogleContactsClient(studioSlug);
+  // Si se proporciona el cliente, usarlo directamente (evita leer DB)
+  // Si no, obtenerlo normalmente desde DB
+  const people = peopleClient || (await getGoogleContactsClient(studioSlug)).people;
 
-  const group = await people.contactGroups.create({
-    requestBody: {
-      contactGroup: {
-        name: `ZEN: ${studioName}`,
+  const nombreGrupo = `ZEN: ${studioName}`;
+
+  try {
+    // Intentar crear el grupo
+    const group = await people.contactGroups.create({
+      requestBody: {
+        contactGroup: {
+          name: nombreGrupo,
+        },
       },
-    },
-  });
+    });
 
-  if (!group.data.resourceName) {
-    throw new Error('No se pudo obtener el resourceName del grupo creado');
+    if (!group.data.resourceName) {
+      throw new Error('No se pudo obtener el resourceName del grupo creado');
+    }
+
+    return { resourceName: group.data.resourceName };
+  } catch (error: any) {
+    // Si el error es 409 (Conflict) o indica que el nombre ya existe, buscar el grupo existente
+    if (
+      error?.code === 409 ||
+      error?.status === 409 ||
+      error?.message?.includes('already exists') ||
+      error?.message?.includes('Contact group name already exists')
+    ) {
+      const resourceNameExistente = await buscarGrupoContactosPorNombre(people, nombreGrupo);
+      
+      if (resourceNameExistente) {
+        return { resourceName: resourceNameExistente };
+      } else {
+        // Si no se encontró, lanzar el error original
+        console.error(`[crearGrupoContactosZEN] ❌ Error: El grupo ya existe pero no se pudo encontrar`);
+        throw new Error(`El grupo "${nombreGrupo}" ya existe pero no se pudo obtener su resourceName`);
+      }
+    }
+    
+    // Si es otro tipo de error, lanzarlo
+    throw error;
   }
-
-  return { resourceName: group.data.resourceName };
 }
 
 /**

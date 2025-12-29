@@ -970,7 +970,7 @@ export async function crearAgendamiento(
         if (isMainEventDate && agenda.evento_id) {
             try {
                 const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
-                    await import('@/lib/integrations/google-calendar/helpers');
+                    await import('@/lib/integrations/google/clients/calendar/helpers');
                 
                 if (await tieneGoogleCalendarHabilitado(studioSlug)) {
                     sincronizarEventoPrincipalEnBackground(agenda.evento_id, studioSlug);

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ContactRound, Plus, Search } from 'lucide-react';
+import { ContactRound, Plus, Search, Users, ExternalLink, RefreshCw } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -9,7 +9,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/shadcn/sheet';
-import { ZenButton, ZenInput, ZenSelect } from '@/components/ui/zen';
+import { ZenButton, ZenInput, ZenSelect, ZenBadge } from '@/components/ui/zen';
 import { ContactsCardView } from './ContactsCardView';
 import { ContactModal } from './ContactModal';
 import { ZenConfirmModal } from '@/components/ui/zen';
@@ -18,6 +18,9 @@ import type { Contact } from '@/lib/actions/schemas/contacts-schemas';
 import { toast } from 'sonner';
 import { useContactRefresh, useContactUpdateListener } from '@/hooks/useContactRefresh';
 import { useContactsRealtime } from '@/hooks/useContactsRealtime';
+import { obtenerEstadoConexion } from '@/lib/actions/studio/integrations';
+import { iniciarConexionGoogleContacts } from '@/lib/integrations/google';
+import { GoogleContactsConnectionModal } from '@/components/shared/integrations/GoogleContactsConnectionModal';
 
 interface ContactsSheetProps {
   open: boolean;
@@ -44,6 +47,9 @@ export function ContactsSheet({
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isGoogleContactsConnected, setIsGoogleContactsConnected] = useState(false);
+  const [googleContactsEmail, setGoogleContactsEmail] = useState<string | null>(null);
+  const [showGoogleContactsModal, setShowGoogleContactsModal] = useState(false);
   const { triggerContactUpdate } = useContactRefresh();
 
   const loadContacts = useCallback(async () => {
@@ -75,6 +81,7 @@ export function ContactsSheet({
     if (open) {
       setLoading(true);
       loadContacts();
+      verificarEstadoGoogleContacts();
     } else {
       // Resetear estados del modal cuando se cierra el sheet
       setIsModalOpen(false);
@@ -82,6 +89,43 @@ export function ContactsSheet({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Verificar estado de Google Contacts
+  const verificarEstadoGoogleContacts = async () => {
+    try {
+      const status = await obtenerEstadoConexion(studioSlug);
+      const hasContactsScope = status.scopes?.some((scope) => scope.includes('contacts')) || false;
+      setIsGoogleContactsConnected(hasContactsScope && !!status.email);
+      setGoogleContactsEmail(status.email || null);
+    } catch (error) {
+      console.error('Error verificando estado de Google Contacts:', error);
+      setIsGoogleContactsConnected(false);
+      setGoogleContactsEmail(null);
+    }
+  };
+
+  // Manejar conexión de Google Contacts
+  const handleConnectGoogleContacts = async () => {
+    setShowGoogleContactsModal(true);
+  };
+
+  const handleConfirmConnectGoogleContacts = async () => {
+    try {
+      const result = await iniciarConexionGoogleContacts(studioSlug);
+      if (!result.success) {
+        toast.error(result.error || 'Error al iniciar conexión con Google Contacts');
+        setShowGoogleContactsModal(false);
+        return;
+      }
+      if (result.url) {
+        window.location.href = result.url;
+      }
+    } catch (error) {
+      console.error('Error conectando Google Contacts:', error);
+      toast.error('Error al conectar con Google Contacts');
+      setShowGoogleContactsModal(false);
+    }
+  };
 
   // Recargar cuando cambian los filtros o la búsqueda
   useEffect(() => {
@@ -394,6 +438,49 @@ export function ContactsSheet({
                 </div>
               </div>
 
+              {/* Google Contacts Integration */}
+              {isGoogleContactsConnected ? (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/50 border border-zinc-700">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Users className="h-4 w-4 text-green-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-zinc-300">
+                          Google Contacts conectado
+                        </span>
+                        <ZenBadge variant="success" size="sm">
+                          Activo
+                        </ZenBadge>
+                      </div>
+                      {googleContactsEmail && (
+                        <div className="text-xs text-zinc-500 mt-0.5 truncate">
+                          {googleContactsEmail}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/30 border border-zinc-700">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-zinc-500" />
+                    <span className="text-sm text-zinc-400">
+                      Sincroniza tus contactos con Google Contacts
+                    </span>
+                  </div>
+                  <ZenButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleConnectGoogleContacts}
+                    className="flex items-center gap-2"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Conectar
+                  </ZenButton>
+                </div>
+              )}
+
               {/* Contador */}
               <div className="text-sm text-zinc-400 min-h-[20px]">
                 {loading ? (
@@ -466,6 +553,14 @@ export function ContactsSheet({
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="destructive"
+      />
+
+      {/* Modal de conexión Google Contacts */}
+      <GoogleContactsConnectionModal
+        isOpen={showGoogleContactsModal}
+        onClose={() => setShowGoogleContactsModal(false)}
+        onConnect={handleConfirmConnectGoogleContacts}
+        connecting={false}
       />
     </>
   );

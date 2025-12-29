@@ -1360,7 +1360,7 @@ export async function autorizarCotizacion(
       // Sincronizar con Google Calendar en background
       try {
         const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
-          await import('@/lib/integrations/google-calendar/helpers');
+          await import('@/lib/integrations/google/clients/calendar/helpers');
         
         if (await tieneGoogleCalendarHabilitado(validatedData.studio_slug)) {
           sincronizarEventoPrincipalEnBackground(nuevoEvento.id, validatedData.studio_slug);

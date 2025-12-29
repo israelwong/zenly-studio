@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { IntegrationCard } from './IntegrationCard';
 import { ZenButton } from '@/components/ui/zen';
 import { GoogleCalendarDisconnectModal } from '@/components/shared/integrations/GoogleCalendarDisconnectModal';
-import { desvincularRecursoGoogle } from '@/lib/actions/auth/desconectar-google-calendar.actions';
+import { desvincularRecursoGoogle } from '@/lib/integrations/google';
 import { toast } from 'sonner';
 
 interface CalendarIntegrationCardProps {

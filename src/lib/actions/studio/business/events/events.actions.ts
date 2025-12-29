@@ -1505,7 +1505,7 @@ export async function cancelarEvento(
     // Sincronizar eliminación con Google Calendar en background
     try {
       const { tieneGoogleCalendarHabilitado, eliminarEventoPrincipalEnBackground } =
-        await import('@/lib/integrations/google-calendar/helpers');
+        await import('@/lib/integrations/google/clients/calendar/helpers');
       
       if (await tieneGoogleCalendarHabilitado(studioSlug)) {
         eliminarEventoPrincipalEnBackground(eventoId);
@@ -1808,7 +1808,7 @@ export async function actualizarFechaEvento(
     // Sincronizar con Google Calendar en background
     try {
       const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
-        await import('@/lib/integrations/google-calendar/helpers');
+        await import('@/lib/integrations/google/clients/calendar/helpers');
       
       if (await tieneGoogleCalendarHabilitado(studioSlug)) {
         sincronizarEventoPrincipalEnBackground(event_id, studioSlug);
@@ -2108,7 +2108,7 @@ export async function asignarCrewAItem(
                 const {
                   tieneGoogleCalendarHabilitado,
                   eliminarEventoEnBackground,
-                } = await import('@/lib/integrations/google-calendar/helpers');
+                } = await import('@/lib/integrations/google/clients/calendar/helpers');
                 if (await tieneGoogleCalendarHabilitado(studioSlug)) {
                   // Cancelar invitación en segundo plano (no bloquea la respuesta)
                   await eliminarEventoEnBackground(
@@ -2132,7 +2132,7 @@ export async function asignarCrewAItem(
                 const {
                   tieneGoogleCalendarHabilitado,
                   eliminarEventoEnBackground,
-                } = await import('@/lib/integrations/google-calendar/helpers');
+                } = await import('@/lib/integrations/google/clients/calendar/helpers');
                 if (await tieneGoogleCalendarHabilitado(studioSlug)) {
                   // Cancelar invitación anterior en segundo plano
                   await eliminarEventoEnBackground(
@@ -2795,7 +2795,7 @@ export async function eliminarSchedulerTask(
         const {
           tieneGoogleCalendarHabilitado,
           eliminarEventoEnBackground,
-        } = await import('@/lib/integrations/google-calendar/helpers');
+        } = await import('@/lib/integrations/google/clients/calendar/helpers');
         if (await tieneGoogleCalendarHabilitado(studioSlug)) {
           await eliminarEventoEnBackground(
             taskWithGoogle.google_calendar_id,

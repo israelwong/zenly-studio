@@ -4,8 +4,11 @@ import {
   procesarUsuarioOAuth,
   vincularRecursoGoogle,
 } from '@/lib/actions/auth/oauth.actions';
-import { procesarCallbackGoogleCalendar } from '@/lib/actions/auth/oauth-calendar.actions';
-import { procesarCallbackGoogle } from '@/lib/actions/studio/integrations/google-drive.actions';
+import {
+  procesarCallbackGoogleCalendar,
+  procesarCallbackGoogleDrive,
+  procesarCallbackUnificado,
+} from '@/lib/integrations/google';
 
 /**
  * Callback de Supabase Auth OAuth
@@ -115,6 +118,44 @@ export async function GET(request: NextRequest) {
       const studioSlugFromState = stateData.studioSlug;
       const returnUrl = stateData.returnUrl || null;
       const stateResourceType = stateData.resourceType;
+      const isUnified = (stateData as any).unified === true;
+
+      // Si es flujo unificado, procesar con función unificada
+      if (isUnified && studioSlugFromState) {
+        const result = await procesarCallbackUnificado(code, state);
+
+        if (!result.success) {
+          const redirectPath = getSafeRedirectUrl(
+            returnUrl,
+            `/${studioSlugFromState}/studio/config/integraciones`,
+            request
+          );
+          return NextResponse.redirect(
+            new URL(
+              `${redirectPath}?error=${encodeURIComponent(result.error || 'Error al conectar')}`,
+              request.url
+            )
+          );
+        }
+
+        // Redirigir con éxito (o con advertencia si hay error parcial)
+        const redirectPath = getSafeRedirectUrl(
+          result.returnUrl || returnUrl,
+          `/${result.studioSlug || studioSlugFromState}/studio/config/integraciones`,
+          request
+        );
+        const redirectUrl = new URL(redirectPath, request.url);
+        
+        if (result.error) {
+          // Hay un error parcial (ej: Contacts no se pudo conectar)
+          redirectUrl.searchParams.set('warning', encodeURIComponent(result.error));
+          redirectUrl.searchParams.set('success', 'google_suite_partial');
+        } else {
+          redirectUrl.searchParams.set('success', 'google_suite_connected');
+        }
+
+        return NextResponse.redirect(redirectUrl);
+      }
 
       // Si es Calendar, procesar con la función de Calendar
       if (stateResourceType === 'calendar' && studioSlugFromState) {
@@ -146,7 +187,7 @@ export async function GET(request: NextRequest) {
       // Si es Contacts, procesar con la función de Contacts
       if (stateResourceType === 'contacts' && studioSlugFromState) {
         const { procesarCallbackGoogleContacts } = await import(
-          '@/lib/actions/auth/oauth-contacts.actions'
+          '@/lib/integrations/google'
         );
         const result = await procesarCallbackGoogleContacts(code, state);
 
@@ -178,7 +219,7 @@ export async function GET(request: NextRequest) {
 
       // Si es Drive o no tiene resourceType (compatibilidad con versiones anteriores)
       if ((stateResourceType === 'drive' || !stateResourceType) && studioSlugFromState) {
-        const result = await procesarCallbackGoogle(code, state);
+        const result = await procesarCallbackGoogleDrive(code, state);
         
         if (!result.success) {
           const redirectPath = getSafeRedirectUrl(

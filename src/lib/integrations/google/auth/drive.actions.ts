@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma';
 import { obtenerCredencialesGoogle } from '@/lib/actions/platform/integrations/google.actions';
 import { encryptToken } from '@/lib/utils/encryption';
-import { crearGrupoContactosZEN } from '@/lib/integrations/google-contacts.client';
 
 export interface GoogleOAuthUrlResult {
   success: boolean;
@@ -12,17 +11,16 @@ export interface GoogleOAuthUrlResult {
 }
 
 /**
- * Genera URL de OAuth2 para conectar Google Contacts
- * Usa OAuth directo con Google (sin Supabase Auth) para no interferir con la sesión del usuario
+ * Genera URL de OAuth2 para conectar Google Drive
  */
-export async function iniciarConexionGoogleContacts(
+export async function iniciarConexionGoogleDrive(
   studioSlug: string,
   returnUrl?: string
 ): Promise<GoogleOAuthUrlResult> {
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: { id: true, studio_name: true },
+      select: { id: true },
     });
 
     if (!studio) {
@@ -39,15 +37,18 @@ export async function iniciarConexionGoogleContacts(
 
     const { clientId, redirectUri } = credentialsResult.data;
 
-    // Scope de Contacts
-    const scopes = ['https://www.googleapis.com/auth/contacts'];
+    // Autorización incremental: Pedir scopes de Drive con permisos de escritura
+    // Necesitamos permisos de escritura para establecer permisos públicos en carpetas
+    const scopes = [
+      'https://www.googleapis.com/auth/drive',
+    ];
 
     // State contiene el studioSlug, returnUrl y resourceType para recuperarlos en el callback
     const state = Buffer.from(
-      JSON.stringify({
-        studioSlug,
+      JSON.stringify({ 
+        studioSlug, 
         returnUrl: returnUrl || null,
-        resourceType: 'contacts',
+        resourceType: 'drive'
       })
     ).toString('base64');
 
@@ -63,7 +64,7 @@ export async function iniciarConexionGoogleContacts(
 
     return { success: true, url: authUrl };
   } catch (error) {
-    console.error('[iniciarConexionGoogleContacts] Error:', error);
+    console.error('[iniciarConexionGoogleDrive] Error:', error);
     return {
       success: false,
       error: 'Error al generar URL de OAuth',
@@ -73,18 +74,11 @@ export async function iniciarConexionGoogleContacts(
 
 /**
  * Procesa el callback de OAuth2 y guarda los tokens
- * Usa OAuth directo con Google (sin Supabase Auth) para no interferir con la sesión del usuario
- * ⚠️ CRÍTICO: Crea el grupo de contactos "ZEN: [Studio Name]" después de conectar
  */
-export async function procesarCallbackGoogleContacts(
+export async function procesarCallbackGoogleDrive(
   code: string,
   state: string
-): Promise<{
-  success: boolean;
-  studioSlug?: string;
-  returnUrl?: string;
-  error?: string;
-}> {
+): Promise<{ success: boolean; studioSlug?: string; returnUrl?: string; error?: string }> {
   try {
     // Decodificar state para obtener studioSlug y returnUrl
     let studioSlug: string;
@@ -99,12 +93,7 @@ export async function procesarCallbackGoogleContacts(
 
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: {
-        id: true,
-        studio_name: true,
-        google_oauth_scopes: true,
-        google_integrations_config: true,
-      },
+      select: { id: true },
     });
 
     if (!studio) {
@@ -138,14 +127,14 @@ export async function procesarCallbackGoogleContacts(
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json();
-      console.error('[procesarCallbackGoogleContacts] Error de Google:', errorData);
+      console.error('[procesarCallbackGoogleDrive] Error de Google:', errorData);
       return { success: false, error: 'Error al intercambiar code por tokens' };
     }
 
     const tokens = await tokenResponse.json();
 
     // ⚠️ CRÍTICO: Log para verificar refresh_token
-    console.log('[procesarCallbackGoogleContacts] Tokens recibidos:', {
+    console.log('[procesarCallbackGoogleDrive] Tokens recibidos:', {
       hasAccessToken: !!tokens.access_token,
       hasRefreshToken: !!tokens.refresh_token,
       tokenType: tokens.token_type,
@@ -154,11 +143,10 @@ export async function procesarCallbackGoogleContacts(
     });
 
     if (!tokens.refresh_token) {
-      console.error('[procesarCallbackGoogleContacts] ERROR: No se recibió refresh_token');
+      console.error('[procesarCallbackGoogleDrive] ERROR: No se recibió refresh_token');
       return {
         success: false,
-        error:
-          'No se recibió refresh_token. Asegúrate de incluir prompt=consent en la URL de OAuth.',
+        error: 'No se recibió refresh_token. Asegúrate de incluir prompt=consent en la URL de OAuth.',
       };
     }
 
@@ -170,24 +158,38 @@ export async function procesarCallbackGoogleContacts(
     });
 
     let email: string | undefined;
-    let name: string | null = null;
     if (userInfoResponse.ok) {
       const userInfo = await userInfoResponse.json();
       email = userInfo.email;
-      name = userInfo.name || null;
     }
 
     // Encriptar refresh_token antes de guardar
     const encryptedRefreshToken = await encryptToken(tokens.refresh_token);
 
     // Parsear scopes que realmente se otorgaron
-    const scopes = tokens.scope ? tokens.scope.split(' ') : [];
+    // Si Google no devuelve scope en la respuesta, usar los scopes que solicitamos
+    let scopes: string[] = [];
+    if (tokens.scope) {
+      scopes = tokens.scope.split(' ');
+    } else {
+      // Si no vienen en la respuesta, usar los scopes que solicitamos
+      // Esto puede pasar en algunos casos de OAuth
+      console.warn('[procesarCallbackGoogleDrive] No se recibieron scopes en la respuesta del token, usando scopes solicitados');
+      scopes = ['https://www.googleapis.com/auth/drive'];
+    }
+    
+    console.log('[procesarCallbackGoogleDrive] Scopes recibidos:', scopes);
 
     // Obtener scopes existentes para combinarlos (autorización incremental)
+    const studioActual = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { google_oauth_scopes: true },
+    });
+
     let scopesFinales = scopes;
-    if (studio.google_oauth_scopes) {
+    if (studioActual?.google_oauth_scopes) {
       try {
-        const scopesExistentes = JSON.parse(studio.google_oauth_scopes) as string[];
+        const scopesExistentes = JSON.parse(studioActual.google_oauth_scopes) as string[];
         // Combinar scopes existentes con los nuevos (sin duplicados)
         scopesFinales = Array.from(new Set([...scopesExistentes, ...scopes]));
       } catch {
@@ -197,71 +199,30 @@ export async function procesarCallbackGoogleContacts(
     }
 
     // Determinar qué integraciones están habilitadas según los scopes
-    const hasDriveScope =
+    const hasDriveScope = 
       scopesFinales.includes('https://www.googleapis.com/auth/drive.readonly') ||
       scopesFinales.includes('https://www.googleapis.com/auth/drive');
     const hasCalendarScope =
       scopesFinales.includes('https://www.googleapis.com/auth/calendar') ||
       scopesFinales.includes('https://www.googleapis.com/auth/calendar.events');
-    const hasContactsScope = scopesFinales.includes(
-      'https://www.googleapis.com/auth/contacts'
-    );
-
-    // Obtener configuración existente de integraciones
-    let integrationsConfig: any = {};
-    if (studio.google_integrations_config) {
-      try {
-        integrationsConfig =
-          typeof studio.google_integrations_config === 'string'
-            ? JSON.parse(studio.google_integrations_config)
-            : studio.google_integrations_config;
-      } catch {
-        integrationsConfig = {};
-      }
-    }
-
-    // ⚠️ CRÍTICO: Crear grupo de contactos "ZEN: [Studio Name]" si Contacts está habilitado
-    let groupResourceName: string | null = null;
-    if (hasContactsScope) {
-      try {
-        const grupoResult = await crearGrupoContactosZEN(studioSlug, studio.studio_name);
-        groupResourceName = grupoResult.resourceName;
-      } catch (error) {
-        console.error(
-          '[procesarCallbackGoogleContacts] Error creando grupo de contactos:',
-          error
-        );
-        // No fallar la conexión si falla la creación del grupo, pero loguear el error
-      }
-    }
-
-    // Actualizar configuración de integraciones
-    integrationsConfig = {
-      ...integrationsConfig,
-      drive: { enabled: hasDriveScope },
-      calendar: { enabled: hasCalendarScope },
-      contacts: {
-        enabled: hasContactsScope,
-        groupResourceName,
-        lastSyncAt: null,
-      },
-    };
 
     // ⚠️ CRÍTICO: Solo actualizar refresh_token si no es null para evitar borrar tokens válidos
     const updateData: any = {
       google_oauth_email: email,
-      google_oauth_name: name,
       google_oauth_scopes: JSON.stringify(scopesFinales),
       is_google_connected: true,
-      google_integrations_config: integrationsConfig,
+      google_integrations_config: {
+        drive: { enabled: hasDriveScope },
+        calendar: { enabled: hasCalendarScope },
+      },
     };
 
     // Solo actualizar refresh_token si tenemos uno nuevo (no null)
     if (encryptedRefreshToken) {
       updateData.google_oauth_refresh_token = encryptedRefreshToken;
-      console.log('[procesarCallbackGoogleContacts] Actualizando refresh_token');
+      console.log('[procesarCallbackGoogleDrive] Actualizando refresh_token');
     } else {
-      console.warn('[procesarCallbackGoogleContacts] WARNING: encryptedRefreshToken es null, no se actualizará');
+      console.warn('[procesarCallbackGoogleDrive] WARNING: encryptedRefreshToken es null, no se actualizará');
     }
 
     // Guardar tokens en DB
@@ -272,7 +233,7 @@ export async function procesarCallbackGoogleContacts(
 
     return { success: true, studioSlug, returnUrl: returnUrl || undefined };
   } catch (error) {
-    console.error('[procesarCallbackGoogleContacts] Error:', error);
+    console.error('[procesarCallbackGoogleDrive] Error:', error);
     return {
       success: false,
       error: 'Error al procesar callback de OAuth',

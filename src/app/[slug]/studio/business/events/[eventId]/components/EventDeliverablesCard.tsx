@@ -27,7 +27,7 @@ import {
 import {
   obtenerEstadoConexion,
   obtenerDetallesCarpeta,
-} from '@/lib/actions/studio/integrations/google-drive.actions';
+} from '@/lib/integrations/google';
 import { GoogleDriveFolderPicker } from '@/components/shared/integrations/GoogleDriveFolderPicker';
 import { GoogleDriveConnectionModal } from '@/components/shared/integrations/GoogleDriveConnectionModal';
 import { iniciarVinculacionDriveClient } from '@/lib/actions/auth/oauth-client.actions';
