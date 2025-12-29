@@ -76,12 +76,12 @@ export async function getSubscriptionData(studioSlug: string): Promise<GetSubscr
             };
         }
 
-        // Obtener la suscripción (activa, trial o cancelada para reactivación)
+        // Obtener la suscripción (activa, trial, cancelada o unlimited para reactivación)
         const subscription = await prisma.subscriptions.findFirst({
             where: {
                 studio_id: studio.id,
                 status: {
-                    in: ['ACTIVE', 'TRIAL', 'CANCELLED']
+                    in: ['ACTIVE', 'TRIAL', 'CANCELLED', 'UNLIMITED']
                 }
             },
             include: {

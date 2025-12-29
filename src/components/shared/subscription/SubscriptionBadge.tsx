@@ -41,6 +41,12 @@ export function SubscriptionBadge({
           className:
             "bg-red-900/20 text-red-400 border-red-500/50 shadow-red-600/20",
         };
+      case "UNLIMITED":
+        return {
+          text: "UNLIMITED",
+          className:
+            "bg-purple-900/20 text-purple-400 border-purple-500/50 shadow-purple-600/20",
+        };
       default:
         return {
           text: planName || "TRIAL",

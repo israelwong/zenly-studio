@@ -85,6 +85,7 @@ export function CurrentPlanCard({ data, studioSlug }: CurrentPlanCardProps) {
             case 'CANCELLED': return 'bg-red-900/30 text-red-300 border-red-800';
             case 'PAUSED': return 'bg-orange-900/30 text-orange-300 border-orange-800';
             case 'EXPIRED': return 'bg-red-900/30 text-red-300 border-red-800';
+            case 'UNLIMITED': return 'bg-purple-900/30 text-purple-300 border-purple-800';
             default: return 'bg-zinc-900/30 text-zinc-300 border-zinc-800';
         }
     };
@@ -96,6 +97,7 @@ export function CurrentPlanCard({ data, studioSlug }: CurrentPlanCardProps) {
             case 'CANCELLED': return 'Cancelada';
             case 'PAUSED': return 'Pausada';
             case 'EXPIRED': return 'Expirada';
+            case 'UNLIMITED': return 'Ilimitado';
             default: return status;
         }
     };
@@ -157,28 +159,36 @@ export function CurrentPlanCard({ data, studioSlug }: CurrentPlanCardProps) {
                         </div>
                     </div>
                     <div className="text-right">
-                        <div className="text-2xl font-bold text-white">
-                            {subscription.billing_interval === 'year'
-                                ? formatPrice(plan.price_yearly / 12)
-                                : formatPrice(plan.price_monthly)}
-                        </div>
-                        <div className="text-zinc-400 text-sm">
-                            /mes
-                            {subscription.billing_interval === 'year' && (
-                                <span className="block text-xs mt-0.5">
-                                    ({formatPrice(plan.price_yearly)}/año)
-                                </span>
-                            )}
-                        </div>
-                        {subscription.billing_interval && (
-                            <div className="mt-1">
-                                <Badge className={`text-xs ${subscription.billing_interval === 'year'
-                                    ? 'bg-emerald-900/30 text-emerald-300 border-emerald-800'
-                                    : 'bg-zinc-800/50 text-zinc-400 border-zinc-700'
-                                    }`}>
-                                    {subscription.billing_interval === 'year' ? 'Facturación Anual' : 'Facturación Mensual'}
-                                </Badge>
+                        {subscription.status === 'UNLIMITED' ? (
+                            <div className="text-2xl font-bold text-purple-300">
+                                Ilimitado
                             </div>
+                        ) : (
+                            <>
+                                <div className="text-2xl font-bold text-white">
+                                    {subscription.billing_interval === 'year'
+                                        ? formatPrice(plan.price_yearly / 12)
+                                        : formatPrice(plan.price_monthly)}
+                                </div>
+                                <div className="text-zinc-400 text-sm">
+                                    /mes
+                                    {subscription.billing_interval === 'year' && (
+                                        <span className="block text-xs mt-0.5">
+                                            ({formatPrice(plan.price_yearly)}/año)
+                                        </span>
+                                    )}
+                                </div>
+                                {subscription.billing_interval && (
+                                    <div className="mt-1">
+                                        <Badge className={`text-xs ${subscription.billing_interval === 'year'
+                                            ? 'bg-emerald-900/30 text-emerald-300 border-emerald-800'
+                                            : 'bg-zinc-800/50 text-zinc-400 border-zinc-700'
+                                            }`}>
+                                            {subscription.billing_interval === 'year' ? 'Facturación Anual' : 'Facturación Mensual'}
+                                        </Badge>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -186,7 +196,19 @@ export function CurrentPlanCard({ data, studioSlug }: CurrentPlanCardProps) {
 
             <CardContent className="space-y-6 flex-1 flex flex-col">
                 {/* Estado de la suscripción */}
-                {subscription.status === 'TRIAL' ? (
+                {subscription.status === 'UNLIMITED' ? (
+                    <div className="p-4 bg-purple-900/20 border border-purple-800/50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                            <CheckCircle className="h-5 w-5 text-purple-400 shrink-0" />
+                            <div className="flex-1">
+                                <div className="text-white font-medium mb-1">Plan Ilimitado</div>
+                                <div className="text-purple-300/80 text-sm">
+                                    Esta cuenta tiene acceso completo sin límites de tiempo. Es un plan especial gestionado manualmente.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : subscription.status === 'TRIAL' ? (
                     <div className="p-4 bg-blue-900/20 border border-blue-800/50 rounded-lg">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
@@ -212,18 +234,21 @@ export function CurrentPlanCard({ data, studioSlug }: CurrentPlanCardProps) {
                             Elige un plan antes de que termine tu período de prueba para continuar usando ZEN.
                         </p>
                     </div>
-                ) : (
+                ) : subscription.status === 'ACTIVE' ? (
                     <div className="flex items-center gap-3 p-4 bg-zinc-800/50 rounded-lg">
                         <div className={`px-2 py-0.5 rounded-full border text-xs ${getStatusColor(subscription.status)}`}>
-                            {subscription.status === 'ACTIVE' ? (
-                                <CheckCircle className="h-3 w-3 inline mr-1" />
-                            ) : (
-                                <XCircle className="h-3 w-3 inline mr-1" />
-                            )}
+                            <CheckCircle className="h-3 w-3 inline mr-1" />
                             {getStatusText(subscription.status)}
                         </div>
                         <div className="text-zinc-400 text-sm">
                             Próximo pago: {formatDate(subscription.current_period_end)}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-3 p-4 bg-zinc-800/50 rounded-lg">
+                        <div className={`px-2 py-0.5 rounded-full border text-xs ${getStatusColor(subscription.status)}`}>
+                            <XCircle className="h-3 w-3 inline mr-1" />
+                            {getStatusText(subscription.status)}
                         </div>
                     </div>
                 )}
@@ -268,7 +293,10 @@ export function CurrentPlanCard({ data, studioSlug }: CurrentPlanCardProps) {
                 )}
 
                 {/* Acciones */}
-                {subscription.status === 'TRIAL' ? (
+                {subscription.status === 'UNLIMITED' ? (
+                    // Sin botones para UNLIMITED - no puede cambiar suscripción
+                    null
+                ) : subscription.status === 'TRIAL' ? (
                     <div className="pt-4 border-t border-zinc-800">
                         <ZenButton
                             onClick={handleOpenPlansModal}

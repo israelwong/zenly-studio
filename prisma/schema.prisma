@@ -3149,6 +3149,7 @@ enum SubscriptionStatus {
   CANCELLED
   PAUSED
   EXPIRED
+  UNLIMITED
 }
 
 enum SubscriptionItemType {

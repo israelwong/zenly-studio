@@ -84,6 +84,14 @@ export async function createSubscriptionCheckout(
       return { success: false, error: "Studio no encontrado" };
     }
 
+    // Validar que no sea cuenta UNLIMITED (no puede cambiar suscripción)
+    if (studio.subscription_status === "UNLIMITED") {
+      return { 
+        success: false, 
+        error: "Esta cuenta tiene plan ilimitado. No se puede cambiar la suscripción desde aquí." 
+      };
+    }
+
     // Verificar que el priceId existe y está activo (buscar en mensual o anual)
     const plan = await prisma.platform_plans.findFirst({
       where: {
@@ -404,7 +412,10 @@ export async function cancelSubscription(studioSlug: string): Promise<{ success:
 export async function getAvailablePlans() {
   try {
     const plans = await prisma.platform_plans.findMany({
-      where: { active: true },
+      where: { 
+        active: true,
+        slug: { not: "unlimited" } // Excluir plan unlimited de las opciones
+      },
       include: {
         plan_limits: {
           select: {

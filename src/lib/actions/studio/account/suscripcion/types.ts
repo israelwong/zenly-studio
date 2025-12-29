@@ -34,7 +34,7 @@ export interface Subscription {
     stripe_subscription_id: string;
     stripe_customer_id: string;
     plan_id: string;
-    status: 'TRIAL' | 'ACTIVE' | 'CANCELLED' | 'PAUSED' | 'EXPIRED';
+    status: 'TRIAL' | 'ACTIVE' | 'CANCELLED' | 'PAUSED' | 'EXPIRED' | 'UNLIMITED';
     current_period_start: Date;
     current_period_end: Date;
     billing_cycle_anchor: Date;
