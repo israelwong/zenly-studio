@@ -37,6 +37,7 @@ interface ContactEventFormModalProps {
         referrer_name?: string;
     };
     onSuccess?: () => void;
+    zIndex?: number; // Z-index para modales anidados
 }
 
 export function ContactEventFormModal({
@@ -47,6 +48,7 @@ export function ContactEventFormModal({
     eventId,
     initialData,
     onSuccess,
+    zIndex = 10050,
 }: ContactEventFormModalProps) {
     const router = useRouter();
     const isEditMode = !!initialData?.id;
@@ -627,6 +629,7 @@ export function ContactEventFormModal({
             saveLabel={isEditMode ? 'Actualizar' : 'Crear Promesa'}
             cancelLabel="Cancelar"
             isLoading={loading}
+            zIndex={zIndex}
         >
             {isInitialLoading && !initialData ? (
                 <div className="space-y-4">

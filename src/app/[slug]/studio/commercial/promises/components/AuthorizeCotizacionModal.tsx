@@ -10,16 +10,10 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
-  DollarSign,
   CalendarIcon,
-  AlertCircle,
-  X,
-  ChevronDown,
   User,
   Phone,
   Mail,
-  MapPin,
-  Calendar as CalendarLucide,
   Edit2
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -157,6 +151,13 @@ export function AuthorizeCotizacionModal({
     try {
       const result = await getPromiseByIdAsPromiseWithContact(studioSlug, promiseId);
       if (result.success && result.data) {
+        console.log('[loadPromiseData] Promise data loaded:', {
+          name: result.data.name,
+          phone: result.data.phone,
+          email: result.data.email,
+          event_type: result.data.event_type?.name,
+          event_date: result.data.event_date
+        });
         setPromiseData(result.data);
       }
     } catch (error) {
@@ -309,20 +310,20 @@ export function AuthorizeCotizacionModal({
                     <div className="flex items-center gap-2">
                       <User className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
                       <span className="text-sm text-white">
-                        {promiseData.contact?.name || 'Sin nombre'}
+                        {promiseData.name || 'Sin nombre'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Phone className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
                       <span className="text-sm text-white">
-                        {promiseData.contact?.phone || 'Sin teléfono'}
+                        {promiseData.phone || 'Sin teléfono'}
                       </span>
                     </div>
-                    {promiseData.contact?.email && (
+                    {promiseData.email && (
                       <div className="flex items-center gap-2">
                         <Mail className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
                         <span className="text-sm text-white truncate">
-                          {promiseData.contact.email}
+                          {promiseData.email}
                         </span>
                       </div>
                     )}
@@ -337,10 +338,10 @@ export function AuthorizeCotizacionModal({
                     Detalles del Evento
                   </h4>
                   <div className="space-y-1.5">
-                    {promiseData.name && (
+                    {promiseData.event_name && (
                       <div>
                         <label className="text-xs text-zinc-500 block mb-0.5">Nombre del Evento</label>
-                        <p className="text-sm text-white font-medium">{promiseData.name}</p>
+                        <p className="text-sm text-white font-medium">{promiseData.event_name}</p>
                       </div>
                     )}
                     {promiseData.event_type?.name && (
@@ -349,15 +350,21 @@ export function AuthorizeCotizacionModal({
                         <p className="text-sm text-white">{promiseData.event_type.name}</p>
                       </div>
                     )}
-                    {promiseData.event_location && (
+                    {promiseData.interested_dates && promiseData.interested_dates.length > 0 && (
                       <div>
-                        <label className="text-xs text-zinc-500 block mb-0.5">Locación</label>
-                        <p className="text-sm text-white">{promiseData.event_location}</p>
+                        <label className="text-xs text-zinc-500 block mb-0.5">Fechas de Interés</label>
+                        <div className="flex flex-wrap gap-1">
+                          {promiseData.interested_dates.map((date: string, idx: number) => (
+                            <span key={idx} className="text-xs text-white bg-zinc-700 px-2 py-0.5 rounded">
+                              {format(new Date(date), 'PP', { locale: es })}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {promiseData.event_date && (
                       <div>
-                        <label className="text-xs text-zinc-500 block mb-0.5">Fecha</label>
+                        <label className="text-xs text-zinc-500 block mb-0.5">Fecha Confirmada</label>
                         <p className="text-sm text-white">
                           {format(new Date(promiseData.event_date), 'PPP', { locale: es })}
                         </p>
@@ -610,46 +617,28 @@ export function AuthorizeCotizacionModal({
       )}
 
       {/* Modal Preview de Cotización */}
-      {showCotizacionPreview && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-          {/* Overlay oscuro */}
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setShowCotizacionPreview(false)}
-          />
-
-          {/* Contenido del modal */}
-          <div className="relative z-10 w-full max-w-7xl bg-zinc-900 rounded-lg shadow-xl border border-zinc-800 max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white">
-                Cotización: {cotizacion.name}
-              </h3>
-              <button
-                onClick={() => setShowCotizacionPreview(false)}
-                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-zinc-400" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-4 overflow-y-auto flex-1">
-              {loadingCotizacion ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-                </div>
-              ) : cotizacionCompleta ? (
-                <ResumenCotizacion
-                  cotizacion={cotizacionCompleta}
-                  studioSlug={studioSlug}
-                  promiseId={promiseId}
-                />
-              ) : null}
-            </div>
+      <ZenDialog
+        isOpen={showCotizacionPreview}
+        onClose={() => setShowCotizacionPreview(false)}
+        title={`Cotización: ${cotizacion.name}`}
+        description="Vista previa completa de la cotización"
+        maxWidth="7xl"
+        onCancel={() => setShowCotizacionPreview(false)}
+        cancelLabel="Cerrar"
+        zIndex={10070}
+      >
+        {loadingCotizacion ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
           </div>
-        </div>
-      )}
+        ) : cotizacionCompleta ? (
+          <ResumenCotizacion
+            cotizacion={cotizacionCompleta}
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+          />
+        ) : null}
+      </ZenDialog>
 
       {/* Modal de Edición de Contacto/Evento */}
       {promiseData && (
@@ -659,20 +648,16 @@ export function AuthorizeCotizacionModal({
           studioSlug={studioSlug}
           context="promise"
           initialData={{
-            id: promiseData.id,
-            name: promiseData.contact?.name || '',
-            phone: promiseData.contact?.phone || '',
-            email: promiseData.contact?.email || undefined,
+            id: promiseData.promise_id || promiseData.id,
+            name: promiseData.name || '',
+            phone: promiseData.phone || '',
+            email: promiseData.email || undefined,
             event_type_id: promiseData.event_type_id || undefined,
-            event_location: promiseData.event_location || undefined,
-            event_name: promiseData.name || undefined,
+            event_name: promiseData.event_name || undefined,
             interested_dates: promiseData.interested_dates || undefined,
-            acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
-            social_network_id: promiseData.social_network_id || undefined,
-            referrer_contact_id: promiseData.referrer_contact_id || undefined,
-            referrer_name: promiseData.referrer_name || undefined,
           }}
           onSuccess={handleEditSuccess}
+          zIndex={10060}
         />
       )}
     </>
