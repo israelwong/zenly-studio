@@ -1,5 +1,24 @@
 import { z } from 'zod';
 
+/**
+ * Estados de cotización (studio_cotizaciones.status):
+ * 
+ * FLUJO NORMAL:
+ * - "pendiente" → Cotización creada, esperando autorización del prospecto
+ * - "preautorizada" → Prospecto autorizó desde portal público
+ * - "contract_pending" → Studio autorizó, esperando confirmación de datos del cliente
+ * - "contract_generated" → Cliente confirmó datos, contrato generado automáticamente
+ * - "contract_signed" → Cliente firmó contrato, esperando autorización final del studio
+ * - "autorizada" / "aprobada" → Studio autorizó evento, contrato vinculado
+ * 
+ * ESTADOS ESPECIALES:
+ * - "cancelada" → Cotización cancelada
+ * - "archived" → Cotización archivada (campo separado: archived = true)
+ * 
+ * LEGACY (importación de clientes):
+ * - Studio puede autorizar directamente sin pasar por flujo de contrato
+ */
+
 export const createCotizacionSchema = z.object({
   studio_slug: z.string().min(1, 'Studio slug requerido'),
   promise_id: z.string().cuid().optional().nullable(),

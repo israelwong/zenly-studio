@@ -1127,7 +1127,17 @@ export async function updateCotizacion(
 }
 
 /**
- * Autorizar cotizaci?n (simplificado - solo autoriza, no registra pagos)
+ * Autorizar cotización (NUEVO FLUJO - NO crea evento, solo cambia estado)
+ * 
+ * CAMBIO IMPORTANTE: Ahora solo marca la cotización como "contract_pending"
+ * El evento se creará DESPUÉS de que el cliente firme el contrato
+ * 
+ * Flujo:
+ * 1. Validar cotización y promesa
+ * 2. Cambiar status a "contract_pending" 
+ * 3. Mover promesa a etapa "approved"
+ * 4. El cliente debe confirmar datos y firmar contrato
+ * 5. El studio autoriza evento manualmente después de firma
  */
 export async function autorizarCotizacion(
   data: AutorizarCotizacionData
@@ -1138,14 +1148,21 @@ export async function autorizarCotizacion(
     // Obtener studio
     const studio = await prisma.studios.findUnique({
       where: { slug: validatedData.studio_slug },
-      select: { id: true },
+      select: { 
+        id: true,
+        config: {
+          select: {
+            require_contract_before_event: true,
+          }
+        }
+      },
     });
 
     if (!studio) {
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener cotizaci?n con relaciones
+    // Obtener cotización con relaciones
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: validatedData.cotizacion_id,
@@ -1167,7 +1184,7 @@ export async function autorizarCotizacion(
             contact_id: true,
             event_type_id: true,
             event_location: true,
-            event_date: true, // ? ?NICO CAMPO DE FECHA (nuevo est?ndar)
+            event_date: true,
             contact: {
               select: {
                 id: true,
@@ -1183,457 +1200,140 @@ export async function autorizarCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     if (cotizacion.status === 'autorizada' || cotizacion.status === 'aprobada') {
-      return { success: false, error: 'La cotizaci?n ya est? autorizada' };
+      return { success: false, error: 'La cotización ya está autorizada' };
+    }
+
+    if (cotizacion.status === 'contract_pending' || cotizacion.status === 'contract_generated' || cotizacion.status === 'contract_signed') {
+      return { success: false, error: 'La cotización ya está en proceso de contrato' };
     }
 
     const contactId = cotizacion.contact_id || cotizacion.promise?.contact_id;
     if (!contactId) {
-      return { success: false, error: 'La cotizaci?n no tiene contacto asociado' };
+      return { success: false, error: 'La cotización no tiene contacto asociado' };
     }
 
-    // Verificar si ya existe un evento asociado a esta cotizaci?n o promise
-    // Buscar tanto eventos activos como cancelados para poder reactivarlos
-    // Priorizar b?squeda por promise_id si existe, ya que es m?s espec?fico
+    // Validación: event_date debe existir antes de autorizar
+    if (!cotizacion.promise?.event_date) {
+      return {
+        success: false,
+        error: 'Debes confirmar la fecha del evento antes de autorizar la cotización. Ve a la promesa y define la fecha del evento.'
+      };
+    }
+
+    // promise_id es requerido
+    if (!validatedData.promise_id) {
+      return {
+        success: false,
+        error: 'Se requiere una promesa para autorizar la cotización',
+      };
+    }
+
+    // Verificar si ya existe un evento (para casos legacy o importación)
     const eventoExistente = await prisma.studio_events.findFirst({
       where: {
         studio_id: studio.id,
         OR: [
-          // Buscar por cotizacion_id (puede estar en evento activo o cancelado)
           { cotizacion_id: validatedData.cotizacion_id },
-          // Buscar por promise_id si existe (m?s espec?fico)
-          ...(validatedData.promise_id ? [{ promise_id: validatedData.promise_id }] : []),
+          { promise_id: validatedData.promise_id },
         ],
       },
       select: {
         id: true,
-        status: true,
-      },
-      orderBy: [
-        // Priorizar eventos activos sobre cancelados
-        { status: 'asc' },
-        // Si hay m?ltiples, tomar el m?s reciente
-        { updated_at: 'desc' },
-      ],
-    });
-
-    // Obtener la primera etapa de manager pipeline (Planeaci?n)
-    const primeraEtapa = await prisma.studio_manager_pipeline_stages.findFirst({
-      where: {
-        studio_id: studio.id,
-        is_active: true,
-        slug: 'planeacion',
-      },
-      orderBy: {
-        order: 'asc',
       },
     });
 
-    if (!primeraEtapa) {
-      return { success: false, error: 'No se encontr? la etapa inicial del pipeline' };
-    }
-
-    // ? VALIDACI?N OBLIGATORIA: event_date debe existir antes de autorizar
-    if (!cotizacion.promise?.event_date) {
-      return {
-        success: false,
-        error: 'Debes confirmar la fecha del evento antes de autorizar la cotizaci?n. Ve a la promesa y define la fecha del evento.'
-      };
-    }
-
-    const eventDate: Date = cotizacion.promise.event_date;
-
-    // Determinar evento existente o crear uno nuevo
-    let eventoId: string | null = null;
-
-    if (eventoExistente) {
-      // Actualizar evento existente (puede estar cancelado y necesitar reactivaci?n)
-      eventoId = eventoExistente.id;
-
-      // Preparar datos de actualizaci?n (solo campos operativos)
-      const updateData: {
-        cotizacion_id: string;
-        stage_id: string;
-        event_date: Date;
-        status: string;
-        updated_at: Date;
-        promise_id?: string | null;
-      } = {
-        cotizacion_id: validatedData.cotizacion_id,
-        stage_id: primeraEtapa.id,
-        event_date: eventDate, // Leer de promise.event_date despu?s
-        status: 'ACTIVE', // Reactivar si estaba cancelado
-        updated_at: new Date(),
-      };
-
-      // Solo actualizar promise_id si viene y no causa conflicto
-      if (validatedData.promise_id) {
-        updateData.promise_id = validatedData.promise_id;
-      }
-
-      await prisma.studio_events.update({
-        where: { id: eventoId },
-        data: updateData,
-      });
-
-      // Actualizar promesa con address y event_date si existe
-      if (validatedData.promise_id) {
-        const address = cotizacion.contact?.address || cotizacion.promise?.contact?.address || null;
-        
-        // Obtener nombre actual de la promesa para no reescribirlo si ya está definido
-        const promiseActual = await prisma.studio_promises.findUnique({
-          where: { id: validatedData.promise_id },
-          select: { name: true },
-        });
-        
-        // Solo actualizar nombre si es null, undefined, o "Pendiente"
-        const nombreActualizar = 
-          !promiseActual?.name || promiseActual.name === 'Pendiente'
-            ? (cotizacion.promise?.name || 'Pendiente')
-            : promiseActual.name;
-        
-        await prisma.studio_promises.update({
-          where: { id: validatedData.promise_id },
-          data: {
-            address: address || undefined,
-            event_date: eventDate,
-            name: nombreActualizar,
-          },
-        });
-      }
-    } else {
-      // Crear nuevo evento solo si no existe uno con el promise_id
-      const eventTypeId = cotizacion.promise?.event_type_id || cotizacion.event_type_id || null;
-      // La direcci?n se obtiene del contacto si est? disponible
-      const address = cotizacion.contact?.address || cotizacion.promise?.contact?.address || null;
-      // El lugar del evento se obtiene de la promesa si est? disponible
-      const eventLocation = cotizacion.promise?.event_location || null;
-
-      // promise_id es requerido ahora
-      if (!validatedData.promise_id) {
-        return {
-          success: false,
-          error: 'Se requiere una promesa para crear el evento',
-        };
-      }
-
-      // Actualizar promesa con address y event_date antes de crear evento
-      // Obtener nombre actual de la promesa para no reescribirlo si ya está definido
-      const promiseActual = await prisma.studio_promises.findUnique({
-        where: { id: validatedData.promise_id },
-        select: { name: true },
-      });
-      
-      // Solo actualizar nombre si es null, undefined, o "Pendiente"
-      const nombreActualizar = 
-        !promiseActual?.name || promiseActual.name === 'Pendiente'
-          ? (cotizacion.promise?.name || 'Pendiente')
-          : promiseActual.name;
-      
-      await prisma.studio_promises.update({
-        where: { id: validatedData.promise_id },
-        data: {
-          address: address || undefined,
-          event_date: eventDate,
-          name: nombreActualizar,
-        },
-      });
-
-      const nuevoEvento = await prisma.studio_events.create({
-        data: {
-          studio_id: studio.id,
-          contact_id: contactId,
-          promise_id: validatedData.promise_id, // REQUERIDO
-          cotizacion_id: validatedData.cotizacion_id,
-          event_type_id: eventTypeId,
-          stage_id: primeraEtapa.id,
-          event_date: eventDate, // Leer de promise.event_date despu?s
-          status: 'ACTIVE',
-        },
-      });
-
-      eventoId = nuevoEvento.id;
-
-      // Sincronizar con Google Calendar en background
-      try {
-        const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
-          await import('@/lib/integrations/google/clients/calendar/helpers');
-        
-        if (await tieneGoogleCalendarHabilitado(validatedData.studio_slug)) {
-          sincronizarEventoPrincipalEnBackground(nuevoEvento.id, validatedData.studio_slug);
-        }
-      } catch (error) {
-        console.error(
-          '[Google Calendar] Error sincronizando evento en autorizarCotizacion (no crítico):',
-          error
-        );
-      }
-    }
+    let eventoId: string | null = eventoExistente?.id || null;
 
     // Obtener etapa "aprobado" del pipeline de promises
-    const etapaAprobado = validatedData.promise_id
-      ? await prisma.studio_promise_pipeline_stages.findFirst({
-        where: {
-          studio_id: studio.id,
-          slug: 'approved',
-          is_active: true,
-        },
-      })
-      : null;
+    const etapaAprobado = await prisma.studio_promise_pipeline_stages.findFirst({
+      where: {
+        studio_id: studio.id,
+        slug: 'approved',
+        is_active: true,
+      },
+    });
 
-    // ?? Obtener configuraci?n de precios ANTES de la transacci?n
-    const configResult = await obtenerConfiguracionPrecios(validatedData.studio_slug);
-    const configPrecios = {
-      utilidad_servicio: Number(configResult?.utilidad_servicio) || 0,
-      utilidad_producto: Number(configResult?.utilidad_producto) || 0,
-      comision_venta: Number(configResult?.comision_venta) || 0,
-      sobreprecio: Number(configResult?.sobreprecio) || 0,
-    };
+    if (!etapaAprobado) {
+      return { success: false, error: 'No se encontró la etapa de aprobación en el pipeline de promesas' };
+    }
 
-    // Calcular descuento si el monto final es diferente al precio original
-    const descuento = cotizacion.price > validatedData.monto
-      ? cotizacion.price - validatedData.monto
-      : 0;
-
-    // Transacci?n para garantizar consistencia
+    // Transacción para garantizar consistencia
     await prisma.$transaction(async (tx) => {
-      // 1. Actualizar cotizaci?n autorizada a "aprobada"
-      const result = await tx.studio_cotizaciones.update({
+      // 1. Actualizar cotización a "contract_pending" (NO crear evento todavía)
+      await tx.studio_cotizaciones.update({
         where: { id: validatedData.cotizacion_id },
         data: {
-          status: 'aprobada' as const,
+          status: 'contract_pending', // Nuevo estado: esperando contrato
           condiciones_comerciales_id: validatedData.condiciones_comerciales_id,
-          evento_id: eventoId,
           updated_at: new Date(),
-          payment_promise_date: new Date(),
-          payment_registered: false,
-          discount: descuento > 0 ? descuento : null, // Guardar descuento si existe
+          // NO asignar evento_id todavía
         },
       });
 
-      // ?? CR?TICO: Guardar estructura + precios de cotizaci?n en el momento de autorizaci?n
-      // Esto crea un "snapshot" hist?rico que protege contra cambios futuros en el cat?logo
-      await guardarEstructuraCotizacionAutorizada(
-        tx,
-        validatedData.cotizacion_id,
-        configPrecios,
-        validatedData.studio_slug
-      );
+      // 2. Archivar otras cotizaciones de la misma promesa
+      const otrasCotizaciones = await tx.studio_cotizaciones.findMany({
+        where: {
+          promise_id: validatedData.promise_id,
+          id: { not: validatedData.cotizacion_id },
+          archived: false,
+          status: { not: 'cancelada' },
+        },
+        select: { id: true },
+      });
 
-      // 2. Archivar autom?ticamente las dem?s cotizaciones de la promesa (solo puede haber una aprobada)
-      // Excluir las canceladas: no se archivan ni modifican
-      if (validatedData.promise_id) {
-        const otrasCotizaciones = await tx.studio_cotizaciones.findMany({
+      if (otrasCotizaciones.length > 0) {
+        await tx.studio_cotizaciones.updateMany({
           where: {
-            promise_id: validatedData.promise_id,
-            id: { not: validatedData.cotizacion_id }, // Excluir la cotizaci?n actual
-            archived: false,
-            status: { not: 'cancelada' }, // Excluir las canceladas
+            id: { in: otrasCotizaciones.map((c) => c.id) },
           },
-          select: { id: true },
-        });
-
-        if (otrasCotizaciones.length > 0) {
-          await tx.studio_cotizaciones.updateMany({
-            where: {
-              id: { in: otrasCotizaciones.map((c) => c.id) },
-            },
-            data: {
-              archived: true,
-              updated_at: new Date(),
-            },
-          });
-          console.log(`[AUTORIZACION] ${otrasCotizaciones.length} cotizaciones archivadas autom?ticamente.`);
-        }
-      }
-
-      // 3. Cambiar etapa de la promesa a "aprobado"
-      if (validatedData.promise_id && etapaAprobado) {
-        await tx.studio_promises.update({
-          where: { id: validatedData.promise_id },
           data: {
-            pipeline_stage_id: etapaAprobado.id,
+            archived: true,
             updated_at: new Date(),
           },
         });
-
-        // 5. Eliminar etiqueta "Cancelada" si existe
-        const tagCancelada = await tx.studio_promise_tags.findUnique({
-          where: {
-            studio_id_slug: {
-              studio_id: studio.id,
-              slug: 'cancelada',
-            },
-          },
-        });
-
-        if (tagCancelada) {
-          const relacionCancelada = await tx.studio_promises_tags.findFirst({
-            where: {
-              promise_id: validatedData.promise_id,
-              tag_id: tagCancelada.id,
-            },
-          });
-
-          if (relacionCancelada) {
-            await tx.studio_promises_tags.delete({
-              where: { id: relacionCancelada.id },
-            });
-          }
-        }
+        console.log(`[AUTORIZACION] ${otrasCotizaciones.length} cotizaciones archivadas automáticamente.`);
       }
 
-      // 6. Convertir agendamiento de promesa a agendamiento de evento
-      if (eventoId && validatedData.promise_id) {
-        // Obtener el evento con su fecha
-        const evento = await tx.studio_events.findUnique({
-          where: { id: eventoId },
-          select: {
-            event_date: true,
+      // 3. Mover promesa a etapa "approved"
+      await tx.studio_promises.update({
+        where: { id: validatedData.promise_id },
+        data: {
+          pipeline_stage_id: etapaAprobado.id,
+          updated_at: new Date(),
+        },
+      });
+
+      // 4. Eliminar etiqueta "Cancelada" si existe
+      const tagCancelada = await tx.studio_promise_tags.findUnique({
+        where: {
+          studio_id_slug: {
+            studio_id: studio.id,
+            slug: 'cancelada',
+          },
+        },
+      });
+
+      if (tagCancelada) {
+        const relacionCancelada = await tx.studio_promises_tags.findFirst({
+          where: {
+            promise_id: validatedData.promise_id,
+            tag_id: tagCancelada.id,
           },
         });
 
-        if (evento && evento.event_date) {
-          // Obtener TODOS los agendamientos asociados a la promesa
-          const agendamientosPromesa = await tx.studio_agenda.findMany({
-            where: {
-              promise_id: validatedData.promise_id,
-              studio_id: studio.id,
-            },
-            orderBy: {
-              created_at: 'desc',
-            },
+        if (relacionCancelada) {
+          await tx.studio_promises_tags.delete({
+            where: { id: relacionCancelada.id },
           });
-
-          // Verificar si ya existe un agendamiento para este evento
-          const agendamientoEventoExistente = await tx.studio_agenda.findFirst({
-            where: {
-              evento_id: eventoId,
-            },
-          });
-
-          // Identificar el agendamiento principal a convertir (el primero o el que tenga fecha definida)
-          const agendamientoPrincipal = agendamientosPromesa.find(
-            (a) => a.date !== null
-          ) || agendamientosPromesa[0];
-
-          if (agendamientoPrincipal) {
-            // Convertir el agendamiento principal de promesa a evento
-            await tx.studio_agenda.update({
-              where: { id: agendamientoPrincipal.id },
-              data: {
-                promise_id: null,
-                evento_id: eventoId,
-                contexto: 'evento',
-                agenda_tipo: 'evento',
-                date: evento.event_date,
-                concept: evento.name || 'Fecha del evento',
-                description: evento.address || null,
-                address: evento.address || null,
-                updated_at: new Date(),
-              },
-            });
-
-            // Eliminar TODOS los dem?s agendamientos de la promesa (fechas de inter?s adicionales)
-            if (agendamientosPromesa.length > 1) {
-              await tx.studio_agenda.deleteMany({
-                where: {
-                  promise_id: validatedData.promise_id,
-                  studio_id: studio.id,
-                  id: {
-                    not: agendamientoPrincipal.id,
-                  },
-                },
-              });
-            }
-          } else if (!agendamientoEventoExistente) {
-            // Si no hay agendamiento de promesa, crear uno nuevo para el evento
-            await tx.studio_agenda.create({
-              data: {
-                studio_id: studio.id,
-                evento_id: eventoId,
-                contexto: 'evento',
-                date: evento.event_date,
-                concept: evento.name || 'Fecha del evento',
-                description: evento.address || null,
-                address: evento.address || null,
-                status: 'pendiente',
-                agenda_tipo: 'evento',
-              },
-            });
-          } else {
-            // Si ya existe agendamiento del evento, solo actualizar con la fecha del evento
-            await tx.studio_agenda.update({
-              where: { id: agendamientoEventoExistente.id },
-              data: {
-                date: evento.event_date,
-                concept: evento.name || 'Fecha del evento',
-                description: evento.address || null,
-                address: evento.address || null,
-                updated_at: new Date(),
-              },
-            });
-          }
-
-          // Asegurar que se eliminen TODOS los agendamientos restantes de la promesa
-          // (por si acaso qued? alguno despu?s de la conversi?n)
-          await tx.studio_agenda.deleteMany({
-            where: {
-              promise_id: validatedData.promise_id,
-              studio_id: studio.id,
-            },
-          });
-        }
-      } else if (eventoId) {
-        // Si no hay promise_id pero s? eventoId, solo crear/actualizar agendamiento del evento
-        const evento = await tx.studio_events.findUnique({
-          where: { id: eventoId },
-          select: {
-            event_date: true,
-          },
-        });
-
-        if (evento && evento.event_date) {
-          const agendamientoExistente = await tx.studio_agenda.findFirst({
-            where: {
-              evento_id: eventoId,
-            },
-          });
-
-          if (!agendamientoExistente) {
-            await tx.studio_agenda.create({
-              data: {
-                studio_id: studio.id,
-                evento_id: eventoId,
-                contexto: 'evento',
-                date: evento.event_date,
-                concept: evento.name || 'Fecha del evento',
-                description: evento.address || null,
-                address: evento.address || null,
-                status: 'pendiente',
-                agenda_tipo: 'evento',
-              },
-            });
-          } else {
-            await tx.studio_agenda.update({
-              where: { id: agendamientoExistente.id },
-              data: {
-                date: evento.event_date,
-                concept: evento.name || 'Fecha del evento',
-                description: evento.address || null,
-                address: evento.address || null,
-                updated_at: new Date(),
-              },
-            });
-          }
         }
       }
     });
 
-    // Obtener la cotizaci?n actualizada con evento_id para asegurar que tenemos el valor correcto
+    // Obtener la cotización actualizada
     const cotizacionActualizada = await prisma.studio_cotizaciones.findUnique({
       where: { id: validatedData.cotizacion_id },
       select: {
@@ -1644,11 +1344,10 @@ export async function autorizarCotizacion(
       },
     });
 
-    // Usar el evento_id de la cotizaci?n actualizada (puede ser m?s confiable que eventoId)
-    const eventoIdFinal = cotizacionActualizada?.evento_id || eventoId;
+    const eventoIdFinal = eventoId;
 
-    // Registrar log en promise si existe
-    if (validatedData.promise_id && cotizacionActualizada) {
+    // Registrar log en promise
+    if (cotizacionActualizada) {
       const { logPromiseAction } = await import('./promise-logs.actions');
       await logPromiseAction(
         validatedData.studio_slug,
@@ -1659,7 +1358,7 @@ export async function autorizarCotizacion(
         {
           quotationName: cotizacionActualizada.name,
           amount: validatedData.monto,
-          eventId: eventoIdFinal,
+          status: 'contract_pending',
         }
       ).catch((error) => {
         console.error('[AUTORIZACION] Error registrando log:', error);
@@ -1669,29 +1368,6 @@ export async function autorizarCotizacion(
     // Revalidar rutas
     revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises`);
     revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises/${validatedData.promise_id}`);
-    revalidatePath(`/${validatedData.studio_slug}/studio/business/events`);
-    revalidatePath(`/${validatedData.studio_slug}/studio/dashboard/agenda`); // Revalidar calendario
-    if (eventoIdFinal) {
-      revalidatePath(`/${validatedData.studio_slug}/studio/business/events/${eventoIdFinal}`);
-    }
-
-    // Crear notificaci?n usando el evento_id de la cotizaci?n actualizada
-    try {
-      const { notifyQuoteApproved } = await import('@/lib/notifications/studio');
-      const contactName = cotizacion.contact?.name || cotizacion.promise?.contact?.name || 'Cliente';
-
-      await notifyQuoteApproved(
-        studio.id,
-        validatedData.cotizacion_id,
-        contactName,
-        validatedData.monto,
-        eventoIdFinal || null,
-        validatedData.promise_id || null
-      );
-    } catch (notificationError) {
-      console.error('[AUTORIZACION] Error creando notificaci?n:', notificationError);
-      // No fallar la autorizaci?n si falla la notificaci?n
-    }
 
     return {
       success: true,
