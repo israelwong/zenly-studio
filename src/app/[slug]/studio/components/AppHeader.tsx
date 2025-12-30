@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Inbox, Zap, Menu, ChevronDown, Calendar, ContactRound, CalendarCheck } from 'lucide-react';
-import Link from 'next/link';
+import { Zap, Menu, ChevronDown } from 'lucide-react';
 import { BreadcrumbHeader } from './BreadcrumbHeader';
 import { UserAvatar } from '@/components/auth/user-avatar';
 import { StorageBadge } from './StorageBadge';
@@ -11,82 +10,23 @@ import { ZenButton, useZenSidebar } from '@/components/ui/zen';
 import { useStudioData } from '@/hooks/useStudioData';
 import { SubscriptionPopover } from './SubscriptionPopover';
 import { SubscriptionBadge } from '@/components/shared/subscription/SubscriptionBadge';
-import { obtenerEstadoConexion } from '@/lib/integrations/google';
 import { GoogleStatusPopover } from '@/components/shared/integrations/GoogleStatusPopover';
 import { useCommercialNameShort } from '@/hooks/usePlatformConfig';
 
 interface AppHeaderProps {
     studioSlug: string;
     onCommandOpen?: () => void;
-    onAgendaClick?: () => void;
-    onContactsClick?: () => void;
-    onTareasOperativasClick?: () => void;
 }
 
-export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContactsClick, onTareasOperativasClick }: AppHeaderProps) {
+export function AppHeader({ studioSlug, onCommandOpen }: AppHeaderProps) {
     const [isMounted, setIsMounted] = useState(false);
-    const [hasGoogleCalendar, setHasGoogleCalendar] = useState(false);
     const { toggleSidebar } = useZenSidebar();
     const { identidadData } = useStudioData({ studioSlug });
     const commercialNameShort = useCommercialNameShort();
 
-    // Evitar problemas de hidratación con Radix UI
     useEffect(() => {
         setIsMounted(true);
     }, []);
-
-    // Verificar estado de Google Calendar y reaccionar a cambios en tiempo real
-    useEffect(() => {
-        if (!isMounted) return;
-
-        let isMountedRef = true;
-
-        const checkConnection = () => {
-            if (!isMountedRef) return;
-
-            obtenerEstadoConexion(studioSlug)
-                .then((result) => {
-                    if (!isMountedRef) return;
-
-                    if (result.success && result.isConnected) {
-                        // Verificar que tenga scopes de Calendar
-                        const hasCalendarScope =
-                            result.scopes?.some(
-                                (scope) =>
-                                    scope.includes('calendar') || scope.includes('calendar.events')
-                            ) || false;
-                        setHasGoogleCalendar(hasCalendarScope);
-                    } else {
-                        setHasGoogleCalendar(false);
-                    }
-                })
-                .catch(() => {
-                    if (!isMountedRef) return;
-                    setHasGoogleCalendar(false);
-                });
-        };
-
-        // Verificar inmediatamente
-        checkConnection();
-
-        // Escuchar eventos personalizados de cambio de conexión (más eficiente que polling)
-        const handleConnectionChange = () => {
-            if (isMountedRef) {
-                checkConnection();
-            }
-        };
-        window.addEventListener('google-calendar-connection-changed', handleConnectionChange);
-
-        // Eliminar el polling cada 5 segundos - solo usar eventos personalizados
-        // Si necesitas polling, aumentar el intervalo a 30 segundos o más
-        // const interval = setInterval(checkConnection, 30000);
-
-        return () => {
-            isMountedRef = false;
-            // clearInterval(interval);
-            window.removeEventListener('google-calendar-connection-changed', handleConnectionChange);
-        };
-    }, [isMounted, studioSlug]);
 
     return (
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-900/95 px-4 backdrop-blur-sm">
@@ -157,70 +97,6 @@ export function AppHeader({ studioSlug, onCommandOpen, onAgendaClick, onContacts
                 <div className="hidden md:block">
                     <StorageBadge studioSlug={studioSlug} />
                 </div>
-
-                {/* Inbox - Conversaciones - Comentado temporalmente */}
-                {/* <Link
-                    href={`/${studioSlug}/studio/commercial/inbox`}
-                    className="relative"
-                >
-                    <ZenButton
-                        variant="ghost"
-                        size="icon"
-                        className="relative rounded-full text-zinc-400 hover:text-zinc-200 transition-all"
-                        title="Inbox"
-                    >
-                        <Inbox className="h-5 w-5" />
-                        {unreadCount > 0 && (
-                            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
-                                {unreadCount > 99 ? '99+' : unreadCount}
-                            </span>
-                        )}
-                    </ZenButton>
-                </Link> */}
-
-                {/* Agenda */}
-                {onAgendaClick && (
-                    <ZenButton
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
-                        onClick={onAgendaClick}
-                        title="Agenda"
-                    >
-                        <Calendar className="h-5 w-5" />
-                        <span className="sr-only">Agenda</span>
-                    </ZenButton>
-                )}
-
-                {/* Tareas Operativas - Solo mostrar si Google Calendar está conectado */}
-                {onTareasOperativasClick && isMounted && hasGoogleCalendar && (
-                    <ZenButton
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-900/20 transition-colors"
-                        onClick={onTareasOperativasClick}
-                        title="Tareas Operativas"
-                    >
-                        <CalendarCheck className="h-5 w-5" />
-                        <span className="sr-only">Tareas Operativas</span>
-                    </ZenButton>
-                )}
-
-
-                {/* Contactos */}
-                {onContactsClick && (
-                    <ZenButton
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
-                        onClick={onContactsClick}
-                        title="Contactos"
-                    >
-                        <ContactRound className="h-5 w-5" />
-                        <span className="sr-only">Contactos</span>
-                    </ZenButton>
-                )}
-
 
                 {/* Google Suite Status */}
                 <GoogleStatusPopover studioSlug={studioSlug}>

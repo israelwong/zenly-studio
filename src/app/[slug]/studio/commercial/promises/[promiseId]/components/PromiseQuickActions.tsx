@@ -148,22 +148,22 @@ export function PromiseQuickActions({
             <button
               onClick={handlePreview}
               className="w-full px-4 py-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all flex items-center gap-2 text-sm font-medium"
-              title="Vista previa (abre en nueva pestaña)"
-              aria-label="Vista previa (abre en nueva pestaña)"
+              title="Abrir vista previa (abre en nueva pestaña)"
+              aria-label="Abrir vista previa (abre en nueva pestaña)"
               disabled={!promiseId}
             >
               <ExternalLink className="h-4 w-4 shrink-0" />
-              <span>Vista previa</span>
+              <span>Abrir vista previa</span>
             </button>
             <button
               onClick={() => setIsShareModalOpen(true)}
               className="w-full px-4 py-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all flex items-center gap-2 text-sm font-medium"
-              title="Preferencias de compartir"
-              aria-label="Preferencias de compartir"
+              title="Configurar compartir"
+              aria-label="Configurar compartir"
               disabled={!promiseId}
             >
               <Settings className="h-4 w-4 shrink-0" />
-              <span>Preferencias</span>
+              <span>Configurar compartir</span>
             </button>
           </div>
         </ZenCardContent>

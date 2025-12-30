@@ -282,16 +282,6 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
                         </div>
                     )}
 
-                    {/* Cotizaciones asociadas */}
-                    {finalCotizacionesCount > 0 && (
-                        <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                            <FileText className="h-3 w-3 flex-shrink-0" />
-                            <span>
-                                {finalCotizacionesCount} {finalCotizacionesCount === 1 ? 'cotización asociada' : 'cotizaciones asociadas'}
-                            </span>
-                        </div>
-                    )}
-
                     {/* Etiquetas - Badges minimalistas full rounded */}
                     {finalTags.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5">

@@ -21,7 +21,9 @@ export function PromiseShareOptionsModal({
 }: PromiseShareOptionsModalProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingScope, setSavingScope] = useState<'all' | 'single' | null>(null);
   const [hasCotizacion, setHasCotizacion] = useState(false);
+  const [hasOverride, setHasOverride] = useState(false);
   const [showPackages, setShowPackages] = useState(true);
   const [showCategoriesSubtotals, setShowCategoriesSubtotals] = useState(false);
   const [showItemsPrices, setShowItemsPrices] = useState(false);
@@ -46,6 +48,7 @@ export function PromiseShareOptionsModal({
       const result = await getPromiseShareSettings(studioSlug, promiseId);
       if (result.success && result.data) {
         setHasCotizacion(result.data.has_cotizacion);
+        setHasOverride(!result.data.remember_preferences); // true si tiene override específico
         setShowPackages(result.data.show_packages);
         setShowCategoriesSubtotals(result.data.show_categories_subtotals);
         setShowItemsPrices(result.data.show_items_prices);
@@ -64,13 +67,14 @@ export function PromiseShareOptionsModal({
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (rememberPreferences: boolean) => {
     if (minDaysToHire < 1) {
       toast.error('El mínimo de días debe ser mayor a 0');
       return;
     }
 
     setSaving(true);
+    setSavingScope(rememberPreferences ? 'all' : 'single');
     try {
       const result = await updatePromiseShareSettings(studioSlug, promiseId, {
         show_packages: showPackages,
@@ -80,11 +84,15 @@ export function PromiseShareOptionsModal({
         show_standard_conditions: showStandardConditions,
         show_offer_conditions: showOfferConditions,
         portafolios: showPortafolios,
-        remember_preferences: false, // Siempre guardar solo para esta promesa
+        remember_preferences: rememberPreferences,
       });
 
       if (result.success) {
-        toast.success('Preferencias guardadas');
+        if (rememberPreferences) {
+          toast.success('Preferencias guardadas para todas las promesas');
+        } else {
+          toast.success('Preferencias guardadas solo para esta promesa');
+        }
         onClose();
       } else {
         toast.error(result.error || 'Error al guardar preferencias');
@@ -94,6 +102,7 @@ export function PromiseShareOptionsModal({
       toast.error('Error al guardar preferencias');
     } finally {
       setSaving(false);
+      setSavingScope(null);
     }
   };
 
@@ -136,6 +145,16 @@ export function PromiseShareOptionsModal({
           </div>
         ) : (
           <>
+            {/* Badge si tiene configuración personalizada */}
+            {hasOverride && (
+              <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg mb-4">
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                <span className="text-sm text-amber-400 font-medium">
+                  Configuración activa solo para esta promesa
+                </span>
+              </div>
+            )}
+
             {/* Switch para mostrar paquetes */}
             <div className="flex items-center justify-between py-2">
               <div className="flex-1">
@@ -259,25 +278,44 @@ export function PromiseShareOptionsModal({
 
             {/* Botones */}
             <div className="flex gap-2 pt-4 border-t border-zinc-800">
-              <ZenButton
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={saving}
-                className="flex-1"
-              >
-                Cancelar
-              </ZenButton>
-              <ZenButton
-                type="button"
-                variant="primary"
-                onClick={handleSave}
-                loading={saving}
-                disabled={saving || minDaysToHire < 1}
-                className="flex-1"
-              >
-                Guardar
-              </ZenButton>
+              {saving ? (
+                <div className="flex items-center justify-center gap-2 py-2 flex-1">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent" />
+                  <span className="text-sm text-zinc-400">
+                    {savingScope === 'all' 
+                      ? 'Guardando para todas las promesas...' 
+                      : 'Guardando para esta promesa...'}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <ZenButton
+                    type="button"
+                    variant="ghost"
+                    onClick={onClose}
+                  >
+                    Cancelar
+                  </ZenButton>
+                  <ZenButton
+                    type="button"
+                    variant="primary"
+                    onClick={() => handleSave(true)}
+                    disabled={minDaysToHire < 1}
+                    className="flex-1"
+                  >
+                    Para todas
+                  </ZenButton>
+                  <ZenButton
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleSave(false)}
+                    disabled={minDaysToHire < 1}
+                    className="flex-1 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500"
+                  >
+                    Solo esta promesa
+                  </ZenButton>
+                </>
+              )}
             </div>
           </>
         )}

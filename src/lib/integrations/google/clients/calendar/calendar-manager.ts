@@ -53,35 +53,12 @@ export async function obtenerOCrearCalendarioSecundario(
         );
         // Continuar para crear uno nuevo
       } else if (errorCode === 403 || errorMessage.includes('Insufficient Permission')) {
-        // Si el error es 403 (permisos insuficientes), verificar scopes
-        const studioWithScopes = await prisma.studios.findUnique({
-          where: { slug: studioSlug },
-          select: { google_oauth_scopes: true },
-        });
-
-        if (studioWithScopes?.google_oauth_scopes) {
-          try {
-            const scopes = JSON.parse(studioWithScopes.google_oauth_scopes) as string[];
-            const hasFullCalendarScope = scopes.includes('https://www.googleapis.com/auth/calendar');
-            const hasEventsOnlyScope = scopes.includes('https://www.googleapis.com/auth/calendar.events');
-
-            // Si solo tiene calendar.events, no puede verificar calendarios pero puede usarlos
-            // Asumir que el calendario existe y retornar el ID guardado
-            if (!hasFullCalendarScope && hasEventsOnlyScope) {
-              console.warn(
-                `[Google Calendar] Solo tiene scope calendar.events, no se puede verificar calendario. Asumiendo que existe: ${studio.google_calendar_secondary_id}`
-              );
-              return studio.google_calendar_secondary_id;
-            }
-          } catch (parseError) {
-            // Si no se puede parsear, continuar para intentar crear
-          }
-        }
-
-        // Si tiene scope completo pero aún falla, es un error real de permisos
-        throw new Error(
-          'Permisos insuficientes para acceder al calendario. Se requiere el permiso completo de Google Calendar. Por favor, reconecta tu cuenta de Google con permisos completos de Calendar.'
+        // Si el error es 403, asumir que el calendario existe pero no se puede verificar
+        // Esto puede pasar con calendar.events scope o problemas temporales de permisos
+        console.warn(
+          `[Google Calendar] Error 403 al verificar calendario. Asumiendo que existe: ${studio.google_calendar_secondary_id}`
         );
+        return studio.google_calendar_secondary_id;
       } else {
         // Otro tipo de error, relanzar
         console.error(

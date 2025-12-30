@@ -107,7 +107,7 @@ export function PromiseAgendamiento({
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
           <div className="flex items-center justify-between">
             <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
-              Agendamiento de citas
+              Agenda de citas con prospecto
             </ZenCardTitle>
             {!agendamiento ? (
               <ZenButton
