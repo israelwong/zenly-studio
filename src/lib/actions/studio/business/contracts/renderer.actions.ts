@@ -5,6 +5,7 @@ import { ActionResponse } from "@/types";
 import { EventContractData, ServiceCategory } from "@/types/contracts";
 import type { CondicionesComercialesData } from "@/app/[slug]/studio/config/contratos/components/types";
 import { renderCondicionesComercialesBlock } from "@/app/[slug]/studio/config/contratos/components/utils/contract-renderer";
+import { construirEstructuraJerarquicaCotizacion, COTIZACION_ITEMS_SELECT_STANDARD } from "@/lib/actions/studio/commercial/promises/cotizacion-structure.utils";
 
 // Tipo extendido que incluye condiciones comerciales y datos adicionales
 export interface EventContractDataWithConditions extends EventContractData {
@@ -157,21 +158,7 @@ export async function getPromiseContractData(
           },
         },
         cotizacion_items: {
-          select: {
-            id: true,
-            item_id: true,
-            quantity: true,
-            unit_price: true,
-            subtotal: true,
-            name_snapshot: true,
-            description_snapshot: true,
-            category_name_snapshot: true,
-            seccion_name_snapshot: true,
-            name: true,
-            description: true,
-            category_name: true,
-            seccion_name: true,
-          },
+          select: COTIZACION_ITEMS_SELECT_STANDARD,
           orderBy: {
             order: "asc",
           },
@@ -194,94 +181,20 @@ export async function getPromiseContractData(
       })
       : "Fecha por definir";
 
-    // Agrupar items por Sección → Categoría usando snapshots guardados
-    // Usar Map para mantener orden de inserción y asignar orden incremental
-    const seccionesMap = new Map<string, {
-      nombre: string;
-      orden: number;
-      categorias: Map<string, {
-        nombre: string;
-        orden: number;
-        items: Array<{
-          nombre: string;
-          descripcion?: string;
-          cantidad: number;
-          subtotal: number;
-        }>;
-      }>;
-    }>();
-
-    let seccionOrdenCounter = 0;
-    const seccionOrdenMap = new Map<string, number>();
-    const categoriaOrdenMap = new Map<string, number>();
-
-    cotizacion.cotizacion_items.forEach((item) => {
-      // Usar snapshots primero (más confiables), luego campos operacionales como fallback
-      const seccionNombre = item.seccion_name_snapshot || item.seccion_name || "Sin sección";
-      const categoriaNombre = item.category_name_snapshot || item.category_name || "Sin categoría";
-      const itemNombre = item.name_snapshot || item.name || "Item sin nombre";
-      const itemDescripcion = item.description_snapshot || item.description || undefined;
-
-      // Asignar orden a sección si es la primera vez que la vemos
-      if (!seccionOrdenMap.has(seccionNombre)) {
-        seccionOrdenMap.set(seccionNombre, seccionOrdenCounter++);
+    // Construir estructura jerárquica usando función centralizada
+    const estructura = construirEstructuraJerarquicaCotizacion(
+      cotizacion.cotizacion_items,
+      {
+        incluirDescripciones: true,
+        ordenarPor: 'incremental',
       }
-
-      // Obtener o crear sección
-      if (!seccionesMap.has(seccionNombre)) {
-        seccionesMap.set(seccionNombre, {
-          nombre: seccionNombre,
-          orden: seccionOrdenMap.get(seccionNombre)!,
-          categorias: new Map(),
-        });
-      }
-
-      const seccionData = seccionesMap.get(seccionNombre)!;
-
-      // Asignar orden a categoría dentro de la sección si es la primera vez que la vemos
-      const categoriaKey = `${seccionNombre}::${categoriaNombre}`;
-      if (!categoriaOrdenMap.has(categoriaKey)) {
-        categoriaOrdenMap.set(categoriaKey, seccionData.categorias.size);
-      }
-
-      // Obtener o crear categoría
-      if (!seccionData.categorias.has(categoriaNombre)) {
-        seccionData.categorias.set(categoriaNombre, {
-          nombre: categoriaNombre,
-          orden: categoriaOrdenMap.get(categoriaKey)!,
-          items: [],
-        });
-      }
-
-      // Agregar item a la categoría
-      const categoriaData = seccionData.categorias.get(categoriaNombre)!;
-      categoriaData.items.push({
-        nombre: itemNombre,
-        descripcion: itemDescripcion,
-        cantidad: item.quantity,
-        subtotal: item.subtotal,
-      });
-    });
-
-    // Convertir a formato cotizacionData y ordenar por orden asignado
-    const secciones = Array.from(seccionesMap.values())
-      .sort((a, b) => a.orden - b.orden)
-      .map(seccion => ({
-        nombre: seccion.nombre,
-        orden: seccion.orden,
-        categorias: Array.from(seccion.categorias.values())
-          .sort((a, b) => a.orden - b.orden)
-          .map(categoria => ({
-            nombre: categoria.nombre,
-            orden: categoria.orden,
-            items: categoria.items,
-          })),
-      }));
+    );
 
     // Calcular totales
     const subtotal = cotizacion.price;
     const descuento = cotizacion.discount || 0;
     const total = subtotal - descuento;
+    const secciones = estructura.secciones;
 
     // Usar condiciones comerciales pasadas o de la cotización
     const condiciones = condicionesComerciales || cotizacion.condiciones_comerciales;

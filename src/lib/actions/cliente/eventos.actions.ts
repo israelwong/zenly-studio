@@ -11,6 +11,7 @@ import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { ClientEvent, ClientEventDetail, ApiResponse } from '@/types/client';
 import type { PublicSeccionData } from '@/types/public-promise';
+import { construirEstructuraJerarquicaCotizacion, COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
 
 /**
  * Obtiene todos los eventos contratados del cliente (promesas autorizadas)
@@ -53,15 +54,8 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
             status: true,
             cotizacion_items: {
               select: {
-                id: true,
-                item_id: true,
-                name: true,
-                description: true,
-                unit_price: true,
-                quantity: true,
-                order: true,
-                category_name: true,
-                seccion_name: true,
+                ...COTIZACION_ITEMS_SELECT_STANDARD,
+                subtotal: true,
               },
               orderBy: { order: 'asc' },
             },
@@ -239,15 +233,8 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
             status: true,
             cotizacion_items: {
               select: {
-                id: true,
-                item_id: true,
-                name: true,
-                description: true,
-                unit_price: true,
-                quantity: true,
-                order: true,
-                category_name: true,
-                seccion_name: true,
+                ...COTIZACION_ITEMS_SELECT_STANDARD,
+                subtotal: true,
               },
               orderBy: { order: 'asc' },
             },
@@ -344,9 +331,8 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
 
 /**
  * Agrupa items de cotización por sección -> categoría -> items
- * Usa la estructura de la cotización (snapshots guardados)
- * Mantiene el orden de los items según el campo 'order' de cotizacion_items
- * (Igual que en ResumenCotizacion.tsx)
+ * Usa la función centralizada construirEstructuraJerarquicaCotizacion
+ * y adapta el formato a PublicSeccionData[]
  */
 function agruparServiciosPorCotizacion(
   items: Array<{
@@ -359,54 +345,61 @@ function agruparServiciosPorCotizacion(
     order: number;
     category_name: string | null;
     seccion_name: string | null;
+    // Snapshots (si están disponibles)
+    name_snapshot?: string | null;
+    description_snapshot?: string | null;
+    category_name_snapshot?: string | null;
+    seccion_name_snapshot?: string | null;
+    subtotal?: number;
   }>
 ): PublicSeccionData[] {
-  // Los items ya vienen ordenados por order: 'asc' desde la consulta
-  // Agrupar por sección y categoría usando los snapshots guardados
-  const seccionesMap = new Map<string, PublicSeccionData>();
+  // Filtrar items sin item_id
+  const itemsFiltrados = items.filter(item => item.item_id !== null);
 
-  items.forEach((item) => {
-    if (!item.item_id) return;
-
-    const seccionName = item.seccion_name || 'Sin sección';
-    const categoriaName = item.category_name || 'Sin categoría';
-
-    // Obtener o crear sección
-    if (!seccionesMap.has(seccionName)) {
-      seccionesMap.set(seccionName, {
-        id: seccionName,
-        nombre: seccionName,
-        orden: 0, // No importa el orden numérico, mantenemos orden de inserción
-        categorias: [],
-      });
-    }
-
-    const seccion = seccionesMap.get(seccionName)!;
-
-    // Buscar o crear categoría
-    let categoria = seccion.categorias.find((cat) => cat.nombre === categoriaName);
-    if (!categoria) {
-      categoria = {
-        id: categoriaName,
-        nombre: categoriaName,
-        orden: 0, // No importa el orden numérico, mantenemos orden de inserción
-        servicios: [],
-      };
-      seccion.categorias.push(categoria);
-    }
-
-    // Agregar servicio manteniendo el orden de los items (order de cotizacion_items)
-    categoria.servicios.push({
-      id: item.item_id,
-      name: item.name || 'Servicio sin nombre',
-      description: item.description,
-      price: item.unit_price,
+  // Usar función centralizada para construir estructura jerárquica
+  const estructura = construirEstructuraJerarquicaCotizacion(
+    itemsFiltrados.map(item => ({
+      item_id: item.item_id!,
       quantity: item.quantity,
-    });
-  });
+      unit_price: item.unit_price,
+      subtotal: item.subtotal ?? (item.unit_price * item.quantity),
+      order: item.order,
+      // Snapshots primero, luego campos operacionales
+      name_snapshot: item.name_snapshot,
+      description_snapshot: item.description_snapshot,
+      category_name_snapshot: item.category_name_snapshot,
+      seccion_name_snapshot: item.seccion_name_snapshot,
+      name: item.name,
+      description: item.description,
+      category_name: item.category_name,
+      seccion_name: item.seccion_name,
+      id: item.id,
+    })),
+    {
+      incluirPrecios: true,
+      incluirDescripciones: true,
+      ordenarPor: 'insercion', // Mantener orden de inserción para cliente
+    }
+  );
 
-  // Convertir Map a Array manteniendo el orden de inserción
-  return Array.from(seccionesMap.values());
+  // Convertir formato de EstructuraJerarquica a PublicSeccionData[]
+  return estructura.secciones.map(seccion => ({
+    id: seccion.nombre,
+    nombre: seccion.nombre,
+    orden: seccion.orden,
+    categorias: seccion.categorias.map(categoria => ({
+      id: categoria.nombre,
+      nombre: categoria.nombre,
+      orden: categoria.orden,
+      servicios: categoria.items.map(item => ({
+        id: item.item_id || item.id || '',
+        name: item.nombre,
+        description: item.descripcion || null,
+        price: item.unit_price,
+        quantity: item.cantidad,
+      })),
+    })),
+  }));
 }
 
 /**

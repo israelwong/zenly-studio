@@ -17,6 +17,7 @@ import {
 } from '@/lib/actions/schemas/cotizaciones-schemas';
 import { guardarEstructuraCotizacionAutorizada, calcularYGuardarPreciosCotizacion } from './cotizacion-pricing';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
+import { COTIZACION_ITEMS_SELECT_STANDARD } from './cotizacion-structure.utils';
 
 export interface CotizacionListItem {
   id: string;
@@ -356,51 +357,12 @@ export async function getCotizacionById(
         selected_at: true,
         cotizacion_items: {
           select: {
-            id: true,
-            item_id: true,
-            quantity: true,
-            unit_price: true,
-            subtotal: true,
+            ...COTIZACION_ITEMS_SELECT_STANDARD,
             cost: true,
             expense: true,
-            name: true,
-            description: true,
-            category_name: true,
-            seccion_name: true,
-            order: true,
-            items: {
-              select: {
-                service_category_id: true,
-                service_categories: {
-                  select: {
-                    order: true,
-                    section_categories: {
-                      select: {
-                        service_sections: {
-                          select: {
-                            order: true,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            service_categories: {
-              select: {
-                order: true,
-                section_categories: {
-                  select: {
-                    service_sections: {
-                      select: {
-                        order: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
+          },
+          orderBy: {
+            order: "asc",
           },
         },
       },
@@ -410,52 +372,23 @@ export async function getCotizacionById(
       return { success: false, error: 'Cotizaci?n no encontrada' };
     }
 
-    // Ordenar items por orden de secci?n y categor?a del cat?logo
+    // Los items ya vienen ordenados por order: "asc" desde la consulta
+    // Usar snapshots primero, luego campos operacionales como fallback
     const itemsOrdenados = cotizacion.cotizacion_items
       .filter((item) => item.item_id !== null)
-      .map((item) => {
-        // Obtener orden de sección y categoría desde las relaciones del catálogo
-        // Intentar desde items primero, luego desde service_categories directo
-        const seccionOrden =
-          item.items?.service_categories?.section_categories?.service_sections?.order ??
-          item.service_categories?.section_categories?.service_sections?.order ??
-          999;
-        const categoriaOrden =
-          item.items?.service_categories?.order ??
-          item.service_categories?.order ??
-          999;
-
-        return {
-          item: {
-            item_id: item.item_id!,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            subtotal: item.subtotal,
-            cost: item.cost ?? 0,
-            expense: item.expense ?? 0,
-            name: item.name,
-            description: item.description,
-            category_name: item.category_name,
-            seccion_name: item.seccion_name,
-          },
-          seccionOrden,
-          categoriaOrden,
-          position: item.position,
-        };
-      })
-      .sort((a, b) => {
-        // Primero por orden de sección
-        if (a.seccionOrden !== b.seccionOrden) {
-          return a.seccionOrden - b.seccionOrden;
-        }
-        // Luego por orden de categoría
-        if (a.categoriaOrden !== b.categoriaOrden) {
-          return a.categoriaOrden - b.categoriaOrden;
-        }
-        // Finalmente por order (orden dentro de la cotización)
-        return a.order - b.order;
-      })
-      .map(({ item }) => item);
+      .map((item) => ({
+        item_id: item.item_id!,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        subtotal: item.subtotal,
+        cost: item.cost ?? 0,
+        expense: item.expense ?? 0,
+        // Usar snapshots primero, luego campos operacionales
+        name: item.name_snapshot || item.name,
+        description: item.description_snapshot || item.description,
+        category_name: item.category_name_snapshot || item.category_name,
+        seccion_name: item.seccion_name_snapshot || item.seccion_name,
+      }));
 
     return {
       success: true,

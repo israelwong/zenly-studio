@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
 import { PromiseFormModal, type PromiseFormRef } from '../components/PromiseFormModal';
-import { PromiseQuickActions } from '../components/PromiseQuickActions';
+import { PromiseQuickActions } from '../[promiseId]/components/PromiseQuickActions';
 import { useRouter } from 'next/navigation';
 
 export default function NuevaPromesaPage() {
