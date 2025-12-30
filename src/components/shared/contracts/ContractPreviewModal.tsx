@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Loader2, Download } from "lucide-react";
+import { Loader2, Download, Edit2 } from "lucide-react";
 import { ZenDialog } from "@/components/ui/zen/modals/ZenDialog";
 import { ZenButton } from "@/components/ui/zen";
 import { ContractPreview } from "@/app/[slug]/studio/config/contratos/components";
@@ -21,6 +21,9 @@ interface ContractPreviewModalProps {
   templateContent: string;
   templateName?: string;
   onContractGenerated?: () => void;
+  // Modo preview-only (para autorización de cotización)
+  previewOnly?: boolean;
+  onEdit?: () => void;
 }
 
 export function ContractPreviewModal({
@@ -33,6 +36,8 @@ export function ContractPreviewModal({
   templateContent,
   templateName,
   onContractGenerated,
+  previewOnly = false,
+  onEdit,
 }: ContractPreviewModalProps) {
   const [eventData, setEventData] = useState<EventContractDataWithConditions | null>(null);
   const [renderedContent, setRenderedContent] = useState('');
@@ -166,38 +171,49 @@ export function ContractPreviewModal({
         isOpen={isOpen}
         onClose={onClose}
         title={templateName ? `Vista Previa: ${templateName}` : "Vista Previa del Contrato"}
-        description="Revisa cómo se verá el contrato con los datos del evento"
+        description={previewOnly ? "Revisa el contrato antes de confirmar" : "Revisa cómo se verá el contrato con los datos del evento"}
         maxWidth="4xl"
-        onSave={handleConfirm}
+        onSave={previewOnly ? onConfirm : handleConfirm}
         onCancel={onClose}
-        saveLabel="Usar esta plantilla"
+        saveLabel={previewOnly ? "Confirmar plantilla" : "Usar esta plantilla"}
         cancelLabel="Cancelar"
         closeOnClickOutside={false}
-        zIndex={10065}
+        zIndex={10080}
         isLoading={isGenerating}
         footerLeftContent={
-          <ZenButton
-            variant="outline"
-            size="sm"
-            onClick={handleExportPDF}
-            disabled={isExportingPDF || loading || !renderedContent}
-            title={
-              loading
-                ? "Cargando datos..."
-                : !renderedContent
-                  ? "No hay contenido disponible"
-                  : isExportingPDF
-                    ? "Generando PDF..."
-                    : "Descargar PDF"
-            }
-          >
-            {isExportingPDF ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4 mr-2" />
-            )}
-            Descargar PDF
-          </ZenButton>
+          previewOnly && onEdit ? (
+            <ZenButton
+              variant="outline"
+              size="sm"
+              onClick={onEdit}
+            >
+              <Edit2 className="h-4 w-4 mr-2" />
+              Editar para este cliente
+            </ZenButton>
+          ) : (
+            <ZenButton
+              variant="outline"
+              size="sm"
+              onClick={handleExportPDF}
+              disabled={isExportingPDF || loading || !renderedContent}
+              title={
+                loading
+                  ? "Cargando datos..."
+                  : !renderedContent
+                    ? "No hay contenido disponible"
+                    : isExportingPDF
+                      ? "Generando PDF..."
+                      : "Descargar PDF"
+              }
+            >
+              {isExportingPDF ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              Descargar PDF
+            </ZenButton>
+          )
         }
       >
         {loading ? (

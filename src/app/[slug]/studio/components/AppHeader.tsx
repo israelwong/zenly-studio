@@ -123,6 +123,9 @@ export function AppHeader({ studioSlug, onCommandOpen }: AppHeaderProps) {
                 {/* Notificaciones */}
                 <NotificationsDropdown studioSlug={studioSlug} />
 
+                {/* Divider */}
+                <div className="h-6 w-px bg-zinc-700" />
+
                 {/* Avatar del usuario - siempre visible */}
                 <UserAvatar studioSlug={studioSlug} />
             </div>

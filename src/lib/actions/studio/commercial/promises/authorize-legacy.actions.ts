@@ -66,6 +66,8 @@ const AutorizarCotizacionLegacySchema = z.object({
     fecha: z.date(),
     payment_method_id: z.string().cuid('ID de método de pago inválido'),
   }).optional(),
+  generar_contrato: z.boolean().default(false),
+  contract_template_id: z.string().cuid('ID de plantilla de contrato inválido').optional(),
 });
 
 type AutorizarCotizacionLegacyInput = z.infer<typeof AutorizarCotizacionLegacySchema>;
@@ -270,6 +272,16 @@ export async function autorizarCotizacionLegacy(
             status: 'completed',
             notes: validated.pago_data.concepto,
           },
+        });
+      }
+
+      // 6. Generar contrato si se solicitó
+      if (validated.generar_contrato && validated.contract_template_id) {
+        // TODO: Implementar generación de contrato
+        // Por ahora solo registramos que se solicitó
+        console.log('[autorizarCotizacionLegacy] Generación de contrato solicitada:', {
+          eventId,
+          templateId: validated.contract_template_id,
         });
       }
     });

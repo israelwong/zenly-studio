@@ -6,8 +6,30 @@ import { EventContractData, ServiceCategory } from "@/types/contracts";
 import type { CondicionesComercialesData } from "@/app/[slug]/studio/config/contratos/components/types";
 import { renderCondicionesComercialesBlock } from "@/app/[slug]/studio/config/contratos/components/utils/contract-renderer";
 
-// Tipo extendido que incluye condiciones comerciales
+// Tipo extendido que incluye condiciones comerciales y datos adicionales
 export interface EventContractDataWithConditions extends EventContractData {
+  email_cliente?: string;
+  telefono_cliente?: string;
+  subtotal?: number;
+  descuento?: number;
+  total?: number;
+  cotizacionData?: {
+    secciones: Array<{
+      nombre: string;
+      orden: number;
+      categorias: Array<{
+        nombre: string;
+        orden: number;
+        items: Array<{
+          nombre: string;
+          descripcion?: string;
+          cantidad: number;
+          subtotal: number;
+        }>;
+      }>;
+    }>;
+    total: number;
+  };
   condicionesData?: CondicionesComercialesData;
 }
 
@@ -54,6 +76,320 @@ export async function getRealEventId(
   } catch (error) {
     console.error('[getRealEventId] Error:', error);
     return { success: false, error: "Error al obtener event_id" };
+  }
+}
+
+// Obtener datos de la promesa para preview de contrato (antes de crear evento)
+export async function getPromiseContractData(
+  studioSlug: string,
+  promiseId: string,
+  cotizacionId: string,
+  condicionesComerciales?: {
+    id: string;
+    name: string;
+    description?: string | null;
+    discount_percentage?: number | null;
+    advance_percentage?: number | null;
+    advance_type?: string | null;
+    advance_amount?: number | null;
+  }
+): Promise<ActionResponse<EventContractDataWithConditions>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true, studio_name: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: "Studio no encontrado" };
+    }
+
+    const promise = await prisma.studio_promises.findFirst({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      include: {
+        contact: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+          },
+        },
+        event_type: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!promise) {
+      return { success: false, error: "Promesa no encontrada" };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        studio_id: studio.id,
+      },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        discount: true,
+        status: true,
+        selected_by_prospect: true,
+        tyc_accepted: true,
+        condiciones_comerciales_id: true,
+        condiciones_comerciales: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            discount_percentage: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+          },
+        },
+        cotizacion_items: {
+          select: {
+            id: true,
+            item_id: true,
+            quantity: true,
+            unit_price: true,
+            subtotal: true, // ✅ Campo correcto
+            // Campos snapshot (guardados al crear la cotización)
+            name_snapshot: true,
+            description_snapshot: true,
+            category_name_snapshot: true,
+            seccion_name_snapshot: true,
+            // Campos no-snapshot como fallback
+            name: true,
+            description: true,
+            category_name: true,
+            seccion_name: true,
+            // Relaciones (fallback adicional)
+            items: {
+              select: {
+                name: true,
+                service_categories: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+            service_categories: {
+              select: {
+                name: true,
+              },
+            },
+          },
+          orderBy: {
+            order: "asc",
+          },
+        },
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: "Cotización no encontrada" };
+    }
+
+    console.log('[getPromiseContractData] Cotización loaded:', {
+      id: cotizacion.id,
+      name: cotizacion.name,
+      items_count: cotizacion.cotizacion_items?.length || 0,
+      items: cotizacion.cotizacion_items?.map(item => ({
+        id: item.id,
+        name: item.name_snapshot || item.items?.name,
+        category: item.category_name_snapshot,
+      }))
+    });
+
+    // Formatear fecha
+    const eventDate = promise.event_date;
+    const fechaEvento = eventDate
+      ? new Date(eventDate).toLocaleDateString("es-ES", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+      : "Fecha por definir";
+
+    // Agrupar por Sección → Categoría → Items (para @cotizacion_autorizada)
+    console.log('[getPromiseContractData] Agrupando items:', {
+      total_items: cotizacion.cotizacion_items?.length || 0,
+      primer_item: cotizacion.cotizacion_items?.[0] ? {
+        name_snapshot: cotizacion.cotizacion_items[0].name_snapshot,
+        seccion: cotizacion.cotizacion_items[0].seccion_name_snapshot,
+        categoria: cotizacion.cotizacion_items[0].category_name_snapshot,
+      } : 'No hay items'
+    });
+
+    const seccionesMap = new Map<string, Map<string, any[]>>();
+    
+    cotizacion.cotizacion_items.forEach((item) => {
+      // Usar snapshot, luego campo no-snapshot, luego fallback
+      const seccionName = item.seccion_name_snapshot || item.seccion_name || "Sin sección";
+      const categoryName = item.category_name_snapshot || item.category_name || item.service_categories?.name || "Sin categoría";
+
+      if (!seccionesMap.has(seccionName)) {
+        seccionesMap.set(seccionName, new Map());
+      }
+
+      const categoriasMap = seccionesMap.get(seccionName)!;
+      if (!categoriasMap.has(categoryName)) {
+        categoriasMap.set(categoryName, []);
+      }
+
+      const precioUnitario = Number(item.unit_price || 0);
+      const subtotalItem = Number(item.subtotal || 0);
+      const precio = subtotalItem > 0 ? subtotalItem : precioUnitario * item.quantity;
+
+      categoriasMap.get(categoryName)!.push({
+        nombre: item.name_snapshot || item.name || item.items?.name || "Item sin nombre",
+        descripcion: item.description_snapshot || item.description || undefined,
+        cantidad: item.quantity,
+        subtotal: precio,
+      });
+    });
+
+    // Convertir a formato CotizacionRenderData
+    const secciones: any[] = [];
+    let seccionOrden = 0;
+
+    seccionesMap.forEach((categoriasMap, seccionName) => {
+      const categorias: any[] = [];
+      let categoriaOrden = 0;
+
+      categoriasMap.forEach((items, categoryName) => {
+        categorias.push({
+          nombre: categoryName,
+          orden: categoriaOrden++,
+          items: items,
+        });
+      });
+
+      secciones.push({
+        nombre: seccionName,
+        orden: seccionOrden++,
+        categorias: categorias,
+      });
+    });
+
+    console.log('[getPromiseContractData] Secciones agrupadas:', {
+      secciones_count: secciones.length,
+      estructura: secciones.map(s => ({
+        seccion: s.nombre,
+        categorias_count: s.categorias.length,
+        categorias: s.categorias.map((c: any) => ({
+          categoria: c.nombre,
+          items_count: c.items.length
+        }))
+      }))
+    });
+
+    // Calcular totales
+    const subtotal = cotizacion.price;
+    const descuento = cotizacion.discount || 0;
+    const total = subtotal - descuento;
+
+    // Usar condiciones comerciales pasadas o de la cotización
+    const condiciones = condicionesComerciales || cotizacion.condiciones_comerciales;
+
+    // Calcular anticipo si hay condiciones
+    let montoAnticipo: number | undefined;
+    let totalFinal = total;
+    let descuentoAplicado = descuento;
+
+    if (condiciones) {
+      if (condiciones.discount_percentage) {
+        descuentoAplicado = (subtotal * condiciones.discount_percentage) / 100;
+        totalFinal = subtotal - descuentoAplicado;
+      }
+
+      if (condiciones.advance_type === "percentage" && condiciones.advance_percentage) {
+        montoAnticipo = (totalFinal * condiciones.advance_percentage) / 100;
+      } else if (condiciones.advance_type === "fixed_amount" && condiciones.advance_amount) {
+        montoAnticipo = condiciones.advance_amount;
+      }
+    }
+
+    // Convertir secciones a formato legacy para [SERVICIOS_INCLUIDOS]
+    const serviciosLegacy: any[] = [];
+    secciones.forEach(seccion => {
+      seccion.categorias.forEach(categoria => {
+        serviciosLegacy.push({
+          categoria: categoria.nombre,
+          servicios: categoria.items.map(item => ({
+            nombre: item.nombre,
+            descripcion: item.descripcion,
+            precio: item.subtotal,
+          })),
+        });
+      });
+    });
+
+    const eventData: EventContractDataWithConditions = {
+      nombre_studio: studio.studio_name,
+      nombre_cliente: promise.contact?.name || "Cliente",
+      email_cliente: promise.contact?.email || "",
+      telefono_cliente: promise.contact?.phone || "",
+      nombre_evento: promise.name || "Evento",
+      tipo_evento: promise.event_type?.name || "Evento",
+      fecha_evento: fechaEvento,
+      servicios_incluidos: serviciosLegacy, // Formato legacy para [SERVICIOS_INCLUIDOS]
+      total_contrato: `$${totalFinal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`,
+      condiciones_pago: condiciones?.description || "Por definir",
+      subtotal,
+      descuento: descuentoAplicado,
+      total: totalFinal,
+      cotizacionData: {
+        secciones: secciones,
+        total: totalFinal,
+      },
+      condicionesData: condiciones ? {
+        nombre: condiciones.name,
+        descripcion: condiciones.description || undefined,
+        porcentaje_descuento: condiciones.discount_percentage || undefined,
+        porcentaje_anticipo: condiciones.advance_percentage || undefined,
+        tipo_anticipo: (condiciones.advance_type as "percentage" | "fixed_amount") || undefined,
+        monto_anticipo: montoAnticipo,
+        total_contrato: subtotal,
+        total_final: totalFinal,
+        descuento_aplicado: descuentoAplicado,
+      } : undefined,
+    };
+
+    console.log('[getPromiseContractData] Event data generated:', {
+      nombre_cliente: eventData.nombre_cliente,
+      fecha_evento: eventData.fecha_evento,
+      secciones_count: secciones.length,
+      total: eventData.total,
+      cotizacionData: {
+        secciones_count: eventData.cotizacionData?.secciones?.length || 0,
+        secciones: eventData.cotizacionData?.secciones?.map(s => ({
+          nombre: s.nombre,
+          categorias_count: s.categorias.length,
+          categorias: s.categorias.map(c => ({
+            nombre: c.nombre,
+            items_count: c.items.length
+          }))
+        }))
+      }
+    });
+
+    return { success: true, data: eventData };
+  } catch (error) {
+    console.error('[getPromiseContractData] Error:', error);
+    return { success: false, error: "Error al obtener datos de la promesa" };
   }
 }
 
@@ -162,7 +498,7 @@ export async function getEventContractData(
 
     // Buscar cotización aprobada del evento (puede estar en la relación directa o por evento_id)
     let cotizacionAprobada = event.cotizacion;
-    
+
     // Si no hay en la relación directa, buscar por evento_id
     if (!cotizacionAprobada) {
       const cotizacionPorEvento = await prisma.studio_cotizaciones.findFirst({
@@ -209,7 +545,7 @@ export async function getEventContractData(
           created_at: 'desc', // Tomar la más reciente si hay múltiples
         },
       });
-      
+
       cotizacionAprobada = cotizacionPorEvento;
     }
 
@@ -236,7 +572,7 @@ export async function getEventContractData(
           item.items?.service_categories?.name ||
           item.service_categories?.name ||
           "Sin categoría";
-        
+
         // Obtener orden de categoría para ordenar
         const categoryOrder = item.items?.service_categories?.order ??
           item.service_categories?.order ??
@@ -310,7 +646,7 @@ export async function getEventContractData(
     let condicionesData: CondicionesComercialesData | undefined;
     if (cotizacionAprobada.condiciones_comerciales) {
       const cc = cotizacionAprobada.condiciones_comerciales;
-      
+
       // Calcular monto de anticipo
       let montoAnticipoCalculado: number | undefined;
       if (cc.advance_percentage && cc.advance_type === "percentage") {
@@ -318,7 +654,7 @@ export async function getEventContractData(
       } else if (cc.advance_amount) {
         montoAnticipoCalculado = Number(cc.advance_amount);
       }
-      
+
       condicionesData = {
         nombre: cc.name,
         descripcion: cc.description || undefined,

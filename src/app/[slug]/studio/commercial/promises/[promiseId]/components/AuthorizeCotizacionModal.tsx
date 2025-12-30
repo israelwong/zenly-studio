@@ -14,7 +14,8 @@ import {
   User,
   Phone,
   Mail,
-  Edit2
+  Edit2,
+  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -25,6 +26,10 @@ import { getPromiseByIdAsPromiseWithContact } from '@/lib/actions/studio/commerc
 import { CondicionComercialSelectorModal } from './CondicionComercialSelectorModal';
 import { ResumenCotizacion } from '@/components/shared/cotizaciones';
 import { ContactEventFormModal } from '@/components/shared/contact-info/ContactEventFormModal';
+import { ContractTemplateSimpleSelectorModal } from './ContractTemplateSimpleSelectorModal';
+import { ContractPreviewForPromiseModal } from './ContractPreviewForPromiseModal';
+import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
+import type { ContractTemplate } from '@/types/contracts';
 
 interface Cotizacion {
   id: string;
@@ -80,12 +85,28 @@ export function AuthorizeCotizacionModal({
   const isClienteNuevo = cotizacion.selected_by_prospect === true;
   const isClienteLegacy = !cotizacion.selected_by_prospect;
 
+  // Validar si puede autorizar según el estado del contrato
+  const puedeAutorizar = isClienteNuevo 
+    ? cotizacion.status === 'contract_signed' 
+    : true; // Cliente legacy siempre puede autorizar
+
   // Estado para Cliente Legacy (selector de condiciones)
   const [selectedCondicionId, setSelectedCondicionId] = useState<string>(
     cotizacion.condiciones_comerciales_id || ''
   );
 
+  // Estado para gestión de contrato (solo cliente legacy)
+  const [generarContrato, setGenerarContrato] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | null>(null);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [showContractPreview, setShowContractPreview] = useState(false);
+  const [showContractEditor, setShowContractEditor] = useState(false);
+  const [hasViewedPreview, setHasViewedPreview] = useState(false);
+  const [isContractCustomized, setIsContractCustomized] = useState(false);
+  const [customizedContent, setCustomizedContent] = useState<string | null>(null);
+
   // Estado para Registro de Pago (toggle único)
+  // Solo mostrar pago si puede autorizar
   const [registrarPago, setRegistrarPago] = useState(true); // true por defecto
   const [pagoConcepto, setPagoConcepto] = useState('Anticipo');
   const [pagoMonto, setPagoMonto] = useState<string>('');
@@ -190,6 +211,12 @@ export function AuthorizeCotizacionModal({
   };
 
   const handleAutorizar = async () => {
+    // Validar si puede autorizar
+    if (!puedeAutorizar) {
+      toast.error('No se puede autorizar hasta que el cliente firme el contrato');
+      return;
+    }
+
     // Validaciones
     if (!pagoDataValid) {
       toast.error('Completa los datos del pago');
@@ -198,6 +225,11 @@ export function AuthorizeCotizacionModal({
 
     if (isClienteLegacy && !selectedCondicionId) {
       toast.error('Selecciona las condiciones comerciales');
+      return;
+    }
+
+    if (isClienteLegacy && generarContrato && !selectedTemplate) {
+      toast.error('Selecciona una plantilla de contrato');
       return;
     }
 
@@ -236,6 +268,8 @@ export function AuthorizeCotizacionModal({
             fecha: pagoFecha!,
             payment_method_id: paymentMethodId,
           } : undefined,
+          generar_contrato: generarContrato,
+          contract_template_id: generarContrato ? selectedTemplate?.id : undefined,
         });
 
         if (result.success && result.data?.eventId) {
@@ -259,6 +293,40 @@ export function AuthorizeCotizacionModal({
     loadPromiseData(); // Recargar datos después de editar
   };
 
+  const handleTemplateSelected = (template: ContractTemplate) => {
+    setSelectedTemplate(template);
+    setShowTemplateSelector(false);
+    // Auto-abrir preview después de seleccionar
+    setTimeout(() => {
+      setShowContractPreview(true);
+    }, 100);
+  };
+
+  const handlePreviewConfirm = () => {
+    setShowContractPreview(false);
+    setHasViewedPreview(true);
+  };
+
+  const handleEditContract = () => {
+    setShowContractPreview(false);
+    setShowContractEditor(true);
+  };
+
+  const handleSaveCustomContract = async (data: { content: string }) => {
+    setCustomizedContent(data.content);
+    setIsContractCustomized(true);
+    setShowContractEditor(false);
+    toast.success('Contrato personalizado guardado');
+    // Volver a abrir preview con contenido actualizado
+    setTimeout(() => {
+      setShowContractPreview(true);
+    }, 100);
+  };
+
+  const handleOpenPreviewFromCard = () => {
+    setShowContractPreview(true);
+  };
+
   return (
     <>
       <ZenDialog
@@ -267,15 +335,18 @@ export function AuthorizeCotizacionModal({
         title="Autorizar Cotización"
         description={
           isClienteNuevo
-            ? 'El cliente pre-autorizó esta cotización. Confirma para habilitar el flujo de contrato digital.'
+            ? cotizacion.status === 'contract_signed'
+              ? 'El cliente firmó el contrato. Confirma para crear el evento.'
+              : 'El cliente debe firmar el contrato antes de autorizar.'
             : 'Autoriza esta cotización y crea el evento inmediatamente.'
         }
         maxWidth="lg"
-        onSave={handleAutorizar}
+        onSave={puedeAutorizar ? handleAutorizar : undefined}
         saveLabel={isLoading ? 'Autorizando...' : 'Autorizar y Crear Evento'}
-        cancelLabel="Cancelar"
+        cancelLabel={puedeAutorizar ? 'Cancelar' : 'Cerrar'}
         isLoading={isLoading}
         saveVariant="primary"
+        zIndex={10050}
       >
         <div className="space-y-4">
           {/* ============================================ */}
@@ -489,26 +560,168 @@ export function AuthorizeCotizacionModal({
                 </div>
               </div>
 
-              {/* Estado Contrato (SOLO Cliente Nuevo) */}
-              {isClienteNuevo && (
-                <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <FileText className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-white">Contrato Digital</h4>
-                      <p className="text-xs text-zinc-400 mt-1">
-                        El cliente recibirá el contrato en su portal después de confirmar sus datos
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
           {/* ============================================ */}
-          {/* BLOQUE 3: REGISTRAR PAGO */}
+          {/* BLOQUE 3: ESTADO DEL CONTRATO */}
           {/* ============================================ */}
+          <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-white mb-4">Contrato</h3>
+
+            {isClienteNuevo ? (
+              // Cliente Nuevo: Mostrar estado del contrato
+              <div className="space-y-3">
+                {cotizacion.status === 'contract_pending' && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <FileText className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-white">Esperando Confirmación</h4>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          El cliente debe confirmar sus datos antes de recibir el contrato
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {cotizacion.status === 'contract_generated' && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <FileText className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-white">Contrato Generado</h4>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          El cliente está revisando el contrato en su portal
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {cotizacion.status === 'contract_signed' && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-white">Contrato Firmado</h4>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          El cliente firmó el contrato. Listo para crear el evento.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Cliente Legacy: Toggle para generar contrato
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 border border-zinc-700 rounded-lg bg-zinc-900/50">
+                  <div className="flex-1">
+                    <label className="font-medium text-white text-sm block">
+                      Generar contrato
+                    </label>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {generarContrato
+                        ? 'Se generará contrato después de crear el evento'
+                        : 'Crear evento sin contrato'}
+                    </p>
+                  </div>
+                  <ZenSwitch
+                    checked={generarContrato}
+                    onCheckedChange={setGenerarContrato}
+                  />
+                </div>
+
+                {/* Selector de Plantilla */}
+                {generarContrato && (
+                  <div>
+                    <label className="text-xs text-zinc-500 block mb-2">Plantilla de Contrato</label>
+                    {selectedTemplate ? (
+                      <div className="space-y-2">
+                        <div className="rounded-lg p-3 border border-zinc-700 bg-zinc-800/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <div className="text-sm font-medium text-white">
+                                    {selectedTemplate.name}
+                                  </div>
+                                  {selectedTemplate.is_default && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                      Default
+                                    </span>
+                                  )}
+                                  {isContractCustomized && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                      Personalizado
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setShowTemplateSelector(true)}
+                              className="text-xs text-zinc-400 hover:text-white transition-colors"
+                            >
+                              Cambiar
+                            </button>
+                          </div>
+                          
+                          {/* Botones de acción */}
+                          <div className="flex gap-2">
+                            <ZenButton
+                              variant="outline"
+                              size="sm"
+                              onClick={handleOpenPreviewFromCard}
+                              className="flex-1"
+                            >
+                              <Eye className="w-3.5 h-3.5 mr-1.5" />
+                              Ver preview
+                            </ZenButton>
+                            <ZenButton
+                              variant="outline"
+                              size="sm"
+                              onClick={handleEditContract}
+                              className="flex-1"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 mr-1.5" />
+                              Editar
+                            </ZenButton>
+                          </div>
+                        </div>
+
+                        {/* Advertencia si no ha visto preview */}
+                        {!hasViewedPreview && (
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                            <p className="text-xs text-amber-400">
+                              💡 Recomendamos revisar el preview antes de autorizar
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowTemplateSelector(true)}
+                        className="w-full border border-dashed border-zinc-700 rounded-lg p-3 text-center hover:border-zinc-600 hover:bg-zinc-800/30 transition-colors"
+                      >
+                        <p className="text-sm text-zinc-400">
+                          Seleccionar plantilla de contrato
+                        </p>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ============================================ */}
+          {/* BLOQUE 4: REGISTRAR PAGO */}
+          {/* ============================================ */}
+          {puedeAutorizar && (
           <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-white mb-4">Registrar Pago</h3>
 
@@ -602,6 +815,7 @@ export function AuthorizeCotizacionModal({
               )}
             </div>
           </div>
+          )}
         </div>
       </ZenDialog>
 
@@ -658,6 +872,54 @@ export function AuthorizeCotizacionModal({
           }}
           onSuccess={handleEditSuccess}
           zIndex={10060}
+        />
+      )}
+
+      {/* Modal Selector de Plantilla de Contrato */}
+      {isClienteLegacy && (
+        <ContractTemplateSimpleSelectorModal
+          isOpen={showTemplateSelector}
+          onClose={() => setShowTemplateSelector(false)}
+          onSelect={handleTemplateSelected}
+          studioSlug={studioSlug}
+          eventTypeId={promiseData?.event_type_id}
+          selectedTemplateId={selectedTemplate?.id}
+        />
+      )}
+
+      {/* Modal Preview de Contrato */}
+      {isClienteLegacy && selectedTemplate && promiseData && (
+        <ContractPreviewForPromiseModal
+          isOpen={showContractPreview}
+          onClose={() => setShowContractPreview(false)}
+          onConfirm={handlePreviewConfirm}
+          onEdit={handleEditContract}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+          cotizacionId={cotizacion.id}
+          template={selectedTemplate}
+          customContent={customizedContent}
+          condicionesComerciales={
+            selectedCondicionId
+              ? condicionesComerciales.find(cc => cc.id === selectedCondicionId)
+              : undefined
+          }
+        />
+      )}
+
+      {/* Modal Editor de Contrato */}
+      {isClienteLegacy && selectedTemplate && (
+        <ContractEditorModal
+          isOpen={showContractEditor}
+          onClose={() => setShowContractEditor(false)}
+          mode="edit-event-contract"
+          studioSlug={studioSlug}
+          initialContent={customizedContent || selectedTemplate.content}
+          templateContent={selectedTemplate.content}
+          onSave={handleSaveCustomContract}
+          title="Editar Contrato"
+          description="Personaliza el contrato para este cliente. Los cambios solo aplicarán a esta promesa."
+          saveLabel="Guardar y volver a preview"
         />
       )}
     </>

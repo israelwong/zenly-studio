@@ -180,7 +180,7 @@ export function useContractRenderer({
 
 // Helper para renderizar servicios (legacy)
 function renderServiciosBlock(servicios: any[]): string {
-  if (servicios.length === 0) {
+  if (!servicios || !Array.isArray(servicios) || servicios.length === 0) {
     return "<p><em>No hay servicios incluidos</em></p>";
   }
 

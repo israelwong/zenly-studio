@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { ActionResponse } from "@/types";
-import { EventContract, CancellationLog, ContractVersion } from "@/types/contracts";
+import { EventContract, CancellationLog, ContractVersion, ContractTemplate } from "@/types/contracts";
 import {
   GenerateEventContractSchema,
   UpdateEventContractSchema,
@@ -103,11 +103,11 @@ export async function getAllEventContracts(
     const sortedContracts = contracts.sort((a, b) => {
       const aIsCancelled = a.status === 'CANCELLED';
       const bIsCancelled = b.status === 'CANCELLED';
-      
+
       // Si uno está cancelado y el otro no, el no cancelado va primero
       if (aIsCancelled && !bIsCancelled) return 1;
       if (!aIsCancelled && bIsCancelled) return -1;
-      
+
       // Si ambos tienen el mismo estado, ordenar por fecha (más reciente primero)
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
@@ -166,15 +166,31 @@ export async function generateEventContract(
     }
 
     // Obtener plantilla (default o específica)
-    const template = validated.template_id
-      ? await prisma.studio_contract_templates.findFirst({
-          where: {
-            id: validated.template_id,
-            studio_id: studio.id,
-            is_active: true,
-          },
-        })
-      : await getDefaultContractTemplate(studio.id);
+    let template: ContractTemplate | null = null;
+
+    if (validated.template_id) {
+      const templateData = await prisma.studio_contract_templates.findFirst({
+        where: {
+          id: validated.template_id,
+          studio_id: studio.id,
+          is_active: true,
+        },
+      });
+
+      if (templateData) {
+        template = {
+          ...templateData,
+          description: templateData.description ?? undefined,
+          event_type_id: templateData.event_type_id ?? undefined,
+          created_by: templateData.created_by ?? undefined,
+        };
+      }
+    } else {
+      const defaultTemplateResult = await getDefaultContractTemplate(studio.id);
+      if (defaultTemplateResult.success && defaultTemplateResult.data) {
+        template = defaultTemplateResult.data;
+      }
+    }
 
     if (!template) {
       return { success: false, error: "No se encontró una plantilla de contrato" };
@@ -191,9 +207,11 @@ export async function generateEventContract(
     // Renderizar contenido
     const renderResult = await renderContractContent(template.content, contractData, contractData.condicionesData);
 
-    if (!renderResult.success) {
+    if (!renderResult.success || !renderResult.data) {
       return { success: false, error: renderResult.error || "Error al renderizar contrato" };
     }
+
+    const renderedContent = renderResult.data;
 
     // Crear contrato
     const contract = await prisma.studio_event_contracts.create({
@@ -201,7 +219,7 @@ export async function generateEventContract(
         studio_id: studio.id,
         event_id: validated.event_id,
         template_id: template.id,
-        content: renderResult.data,
+        content: renderedContent,
         status: "DRAFT",
         version: 1,
         created_by: userId,
@@ -213,7 +231,7 @@ export async function generateEventContract(
       data: {
         contract_id: contract.id,
         version: 1,
-        content: renderResult.data,
+        content: renderedContent,
         status: "DRAFT",
         change_type: "AUTO_REGENERATE",
         change_reason: "Contrato generado inicialmente",
@@ -287,13 +305,15 @@ export async function updateEventContract(
       contractData.condicionesData
     );
 
-    if (!renderResult.success) {
+    if (!renderResult.success || !renderResult.data) {
       return { success: false, error: renderResult.error || "Error al renderizar contrato" };
     }
 
+    const renderedContent = renderResult.data;
+
     // Guardar versión anterior antes de actualizar
     const newVersion = contract.version + 1;
-    
+
     // Verificar si la versión anterior ya existe
     const existingPreviousVersion = await prisma.studio_contract_versions.findFirst({
       where: {
@@ -330,7 +350,7 @@ export async function updateEventContract(
     const updated = await prisma.studio_event_contracts.update({
       where: { id: contractId },
       data: {
-        content: renderResult.data, // Contenido renderizado (sin variables) - para mostrar
+        content: renderedContent, // Contenido renderizado (sin variables) - para mostrar
         custom_template_content: validated.content, // Contenido editado (con variables) - para editar después
         ...(validated.status && { status: validated.status }),
         version: newVersion,
@@ -343,7 +363,7 @@ export async function updateEventContract(
         data: {
           contract_id: contractId,
           version: newVersion,
-          content: renderResult.data, // Contenido renderizado
+          content: renderedContent, // Contenido renderizado
           status: validated.status || contract.status,
           change_type: "MANUAL_EDIT",
           change_reason: validated.change_reason || "Edición manual del contrato",
@@ -481,16 +501,31 @@ export async function regenerateEventContract(
     const contractData = contractDataResult.data;
 
     // Renderizar con la plantilla actual
-    const template = contract.template || await getDefaultContractTemplate(studio.id);
+    let template: ContractTemplate | null = contract.template ? {
+      ...contract.template,
+      description: contract.template.description ?? undefined,
+      event_type_id: contract.template.event_type_id ?? undefined,
+      created_by: contract.template.created_by ?? undefined,
+    } : null;
+
+    if (!template) {
+      const defaultTemplateResult = await getDefaultContractTemplate(studio.id);
+      if (defaultTemplateResult.success && defaultTemplateResult.data) {
+        template = defaultTemplateResult.data;
+      }
+    }
+
     if (!template) {
       return { success: false, error: "No se encontró la plantilla del contrato" };
     }
 
     const renderResult = await renderContractContent(template.content, contractData, contractData.condicionesData);
 
-    if (!renderResult.success) {
+    if (!renderResult.success || !renderResult.data) {
       return { success: false, error: renderResult.error || "Error al renderizar contrato" };
     }
+
+    const renderedContent = renderResult.data;
 
     // Guardar versión anterior (solo si no existe ya)
     const existingPreviousVersion = await prisma.studio_contract_versions.findFirst({
@@ -523,7 +558,7 @@ export async function regenerateEventContract(
     const updated = await prisma.studio_event_contracts.update({
       where: { id: contract.id },
       data: {
-        content: renderResult.data,
+        content: renderedContent,
         // Mantener el estado actual (PUBLISHED permanece PUBLISHED, DRAFT permanece DRAFT)
         status: contract.status,
         version: newVersion,
@@ -543,7 +578,7 @@ export async function regenerateEventContract(
         data: {
           contract_id: contract.id,
           version: newVersion,
-          content: renderResult.data,
+          content: renderedContent,
           // Mantener el mismo estado que el contrato
           status: contract.status,
           change_type: "AUTO_REGENERATE",
@@ -628,9 +663,11 @@ export async function updateEventContractTemplate(
       contractData.condicionesData
     );
 
-    if (!renderResult.success) {
+    if (!renderResult.success || !renderResult.data) {
       return { success: false, error: renderResult.error || "Error al renderizar contrato" };
     }
+
+    const renderedContent = renderResult.data;
 
     // Guardar versión anterior (solo si no existe ya)
     const newVersion = contract.version + 1;
@@ -661,7 +698,7 @@ export async function updateEventContractTemplate(
       where: { id: contractId },
       data: {
         template_id: newTemplate.id,
-        content: renderResult.data,
+        content: renderedContent,
         custom_template_content: null, // Limpiar contenido personalizado al cambiar plantilla
         version: newVersion,
       },
@@ -672,7 +709,7 @@ export async function updateEventContractTemplate(
       data: {
         contract_id: contractId,
         version: newVersion,
-        content: renderResult.data,
+        content: renderedContent,
         status: contract.status,
         change_type: "TEMPLATE_UPDATE",
         change_reason: validated.change_reason || `Plantilla cambiada a "${newTemplate.name}"`,
@@ -1002,11 +1039,11 @@ export async function getAllEventContractsForClient(
     const sortedContracts = contracts.sort((a, b) => {
       const aIsCancelled = a.status === 'CANCELLED';
       const bIsCancelled = b.status === 'CANCELLED';
-      
+
       // Si uno está cancelado y el otro no, el no cancelado va primero
       if (aIsCancelled && !bIsCancelled) return 1;
       if (!aIsCancelled && bIsCancelled) return -1;
-      
+
       // Si ambos tienen el mismo estado, ordenar por fecha (más reciente primero)
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
