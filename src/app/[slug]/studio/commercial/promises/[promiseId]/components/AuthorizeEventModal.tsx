@@ -3,10 +3,6 @@
 import React, { useState } from 'react';
 import {
   ZenDialog,
-  ZenDialogContent,
-  ZenDialogHeader,
-  ZenDialogTitle,
-  ZenDialogDescription,
   ZenButton,
   ZenInput,
   ZenCheckbox,
@@ -77,19 +73,19 @@ export function AuthorizeEventModal({
   };
 
   return (
-    <ZenDialog open={isOpen} onOpenChange={handleClose}>
-      <ZenDialogContent className="sm:max-w-[500px]">
-        <ZenDialogHeader>
-          <ZenDialogTitle className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-            Autorizar Evento
-          </ZenDialogTitle>
-          <ZenDialogDescription>
-            El cliente ha firmado el contrato. Autoriza el evento para moverlo al pipeline de gestión.
-          </ZenDialogDescription>
-        </ZenDialogHeader>
-
-        <div className="space-y-4 py-4">
+    <ZenDialog
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+          Autorizar Evento
+        </div>
+      }
+      description="El cliente ha firmado el contrato. Autoriza el evento para moverlo al pipeline de gestión."
+      maxWidth="md"
+    >
+      <div className="space-y-4">
           {/* Información de la cotización */}
           <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4 space-y-2">
             <div className="flex items-center justify-between">
@@ -168,7 +164,7 @@ export function AuthorizeEventModal({
         </div>
 
         {/* Botones */}
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-3 mt-6">
           <ZenButton
             variant="ghost"
             onClick={handleClose}
@@ -193,7 +189,6 @@ export function AuthorizeEventModal({
             )}
           </ZenButton>
         </div>
-      </ZenDialogContent>
     </ZenDialog>
   );
 }

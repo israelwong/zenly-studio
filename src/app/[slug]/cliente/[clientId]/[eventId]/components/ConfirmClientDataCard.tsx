@@ -9,10 +9,6 @@ import {
   ZenButton,
   ZenInput,
   ZenDialog,
-  ZenDialogContent,
-  ZenDialogHeader,
-  ZenDialogTitle,
-  ZenDialogDescription,
 } from '@/components/ui/zen';
 import { CheckCircle2, Loader2, AlertCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
@@ -167,16 +163,14 @@ export function ConfirmClientDataCard({
       </ZenCard>
 
       {/* Modal de confirmación */}
-      <ZenDialog open={showModal} onOpenChange={setShowModal}>
-        <ZenDialogContent className="sm:max-w-[500px]">
-          <ZenDialogHeader>
-            <ZenDialogTitle>Confirma tus Datos</ZenDialogTitle>
-            <ZenDialogDescription>
-              Revisa y actualiza tu información si es necesario. Estos datos se utilizarán en tu contrato.
-            </ZenDialogDescription>
-          </ZenDialogHeader>
-
-          <div className="space-y-4 py-4">
+      <ZenDialog
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title="Confirma tus Datos"
+        description="Revisa y actualiza tu información si es necesario. Estos datos se utilizarán en tu contrato."
+        maxWidth="md"
+      >
+        <div className="space-y-4">
             <div>
               <label className="text-sm text-zinc-400 mb-1 block">
                 Nombre completo <span className="text-red-400">*</span>
@@ -225,41 +219,40 @@ export function ConfirmClientDataCard({
               />
             </div>
 
-            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
-              <p className="text-xs text-blue-400">
-                <strong>Importante:</strong> Al confirmar, aceptas que estos datos son correctos 
-                y se utilizarán para generar tu contrato. Se registrará tu dirección IP para 
-                validez legal.
-              </p>
-            </div>
+          <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
+            <p className="text-xs text-blue-400">
+              <strong>Importante:</strong> Al confirmar, aceptas que estos datos son correctos 
+              y se utilizarán para generar tu contrato. Se registrará tu dirección IP para 
+              validez legal.
+            </p>
           </div>
+        </div>
 
-          <div className="flex justify-end gap-3">
-            <ZenButton
-              variant="ghost"
-              onClick={() => setShowModal(false)}
-              disabled={isSubmitting}
-            >
-              Cancelar
-            </ZenButton>
-            <ZenButton
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Confirmando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Confirmar Datos
-                </>
-              )}
-            </ZenButton>
-          </div>
-        </ZenDialogContent>
+        <div className="flex justify-end gap-3 mt-6">
+          <ZenButton
+            variant="ghost"
+            onClick={() => setShowModal(false)}
+            disabled={isSubmitting}
+          >
+            Cancelar
+          </ZenButton>
+          <ZenButton
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Confirmando...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Confirmar Datos
+              </>
+            )}
+          </ZenButton>
+        </div>
       </ZenDialog>
     </>
   );

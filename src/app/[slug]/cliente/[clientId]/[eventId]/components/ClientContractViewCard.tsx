@@ -8,10 +8,6 @@ import {
   ZenCardContent,
   ZenButton,
   ZenDialog,
-  ZenDialogContent,
-  ZenDialogHeader,
-  ZenDialogTitle,
-  ZenDialogDescription,
   ZenBadge,
 } from '@/components/ui/zen';
 import { FileText, Eye, CheckCircle2, Loader2, Clock } from 'lucide-react';
@@ -186,55 +182,50 @@ export function ClientContractViewCard({
       </ZenCard>
 
       {/* Modal para ver contrato */}
-      <ZenDialog open={showViewModal} onOpenChange={setShowViewModal}>
-        <ZenDialogContent className="sm:max-w-[800px] max-h-[80vh]">
-          <ZenDialogHeader>
-            <ZenDialogTitle>Contrato de Servicios</ZenDialogTitle>
-            <ZenDialogDescription>
-              Revisa cuidadosamente el contenido del contrato
-            </ZenDialogDescription>
-          </ZenDialogHeader>
+      <ZenDialog
+        isOpen={showViewModal}
+        onClose={() => setShowViewModal(false)}
+        title="Contrato de Servicios"
+        description="Revisa cuidadosamente el contenido del contrato"
+        maxWidth="4xl"
+      >
+        <div className="overflow-y-auto max-h-[60vh] p-6 bg-white text-black rounded-lg">
+          <div
+            className="prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: contract.content }}
+          />
+        </div>
 
-          <div className="overflow-y-auto max-h-[60vh] p-6 bg-white text-black rounded-lg">
-            <div
-              className="prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: contract.content }}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-3 mt-6">
+          <ZenButton
+            variant="ghost"
+            onClick={() => setShowViewModal(false)}
+          >
+            Cerrar
+          </ZenButton>
+          {contract.status === 'PUBLISHED' && (
             <ZenButton
-              variant="ghost"
-              onClick={() => setShowViewModal(false)}
+              onClick={() => {
+                setShowViewModal(false);
+                setShowSignModal(true);
+              }}
             >
-              Cerrar
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Firmar Contrato
             </ZenButton>
-            {contract.status === 'PUBLISHED' && (
-              <ZenButton
-                onClick={() => {
-                  setShowViewModal(false);
-                  setShowSignModal(true);
-                }}
-              >
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Firmar Contrato
-              </ZenButton>
-            )}
-          </div>
-        </ZenDialogContent>
+          )}
+        </div>
       </ZenDialog>
 
       {/* Modal de confirmación de firma */}
-      <ZenDialog open={showSignModal} onOpenChange={setShowSignModal}>
-        <ZenDialogContent className="sm:max-w-[500px]">
-          <ZenDialogHeader>
-            <ZenDialogTitle>Firmar Contrato</ZenDialogTitle>
-            <ZenDialogDescription>
-              Confirma que has leído y aceptas los términos del contrato
-            </ZenDialogDescription>
-          </ZenDialogHeader>
-
-          <div className="space-y-4 py-4">
+      <ZenDialog
+        isOpen={showSignModal}
+        onClose={() => setShowSignModal(false)}
+        title="Firmar Contrato"
+        description="Confirma que has leído y aceptas los términos del contrato"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4">
               <p className="text-sm text-amber-400 mb-2">
                 <strong>Importante:</strong>
@@ -247,39 +238,38 @@ export function ClientContractViewCard({
               </ul>
             </div>
 
-            <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
-              <p className="text-sm text-zinc-300">
-                ¿Has leído y comprendido todos los términos del contrato?
-              </p>
-            </div>
+          <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+            <p className="text-sm text-zinc-300">
+              ¿Has leído y comprendido todos los términos del contrato?
+            </p>
           </div>
+        </div>
 
-          <div className="flex justify-end gap-3">
-            <ZenButton
-              variant="ghost"
-              onClick={() => setShowSignModal(false)}
-              disabled={isSigning}
-            >
-              Cancelar
-            </ZenButton>
-            <ZenButton
-              onClick={handleSign}
-              disabled={isSigning}
-            >
-              {isSigning ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Firmando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Sí, Firmar Contrato
-                </>
-              )}
-            </ZenButton>
-          </div>
-        </ZenDialogContent>
+        <div className="flex justify-end gap-3 mt-6">
+          <ZenButton
+            variant="ghost"
+            onClick={() => setShowSignModal(false)}
+            disabled={isSigning}
+          >
+            Cancelar
+          </ZenButton>
+          <ZenButton
+            onClick={handleSign}
+            disabled={isSigning}
+          >
+            {isSigning ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Firmando...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Sí, Firmar Contrato
+              </>
+            )}
+          </ZenButton>
+        </div>
       </ZenDialog>
     </>
   );
