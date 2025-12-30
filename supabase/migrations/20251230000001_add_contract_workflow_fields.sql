@@ -21,51 +21,27 @@ COMMENT ON COLUMN platform_config.require_contract_before_event IS
 'Si es true, requiere contrato firmado antes de crear evento. Si es false, permite crear evento sin contrato (legacy).';
 
 -- =====================================================
--- 2. Agregar nuevos estados de cotización
+-- 2. Nuevos estados de cotización (documentación)
 -- =====================================================
 
--- Verificar si el tipo enum existe y agregar nuevos valores
-DO $$ 
-BEGIN
-    -- Agregar CONTRACT_PENDING si no existe
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_enum 
-        WHERE enumlabel = 'CONTRACT_PENDING' 
-        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'cotizacion_status')
-    ) THEN
-        ALTER TYPE cotizacion_status ADD VALUE 'CONTRACT_PENDING';
-    END IF;
-
-    -- Agregar CONTRACT_GENERATED si no existe
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_enum 
-        WHERE enumlabel = 'CONTRACT_GENERATED' 
-        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'cotizacion_status')
-    ) THEN
-        ALTER TYPE cotizacion_status ADD VALUE 'CONTRACT_GENERATED';
-    END IF;
-
-    -- Agregar CONTRACT_SIGNED si no existe
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_enum 
-        WHERE enumlabel = 'CONTRACT_SIGNED' 
-        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'cotizacion_status')
-    ) THEN
-        ALTER TYPE cotizacion_status ADD VALUE 'CONTRACT_SIGNED';
-    END IF;
-END $$;
-
-COMMENT ON TYPE cotizacion_status IS 
-'Estados de cotización:
-- DRAFT: Borrador
-- SHARED: Compartida con cliente
-- PRE_AUTHORIZED: Cliente autorizó desde portal público
-- CONTRACT_PENDING: Cliente debe revisar/confirmar datos antes de generar contrato
-- CONTRACT_GENERATED: Contrato generado, pendiente de firma del cliente
-- CONTRACT_SIGNED: Contrato firmado por cliente, pendiente de autorización del studio
-- APPROVED: Autorizada por studio, evento creado
-- REJECTED: Rechazada
-- CANCELLED: Cancelada';
+-- NOTA: studio_cotizaciones.status es de tipo TEXT, no ENUM
+-- Los nuevos estados se documentan aquí para referencia:
+-- 
+-- Estados existentes:
+-- - 'pendiente' (DRAFT)
+-- - 'compartida' (SHARED)
+-- - 'pre_autorizada' (PRE_AUTHORIZED)
+-- - 'autorizada' (APPROVED)
+-- - 'rechazada' (REJECTED)
+-- - 'cancelada' (CANCELLED)
+--
+-- Nuevos estados a usar en el código:
+-- - 'contract_pending' - Cliente debe revisar/confirmar datos antes de generar contrato
+-- - 'contract_generated' - Contrato generado, pendiente de firma del cliente
+-- - 'contract_signed' - Contrato firmado por cliente, pendiente de autorización del studio
+--
+-- No se requiere migración SQL ya que el campo es TEXT y acepta cualquier valor.
+-- La validación se hace a nivel de aplicación.
 
 -- =====================================================
 -- 3. Agregar referencia de contrato en eventos

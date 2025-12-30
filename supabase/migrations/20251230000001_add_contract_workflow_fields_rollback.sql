@@ -46,40 +46,16 @@ ALTER TABLE studio_event_contracts
 DROP COLUMN IF EXISTS signed_ip;
 
 -- =====================================================
--- NOTA: No se pueden eliminar valores de ENUM una vez agregados
+-- NOTA: Estados de cotización
 -- =====================================================
--- Los nuevos estados de cotización (CONTRACT_PENDING, CONTRACT_GENERATED, CONTRACT_SIGNED)
--- NO se pueden eliminar del tipo enum 'cotizacion_status' sin recrear el tipo completo.
--- Si necesitas eliminarlos, deberás:
--- 1. Crear un nuevo tipo enum sin esos valores
--- 2. Migrar todas las columnas que usan el tipo
--- 3. Eliminar el tipo antiguo
--- 4. Renombrar el nuevo tipo
+-- Los nuevos estados (contract_pending, contract_generated, contract_signed) son valores
+-- de texto en el campo studio_cotizaciones.status (tipo TEXT).
+-- No requieren rollback SQL ya que son solo valores de datos.
 -- 
--- Esto es complejo y puede causar problemas. Se recomienda dejar los valores en el enum
--- aunque no se usen, ya que no causan problemas de performance.
-
--- Si realmente necesitas eliminar los valores del enum, ejecuta este bloque:
--- ADVERTENCIA: Esto requiere que NO haya registros usando estos estados
-
+-- Si hay registros usando estos estados y quieres revertirlos:
 /*
-DO $$ 
-DECLARE
-    has_records BOOLEAN;
-BEGIN
-    -- Verificar si hay registros con los nuevos estados
-    SELECT EXISTS (
-        SELECT 1 FROM studio_cotizaciones 
-        WHERE status IN ('CONTRACT_PENDING', 'CONTRACT_GENERATED', 'CONTRACT_SIGNED')
-    ) INTO has_records;
-
-    IF has_records THEN
-        RAISE EXCEPTION 'No se pueden eliminar los estados del enum porque hay registros usándolos. Actualiza primero esos registros.';
-    END IF;
-
-    -- Si no hay registros, proceder con la recreación del enum
-    -- (Este proceso es complejo y se omite aquí por seguridad)
-    RAISE NOTICE 'Para eliminar los valores del enum, contacta al DBA para realizar la migración manual.';
-END $$;
+UPDATE studio_cotizaciones 
+SET status = 'pendiente' 
+WHERE status IN ('contract_pending', 'contract_generated', 'contract_signed');
 */
 
