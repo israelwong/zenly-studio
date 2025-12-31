@@ -9,6 +9,7 @@ import { EventPanel } from '../components/EventPanel';
 import { BitacoraSheet } from '@/components/shared/bitacora';
 import { EventDetailSkeleton } from './components/EventDetailSkeleton';
 import { EventDetailHeader } from './components/EventDetailHeader';
+import { ContractTemplateManagerModal } from '@/components/shared/contracts/ContractTemplateManagerModal';
 import { toast } from 'sonner';
 
 export default function EventDetailPage() {
@@ -25,6 +26,7 @@ export default function EventDetailPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [cotizacionesCount, setCotizacionesCount] = useState(0);
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
 
   useEffect(() => {
     document.title = 'ZEN Studio - Evento';
@@ -180,6 +182,7 @@ export default function EventDetailPage() {
           onPipelineStageChange={handlePipelineStageChange}
           onCancelClick={handleCancelClick}
           onLogsClick={() => setLogsSheetOpen(true)}
+          onTemplatesClick={() => setTemplatesModalOpen(true)}
         />
         <ZenCardContent className="p-6">
           <EventPanel
@@ -225,6 +228,14 @@ export default function EventDetailPage() {
           promiseId={eventData.promise.id}
         />
       )}
+
+      {/* Modal de plantillas de contrato */}
+      <ContractTemplateManagerModal
+        isOpen={templatesModalOpen}
+        onClose={() => setTemplatesModalOpen(false)}
+        studioSlug={studioSlug}
+        eventTypeId={eventData?.promise?.event_type_id || undefined}
+      />
     </div>
   );
 }

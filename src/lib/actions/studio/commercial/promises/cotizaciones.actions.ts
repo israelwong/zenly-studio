@@ -316,10 +316,23 @@ export async function getCotizacionById(
       subtotal: number;
       cost: number;
       expense: number;
+      order: number;
+      id: string;
+      // Campos operacionales (para compatibilidad)
       name: string | null;
       description: string | null;
       category_name: string | null;
       seccion_name: string | null;
+      // Snapshots raw (para usar con función centralizada)
+      name_snapshot?: string | null;
+      description_snapshot?: string | null;
+      category_name_snapshot?: string | null;
+      seccion_name_snapshot?: string | null;
+      // Campos operacionales raw (fallback)
+      name_raw?: string | null;
+      description_raw?: string | null;
+      category_name_raw?: string | null;
+      seccion_name_raw?: string | null;
     }>;
   };
   error?: string;
@@ -373,7 +386,7 @@ export async function getCotizacionById(
     }
 
     // Los items ya vienen ordenados por order: "asc" desde la consulta
-    // Usar snapshots primero, luego campos operacionales como fallback
+    // Devolver items con snapshots para que componentes cliente puedan usar función centralizada
     const itemsOrdenados = cotizacion.cotizacion_items
       .filter((item) => item.item_id !== null)
       .map((item) => ({
@@ -383,11 +396,23 @@ export async function getCotizacionById(
         subtotal: item.subtotal,
         cost: item.cost ?? 0,
         expense: item.expense ?? 0,
-        // Usar snapshots primero, luego campos operacionales
+        order: item.order ?? 0,
+        id: item.id,
+        // Campos operacionales (para compatibilidad)
         name: item.name_snapshot || item.name,
         description: item.description_snapshot || item.description,
         category_name: item.category_name_snapshot || item.category_name,
         seccion_name: item.seccion_name_snapshot || item.seccion_name,
+        // Snapshots raw (para usar con función centralizada)
+        name_snapshot: item.name_snapshot,
+        description_snapshot: item.description_snapshot,
+        category_name_snapshot: item.category_name_snapshot,
+        seccion_name_snapshot: item.seccion_name_snapshot,
+        // Campos operacionales raw (fallback)
+        name_raw: item.name,
+        description_raw: item.description,
+        category_name_raw: item.category_name,
+        seccion_name_raw: item.seccion_name,
       }));
 
     return {

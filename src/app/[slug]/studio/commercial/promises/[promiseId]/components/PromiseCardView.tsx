@@ -6,7 +6,6 @@ import { PromiseQuotesPanel } from './PromiseQuotesPanel';
 import { PromiseTags } from './PromiseTags';
 import { PromiseAgendamiento } from './PromiseAgendamiento';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
-import { PromiseContractCard } from './PromiseContractCard';
 import { PromiseQuickActions } from './PromiseQuickActions';
 
 interface PromiseCardViewProps {
@@ -117,11 +116,14 @@ export function PromiseCardView({
           {/* Columna 2: Acciones Rápidas + Agendamiento + Etiquetas */}
           <div className="lg:col-span-1 space-y-6">
             {/* Acciones Rápidas (solo si está guardado) */}
-            {isSaved && promiseId && (
+            {isSaved && promiseId && contactId && (
               <PromiseQuickActions
                 studioSlug={studioSlug}
-                promiseId={promiseId}
+                contactId={contactId}
                 contactName={data.name}
+                phone={data.phone}
+                email={data.email}
+                promiseId={promiseId}
               />
             )}
 
@@ -158,16 +160,6 @@ export function PromiseCardView({
               contactId={contactId}
             />
 
-            {/* Contrato (solo si está guardado) */}
-            {isSaved && promiseId && (
-              <div>
-                <PromiseContractCard
-                  studioSlug={studioSlug}
-                  eventId={promiseId}
-                  eventTypeId={data.event_type_id || undefined}
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>

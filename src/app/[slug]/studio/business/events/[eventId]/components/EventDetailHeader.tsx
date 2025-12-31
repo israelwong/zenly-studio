@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Loader2, MessageSquare, ExternalLink } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Loader2, MessageSquare, ExternalLink, FileText } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 import type { EventPipelineStage } from '@/lib/actions/schemas/events-schemas';
@@ -17,6 +17,7 @@ interface EventDetailHeaderProps {
   onPipelineStageChange: (newStageId: string) => void;
   onCancelClick: () => void;
   onLogsClick: () => void;
+  onTemplatesClick: () => void;
 }
 
 export function EventDetailHeader({
@@ -29,6 +30,7 @@ export function EventDetailHeader({
   onPipelineStageChange,
   onCancelClick,
   onLogsClick,
+  onTemplatesClick,
 }: EventDetailHeaderProps) {
   const router = useRouter();
   const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
@@ -62,6 +64,18 @@ export function EventDetailHeader({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Botón de plantillas de contrato */}
+          <ZenButton
+            variant="ghost"
+            size="sm"
+            onClick={onTemplatesClick}
+            className="gap-2 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-950/50 px-3"
+          >
+            <FileText className="h-4 w-4" />
+            <span className="text-xs font-medium">Plantillas de contrato</span>
+          </ZenButton>
+          <div className="h-6 w-px bg-zinc-700 mx-1" />
+          
           {/* Botón de bitácora */}
           {eventData?.promise?.id && (
             <>

@@ -6,9 +6,9 @@ import { useClientAuth } from '@/hooks/useClientAuth';
 import { Loader2, FileText, CheckCircle2, Download, X, Clock, User, Calendar, Edit, Eye, MoreVertical } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenBadge, ZenConfirmModal, ZenDialog, ZenTextarea, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenSidebarTrigger } from '@/components/ui/zen';
 import { getEventContractForClient, getAllEventContractsForClient, signEventContract, requestContractCancellationByClient, confirmContractCancellationByClient, rejectContractCancellationByClient, regenerateEventContract } from '@/lib/actions/studio/business/contracts/contracts.actions';
-import { getEventContractData, renderContractContent, getRealEventId } from '@/lib/actions/studio/business/contracts/renderer.actions';
+import { getEventContractData, getRealEventId } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { generatePDFFromElement, generateContractFilename } from '@/lib/utils/pdf-generator';
-import { CONTRACT_PREVIEW_STYLES } from '@/lib/utils/contract-styles';
+import { ContractPreview } from '@/components/shared/contracts/ContractPreview';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
 
@@ -50,7 +50,6 @@ export default function EventoContratoPage() {
   const [contract, setContract] = useState<EventContract | null>(null);
   const [allContracts, setAllContracts] = useState<EventContract[]>([]);
   const [cancelledContracts, setCancelledContracts] = useState<EventContract[]>([]);
-  const [renderedContent, setRenderedContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [showCancelledContractModal, setShowCancelledContractModal] = useState(false);
   const [selectedCancelledContract, setSelectedCancelledContract] = useState<EventContract | null>(null);
@@ -114,29 +113,15 @@ export default function EventoContratoPage() {
         const activeContract = activeContracts[0] || null;
         setContract(activeContract);
 
-        // Si hay contrato activo, renderizar su contenido
+        // Si hay contrato activo, obtener datos del evento para renderizar
         if (activeContract) {
           // Obtener datos del evento para renderizar
           const dataResult = await getEventContractData(slug, eventId);
           if (dataResult.success && dataResult.data) {
             setEventData(dataResult.data);
-
-            // Renderizar contenido
-            const renderResult = await renderContractContent(
-              activeContract.content,
-              dataResult.data,
-              dataResult.data.condicionesData
-            );
-            if (renderResult.success && renderResult.data) {
-              setRenderedContent(renderResult.data);
-            } else {
-              toast.error(renderResult.error || 'Error al renderizar el contrato');
-            }
           } else {
             toast.error(dataResult.error || 'Error al obtener datos del evento');
           }
-        } else {
-          setRenderedContent('');
         }
       } else {
         toast.error(allContractsResult.error || 'No hay contratos disponibles para este evento');
@@ -417,7 +402,7 @@ export default function EventoContratoPage() {
   };
 
   const handleExportPDF = async () => {
-    if (!eventData || !renderedContent || !printableRef.current) {
+    if (!eventData || !contract || !printableRef.current) {
       toast.error('No hay datos del contrato disponibles');
       return;
     }
@@ -566,16 +551,8 @@ export default function EventoContratoPage() {
     try {
       const dataResult = await getEventContractData(slug, eventId);
       if (dataResult.success && dataResult.data) {
-        const renderResult = await renderContractContent(
-          cancelledContract.content,
-          dataResult.data,
-          dataResult.data.condicionesData
-        );
-        if (renderResult.success && renderResult.data) {
-          setCancelledContractContent(renderResult.data);
-        } else {
-          toast.error('Error al renderizar el contrato cancelado');
-        }
+        // El contenido se renderizará en el componente ContractPreview
+        setCancelledContractContent(cancelledContract.content);
       }
     } catch (error) {
       toast.error('Error al cargar el contrato cancelado');
@@ -779,14 +756,15 @@ export default function EventoContratoPage() {
             </div>
           </ZenCardHeader>
           <ZenCardContent className="p-6">
-            {renderedContent ? (
-              <>
-                <style dangerouslySetInnerHTML={{ __html: CONTRACT_PREVIEW_STYLES }} />
-                <div
-                  className="contract-preview scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
-                  dangerouslySetInnerHTML={{ __html: renderedContent }}
-                />
-              </>
+            {contract && eventData ? (
+              <ContractPreview
+                content={contract.content}
+                eventData={eventData}
+                cotizacionData={eventData.cotizacionData}
+                condicionesData={eventData.condicionesData}
+                noCard={true}
+                className="h-full"
+              />
             ) : (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
@@ -860,7 +838,7 @@ export default function EventoContratoPage() {
       )}
 
       {/* Hidden Printable Version - Sin clases Tailwind para PDF */}
-      {renderedContent && (
+      {contract && eventData && (
         <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
           <div
             ref={printableRef}
@@ -874,8 +852,15 @@ export default function EventoContratoPage() {
               fontSize: '14px',
               lineHeight: '1.6'
             }}
-            dangerouslySetInnerHTML={{ __html: renderedContent }}
-          />
+          >
+            <ContractPreview
+              content={contract.content}
+              eventData={eventData}
+              cotizacionData={eventData.cotizacionData}
+              condicionesData={eventData.condicionesData}
+              noCard={true}
+            />
+          </div>
         </div>
       )}
 
@@ -1047,12 +1032,14 @@ export default function EventoContratoPage() {
         }}
         cancelLabel="Cerrar"
       >
-        {cancelledContractContent ? (
+        {selectedCancelledContract && eventData && cancelledContractContent ? (
           <div className="h-[calc(90vh-200px)] min-h-[500px] overflow-y-auto p-4">
-            <style dangerouslySetInnerHTML={{ __html: CONTRACT_PREVIEW_STYLES }} />
-            <div
-              className="contract-preview"
-              dangerouslySetInnerHTML={{ __html: cancelledContractContent }}
+            <ContractPreview
+              content={cancelledContractContent}
+              eventData={eventData}
+              cotizacionData={eventData.cotizacionData}
+              condicionesData={eventData.condicionesData}
+              noCard={true}
             />
           </div>
         ) : (

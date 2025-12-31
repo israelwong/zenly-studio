@@ -2,11 +2,17 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, FileText } from 'lucide-react';
 import { PromiseNotesButton } from './components/PromiseNotesButton';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
 import { PromiseCardView } from './components/PromiseCardView';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
+import dynamic from 'next/dynamic';
+
+const ContractTemplateManagerModal = dynamic(
+  () => import('@/components/shared/contracts/ContractTemplateManagerModal').then(mod => mod.ContractTemplateManagerModal),
+  { ssr: false }
+);
 import { getPromiseById, archivePromise, unarchivePromise, deletePromise, getPipelineStages, movePromise } from '@/lib/actions/studio/commercial/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { toast } from 'sonner';
@@ -33,6 +39,7 @@ export default function EditarPromesaPage() {
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
   const [currentPipelineStageId, setCurrentPipelineStageId] = useState<string | null>(null);
   const [isChangingStage, setIsChangingStage] = useState(false);
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [promiseData, setPromiseData] = useState<{
     id: string;
     name: string;
@@ -519,6 +526,16 @@ export default function EditarPromesaPage() {
                 );
               })()}
               <div className="flex items-center gap-2">
+                {/* Botón de plantillas de contrato */}
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTemplatesModalOpen(true)}
+                  className="gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  <span>Plantillas de contrato</span>
+                </ZenButton>
                 {promiseId && (
                   <PromiseNotesButton
                     studioSlug={studioSlug}
@@ -647,6 +664,14 @@ export default function EditarPromesaPage() {
         variant="destructive"
         loading={isDeleting}
         disabled={isDeleting}
+      />
+
+      {/* Modal de plantillas de contrato */}
+      <ContractTemplateManagerModal
+        isOpen={templatesModalOpen}
+        onClose={() => setTemplatesModalOpen(false)}
+        studioSlug={studioSlug}
+        eventTypeId={promiseData?.event_type_id || undefined}
       />
     </div>
   );
