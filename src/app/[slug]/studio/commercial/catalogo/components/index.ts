@@ -1,4 +1,3 @@
-export { UtilidadForm } from "./UtilidadForm";
 export { CatalogoTabSkeleton } from "./CatalogoTabSkeleton";
 
 // Secciones

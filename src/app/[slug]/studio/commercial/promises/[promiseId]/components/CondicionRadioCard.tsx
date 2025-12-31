@@ -6,6 +6,7 @@ interface CondicionRadioCardProps {
   description: string | null;
   discount_percentage: number | null;
   advance_percentage: number | null;
+  type?: string | null;
   selected: boolean;
   onChange: (id: string) => void;
 }
@@ -16,6 +17,7 @@ export function CondicionRadioCard({
   description,
   discount_percentage,
   advance_percentage,
+  type,
   selected,
   onChange,
 }: CondicionRadioCardProps) {
@@ -50,9 +52,16 @@ export function CondicionRadioCard({
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <span className={`font-medium text-sm ${selected ? 'text-white' : 'text-zinc-300'}`}>
-            {name}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`font-medium text-sm ${selected ? 'text-white' : 'text-zinc-300'}`}>
+              {name}
+            </span>
+            {type === 'offer' && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full">
+                OFERTA
+              </span>
+            )}
+          </div>
 
           {description && (
             <p className={`text-xs mt-1 ${selected ? 'text-zinc-400' : 'text-zinc-500'}`}>

@@ -60,7 +60,6 @@ export function ZenConfirmModal({
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent
                 className="sm:max-w-md bg-zinc-900 border-zinc-700"
-                style={{ zIndex }}
                 overlayZIndex={zIndex - 1}
             >
                 <DialogHeader>

@@ -15,7 +15,8 @@ import {
   Phone,
   Mail,
   Edit2,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -50,6 +51,7 @@ interface CondicionComercial {
   description?: string | null;
   advance_percentage?: number | null;
   discount_percentage?: number | null;
+  type?: string | null;
 }
 
 interface PaymentMethod {
@@ -107,7 +109,7 @@ export function AuthorizeCotizacionModal({
 
   // Estado para Registro de Pago (toggle único)
   // Solo mostrar pago si puede autorizar
-  const [registrarPago, setRegistrarPago] = useState(true); // true por defecto
+  const [registrarPago, setRegistrarPago] = useState(false); // false por defecto
   const [pagoConcepto, setPagoConcepto] = useState('Anticipo');
   const [pagoMonto, setPagoMonto] = useState<string>('');
   const [pagoFecha, setPagoFecha] = useState<Date | undefined>(new Date());
@@ -457,16 +459,19 @@ export function AuthorizeCotizacionModal({
           <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-white">Cotización</h3>
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={handleOpenPreview}
-                loading={loadingCotizacion}
-                className="h-7 px-2"
-              >
-                <Eye className="w-3.5 h-3.5 mr-1.5" />
-                Ver detalle
-              </ZenButton>
+              {/* Botón Ver detalle solo si hay condición comercial definida */}
+              {selectedCondicionId && (
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleOpenPreview}
+                  loading={loadingCotizacion}
+                  className="h-7 px-2"
+                >
+                  <Eye className="w-3.5 h-3.5 mr-1.5" />
+                  Ver detalle
+                </ZenButton>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -476,89 +481,95 @@ export function AuthorizeCotizacionModal({
                 <p className="text-sm text-white font-medium">{cotizacion.name}</p>
               </div>
 
-              {/* Condiciones Comerciales */}
+              {/* Condiciones Comerciales - Diseño Minimalista */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs text-zinc-500">Condiciones Comerciales</label>
-                  {!isClienteNuevo && selectedCondicionId && (
-                    <button
-                      onClick={() => setShowCondicionSelector(true)}
-                      className="text-xs text-zinc-400 hover:text-white transition-colors"
-                    >
-                      Cambiar
-                    </button>
-                  )}
-                </div>
-
+                <label className="text-xs text-zinc-500 block mb-2">Condiciones Comerciales</label>
+                
                 {selectedCondicionId ? (
-                  <div className={`rounded-lg p-2.5 border ${isClienteNuevo
+                  <div className={`rounded-lg p-3 border ${isClienteNuevo
                     ? 'bg-emerald-500/10 border-emerald-500/20'
                     : 'bg-zinc-800/50 border-zinc-700'
                     }`}>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className={`w-4 h-4 shrink-0 ${isClienteNuevo ? 'text-emerald-400' : 'text-emerald-500'
-                        }`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-white">
-                          {condicionesComerciales.find(cc => cc.id === selectedCondicionId)?.name ||
-                            cotizacion.condiciones_comerciales?.name ||
-                            'Sin condiciones'}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                        <CheckCircle2 className={`w-4 h-4 shrink-0 ${isClienteNuevo ? 'text-emerald-400' : 'text-emerald-500'
+                          }`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-white truncate">
+                            {condicionesComerciales.find(cc => cc.id === selectedCondicionId)?.name ||
+                              cotizacion.condiciones_comerciales?.name ||
+                              'Sin condiciones'}
+                          </div>
+                          {!isClienteNuevo && (() => {
+                            const condicion = condicionesComerciales.find(cc => cc.id === selectedCondicionId);
+                            return condicion && (
+                              <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-0.5">
+                                {condicion.advance_percentage && condicion.advance_percentage > 0 && (
+                                  <>
+                                    <span>Anticipo {condicion.advance_percentage}%</span>
+                                    <span className="text-zinc-600">•</span>
+                                  </>
+                                )}
+                                <span>Desc. {condicion.discount_percentage ?? 0}%</span>
+                              </div>
+                            );
+                          })()}
                         </div>
-                        {!isClienteNuevo && (() => {
-                          const condicion = condicionesComerciales.find(cc => cc.id === selectedCondicionId);
-                          return condicion && (
-                            <div className="flex items-center gap-2 text-xs text-zinc-400 mt-0.5">
-                              {condicion.advance_percentage && condicion.advance_percentage > 0 && (
-                                <span>Anticipo {condicion.advance_percentage}%</span>
-                              )}
-                              <span>•</span>
-                              <span>Desc. {condicion.discount_percentage ?? 0}%</span>
-                            </div>
-                          );
-                        })()}
                       </div>
+                      {!isClienteNuevo && (
+                        <button
+                          onClick={() => setShowCondicionSelector(true)}
+                          className="shrink-0 w-7 h-7 flex items-center justify-center rounded-md border border-zinc-600 hover:border-zinc-500 hover:bg-zinc-700/50 transition-colors"
+                          title="Cambiar condiciones"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-zinc-400" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <button
                     onClick={() => setShowCondicionSelector(true)}
-                    className="w-full border border-dashed border-zinc-700 rounded-lg p-3 text-center hover:border-zinc-600 hover:bg-zinc-800/30 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 border border-dashed border-zinc-700 rounded-lg p-3 hover:border-zinc-600 hover:bg-zinc-800/30 transition-colors group"
                   >
-                    <p className="text-sm text-zinc-400">
+                    <Plus className="w-4 h-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+                    <span className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors">
                       Seleccionar condiciones comerciales
-                    </p>
+                    </span>
                   </button>
                 )}
               </div>
 
-              {/* Resumen Financiero */}
-              <div>
-                <label className="text-xs text-zinc-500 block mb-2">Resumen Financiero</label>
-                <div className="bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-zinc-400">Precio base:</span>
-                      <span className="text-white">
-                        ${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    {descuento > 0 && (
+              {/* Resumen Financiero - Solo si hay condición comercial definida */}
+              {selectedCondicionId && (
+                <div>
+                  <label className="text-xs text-zinc-500 block mb-2">Resumen Financiero</label>
+                  <div className="bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-zinc-400">Descuento:</span>
-                        <span className="text-emerald-500">
-                          -${descuento.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        <span className="text-zinc-400">Precio base:</span>
+                        <span className="text-white">
+                          ${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
-                    )}
-                    <div className="flex justify-between text-base font-bold pt-2 border-t border-zinc-700">
-                      <span className="text-white">Total a pagar:</span>
-                      <span className="text-emerald-500">
-                        ${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </span>
+                      {descuento > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-zinc-400">Descuento:</span>
+                          <span className="text-emerald-500">
+                            -${descuento.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-base font-bold pt-2 border-t border-zinc-700">
+                        <span className="text-white">Total a pagar:</span>
+                        <span className="text-emerald-500">
+                          ${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
             </div>
           </div>
@@ -566,6 +577,7 @@ export function AuthorizeCotizacionModal({
           {/* ============================================ */}
           {/* BLOQUE 3: ESTADO DEL CONTRATO */}
           {/* ============================================ */}
+          {selectedCondicionId && (
           <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-white mb-4">Contrato</h3>
 
@@ -717,11 +729,12 @@ export function AuthorizeCotizacionModal({
               </div>
             )}
           </div>
+          )}
 
           {/* ============================================ */}
           {/* BLOQUE 4: REGISTRAR PAGO */}
           {/* ============================================ */}
-          {puedeAutorizar && (
+          {selectedCondicionId && puedeAutorizar && (
           <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-white mb-4">Registrar Pago</h3>
 
@@ -827,6 +840,11 @@ export function AuthorizeCotizacionModal({
           condiciones={condicionesComerciales}
           selectedId={selectedCondicionId}
           onSelect={setSelectedCondicionId}
+          studioSlug={studioSlug}
+          onRefresh={async () => {
+            // Recargar condiciones comerciales desde el componente padre si es necesario
+            // Por ahora solo actualizamos el estado local
+          }}
         />
       )}
 
@@ -920,6 +938,7 @@ export function AuthorizeCotizacionModal({
           title="Editar Contrato"
           description="Personaliza el contrato para este cliente. Los cambios solo aplicarán a esta promesa."
           saveLabel="Guardar y volver a preview"
+          zIndex={10090}
         />
       )}
     </>

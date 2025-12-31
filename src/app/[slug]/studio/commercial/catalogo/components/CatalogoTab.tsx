@@ -13,7 +13,8 @@ import {
     ZenDropdownMenuSeparator,
 } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { SeccionEditorModal, SeccionFormData, CategoriaEditorModal, CategoriaFormData, ItemEditorModal, ItemFormData, UtilidadForm, CatalogoTabSkeleton } from './';
+import { SeccionEditorModal, SeccionFormData, CategoriaEditorModal, CategoriaFormData, ItemEditorModal, ItemFormData, CatalogoTabSkeleton } from './';
+import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
 import { ConfiguracionPrecios, calcularPrecio as calcularPrecioSistema } from '@/lib/actions/studio/catalogo/calcular-precio';
 import {
     crearSeccion,

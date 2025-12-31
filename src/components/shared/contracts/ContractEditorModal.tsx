@@ -52,6 +52,7 @@ interface ContractEditorModalProps {
   saveLabel?: string;
   cancelLabel?: string;
   isLoading?: boolean;
+  zIndex?: number;
 }
 
 export function ContractEditorModal({
@@ -71,6 +72,7 @@ export function ContractEditorModal({
   saveLabel,
   cancelLabel = "Cancelar",
   isLoading = false,
+  zIndex = 10090,
 }: ContractEditorModalProps) {
   const [content, setContent] = useState(initialContent || templateContent || "");
   const [name, setName] = useState(initialName);
@@ -278,7 +280,7 @@ export function ContractEditorModal({
       cancelLabel={cancelLabel}
       isLoading={isLoading}
       closeOnClickOutside={false}
-      zIndex={10070}
+      zIndex={zIndex}
     >
       {/* Wrapper para anular el overflow del ZenCardContent y crear scrolls independientes */}
       <div

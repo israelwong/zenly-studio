@@ -1,9 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Plus, Trash2, GripVertical, X, MoreVertical, Edit2 } from 'lucide-react';
 import { ZenDialog } from '@/components/ui/zen/modals/ZenDialog';
 import { ZenButton, ZenInput, ZenTextarea, ZenSwitch } from '@/components/ui/zen';
+import {
+  ZenDropdownMenu,
+  ZenDropdownMenuTrigger,
+  ZenDropdownMenuContent,
+  ZenDropdownMenuItem,
+  ZenDropdownMenuSeparator,
+} from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import {
   obtenerTodasCondicionesComerciales,
@@ -11,11 +18,12 @@ import {
   actualizarCondicionComercial,
   eliminarCondicionComercial,
   actualizarOrdenCondicionesComerciales,
+  checkCondicionComercialAssociations,
 } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import type { CondicionComercialForm } from '@/lib/actions/schemas/condiciones-comerciales-schemas';
 import { useConfiguracionPreciosUpdateListener, type ConfiguracionPreciosUpdateEventDetail } from '@/hooks/useConfiguracionPreciosRefresh';
-import { UtilidadForm } from '@/app/[slug]/studio/commercial/catalogo/components/UtilidadForm';
+import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
 import { toast } from 'sonner';
 import {
   DndContext,
@@ -60,6 +68,7 @@ interface CondicionesComercialesManagerProps {
     offerId: string;
     offerName: string;
   };
+  onSelect?: (condicionId: string) => void; // Callback opcional para modo selección
 }
 
 interface SortableCondicionItemProps {
@@ -69,8 +78,6 @@ interface SortableCondicionItemProps {
   onEdit: (condicion: CondicionComercial) => void;
   onDelete: (id: string) => void;
   onToggleStatus: (id: string, newStatus: boolean) => void;
-  onMoveUp: (id: string) => void;
-  onMoveDown: (id: string) => void;
 }
 
 function SortableCondicionItem({
@@ -80,8 +87,7 @@ function SortableCondicionItem({
   onEdit,
   onDelete,
   onToggleStatus,
-  onMoveUp,
-  onMoveDown
+  onSelect,
 }: SortableCondicionItemProps) {
   const {
     attributes,
@@ -105,10 +111,17 @@ function SortableCondicionItem({
       ref={setNodeRef}
       style={style}
       className={`p-4 border rounded-lg w-full cursor-pointer transition-all ${isActive
-        ? 'border-emerald-500/50 bg-emerald-500/5 hover:bg-emerald-500/10'
+        ? 'border-zinc-600 bg-zinc-800/50 hover:bg-zinc-800/70'
         : 'border-zinc-700 bg-zinc-800/30 opacity-75'
         }`}
-      onClick={() => onEdit(condicion)}
+      onClick={() => {
+        // Si hay onSelect, seleccionar en lugar de editar
+        if (onSelect) {
+          onSelect(condicion.id);
+        } else {
+          onEdit(condicion);
+        }
+      }}
     >
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3 flex-1">
@@ -126,7 +139,7 @@ function SortableCondicionItem({
                 {condicion.name}
               </h4>
               {condicion.type === 'offer' && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">
+                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full">
                   OFERTA
                 </span>
               )}
@@ -156,34 +169,34 @@ function SortableCondicionItem({
             onCheckedChange={(checked) => onToggleStatus(condicion.id, checked)}
             label={isActive ? 'Activa' : 'Inactiva'}
           />
-          <div className="flex items-center gap-1">
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => onMoveUp(condicion.id)}
-              disabled={index === 0}
-              className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-300 disabled:opacity-30"
-            >
-              <ChevronUp className="h-4 w-4" />
-            </ZenButton>
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => onMoveDown(condicion.id)}
-              disabled={index === totalItems - 1}
-              className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-300 disabled:opacity-30"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </ZenButton>
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(condicion.id)}
-              className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
-            >
-              <Trash2 className="h-4 w-4" />
-            </ZenButton>
-          </div>
+          <ZenDropdownMenu>
+            <ZenDropdownMenuTrigger asChild>
+              <ZenButton
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </ZenButton>
+            </ZenDropdownMenuTrigger>
+            <ZenDropdownMenuContent align="end">
+              <ZenDropdownMenuItem
+                onClick={() => onEdit(condicion)}
+                className="gap-2"
+              >
+                <Edit2 className="h-4 w-4" />
+                Editar
+              </ZenDropdownMenuItem>
+              <ZenDropdownMenuSeparator />
+              <ZenDropdownMenuItem
+                onClick={() => onDelete(condicion.id)}
+                className="gap-2 text-red-400 focus:text-red-300 focus:bg-red-950/20"
+              >
+                <Trash2 className="h-4 w-4" />
+                Eliminar
+              </ZenDropdownMenuItem>
+            </ZenDropdownMenuContent>
+          </ZenDropdownMenu>
         </div>
       </div>
     </div>
@@ -196,6 +209,7 @@ export function CondicionesComercialesManager({
   onClose,
   onRefresh,
   context,
+  onSelect,
 }: CondicionesComercialesManagerProps) {
   const [condiciones, setCondiciones] = useState<CondicionComercial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,7 +287,7 @@ export function CondicionesComercialesManager({
     }
   };
 
-  const handleConfirmClose = () => {
+  const resetFormState = () => {
     setShowForm(false);
     setEditingId(null);
     setViewingOfferCondition(null);
@@ -289,6 +303,11 @@ export function CondicionesComercialesManager({
     };
     setFormData(emptyForm);
     setInitialFormData(emptyForm);
+    setFormErrors({});
+  };
+
+  const handleConfirmClose = () => {
+    resetFormState();
     setShowConfirmClose(false);
     if (pendingClose) {
       pendingClose();
@@ -318,12 +337,25 @@ export function CondicionesComercialesManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showForm, isOpen]);
 
+  // Resetear el estado del formulario cuando el modal se cierra
+  useEffect(() => {
+    if (!isOpen) {
+      resetFormState();
+      setShowConfirmClose(false);
+      setShowConfirmDelete(false);
+      setPendingClose(null);
+      setPendingDeleteId(null);
+    }
+  }, [isOpen]);
+
   // Escuchar actualizaciones de configuración de precios
   useConfiguracionPreciosUpdateListener(studioSlug, (config?: ConfiguracionPreciosUpdateEventDetail) => {
     // Si se pasa el sobreprecio directamente, actualizar inmediatamente
-    // El sobreprecio viene en decimal (0.05 = 5%), convertir a porcentaje
+    // El sobreprecio viene en decimal (0.10 = 10%), convertir a porcentaje
+    // IMPORTANTE: Usar sobreprecio (markup), NO comision_venta
     if (config?.sobreprecio !== undefined) {
-      setMaxDescuento(config.sobreprecio * 100);
+      const sobreprecioPorcentaje = config.sobreprecio * 100;
+      setMaxDescuento(sobreprecioPorcentaje);
     } else {
       // Si no viene el sobreprecio, recargar la configuración completa
       loadConfiguracion();
@@ -360,13 +392,24 @@ export function CondicionesComercialesManager({
   const loadConfiguracion = async () => {
     try {
       const result = await obtenerConfiguracionPrecios(studioSlug);
-      if (result.success && result.data) {
+      if (result.success && result.data && result.data.sobreprecio !== undefined) {
         // sobreprecio ya viene convertido a porcentaje (ej: 10 = 10%)
-        // No multiplicar nuevamente, usar directamente
-        setMaxDescuento(result.data.sobreprecio);
+        // Asegurar que sea un número válido
+        const sobreprecioValue = typeof result.data.sobreprecio === 'number' 
+          ? result.data.sobreprecio 
+          : parseFloat(String(result.data.sobreprecio));
+        
+        if (!isNaN(sobreprecioValue) && sobreprecioValue >= 0) {
+          setMaxDescuento(sobreprecioValue);
+        } else {
+          setMaxDescuento(null);
+        }
+      } else {
+        setMaxDescuento(null);
       }
     } catch (error) {
-      console.error('Error loading configuracion:', error);
+      console.error('[CondicionesComercialesManager] Error loading configuracion:', error);
+      setMaxDescuento(null);
     }
   };
 
@@ -426,9 +469,31 @@ export function CondicionesComercialesManager({
     setShowForm(true);
   };
 
-  const handleDelete = (id: string) => {
-    setPendingDeleteId(id);
-    setShowConfirmDelete(true);
+  const handleDelete = async (id: string) => {
+    try {
+      // Verificar asociaciones antes de mostrar el modal
+      const checkResult = await checkCondicionComercialAssociations(studioSlug, id);
+
+      if (!checkResult.success) {
+        toast.error(checkResult.error || 'Error al verificar asociaciones');
+        return;
+      }
+
+      if (checkResult.hasCotizaciones) {
+        // Mostrar mensaje específico sin abrir el modal
+        toast.error(
+          `No puedes eliminar esta condición comercial porque tiene ${checkResult.cotizacionesCount} cotización${checkResult.cotizacionesCount > 1 ? 'es' : ''} asociada${checkResult.cotizacionesCount > 1 ? 's' : ''}`
+        );
+        return;
+      }
+
+      // Si no tiene asociaciones, mostrar modal de confirmación
+      setPendingDeleteId(id);
+      setShowConfirmDelete(true);
+    } catch (error) {
+      console.error('Error checking condicion associations:', error);
+      toast.error('Error al verificar asociaciones de la condición');
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -627,73 +692,6 @@ export function CondicionesComercialesManager({
     }
   };
 
-  const handleMoveUp = async (id: string) => {
-    const currentIndex = condiciones.findIndex((c) => c.id === id);
-    if (currentIndex === 0 || isReordering) return;
-
-    const newIndex = currentIndex - 1;
-    const newCondiciones = arrayMove(condiciones, currentIndex, newIndex);
-
-    try {
-      setIsReordering(true);
-      setCondiciones(newCondiciones);
-
-      const condicionesConOrden = newCondiciones.map((condicion, index) => ({
-        id: condicion.id,
-        orden: index,
-      }));
-
-      const result = await actualizarOrdenCondicionesComerciales(studioSlug, condicionesConOrden);
-
-      if (!result.success) {
-        setCondiciones(condiciones);
-        toast.error(result.error || 'Error al actualizar el orden');
-      } else {
-        toast.success('Orden actualizado exitosamente');
-        onRefresh?.();
-      }
-    } catch (error) {
-      console.error('Error moving condicion:', error);
-      setCondiciones(condiciones);
-      toast.error('Error al actualizar el orden');
-    } finally {
-      setIsReordering(false);
-    }
-  };
-
-  const handleMoveDown = async (id: string) => {
-    const currentIndex = condiciones.findIndex((c) => c.id === id);
-    if (currentIndex === condiciones.length - 1 || isReordering) return;
-
-    const newIndex = currentIndex + 1;
-    const newCondiciones = arrayMove(condiciones, currentIndex, newIndex);
-
-    try {
-      setIsReordering(true);
-      setCondiciones(newCondiciones);
-
-      const condicionesConOrden = newCondiciones.map((condicion, index) => ({
-        id: condicion.id,
-        orden: index,
-      }));
-
-      const result = await actualizarOrdenCondicionesComerciales(studioSlug, condicionesConOrden);
-
-      if (!result.success) {
-        setCondiciones(condiciones);
-        toast.error(result.error || 'Error al actualizar el orden');
-      } else {
-        toast.success('Orden actualizado exitosamente');
-        onRefresh?.();
-      }
-    } catch (error) {
-      console.error('Error moving condicion:', error);
-      setCondiciones(condiciones);
-      toast.error('Error al actualizar el orden');
-    } finally {
-      setIsReordering(false);
-    }
-  };
 
   const handleDiscountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -811,13 +809,19 @@ export function CondicionesComercialesManager({
 
     try {
       const condicionExistente = editingId ? condiciones.find(c => c.id === editingId) : null;
+      // Preparar monto_anticipo: si es fixed_amount y tiene valor, enviar el string (se parseará en el servidor)
+      // Si está vacío o es null, enviar null
+      const montoAnticipo = formData.advance_type === 'fixed_amount' 
+        ? (formData.advance_amount && formData.advance_amount.trim() !== '' ? formData.advance_amount.trim() : null)
+        : null;
+
       const data = {
         nombre: formData.name,
         descripcion: formData.description || null,
         porcentaje_descuento: formData.discount_percentage || null,
         porcentaje_anticipo: formData.advance_type === 'percentage' ? (formData.advance_percentage || null) : null,
         tipo_anticipo: formData.advance_type,
-        monto_anticipo: formData.advance_type === 'fixed_amount' ? (formData.advance_amount || null) : null,
+        monto_anticipo: montoAnticipo,
         status: (formData.status ? 'active' : 'inactive') as 'active' | 'inactive',
         orden: editingId ? (condicionExistente?.order || 0) : condiciones.length,
         type: (formData.is_offer ? 'offer' : 'standard') as 'standard' | 'offer',
@@ -868,6 +872,11 @@ export function CondicionesComercialesManager({
         setInitialFormData(formData);
         setFormErrors({});
         onRefresh?.();
+
+        // Si se creó una nueva condición y hay onSelect, seleccionarla automáticamente
+        if (!editingId && onSelect && result.data) {
+          onSelect(result.data.id);
+        }
       } else {
         // Manejar errores de validación
         if (result.error && typeof result.error === 'object' && !Array.isArray(result.error)) {
@@ -899,6 +908,9 @@ export function CondicionesComercialesManager({
         title="Gestionar Condiciones Comerciales"
         description="Crea y gestiona condiciones comerciales reutilizables"
         maxWidth="xl"
+        zIndex={10080}
+        onCancel={handleClose}
+        cancelLabel="Cerrar"
       >
         {viewingOfferCondition ? (
           <div className="space-y-4">
@@ -1131,11 +1143,12 @@ export function CondicionesComercialesManager({
                 variant="ghost"
                 onClick={() => {
                   if (hasUnsavedChanges()) {
-                    setPendingClose(() => () => setShowForm(false));
+                    setPendingClose(() => () => {
+                      resetFormState();
+                    });
                     setShowConfirmClose(true);
                   } else {
-                    setShowForm(false);
-                    setEditingId(null);
+                    resetFormState();
                   }
                 }}
               >
@@ -1159,7 +1172,7 @@ export function CondicionesComercialesManager({
             </div>
 
             {loading ? (
-              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+              <div className="space-y-2 max-h-[350px] overflow-y-auto">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -1207,7 +1220,7 @@ export function CondicionesComercialesManager({
                   items={condiciones.map((c) => c.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className={`space-y-2 max-h-[600px] overflow-y-auto overflow-x-hidden ${isReordering ? 'pointer-events-none opacity-50' : ''}`}>
+                  <div className={`space-y-2 max-h-[350px] overflow-y-auto overflow-x-hidden ${isReordering ? 'pointer-events-none opacity-50' : ''}`}>
                     {condiciones.map((condicion, index) => (
                       <SortableCondicionItem
                         key={condicion.id}
@@ -1217,8 +1230,7 @@ export function CondicionesComercialesManager({
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                         onToggleStatus={handleToggleStatus}
-                        onMoveUp={handleMoveUp}
-                        onMoveDown={handleMoveDown}
+                        onSelect={onSelect}
                       />
                     ))}
                   </div>
@@ -1238,6 +1250,7 @@ export function CondicionesComercialesManager({
         confirmText="Descartar cambios"
         cancelText="Cancelar"
         variant="destructive"
+        zIndex={10090}
       />
 
       <ZenConfirmModal
@@ -1249,6 +1262,7 @@ export function CondicionesComercialesManager({
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="destructive"
+        zIndex={10090}
       />
 
       {/* Modal de Configuración de Utilidad */}
@@ -1259,6 +1273,7 @@ export function CondicionesComercialesManager({
         description="Gestiona los márgenes de utilidad, comisiones y sobreprecios para tus servicios y productos"
         maxWidth="2xl"
         closeOnClickOutside={false}
+        zIndex={10090}
       >
         <UtilidadForm
           studioSlug={studioSlug}

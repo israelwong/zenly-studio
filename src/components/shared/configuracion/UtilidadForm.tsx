@@ -14,7 +14,7 @@ import {
 import {
     obtenerConfiguracionPrecios,
     actualizarConfiguracionPrecios
-} from '@/lib/actions/studio/catalogo/utilidad.actions';
+} from '@/lib/actions/studio/config/configuracion-precios.actions';
 import type {
     ConfiguracionPreciosForm,
 } from '@/lib/actions/schemas/configuracion-precios-schemas';
@@ -64,20 +64,21 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
         setLoading(true);
         try {
             const result = await obtenerConfiguracionPrecios(studioSlug);
-            // Los valores vienen como decimales de BD (0.3, 0.05)
-            // Convertir a porcentajes para mostrar en UI (30, 5)
+            
+            // obtenerConfiguracionPrecios devuelve valores como porcentajes (30, 10, 5, etc.)
+            // Redondear a enteros para mostrar en los inputs
             const configData = {
-                utilidad_servicio: result?.utilidad_servicio
-                    ? String(parseFloat(result.utilidad_servicio) * 100)
+                utilidad_servicio: result?.utilidad_servicio 
+                    ? String(Math.round(parseFloat(result.utilidad_servicio))) 
                     : '',
-                utilidad_producto: result?.utilidad_producto
-                    ? String(parseFloat(result.utilidad_producto) * 100)
+                utilidad_producto: result?.utilidad_producto 
+                    ? String(Math.round(parseFloat(result.utilidad_producto))) 
                     : '',
-                comision_venta: result?.comision_venta
-                    ? String(parseFloat(result.comision_venta) * 100)
+                comision_venta: result?.comision_venta 
+                    ? String(Math.round(parseFloat(result.comision_venta))) 
                     : '',
-                sobreprecio: result?.sobreprecio
-                    ? String(parseFloat(result.sobreprecio) * 100)
+                sobreprecio: result?.sobreprecio 
+                    ? String(Math.round(parseFloat(result.sobreprecio))) 
                     : ''
             };
             setConfig(configData);
@@ -102,18 +103,29 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
     type ConfigField = 'utilidad_servicio' | 'utilidad_producto' | 'comision_venta' | 'sobreprecio';
 
     const handleInputChange = (field: ConfigField, value: string) => {
-        // Permitir solo números y punto decimal
-        const sanitizedValue = value.replace(/[^0-9.]/g, '');
+        // Solo permitir números enteros (sin punto decimal)
+        const onlyNumbers = value.replace(/[^0-9]/g, '');
 
-        // Permitir solo un punto decimal
-        const parts = sanitizedValue.split('.');
-        const formattedValue = parts.length > 2
-            ? `${parts[0]}.${parts.slice(1).join('')}`
-            : sanitizedValue;
+        // Validaciones específicas por campo
+        const numValue = parseInt(onlyNumbers, 10);
+
+        if (onlyNumbers && !isNaN(numValue)) {
+            // Utilidad servicio y producto: máximo 3 dígitos (999)
+            if ((field === 'utilidad_servicio' || field === 'utilidad_producto')) {
+                if (onlyNumbers.length > 3) {
+                    return; // No actualizar si excede 3 dígitos
+                }
+            }
+
+            // Comisión de venta y sobreprecio: máximo 100
+            if ((field === 'comision_venta' || field === 'sobreprecio') && numValue > 100) {
+                return; // No actualizar si excede 100
+            }
+        }
 
         setConfig(prev => ({
             ...prev,
-            [field]: formattedValue
+            [field]: onlyNumbers || ''
         }));
     };
 
@@ -137,12 +149,14 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
 
         setSubmitting(true);
         try {
-            // Convertir de porcentaje (20) a decimal (0.20) para el schema
-            // Si el campo está vacío, enviar "0" para que se actualice a 0 en la BD
+            // El usuario ingresa valores enteros (10, 5, etc.) en el formulario
+            // El schema espera decimales (0.10, 0.05, etc.) entre 0.0 y 1.0
+            // Convertir de entero a decimal: 10 -> 0.10
             const parseAndValidate = (value: string | undefined): string => {
                 if (!value || value.trim() === '') return '0';
                 const parsed = parseFloat(value);
                 if (isNaN(parsed)) return '0';
+                // Convertir de porcentaje entero a decimal: 10 -> 0.10
                 return String(parsed / 100);
             };
 
@@ -163,6 +177,7 @@ export function UtilidadForm({ studioSlug, onClose }: UtilidadFormProps) {
                 setInitialConfig({ ...config });
 
                 // Emitir evento para notificar a otros componentes (valores en decimal)
+                // dataToSend ya tiene valores en decimal (0.10, 0.05, etc.)
                 triggerUpdate(studioSlug, {
                     utilidad_servicio: parseFloat(dataToSend.utilidad_servicio || '0'),
                     utilidad_producto: parseFloat(dataToSend.utilidad_producto || '0'),

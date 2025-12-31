@@ -668,6 +668,30 @@ export function PromiseQuotesPanelCard({
                       <Edit2 className="h-4 w-4 mr-2" />
                       Editar nombre
                     </ZenDropdownMenuItem>
+                    {!isAuthorized && promiseId && (
+                      <ZenDropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const params = new URLSearchParams();
+                          if (contactId) {
+                            params.set('contactId', contactId);
+                          }
+                          const queryString = params.toString();
+                          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+                        }}
+                        disabled={loading || isDuplicating || isEditingName}
+                      >
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Editar
+                      </ZenDropdownMenuItem>
+                    )}
+                    {/* Duplicar: NO mostrar si es aprobada o revisión */}
+                    {!isAuthorized && !isRevision && (
+                      <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating || isEditingName}>
+                        <Copy className="h-4 w-4 mr-2" />
+                        Duplicar
+                      </ZenDropdownMenuItem>
+                    )}
                     <ZenDropdownMenuSeparator />
                     {isAuthorized ? (
                       <ZenDropdownMenuItem
@@ -696,17 +720,6 @@ export function PromiseQuotesPanelCard({
                           Autorizar
                         </ZenDropdownMenuItem>
                       )
-                    )}
-
-                    {/* Duplicar: NO mostrar si es aprobada o revisión */}
-                    {!isAuthorized && !isRevision && (
-                      <>
-                        <ZenDropdownMenuSeparator />
-                        <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating || isEditingName}>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Duplicar
-                        </ZenDropdownMenuItem>
-                      </>
                     )}
 
                     {/* Archivar y Eliminar: NO mostrar si es aprobada */}

@@ -315,6 +315,72 @@ export async function actualizarCondicionComercial(
     }
 }
 
+// Verificar asociaciones de condición comercial antes de eliminar
+export async function checkCondicionComercialAssociations(
+    studioSlug: string,
+    condicionId: string
+): Promise<{
+    success: boolean;
+    hasCotizaciones: boolean;
+    cotizacionesCount: number;
+    error?: string;
+}> {
+    try {
+        const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+        });
+
+        if (!studio) {
+            return {
+                success: false,
+                hasCotizaciones: false,
+                cotizacionesCount: 0,
+                error: "Studio no encontrado",
+            };
+        }
+
+        // Verificar que la condición pertenezca al studio
+        const condicion = await prisma.studio_condiciones_comerciales.findFirst({
+            where: {
+                id: condicionId,
+                studio_id: studio.id,
+            },
+        });
+
+        if (!condicion) {
+            return {
+                success: false,
+                hasCotizaciones: false,
+                cotizacionesCount: 0,
+                error: "Condición comercial no encontrada o no pertenece al studio",
+            };
+        }
+
+        // Contar cotizaciones asociadas
+        const cotizacionesCount = await prisma.studio_cotizaciones.count({
+            where: {
+                studio_id: studio.id,
+                condiciones_comerciales_id: condicionId,
+            },
+        });
+
+        return {
+            success: true,
+            hasCotizaciones: cotizacionesCount > 0,
+            cotizacionesCount,
+        };
+    } catch (error) {
+        console.error("Error al verificar asociaciones de condición comercial:", error);
+        return {
+            success: false,
+            hasCotizaciones: false,
+            cotizacionesCount: 0,
+            error: "Error al verificar asociaciones",
+        };
+    }
+}
+
 // Eliminar condición comercial
 export async function eliminarCondicionComercial(studioSlug: string, condicionId: string) {
     try {
@@ -339,6 +405,23 @@ export async function eliminarCondicionComercial(studioSlug: string, condicionId
             return {
                 success: false,
                 error: "Condición comercial no encontrada o no pertenece al studio",
+            };
+        }
+
+        // Verificar asociaciones antes de eliminar
+        const checkResult = await checkCondicionComercialAssociations(studioSlug, condicionId);
+
+        if (!checkResult.success) {
+            return {
+                success: false,
+                error: checkResult.error || "Error al verificar asociaciones",
+            };
+        }
+
+        if (checkResult.hasCotizaciones) {
+            return {
+                success: false,
+                error: `No puedes eliminar esta condición comercial porque tiene ${checkResult.cotizacionesCount} cotización${checkResult.cotizacionesCount > 1 ? 'es' : ''} asociada${checkResult.cotizacionesCount > 1 ? 's' : ''}`,
             };
         }
 
@@ -417,11 +500,13 @@ export async function obtenerConfiguracionPrecios(studioSlug: string) {
             },
             select: {
                 markup: true,
+                sales_commission: true, // Incluir para debugging/verificación
             },
         });
 
+        // IMPORTANTE: Usar markup (sobreprecio) para el descuento máximo, NO sales_commission
         // markup está almacenado como decimal (0.10 = 10%), convertir a porcentaje
-        const markupDecimal = configuracion?.markup || 0;
+        const markupDecimal = configuracion?.markup ?? 0;
         const markupPorcentaje = markupDecimal * 100;
 
         return {

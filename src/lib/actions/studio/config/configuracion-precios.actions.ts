@@ -159,12 +159,14 @@ export async function actualizarConfiguracionPrecios(
 
         const { id: _, ...validatedData } = validationResult.data;
 
-        // Convertir porcentajes a decimales para almacenamiento
+        // El schema ya valida que los valores estén entre 0.0 y 1.0 (decimales)
+        // UtilidadForm convierte de enteros (10) a decimales (0.10) antes de enviar
+        // Usar directamente los valores del schema sin dividir por 100
         const dataToSave = {
-            service_margin: parseFloat((parseFloat(validatedData.utilidad_servicio) / 100).toFixed(4)),
-            product_margin: parseFloat((parseFloat(validatedData.utilidad_producto) / 100).toFixed(4)),
-            sales_commission: parseFloat((parseFloat(validatedData.comision_venta) / 100).toFixed(4)),
-            markup: parseFloat((parseFloat(validatedData.sobreprecio) / 100).toFixed(4)),
+            service_margin: parseFloat(parseFloat(validatedData.utilidad_servicio || '0').toFixed(4)),
+            product_margin: parseFloat(parseFloat(validatedData.utilidad_producto || '0').toFixed(4)),
+            sales_commission: parseFloat(parseFloat(validatedData.comision_venta || '0').toFixed(4)),
+            markup: parseFloat(parseFloat(validatedData.sobreprecio || '0').toFixed(4)),
         };
 
         // Obtener el studio
@@ -246,10 +248,11 @@ export async function actualizarConfiguracionPrecios(
             await Promise.all(updatePromises);
         }
 
-        // 6. Revalidar las rutas
+        // 6. Revalidar las rutas (componente compartido usado en múltiples lugares)
         revalidatePath(`/${studioSlug}/studio/configuracion/negocio/configuracion-precios`);
-        revalidatePath(`/${slug}/studio/commercial/catalogo`);
         revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
+        revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+        revalidatePath(`/${studioSlug}/studio/commercial/ofertas`);
 
         return {
             success: true,
