@@ -368,8 +368,15 @@ export default function ContratosPage() {
 
             if (result.success && result.data) {
               toast.success('Plantilla creada correctamente');
-              // Agregar el nuevo template al array local
-              setTemplates((prev) => [...prev, result.data!]);
+              
+              // Si se creó como default, recargar todas las plantillas para actualizar el estado
+              if (data.is_default) {
+                await loadTemplates();
+              } else {
+                // Si no es default, solo agregar al estado local
+                setTemplates((prev) => [...prev, result.data!]);
+              }
+              
               setCreateModalOpen(false);
             } else {
               toast.error(result.error || 'Error al crear plantilla');

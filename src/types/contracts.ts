@@ -84,12 +84,20 @@ export interface CancellationLog {
 
 export interface EventContractData {
   nombre_cliente: string;
+  email_cliente?: string;
+  telefono_cliente?: string;
+  direccion_cliente?: string;
   fecha_evento: string;
   tipo_evento: string;
   nombre_evento: string;
   total_contrato: string;
   condiciones_pago: string;
   nombre_studio: string;
+  nombre_representante?: string;
+  telefono_studio?: string;
+  correo_studio?: string;
+  direccion_studio?: string;
+  fecha_firma_cliente?: string;
   servicios_incluidos: ServiceCategory[];
 }
 
@@ -156,6 +164,12 @@ export const CONTRACT_VARIABLES: ContractVariable[] = [
     description: "Número de teléfono del contacto",
     example: "+52 55 1234 5678",
   },
+  {
+    key: "@direccion_cliente",
+    label: "Dirección del Cliente",
+    description: "Dirección completa del cliente",
+    example: "Av. Insurgentes 456, CDMX",
+  },
   // Evento
   {
     key: "@nombre_evento",
@@ -206,6 +220,36 @@ export const CONTRACT_VARIABLES: ContractVariable[] = [
     label: "Nombre del Studio",
     description: "Nombre comercial del studio",
     example: "PROSOCIALMX",
+  },
+  {
+    key: "@nombre_representante",
+    label: "Nombre del Representante Legal",
+    description: "Nombre del representante legal del estudio",
+    example: "Juan Pérez",
+  },
+  {
+    key: "@telefono_studio",
+    label: "Teléfono del Studio",
+    description: "Teléfono principal de contacto del estudio",
+    example: "+52 55 1234 5678",
+  },
+  {
+    key: "@correo_studio",
+    label: "Correo del Studio",
+    description: "Correo electrónico del estudio",
+    example: "contacto@studio.com",
+  },
+  {
+    key: "@direccion_studio",
+    label: "Dirección del Studio",
+    description: "Dirección completa del estudio",
+    example: "Av. Reforma 123, CDMX",
+  },
+  {
+    key: "@fecha_firma_cliente",
+    label: "Fecha de Firma del Cliente",
+    description: "Fecha en que el cliente firmó el contrato",
+    example: "15 de enero de 2025",
   },
   // Legacy
   {

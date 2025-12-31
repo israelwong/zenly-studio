@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Loader2 } from "lucide-react";
 import { ZenDialog } from "@/components/ui/zen/modals/ZenDialog";
-import { ZenButton, ZenConfirmModal } from "@/components/ui/zen";
+import { ZenButton } from "@/components/ui/zen";
 import { ContractTemplatesTable } from "@/app/[slug]/studio/config/contratos/components";
 import { ContractEditorModal } from "./ContractEditorModal";
 import {
@@ -15,9 +15,17 @@ import {
   toggleContractTemplate,
   deleteContractTemplate,
 } from "@/lib/actions/studio/business/contracts";
+import {
+  getStudioContractData,
+  validateStudioContractData,
+  createDefaultTemplateForStudio,
+  type StudioContractData,
+} from "@/lib/actions/studio/business/contracts/templates.actions";
 import { DEFAULT_CONTRACT_TEMPLATE } from "@/lib/constants/contract-template";
 import type { ContractTemplate } from "@/types/contracts";
 import { toast } from "sonner";
+import { StudioContractDataModal } from "./StudioContractDataModal";
+import { CheckCircle2, X, AlertCircle, Settings } from "lucide-react";
 
 interface ContractTemplateManagerModalProps {
   isOpen: boolean;
@@ -42,14 +50,91 @@ export function ContractTemplateManagerModal({
   const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [duplicatingTemplateId, setDuplicatingTemplateId] = useState<string | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [templateToDelete, setTemplateToDelete] = useState<ContractTemplate | null>(null);
+  const [studioDataModalOpen, setStudioDataModalOpen] = useState(false);
+  const [studioDataModalFromValidation, setStudioDataModalFromValidation] = useState(false);
+  const [showDefaultTemplateMessage, setShowDefaultTemplateMessage] = useState(false);
+  const [defaultTemplateCreated, setDefaultTemplateCreated] = useState(false);
+  const [hasValidStudioData, setHasValidStudioData] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      loadTemplates();
+      initializeModal();
+    } else {
+      // Resetear estados cuando se cierra el modal
+      setStudioDataModalOpen(false);
+      setShowDefaultTemplateMessage(false);
+      setDefaultTemplateCreated(false);
+      setHasValidStudioData(false);
+      setLoading(true);
     }
   }, [isOpen, studioSlug, eventTypeId]);
+
+  const initializeModal = async () => {
+    setLoading(true);
+    // 1. Verificar datos del estudio
+    const studioDataResult = await getStudioContractData(studioSlug);
+    if (!studioDataResult.success || !studioDataResult.data) {
+      toast.error(studioDataResult.error || "Error al verificar datos del estudio");
+      setLoading(false);
+      return;
+    }
+
+    // Extraer solo los datos legales (sin sources) para validación
+    const contractData: StudioContractData = {
+      nombre_studio: studioDataResult.data.nombre_studio,
+      nombre_representante: studioDataResult.data.nombre_representante,
+      telefono_studio: studioDataResult.data.telefono_studio,
+      correo_studio: studioDataResult.data.correo_studio,
+      direccion_studio: studioDataResult.data.direccion_studio,
+    };
+
+    const validation = await validateStudioContractData(contractData);
+    if (!validation.isValid) {
+      // Si faltan datos, mostrar modal de datos del estudio
+      // Pero mantener el modal principal abierto para mostrar después
+      setStudioDataModalFromValidation(true);
+      setStudioDataModalOpen(true);
+      setHasValidStudioData(false);
+      // No cargar plantillas si no hay datos válidos
+      setLoading(false);
+      return;
+    }
+
+    // 2. Si datos completos, verificar y crear plantilla default si es necesario
+    setHasValidStudioData(true);
+    await ensureDefaultTemplate();
+  };
+
+  const ensureDefaultTemplate = async () => {
+    try {
+      // Verificar si existe plantilla default
+      const templatesResult = await getContractTemplates(studioSlug, {
+        isActive: true,
+      });
+
+      if (templatesResult.success && templatesResult.data) {
+        const hasDefault = templatesResult.data.some((t) => t.is_default);
+        
+        if (!hasDefault) {
+          // Crear plantilla default automáticamente
+          const createResult = await createDefaultTemplateForStudio(studioSlug);
+          if (createResult.success) {
+            setDefaultTemplateCreated(true);
+            setShowDefaultTemplateMessage(true);
+            // Recargar plantillas
+            await loadTemplates();
+          }
+        }
+      }
+
+      // Cargar plantillas normalmente
+      await loadTemplates();
+    } catch (error) {
+      console.error("Error ensuring default template:", error);
+      // Continuar cargando plantillas aunque falle la creación de default
+      await loadTemplates();
+    }
+  };
 
   const loadTemplates = async () => {
     setLoading(true);
@@ -125,6 +210,12 @@ export function ContractTemplateManagerModal({
 
   const handleToggle = async (templateId: string) => {
     try {
+      const template = templates.find((t) => t.id === templateId);
+      if (template?.is_default) {
+        toast.error("No puedes desactivar la plantilla por defecto");
+        return;
+      }
+
       const result = await toggleContractTemplate(studioSlug, templateId);
       if (result.success && result.data) {
         toast.success("Estado actualizado correctamente");
@@ -145,25 +236,21 @@ export function ContractTemplateManagerModal({
     }
   };
 
-  const handleDeleteClick = (templateId: string) => {
+  const handleDeleteClick = async (templateId: string) => {
     const template = templates.find((t) => t.id === templateId);
-    if (template) {
-      setTemplateToDelete(template);
-      setDeleteConfirmOpen(true);
-    }
-  };
+    if (!template) return;
 
-  const handleDeleteConfirm = async () => {
-    if (!templateToDelete) return;
+    if (template.is_default) {
+      toast.error("No puedes eliminar la plantilla por defecto. Primero cambia la plantilla por defecto a otra plantilla.");
+      return;
+    }
 
     try {
-      const result = await deleteContractTemplate(studioSlug, templateToDelete.id);
+      const result = await deleteContractTemplate(studioSlug, templateId);
       if (result.success) {
         toast.success("Plantilla eliminada correctamente");
         // Actualizar estado local - remover la plantilla eliminada
-        setTemplates((prev) => prev.filter((template) => template.id !== templateToDelete.id));
-        setDeleteConfirmOpen(false);
-        setTemplateToDelete(null);
+        setTemplates((prev) => prev.filter((t) => t.id !== templateId));
       } else {
         toast.error(result.error || "Error al eliminar plantilla");
       }
@@ -172,6 +259,33 @@ export function ContractTemplateManagerModal({
       toast.error("Error al eliminar plantilla");
     }
   };
+
+  const handleSetDefault = async (templateId: string) => {
+    try {
+      const result = await updateContractTemplate(studioSlug, templateId, {
+        is_default: true,
+      });
+
+      if (result.success && result.data) {
+        toast.success("Plantilla por defecto actualizada correctamente");
+        // Actualizar estado local - desmarcar todas y marcar la nueva
+        setTemplates((prev) =>
+          prev.map((template) => ({
+            ...template,
+            is_default: template.id === templateId,
+            // Si es la nueva default, asegurar que esté activa
+            is_active: template.id === templateId ? true : template.is_active,
+          }))
+        );
+      } else {
+        toast.error(result.error || "Error al cambiar plantilla por defecto");
+      }
+    } catch (error) {
+      console.error("Error setting default template:", error);
+      toast.error("Error al cambiar plantilla por defecto");
+    }
+  };
+
 
   return (
     <>
@@ -187,19 +301,83 @@ export function ContractTemplateManagerModal({
         zIndex={10060}
       >
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-400">
-              {templates.length} plantilla{templates.length !== 1 ? "s" : ""} disponible{templates.length !== 1 ? "s" : ""}
-            </p>
-            <ZenButton
-              variant="default"
-              size="sm"
-              onClick={() => setCreateModalOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Crear Nueva Plantilla
-            </ZenButton>
-          </div>
+          {/* Mensaje cuando faltan datos del estudio */}
+          {!hasValidStudioData && !loading && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex gap-3 items-start">
+              <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-amber-300 font-medium mb-1">
+                  Datos del estudio pendientes
+                </p>
+                <p className="text-xs text-amber-400/80">
+                  Completa los datos del estudio para poder gestionar las plantillas de contrato.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Mensaje informativo de plantilla creada */}
+          {showDefaultTemplateMessage && defaultTemplateCreated && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 flex gap-3 items-start">
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-emerald-300 font-medium mb-1">
+                  Plantilla por defecto creada
+                </p>
+                <p className="text-xs text-emerald-400/80 mb-3">
+                  Hemos creado para ti una plantilla por defecto lista para usar. Revísala y personalízala para que se adapte a tu negocio.
+                </p>
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const defaultTemplate = templates.find((t) => t.is_default);
+                    if (defaultTemplate) {
+                      handleEdit(defaultTemplate.id);
+                    }
+                  }}
+                  className="text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/10"
+                >
+                  Ver plantilla
+                </ZenButton>
+              </div>
+              <button
+                onClick={() => setShowDefaultTemplateMessage(false)}
+                className="text-emerald-400/60 hover:text-emerald-300 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {hasValidStudioData && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-zinc-400">
+                {templates.length} plantilla{templates.length !== 1 ? "s" : ""} disponible{templates.length !== 1 ? "s" : ""}
+              </p>
+              <div className="flex items-center gap-2">
+                <ZenButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setStudioDataModalFromValidation(false);
+                    setStudioDataModalOpen(true);
+                  }}
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Editar datos legales del estudio
+                </ZenButton>
+                <ZenButton
+                  variant="default"
+                  size="sm"
+                  onClick={() => setCreateModalOpen(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Crear Nueva Plantilla
+                </ZenButton>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="relative rounded-lg border border-zinc-800 overflow-hidden">
@@ -252,15 +430,16 @@ export function ContractTemplateManagerModal({
                 </table>
               </div>
             </div>
-          ) : (
+          ) : hasValidStudioData ? (
             <ContractTemplatesTable
               templates={templates}
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
               onToggle={handleToggle}
               onDelete={handleDeleteClick}
+              onSetDefault={handleSetDefault}
             />
-          )}
+          ) : null}
         </div>
       </ZenDialog>
 
@@ -285,8 +464,15 @@ export function ContractTemplateManagerModal({
             if (result.success && result.data) {
               toast.success("Plantilla creada correctamente");
               setCreateModalOpen(false);
-              // Actualizar estado local
-              setTemplates((prev) => [...prev, result.data!]);
+              
+              // Si se creó como default, recargar todas las plantillas para actualizar el estado
+              if (data.is_default) {
+                await loadTemplates();
+              } else {
+                // Si no es default, solo agregar al estado local
+                setTemplates((prev) => [...prev, result.data!]);
+              }
+              
               // Si hay callback onSelect, seleccionar automáticamente
               if (onSelect && result.data.id) {
                 onSelect(result.data.id);
@@ -356,19 +542,27 @@ export function ContractTemplateManagerModal({
         />
       )}
 
-      {/* Modal confirmar eliminación */}
-      <ZenConfirmModal
-        isOpen={deleteConfirmOpen}
+      {/* Modal de datos del estudio */}
+      <StudioContractDataModal
+        isOpen={studioDataModalOpen}
         onClose={() => {
-          setDeleteConfirmOpen(false);
-          setTemplateToDelete(null);
+          setStudioDataModalOpen(false);
+          // Si se cierra sin guardar (cancelar) y viene de validación inicial, cerrar el modal principal también
+          if (studioDataModalFromValidation) {
+            onClose();
+          }
         }}
-        onConfirm={handleDeleteConfirm}
-        title="Eliminar Plantilla"
-        description={`¿Estás seguro de que deseas eliminar la plantilla "${templateToDelete?.name}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        cancelText="Cancelar"
-        variant="destructive"
+        studioSlug={studioSlug}
+        onSave={async () => {
+          // Cerrar solo el modal de datos del estudio (no el principal)
+          setStudioDataModalOpen(false);
+          setStudioDataModalFromValidation(false);
+          // Marcar que ahora tenemos datos válidos
+          setHasValidStudioData(true);
+          // Después de guardar datos, verificar y crear plantilla default
+          await ensureDefaultTemplate();
+          // El modal principal se mantiene abierto y muestra las plantillas
+        }}
       />
     </>
   );

@@ -234,9 +234,14 @@ export async function getPromiseContractData(
 
     const eventData: EventContractDataWithConditions = {
       nombre_studio: studio.studio_name,
+      nombre_representante: studio.representative_name || undefined,
+      telefono_studio: studio.phone || undefined,
+      correo_studio: studio.email,
+      direccion_studio: studio.address || undefined,
       nombre_cliente: promise.contact?.name || "Cliente",
       email_cliente: promise.contact?.email || "",
       telefono_cliente: promise.contact?.phone || "",
+      direccion_cliente: promise.contact?.address || undefined,
       nombre_evento: promise.name || "Evento",
       tipo_evento: promise.event_type?.name || "Evento",
       fecha_evento: fechaEvento,
@@ -278,7 +283,14 @@ export async function getEventContractData(
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: { id: true, studio_name: true },
+      select: { 
+        id: true, 
+        studio_name: true,
+        representative_name: true,
+        phone: true,
+        email: true,
+        address: true,
+      },
     });
 
     if (!studio) {
@@ -310,6 +322,7 @@ export async function getEventContractData(
                 name: true,
                 phone: true,
                 email: true,
+                address: true,
               },
             },
             event_type: {
@@ -324,6 +337,18 @@ export async function getEventContractData(
           select: {
             id: true,
             name: true,
+          },
+        },
+        contracts: {
+          where: {
+            status: "SIGNED",
+          },
+          orderBy: {
+            signed_at: "desc",
+          },
+          take: 1,
+          select: {
+            signed_at: true,
           },
         },
         cotizacion: {
@@ -547,8 +572,21 @@ export async function getEventContractData(
       };
     }
 
+    // Formatear fecha de firma si existe
+    const fechaFirmaCliente = event.contracts?.[0]?.signed_at
+      ? new Date(event.contracts[0].signed_at).toLocaleDateString("es-ES", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : undefined;
+
     const contractData: EventContractDataWithConditions = {
       nombre_cliente: event.promise.contact.name,
+      email_cliente: event.promise.contact.email || undefined,
+      telefono_cliente: event.promise.contact.phone || undefined,
+      direccion_cliente: event.promise.contact.address || undefined,
       fecha_evento: fechaEvento,
       tipo_evento: event.event_type?.name || event.promise.event_type?.name || "Evento",
       nombre_evento: event.promise.name || "Sin nombre",
@@ -559,6 +597,11 @@ export async function getEventContractData(
       condiciones_pago:
         cotizacionAprobada.condiciones_comerciales?.description || "No especificadas",
       nombre_studio: studio.studio_name,
+      nombre_representante: studio.representative_name || undefined,
+      telefono_studio: studio.phone || undefined,
+      correo_studio: studio.email,
+      direccion_studio: studio.address || undefined,
+      fecha_firma_cliente: fechaFirmaCliente,
       servicios_incluidos: serviciosIncluidos,
       condicionesData,
     };
@@ -579,26 +622,62 @@ export async function renderContractContent(
   try {
     let rendered = content;
 
-    // Reemplazar variables simples
-    const variables: Record<string, string> = {
-      "@nombre_cliente": eventData.nombre_cliente,
+    // Variables de cliente (se convertirán a mayúsculas)
+    const clienteVars: Record<string, string> = {
+      "@nombre_cliente": eventData.nombre_cliente.toUpperCase(),
+      "@email_cliente": (eventData.email_cliente || "").toUpperCase(),
+      "@telefono_cliente": (eventData.telefono_cliente || "").toUpperCase(),
+      "@direccion_cliente": (eventData.direccion_cliente || "").toUpperCase(),
+    };
+
+    // Variables de estudio (se convertirán a mayúsculas)
+    const studioVars: Record<string, string> = {
+      "@nombre_studio": eventData.nombre_studio.toUpperCase(),
+      "@nombre_representante": (eventData.nombre_representante || "").toUpperCase(),
+      "@telefono_studio": (eventData.telefono_studio || "").toUpperCase(),
+      "@correo_studio": (eventData.correo_studio || "").toUpperCase(),
+      "@direccion_studio": (eventData.direccion_studio || "").toUpperCase(),
+    };
+
+    // Variables de negocio/comerciales (sin mayúsculas)
+    const comercialesVars: Record<string, string> = {
+      "@total_contrato": eventData.total_contrato,
+      "@condiciones_pago": eventData.condiciones_pago,
+    };
+
+    // Variables de evento (sin mayúsculas)
+    const eventoVars: Record<string, string> = {
       "@fecha_evento": eventData.fecha_evento,
       "@tipo_evento": eventData.tipo_evento,
       "@nombre_evento": eventData.nombre_evento,
-      "@total_contrato": eventData.total_contrato,
-      "@condiciones_pago": eventData.condiciones_pago,
-      "@nombre_studio": eventData.nombre_studio,
+      "@fecha_firma_cliente": eventData.fecha_firma_cliente || "",
     };
 
-    // También soportar sintaxis {variable}
+    // Combinar todas las variables
+    const variables: Record<string, string> = {
+      ...clienteVars,
+      ...studioVars,
+      ...comercialesVars,
+      ...eventoVars,
+    };
+
+    // También soportar sintaxis {variable} con las mismas conversiones
     const braceVariables: Record<string, string> = {
-      "{nombre_cliente}": eventData.nombre_cliente,
+      "{nombre_cliente}": eventData.nombre_cliente.toUpperCase(),
+      "{email_cliente}": (eventData.email_cliente || "").toUpperCase(),
+      "{telefono_cliente}": (eventData.telefono_cliente || "").toUpperCase(),
+      "{direccion_cliente}": (eventData.direccion_cliente || "").toUpperCase(),
       "{fecha_evento}": eventData.fecha_evento,
       "{tipo_evento}": eventData.tipo_evento,
       "{nombre_evento}": eventData.nombre_evento,
       "{total_contrato}": eventData.total_contrato,
       "{condiciones_pago}": eventData.condiciones_pago,
-      "{nombre_studio}": eventData.nombre_studio,
+      "{nombre_studio}": eventData.nombre_studio.toUpperCase(),
+      "{nombre_representante}": (eventData.nombre_representante || "").toUpperCase(),
+      "{telefono_studio}": (eventData.telefono_studio || "").toUpperCase(),
+      "{correo_studio}": (eventData.correo_studio || "").toUpperCase(),
+      "{direccion_studio}": (eventData.direccion_studio || "").toUpperCase(),
+      "{fecha_firma_cliente}": eventData.fecha_firma_cliente || "",
     };
 
     // Reemplazar variables @variable

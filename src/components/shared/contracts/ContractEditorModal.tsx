@@ -204,14 +204,24 @@ export function ContractEditorModal({
       category = "bloque";
     } else if (
       v.key.includes("cliente") ||
-      v.key.includes("email") ||
-      v.key.includes("telefono")
+      (v.key.includes("email") && v.key.includes("cliente")) ||
+      (v.key.includes("telefono") && v.key.includes("cliente")) ||
+      (v.key.includes("direccion") && v.key.includes("cliente")) ||
+      v.key.includes("fecha_firma_cliente")
     ) {
       category = "cliente";
-    } else if (v.key.includes("evento") || v.key.includes("fecha") || v.key.includes("tipo")) {
+    } else if (v.key.includes("evento") || (v.key.includes("fecha") && !v.key.includes("firma")) || v.key.includes("tipo")) {
       category = "evento";
     } else if (v.key.includes("total") || v.key.includes("pago")) {
       category = "comercial";
+    } else if (
+      v.key.includes("studio") ||
+      v.key.includes("representante") ||
+      (v.key.includes("correo") && v.key.includes("studio")) ||
+      (v.key.includes("telefono") && v.key.includes("studio")) ||
+      (v.key.includes("direccion") && v.key.includes("studio"))
+    ) {
+      category = "studio";
     }
 
     return {
@@ -333,6 +343,23 @@ export function ContractEditorModal({
                       value={templateDescription}
                       onChange={(e) => setTemplateDescription(e.target.value)}
                       placeholder="Descripción breve de la plantilla"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="space-y-0.5">
+                      <ZenLabel htmlFor="modal-is-default">Plantilla por defecto</ZenLabel>
+                      <p className="text-xs text-zinc-500">
+                        Esta plantilla se usará automáticamente al generar contratos
+                      </p>
+                    </div>
+                    <ZenSwitch
+                      id="modal-is-default"
+                      checked={isDefault}
+                      onCheckedChange={(checked) => {
+                        setIsDefault(checked);
+                        // Si se marca como default, debe estar activa
+                        // Esto se maneja en el servidor, pero lo hacemos aquí para UX
+                      }}
                     />
                   </div>
                 </div>

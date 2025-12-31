@@ -1,63 +1,95 @@
-export const DEFAULT_CONTRACT_TEMPLATE = `<h1>CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES</h1>
+export const DEFAULT_CONTRACT_TEMPLATE = `<h1>CONTRATO DE PRESTACIÓN DE SERVICIOS</h1>
 
-<h2>GENERALES DEL EVENTO</h2>
-<ul>
-  <li><strong>Nombre del evento:</strong> @nombre_evento</li>
-  <li><strong>Fecha de celebración:</strong> @fecha_evento</li>
-  <li><strong>Tipo de evento:</strong> @tipo_evento</li>
-  <li><strong>Cliente:</strong> @nombre_cliente</li>
-</ul>
-
-<h2>OBJETO DEL CONTRATO</h2>
-<p>Contrato de prestación de servicios profesionales de fotografía y cinematografía que celebran por una parte <strong>@nombre_studio</strong> y por la otra el cliente <strong>@nombre_cliente</strong>, de conformidad con las siguientes declaraciones y cláusulas:</p>
+<p>Contrato de prestación de servicios profesionales que celebran, por una parte <strong>@nombre_representante</strong>, en lo sucesivo Director General de <strong>@nombre_studio</strong>, y por la otra parte <strong>@nombre_cliente</strong> en lo sucesivo EL CLIENTE; instrumento que se celebra de conformidad con las siguientes declaraciones y cláusulas:</p>
 
 <h2>DECLARACIONES</h2>
-<ol>
-  <li>Declara el prestador que cuenta con la capacidad técnica, equipo y material para el desempeño de las actividades profesionales en medios audiovisuales encomendadas.</li>
-  <li>Declara el cliente que conoce los servicios ofrecidos y reconoce la capacidad técnica necesaria para el cumplimiento del presente contrato.</li>
-</ol>
 
-<h2>SERVICIOS INCLUIDOS</h2>
+<h3>I. Declara el prestador de servicios:</h3>
+
+<p><strong>I.1.</strong> Llamarse como quedó escrito anteriormente, ser mayor de edad, con domicilio legal y convencional en <strong>@direccion_studio</strong> con teléfono <strong>@telefono_studio</strong> y correo electrónico <strong>@correo_studio</strong>.</p>
+
+<p><strong>I.2.</strong> Que cuenta con la capacidad técnica, equipo y el material para el desempeño de las actividades profesionales en medios audiovisuales encomendadas.</p>
+
+<h3>II. Declara EL CLIENTE:</h3>
+
+<p><strong>II.1.</strong> Llamarse como quedo escrito, ser mayor de edad, con domicilio legal y convencional en <strong>@direccion_cliente</strong> con teléfono <strong>@telefono_cliente</strong> y correo electrónico <strong>@email_cliente</strong>.</p>
+
+<p><strong>II.2.</strong> Que conoce los servicios que ofrece <strong>@nombre_studio</strong>, y que reconoce que cuenta con la capacidad y la técnica necesarias para el cumplimiento de los fines del presente contrato.</p>
+
+<p><strong>II.3.</strong> Que la celebración de su evento será el día <strong>@fecha_evento</strong>.</p>
+
+<p>Declaran las partes que por lo anterior, manifiestan su conformidad de celebrar este instrumento de conformidad a las siguientes cláusulas:</p>
+
+<h2>CLÁUSULAS</h2>
+
+<h3>PRIMERA: RESPECTO A LOS SERVICIOS CONTRATADOS</h3>
+
+<p><strong>@nombre_studio</strong> se compromete a proveer los siguientes servicios:</p>
+
 [SERVICIOS_INCLUIDOS]
 
-<h2>HONORARIOS</h2>
-<p>Por la prestación de los servicios establecidos, el cliente pagará la cantidad de <strong>@total_contrato</strong> (pesos mexicanos 00/100 M.N.)</p>
+<h3>SEGUNDA: RESPECTO A LOS HONORARIOS</h3>
+
+<p>Por la prestación de los servicios establecidos en la cláusula anterior, EL CLIENTE pagará al representante de <strong>@nombre_studio</strong> la cantidad de <strong>@total_contrato</strong> (pesos mexicanos 00/100 M.N.)</p>
+
+<h3>TERCERA: CONDICIONES COMERCIALES</h3>
+
 <p><strong>Condiciones de pago:</strong> @condiciones_pago</p>
 
-<h2>REQUERIMIENTOS</h2>
-<ul>
-  <li>El cliente proporcionará acceso a la locación y las facilidades necesarias para la realización de los servicios contratados.</li>
-  <li>El cliente proporcionará acceso a los servicios de alimentación y bebidas para el equipo de producción.</li>
-</ul>
+<h3>CUARTA: SERVICIOS ADICIONALES</h3>
 
-<h2>GARANTÍAS EN PRODUCCIÓN</h2>
-<ul>
-  <li><strong>Puntualidad:</strong> La producción llegará 30 minutos antes al lugar pactado.</li>
-  <li><strong>Equipo técnico:</strong> Se llevará todo el equipo contratado y accesorios necesarios.</li>
-</ul>
+<p>En caso de que EL CLIENTE solicite servicios adicionales a los anteriormente listados, estos se cotizarán y anexarán al costo total del contrato y deberán ser pagados a la entrega del servicio.</p>
 
-<h2>ENTREGA DEL SERVICIO</h2>
-<ul>
-  <li>Entrega digital máxima en 20 días hábiles después del evento.</li>
-  <li>Entrega impresa máximo 30 días tras autorizar el diseño.</li>
-  <li>Cliente puede solicitar respaldo previo en disco externo.</li>
-</ul>
+<h3>QUINTA: RESPECTO A LOS PAGOS</h3>
 
-<h2>CANCELACIÓN</h2>
-<p>El anticipo no es reembolsable por cancelaciones ajenas al prestador. Si se cambia la fecha y el prestador está disponible, se respeta el anticipo. Si la fecha ya está asignada, se considerará como cancelación.</p>
+<p>Si el pago se realiza por transferencia bancaria será necesario enviar el comprobante y esperar confirmación del deposito en firme. Una vez confirmado el pago se abre expediente y separa la fecha para evento.</p>
 
-<h2>COSTOS ADICIONALES</h2>
-<ul>
-  <li><strong>Permiso de locación:</strong> El cliente cubrirá permisos requeridos por la locación.</li>
-  <li><strong>Horas extra:</strong> Se agregarán al presupuesto y pagarán el día de la solicitud.</li>
-</ul>
+<p>Si el pago es en efectivo será necesario solicitar un recibo de dinero.</p>
 
-<h2>GARANTÍAS EN SERVICIO</h2>
-<ul>
-  <li>Respaldo de material audiovisual en disco externo dedicado.</li>
-  <li>Copia y edición de material en discos duros de trabajo dedicados.</li>
-  <li>Fotos en alta resolución formato JPG con revelado digital (ajuste de exposición y balance de blancos).</li>
-  <li>Calidad de video en alta definición.</li>
-  <li>Plazo de observaciones: 30 días para comentarios y ajustes; después, se borran originales.</li>
-</ul>`;
+<p>Recibido el pago se abre expediente y separa la fecha del evento.</p>
 
+<h3>SEXTA: GARANTÍAS DEL SERVICIO EN PRODUCCIÓN (COBERTURA)</h3>
+
+<p><strong>Puntualidad:</strong> La producción se compromete a llegar 30 minutos antes de la hora pactada al lugar acordado (sesión previa, arreglo en domicilio, día del evento). En caso de haber contratado grúa, esta llegará 3 horas antes para realizar la instalación y pruebas pertinentes.</p>
+
+<p><strong>Equipo técnico:</strong> <strong>@nombre_studio</strong> se compromete a llevar todo el equipo técnico que EL CLIENTE contrató para el día del evento así como todos los accesorios necesarios para realizar el trabajo. No se garantizan cables, adaptadores o extensiones adicionales para conexión con otros proveedores; en caso de requerir algo específico, será necesario notificarlo con 3 días de anticipación.</p>
+
+<p><strong>Respaldo de información:</strong> El material capturado será respaldado el mismo día del evento en un disco duro externo con la finalidad de proteger la información.</p>
+
+<h3>SÉPTIMA: POLÍTICAS DE SERVICIO</h3>
+
+<p>Las <strong>SESIONES PREVIAS</strong> en locación generan costos adicionales para EL CLIENTE según donde se lleven a cabo, donde se consideran: casetas, permisos de fotografía, gasolina, alimentos y/u hospedaje.</p>
+
+<p>Para el día de <strong>COBERTURA DEL EVENTO</strong> será necesario definir previamente con el director general si EL CLIENTE proveerá alimento de la fiesta a la producción o si la producción deberá llevar su propio alimento por cuestiones de logística.</p>
+
+<p>Para el día de <strong>COBERTURA DEL EVENTO</strong> la producción requiere de hasta 40 minutos para la toma de alimentos cuando es la hora de comida o cena.</p>
+
+<p>El día de <strong>COBERTURA DEL EVENTO</strong>, 15 minutos antes de finalizar el tiempo contratado, se inicia con el proceso de desmonte, pero durante el procedimiento, <strong>@nombre_studio</strong> se compromete a seguir cubriendo el evento hasta concluir con el tiempo de cobertura contratado.</p>
+
+<p>En caso de requerir horas extra de producción por parte de EL CLIENTE, se acordarán con el DIRECTOR GENERAL el número de horas a ocupar y el presupuesto se sumará al presupuesto pendiente por liquidar y se cobrará al momento de la entrega del servicio.</p>
+
+<h3>OCTAVA: GARANTÍAS EN EL MATERIAL DE ENTREGA</h3>
+
+<p><strong>Calidad:</strong> El DIRECTOR GENERAL se compromete a entregar el servicio en la misma calidad del material exhibido en el momento de la contratación.</p>
+
+<p><strong>Integridad en imagen:</strong> En caso que EL CLIENTE perciba alguna área de oportunidad en el ensamblado del video, el DIRECTOR GENERAL se compromete a realizar las adecuaciones necesarias, volver a exportar y a entregar el video nuevamente sin costo adicional.</p>
+
+<p><strong>Calidad de audio:</strong> <strong>@nombre_studio</strong> se compromete a grabar el audio con la mayor calidad posible con apoyo del sistema de micrófonos de las videocámaras y mediante una grabadora de audio digital profesional, la cual se conecta al servicio de audio del salón, jardín o agrupación musical ajena a <strong>@nombre_studio</strong>. Si el proveedor de audio presenta fallas en su salida de audio, la grabación de <strong>@nombre_studio</strong> se verá afectada. En postproducción se hará todo lo posible para que el audio quede bien, pero en caso de no escucharse correctamente, la solución última será subtitular.</p>
+
+<p><strong>Calidad en impresión:</strong> En caso que EL CLIENTE haya contratado algún impreso y perciba alguna área de oportunidad en el cuadro impreso o bien, en el ensamblado del álbum impreso, el DIRECTOR GENERAL se compromete a iniciar y dar seguimiento de reclamo al proveedor externo, pero al ser un servicio externo <strong>@nombre_studio</strong> no asume responsabilidad a dicho proveedor.</p>
+
+<h3>NOVENA: EN CASO DE CANCELACIÓN</h3>
+
+<p>El anticipo no será devuelto bajo ninguna circunstancia por la cancelación del evento por razones ajenas a <strong>@nombre_studio</strong>. En caso de cambio de fecha se respetará dicho anticipo siempre y cuando <strong>@nombre_studio</strong> tenga la nueva fecha libre y no haya sido previamente asignada a otro evento. En dicho caso el anticipo no será devuelto, tomándose como cancelación.</p>
+
+<h3>DÉCIMA: RESPECTO A LA ENTREGA</h3>
+
+<p>El servicio se entregará en digital 40 días hábiles posteriores a la cobertura del evento.</p>
+
+<p>Una vez entregado su proyecto, ofrecemos 30 días naturales para recibir observaciones del material. En caso de no existir ninguna observación durante 30 días, borramos los archivos originales del evento, siendo imposible su recuperación posterior.</p>
+
+<p>En caso que EL CLIENTE requiera los archivos originales, deberá proporcionarnos un disco duro de aproximadamente 500GB para el respaldo de la información antes de ser eliminada.</p>
+
+<p><strong>@nombre_studio</strong> no conserva copia de los archivos originales, solo se conserva la copia de los archivos digitales entregados en su versión final. Si EL CLIENTE requiere una copia en un futuro, se le dará un link de Google Drive para que pueda consultar y descargarlos.</p>
+
+<p>Leído el presente contrato y enteradas las partes de su contenido y alcance legal, confirmo de aceptación el día <strong>@fecha_firma_cliente</strong></p>`;

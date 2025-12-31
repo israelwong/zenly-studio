@@ -43,21 +43,57 @@ export const ContractEditor = forwardRef<ContractEditorRef, ContractEditorProps>
   const isBlockVariable = (variable: string) => {
     return variable.trim().startsWith('[');
   };
+
+  // Determinar el tipo de variable para el badge
+  const getVariableType = (variable: string): 'cliente' | 'studio' | 'comercial' | 'bloque' => {
+    const varLower = variable.toLowerCase();
+    if (isBlockVariable(variable)) {
+      return 'bloque';
+    }
+    // Variables de cliente
+    if (varLower.includes('cliente') || varLower.includes('email_cliente') || varLower.includes('telefono_cliente') || varLower.includes('direccion_cliente')) {
+      return 'cliente';
+    }
+    // Variables de studio/negocio
+    if (varLower.includes('studio') || varLower.includes('representante') || varLower.includes('correo_studio') || varLower.includes('telefono_studio') || varLower.includes('direccion_studio')) {
+      return 'studio';
+    }
+    // Variables comerciales
+    if (varLower.includes('total') || varLower.includes('pago') || varLower.includes('condiciones')) {
+      return 'comercial';
+    }
+    return 'cliente'; // Por defecto cliente
+  };
   
   // Obtener clases CSS del badge según el tipo de variable
   const getBadgeClasses = (variable: string) => {
-    const isBlock = isBlockVariable(variable);
-    if (isBlock) {
-      return 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-600/20 text-purple-400 text-xs font-mono border border-purple-600/30 variable-badge';
+    const type = getVariableType(variable);
+    
+    if (type === 'bloque') {
+      // [SERVICIOS_INCLUIDOS] y condiciones comerciales - green
+      return 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600/20 text-emerald-400 text-xs font-mono border border-emerald-600/30 variable-badge';
     }
+    if (type === 'cliente') {
+      // Variables de cliente - green
+      return 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600/20 text-emerald-400 text-xs font-mono border border-emerald-600/30 variable-badge';
+    }
+    if (type === 'studio' || type === 'comercial') {
+      // Variables de studio y comerciales - amber
+      return 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-600/20 text-amber-400 text-xs font-mono border border-amber-600/30 variable-badge';
+    }
+    // Por defecto green
     return 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600/20 text-emerald-400 text-xs font-mono border border-emerald-600/30 variable-badge';
   };
   
   // Obtener clases CSS del botón de eliminar según el tipo de variable
   const getRemoveButtonClasses = (variable: string) => {
-    const isBlock = isBlockVariable(variable);
-    if (isBlock) {
-      return 'ml-1 hover:text-purple-300 transition-colors variable-remove';
+    const type = getVariableType(variable);
+    
+    if (type === 'bloque' || type === 'cliente') {
+      return 'ml-1 hover:text-emerald-300 transition-colors variable-remove';
+    }
+    if (type === 'studio' || type === 'comercial') {
+      return 'ml-1 hover:text-amber-300 transition-colors variable-remove';
     }
     return 'ml-1 hover:text-emerald-300 transition-colors variable-remove';
   };
