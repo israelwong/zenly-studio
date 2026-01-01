@@ -212,6 +212,7 @@ export async function getPromiseById(
   contact_name: string;
   contact_phone: string;
   contact_email: string | null;
+  contact_address: string | null;
   event_type_id: string | null;
   event_type_name: string | null;
   event_location: string | null;
@@ -242,6 +243,7 @@ export async function getPromiseById(
             name: true,
             phone: true,
             email: true,
+            address: true,
             acquisition_channel_id: true,
             social_network_id: true,
             referrer_contact_id: true,
@@ -298,6 +300,7 @@ export async function getPromiseById(
         contact_name: promise.contact.name,
         contact_phone: promise.contact.phone,
         contact_email: promise.contact.email,
+        contact_address: promise.contact.address,
         event_type_id: promise.event_type_id,
         event_type_name: promise.event_type?.name || null,
         event_location: promise.event_location || null,

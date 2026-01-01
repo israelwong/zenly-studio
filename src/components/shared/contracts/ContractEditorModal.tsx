@@ -111,14 +111,6 @@ export function ContractEditorModal({
   React.useEffect(() => {
     if (isOpen) {
       const newContent = initialContent || templateContent || "";
-      console.log('[ContractEditorModal] Inicializando editor:', {
-        mode,
-        initialContentLength: initialContent?.length || 0,
-        templateContentLength: templateContent?.length || 0,
-        newContentLength: newContent.length,
-        newContentPreview: newContent.substring(0, 200),
-        hasFechaEvento: newContent.includes('@fecha_evento') || newContent.includes('fecha_evento'),
-      });
       setContent(newContent);
       setName(initialName);
       setTemplateDescription(initialDescription);
@@ -170,14 +162,6 @@ export function ContractEditorModal({
     if (editorRef.current && editorRef.current.getContent) {
       currentContent = editorRef.current.getContent();
     }
-
-    console.log('[ContractEditorModal] Guardando:', {
-      mode,
-      contentLength: currentContent.length,
-      contentPreview: currentContent.substring(0, 200),
-      hasFechaEvento: currentContent.includes('@fecha_evento') || currentContent.includes('fecha_evento'),
-      contentEnd: currentContent.substring(Math.max(0, currentContent.length - 200)),
-    });
 
     const data: {
       content: string;

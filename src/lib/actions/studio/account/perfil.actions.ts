@@ -15,25 +15,18 @@ interface ActionResult<T = unknown> {
 // Obtener perfil del lead asociado al proyecto
 export async function obtenerPerfil(studioSlug: string): Promise<ActionResult<PerfilData>> {
     try {
-        console.log('🔍 Buscando proyecto con slug:', studioSlug);
-
         // Buscar el proyecto por slug
         const proyecto = await prisma.studios.findUnique({
             where: { slug: studioSlug },
             select: { id: true }
         });
 
-        console.log('📋 Proyecto encontrado:', proyecto);
-
         if (!proyecto) {
-            console.log('❌ Proyecto no encontrado');
             return {
                 success: false,
                 error: 'Proyecto no encontrado'
             };
         }
-
-        console.log('🔍 Buscando lead asociado al proyecto:', proyecto.id);
 
         // Buscar el lead asociado al proyecto
         const lead = await prisma.platform_leads.findFirst({
@@ -42,10 +35,7 @@ export async function obtenerPerfil(studioSlug: string): Promise<ActionResult<Pe
             }
         });
 
-        console.log('📋 Lead encontrado:', lead);
-
         if (!lead) {
-            console.log('❌ Lead no encontrado');
             return {
                 success: false,
                 error: 'No se encontró información del perfil asociado a este proyecto'
@@ -62,19 +52,12 @@ export async function obtenerPerfil(studioSlug: string): Promise<ActionResult<Pe
             updatedAt: lead.updated_at
         };
 
-        console.log('✅ Perfil procesado:', perfilData);
-
         return {
             success: true,
             data: perfilData
         };
     } catch (error: unknown) {
-        console.error('❌ Error al obtener perfil:', error);
-        console.error('❌ Error details:', {
-            message: error instanceof Error ? error.message : 'Unknown error',
-            stack: error instanceof Error ? error.stack : undefined,
-            name: error instanceof Error ? error.name : undefined
-        });
+        console.error('Error al obtener perfil:', error);
         return {
             success: false,
             error: 'Error interno del servidor'

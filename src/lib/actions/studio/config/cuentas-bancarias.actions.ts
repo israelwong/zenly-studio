@@ -15,25 +15,18 @@ interface ActionResult<T = unknown> {
 // Obtener todas las cuentas bancarias de un proyecto
 export async function obtenerCuentasBancarias(studioSlug: string): Promise<ActionResult<CuentaBancariaData[]>> {
     try {
-        console.log('🔍 Buscando proyecto con slug:', studioSlug);
-
         // Buscar el proyecto por slug
         const proyecto = await prisma.studios.findUnique({
             where: { slug: studioSlug },
             select: { id: true }
         });
 
-        console.log('📋 Proyecto encontrado:', proyecto);
-
         if (!proyecto) {
-            console.log('❌ Proyecto no encontrado');
             return {
                 success: false,
                 error: 'Proyecto no encontrado'
             };
         }
-
-        console.log('🔍 Buscando cuentas bancarias para proyecto:', proyecto.id);
 
         const cuentas = await prisma.studio_cuentas_bancarias.findMany({
             where: {
@@ -44,8 +37,6 @@ export async function obtenerCuentasBancarias(studioSlug: string): Promise<Actio
                 createdAt: 'asc'
             }
         });
-
-        console.log('📋 Cuentas encontradas:', cuentas.length, cuentas);
 
         const cuentasData: CuentaBancariaData[] = cuentas.map(cuenta => ({
             id: cuenta.id,

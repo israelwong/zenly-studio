@@ -8,6 +8,7 @@ export const createPromiseSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido').max(200),
   phone: z.string().min(1, 'El teléfono es requerido').max(20),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
+  address: z.string().max(500, 'La dirección es demasiado larga').optional().or(z.literal('')),
   event_type_id: z.string().min(1, 'El tipo de evento es requerido'),
   event_location: z.string().max(200, 'El lugar del evento es demasiado largo').optional().or(z.literal('')),
   event_name: z.string().max(200, 'El nombre del evento es demasiado largo').optional().or(z.literal('')), // Nombre del evento (opcional)
@@ -74,15 +75,24 @@ export interface PromiseWithContact {
   name: string;
   phone: string;
   email: string | null;
+  address: string | null; // Dirección del contacto
   avatar_url: string | null;
   status: string; // "prospecto" | "cliente" - estado del contacto
   event_type_id: string | null;
   event_name: string | null; // Nombre del evento (opcional)
+  event_location: string | null; // Locación del evento
   interested_dates: string[] | null;
   event_date: Date | null; // Fecha del evento (consolidado)
   defined_date: Date | null; // Fecha definida del evento (legacy)
   promise_pipeline_stage_id: string | null;
   is_test: boolean; // Marca si es una promesa de prueba del preview
+  // Datos de adquisición
+  acquisition_channel_id: string | null;
+  acquisition_channel_name?: string | null;
+  social_network_id: string | null;
+  social_network_name?: string | null;
+  referrer_contact_id: string | null;
+  referrer_name: string | null;
   created_at: Date;
   updated_at: Date;
   event_type?: {

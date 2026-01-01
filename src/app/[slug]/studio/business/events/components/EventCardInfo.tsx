@@ -33,6 +33,7 @@ interface EventCardInfoProps {
         name: string;
         phone: string;
         email: string | null;
+        address: string | null;
       };
     } | null;
   };
@@ -146,6 +147,7 @@ export function EventCardInfo({
             name: initialData.promise_data.contact.name,
             phone: initialData.promise_data.contact.phone,
             email: initialData.promise_data.contact.email || undefined,
+            address: initialData.promise_data.contact.address ?? undefined,
             event_type_id: initialData.promise_data.event_type_id || undefined,
             event_location: initialData.promise_data.event_location || undefined,
             interested_dates: initialData.promise_data.interested_dates || undefined,

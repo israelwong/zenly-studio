@@ -579,7 +579,6 @@ export async function getStudioContractData(
       }
     } catch (error) {
       // Si no se puede obtener el perfil, continuar sin él
-      console.warn("[getStudioContractData] No se pudo obtener perfil:", error);
     }
 
     return {

@@ -131,9 +131,9 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
     // Rutas del menú
     const menuRoutes = {
         verPerfilPublico: studioSlug ? `/${studioSlug}` : '',
-        perfil: `${basePath}/account/perfil`,
-        seguridad: `${basePath}/account/seguridad`,
-        suscripcion: `${basePath}/account/suscripcion`,
+        perfil: `${basePath}/config/account/perfil`,
+        seguridad: `${basePath}/config/account/seguridad`,
+        suscripcion: `${basePath}/config/account/suscripcion`,
     };
 
     return (
@@ -228,6 +228,13 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
                     <Link href={menuRoutes.seguridad}>
                         <Shield className="mr-2 h-4 w-4" />
                         <span>Seguridad</span>
+                    </Link>
+                </ZenDropdownMenuItem>
+
+                <ZenDropdownMenuItem className="cursor-pointer" asChild>
+                    <Link href={menuRoutes.suscripcion}>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        <span>Suscripción</span>
                     </Link>
                 </ZenDropdownMenuItem>
 

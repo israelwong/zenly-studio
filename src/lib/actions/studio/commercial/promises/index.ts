@@ -25,7 +25,7 @@ export {
   logPromiseAction,
 } from './promise-logs.actions';
 
-export type { PromiseLogAction } from './promise-logs.actions';
+export type { PromiseLogAction, PromiseLog, PromiseLogsResponse } from './promise-logs.actions';
 
 export {
   logWhatsAppSent,

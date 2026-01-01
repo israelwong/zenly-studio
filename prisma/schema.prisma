@@ -735,6 +735,8 @@ model studios {
   slug                                            String                           @unique
   email                                           String                           @unique
   address                                         String?
+  representative_name                             String?                          // Nombre del representante legal del estudio (requerido para contratos)
+  phone                                           String?                          // Teléfono principal del estudio (simplificado de studio_phones)
   website                                         String?
   logo_url                                        String?
   plan_id                                         String?

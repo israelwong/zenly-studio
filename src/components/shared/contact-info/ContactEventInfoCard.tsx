@@ -14,6 +14,7 @@ import { logWhatsAppSent, logCallMade, logEmailSent } from '@/lib/actions/studio
 import { ContactEventFormModal } from './ContactEventFormModal';
 import { createClient } from '@/lib/supabase/client';
 import { createRealtimeChannel, subscribeToChannel, setupRealtimeAuth } from '@/lib/realtime/core';
+import { useContactUpdateListener } from '@/hooks/useContactRefresh';
 
 /**
  * Determina el color del badge de fecha según días restantes
@@ -62,6 +63,7 @@ interface ContactEventInfoCardProps {
     name: string;
     phone: string;
     email: string | null;
+    address?: string | null;
   };
   // Datos del evento (desde promesa o evento)
   eventData: {
@@ -93,6 +95,7 @@ interface ContactEventInfoCardProps {
     name: string;
     phone: string;
     email: string | null;
+    address: string | null;
     event_type_id: string | null;
     event_location: string | null;
     event_name?: string | null; // Nombre del evento (opcional)
@@ -421,13 +424,48 @@ export function ContactEventInfoCard({
   const [showPromiseModal, setShowPromiseModal] = useState(false);
   const [contactData, setContactData] = useState(initialContactData);
   const [eventData, setEventData] = useState(initialEventData);
+  const [acquisitionDataLocal, setAcquisitionDataLocal] = useState(acquisitionData);
   const supabase = createClient();
   const contactsChannelRef = useRef<any>(null);
   const promisesChannelRef = useRef<any>(null);
 
-  // Sincronizar props cuando cambian
+  // Escuchar actualizaciones de contacto vía CustomEvent
+  useContactUpdateListener(contactId, (contact) => {
+    if (contact) {
+      setContactData((prev) => ({
+        ...prev,
+        name: contact.name || prev.name,
+        phone: contact.phone || prev.phone,
+        email: contact.email !== undefined ? contact.email : prev.email,
+        address: contact.address !== undefined ? contact.address : prev.address,
+      }));
+
+      // Actualizar datos de adquisición si vienen en el evento
+      if (contact.acquisition_channel_id !== undefined ||
+        contact.social_network_id !== undefined ||
+        contact.referrer_contact_id !== undefined ||
+        contact.referrer_name !== undefined) {
+        setAcquisitionDataLocal((prev) => ({
+          ...prev,
+          acquisition_channel_id: contact.acquisition_channel_id !== undefined ? contact.acquisition_channel_id : prev?.acquisition_channel_id,
+          social_network_id: contact.social_network_id !== undefined ? contact.social_network_id : prev?.social_network_id,
+          referrer_contact_id: contact.referrer_contact_id !== undefined ? contact.referrer_contact_id : prev?.referrer_contact_id,
+          referrer_name: contact.referrer_name !== undefined ? contact.referrer_name : prev?.referrer_name,
+        }));
+      }
+    }
+  });
+
+  // Sincronizar props cuando cambian (pero preservar valores actualizados localmente)
+  // IMPORTANTE: Solo sincronizar en el montaje inicial, NO en actualizaciones posteriores
+  // porque el estado local se actualiza vía Realtime y CustomEvent
+  const isInitialMount = useRef(true);
+
   useEffect(() => {
-    setContactData(initialContactData);
+    if (isInitialMount.current) {
+      setContactData(initialContactData);
+      isInitialMount.current = false;
+    }
   }, [initialContactData]);
 
   useEffect(() => {
@@ -462,13 +500,27 @@ export function ContactEventInfoCard({
             const contactNew = p.record || p.new || p.payload?.record || p.payload?.new;
 
             if (contactNew && contactNew.id === contactId) {
-              // Actualizar datos del contacto
               setContactData((prev) => ({
                 ...prev,
                 name: contactNew.name || prev.name,
                 phone: contactNew.phone || prev.phone,
                 email: contactNew.email !== undefined ? contactNew.email : prev.email,
+                address: contactNew.address !== undefined ? contactNew.address : prev.address,
               }));
+
+              // Actualizar datos de adquisición si vienen en el broadcast
+              if (contactNew.acquisition_channel_id !== undefined ||
+                contactNew.social_network_id !== undefined ||
+                contactNew.referrer_contact_id !== undefined ||
+                contactNew.referrer_name !== undefined) {
+                setAcquisitionDataLocal((prev) => ({
+                  ...prev,
+                  acquisition_channel_id: contactNew.acquisition_channel_id !== undefined ? contactNew.acquisition_channel_id : prev?.acquisition_channel_id,
+                  social_network_id: contactNew.social_network_id !== undefined ? contactNew.social_network_id : prev?.social_network_id,
+                  referrer_contact_id: contactNew.referrer_contact_id !== undefined ? contactNew.referrer_contact_id : prev?.referrer_contact_id,
+                  referrer_name: contactNew.referrer_name !== undefined ? contactNew.referrer_name : prev?.referrer_name,
+                }));
+              }
             }
           });
 
@@ -626,6 +678,16 @@ export function ContactEventInfoCard({
                 />
               </div>
             )}
+            <div>
+              <label className="text-xs font-medium text-zinc-400 block mb-1">
+                Dirección
+              </label>
+              {contactData.address || promiseData?.address ? (
+                <p className="text-sm text-zinc-200">{contactData.address || promiseData?.address}</p>
+              ) : (
+                <p className="text-sm text-zinc-400 italic">No definida</p>
+              )}
+            </div>
           </div>
 
           <SeparadorZen spacing="md" variant="subtle" />
@@ -823,29 +885,35 @@ export function ContactEventInfoCard({
           studioSlug={studioSlug}
           context={context}
           eventId={eventId || undefined}
-          initialData={{
-            id: promiseData.id,
-            name: promiseData.name,
-            phone: promiseData.phone,
-            email: promiseData.email || undefined,
-            event_type_id: promiseData.event_type_id || undefined,
-            event_location: promiseData.event_location || undefined,
-            event_name: promiseData.event_name || undefined,
-            // Si es evento y hay event_date, convertir a formato YYYY-MM-DD (sin cambios por zona horaria)
-            interested_dates: context === 'event' && eventData.event_date
-              ? (() => {
-                const date = eventData.event_date;
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                return [`${year}-${month}-${day}`];
-              })()
-              : promiseData.interested_dates || undefined,
-            acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
-            social_network_id: promiseData.social_network_id || undefined,
-            referrer_contact_id: promiseData.referrer_contact_id || undefined,
-            referrer_name: promiseData.referrer_name || undefined,
-          }}
+          initialData={(() => {
+            // Priorizar contactData.address (estado local actualizado) sobre promiseData.address (prop del padre)
+            const addressValue = contactData.address || promiseData.address || undefined;
+
+            return {
+              id: promiseData.id,
+              name: promiseData.name,
+              phone: promiseData.phone,
+              email: promiseData.email || undefined,
+              address: addressValue,
+              event_type_id: promiseData.event_type_id || undefined,
+              event_location: promiseData.event_location || undefined,
+              event_name: promiseData.event_name || undefined,
+              // Si es evento y hay event_date, convertir a formato YYYY-MM-DD (sin cambios por zona horaria)
+              interested_dates: context === 'event' && eventData.event_date
+                ? (() => {
+                  const date = eventData.event_date;
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  return [`${year}-${month}-${day}`];
+                })()
+                : promiseData.interested_dates || undefined,
+              acquisition_channel_id: acquisitionDataLocal?.acquisition_channel_id || promiseData.acquisition_channel_id || undefined,
+              social_network_id: acquisitionDataLocal?.social_network_id || promiseData.social_network_id || undefined,
+              referrer_contact_id: acquisitionDataLocal?.referrer_contact_id || promiseData.referrer_contact_id || undefined,
+              referrer_name: acquisitionDataLocal?.referrer_name || promiseData.referrer_name || undefined,
+            };
+          })()}
           onSuccess={handlePromiseSuccess}
         />
       )}

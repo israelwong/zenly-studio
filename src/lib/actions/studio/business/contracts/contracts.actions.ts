@@ -947,10 +947,6 @@ export async function getEventContractForClient(
       });
 
       if (draftContract) {
-        console.log('[getEventContractForClient] Contrato encontrado pero está en DRAFT:', {
-          contractId: draftContract.id,
-          status: draftContract.status,
-        });
         return { success: false, error: "El contrato aún no ha sido publicado" };
       }
 

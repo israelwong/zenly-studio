@@ -16,6 +16,7 @@ interface PromiseCardViewProps {
     name: string;
     phone: string;
     email: string | null;
+    address?: string | null;
     event_type_id: string | null;
     event_type_name?: string | null;
     event_location?: string | null;
@@ -74,6 +75,7 @@ export function PromiseCardView({
                 name: data.name,
                 phone: data.phone,
                 email: data.email,
+                address: data.address || null,
               }}
               eventData={{
                 event_type_id: data.event_type_id,
@@ -99,6 +101,7 @@ export function PromiseCardView({
                 name: data.name,
                 phone: data.phone,
                 email: data.email || null,
+                address: data.address || null,
                 event_type_id: data.event_type_id,
                 event_location: data.event_location || null,
                 event_name: data.event_name || null,
@@ -172,10 +175,11 @@ export function PromiseCardView({
           studioSlug={studioSlug}
           context="promise"
           initialData={{
-            id: promiseId,
+            id: contactId || undefined,
             name: data.name,
             phone: data.phone,
             email: data.email || undefined,
+            address: data.address || undefined,
             event_type_id: data.event_type_id || undefined,
             event_location: data.event_location || undefined,
             event_name: data.event_name || undefined,

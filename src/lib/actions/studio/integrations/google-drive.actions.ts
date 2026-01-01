@@ -521,14 +521,23 @@ export async function desconectarGoogleDrive(
       },
     });
 
-    const tieneDriveScopes = studioVerificado?.google_oauth_scopes
-      ? JSON.parse(studioVerificado.google_oauth_scopes as string).some((s: string) => s.includes('drive'))
+    if (!studioVerificado) {
+      return {
+        success: true,
+        permisosRevocados,
+        entregablesLimpios,
+      };
+    }
+
+    const oauthScopes = studioVerificado.google_oauth_scopes;
+    const tieneDriveScopes = oauthScopes
+      ? JSON.parse(oauthScopes as string).some((s: string) => s.includes('drive'))
       : false;
 
-    if (tieneDriveScopes) {
+    if (tieneDriveScopes && oauthScopes) {
       console.warn('[desconectarGoogleDrive] ⚠️ Aún hay scopes de Drive después de desconectar. Reintentando limpieza...');
       // Forzar limpieza de scopes de Drive
-      const scopesActuales = JSON.parse(studioVerificado.google_oauth_scopes as string) as string[];
+      const scopesActuales = JSON.parse(oauthScopes as string) as string[];
       const scopesSinDrive = scopesActuales.filter((s: string) => !s.includes('drive'));
 
       await prisma.studios.update({
