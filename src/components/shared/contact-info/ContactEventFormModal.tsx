@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ZenDialog, ZenInput, ZenCard, ZenCardContent } from '@/components/ui/zen';
+import { ZenDialog, ZenInput, ZenTextarea, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/even
 import { getContacts, getAcquisitionChannels, getSocialNetworks } from '@/lib/actions/studio/commercial/contacts';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
+import { useContactRefresh } from '@/hooks/useContactRefresh';
 
 interface ContactEventFormModalProps {
     isOpen: boolean;
@@ -26,6 +27,7 @@ interface ContactEventFormModalProps {
         name?: string;
         phone?: string;
         email?: string;
+        address?: string;
         event_type_id?: string;
         event_location?: string;
         event_name?: string; // Nombre del evento (opcional)
@@ -51,6 +53,7 @@ export function ContactEventFormModal({
     zIndex = 10050,
 }: ContactEventFormModalProps) {
     const router = useRouter();
+    const { triggerContactUpdate } = useContactRefresh();
     const isEditMode = !!initialData?.id;
     const [loading, setLoading] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(false);
@@ -59,6 +62,7 @@ export function ContactEventFormModal({
         name: initialData?.name || '',
         phone: initialData?.phone || '',
         email: initialData?.email || '',
+        address: initialData?.address || '',
         event_type_id: initialData?.event_type_id || '',
         event_location: initialData?.event_location || '',
         event_name: initialData?.event_name || '',
@@ -202,6 +206,7 @@ export function ContactEventFormModal({
                     name: initialData.name || '',
                     phone: normalizePhone(initialData.phone || ''),
                     email: initialData.email || '',
+                    address: initialData.address || '',
                     event_type_id: initialData.event_type_id || '',
                     event_location: initialData.event_location || '',
                     event_name: initialData.event_name || '',
@@ -578,6 +583,26 @@ export function ContactEventFormModal({
                 toast.success(isEditMode ? 'Promesa actualizada exitosamente' : 'Promesa registrada exitosamente');
 
                 if (isEditMode) {
+                    // Disparar evento de actualización de contacto para sincronizar componentes
+                    triggerContactUpdate(result.data.id, {
+                        id: result.data.id,
+                        name: result.data.name,
+                        phone: result.data.phone,
+                        email: result.data.email,
+                        address: result.data.address,
+                        acquisition_channel_id: result.data.acquisition_channel_id,
+                        social_network_id: result.data.social_network_id,
+                        referrer_contact_id: result.data.referrer_contact_id,
+                        referrer_name: result.data.referrer_name,
+                        // Datos del evento
+                        event_type_id: result.data.event_type_id,
+                        event_name: result.data.event_name,
+                        event_location: result.data.event_location,
+                        event_type: result.data.event_type,
+                        interested_dates: result.data.interested_dates,
+                        event_date: result.data.event_date,
+                    });
+
                     // En modo edición, cerrar modal y refrescar
                     onClose();
                     if (onSuccess) {
@@ -713,26 +738,23 @@ export function ContactEventFormModal({
                         />
                     </div>
 
-                    {/* Nombre del Evento (opcional) */}
+                    {/* Dirección */}
                     <div>
-                        <ZenInput
-                            label="Nombre del Evento (opcional)"
-                            placeholder="Ej: Los quince años de Ana, Boda de Ana y Roberto"
-                            value={formData.event_name || ''}
+                        <label className="text-sm font-medium text-zinc-300 block mb-2">
+                            Dirección
+                        </label>
+                        <textarea
+                            value={formData.address || ''}
                             onChange={(e) => {
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    event_name: e.target.value || undefined,
-                                }));
+                                setFormData((prev) => ({ ...prev, address: e.target.value || undefined }));
                             }}
-                            className="w-full"
+                            placeholder="Dirección del cliente (opcional)"
+                            rows={2}
+                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors resize-none"
                         />
-                        <p className="text-xs text-zinc-400 mt-1">
-                            Puedes especificar el nombre del evento si lo conoces
-                        </p>
                     </div>
 
-                    {/* Tipo de Evento y Lugar del Evento */}
+                    {/* Tipo de Evento y Nombre del Evento */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-sm font-medium text-zinc-300 block mb-2">
@@ -775,24 +797,40 @@ export function ContactEventFormModal({
                         </div>
 
                         <div>
-                            <label className="text-sm font-medium text-zinc-300 block mb-2">
-                                Lugar del Evento
-                            </label>
                             <ZenInput
-                                type="text"
-                                placeholder="Ej: Salón de eventos, Playa, Jardín... (opcional)"
-                                value={formData.event_location || ''}
+                                label="Nombre del Evento (opcional)"
+                                placeholder="Ej: Los quince años de Ana, Boda de Ana y Roberto"
+                                value={formData.event_name || ''}
                                 onChange={(e) => {
                                     setFormData((prev) => ({
                                         ...prev,
-                                        event_location: e.target.value,
+                                        event_name: e.target.value || undefined,
                                     }));
                                 }}
-                                disabled={!formData.event_type_id || formData.event_type_id === 'none'}
-                                className="w-full h-10 disabled:opacity-50 disabled:cursor-not-allowed"
-                                error={errors.event_location}
+                                className="w-full"
                             />
                         </div>
+                    </div>
+
+                    {/* Lugar del Evento */}
+                    <div>
+                        <label className="text-sm font-medium text-zinc-300 block mb-2">
+                            Lugar del Evento
+                        </label>
+                        <ZenInput
+                            type="text"
+                            placeholder="Ej: Salón de eventos, Playa, Jardín... (opcional)"
+                            value={formData.event_location || ''}
+                            onChange={(e) => {
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    event_location: e.target.value,
+                                }));
+                            }}
+                            disabled={!formData.event_type_id || formData.event_type_id === 'none'}
+                            className="w-full h-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                            error={errors.event_location}
+                        />
                     </div>
 
                     {/* Canal de Adquisición */}

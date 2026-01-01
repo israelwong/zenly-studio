@@ -266,10 +266,25 @@ export async function getPromiseByIdAsPromiseWithContact(
             name: true,
             phone: true,
             email: true,
+            address: true,
             avatar_url: true,
             status: true,
+            acquisition_channel_id: true,
+            social_network_id: true,
+            referrer_contact_id: true,
+            referrer_name: true,
             created_at: true,
             updated_at: true,
+            acquisition_channel: {
+              select: {
+                name: true,
+              },
+            },
+            social_network: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
         pipeline_stage: {
@@ -382,10 +397,12 @@ export async function getPromiseByIdAsPromiseWithContact(
       name: promise.contact.name,
       phone: promise.contact.phone,
       email: promise.contact.email,
+      address: promise.contact.address || null,
       avatar_url: promise.contact.avatar_url,
       status: promise.contact.status,
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
+      event_location: promise.event_location || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
@@ -393,6 +410,12 @@ export async function getPromiseByIdAsPromiseWithContact(
       defined_date: promise.defined_date,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
       is_test: promise.is_test || false,
+      acquisition_channel_id: promise.contact.acquisition_channel_id,
+      acquisition_channel_name: promise.contact.acquisition_channel?.name || null,
+      social_network_id: promise.contact.social_network_id,
+      social_network_name: promise.contact.social_network?.name || null,
+      referrer_contact_id: promise.contact.referrer_contact_id,
+      referrer_name: promise.contact.referrer_name,
       created_at: promise.contact.created_at,
       updated_at: promise.updated_at,
       event_type: promise.event_type || null,
@@ -494,6 +517,7 @@ export async function createPromise(
       update: {
         name: validatedData.name,
         email: validatedData.email || null,
+        address: validatedData.address && validatedData.address.trim() !== '' ? validatedData.address.trim() : null,
         status: 'prospecto',
         acquisition_channel_id: validatedData.acquisition_channel_id || null,
         social_network_id: validatedData.social_network_id || null,
@@ -505,6 +529,7 @@ export async function createPromise(
         name: validatedData.name,
         phone: validatedData.phone,
         email: validatedData.email || null,
+        address: validatedData.address && validatedData.address.trim() !== '' ? validatedData.address.trim() : null,
         status: 'prospecto',
         acquisition_channel_id: validatedData.acquisition_channel_id || null,
         social_network_id: validatedData.social_network_id || null,
@@ -574,6 +599,7 @@ export async function createPromise(
       name: contact.name,
       phone: contact.phone,
       email: contact.email,
+      address: contact.address || null,
       avatar_url: contact.avatar_url,
       status: contact.status,
       event_type_id: promise.event_type_id,
@@ -746,12 +772,15 @@ export async function updatePromise(
     }
 
     // Actualizar contacto
+    const addressToSave = validatedData.address && validatedData.address.trim() !== '' ? validatedData.address.trim() : null;
+    
     const contact = await prisma.studio_contacts.update({
       where: { id: validatedData.id },
       data: {
         name: validatedData.name,
         phone: validatedData.phone,
         email: validatedData.email,
+        address: addressToSave,
         acquisition_channel_id: validatedData.acquisition_channel_id || null,
         social_network_id: validatedData.social_network_id || null,
         referrer_contact_id: validatedData.referrer_contact_id || null,
@@ -935,15 +964,23 @@ export async function updatePromise(
       name: contact.name,
       phone: contact.phone,
       email: contact.email,
+      address: contact.address || null,
       avatar_url: contact.avatar_url,
       status: contact.status,
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
+      event_location: promise.event_location || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
+      event_date: promise.event_date,
+      defined_date: promise.defined_date,
       promise_pipeline_stage_id: promise.pipeline_stage_id,
-      is_test: promise.is_test, // ✅ Incluir flag de prueba
+      is_test: promise.is_test,
+      acquisition_channel_id: contact.acquisition_channel_id,
+      social_network_id: contact.social_network_id,
+      referrer_contact_id: contact.referrer_contact_id,
+      referrer_name: contact.referrer_name,
       created_at: contact.created_at,
       updated_at: contact.updated_at,
       event_type: promise.event_type,

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ZenDialog, ZenButton, ZenInput, ZenCard, ZenCardContent, ZenSwitch, SeparadorZen, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { ZenDialog, ZenButton, ZenInput, ZenCard, ZenCardContent, ZenSwitch, SeparadorZen, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenBadge } from '@/components/ui/zen';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import {
@@ -20,7 +20,8 @@ import {
   Settings,
   MoreVertical,
   X,
-  Trash2
+  Trash2,
+  MapPin
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -36,6 +37,7 @@ import { ContractPreviewForPromiseModal } from './ContractPreviewForPromiseModal
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { updateContractTemplate, getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import type { ContractTemplate } from '@/types/contracts';
+import { useContactUpdateListener } from '@/hooks/useContactRefresh';
 
 interface Cotizacion {
   id: string;
@@ -137,6 +139,30 @@ export function AuthorizeCotizacionModal({
   const [loadingPromise, setLoadingPromise] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [localCondicionesComerciales, setLocalCondicionesComerciales] = useState<CondicionComercial[]>(condicionesComerciales);
+
+  // Escuchar actualizaciones de contacto para sincronizar promiseData localmente
+  useContactUpdateListener(promiseData?.id, (contact) => {
+    if (contact && promiseData) {
+      setPromiseData((prev: any) => ({
+        ...prev,
+        name: contact.name || prev.name,
+        phone: contact.phone || prev.phone,
+        email: contact.email !== undefined ? contact.email : prev.email,
+        address: contact.address !== undefined ? contact.address : prev.address,
+        acquisition_channel_id: contact.acquisition_channel_id !== undefined ? contact.acquisition_channel_id : prev.acquisition_channel_id,
+        social_network_id: contact.social_network_id !== undefined ? contact.social_network_id : prev.social_network_id,
+        referrer_contact_id: contact.referrer_contact_id !== undefined ? contact.referrer_contact_id : prev.referrer_contact_id,
+        referrer_name: contact.referrer_name !== undefined ? contact.referrer_name : prev.referrer_name,
+        // Actualizar datos del evento
+        event_type_id: (contact as any).event_type_id !== undefined ? (contact as any).event_type_id : prev.event_type_id,
+        event_name: (contact as any).event_name !== undefined ? (contact as any).event_name : prev.event_name,
+        event_location: (contact as any).event_location !== undefined ? (contact as any).event_location : prev.event_location,
+        event_type: (contact as any).event_type !== undefined ? (contact as any).event_type : prev.event_type,
+        interested_dates: (contact as any).interested_dates !== undefined ? (contact as any).interested_dates : prev.interested_dates,
+        event_date: (contact as any).event_date !== undefined ? (contact as any).event_date : prev.event_date,
+      }));
+    }
+  });
 
   // Validación de datos del cliente para contratos
   interface ClientContractDataValidation {
@@ -386,7 +412,7 @@ export function AuthorizeCotizacionModal({
 
   const handleEditSuccess = () => {
     setShowEditModal(false);
-    loadPromiseData(); // Recargar datos después de editar
+    // No recargar datos - useContactUpdateListener se encarga de la actualización local
   };
 
   const handleTemplateSelected = (template: ContractTemplate) => {
@@ -571,27 +597,39 @@ export function AuthorizeCotizacionModal({
                   <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
                     Datos del Contacto
                   </h4>
-                  <div className="space-y-1.5">
+                  {/* Fila 1: Nombre y Teléfono */}
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-2">
                       <User className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                      <span className="text-sm text-white">
-                        {promiseData.name || 'Sin nombre'}
+                      <span className={`text-sm ${promiseData.name ? 'text-white' : 'text-zinc-500 italic'}`}>
+                        {promiseData.name || 'No definido'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Phone className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                      <span className="text-sm text-white">
-                        {promiseData.phone || 'Sin teléfono'}
+                      <span className={`text-sm ${promiseData.phone ? 'text-white' : 'text-zinc-500 italic'}`}>
+                        {promiseData.phone || 'No definido'}
                       </span>
                     </div>
-                    {promiseData.email && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                        <span className="text-sm text-white truncate">
-                          {promiseData.email}
-                        </span>
-                      </div>
-                    )}
+                  </div>
+                  {/* Fila 2: Email y Dirección */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                      <span className={`text-sm truncate ${promiseData.email ? 'text-white' : 'text-zinc-500 italic'}`}>
+                        {promiseData.email || 'No definido'}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+                      <p className={`text-sm ${promiseData.address ? 'text-white' : 'text-zinc-500 italic'}`} title={promiseData.address || undefined}>
+                        {promiseData.address 
+                          ? (promiseData.address.length > 15 
+                              ? `${promiseData.address.substring(0, 15)}...` 
+                              : promiseData.address)
+                          : 'Dirección no definida'}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -602,39 +640,46 @@ export function AuthorizeCotizacionModal({
                   <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
                     Detalles del Evento
                   </h4>
-                  <div className="space-y-1.5">
-                    {promiseData.event_name && (
-                      <div>
-                        <label className="text-xs text-zinc-500 block mb-0.5">Nombre del Evento</label>
-                        <p className="text-sm text-white font-medium">{promiseData.event_name}</p>
-                      </div>
-                    )}
-                    {promiseData.event_type?.name && (
-                      <div>
-                        <label className="text-xs text-zinc-500 block mb-0.5">Tipo de Evento</label>
-                        <p className="text-sm text-white">{promiseData.event_type.name}</p>
-                      </div>
-                    )}
-                    {promiseData.interested_dates && promiseData.interested_dates.length > 0 && (
-                      <div>
-                        <label className="text-xs text-zinc-500 block mb-0.5">Fechas de Interés</label>
-                        <div className="flex flex-wrap gap-1">
-                          {promiseData.interested_dates.map((date: string, idx: number) => (
-                            <span key={idx} className="text-xs text-white bg-zinc-700 px-2 py-0.5 rounded">
-                              {format(new Date(date), 'PP', { locale: es })}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {promiseData.event_date && (
-                      <div>
-                        <label className="text-xs text-zinc-500 block mb-0.5">Fecha Confirmada</label>
-                        <p className="text-sm text-white">
-                          {format(new Date(promiseData.event_date), 'PPP', { locale: es })}
-                        </p>
-                      </div>
-                    )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5">
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-0.5">Tipo de Evento</label>
+                      {promiseData.event_type?.name ? (
+                        <ZenBadge
+                          variant="outline"
+                          className="bg-emerald-500/20 text-emerald-400 border-emerald-400/50 font-medium px-1.5 py-0 text-[10px] rounded-full"
+                        >
+                          {promiseData.event_type.name}
+                        </ZenBadge>
+                      ) : (
+                        <p className="text-sm text-zinc-500 italic">No definido</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-0.5">Fecha Confirmada</label>
+                      <p className={`text-sm ${promiseData.event_date ? 'text-white' : 'text-zinc-500 italic'}`}>
+                        {promiseData.event_date 
+                          ? format(new Date(promiseData.event_date), 'PPP', { locale: es })
+                          : 'No definido'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-0.5">Nombre del Evento</label>
+                      <p className={`text-sm font-medium ${promiseData.event_name ? 'text-white' : 'text-zinc-500 italic'}`}>
+                        {promiseData.event_name || 'No definido'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-0.5">Locación</label>
+                      <p className={`text-sm ${promiseData.event_location ? 'text-white' : 'text-zinc-500 italic'}`}>
+                        {promiseData.event_location || 'No definido'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-0.5">Canal de Adquisición</label>
+                      <p className={`text-sm ${promiseData.acquisition_channel_name ? 'text-white' : 'text-zinc-500 italic'}`}>
+                        {promiseData.acquisition_channel_name || 'No definido'}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1145,13 +1190,19 @@ export function AuthorizeCotizacionModal({
           studioSlug={studioSlug}
           context="promise"
           initialData={{
-            id: promiseData.promise_id || promiseData.id,
+            id: promiseData.id, // contactId
             name: promiseData.name || '',
             phone: promiseData.phone || '',
             email: promiseData.email || undefined,
+            address: promiseData.address || undefined,
             event_type_id: promiseData.event_type_id || undefined,
+            event_location: promiseData.event_location || undefined,
             event_name: promiseData.event_name || undefined,
             interested_dates: promiseData.interested_dates || undefined,
+            acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
+            social_network_id: promiseData.social_network_id || undefined,
+            referrer_contact_id: promiseData.referrer_contact_id || undefined,
+            referrer_name: promiseData.referrer_name || undefined,
           }}
           onSuccess={handleEditSuccess}
           zIndex={10060}
