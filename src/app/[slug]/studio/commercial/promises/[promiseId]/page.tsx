@@ -45,6 +45,7 @@ export default function EditarPromesaPage() {
     name: string;
     phone: string;
     email: string | null;
+    address: string | null;
     event_type_id: string | null;
     event_type_name: string | null;
     event_location: string | null;
@@ -84,6 +85,7 @@ export default function EditarPromesaPage() {
             name: result.data.contact_name,
             phone: result.data.contact_phone,
             email: result.data.contact_email,
+            address: result.data.contact_address,
             event_type_id: result.data.event_type_id || null,
             event_type_name: result.data.event_type_name || null,
             event_location: result.data.event_location || null,
@@ -146,20 +148,35 @@ export default function EditarPromesaPage() {
   }, [studioSlug]);
 
   // Callback para manejar actualizaciones de contacto
-  const handleContactUpdate = useCallback((updatedContact: { id: string; name: string; phone: string; email: string | null } | undefined) => {
+  const handleContactUpdate = useCallback((updatedContact: {
+    id: string;
+    name?: string;
+    phone?: string;
+    email?: string | null;
+    address?: string | null;
+    acquisition_channel_id?: string | null;
+    social_network_id?: string | null;
+    referrer_contact_id?: string | null;
+    referrer_name?: string | null;
+  } | undefined) => {
     if (updatedContact && promiseData) {
       // Actualizar datos locales con la información del contacto actualizado
       setPromiseData(prev => prev ? {
         ...prev,
-        name: updatedContact.name,
-        phone: updatedContact.phone,
-        email: updatedContact.email,
+        name: updatedContact.name !== undefined ? updatedContact.name : prev.name,
+        phone: updatedContact.phone !== undefined ? updatedContact.phone : prev.phone,
+        email: updatedContact.email !== undefined ? updatedContact.email : prev.email,
+        address: updatedContact.address !== undefined ? updatedContact.address : prev.address,
+        acquisition_channel_id: updatedContact.acquisition_channel_id !== undefined ? updatedContact.acquisition_channel_id : prev.acquisition_channel_id,
+        social_network_id: updatedContact.social_network_id !== undefined ? updatedContact.social_network_id : prev.social_network_id,
+        referrer_contact_id: updatedContact.referrer_contact_id !== undefined ? updatedContact.referrer_contact_id : prev.referrer_contact_id,
+        referrer_name: updatedContact.referrer_name !== undefined ? updatedContact.referrer_name : prev.referrer_name,
       } : null);
       setContactData(prev => prev ? {
         ...prev,
-        contactName: updatedContact.name,
-        phone: updatedContact.phone,
-        email: updatedContact.email,
+        contactName: updatedContact.name !== undefined ? updatedContact.name : prev.contactName,
+        phone: updatedContact.phone !== undefined ? updatedContact.phone : prev.phone,
+        email: updatedContact.email !== undefined ? updatedContact.email : prev.email,
       } : null);
     } else if (promiseData?.id) {
       // Si no viene el contacto completo, recargar desde el servidor
@@ -172,6 +189,7 @@ export default function EditarPromesaPage() {
               name: result.data.contact_name,
               phone: result.data.contact_phone,
               email: result.data.contact_email,
+              address: result.data.contact_address,
               event_type_id: result.data.event_type_id || null,
               event_type_name: result.data.event_type_name || null,
               event_location: result.data.event_location || null,
@@ -381,6 +399,7 @@ export default function EditarPromesaPage() {
           name: result.data.contact_name,
           phone: result.data.contact_phone,
           email: result.data.contact_email,
+          address: result.data.contact_address,
           event_type_id: result.data.event_type_id || null,
           event_type_name: result.data.event_type_name || null,
           event_location: result.data.event_location || null,
@@ -596,6 +615,7 @@ export default function EditarPromesaPage() {
               name: promiseData.name,
               phone: promiseData.phone,
               email: promiseData.email,
+              address: promiseData.address,
               event_type_id: promiseData.event_type_id,
               event_type_name: promiseData.event_type_name || undefined,
               event_location: promiseData.event_location || undefined,
@@ -627,6 +647,7 @@ export default function EditarPromesaPage() {
           name: promiseData.name,
           phone: promiseData.phone,
           email: promiseData.email || undefined,
+          address: promiseData.address || undefined,
           event_type_id: promiseData.event_type_id || undefined,
           event_location: promiseData.event_location || undefined,
           event_name: promiseData.event_name || undefined,
