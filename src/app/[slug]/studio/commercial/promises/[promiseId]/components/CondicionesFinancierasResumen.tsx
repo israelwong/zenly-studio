@@ -1,0 +1,138 @@
+'use client';
+
+import React from 'react';
+import { DollarSign } from 'lucide-react';
+
+interface CondicionComercial {
+  id: string;
+  name: string;
+  description: string | null;
+  discount_percentage: number | null;
+  advance_type: string;
+  advance_percentage: number | null;
+  advance_amount: number | null;
+}
+
+interface CondicionesFinancierasResumenProps {
+  precioBase: number;
+  condicion: CondicionComercial;
+}
+
+export function CondicionesFinancierasResumen({
+  precioBase,
+  condicion,
+}: CondicionesFinancierasResumenProps) {
+  // Calcular descuento
+  const descuentoMonto = condicion.discount_percentage
+    ? precioBase * (condicion.discount_percentage / 100)
+    : 0;
+
+  // Calcular subtotal (precio - descuento)
+  const subtotal = precioBase - descuentoMonto;
+
+  // Calcular anticipo
+  let anticipoMonto = 0;
+  if (condicion.advance_type === 'percentage' && condicion.advance_percentage) {
+    anticipoMonto = subtotal * (condicion.advance_percentage / 100);
+  } else if (condicion.advance_type === 'amount' && condicion.advance_amount) {
+    anticipoMonto = condicion.advance_amount;
+  }
+
+  // Calcular diferido
+  const diferido = subtotal - anticipoMonto;
+
+  // Calcular total a pagar
+  const totalAPagar = subtotal;
+
+  const formatMoney = (amount: number) => {
+    return amount.toLocaleString('es-MX', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  return (
+    <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-start gap-2 pb-3 border-b border-zinc-700">
+        <DollarSign className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-semibold text-white">{condicion.name}</h4>
+          {condicion.description && (
+            <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2">
+              {condicion.description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Desglose Financiero */}
+      <div className="space-y-2 text-sm">
+        {/* Precio Base */}
+        <div className="flex justify-between items-center">
+          <span className="text-zinc-400">Precio base:</span>
+          <span className="text-white font-medium tabular-nums">
+            ${formatMoney(precioBase)}
+          </span>
+        </div>
+
+        {/* Descuento (si existe) */}
+        {descuentoMonto > 0 && (
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-400">
+              Descuento ({condicion.discount_percentage}%):
+            </span>
+            <span className="text-red-400 font-medium tabular-nums">
+              -${formatMoney(descuentoMonto)}
+            </span>
+          </div>
+        )}
+
+        {/* Subtotal (si hay descuento) */}
+        {descuentoMonto > 0 && (
+          <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
+            <span className="text-zinc-300 font-medium">Subtotal:</span>
+            <span className="text-white font-semibold tabular-nums">
+              ${formatMoney(subtotal)}
+            </span>
+          </div>
+        )}
+
+        {/* Anticipo */}
+        {anticipoMonto > 0 && (
+          <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
+            <span className="text-zinc-400">
+              Anticipo{' '}
+              {condicion.advance_type === 'percentage' && condicion.advance_percentage
+                ? `(${condicion.advance_percentage}%)`
+                : ''}
+              :
+            </span>
+            <span className="text-emerald-400 font-medium tabular-nums">
+              ${formatMoney(anticipoMonto)}
+            </span>
+          </div>
+        )}
+
+        {/* Diferido */}
+        {anticipoMonto > 0 && diferido > 0 && (
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-400">Diferido:</span>
+            <span className="text-amber-400 font-medium tabular-nums">
+              ${formatMoney(diferido)}
+            </span>
+          </div>
+        )}
+
+        {/* Total a Pagar */}
+        <div className="flex justify-between items-center pt-3 border-t border-zinc-700">
+          <span className="text-white font-semibold">Total a pagar:</span>
+          <span className="text-emerald-400 font-bold text-lg tabular-nums">
+            ${formatMoney(totalAPagar)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+

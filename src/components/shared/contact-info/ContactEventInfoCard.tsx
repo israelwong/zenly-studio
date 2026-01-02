@@ -615,7 +615,7 @@ export function ContactEventInfoCard({
 
   return (
     <>
-      <ZenCard>
+      <ZenCard className="h-full flex flex-col">
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
           <div className="flex items-center justify-between">
             <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
@@ -633,7 +633,7 @@ export function ContactEventInfoCard({
             )}
           </div>
         </ZenCardHeader>
-        <ZenCardContent className="p-4 space-y-4">
+        <ZenCardContent className="p-4 space-y-4 flex-1 overflow-y-auto">
           {/* Datos del Contacto */}
           <div className="space-y-3">
             <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wide">

@@ -131,7 +131,7 @@ export function ContractTemplateSelectorModal({
               Crea tu primera plantilla para generar contratos
             </p>
             <ZenButton
-              variant="default"
+              variant="primary"
               onClick={handleOpenCreate}
               className="w-full"
             >

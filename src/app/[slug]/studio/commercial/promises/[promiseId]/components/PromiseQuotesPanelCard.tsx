@@ -27,6 +27,7 @@ import {
   updateCotizacionName,
   cancelarCotizacion,
   cancelarCotizacionYEvento,
+  pasarACierre,
   type CotizacionListItem,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { AuthorizeCotizacionModal } from './AuthorizeCotizacionModal';
@@ -69,23 +70,11 @@ export function PromiseQuotesPanelCard({
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState(cotizacion.name);
   const inputRef = useRef<HTMLInputElement>(null);
   const isProcessingRef = useRef(false);
-  
-  // Estados para el modal de autorización
-  const [condicionesComerciales, setCondicionesComerciales] = useState<Array<{
-    id: string; 
-    name: string;
-    description?: string | null;
-    advance_percentage?: number | null;
-    discount_percentage?: number | null;
-  }>>([]);
-  const [paymentMethods, setPaymentMethods] = useState<Array<{id: string; name: string}>>([]);
-  const [isLoadingModalData, setIsLoadingModalData] = useState(false);
 
   // Sincronizar editingName cuando cambie cotizacion.name (solo si no está editando)
   useEffect(() => {
@@ -122,6 +111,10 @@ export function PromiseQuotesPanelCard({
     if (revisionStatus === 'pending_revision') {
       return 'warning';
     }
+    // En cierre - usar info (azul)
+    if (status === 'en_cierre') {
+      return 'info';
+    }
     // Estados de contrato (nuevos)
     if (status === 'contract_signed') {
       return 'success'; // Verde - listo para autorizar evento
@@ -152,6 +145,10 @@ export function PromiseQuotesPanelCard({
     // Si es revisión pendiente (no autorizada aún)
     if (revisionStatus === 'pending_revision') {
       return 'Revisión';
+    }
+    // En cierre
+    if (status === 'en_cierre') {
+      return 'En Cierre';
     }
     // Estados de contrato (nuevos)
     if (status === 'contract_signed') {
@@ -363,69 +360,35 @@ export function PromiseQuotesPanelCard({
     setIsEditingName(false);
   };
 
-  const handleAuthorize = async () => {
+  const handlePasarACierre = async () => {
+    console.log('[handlePasarACierre] Iniciando - cotizacion:', {
+      id: cotizacion.id,
+      name: cotizacion.name,
+      status: cotizacion.status,
+    });
+
     if (!promiseId) {
-      toast.error('No se puede autorizar sin una promesa asociada');
+      toast.error('No se puede pasar a cierre sin una promesa asociada');
       return;
     }
 
-    // Validar que exista al menos una fecha definida
+    setLoading(true);
     try {
-      const { getPromiseById } = await import('@/lib/actions/studio/commercial/promises/promise-logs.actions');
-      const result = await getPromiseById(promiseId);
-
-      if (result.success && result.data) {
-        // Usar event_date como campo principal (estándar actual)
-        // También verificar defined_date e interested_dates como fallback para compatibilidad
-        const hasDate = result.data.event_date ||
-          result.data.defined_date ||
-          (result.data.interested_dates && result.data.interested_dates.length > 0);
-
-        if (!hasDate) {
-          toast.error('Debe existir al menos una fecha definida para autorizar la cotización');
-          return;
-        }
+      console.log('[handlePasarACierre] Llamando a pasarACierre...');
+      const result = await pasarACierre(studioSlug, cotizacion.id);
+      console.log('[handlePasarACierre] Resultado:', result);
+      
+      if (result.success) {
+        toast.success('Cotización pasada a proceso de cierre');
+        onUpdate?.(cotizacion.id);
       } else {
-        toast.error('Error al validar la promesa');
-        return;
+        toast.error(result.error || 'Error al pasar cotización a cierre');
       }
     } catch (error) {
-      console.error('Error validating promise:', error);
-      toast.error('Error al validar la promesa');
-      return;
-    }
-
-    // Cargar datos necesarios para el modal
-    setIsLoadingModalData(true);
-    try {
-      const { obtenerCondicionesComerciales } = await import('@/lib/actions/studio/config/condiciones-comerciales.actions');
-      const { getPaymentMethodsForAuthorization } = await import('@/lib/actions/studio/commercial/promises/authorize-legacy.actions');
-
-      const [condicionesResult, paymentMethodsResult] = await Promise.all([
-        obtenerCondicionesComerciales(studioSlug),
-        getPaymentMethodsForAuthorization(studioSlug),
-      ]);
-
-      if (condicionesResult.success && condicionesResult.data) {
-        setCondicionesComerciales(condicionesResult.data.map(cc => ({ 
-          id: cc.id, 
-          name: cc.name,
-          description: cc.description,
-          advance_percentage: cc.advance_percentage,
-          discount_percentage: cc.discount_percentage,
-        })));
-      }
-
-      if (paymentMethodsResult.success && paymentMethodsResult.data) {
-        setPaymentMethods(paymentMethodsResult.data);
-      }
-
-      setShowAuthorizeModal(true);
-    } catch (error) {
-      console.error('[handleAuthorize] Error cargando datos del modal:', error);
-      toast.error('Error al cargar datos para autorización');
+      console.error('[handlePasarACierre] Error:', error);
+      toast.error('Error al pasar cotización a cierre');
     } finally {
-      setIsLoadingModalData(false);
+      setLoading(false);
     }
   };
 
@@ -706,18 +669,18 @@ export function PromiseQuotesPanelCard({
                         Cancelar
                       </ZenDropdownMenuItem>
                     ) : (
-                      // Solo mostrar botón Autorizar si no hay otra cotización aprobada
+                      // Solo mostrar botón Pasar a Cierre si no hay otra cotización aprobada o en cierre
                       !hasApprovedQuote && (
                         <ZenDropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleAuthorize();
+                            handlePasarACierre();
                           }}
                           disabled={loading || isDuplicating || isEditingName || !promiseId}
                           className="text-emerald-400 focus:text-emerald-300"
                         >
                           <CheckCircle className="h-4 w-4 mr-2" />
-                          Autorizar
+                          Pasar a Cierre
                         </ZenDropdownMenuItem>
                       )
                     )}
@@ -850,29 +813,6 @@ export function PromiseQuotesPanelCard({
         </div>
       )}
 
-      {/* Modal de Autorización */}
-      {showAuthorizeModal && promiseId && (
-        <AuthorizeCotizacionModal
-          isOpen={showAuthorizeModal}
-          onClose={() => setShowAuthorizeModal(false)}
-          cotizacion={{
-            id: cotizacion.id,
-            name: cotizacion.name,
-            price: cotizacion.price,
-            status: cotizacion.status,
-            selected_by_prospect: cotizacion.selected_by_prospect || false,
-            condiciones_comerciales_id: cotizacion.condiciones_comerciales_id,
-            condiciones_comerciales: cotizacion.condiciones_comerciales,
-          }}
-          promiseId={promiseId}
-          studioSlug={studioSlug}
-          condicionesComerciales={condicionesComerciales}
-          paymentMethods={paymentMethods}
-          onSuccess={() => {
-            onUpdate?.(cotizacion.id);
-          }}
-        />
-      )}
     </>
   );
 }

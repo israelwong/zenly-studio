@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { FileText, Loader2, CheckCircle2 } from 'lucide-react';
+import { FileText, Loader2, CheckCircle2, Settings } from 'lucide-react';
 import { ZenDialog, ZenButton } from '@/components/ui/zen';
 import { getContractTemplates } from '@/lib/actions/studio/business/contracts/templates.actions';
 import type { ContractTemplate } from '@/types/contracts';
 import { toast } from 'sonner';
+import { ContractTemplateManagerModal } from '@/components/shared/contracts/ContractTemplateManagerModal';
 
 interface ContractTemplateSimpleSelectorModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export function ContractTemplateSimpleSelectorModal({
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(selectedTemplateId || null);
+  const [showManagerModal, setShowManagerModal] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -85,7 +87,18 @@ export function ContractTemplateSimpleSelectorModal({
     onClose();
   };
 
+  const handleManageTemplates = () => {
+    setShowManagerModal(true);
+  };
+
+  const handleManagerModalClose = () => {
+    setShowManagerModal(false);
+    // Recargar plantillas después de cerrar el gestor
+    loadTemplates();
+  };
+
   return (
+    <>
     <ZenDialog
       isOpen={isOpen}
       onClose={handleClose}
@@ -98,6 +111,25 @@ export function ContractTemplateSimpleSelectorModal({
       cancelLabel="Cancelar"
       saveVariant="primary"
       zIndex={10070}
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <button
+            onClick={handleManageTemplates}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-400 hover:text-emerald-400 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            Gestionar plantillas
+          </button>
+          <div className="flex gap-2">
+            <ZenButton variant="outline" onClick={handleClose}>
+              Cancelar
+            </ZenButton>
+            <ZenButton variant="primary" onClick={handleConfirm}>
+              Confirmar
+            </ZenButton>
+          </div>
+        </div>
+      }
     >
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -159,6 +191,15 @@ export function ContractTemplateSimpleSelectorModal({
         </div>
       )}
     </ZenDialog>
+
+    {/* Modal Gestor de Plantillas */}
+    <ContractTemplateManagerModal
+      isOpen={showManagerModal}
+      onClose={handleManagerModalClose}
+      studioSlug={studioSlug}
+      eventTypeId={eventTypeId}
+    />
+    </>
   );
 }
 

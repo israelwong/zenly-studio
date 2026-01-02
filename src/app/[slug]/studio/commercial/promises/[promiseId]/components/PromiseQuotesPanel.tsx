@@ -36,7 +36,6 @@ import {
   reorderCotizaciones,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { PromiseQuotesPanelCard } from './PromiseQuotesPanelCard';
-import { PromiseClosingProcessCard } from './PromiseClosingProcessCard';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -272,35 +271,23 @@ export function PromiseQuotesPanel({
 
   const isMenuDisabled = !eventTypeId || !isSaved;
 
-  // Calcular si hay una cotización aprobada (no cancelada, no archivada)
+  // Calcular si hay una cotización aprobada o en cierre (no cancelada, no archivada)
   const hasApprovedQuote = cotizaciones.some(
-    (c) => (c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved') && !c.archived && c.status !== 'cancelada'
+    (c) => (c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved' || c.status === 'en_cierre') && !c.archived && c.status !== 'cancelada'
   );
 
-  // Obtener la cotización aprobada para el card de cierre
+  // Obtener la cotización aprobada o en cierre para el card de cierre
   const approvedQuote = cotizaciones.find(
-    (c) => (c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved') && !c.archived && c.status !== 'cancelada'
+    (c) => (c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved' || c.status === 'en_cierre') && !c.archived && c.status !== 'cancelada'
   );
 
-  // Filtrar cotizaciones para el listado (excluir la aprobada)
+  // Filtrar cotizaciones para el listado (excluir la aprobada o en cierre)
   const cotizacionesParaListado = cotizaciones.filter(
-    (c) => !(c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved') || c.archived || c.status === 'cancelada'
+    (c) => !(c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved' || c.status === 'en_cierre') || c.archived || c.status === 'cancelada'
   );
 
   return (
     <>
-      {/* Card "En Proceso de Cierre" - Solo si hay cotización aprobada */}
-      {approvedQuote && promiseData && onAuthorizeClick && (
-        <PromiseClosingProcessCard
-          cotizacion={approvedQuote}
-          promiseData={promiseData}
-          studioSlug={studioSlug}
-          promiseId={promiseId || ''}
-          onAuthorizeClick={onAuthorizeClick}
-          isLoadingPromiseData={isLoadingPromiseData}
-        />
-      )}
-
       {/* Card "Cotizaciones" */}
       <ZenCard className="min-h-[300px] flex flex-col">
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">

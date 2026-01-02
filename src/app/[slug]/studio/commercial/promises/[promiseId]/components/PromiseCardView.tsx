@@ -6,8 +6,8 @@ import { PromiseQuotesPanel } from './PromiseQuotesPanel';
 import { PromiseTags } from './PromiseTags';
 import { PromiseAgendamiento } from './PromiseAgendamiento';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
-import { PromiseQuickActions } from './PromiseQuickActions';
 import { AuthorizeCotizacionModal } from './AuthorizeCotizacionModal';
+import { PromiseClosingProcessSection } from './PromiseClosingProcessSection';
 
 interface PromiseCardViewProps {
   studioSlug: string;
@@ -142,9 +142,9 @@ export function PromiseCardView({
     <>
       <div className="space-y-6">
         {/* Layout de 3 columnas */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
           {/* Columna 1: Información */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 flex flex-col h-full">
             <ContactEventInfoCard
               studioSlug={studioSlug}
               contactId={contactId}
@@ -193,19 +193,27 @@ export function PromiseCardView({
             />
           </div>
 
-          {/* Columna 2: Acciones Rápidas + Agendamiento + Etiquetas */}
+          {/* Columna 2: Cotizaciones + Agendamiento + Etiquetas */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Acciones Rápidas (solo si está guardado) */}
-            {isSaved && promiseId && contactId && (
-              <PromiseQuickActions
-                studioSlug={studioSlug}
-                contactId={contactId}
-                contactName={data.name}
-                phone={data.phone}
-                email={data.email}
-                promiseId={promiseId}
-              />
-            )}
+            {/* Cotizaciones */}
+            <PromiseQuotesPanel
+              studioSlug={studioSlug}
+              promiseId={promiseId}
+              eventTypeId={data.event_type_id || null}
+              isSaved={isSaved}
+              contactId={contactId}
+              promiseData={{
+                name: data.name,
+                phone: data.phone,
+                email: data.email,
+                address: data.address || null,
+                event_date: data.event_date || null,
+                event_name: data.event_name || null,
+                event_type_name: data.event_type_name || null,
+              }}
+              isLoadingPromiseData={false}
+              onAuthorizeClick={() => setShowAuthorizeModal(true)}
+            />
 
             {/* Agendamiento (solo si está guardado) */}
             {isSaved && promiseId && (
@@ -230,14 +238,11 @@ export function PromiseCardView({
             )}
           </div>
 
-          {/* Columna 3: Cotizaciones + Contrato */}
-          <div className="lg:col-span-1 space-y-6">
-            <PromiseQuotesPanel
+          {/* Columna 3: Proceso de Cierre */}
+          <div className="lg:col-span-1 flex flex-col h-full">
+            <PromiseClosingProcessSection
               studioSlug={studioSlug}
               promiseId={promiseId}
-              eventTypeId={data.event_type_id || null}
-              isSaved={isSaved}
-              contactId={contactId}
               promiseData={{
                 name: data.name,
                 phone: data.phone,
@@ -247,10 +252,8 @@ export function PromiseCardView({
                 event_name: data.event_name || null,
                 event_type_name: data.event_type_name || null,
               }}
-              isLoadingPromiseData={false}
-              onAuthorizeClick={() => setShowAuthorizeModal(true)}
+              onAuthorizeClick={() => setShowAuthorizeClick(true)}
             />
-
           </div>
         </div>
       </div>

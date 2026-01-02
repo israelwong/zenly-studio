@@ -1539,3 +1539,213 @@ export async function cancelarCotizacionYEvento(
   }
 }
 
+/**
+ * Pasa una cotización al estado "en_cierre"
+ * - Cambia el status a 'en_cierre'
+ * - Archiva todas las demás cotizaciones pendientes de la misma promesa
+ * - Solo puede haber una cotización en cierre a la vez por promesa
+ */
+export async function pasarACierre(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<CotizacionResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        promise: {
+          studio_id: studio.id,
+        },
+      },
+      include: {
+        promise: true,
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    console.log('[pasarACierre] Cotización encontrada:', {
+      id: cotizacion.id,
+      status: cotizacion.status,
+      name: cotizacion.name,
+    });
+
+    // Verificar que la cotización esté pendiente
+    if (cotizacion.status !== 'pendiente') {
+      console.log('[pasarACierre] Status no es pendiente:', cotizacion.status);
+      return { success: false, error: `Solo se pueden pasar a cierre cotizaciones pendientes. Status actual: ${cotizacion.status}` };
+    }
+
+    // Verificar que no haya otra cotización en cierre en la misma promesa
+    const otraCotizacionEnCierre = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise_id: cotizacion.promise_id,
+        id: { not: cotizacionId },
+        status: 'en_cierre',
+      },
+    });
+
+    if (otraCotizacionEnCierre) {
+      return { 
+        success: false, 
+        error: 'Ya existe otra cotización en proceso de cierre. Cancela el cierre de la otra cotización primero.' 
+      };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Pasar cotización a cierre
+      await tx.studio_cotizaciones.update({
+        where: { id: cotizacionId },
+        data: {
+          status: 'en_cierre',
+          updated_at: new Date(),
+        },
+      });
+
+      // 2. Crear registro de cierre (si no existe)
+      await tx.studio_cotizaciones_cierre.upsert({
+        where: { cotizacion_id: cotizacionId },
+        create: {
+          cotizacion_id: cotizacionId,
+        },
+        update: {}, // No actualizar si ya existe
+      });
+
+      // 3. Archivar todas las demás cotizaciones pendientes de la misma promesa
+      await tx.studio_cotizaciones.updateMany({
+        where: {
+          promise_id: cotizacion.promise_id,
+          id: { not: cotizacionId },
+          status: 'pendiente',
+          archived: false,
+        },
+        data: {
+          archived: true,
+          updated_at: new Date(),
+        },
+      });
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return {
+      success: true,
+      data: {
+        id: cotizacion.id,
+        name: cotizacion.name,
+      },
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error pasando cotización a cierre:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al pasar cotización a cierre',
+    };
+  }
+}
+
+/**
+ * Cancela el proceso de cierre de una cotización
+ * - Cambia el status de 'en_cierre' a 'pendiente'
+ * - Desarchivar otras cotizaciones archivadas de la misma promesa (opcional)
+ */
+export async function cancelarCierre(
+  studioSlug: string,
+  cotizacionId: string,
+  desarchivarOtras: boolean = false
+): Promise<CotizacionResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        promise: {
+          studio_id: studio.id,
+        },
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    // Verificar que la cotización esté en cierre
+    if (cotizacion.status !== 'en_cierre') {
+      return { success: false, error: 'Solo se pueden cancelar cotizaciones en proceso de cierre' };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Regresar cotización a pendiente
+      await tx.studio_cotizaciones.update({
+        where: { id: cotizacionId },
+        data: {
+          status: 'pendiente',
+          updated_at: new Date(),
+        },
+      });
+
+      // 2. Eliminar registro de cierre
+      await tx.studio_cotizaciones_cierre.deleteMany({
+        where: { cotizacion_id: cotizacionId },
+      });
+
+      // 3. Opcionalmente desarchivar otras cotizaciones
+      if (desarchivarOtras && cotizacion.promise_id) {
+        await tx.studio_cotizaciones.updateMany({
+          where: {
+            promise_id: cotizacion.promise_id,
+            id: { not: cotizacionId },
+            archived: true,
+            status: 'pendiente',
+          },
+          data: {
+            archived: false,
+            updated_at: new Date(),
+          },
+        });
+      }
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return {
+      success: true,
+      data: {
+        id: cotizacion.id,
+        name: cotizacion.name,
+      },
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error cancelando cierre:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cancelar cierre',
+    };
+  }
+}
+

@@ -1,15 +1,30 @@
 'use client';
 
-import React from 'react';
-import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle2, AlertCircle, Loader2, XCircle, Eye } from 'lucide-react';
 import {
   ZenCard,
   ZenCardContent,
   ZenCardHeader,
   ZenCardTitle,
   ZenButton,
+  ZenConfirmModal,
 } from '@/components/ui/zen';
+import { cancelarCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { obtenerRegistroCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import { CondicionesComercialeSelectorSimpleModal } from './CondicionesComercialeSelectorSimpleModal';
+import { ContractTemplateSimpleSelectorModal } from './ContractTemplateSimpleSelectorModal';
+import { ContractPreviewForPromiseModal } from './ContractPreviewForPromiseModal';
+import { ContratoGestionCard } from './ContratoGestionCard';
+import { RegistroPagoModal } from './RegistroPagoModal';
+import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import type { ContractTemplate } from '@/types/contracts';
+import { CondicionesFinancierasResumen } from './CondicionesFinancierasResumen';
+import { ResumenCotizacion } from '@/components/shared/cotizaciones';
+import { ZenDialog } from '@/components/ui/zen';
+import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { toast } from 'sonner';
 
 interface PromiseClosingProcessCardProps {
   cotizacion: CotizacionListItem;
@@ -36,6 +51,140 @@ export function PromiseClosingProcessCard({
   onAuthorizeClick,
   isLoadingPromiseData = false,
 }: PromiseClosingProcessCardProps) {
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [showCondicionesModal, setShowCondicionesModal] = useState(false);
+  const [showContratoModal, setShowContratoModal] = useState(false);
+  const [showContratoPreview, setShowContratoPreview] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | null>(null);
+  const [showPagoModal, setShowPagoModal] = useState(false);
+  const [showCotizacionPreview, setShowCotizacionPreview] = useState(false);
+  const [cotizacionCompleta, setCotizacionCompleta] = useState<any>(null);
+  const [loadingCotizacion, setLoadingCotizacion] = useState(false);
+  
+  // Estado del registro de cierre
+  const [registroCierre, setRegistroCierre] = useState<{
+    condiciones_comerciales_id?: string | null;
+    condiciones_comerciales_definidas?: boolean;
+    contract_template_id?: string | null;
+    contrato_definido?: boolean;
+    pago_registrado?: boolean;
+    pago_concepto?: string | null;
+    pago_monto?: number | null;
+    pago_fecha?: Date | null;
+    pago_metodo_id?: string | null;
+    condiciones_comerciales?: {
+      id: string;
+      name: string;
+      description?: string | null;
+      discount_percentage?: number | null;
+      advance_type?: string;
+      advance_percentage?: number | null;
+      advance_amount?: number | null;
+    } | null;
+  } | null>(null);
+  const [loadingRegistro, setLoadingRegistro] = useState(true);
+
+  // Cargar registro de cierre
+  useEffect(() => {
+    loadRegistroCierre();
+  }, [cotizacion.id]);
+
+  const loadRegistroCierre = async () => {
+    setLoadingRegistro(true);
+    try {
+      const result = await obtenerRegistroCierre(studioSlug, cotizacion.id);
+      if (result.success && result.data) {
+        setRegistroCierre(result.data as any);
+      }
+    } catch (error) {
+      console.error('[loadRegistroCierre] Error:', error);
+    } finally {
+      setLoadingRegistro(false);
+    }
+  };
+
+  const handleCancelarCierre = async () => {
+    setIsCancelling(true);
+    try {
+      const result = await cancelarCierre(studioSlug, cotizacion.id, false);
+      if (result.success) {
+        toast.success('Proceso de cierre cancelado. Cotización regresada a pendiente.');
+        setShowCancelModal(false);
+        // El componente padre se actualizará automáticamente vía Realtime
+      } else {
+        toast.error(result.error || 'Error al cancelar cierre');
+      }
+    } catch (error) {
+      console.error('[handleCancelarCierre] Error:', error);
+      toast.error('Error al cancelar cierre');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleCondicionesSuccess = () => {
+    loadRegistroCierre();
+  };
+
+  const handleContratoSuccess = () => {
+    loadRegistroCierre();
+  };
+
+  const handleTemplateSelected = (template: ContractTemplate) => {
+    setSelectedTemplate(template);
+    // Abrir preview primero
+    setShowContratoPreview(true);
+    // Cerrar selector después de un pequeño delay
+    setTimeout(() => {
+      setShowContratoModal(false);
+    }, 150);
+  };
+
+  const handlePreviewConfirm = async () => {
+    if (!selectedTemplate) return;
+
+    const result = await actualizarContratoCierre(
+      studioSlug,
+      cotizacion.id,
+      selectedTemplate.id
+    );
+
+    if (result.success) {
+      toast.success('Plantilla de contrato seleccionada');
+      setShowContratoPreview(false);
+      setSelectedTemplate(null);
+      loadRegistroCierre();
+    } else {
+      toast.error(result.error || 'Error al guardar plantilla');
+    }
+  };
+
+  const handlePagoSuccess = () => {
+    loadRegistroCierre();
+  };
+
+  // Cargar cotización completa cuando se abre el preview
+  const handleOpenPreview = async () => {
+    setLoadingCotizacion(true);
+    setShowCotizacionPreview(true);
+
+    try {
+      const result = await getCotizacionById(cotizacion.id, studioSlug);
+      if (result.success && result.data) {
+        setCotizacionCompleta(result.data);
+      } else {
+        toast.error('Error al cargar la cotización');
+        setShowCotizacionPreview(false);
+      }
+    } catch (error) {
+      console.error('[handleOpenPreview] Error:', error);
+      toast.error('Error al cargar la cotización');
+      setShowCotizacionPreview(false);
+    } finally {
+      setLoadingCotizacion(false);
+    }
+  };
   // Calcular completitud de datos del cliente
   const clientCompletion = {
     name: !!promiseData.name?.trim(),
@@ -47,9 +196,44 @@ export function PromiseClosingProcessCard({
     (Object.values(clientCompletion).filter(Boolean).length / 4) * 100
   );
 
-  // Verificar si tiene condiciones comerciales
+  // Verificar si tiene condiciones comerciales y formatear descripción
   const hasCondiciones = !!cotizacion.condiciones_comerciales_id;
-  const condicionNombre = cotizacion.condiciones_comerciales?.name || 'No definidas';
+  
+  const getCondicionTexto = () => {
+    if (!registroCierre?.condiciones_comerciales) return 'No definidas';
+    
+    const condicion = registroCierre.condiciones_comerciales;
+    const partes: string[] = [];
+    
+    // Nombre base
+    let texto = condicion.name;
+    
+    // Agregar descripción si existe
+    if (condicion.description) {
+      texto += ` (${condicion.description})`;
+    }
+    
+    // Agregar anticipo
+    if (condicion.advance_type === 'percentage' && condicion.advance_percentage) {
+      partes.push(`Anticipo ${condicion.advance_percentage}%`);
+    } else if (condicion.advance_type === 'amount' && condicion.advance_amount) {
+      partes.push(`Anticipo $${condicion.advance_amount.toLocaleString('es-MX')}`);
+    }
+    
+    // Agregar descuento
+    if (condicion.discount_percentage) {
+      partes.push(`Descuento ${condicion.discount_percentage}%`);
+    }
+    
+    // Si hay detalles adicionales, agregarlos
+    if (partes.length > 0) {
+      texto += ` • ${partes.join(' • ')}`;
+    }
+    
+    return texto;
+  };
+  
+  const condicionTexto = getCondicionTexto();
 
   // Determinar estado del contrato
   const isClienteNuevo = cotizacion.selected_by_prospect === true;
@@ -57,6 +241,7 @@ export function PromiseClosingProcessCard({
   let contratoIcon: React.ReactNode;
   let contratoEstado: string;
   let contratoColor: string;
+  let contratoBoton: string | null = null;
 
   if (isClienteNuevo) {
     switch (cotizacion.status) {
@@ -64,72 +249,108 @@ export function PromiseClosingProcessCard({
         contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
         contratoEstado = 'Pendiente de confirmación del cliente';
         contratoColor = 'text-amber-400';
+        contratoBoton = null; // No editable en flujo automático
         break;
       case 'contract_generated':
         contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
         contratoEstado = 'Generado, esperando firma del cliente';
         contratoColor = 'text-blue-400';
+        contratoBoton = null; // No editable en flujo automático
         break;
       case 'contract_signed':
         contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
         contratoEstado = 'Firmado por el cliente';
         contratoColor = 'text-emerald-400';
+        contratoBoton = null; // No editable en flujo automático
         break;
       default:
         contratoIcon = <AlertCircle className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5" />;
         contratoEstado = 'Estado desconocido';
         contratoColor = 'text-zinc-400';
+        contratoBoton = null;
     }
   } else {
-    // Cliente Legacy
-    contratoIcon = <CheckCircle2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5" />;
-    contratoEstado = 'No requerido (flujo manual)';
-    contratoColor = 'text-zinc-400';
+    // Cliente Legacy - Manual
+    if (registroCierre?.contrato_definido && registroCierre?.contract_template_id) {
+      contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+      contratoEstado = ''; // No mostrar texto, la plantilla se muestra abajo
+      contratoColor = 'text-emerald-400';
+      contratoBoton = 'Editar';
+    } else {
+      contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+      contratoEstado = 'No definido';
+      contratoColor = 'text-amber-400';
+      contratoBoton = 'Definir';
+    }
   }
 
-  // TODO: Determinar estado del pago (requiere consulta a DB)
-  const pagoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
-  const pagoEstado = 'No registrado';
-  const pagoColor = 'text-amber-400';
+  // Determinar estado del pago
+  let pagoIcon: React.ReactNode;
+  let pagoEstado: string;
+  let pagoColor: string;
+
+  // Si hay concepto y monto, es pago registrado
+  if (registroCierre?.pago_concepto && registroCierre?.pago_monto) {
+    pagoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+    pagoEstado = `${registroCierre.pago_concepto}: $${registroCierre.pago_monto.toLocaleString('es-MX')}`;
+    pagoColor = 'text-emerald-400';
+  } else if (registroCierre?.pago_registrado === false) {
+    // Si pago_registrado es explícitamente false, es promesa de pago
+    pagoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+    pagoEstado = 'Promesa de pago';
+    pagoColor = 'text-blue-400';
+  } else {
+    // Si no hay nada definido
+    pagoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+    pagoEstado = 'No definido';
+    pagoColor = 'text-amber-400';
+  }
 
   if (isLoadingPromiseData) {
     return (
-      <ZenCard className="mb-4">
-        <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
+      <ZenCard className="h-full flex flex-col">
+        <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="h-2 w-2 rounded-full bg-zinc-600 shrink-0" />
             <ZenCardTitle className="text-sm">En Proceso de Cierre</ZenCardTitle>
           </div>
         </ZenCardHeader>
-        <ZenCardContent className="p-4">
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
-          </div>
+        <ZenCardContent className="p-4 flex-1 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
         </ZenCardContent>
       </ZenCard>
     );
   }
 
   return (
-    <ZenCard className="mb-4">
-      <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
+    <ZenCard className="h-full flex flex-col">
+      <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className={`h-2 w-2 rounded-full shrink-0 ${
+            cotizacion.status === 'en_cierre' 
+              ? 'bg-emerald-500 animate-pulse' 
+              : 'bg-emerald-500'
+          }`} />
           <ZenCardTitle className="text-sm">En Proceso de Cierre</ZenCardTitle>
         </div>
       </ZenCardHeader>
 
-      <ZenCardContent className="p-4">
-        {/* Header: Nombre + Monto */}
-        <div className="mb-4">
-          <h4 className="text-base font-semibold text-white mb-1">{cotizacion.name}</h4>
-          <p className="text-2xl font-bold text-emerald-400">
-            ${cotizacion.price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-          </p>
+      <ZenCardContent className="p-4 flex-1 overflow-y-auto">
+        {/* Header: Nombre + Preview */}
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h4 className="text-base font-semibold text-white flex-1">{cotizacion.name}</h4>
+          <button
+            onClick={handleOpenPreview}
+            disabled={loadingCotizacion}
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 transition-colors text-xs text-zinc-300 hover:text-white shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Eye className="h-3 w-3" />
+            {loadingCotizacion ? 'Cargando...' : 'Preview'}
+          </button>
         </div>
 
         {/* Indicadores de Progreso */}
-        <div className="space-y-3 mb-5">
+        <div className="space-y-4 mb-5">
           {/* Datos del Cliente */}
           <div className="flex items-center gap-2.5 text-sm">
             {clientPercentage === 100 ? (
@@ -149,43 +370,237 @@ export function PromiseClosingProcessCard({
 
           {/* Condiciones Comerciales */}
           <div className="flex items-start gap-2.5 text-sm">
-            {hasCondiciones ? (
+            {loadingRegistro ? (
+              <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
+            ) : registroCierre?.condiciones_comerciales_definidas ? (
               <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
             ) : (
               <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
             )}
             <div className="flex-1 min-w-0">
-              <span className="text-zinc-300 block">Condiciones comerciales</span>
-              <p className={`text-xs mt-0.5 ${hasCondiciones ? 'text-zinc-400' : 'text-amber-400'}`}>
-                {condicionNombre}
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-300 block">Condiciones comerciales</span>
+                <button
+                  onClick={() => setShowCondicionesModal(true)}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  {registroCierre?.condiciones_comerciales_definidas ? 'Editar' : 'Definir'}
+                </button>
+              </div>
+              <p className={`text-xs mt-0.5 leading-relaxed ${registroCierre?.condiciones_comerciales_definidas ? 'text-zinc-400' : 'text-amber-400'}`}>
+                {condicionTexto}
               </p>
             </div>
           </div>
 
           {/* Contrato */}
-          <div className="flex items-start gap-2.5 text-sm">
-            {contratoIcon}
-            <div className="flex-1 min-w-0">
-              <span className="text-zinc-300 block">Contrato digital</span>
-              <p className={`text-xs mt-0.5 ${contratoColor}`}>{contratoEstado}</p>
+          <div className="space-y-2">
+            <div className="flex items-start gap-2.5 text-sm">
+              {loadingRegistro ? (
+                <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
+              ) : (
+                contratoIcon
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-300 block">Contrato digital</span>
+                  {!isClienteNuevo && contratoBoton && (
+                    <button
+                      onClick={() => {
+                        if (registroCierre?.contract_template_id) {
+                          // Si ya hay plantilla, abrir modal de opciones
+                          if ((window as any).__openContratoDropdown) {
+                            (window as any).__openContratoDropdown();
+                          }
+                        } else {
+                          // Si no hay plantilla, abrir selector
+                          setShowContratoModal(true);
+                        }
+                      }}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                    >
+                      {registroCierre?.contract_template_id ? 'Editar' : 'Generar'}
+                    </button>
+                  )}
+                </div>
+                {contratoEstado && (
+                  <p className={`text-xs mt-0.5 ${contratoColor}`}>{contratoEstado}</p>
+                )}
+              </div>
             </div>
+            
+            {/* Card de gestión de contrato (solo cliente legacy) */}
+            {!isClienteNuevo && contratoBoton && (
+              <div className="ml-6">
+                <ContratoGestionCard
+                  studioSlug={studioSlug}
+                  promiseId={promiseId}
+                  cotizacionId={cotizacion.id}
+                  eventTypeId={cotizacion.event_type_id}
+                  selectedTemplateId={registroCierre?.contract_template_id}
+                  condicionesComerciales={registroCierre?.condiciones_comerciales as any}
+                  promiseData={promiseData}
+                  onSuccess={handleContratoSuccess}
+                  onOpenDropdown={() => {}}
+                />
+              </div>
+            )}
           </div>
 
           {/* Pago Inicial */}
           <div className="flex items-start gap-2.5 text-sm">
-            {pagoIcon}
+            {loadingRegistro ? (
+              <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
+            ) : (
+              pagoIcon
+            )}
             <div className="flex-1 min-w-0">
-              <span className="text-zinc-300 block">Pago inicial</span>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-300 block">Pago inicial</span>
+                <button
+                  onClick={() => setShowPagoModal(true)}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  {registroCierre?.pago_registrado ? 'Editar' : 'Registrar'}
+                </button>
+              </div>
               <p className={`text-xs mt-0.5 ${pagoColor}`}>{pagoEstado}</p>
             </div>
           </div>
         </div>
 
-        {/* CTA */}
-        <ZenButton variant="primary" className="w-full" onClick={onAuthorizeClick}>
-          Autorizar y Crear Evento
-        </ZenButton>
+        {/* Resumen Financiero (si hay condiciones definidas) */}
+        {registroCierre?.condiciones_comerciales_definidas && registroCierre?.condiciones_comerciales && (
+          <div className="mb-4">
+            <CondicionesFinancierasResumen
+              precioBase={cotizacion.price}
+              condicion={registroCierre.condiciones_comerciales as any}
+            />
+          </div>
+        )}
+
+        {/* CTAs */}
+        <div className="space-y-2">
+          <ZenButton variant="primary" className="w-full" onClick={onAuthorizeClick}>
+            Autorizar y Crear Evento
+          </ZenButton>
+          <ZenButton
+            variant="outline"
+            className="w-full text-zinc-400 hover:text-red-400 hover:border-red-500"
+            onClick={() => setShowCancelModal(true)}
+          >
+            <XCircle className="h-4 w-4 mr-2" />
+            Cancelar Cierre
+          </ZenButton>
+        </div>
       </ZenCardContent>
+
+      {/* Modal de Confirmación Cancelar Cierre */}
+      <ZenConfirmModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={handleCancelarCierre}
+        title="¿Cancelar proceso de cierre?"
+        description={
+          <div className="space-y-3">
+            <p className="text-sm text-zinc-300">
+              Al cancelar el proceso de cierre:
+            </p>
+            <ul className="text-sm text-zinc-400 space-y-2 list-disc list-inside">
+              <li>La cotización regresará a estado <strong className="text-zinc-300">Pendiente</strong></li>
+              <li>Se eliminarán todas las definiciones guardadas (condiciones, contrato, pago)</li>
+              <li>Las demás cotizaciones permanecerán <strong className="text-zinc-300">Archivadas</strong></li>
+              <li>Podrás volver a iniciar el proceso de cierre cuando lo necesites</li>
+            </ul>
+          </div>
+        }
+        confirmText={isCancelling ? 'Cancelando...' : 'Sí, cancelar cierre'}
+        cancelText="No, mantener en cierre"
+        variant="default"
+        loading={isCancelling}
+      />
+
+      {/* Modal Condiciones Comerciales */}
+      <CondicionesComercialeSelectorSimpleModal
+        isOpen={showCondicionesModal}
+        onClose={() => setShowCondicionesModal(false)}
+        studioSlug={studioSlug}
+        cotizacionId={cotizacion.id}
+        selectedId={registroCierre?.condiciones_comerciales_id}
+        onSuccess={handleCondicionesSuccess}
+      />
+
+      {/* Modal Selector de Plantilla de Contrato */}
+      <ContractTemplateSimpleSelectorModal
+        isOpen={showContratoModal}
+        onClose={() => setShowContratoModal(false)}
+        onSelect={handleTemplateSelected}
+        studioSlug={studioSlug}
+        eventTypeId={cotizacion.event_type_id}
+      />
+
+      {/* Modal Pago */}
+      <RegistroPagoModal
+        isOpen={showPagoModal}
+        onClose={() => setShowPagoModal(false)}
+        studioSlug={studioSlug}
+        cotizacionId={cotizacion.id}
+        pagoData={(registroCierre?.pago_concepto || registroCierre?.pago_monto) ? {
+          concepto: registroCierre.pago_concepto,
+          monto: registroCierre.pago_monto,
+          fecha: registroCierre.pago_fecha,
+          metodo_id: registroCierre.pago_metodo_id,
+        } : null}
+        paymentMethods={[]}
+        onSuccess={handlePagoSuccess}
+      />
+
+      {/* Modal Preview de Cotización */}
+      <ZenDialog
+        isOpen={showCotizacionPreview}
+        onClose={() => setShowCotizacionPreview(false)}
+        title={`Cotización: ${cotizacion.name}`}
+        description="Vista previa completa de la cotización"
+        maxWidth="4xl"
+        onCancel={() => setShowCotizacionPreview(false)}
+        cancelLabel="Cerrar"
+        zIndex={10070}
+      >
+        {loadingCotizacion ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+          </div>
+        ) : cotizacionCompleta ? (
+          <ResumenCotizacion
+            cotizacion={cotizacionCompleta}
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+          />
+        ) : (
+          <div className="text-center py-8 text-zinc-400">
+            No se pudo cargar la cotización
+          </div>
+        )}
+      </ZenDialog>
+
+      {/* Modal Preview de Contrato */}
+      {selectedTemplate && promiseData && (
+        <ContractPreviewForPromiseModal
+          isOpen={showContratoPreview}
+          onClose={() => {
+            setShowContratoPreview(false);
+            setSelectedTemplate(null);
+          }}
+          onConfirm={handlePreviewConfirm}
+          onEdit={() => {}}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+          cotizacionId={cotizacion.id}
+          template={selectedTemplate}
+          customContent={null}
+          condicionesComerciales={registroCierre?.condiciones_comerciales as any}
+        />
+      )}
     </ZenCard>
   );
 }

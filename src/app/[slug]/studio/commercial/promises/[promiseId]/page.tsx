@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, FileText } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, FileText, Share2, ExternalLink, Settings, Copy, ChevronDown, Check } from 'lucide-react';
 import { PromiseNotesButton } from './components/PromiseNotesButton';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal } from '@/components/ui/zen';
+import { PromiseShareOptionsModal } from './components/PromiseShareOptionsModal';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal, ZenBadge } from '@/components/ui/zen';
 import { PromiseCardView } from './components/PromiseCardView';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
 import dynamic from 'next/dynamic';
@@ -40,6 +41,7 @@ export default function EditarPromesaPage() {
   const [currentPipelineStageId, setCurrentPipelineStageId] = useState<string | null>(null);
   const [isChangingStage, setIsChangingStage] = useState(false);
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [promiseData, setPromiseData] = useState<{
     id: string;
     name: string;
@@ -452,23 +454,78 @@ export default function EditarPromesaPage() {
               >
                 <ArrowLeft className="h-4 w-4" />
               </ZenButton>
-              <div>
+              <div className="flex items-baseline gap-2">
                 <ZenCardTitle>Promesa</ZenCardTitle>
-                <ZenCardDescription>
-                  Información de la promesa de evento
-                </ZenCardDescription>
+                {(() => {
+                  // Verificar estado del evento primero
+                  if (loading || !pipelineStages.length || !currentPipelineStageId || !promiseData) {
+                    return (
+                      <div className="flex items-center gap-1.5 pb-0.5">
+                        <Loader2 className="h-3 w-3 animate-spin text-zinc-500" />
+                        <span className="text-xs text-zinc-500">Cargando...</span>
+                      </div>
+                    );
+                  }
+
+                  const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
+                  const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' ||
+                    currentStage?.name.toLowerCase().includes('aprobado');
+                  const hasEvent = promiseData.has_event || false;
+                  const isRestricted = isApprovedStage && hasEvent;
+                  const eventoId = promiseData.evento_id || null;
+
+                  // Filtrar etapas: si está restringido, solo mostrar "archived" además de la actual
+                  const availableStages = isRestricted
+                    ? pipelineStages.filter((s) => s.slug === 'archived' || s.id === currentPipelineStageId)
+                    : pipelineStages;
+
+                  // Determinar variante del badge
+                  const badgeVariant = isArchived ? 'warning' : isApprovedStage ? 'success' : 'default';
+
+                  return (
+                    <ZenDropdownMenu>
+                      <ZenDropdownMenuTrigger asChild>
+                        <button
+                          disabled={isChangingStage}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                        >
+                          {isChangingStage ? (
+                            <>
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              <span>Actualizando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>{currentStage?.name}</span>
+                              <ChevronDown className="h-2.5 w-2.5" />
+                            </>
+                          )}
+                        </button>
+                      </ZenDropdownMenuTrigger>
+                      <ZenDropdownMenuContent align="start">
+                        {availableStages.map((stage) => (
+                          <ZenDropdownMenuItem
+                            key={stage.id}
+                            onClick={() => handlePipelineStageChange(stage.id)}
+                            disabled={stage.id === currentPipelineStageId}
+                          >
+                            <span className="flex-1">{stage.name}</span>
+                            {stage.id === currentPipelineStageId && (
+                              <Check className="h-4 w-4 text-emerald-500 ml-2" />
+                            )}
+                          </ZenDropdownMenuItem>
+                        ))}
+                      </ZenDropdownMenuContent>
+                    </ZenDropdownMenu>
+                  );
+                })()}
               </div>
             </div>
             <div className="flex items-center gap-3">
               {(() => {
-                // Verificar estado del evento primero
+                // Mostrar botón de gestionar evento si está aprobado y tiene evento
                 if (loading || !pipelineStages.length || !currentPipelineStageId || !promiseData) {
-                  return (
-                    <div className="flex items-center gap-2 text-sm text-zinc-500">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Verificando estado...</span>
-                    </div>
-                  );
+                  return null;
                 }
 
                 const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
@@ -478,71 +535,20 @@ export default function EditarPromesaPage() {
                 const isRestricted = isApprovedStage && hasEvent;
                 const eventoId = promiseData.evento_id || null;
 
-                // Si está restringido (tiene cotización aprobada con evento), mostrar mensaje y botón
                 if (isRestricted && eventoId) {
                   return (
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm text-zinc-400">Evento aprobado</span>
-                      <ZenButton
-                        variant="primary"
-                        size="sm"
-                        onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventoId}`)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                      >
-                        Gestionar Evento
-                      </ZenButton>
-                    </div>
+                    <ZenButton
+                      variant="primary"
+                      size="sm"
+                      onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventoId}`)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      Gestionar Evento
+                    </ZenButton>
                   );
                 }
 
-                // Filtrar etapas: si está restringido, solo mostrar "archived" además de la actual
-                const availableStages = isRestricted
-                  ? pipelineStages.filter((s) => s.slug === 'archived' || s.id === currentPipelineStageId)
-                  : pipelineStages;
-
-                return (
-                  <div className="flex flex-col gap-2">
-                    {isRestricted && (
-                      <div className="text-xs text-amber-400 bg-amber-950/20 border border-amber-500/30 rounded px-2 py-1">
-                        Esta promesa tiene un evento asociado. Solo puede archivarse.
-                      </div>
-                    )}
-                    <div className="relative flex items-center">
-                      <select
-                        value={currentPipelineStageId}
-                        onChange={(e) => handlePipelineStageChange(e.target.value)}
-                        disabled={isChangingStage || loading}
-                        className={`pl-3 pr-8 py-1.5 text-sm bg-zinc-900 border rounded-lg text-zinc-100 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed appearance-none ${isChangingStage
-                          ? "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
-                          : isArchived
-                            ? "border-amber-500 focus:ring-amber-500/50 focus:border-amber-500"
-                            : isApprovedStage
-                              ? "border-emerald-500 focus:ring-emerald-500/50 focus:border-emerald-500"
-                              : "border-zinc-700 focus:ring-emerald-500/50 focus:border-emerald-500"
-                          }`}
-                      >
-                        {isChangingStage ? (
-                          <option value={currentPipelineStageId}>Actualizando estado...</option>
-                        ) : (
-                          availableStages.map((stage) => (
-                            <option key={stage.id} value={stage.id}>
-                              {stage.name}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                      {isChangingStage ? (
-                        <Loader2 className="absolute right-2 h-4 w-4 animate-spin text-zinc-400 pointer-events-none" />
-                      ) : (
-                        <div className="absolute right-2 pointer-events-none">
-                          <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
+                return null;
               })()}
               <div className="flex items-center gap-2">
                 {/* Botón de plantillas de contrato */}
@@ -561,6 +567,53 @@ export default function EditarPromesaPage() {
                     promiseId={promiseId}
                     contactId={contactData?.contactId}
                   />
+                )}
+                {/* Botón Compartir */}
+                {promiseId && contactData && (
+                  <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                      <ZenButton
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <Share2 className="h-4 w-4" />
+                        <span>Compartir</span>
+                      </ZenButton>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end">
+                      <ZenDropdownMenuItem
+                        onClick={async () => {
+                          const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
+                          try {
+                            await navigator.clipboard.writeText(previewUrl);
+                            toast.success('Link copiado al portapapeles');
+                          } catch (error) {
+                            toast.error('Error al copiar link');
+                          }
+                        }}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copiar link
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuItem
+                        onClick={() => {
+                          const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
+                          window.open(previewUrl, '_blank');
+                        }}
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Abrir vista previa
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuSeparator />
+                      <ZenDropdownMenuItem
+                        onClick={() => setIsShareModalOpen(true)}
+                      >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Configurar compartir
+                      </ZenDropdownMenuItem>
+                    </ZenDropdownMenuContent>
+                  </ZenDropdownMenu>
                 )}
                 <ZenDropdownMenu>
                   <ZenDropdownMenuTrigger asChild>
@@ -660,6 +713,16 @@ export default function EditarPromesaPage() {
         }}
         onSuccess={handleEditSuccess}
       />
+
+      {/* Modal de Compartir */}
+      {promiseId && (
+        <PromiseShareOptionsModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+        />
+      )}
 
       {/* Modales de confirmación */}
       <ZenConfirmModal
