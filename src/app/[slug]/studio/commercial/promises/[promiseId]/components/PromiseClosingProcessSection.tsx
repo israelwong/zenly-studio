@@ -42,7 +42,6 @@ export function PromiseClosingProcessSection({
     try {
       const result = await getCotizacionesByPromiseId(promiseId);
       if (result.success && result.data) {
-        console.log('[PromiseClosingProcessSection] Cotizaciones cargadas:', result.data);
         setCotizaciones(result.data);
       }
     } catch (error) {
@@ -62,15 +61,12 @@ export function PromiseClosingProcessSection({
     studioSlug,
     promiseId: promiseId || null,
     onCotizacionInserted: () => {
-      console.log('[PromiseClosingProcessSection] Cotización insertada - recargando');
       loadCotizaciones();
     },
-    onCotizacionUpdated: (cotizacionId) => {
-      console.log('[PromiseClosingProcessSection] Cotización actualizada:', cotizacionId);
+    onCotizacionUpdated: () => {
       loadCotizaciones();
     },
-    onCotizacionDeleted: (cotizacionId) => {
-      console.log('[PromiseClosingProcessSection] Cotización eliminada:', cotizacionId);
+    onCotizacionDeleted: () => {
       loadCotizaciones();
     },
   });

@@ -361,12 +361,6 @@ export function PromiseQuotesPanelCard({
   };
 
   const handlePasarACierre = async () => {
-    console.log('[handlePasarACierre] Iniciando - cotizacion:', {
-      id: cotizacion.id,
-      name: cotizacion.name,
-      status: cotizacion.status,
-    });
-
     if (!promiseId) {
       toast.error('No se puede pasar a cierre sin una promesa asociada');
       return;
@@ -374,10 +368,7 @@ export function PromiseQuotesPanelCard({
 
     setLoading(true);
     try {
-      console.log('[handlePasarACierre] Llamando a pasarACierre...');
       const result = await pasarACierre(studioSlug, cotizacion.id);
-      console.log('[handlePasarACierre] Resultado:', result);
-      
       if (result.success) {
         toast.success('Cotización pasada a proceso de cierre');
         onUpdate?.(cotizacion.id);

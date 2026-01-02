@@ -1575,16 +1575,9 @@ export async function pasarACierre(
       return { success: false, error: 'Cotización no encontrada' };
     }
 
-    console.log('[pasarACierre] Cotización encontrada:', {
-      id: cotizacion.id,
-      status: cotizacion.status,
-      name: cotizacion.name,
-    });
-
     // Verificar que la cotización esté pendiente
     if (cotizacion.status !== 'pendiente') {
-      console.log('[pasarACierre] Status no es pendiente:', cotizacion.status);
-      return { success: false, error: `Solo se pueden pasar a cierre cotizaciones pendientes. Status actual: ${cotizacion.status}` };
+      return { success: false, error: 'Solo se pueden pasar a cierre cotizaciones pendientes' };
     }
 
     // Verificar que no haya otra cotización en cierre en la misma promesa
