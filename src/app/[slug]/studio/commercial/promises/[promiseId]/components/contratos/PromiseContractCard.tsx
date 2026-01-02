@@ -46,7 +46,7 @@ import { ContractTemplateSelectorModal } from './ContractTemplateSelectorModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { PromiseContractViewModal } from './PromiseContractViewModal';
 import { ContractVersionsModal } from './ContractVersionsModal';
-import { AuthorizeEventModal } from './AuthorizeEventModal';
+import { AuthorizeEventModal } from '../eventos/AuthorizeEventModal';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { getEventContract, getAllEventContracts, generateEventContract, updateEventContract, deleteEventContract, publishEventContract, requestContractCancellationByStudio, confirmContractCancellationByStudio, rejectContractCancellationByStudio, getContractCancellationLogs, getContractVersions } from '@/lib/actions/studio/business/contracts/contracts.actions';
 

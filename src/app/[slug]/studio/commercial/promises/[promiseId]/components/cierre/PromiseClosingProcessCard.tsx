@@ -17,9 +17,9 @@ import {
 import { ContactEventFormModal } from '@/components/shared/contact-info';
 import { cancelarCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { obtenerRegistroCierre, quitarCondicionesCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
-import { CondicionesComercialeSelectorSimpleModal } from './CondicionesComercialeSelectorSimpleModal';
-import { ContractTemplateSimpleSelectorModal } from './ContractTemplateSimpleSelectorModal';
-import { ContractPreviewForPromiseModal } from './ContractPreviewForPromiseModal';
+import { CondicionesComercialeSelectorSimpleModal } from '../condiciones-comerciales/CondicionesComercialeSelectorSimpleModal';
+import { ContractTemplateSimpleSelectorModal } from '../contratos/ContractTemplateSimpleSelectorModal';
+import { ContractPreviewForPromiseModal } from '../contratos/ContractPreviewForPromiseModal';
 import { ContratoGestionCard } from './ContratoGestionCard';
 import { RegistroPagoModal } from './RegistroPagoModal';
 import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';

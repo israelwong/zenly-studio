@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { ContactEventInfoCard } from '@/components/shared/contact-info';
-import { PromiseQuotesPanel } from './PromiseQuotesPanel';
+import { PromiseQuotesPanel } from './cotizaciones/PromiseQuotesPanel';
 import { PromiseTags } from './PromiseTags';
-import { PromiseAgendamiento } from './PromiseAgendamiento';
+import { PromiseAgendamiento } from './eventos/PromiseAgendamiento';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
-import { AuthorizeCotizacionModal } from './AuthorizeCotizacionModal';
-import { PromiseClosingProcessSection } from './PromiseClosingProcessSection';
+import { AuthorizeCotizacionModal } from './cotizaciones/AuthorizeCotizacionModal';
+import { PromiseClosingProcessSection } from './cierre/PromiseClosingProcessSection';
 
 interface PromiseCardViewProps {
   studioSlug: string;

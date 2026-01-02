@@ -32,7 +32,7 @@ import {
   type CotizacionListItem,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { AuthorizeCotizacionModal } from './AuthorizeCotizacionModal';
-import { ClosingProcessInfoModal, getClosingProcessInfoDismissed } from './ClosingProcessInfoModal';
+import { ClosingProcessInfoModal, getClosingProcessInfoDismissed } from '../cierre/ClosingProcessInfoModal';
 
 interface PromiseQuotesPanelCardProps {
   cotizacion: CotizacionListItem;
