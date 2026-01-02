@@ -39,7 +39,8 @@ interface ContratoGestionCardProps {
     event_type_name: string | null;
   };
   onSuccess?: () => void;
-  onOpenDropdown?: () => void;
+  showOptionsModal?: boolean;
+  onCloseOptionsModal?: () => void;
 }
 
 export function ContratoGestionCard({
@@ -51,7 +52,8 @@ export function ContratoGestionCard({
   condicionesComerciales,
   promiseData,
   onSuccess,
-  onOpenDropdown,
+  showOptionsModal: externalShowOptionsModal,
+  onCloseOptionsModal,
 }: ContratoGestionCardProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | null>(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
@@ -60,7 +62,6 @@ export function ContratoGestionCard({
   const [hasViewedPreview, setHasViewedPreview] = useState(false);
   const [isContractCustomized, setIsContractCustomized] = useState(false);
   const [customizedContent, setCustomizedContent] = useState<string | null>(null);
-  const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showManagerModal, setShowManagerModal] = useState(false);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
 
@@ -71,16 +72,6 @@ export function ContratoGestionCard({
     }
   }, [selectedTemplateId]);
 
-  // Exponer función para abrir modal desde el padre
-  useEffect(() => {
-    // Guardar referencia a la función
-    (window as any).__openContratoDropdown = () => {
-      setShowOptionsModal(true);
-    };
-    return () => {
-      delete (window as any).__openContratoDropdown;
-    };
-  }, []);
 
   const loadTemplate = async (templateId: string) => {
     setLoadingTemplate(true);
@@ -126,13 +117,13 @@ export function ContratoGestionCard({
   };
 
   const handleEditContract = () => {
-    setShowOptionsModal(false);
+    onCloseOptionsModal?.();
     setShowContractPreview(false);
     setShowContractEditor(true);
   };
 
   const handleManageTemplates = () => {
-    setShowOptionsModal(false);
+    onCloseOptionsModal?.();
     setShowManagerModal(true);
   };
 
@@ -285,11 +276,11 @@ export function ContratoGestionCard({
       {/* Modal de Opciones */}
       {selectedTemplate && (
         <ZenDialog
-          isOpen={showOptionsModal}
-          onClose={() => setShowOptionsModal(false)}
+          isOpen={externalShowOptionsModal || false}
+          onClose={() => onCloseOptionsModal?.()}
           title="Opciones de Contrato"
           maxWidth="sm"
-          onCancel={() => setShowOptionsModal(false)}
+          onCancel={() => onCloseOptionsModal?.()}
           cancelLabel="Cerrar"
           zIndex={10070}
         >
@@ -310,7 +301,7 @@ export function ContratoGestionCard({
             <button
               onClick={() => {
                 setShowTemplateSelector(true);
-                setShowOptionsModal(false);
+                onCloseOptionsModal?.();
               }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800 transition-colors text-left"
             >
@@ -335,7 +326,7 @@ export function ContratoGestionCard({
             <button
               onClick={() => {
                 handleRemoveTemplate();
-                setShowOptionsModal(false);
+                onCloseOptionsModal?.();
               }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-red-700/50 hover:border-red-600 hover:bg-red-500/10 transition-colors text-left"
             >

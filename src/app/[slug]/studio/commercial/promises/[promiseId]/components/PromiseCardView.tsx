@@ -254,8 +254,12 @@ export function PromiseCardView({
                 event_date: data.event_date || null,
                 event_name: data.event_name || null,
                 event_type_name: data.event_type_name || null,
+                event_location: data.event_location || null,
               }}
               onAuthorizeClick={() => setShowAuthorizeModal(true)}
+              contactId={contactId || undefined}
+              eventTypeId={data.event_type_id || null}
+              acquisitionChannelId={data.acquisition_channel_id || null}
             />
           </div>
         </div>

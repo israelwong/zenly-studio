@@ -242,6 +242,65 @@ export async function actualizarCondicionesCierre(
 }
 
 /**
+ * Quitar condiciones comerciales del proceso de cierre
+ */
+export async function quitarCondicionesCierre(
+  studioSlug: string,
+  cotizacionId: string
+): Promise<CierreResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    // Verificar que la cotización pertenece al studio
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        studio_id: studio.id,
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    // Actualizar registro de cierre para quitar condiciones
+    const registro = await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: {
+        condiciones_comerciales_id: null,
+        condiciones_comerciales_definidas: false,
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return {
+      success: true,
+      data: {
+        id: registro.id,
+        cotizacion_id: registro.cotizacion_id,
+      },
+    };
+  } catch (error) {
+    console.error('[quitarCondicionesCierre] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al quitar condiciones comerciales',
+    };
+  }
+}
+
+/**
  * Actualiza el contrato en el registro de cierre
  */
 export async function actualizarContratoCierre(

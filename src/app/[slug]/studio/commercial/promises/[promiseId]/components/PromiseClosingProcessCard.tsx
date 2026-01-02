@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, XCircle, Eye } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, XCircle, Eye, MoreVertical, Edit2 } from 'lucide-react';
 import {
   ZenCard,
   ZenCardContent,
@@ -9,9 +9,14 @@ import {
   ZenCardTitle,
   ZenButton,
   ZenConfirmModal,
+  ZenDropdownMenu,
+  ZenDropdownMenuTrigger,
+  ZenDropdownMenuContent,
+  ZenDropdownMenuItem,
 } from '@/components/ui/zen';
+import { ContactEventFormModal } from '@/components/shared/contact-info';
 import { cancelarCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
-import { obtenerRegistroCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import { obtenerRegistroCierre, quitarCondicionesCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { CondicionesComercialeSelectorSimpleModal } from './CondicionesComercialeSelectorSimpleModal';
 import { ContractTemplateSimpleSelectorModal } from './ContractTemplateSimpleSelectorModal';
 import { ContractPreviewForPromiseModal } from './ContractPreviewForPromiseModal';
@@ -36,12 +41,16 @@ interface PromiseClosingProcessCardProps {
     event_date: Date | null;
     event_name: string | null;
     event_type_name: string | null;
+    event_location?: string | null;
   };
   studioSlug: string;
   promiseId: string;
   onAuthorizeClick: () => void;
   isLoadingPromiseData?: boolean;
   onCierreCancelado?: (cotizacionId: string) => void;
+  contactId?: string;
+  eventTypeId?: string | null;
+  acquisitionChannelId?: string | null;
 }
 
 export function PromiseClosingProcessCard({
@@ -52,6 +61,9 @@ export function PromiseClosingProcessCard({
   onAuthorizeClick,
   isLoadingPromiseData = false,
   onCierreCancelado,
+  contactId,
+  eventTypeId,
+  acquisitionChannelId,
 }: PromiseClosingProcessCardProps) {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -59,10 +71,14 @@ export function PromiseClosingProcessCard({
   const [showContratoModal, setShowContratoModal] = useState(false);
   const [showContratoPreview, setShowContratoPreview] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | null>(null);
+  const [showContratoOptionsModal, setShowContratoOptionsModal] = useState(false);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [showCotizacionPreview, setShowCotizacionPreview] = useState(false);
   const [cotizacionCompleta, setCotizacionCompleta] = useState<any>(null);
   const [loadingCotizacion, setLoadingCotizacion] = useState(false);
+  const [isRemovingCondiciones, setIsRemovingCondiciones] = useState(false);
+  const [showEditPromiseModal, setShowEditPromiseModal] = useState(false);
+  const [localPromiseData, setLocalPromiseData] = useState(promiseData);
   
   // Estado del registro de cierre
   const [registroCierre, setRegistroCierre] = useState<{
@@ -86,6 +102,11 @@ export function PromiseClosingProcessCard({
     } | null;
   } | null>(null);
   const [loadingRegistro, setLoadingRegistro] = useState(true);
+
+  // Sincronizar promiseData local con prop
+  useEffect(() => {
+    setLocalPromiseData(promiseData);
+  }, [promiseData]);
 
   // Cargar registro de cierre
   useEffect(() => {
@@ -167,6 +188,39 @@ export function PromiseClosingProcessCard({
     loadRegistroCierre();
   };
 
+  const handleQuitarCondiciones = async () => {
+    setIsRemovingCondiciones(true);
+    try {
+      const result = await quitarCondicionesCierre(studioSlug, cotizacion.id);
+      if (result.success) {
+        toast.success('Condiciones comerciales removidas');
+        loadRegistroCierre();
+      } else {
+        toast.error(result.error || 'Error al quitar condiciones');
+      }
+    } catch (error) {
+      console.error('Error al quitar condiciones:', error);
+      toast.error('Error al quitar condiciones');
+    } finally {
+      setIsRemovingCondiciones(false);
+    }
+  };
+
+  const handlePromiseDataUpdated = (updatedData: any) => {
+    // Actualizar datos locales inmediatamente
+    setLocalPromiseData({
+      name: updatedData.name || localPromiseData.name,
+      phone: updatedData.phone || localPromiseData.phone,
+      email: updatedData.email || localPromiseData.email,
+      address: updatedData.address || localPromiseData.address,
+      event_date: updatedData.event_date || localPromiseData.event_date,
+      event_name: updatedData.event_name || localPromiseData.event_name,
+      event_type_name: updatedData.event_type_name || localPromiseData.event_type_name,
+      event_location: updatedData.event_location || localPromiseData.event_location,
+    });
+    toast.success('Datos actualizados correctamente');
+  };
+
   // Cargar cotización completa cuando se abre el preview
   const handleOpenPreview = async () => {
     setLoadingCotizacion(true);
@@ -188,16 +242,19 @@ export function PromiseClosingProcessCard({
       setLoadingCotizacion(false);
     }
   };
-  // Calcular completitud de datos del cliente
+  // Calcular completitud de datos del cliente para contrato (usar datos locales)
   const clientCompletion = {
-    name: !!promiseData.name?.trim(),
-    phone: !!promiseData.phone?.trim(),
-    email: !!promiseData.email?.trim(),
-    address: !!promiseData.address?.trim(),
+    name: !!localPromiseData.name?.trim(),
+    phone: !!localPromiseData.phone?.trim(),
+    email: !!localPromiseData.email?.trim(),
+    address: !!localPromiseData.address?.trim(),
+    event_name: !!localPromiseData.event_name?.trim(),
+    event_location: !!(localPromiseData.event_location?.trim() || localPromiseData.address?.trim()),
+    event_date: !!localPromiseData.event_date,
   };
-  const clientPercentage = Math.round(
-    (Object.values(clientCompletion).filter(Boolean).length / 4) * 100
-  );
+  const completedFields = Object.values(clientCompletion).filter(Boolean).length;
+  const totalFields = Object.keys(clientCompletion).length;
+  const clientPercentage = Math.round((completedFields / totalFields) * 100);
 
   // Verificar si tiene condiciones comerciales y formatear descripción
   const hasCondiciones = !!cotizacion.condiciones_comerciales_id;
@@ -352,71 +409,171 @@ export function PromiseClosingProcessCard({
           </button>
         </div>
 
-        {/* Indicadores de Progreso */}
-        <div className="space-y-4 mb-5">
-          {/* Datos del Cliente */}
-          <div className="flex items-center gap-2.5 text-sm">
-            {clientPercentage === 100 ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-            ) : (
-              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
-            )}
-            <span className="text-zinc-300 flex-1">Datos del cliente</span>
-            <span
-              className={`font-medium tabular-nums ${
-                clientPercentage === 100 ? 'text-emerald-400' : 'text-amber-400'
-              }`}
-            >
-              {clientPercentage}%
-            </span>
-          </div>
-
-          {/* Condiciones Comerciales */}
-          <div className="flex items-start gap-2.5 text-sm">
-            {loadingRegistro ? (
-              <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
-            ) : registroCierre?.condiciones_comerciales_definidas ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-300 block">Condiciones comerciales</span>
-                <button
-                  onClick={() => setShowCondicionesModal(true)}
-                  className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-                >
-                  {registroCierre?.condiciones_comerciales_definidas ? 'Editar' : 'Definir'}
-                </button>
+        <div className="space-y-2 mb-4">
+          {/* CONDICIONES COMERCIALES */}
+          {registroCierre?.condiciones_comerciales_definidas && registroCierre?.condiciones_comerciales ? (
+            <CondicionesFinancierasResumen
+              precioBase={cotizacion.price}
+              condicion={registroCierre.condiciones_comerciales as any}
+              dropdownMenu={
+                <ZenDropdownMenu>
+                  <ZenDropdownMenuTrigger asChild>
+                    <button
+                      className="h-5 w-5 p-0 rounded hover:bg-zinc-700/50 transition-colors flex items-center justify-center"
+                      disabled={isRemovingCondiciones}
+                    >
+                      <MoreVertical className="h-3.5 w-3.5 text-zinc-400" />
+                    </button>
+                  </ZenDropdownMenuTrigger>
+                  <ZenDropdownMenuContent align="end">
+                    <ZenDropdownMenuItem
+                      onClick={() => setShowCondicionesModal(true)}
+                      disabled={isRemovingCondiciones}
+                    >
+                      Cambiar condición comercial
+                    </ZenDropdownMenuItem>
+                    <ZenDropdownMenuItem
+                      onClick={handleQuitarCondiciones}
+                      disabled={isRemovingCondiciones}
+                      className="text-red-400 focus:text-red-300"
+                    >
+                      {isRemovingCondiciones ? 'Desasociando...' : 'Desasociar condición comercial'}
+                    </ZenDropdownMenuItem>
+                  </ZenDropdownMenuContent>
+                </ZenDropdownMenu>
+              }
+            />
+          ) : (
+            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+              <div className="flex items-start gap-2">
+                {loadingRegistro ? (
+                  <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
+                      Condiciones Comerciales
+                    </span>
+                    <button
+                      onClick={() => setShowCondicionesModal(true)}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                    >
+                      Definir
+                    </button>
+                  </div>
+                  <span className="text-sm text-zinc-300">
+                    No definidas
+                  </span>
+                </div>
               </div>
-              <p className={`text-xs mt-0.5 leading-relaxed ${registroCierre?.condiciones_comerciales_definidas ? 'text-zinc-400' : 'text-amber-400'}`}>
-                {condicionTexto}
-              </p>
+            </div>
+          )}
+
+          {/* DATOS REQUERIDOS PARA CONTRATO */}
+          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+            <div className="flex items-start gap-2 mb-2">
+              {clientPercentage === 100 ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
+                    Datos Requeridos {completedFields}/{totalFields}
+                  </span>
+                  <button
+                    onClick={() => setShowEditPromiseModal(true)}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                  >
+                    Editar
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-zinc-700/50 pt-2">
+              <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs">
+              <div className="flex items-center gap-1">
+                {clientCompletion.name ? (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                ) : (
+                  <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+                )}
+                <span className={clientCompletion.name ? 'text-zinc-400' : 'text-zinc-500'}>Nombre</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {clientCompletion.phone ? (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                ) : (
+                  <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+                )}
+                <span className={clientCompletion.phone ? 'text-zinc-400' : 'text-zinc-500'}>Teléfono</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {clientCompletion.email ? (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                ) : (
+                  <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+                )}
+                <span className={clientCompletion.email ? 'text-zinc-400' : 'text-zinc-500'}>Correo</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {clientCompletion.address ? (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                ) : (
+                  <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+                )}
+                <span className={clientCompletion.address ? 'text-zinc-400' : 'text-zinc-500'}>Dirección</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {clientCompletion.event_name ? (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                ) : (
+                  <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+                )}
+                <span className={clientCompletion.event_name ? 'text-zinc-400' : 'text-zinc-500'}>Evento</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {clientCompletion.event_location ? (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                ) : (
+                  <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+                )}
+                <span className={clientCompletion.event_location ? 'text-zinc-400' : 'text-zinc-500'}>Locación</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {clientCompletion.event_date ? (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                ) : (
+                  <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+                )}
+                <span className={clientCompletion.event_date ? 'text-zinc-400' : 'text-zinc-500'}>Fecha</span>
+              </div>
+            </div>
             </div>
           </div>
 
-          {/* Contrato */}
-          <div className="space-y-2">
-            <div className="flex items-start gap-2.5 text-sm">
+          {/* CONTRATO DIGITAL */}
+          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+            <div className="flex items-start gap-2">
               {loadingRegistro ? (
                 <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
               ) : (
                 contratoIcon
               )}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-300 block">Contrato digital</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
+                    Contrato Digital
+                  </span>
                   {!isClienteNuevo && contratoBoton && (
                     <button
                       onClick={() => {
                         if (registroCierre?.contract_template_id) {
-                          // Si ya hay plantilla, abrir modal de opciones
-                          if ((window as any).__openContratoDropdown) {
-                            (window as any).__openContratoDropdown();
-                          }
+                          setShowContratoOptionsModal(true);
                         } else {
-                          // Si no hay plantilla, abrir selector
                           setShowContratoModal(true);
                         }
                       }}
@@ -426,15 +583,20 @@ export function PromiseClosingProcessCard({
                     </button>
                   )}
                 </div>
+                {!registroCierre?.contrato_definido && (
+                  <span className="text-sm text-zinc-300">
+                    No definido
+                  </span>
+                )}
                 {contratoEstado && (
-                  <p className={`text-xs mt-0.5 ${contratoColor}`}>{contratoEstado}</p>
+                  <p className={`text-xs ${!registroCierre?.contrato_definido ? 'mt-1' : ''} ${contratoColor}`}>{contratoEstado}</p>
                 )}
               </div>
             </div>
             
-            {/* Card de gestión de contrato (solo cliente legacy) */}
+            {/* Card de gestión de contrato */}
             {!isClienteNuevo && contratoBoton && (
-              <div className="ml-6">
+              <div className="mt-2 pt-2 border-t border-zinc-700/50">
                 <ContratoGestionCard
                   studioSlug={studioSlug}
                   promiseId={promiseId}
@@ -444,43 +606,43 @@ export function PromiseClosingProcessCard({
                   condicionesComerciales={registroCierre?.condiciones_comerciales as any}
                   promiseData={promiseData}
                   onSuccess={handleContratoSuccess}
-                  onOpenDropdown={() => {}}
+                  showOptionsModal={showContratoOptionsModal}
+                  onCloseOptionsModal={() => setShowContratoOptionsModal(false)}
                 />
               </div>
             )}
           </div>
 
-          {/* Pago Inicial */}
-          <div className="flex items-start gap-2.5 text-sm">
-            {loadingRegistro ? (
-              <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
-            ) : (
-              pagoIcon
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-300 block">Pago inicial</span>
-                <button
-                  onClick={() => setShowPagoModal(true)}
-                  className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-                >
-                  {registroCierre?.pago_registrado ? 'Editar' : 'Registrar'}
-                </button>
+          {/* PAGO INICIAL */}
+          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+            <div className="flex items-start gap-2">
+              {loadingRegistro ? (
+                <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
+              ) : (
+                pagoIcon
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
+                    Pago Inicial
+                  </span>
+                  <button
+                    onClick={() => setShowPagoModal(true)}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                  >
+                    {registroCierre?.pago_registrado ? 'Editar' : 'Registrar'}
+                  </button>
+                </div>
+                {!registroCierre?.pago_registrado && (
+                  <span className="text-sm text-zinc-300">
+                    No registrado
+                  </span>
+                )}
+                <p className={`text-xs ${!registroCierre?.pago_registrado ? 'mt-1' : ''} ${pagoColor}`}>{pagoEstado}</p>
               </div>
-              <p className={`text-xs mt-0.5 ${pagoColor}`}>{pagoEstado}</p>
             </div>
           </div>
         </div>
-
-        {/* Resumen Financiero (si hay condiciones definidas) */}
-        {registroCierre?.condiciones_comerciales_definidas && registroCierre?.condiciones_comerciales && (
-          <div className="mb-4">
-            <CondicionesFinancierasResumen
-              precioBase={cotizacion.price}
-              condicion={registroCierre.condiciones_comerciales as any}
-            />
-          </div>
-        )}
 
         {/* CTAs */}
         <div className="space-y-2">
@@ -578,6 +740,7 @@ export function PromiseClosingProcessCard({
             cotizacion={cotizacionCompleta}
             studioSlug={studioSlug}
             promiseId={promiseId}
+            condicionesComerciales={registroCierre?.condiciones_comerciales as any}
           />
         ) : (
           <div className="text-center py-8 text-zinc-400">
@@ -602,6 +765,30 @@ export function PromiseClosingProcessCard({
           template={selectedTemplate}
           customContent={null}
           condicionesComerciales={registroCierre?.condiciones_comerciales as any}
+        />
+      )}
+
+      {/* Modal Editar Datos de Promesa */}
+      {contactId && (
+        <ContactEventFormModal
+          isOpen={showEditPromiseModal}
+          onClose={() => setShowEditPromiseModal(false)}
+          studioSlug={studioSlug}
+          context="promise"
+          initialData={{
+            id: contactId,
+            name: localPromiseData.name,
+            phone: localPromiseData.phone,
+            email: localPromiseData.email || undefined,
+            address: localPromiseData.address || undefined,
+            event_type_id: eventTypeId || undefined,
+            event_name: localPromiseData.event_name || undefined,
+            event_location: localPromiseData.event_location || undefined,
+            event_date: localPromiseData.event_date || undefined,
+            acquisition_channel_id: acquisitionChannelId || undefined,
+            promiseId: promiseId,
+          }}
+          onSuccess={handlePromiseDataUpdated}
         />
       )}
     </ZenCard>

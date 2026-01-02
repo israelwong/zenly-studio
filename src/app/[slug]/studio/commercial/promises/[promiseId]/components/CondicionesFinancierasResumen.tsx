@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { DollarSign } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 interface CondicionComercial {
   id: string;
@@ -16,11 +16,13 @@ interface CondicionComercial {
 interface CondicionesFinancierasResumenProps {
   precioBase: number;
   condicion: CondicionComercial;
+  dropdownMenu?: React.ReactNode;
 }
 
 export function CondicionesFinancierasResumen({
   precioBase,
   condicion,
+  dropdownMenu,
 }: CondicionesFinancierasResumenProps) {
   // Calcular descuento
   const descuentoMonto = condicion.discount_percentage
@@ -54,20 +56,32 @@ export function CondicionesFinancierasResumen({
   return (
     <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
       {/* Header */}
-      <div className="flex items-start gap-2 pb-3 border-b border-zinc-700">
-        <DollarSign className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-2">
+        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-semibold text-white">{condicion.name}</h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
+              Condiciones Comerciales
+            </h4>
+            {dropdownMenu}
+          </div>
+        </div>
+      </div>
+
+      {/* Divisor */}
+      <div className="border-t border-zinc-700 pt-3">
+        {/* Nombre y descripción de la condición */}
+        <div className="mb-3 border-l-2 border-emerald-500 pl-3">
+          <h5 className="text-sm font-semibold text-white">{condicion.name}</h5>
           {condicion.description && (
             <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2">
               {condicion.description}
             </p>
           )}
         </div>
-      </div>
 
-      {/* Desglose Financiero */}
-      <div className="space-y-2 text-sm">
+        {/* Desglose Financiero */}
+        <div className="space-y-2 text-sm">
         {/* Precio Base */}
         <div className="flex justify-between items-center">
           <span className="text-zinc-400">Precio base:</span>
@@ -124,12 +138,13 @@ export function CondicionesFinancierasResumen({
           </div>
         )}
 
-        {/* Total a Pagar */}
-        <div className="flex justify-between items-center pt-3 border-t border-zinc-700">
-          <span className="text-white font-semibold">Total a pagar:</span>
-          <span className="text-emerald-400 font-bold text-lg tabular-nums">
-            ${formatMoney(totalAPagar)}
-          </span>
+          {/* Total a Pagar */}
+          <div className="flex justify-between items-center pt-3 border-t border-zinc-700">
+            <span className="text-white font-semibold">Total a pagar:</span>
+            <span className="text-emerald-400 font-bold text-lg tabular-nums">
+              ${formatMoney(totalAPagar)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

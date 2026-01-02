@@ -20,8 +20,12 @@ interface PromiseClosingProcessSectionProps {
     event_date: Date | null;
     event_name: string | null;
     event_type_name: string | null;
+    event_location?: string | null;
   };
   onAuthorizeClick: () => void;
+  contactId?: string;
+  eventTypeId?: string | null;
+  acquisitionChannelId?: string | null;
 }
 
 export function PromiseClosingProcessSection({
@@ -29,6 +33,9 @@ export function PromiseClosingProcessSection({
   promiseId,
   promiseData,
   onAuthorizeClick,
+  contactId,
+  eventTypeId,
+  acquisitionChannelId,
 }: PromiseClosingProcessSectionProps) {
   const [cotizaciones, setCotizaciones] = useState<CotizacionListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,6 +138,9 @@ export function PromiseClosingProcessSection({
         onCierreCancelado={() => {
           // Realtime sincronizará automáticamente ambos componentes
         }}
+        contactId={contactId}
+        eventTypeId={eventTypeId}
+        acquisitionChannelId={acquisitionChannelId}
       />
     );
   }
