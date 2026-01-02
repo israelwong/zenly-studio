@@ -109,9 +109,9 @@ export function PromiseClosingProcessCard({
   const handleCancelarCierre = async () => {
     setIsCancelling(true);
     try {
-      const result = await cancelarCierre(studioSlug, cotizacion.id, false);
+      const result = await cancelarCierre(studioSlug, cotizacion.id, true);
       if (result.success) {
-        toast.success('Proceso de cierre cancelado. Cotización regresada a pendiente.');
+        toast.success('Proceso de cierre cancelado. Cotizaciones desarchivadas.');
         setShowCancelModal(false);
         // Notificar al padre para actualizar el panel de cotizaciones
         onCierreCancelado?.(cotizacion.id);

@@ -505,18 +505,27 @@ export function PromiseQuotesPanelCard({
                   }`}>
                   ${(cotizacion.price - (cotizacion.discount || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </span>
-                <ZenBadge
-                  variant={getStatusVariant(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full ${cotizacion.selected_by_prospect && (cotizacion.status === 'pendiente' || cotizacion.status === 'pending')
-                    ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                    : ''
-                    }`}
-                >
-                  {getStatusLabel(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
-                  {cotizacion.revision_number && cotizacion.revision_status === 'pending_revision' && (
-                    <span className="ml-1">#{cotizacion.revision_number}</span>
-                  )}
-                </ZenBadge>
+                {cotizacion.archived ? (
+                  <ZenBadge
+                    variant="secondary"
+                    className="text-[10px] px-1.5 py-0.5 rounded-full"
+                  >
+                    Archivada
+                  </ZenBadge>
+                ) : (
+                  <ZenBadge
+                    variant={getStatusVariant(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full ${cotizacion.selected_by_prospect && (cotizacion.status === 'pendiente' || cotizacion.status === 'pending')
+                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                      : ''
+                      }`}
+                  >
+                    {getStatusLabel(cotizacion.status, cotizacion.revision_status, cotizacion.selected_by_prospect)}
+                    {cotizacion.revision_number && cotizacion.revision_status === 'pending_revision' && (
+                      <span className="ml-1">#{cotizacion.revision_number}</span>
+                    )}
+                  </ZenBadge>
+                )}
               </div>
               {/* Mostrar precio original si hay descuento aplicado */}
               {(() => {
@@ -547,19 +556,21 @@ export function PromiseQuotesPanelCard({
             </div>
           </div>
           <div onClick={(e) => e.stopPropagation()}>
-            <ZenDropdownMenu>
-              <ZenDropdownMenuTrigger asChild>
-                <ZenButton
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  disabled={loading || isDuplicating}
-                >
-                  <MoreVertical className="h-4 w-4 text-zinc-400" />
-                </ZenButton>
-              </ZenDropdownMenuTrigger>
-              <ZenDropdownMenuContent align="end">
-                {cotizacion.archived ? (
+            {/* Ocultar menú si es archivada Y hay cotización en cierre */}
+            {!(cotizacion.archived && hasApprovedQuote) && (
+              <ZenDropdownMenu>
+                <ZenDropdownMenuTrigger asChild>
+                  <ZenButton
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    disabled={loading || isDuplicating}
+                  >
+                    <MoreVertical className="h-4 w-4 text-zinc-400" />
+                  </ZenButton>
+                </ZenDropdownMenuTrigger>
+                <ZenDropdownMenuContent align="end">
+                  {cotizacion.archived ? (
                   <>
                     <ZenDropdownMenuItem
                       onClick={(e) => {
@@ -647,8 +658,8 @@ export function PromiseQuotesPanelCard({
                         Cancelar
                       </ZenDropdownMenuItem>
                     ) : (
-                      // Solo mostrar botón Pasar a Cierre si no hay otra cotización aprobada o en cierre
-                      !hasApprovedQuote && (
+                      // Solo mostrar botón Pasar a Cierre si no hay otra cotización aprobada o en cierre Y no está archivada
+                      !hasApprovedQuote && !cotizacion.archived && (
                         <ZenDropdownMenuItem
                           onClick={handlePasarACierreClick}
                           disabled={loading || isDuplicating || !promiseId}
@@ -679,8 +690,9 @@ export function PromiseQuotesPanelCard({
                     )}
                   </>
                 )}
-              </ZenDropdownMenuContent>
-            </ZenDropdownMenu>
+                </ZenDropdownMenuContent>
+              </ZenDropdownMenu>
+            )}
           </div>
         </div>
       </div>

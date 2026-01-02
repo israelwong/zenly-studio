@@ -1606,13 +1606,26 @@ export async function pasarACierre(
         },
       });
 
-      // 2. Crear registro de cierre (si no existe)
+      // 2. Crear registro de cierre limpio (resetear si ya existe)
       await tx.studio_cotizaciones_cierre.upsert({
         where: { cotizacion_id: cotizacionId },
         create: {
           cotizacion_id: cotizacionId,
         },
-        update: {}, // No actualizar si ya existe
+        update: {
+          // Limpiar todos los campos si el registro ya existía
+          condiciones_comerciales_id: null,
+          condiciones_comerciales_definidas: false,
+          contract_template_id: null,
+          contract_content: null,
+          contrato_definido: false,
+          pago_registrado: false,
+          pago_concepto: null,
+          pago_monto: null,
+          pago_fecha: null,
+          pago_metodo_id: null,
+          updated_at: new Date(),
+        },
       });
 
       // 3. Archivar todas las demás cotizaciones pendientes de la misma promesa

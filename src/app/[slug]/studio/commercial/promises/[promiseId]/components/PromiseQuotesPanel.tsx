@@ -269,12 +269,12 @@ export function PromiseQuotesPanel({
     }
   };
 
-  const isMenuDisabled = !eventTypeId || !isSaved;
-
   // Calcular si hay una cotización aprobada o en cierre (no cancelada, no archivada)
   const hasApprovedQuote = cotizaciones.some(
     (c) => (c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved' || c.status === 'en_cierre') && !c.archived && c.status !== 'cancelada'
   );
+
+  const isMenuDisabled = !eventTypeId || !isSaved || hasApprovedQuote;
 
   // Obtener la cotización aprobada o en cierre para el card de cierre
   const approvedQuote = cotizaciones.find(
@@ -402,16 +402,7 @@ export function PromiseQuotesPanel({
           ) : !isHydrated ? (
             <div className="space-y-2">
               {(() => {
-                // Calcular si hay una cotización aprobada (excluyendo la actual si es aprobada)
-                const hasApprovedQuote = cotizaciones.some(
-                  (c) => (c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved') && !c.archived
-                );
-                
                 return cotizacionesParaListado.map((cotizacion) => {
-                  // Esta cotización es aprobada, entonces no hay otra aprobada para ella
-                  const isThisApproved = cotizacion.status === 'aprobada' || cotizacion.status === 'autorizada' || cotizacion.status === 'approved';
-                  const hasOtherApproved = hasApprovedQuote && !isThisApproved;
-                  
                   return (
                     <PromiseQuotesPanelCard
                       key={cotizacion.id}
@@ -420,7 +411,7 @@ export function PromiseQuotesPanel({
                       promiseId={promiseId}
                       contactId={contactId}
                       isDuplicating={duplicatingId === cotizacion.id}
-                      hasApprovedQuote={hasOtherApproved}
+                      hasApprovedQuote={hasApprovedQuote}
                       onDuplicateStart={(id) => setDuplicatingId(id)}
                       onDuplicateComplete={(newCotizacion) => {
                         setDuplicatingId(null);
@@ -480,59 +471,11 @@ export function PromiseQuotesPanel({
                           prev.map((c) => (c.id === id ? { ...c, name: newName } : c))
                         );
                       }}
-                      onPasarACierre={(cotizacionId) => {
-                        // Actualización local optimista: pasar a cierre y archivar otras pendientes
-                        setCotizaciones((prev) => {
-                          const updated = prev.map((c) => {
-                            if (c.id === cotizacionId) {
-                              // Cambiar status a en_cierre
-                              return { ...c, status: 'en_cierre' as const };
-                            } else if (
-                              c.status === 'pendiente' &&
-                              !c.archived &&
-                              c.id !== cotizacionId
-                            ) {
-                              // Archivar otras cotizaciones pendientes
-                              return { ...c, archived: true };
-                            }
-                            return c;
-                          });
-                          // Reordenar: no archivadas primero, luego archivadas
-                          return updated.sort((a, b) => {
-                            if (a.archived && !b.archived) return 1;
-                            if (!a.archived && b.archived) return -1;
-                            const orderA = a.order ?? 0;
-                            const orderB = b.order ?? 0;
-                            return orderA - orderB;
-                          });
-                        });
-                        // Realtime sincronizará automáticamente el proceso de cierre
+                      onPasarACierre={async (cotizacionId) => {
+                        // Realtime sincronizará automáticamente ambos componentes
                       }}
                       onCierreCancelado={(cotizacionId) => {
-                        // Actualización local optimista: regresar a pendiente y desarchivar otras
-                        setCotizaciones((prev) => {
-                          const updated = prev.map((c) => {
-                            if (c.id === cotizacionId) {
-                              // Regresar a pendiente
-                              return { ...c, status: 'pendiente' as const };
-                            } else if (
-                              c.status === 'pendiente' &&
-                              c.archived
-                            ) {
-                              // Desarchivar otras cotizaciones pendientes que fueron archivadas
-                              return { ...c, archived: false };
-                            }
-                            return c;
-                          });
-                          // Reordenar: no archivadas primero, luego archivadas
-                          return updated.sort((a, b) => {
-                            if (a.archived && !b.archived) return 1;
-                            if (!a.archived && b.archived) return -1;
-                            const orderA = a.order ?? 0;
-                            const orderB = b.order ?? 0;
-                            return orderA - orderB;
-                          });
-                        });
+                        // Realtime sincronizará automáticamente ambos componentes
                       }}
                     />
                   );
@@ -550,17 +493,7 @@ export function PromiseQuotesPanel({
                 strategy={verticalListSortingStrategy}
               >
                 <div className={`space-y-2 ${isReordering ? 'pointer-events-none opacity-50' : ''}`}>
-                  {(() => {
-                    // Calcular si hay una cotización aprobada (excluyendo la actual si es aprobada)
-                    const hasApprovedQuote = cotizaciones.some(
-                      (c) => (c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved') && !c.archived
-                    );
-                    
-                    return cotizacionesParaListado.map((cotizacion) => {
-                      // Esta cotización es aprobada, entonces no hay otra aprobada para ella
-                      const isThisApproved = cotizacion.status === 'aprobada' || cotizacion.status === 'autorizada' || cotizacion.status === 'approved';
-                      const hasOtherApproved = hasApprovedQuote && !isThisApproved;
-                      
+                  {cotizacionesParaListado.map((cotizacion) => {
                       return (
                         <PromiseQuotesPanelCard
                           key={cotizacion.id}
@@ -569,7 +502,7 @@ export function PromiseQuotesPanel({
                           promiseId={promiseId}
                           contactId={contactId}
                           isDuplicating={duplicatingId === cotizacion.id}
-                          hasApprovedQuote={hasOtherApproved}
+                          hasApprovedQuote={hasApprovedQuote}
                           onDuplicateStart={(id) => setDuplicatingId(id)}
                           onDuplicateComplete={(newCotizacion) => {
                             setDuplicatingId(null);
@@ -620,64 +553,15 @@ export function PromiseQuotesPanel({
                               prev.map((c) => (c.id === id ? { ...c, name: newName } : c))
                             );
                           }}
-                          onPasarACierre={(cotizacionId) => {
-                            // Actualización local optimista: pasar a cierre y archivar otras pendientes
-                            setCotizaciones((prev) => {
-                              const updated = prev.map((c) => {
-                                if (c.id === cotizacionId) {
-                                  // Cambiar status a en_cierre
-                                  return { ...c, status: 'en_cierre' as const };
-                                } else if (
-                                  c.status === 'pendiente' &&
-                                  !c.archived &&
-                                  c.id !== cotizacionId
-                                ) {
-                                  // Archivar otras cotizaciones pendientes
-                                  return { ...c, archived: true };
-                                }
-                                return c;
-                              });
-                              // Reordenar: no archivadas primero, luego archivadas
-                              return updated.sort((a, b) => {
-                                if (a.archived && !b.archived) return 1;
-                                if (!a.archived && b.archived) return -1;
-                                const orderA = a.order ?? 0;
-                                const orderB = b.order ?? 0;
-                                return orderA - orderB;
-                              });
-                            });
-                            // Realtime sincronizará automáticamente el proceso de cierre
+                          onPasarACierre={async (cotizacionId) => {
+                            // Realtime sincronizará automáticamente ambos componentes
                           }}
                           onCierreCancelado={(cotizacionId) => {
-                            // Actualización local optimista: regresar a pendiente y desarchivar otras
-                            setCotizaciones((prev) => {
-                              const updated = prev.map((c) => {
-                                if (c.id === cotizacionId) {
-                                  // Regresar a pendiente
-                                  return { ...c, status: 'pendiente' as const };
-                                } else if (
-                                  c.status === 'pendiente' &&
-                                  c.archived
-                                ) {
-                                  // Desarchivar otras cotizaciones pendientes que fueron archivadas
-                                  return { ...c, archived: false };
-                                }
-                                return c;
-                              });
-                              // Reordenar: no archivadas primero, luego archivadas
-                              return updated.sort((a, b) => {
-                                if (a.archived && !b.archived) return 1;
-                                if (!a.archived && b.archived) return -1;
-                                const orderA = a.order ?? 0;
-                                const orderB = b.order ?? 0;
-                                return orderA - orderB;
-                              });
-                            });
+                            // Realtime sincronizará automáticamente ambos componentes
                           }}
                         />
                       );
-                    });
-                  })()}
+                    })}
                 </div>
               </SortableContext>
             </DndContext>

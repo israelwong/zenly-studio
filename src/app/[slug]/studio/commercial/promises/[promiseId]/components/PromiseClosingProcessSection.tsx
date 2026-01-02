@@ -128,10 +128,8 @@ export function PromiseClosingProcessSection({
         promiseId={promiseId}
         onAuthorizeClick={onAuthorizeClick}
         isLoadingPromiseData={false}
-        onCierreCancelado={(cotizacionId) => {
-          // Actualización local optimista
-          loadCotizaciones();
-          // Realtime sincronizará automáticamente el panel de cotizaciones
+        onCierreCancelado={() => {
+          // Realtime sincronizará automáticamente ambos componentes
         }}
       />
     );
