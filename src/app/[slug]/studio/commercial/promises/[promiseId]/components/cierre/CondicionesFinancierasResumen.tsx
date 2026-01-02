@@ -54,7 +54,7 @@ export function CondicionesFinancierasResumen({
   };
 
   return (
-    <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 space-y-3">
+    <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-5 space-y-3">
       {/* Header */}
       <div className="flex items-start gap-2">
         <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />

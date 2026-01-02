@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, XCircle, Eye, MoreVertical, Edit2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, XCircle, Eye, MoreVertical, Edit2, HelpCircle } from 'lucide-react';
 import {
   ZenCard,
   ZenCardContent,
@@ -30,6 +30,7 @@ import { ZenDialog } from '@/components/ui/zen';
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
+import { ClosingProcessInfoModal } from './ClosingProcessInfoModal';
 
 interface PromiseClosingProcessCardProps {
   cotizacion: CotizacionListItem;
@@ -78,6 +79,7 @@ export function PromiseClosingProcessCard({
   const [loadingCotizacion, setLoadingCotizacion] = useState(false);
   const [isRemovingCondiciones, setIsRemovingCondiciones] = useState(false);
   const [showEditPromiseModal, setShowEditPromiseModal] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [localPromiseData, setLocalPromiseData] = useState(promiseData);
   
   // Estado del registro de cierre
@@ -385,13 +387,23 @@ export function PromiseClosingProcessCard({
   return (
     <ZenCard className="h-full flex flex-col">
       <ZenCardHeader className="border-b border-zinc-800 py-3 px-4 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className={`h-2 w-2 rounded-full shrink-0 ${
-            cotizacion.status === 'en_cierre' 
-              ? 'bg-emerald-500 animate-pulse' 
-              : 'bg-emerald-500'
-          }`} />
-          <ZenCardTitle className="text-sm">En Proceso de Cierre</ZenCardTitle>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`h-2 w-2 rounded-full shrink-0 ${
+              cotizacion.status === 'en_cierre' 
+                ? 'bg-emerald-500 animate-pulse' 
+                : 'bg-emerald-500'
+            }`} />
+            <ZenCardTitle className="text-sm">En Proceso de Cierre</ZenCardTitle>
+          </div>
+          <ZenButton
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowInfoModal(true)}
+            className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-300"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </ZenButton>
         </div>
       </ZenCardHeader>
 
@@ -444,7 +456,7 @@ export function PromiseClosingProcessCard({
               }
             />
           ) : (
-            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
               <div className="flex items-start gap-2">
                 {loadingRegistro ? (
                   <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
@@ -472,7 +484,7 @@ export function PromiseClosingProcessCard({
           )}
 
           {/* DATOS REQUERIDOS PARA CONTRATO */}
-          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
             <div className="flex items-start gap-2 mb-2">
               {clientPercentage === 100 ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
@@ -556,7 +568,7 @@ export function PromiseClosingProcessCard({
           </div>
 
           {/* CONTRATO DIGITAL */}
-          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
             <div className="flex items-start gap-2">
               {loadingRegistro ? (
                 <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
@@ -595,7 +607,7 @@ export function PromiseClosingProcessCard({
             </div>
             
             {/* Card de gestión de contrato */}
-            {!isClienteNuevo && contratoBoton && (
+            {!isClienteNuevo && contratoBoton && registroCierre?.contract_template_id && (
               <div className="mt-2 pt-2 border-t border-zinc-700/50">
                 <ContratoGestionCard
                   studioSlug={studioSlug}
@@ -614,7 +626,7 @@ export function PromiseClosingProcessCard({
           </div>
 
           {/* PAGO INICIAL */}
-          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
             <div className="flex items-start gap-2">
               {loadingRegistro ? (
                 <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
@@ -791,6 +803,14 @@ export function PromiseClosingProcessCard({
           onSuccess={handlePromiseDataUpdated}
         />
       )}
+
+      {/* Modal de información del proceso de cierre */}
+      <ClosingProcessInfoModal
+        isOpen={showInfoModal}
+        onClose={() => setShowInfoModal(false)}
+        onConfirm={() => setShowInfoModal(false)}
+        showDismissCheckbox={false}
+      />
     </ZenCard>
   );
 }
