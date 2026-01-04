@@ -177,12 +177,23 @@ export function PromiseClosingProcessCard({
     try {
       const result = await obtenerDatosContratoCierre(studioSlug, cotizacion.id);
       if (result.success && result.data) {
-        setContractData({
-          contract_version: result.data.contract_version,
-          contract_template_id: result.data.contract_template_id,
-          contract_content: result.data.contract_content,
-          contrato_definido: result.data.contrato_definido,
-          ultima_version_info: result.data.ultima_version_info,
+        // Solo actualizar si hay cambios reales (evitar loop infinito)
+        setContractData(prev => {
+          const hasChanges = 
+            prev?.contract_version !== result.data!.contract_version ||
+            prev?.contract_template_id !== result.data!.contract_template_id ||
+            prev?.contract_content !== result.data!.contract_content ||
+            prev?.contrato_definido !== result.data!.contrato_definido;
+          
+          if (!hasChanges) return prev;
+          
+          return {
+            contract_version: result.data!.contract_version,
+            contract_template_id: result.data!.contract_template_id,
+            contract_content: result.data!.contract_content,
+            contrato_definido: result.data!.contrato_definido,
+            ultima_version_info: result.data!.ultima_version_info,
+          };
         });
       }
     } catch (error) {
@@ -238,14 +249,32 @@ export function PromiseClosingProcessCard({
   const handleCondicionesSuccess = useCallback(async () => {
     const result = await obtenerDatosCondicionesCierre(studioSlug, cotizacion.id);
     if (result.success && result.data) {
-      setCondicionesData(result.data);
+      // Solo actualizar si hay cambios reales (evitar loop infinito)
+      setCondicionesData(prev => {
+        const hasChanges = 
+          prev?.condiciones_comerciales_id !== result.data!.condiciones_comerciales_id ||
+          prev?.condiciones_comerciales_definidas !== result.data!.condiciones_comerciales_definidas;
+        
+        if (!hasChanges) return prev;
+        return result.data!;
+      });
     }
   }, [studioSlug, cotizacion.id]);
 
   const handleContratoSuccess = useCallback(async () => {
     const result = await obtenerDatosContratoCierre(studioSlug, cotizacion.id);
     if (result.success && result.data) {
-      setContractData(result.data);
+      // Solo actualizar si hay cambios reales (evitar loop infinito)
+      setContractData(prev => {
+        const hasChanges = 
+          prev?.contract_version !== result.data!.contract_version ||
+          prev?.contract_template_id !== result.data!.contract_template_id ||
+          prev?.contract_content !== result.data!.contract_content ||
+          prev?.contrato_definido !== result.data!.contrato_definido;
+        
+        if (!hasChanges) return prev;
+        return result.data!;
+      });
     }
   }, [studioSlug, cotizacion.id]);
 
@@ -282,7 +311,16 @@ export function PromiseClosingProcessCard({
   const handlePagoSuccess = useCallback(async () => {
     const result = await obtenerDatosPagoCierre(studioSlug, cotizacion.id);
     if (result.success && result.data) {
-      setPagoData(result.data);
+      // Solo actualizar si hay cambios reales (evitar loop infinito)
+      setPagoData(prev => {
+        const hasChanges = 
+          prev?.pago_registrado !== result.data!.pago_registrado ||
+          prev?.pago_concepto !== result.data!.pago_concepto ||
+          prev?.pago_monto !== result.data!.pago_monto;
+        
+        if (!hasChanges) return prev;
+        return result.data!;
+      });
     }
   }, [studioSlug, cotizacion.id]);
 
