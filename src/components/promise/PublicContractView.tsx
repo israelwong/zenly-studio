@@ -260,25 +260,39 @@ export function PublicContractView({
 
     try {
       // Obtener IP del cliente
-      const ipResponse = await fetch('https://api.ipify.org?format=json');
-      const ipData = await ipResponse.json();
-      const clientIp = ipData.ip || '0.0.0.0';
+      let clientIp = '0.0.0.0';
+      try {
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipResponse.json();
+        clientIp = ipData.ip || '0.0.0.0';
+      } catch (ipError) {
+        console.warn('[handleConfirmSign] Error obteniendo IP:', ipError);
+        // Continuar con IP por defecto
+      }
+
+      console.log('[handleConfirmSign] Firmando contrato:', { studioSlug, promiseId, cotizacionId, clientIp });
 
       const result = await signPublicContract(studioSlug, promiseId, cotizacionId, {
         ip_address: clientIp,
       });
 
+      console.log('[handleConfirmSign] Resultado completo:', JSON.stringify(result, null, 2));
+      console.log('[handleConfirmSign] result.success:', result.success);
+      console.log('[handleConfirmSign] result.error:', result.error);
+
       if (result.success) {
         toast.success('Contrato firmado exitosamente');
+        console.log('[handleConfirmSign] Cerrando modal y recargando página...');
         // Cerrar modal y recargar para actualizar estado
         // La firma se guardó en studio_cotizaciones_cierre.contract_signed_at (tabla temporal)
         onClose();
         window.location.reload();
       } else {
+        console.error('[handleConfirmSign] Error en firma:', result.error);
         toast.error(result.error || 'Error al firmar contrato');
       }
     } catch (error) {
-      console.error('Error signing contract:', error);
+      console.error('[handleConfirmSign] Error signing contract:', error);
       toast.error('Error al firmar contrato');
     } finally {
       setIsSigning(false);

@@ -578,12 +578,21 @@ export async function getPublicPromiseData(
               select: {
                 id: true,
                 item_id: true,
+                // Snapshots (prioridad - inmutables)
+                name_snapshot: true,
+                description_snapshot: true,
+                category_name_snapshot: true,
+                seccion_name_snapshot: true,
+                // Campos operacionales (fallback - mutables)
                 name: true,
                 description: true,
+                category_name: true,
+                seccion_name: true,
                 unit_price: true,
                 quantity: true,
                 subtotal: true,
                 status: true,
+                order: true,
               },
               orderBy: {
                 order: 'asc',
