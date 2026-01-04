@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ZenInput } from '@/components/ui/zen';
+import { ZenInput, ZenTextarea } from '@/components/ui/zen';
 import { Loader2 } from 'lucide-react';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { toast } from 'sonner';
@@ -228,7 +228,7 @@ export function PublicPromiseDataForm({
             disabled={isSubmitting}
             className="sm:col-span-2"
           />
-          <ZenInput
+          <ZenTextarea
             label="Dirección"
             value={formData.contact_address}
             onChange={(e) => {
@@ -240,6 +240,7 @@ export function PublicPromiseDataForm({
             error={errors.contact_address}
             required
             disabled={isSubmitting}
+            rows={3}
             className="sm:col-span-2"
           />
         </div>

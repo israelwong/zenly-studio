@@ -66,21 +66,21 @@ export const PublicContractCard = memo(function PublicContractCard({
             </div>
           </div>
           {isRegeneratingContract ? (
-            <ZenBadge variant="info" className="text-xs">
+            <ZenBadge variant="info" className="text-xs hidden md:flex">
               <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
               Regenerando contrato
             </ZenBadge>
           ) : isContractSigned ? (
-            <ZenBadge variant="success" className="text-xs">
+            <ZenBadge variant="success" className="text-xs hidden md:flex">
               <CheckCircle2 className="w-3 h-3 mr-1" />
               Firmado
             </ZenBadge>
           ) : (hasContract || hasContractTemplate) ? (
-            <ZenBadge variant="info" className="text-xs">
+            <ZenBadge variant="info" className="text-xs hidden md:flex">
               Pendiente de firma
             </ZenBadge>
           ) : (
-            <ZenBadge variant="warning" className="text-xs">
+            <ZenBadge variant="warning" className="text-xs hidden md:flex">
               Pendiente de generación
             </ZenBadge>
           )}
@@ -136,7 +136,7 @@ export const PublicContractCard = memo(function PublicContractCard({
                 disabled={isRegeneratingContract}
               >
                 <FileText className="w-4 h-4 mr-2" />
-                {isContractSigned ? 'Ver contrato firmado' : 'Revisar y firmar contrato'}
+                {isContractSigned ? 'Ver firmado' : 'Revisar y firmar'}
               </ZenButton>
             </div>
           </div>

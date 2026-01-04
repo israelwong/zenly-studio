@@ -236,22 +236,12 @@ export function PromisePageClient({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleShowBankInfo}
-              disabled={loadingBankInfo}
-              className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Cuenta CLABE</span>
-            </button>
-            <a
-              href={`/${studioSlug}`}
-              className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
-            >
-              Ver perfil
-            </a>
-          </div>
+          <a
+            href={`/${studioSlug}`}
+            className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
+          >
+            Ver perfil
+          </a>
         </div>
       </header>
 

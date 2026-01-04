@@ -50,7 +50,7 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
               <p className="text-sm text-zinc-400">{cotizacionDescription}</p>
             )}
           </div>
-          <ZenBadge variant="success" className="text-xs shrink-0">
+          <ZenBadge variant="success" className="text-xs shrink-0 hidden md:flex">
             <CheckCircle2 className="w-3 h-3 mr-1" />
             Cotización autorizada
           </ZenBadge>

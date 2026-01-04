@@ -291,7 +291,7 @@ export function PublicQuoteAuthorizedView({
               <div className="shrink-0 w-10 h-10 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center relative z-10">
                 <CheckCircle2 className="h-5 w-5 text-emerald-400" />
               </div>
-              
+
               {/* Contenido */}
               <div className="flex-1 min-w-0">
                 <div className="mb-2">
@@ -318,27 +318,28 @@ export function PublicQuoteAuthorizedView({
             <div className="relative">
               <div className="flex items-start gap-4">
                 {/* Número del paso */}
-                <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative z-10 ${
-                  isContractSigned 
-                    ? 'bg-emerald-500/20 border-2 border-emerald-500' 
-                    : 'bg-blue-500/20 border-2 border-blue-500'
-                }`}>
+                <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative z-10 ${isContractSigned
+                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                  : 'bg-blue-500/20 border-2 border-blue-500'
+                  }`}>
                   {isContractSigned ? (
                     <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                   ) : (
                     <span className="text-sm font-bold text-blue-400">2</span>
                   )}
                 </div>
-                
+
                 {/* Contenido */}
                 <div className="flex-1 min-w-0">
                   <div className="mb-2">
                     <h3 className="text-lg font-semibold text-zinc-100">
-                      Paso 2: Firma de Contrato
+                      {isContractSigned
+                        ? 'Paso 2: Firma de contrato'
+                        : 'Paso 2: Firma de contrato pendiente'}
                     </h3>
                     <p className="text-sm text-zinc-400">
-                      {isContractSigned 
-                        ? '✓ Contrato firmado exitosamente' 
+                      {isContractSigned
+                        ? 'Contrato firmado exitosamente'
                         : 'Revisa y firma tu contrato digital'}
                     </p>
                   </div>
@@ -359,16 +360,14 @@ export function PublicQuoteAuthorizedView({
           <div className="relative">
             <div className="flex items-start gap-4">
               {/* Número del paso */}
-              <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative z-10 ${
-                isContractSigned
-                  ? 'bg-blue-500/20 border-2 border-blue-500'
-                  : 'bg-zinc-800 border-2 border-zinc-700'
-              }`}>
-                <span className={`text-sm font-bold ${
-                  isContractSigned ? 'text-blue-400' : 'text-zinc-500'
-                }`}>3</span>
+              <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative z-10 ${isContractSigned
+                ? 'bg-blue-500/20 border-2 border-blue-500'
+                : 'bg-zinc-800 border-2 border-zinc-700'
+                }`}>
+                <span className={`text-sm font-bold ${isContractSigned ? 'text-blue-400' : 'text-zinc-500'
+                  }`}>3</span>
               </div>
-              
+
               {/* Contenido */}
               <div className="flex-1 min-w-0">
                 <div className="mb-2">
@@ -449,8 +448,16 @@ export function PublicQuoteAuthorizedView({
         title="Actualizar mis datos"
         description="Actualiza tu información de contacto y del evento. El contrato se regenerará automáticamente con los nuevos datos."
         maxWidth="2xl"
+        onSave={() => {
+          const form = document.querySelector('form');
+          if (form) {
+            form.requestSubmit();
+          }
+        }}
         onCancel={() => !isUpdatingData && setShowEditDataModal(false)}
+        saveLabel={isUpdatingData ? 'Guardando...' : 'Actualizar datos'}
         cancelLabel="Cancelar"
+        isLoading={isUpdatingData}
         zIndex={10060}
       >
         <PublicPromiseDataForm
@@ -461,38 +468,6 @@ export function PublicQuoteAuthorizedView({
           isSubmitting={isUpdatingData}
           showEventTypeAndDate={true}
         />
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800">
-          <ZenButton
-            variant="outline"
-            onClick={() => setShowEditDataModal(false)}
-            disabled={isUpdatingData}
-          >
-            Cancelar
-          </ZenButton>
-          <ZenButton
-            variant="primary"
-            onClick={(e) => {
-              e.preventDefault();
-              const form = document.querySelector('form');
-              if (form) {
-                form.requestSubmit();
-              }
-            }}
-            disabled={isUpdatingData}
-          >
-            {isUpdatingData ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Guardando...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Guardar cambios
-              </>
-            )}
-          </ZenButton>
-        </div>
       </ZenDialog>
 
       {/* Modal de información bancaria */}

@@ -270,8 +270,9 @@ export function PublicContractView({
 
       if (result.success) {
         toast.success('Contrato firmado exitosamente');
+        // Cerrar modal y recargar para actualizar estado
+        // La firma se guardó en studio_cotizaciones_cierre.contract_signed_at (tabla temporal)
         onClose();
-        // Recargar la página para mostrar el estado actualizado
         window.location.reload();
       } else {
         toast.error(result.error || 'Error al firmar contrato');
@@ -331,13 +332,14 @@ export function PublicContractView({
               <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
             </div>
           ) : (templateContent || renderedContent) ? (
-            <div className="bg-zinc-900 rounded-lg p-6 max-h-[60vh] overflow-y-auto">
+            <div className="bg-zinc-900 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">
               <ContractPreview
                 content={templateContent || renderedContent || ''}
                 eventData={eventData || eventDataFallback}
                 cotizacionData={eventData?.cotizacionData}
                 condicionesData={eventData?.condicionesData || condicionesData}
                 showVariables={false}
+                noCard={true}
               />
             </div>
           ) : (
@@ -347,23 +349,20 @@ export function PublicContractView({
           )}
 
           {/* Acciones */}
-          <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-zinc-800">
+          <div className="flex flex-row gap-2 pt-4 border-t border-zinc-800">
             <ZenButton
-              variant="outline"
+              variant="ghost"
               onClick={handleExportPDF}
               disabled={isExportingPDF}
-              className="flex-1"
+              className="flex-1 text-sm py-2"
             >
               {isExportingPDF ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                   Exportando...
                 </>
               ) : (
-                <>
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar PDF
-                </>
+                <>Exportar PDF</>
               )}
             </ZenButton>
             {!isSigned && (
@@ -371,26 +370,26 @@ export function PublicContractView({
                 variant="primary"
                 onClick={handleSign}
                 disabled={isSigning}
-                className="flex-1"
+                className="flex-1 text-sm py-2"
               >
                 {isSigning ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                     Firmando...
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
                     Firmar Contrato
                   </>
                 )}
               </ZenButton>
             )}
             {isSigned && (
-              <ZenBadge variant="success" className="flex items-center justify-center py-2">
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Contrato Firmado
-              </ZenBadge>
+              <div className="flex-1 flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-2.5">
+                <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-400" />
+                <span className="text-sm font-medium text-emerald-400">Contrato Firmado</span>
+              </div>
             )}
           </div>
           {contractVersion && (

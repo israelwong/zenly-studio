@@ -79,7 +79,8 @@ export async function signPublicContract(
       return { success: false, error: "El contrato aún no está disponible para firma" };
     }
 
-    if (cotizacion.status === 'contract_signed') {
+    // Verificar si ya fue firmado (en la tabla temporal)
+    if (cotizacion.cotizacion_cierre?.contract_signed_at) {
       return { success: false, error: "El contrato ya ha sido firmado" };
     }
 
@@ -92,11 +93,12 @@ export async function signPublicContract(
       },
     });
 
-    // Actualizar status de cotización a contract_signed
+    // IMPORTANTE: Mantener status en 'en_cierre' porque aún falta el pago y autorización
+    // El estado 'contract_signed' se usará cuando se autorice y cree el evento
+    // Por ahora solo actualizamos updated_at para trigger realtime
     await prisma.studio_cotizaciones.update({
       where: { id: cotizacionId },
       data: {
-        status: 'contract_signed',
         updated_at: new Date(),
       },
     });
