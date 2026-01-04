@@ -115,15 +115,13 @@ export async function autorizarCotizacionPublica(
       }
     }
 
-    // 3. Actualizar cotización: asociar condición comercial y pasar a en_cierre
-    // También archivar otras cotizaciones pendientes y crear registro de cierre
+    // 3. Actualizar cotización: pasar a en_cierre y crear registro temporal
+    // Las condiciones comerciales se guardan SOLO en la tabla temporal (studio_cotizaciones_cierre)
     await prisma.$transaction(async (tx) => {
-      // 3.1. Actualizar cotización a en_cierre
+      // 3.1. Actualizar cotización a en_cierre (SIN guardar condiciones aquí)
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
-          condiciones_comerciales_id: condicionesComercialesId || null,
-          condiciones_comerciales_metodo_pago_id: condicionesComercialesMetodoPagoId || null,
           selected_by_prospect: true,
           selected_at: new Date(),
           status: 'en_cierre',

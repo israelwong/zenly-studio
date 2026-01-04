@@ -152,18 +152,6 @@ export async function getPromiseContractData(
         status: true,
         selected_by_prospect: true,
         tyc_accepted: true,
-        condiciones_comerciales_id: true,
-        condiciones_comerciales: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            discount_percentage: true,
-            advance_percentage: true,
-            advance_type: true,
-            advance_amount: true,
-          },
-        },
         cotizacion_items: {
           select: COTIZACION_ITEMS_SELECT_STANDARD,
           orderBy: {
@@ -212,13 +200,13 @@ export async function getPromiseContractData(
     
     const secciones = estructura.secciones;
 
-    // Usar condiciones comerciales pasadas o de la cotización
-    // Siempre obtener datos completos desde la base de datos si tenemos un ID
-    let condiciones = condicionesComerciales || cotizacion.condiciones_comerciales;
+    // Usar SOLO condiciones comerciales pasadas como parámetro (de la tabla temporal)
+    // NO usar fallback a cotizacion.condiciones_comerciales
+    let condiciones = condicionesComerciales;
     
     // Si tenemos un ID de condiciones comerciales, obtener datos completos desde la base de datos
     // Esto asegura que siempre tengamos todos los campos necesarios (advance_type, advance_amount, etc.)
-    const condicionId = condiciones?.id || condicionesComerciales?.id || cotizacion.condiciones_comerciales_id;
+    const condicionId = condicionesComerciales?.id;
     
     if (condicionId) {
       const condicionCompleta = await prisma.studio_condiciones_comerciales.findUnique({

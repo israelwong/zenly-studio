@@ -71,7 +71,7 @@ export const ContratoSection = memo(function ContratoSection({
 }: ContratoSectionProps) {
   // Calcular estado del contrato dentro del componente
   const tieneContratoGenerado = contractData?.contrato_definido && contractData?.contract_template_id;
-  
+
   let contratoIcon: React.ReactNode;
   let contratoEstado: string;
   let contratoColor: string;

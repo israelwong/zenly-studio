@@ -462,7 +462,7 @@ export function PromiseClosingProcessCard({
     if (isClienteNuevo) {
       // Caso 1 y 2: Contacto directo o Leadform
       // Debe tener condiciones comerciales (seleccionadas por prospecto)
-      if (!cotizacion.condiciones_comerciales_id && !condicionesData?.condiciones_comerciales_id) {
+      if (!condicionesData?.condiciones_comerciales_id) {
         errors.push('La cotización debe tener condiciones comerciales asociadas');
       }
 
@@ -493,7 +493,7 @@ export function PromiseClosingProcessCard({
 
       // Si quiere generar contrato pero no hay condiciones comerciales
       const generarContrato = contractData?.contrato_definido && contractData?.contract_template_id;
-      if (generarContrato && !condicionesData?.condiciones_comerciales_id && !cotizacion.condiciones_comerciales_id) {
+      if (generarContrato && !condicionesData?.condiciones_comerciales_id) {
         errors.push('Se requieren condiciones comerciales para generar el contrato');
       }
 
@@ -503,7 +503,7 @@ export function PromiseClosingProcessCard({
       }
 
       // Condiciones comerciales son opcionales (warning)
-      if (!condicionesData?.condiciones_comerciales_id && !cotizacion.condiciones_comerciales_id) {
+      if (!condicionesData?.condiciones_comerciales_id) {
         warnings.push('No se han definido condiciones comerciales.');
       }
 
@@ -620,7 +620,7 @@ export function PromiseClosingProcessCard({
           studio_slug: studioSlug,
           cotizacion_id: cotizacion.id,
           promise_id: promiseId,
-          condiciones_comerciales_id: condicionesData?.condiciones_comerciales_id || cotizacion.condiciones_comerciales_id || '',
+          condiciones_comerciales_id: condicionesData?.condiciones_comerciales_id || '',
           monto: montoTotal,
         });
 
@@ -633,7 +633,7 @@ export function PromiseClosingProcessCard({
       } else {
         // FLUJO LEGACY: Crea evento inmediatamente
         const generarContrato = contractData?.contrato_definido && contractData?.contract_template_id;
-        const condicionesComercialesId = condicionesData?.condiciones_comerciales_id || cotizacion.condiciones_comerciales_id;
+        const condicionesComercialesId = condicionesData?.condiciones_comerciales_id;
 
         // Validar que haya condiciones comerciales si se requiere generar contrato
         if (generarContrato && !condicionesComercialesId) {
@@ -677,7 +677,7 @@ export function PromiseClosingProcessCard({
   };
 
   // Verificar si tiene condiciones comerciales y formatear descripción
-  const hasCondiciones = !!cotizacion.condiciones_comerciales_id;
+  const hasCondiciones = !!condicionesData?.condiciones_comerciales_id;
 
   const getCondicionTexto = () => {
     if (!condicionesData?.condiciones_comerciales) return 'No definidas';
