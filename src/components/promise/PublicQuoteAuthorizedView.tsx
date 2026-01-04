@@ -90,7 +90,8 @@ export function PublicQuoteAuthorizedView({
   const hasContract = !!currentContract?.content;
   const hasContractTemplate = !!currentContract?.template_id;
   const isContractGenerated = cotizacion.status === 'contract_generated' || cotizacion.status === 'contract_signed';
-  const isContractSigned = cotizacion.status === 'contract_signed';
+  // IMPORTANTE: Verificar firma desde la tabla temporal (contract.signed_at)
+  const isContractSigned = !!currentContract?.signed_at;
   const isEnCierre = cotizacion.status === 'en_cierre';
 
   // Obtener condiciones comerciales (priorizar desde contract, sino desde cotizacion directamente)
@@ -281,11 +282,11 @@ export function PublicQuoteAuthorizedView({
 
         {/* Flujo vertical con pasos */}
         <div className="relative space-y-6">
-          {/* Línea vertical conectora */}
-          <div className="absolute left-[19px] top-12 bottom-12 w-0.5 bg-zinc-800 hidden md:block" />
-
           {/* PASO 1: Cotización Autorizada */}
           <div className="relative">
+            {/* Línea conectora al siguiente paso - verde porque está completado */}
+            <div className="absolute left-[19px] top-10 w-0.5 h-[calc(100%+1.5rem)] bg-emerald-500/30 z-0" />
+
             <div className="flex items-start gap-4">
               {/* Número del paso */}
               <div className="shrink-0 w-10 h-10 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center relative z-10">
@@ -316,6 +317,10 @@ export function PublicQuoteAuthorizedView({
           {/* PASO 2: Firma de Contrato */}
           {(isContractGenerated || isEnCierre) && (
             <div className="relative">
+              {/* Línea conectora al siguiente paso - verde si firmado, azul si pendiente */}
+              <div className={`absolute left-[19px] top-10 w-0.5 h-[calc(100%+1.5rem)] z-0 ${isContractSigned ? 'bg-emerald-500/30' : 'bg-blue-500/30'
+                }`} />
+
               <div className="flex items-start gap-4">
                 {/* Número del paso */}
                 <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative z-10 ${isContractSigned

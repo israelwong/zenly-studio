@@ -79,6 +79,7 @@ export interface PublicCotizacion {
     template_id: string | null;
     content: string;
     version?: number;
+    signed_at?: Date | null;
     condiciones_comerciales: {
       id: string;
       name: string;

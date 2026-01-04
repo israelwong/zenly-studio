@@ -610,6 +610,7 @@ export async function getPublicPromiseData(
                 contract_content: true,
                 contract_version: true,
                 contrato_definido: true,
+                contract_signed_at: true,
                 condiciones_comerciales_id: true,
                 condiciones_comerciales_definidas: true,
                 condiciones_comerciales: {
@@ -829,6 +830,7 @@ export async function getPublicPromiseData(
             template_id: cierre?.contract_template_id || null,
             content: cierre?.contract_content || null,
             version: cierre?.contract_version ?? 1,
+            signed_at: cierre?.contract_signed_at || null,
             // Priorizar condiciones comerciales de cotizacion_cierre, sino usar las de la cotización directamente
             condiciones_comerciales: (cierre?.condiciones_comerciales ? {
               id: cierre.condiciones_comerciales.id,
