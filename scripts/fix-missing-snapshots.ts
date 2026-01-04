@@ -13,28 +13,28 @@ import { Pool } from 'pg';
 config({ path: resolve(__dirname, '../.env.local') });
 
 if (!process.env.DATABASE_URL && !process.env.DIRECT_URL) {
-  throw new Error('DATABASE_URL o DIRECT_URL debe estar definida');
+    throw new Error('DATABASE_URL o DIRECT_URL debe estar definida');
 }
 
 const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL!;
 
 const pgPool = new Pool({
-  connectionString,
-  max: 5,
+    connectionString,
+    max: 5,
 });
 
 const adapter = new PrismaPg(pgPool);
 
 const prisma = new PrismaClient({
-  adapter,
+    adapter,
 });
 
 async function fixMissingSnapshots() {
-  console.log('🔍 Ejecutando actualización de snapshots...');
+    console.log('🔍 Ejecutando actualización de snapshots...');
 
-  try {
-    // Usar SQL directo para actualizar todos los items que necesitan snapshots
-    const result = await prisma.$executeRaw`
+    try {
+        // Usar SQL directo para actualizar todos los items que necesitan snapshots
+        const result = await prisma.$executeRaw`
       UPDATE studio_cotizacion_items
       SET 
         name_snapshot = COALESCE(name, 'Sin nombre'),
@@ -54,24 +54,24 @@ async function fixMissingSnapshots() {
         OR category_name_snapshot IS NULL
     `;
 
-    console.log(`\n✅ Actualización completada: ${result} registros actualizados`);
-  } catch (error) {
-    console.error('❌ Error durante la actualización:', error);
-    throw error;
-  }
+        console.log(`\n✅ Actualización completada: ${result} registros actualizados`);
+    } catch (error) {
+        console.error('❌ Error durante la actualización:', error);
+        throw error;
+    }
 }
 
 // Ejecutar script
 fixMissingSnapshots()
-  .then(() => {
-    console.log('\n✨ Script completado');
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error('\n💥 Error fatal:', error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+    .then(() => {
+        console.log('\n✨ Script completado');
+        process.exit(0);
+    })
+    .catch((error) => {
+        console.error('\n💥 Error fatal:', error);
+        process.exit(1);
+    })
+    .finally(async () => {
+        await prisma.$disconnect();
+    });
 

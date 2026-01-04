@@ -371,9 +371,9 @@ interface PublicPaquete {
 function filtrarCatalogoPorItems(
   catalogo: SeccionData[],
   itemIds: Set<string>,
-  itemsData: Map<string, { 
-    price?: number; 
-    quantity?: number; 
+  itemsData: Map<string, {
+    price?: number;
+    quantity?: number;
     description?: string | null;
     name_snapshot?: string | null;
     description_snapshot?: string | null;
