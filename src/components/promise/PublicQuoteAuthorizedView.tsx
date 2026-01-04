@@ -1,14 +1,16 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Loader2, CheckCircle2 } from 'lucide-react';
-import { ZenButton, ZenDialog } from '@/components/ui/zen';
+import { Loader2, CheckCircle2, Building2 } from 'lucide-react';
+import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
 import { PublicPromiseDataForm } from '@/components/shared/promise/PublicPromiseDataForm';
 import { PublicContractView } from './PublicContractView';
 import { PublicContractCard } from './PublicContractCard';
 import { PublicQuoteFinancialCard } from './PublicQuoteFinancialCard';
+import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContract } from '@/lib/actions/public/promesas.actions';
 import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
+import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { toast } from 'sonner';
 import type { PublicCotizacion } from '@/types/public-promise';
@@ -33,6 +35,7 @@ interface PublicQuoteAuthorizedViewProps {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
+    id?: string;
   };
   cotizacionPrice: number;
   eventTypeId?: string | null;
@@ -53,6 +56,9 @@ export function PublicQuoteAuthorizedView({
   const [isRegeneratingContract, setIsRegeneratingContract] = useState(false);
   const [cotizacion, setCotizacion] = useState<PublicCotizacion>(initialCotizacion);
   const [promise, setPromise] = useState(initialPromise);
+  const [showBankInfoModal, setShowBankInfoModal] = useState(false);
+  const [bankInfo, setBankInfo] = useState<{ banco?: string | null; titular?: string | null; clabe?: string | null } | null>(null);
+  const [loadingBankInfo, setLoadingBankInfo] = useState(false);
 
   // Estado separado para el contrato (se actualiza independientemente)
   const [contractData, setContractData] = useState<{
@@ -90,6 +96,38 @@ export function PublicQuoteAuthorizedView({
   // Obtener condiciones comerciales (priorizar desde contract, sino desde cotizacion directamente)
   // Esto cubre el caso cuando el contrato fue generado manualmente por el estudio
   const condicionesComerciales = currentContract?.condiciones_comerciales || null;
+
+  const handleShowBankInfo = useCallback(async () => {
+    if (!studio.id) {
+      toast.error('No se pudo obtener información del estudio');
+      return;
+    }
+
+    if (bankInfo) {
+      setShowBankInfoModal(true);
+      return;
+    }
+
+    setLoadingBankInfo(true);
+    try {
+      const result = await obtenerInfoBancariaStudio(studio.id);
+      if (result.success && result.data) {
+        setBankInfo({
+          banco: result.data.banco,
+          titular: result.data.titular,
+          clabe: result.data.clabe,
+        });
+        setShowBankInfoModal(true);
+      } else {
+        toast.error('No se pudo cargar la información bancaria');
+      }
+    } catch (error) {
+      console.error('[PublicQuoteAuthorizedView] Error loading bank info:', error);
+      toast.error('Error al cargar información bancaria');
+    } finally {
+      setLoadingBankInfo(false);
+    }
+  }, [studio.id, bankInfo]);
 
   const reloadCotizacionData = useCallback(async () => {
     try {
@@ -251,6 +289,37 @@ export function PublicQuoteAuthorizedView({
             onViewContract={() => setShowContractView(true)}
           />
         )}
+
+        {/* Información Bancaria */}
+        <ZenCard>
+          <div className="p-6">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-3 flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Información de Pago
+            </h3>
+            <p className="text-sm text-zinc-400 mb-4">
+              Consulta los datos bancarios del estudio para realizar tu pago.
+            </p>
+            <ZenButton
+              onClick={handleShowBankInfo}
+              disabled={loadingBankInfo}
+              variant="outline"
+              className="w-full"
+            >
+              {loadingBankInfo ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Cargando...
+                </>
+              ) : (
+                <>
+                  <Building2 className="h-4 w-4 mr-2" />
+                  Ver Cuenta CLABE
+                </>
+              )}
+            </ZenButton>
+          </div>
+        </ZenCard>
       </div>
 
       {/* Vista de Contrato */}
@@ -325,6 +394,16 @@ export function PublicQuoteAuthorizedView({
           </ZenButton>
         </div>
       </ZenDialog>
+
+      {/* Modal de información bancaria */}
+      {bankInfo && (
+        <BankInfoModal
+          isOpen={showBankInfoModal}
+          onClose={() => setShowBankInfoModal(false)}
+          bankInfo={bankInfo}
+          studioName={studio.studio_name}
+        />
+      )}
     </>
   );
 }

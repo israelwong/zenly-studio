@@ -288,6 +288,7 @@ export function PromisePageClient({
               phone: studio.phone,
               email: studio.email,
               address: studio.address,
+              id: studio.id,
             }}
             cotizacionPrice={cotizacionAutorizada.price}
             eventTypeId={promise.event_type_id}
