@@ -589,17 +589,6 @@ export async function getPublicPromiseData(
                 order: 'asc',
               },
             },
-            condiciones_comerciales: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-                advance_percentage: true,
-                advance_type: true,
-                advance_amount: true,
-                discount_percentage: true,
-              },
-            },
             condiciones_comerciales_metodo_pago: {
               select: {
                 metodos_pago: {
@@ -849,14 +838,6 @@ export async function getPublicPromiseData(
               advance_type: cierre.condiciones_comerciales.advance_type,
               advance_amount: cierre.condiciones_comerciales.advance_amount,
               discount_percentage: cierre.condiciones_comerciales.discount_percentage,
-            } : cot.condiciones_comerciales ? {
-              id: cot.condiciones_comerciales.id,
-              name: cot.condiciones_comerciales.name,
-              description: cot.condiciones_comerciales.description,
-              advance_percentage: cot.condiciones_comerciales.advance_percentage,
-              advance_type: cot.condiciones_comerciales.advance_type,
-              advance_amount: cot.condiciones_comerciales.advance_amount,
-              discount_percentage: cot.condiciones_comerciales.discount_percentage,
             } : null),
           };
         })(),
