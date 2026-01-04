@@ -139,15 +139,13 @@ export async function calcularYGuardarPreciosCotizacion(
   cotizacionId: string,
   studioSlug: string
 ): Promise<void> {
-  console.log(`[PRICING] 🚀 Iniciando cálculo para cotización ${cotizacionId}`);
   try {
     // 1️⃣ Obtener configuración de precios
     const configForm = await obtenerConfiguracionPrecios(studioSlug);
     if (!configForm) {
-      console.warn('[PRICING] ⚠️ No hay configuración de precios, no se calcularán precios');
+      console.warn('[PRICING] No hay configuración de precios, no se calcularán precios');
       return;
     }
-    console.log('[PRICING] ✅ Configuración de precios obtenida');
 
     // Convertir a formato ConfiguracionPrecios (decimales)
     const configPrecios: ConfiguracionPrecios = {
@@ -158,13 +156,10 @@ export async function calcularYGuardarPreciosCotizacion(
     };
 
     // 2️⃣ Obtener catálogo
-    console.log('[PRICING] 📚 Obteniendo catálogo...');
     const catalogoResult = await obtenerCatalogo(studioSlug, false);
     if (!catalogoResult.success || !catalogoResult.data) {
-      console.error('[PRICING] ❌ No se pudo obtener el catálogo');
       throw new Error('No se pudo obtener el catálogo');
     }
-    console.log(`[PRICING] ✅ Catálogo obtenido: ${catalogoResult.data.length} secciones`);
 
     // Crear mapa de item_id -> datos del catálogo
     interface DatosCatalogo {
@@ -194,32 +189,21 @@ export async function calcularYGuardarPreciosCotizacion(
     });
 
     // 3️⃣ Obtener items de la cotización
-    console.log('[PRICING] 📦 Obteniendo items de la cotización...');
     const items = await prisma.studio_cotizacion_items.findMany({
       where: { cotizacion_id: cotizacionId },
     });
 
-    console.log(`[PRICING] ✅ Items encontrados: ${items.length}`);
-    if (items.length === 0) {
-      console.warn('[PRICING] ⚠️ No hay items para procesar');
-      return;
-    }
+    if (items.length === 0) return;
 
     // 4️⃣ Calcular y guardar precios para cada item
-    console.log('[PRICING] 💰 Calculando precios para cada item...');
-    let itemsActualizados = 0;
     for (const item of items) {
-      if (!item.item_id) {
-        console.warn(`[PRICING] ⚠️ Item ${item.id} no tiene item_id`);
-        continue;
-      }
+      if (!item.item_id) continue;
 
       const datosCatalogo = catalogoMap.get(item.item_id);
       if (!datosCatalogo) {
-        console.warn(`[PRICING] ⚠️ Item ${item.item_id} no encontrado en catálogo`);
+        console.warn(`[PRICING] Item ${item.item_id} no encontrado en catálogo`);
         continue;
       }
-      console.log(`[PRICING] 📝 Procesando item: ${datosCatalogo.nombre}`);
 
       // Normalizar tipoUtilidad
       const normalizedTipoUtilidad = datosCatalogo.tipoUtilidad?.toLowerCase() || 'service';
@@ -264,12 +248,9 @@ export async function calcularYGuardarPreciosCotizacion(
           profit_type_snapshot: tipoUtilidadFinal,
         },
       });
-      itemsActualizados++;
-      console.log(`[PRICING] ✅ Item actualizado: ${datosCatalogo.nombre} (${item.id})`);
     }
-    console.log(`[PRICING] 🎉 Proceso completado: ${itemsActualizados}/${items.length} items actualizados`);
   } catch (error) {
-    console.error('[PRICING] ❌ Error calculando y guardando precios:', error);
+    console.error('[PRICING] Error calculando y guardando precios:', error);
     throw error;
   }
 }

@@ -325,20 +325,13 @@ export async function solicitarPaquetePublico(
             if (renderResult.success && renderResult.data) {
               // Guardar en studio_cotizaciones_cierre con template_id y contenido renderizado
               // NO crear evento ni contrato en studio_event_contracts todavía
+              // Mantener status en 'en_cierre' (no cambiar a 'contract_generated')
               await prisma.studio_cotizaciones_cierre.update({
                 where: { cotizacion_id: cotizacion.id },
                 data: {
                   contract_template_id: template.id,
                   contract_content: renderResult.data,
                   contrato_definido: true,
-                },
-              });
-
-              // Actualizar estado de cotización a contract_generated
-              await prisma.studio_cotizaciones.update({
-                where: { id: cotizacion.id },
-                data: {
-                  status: 'contract_generated',
                 },
               });
             }
