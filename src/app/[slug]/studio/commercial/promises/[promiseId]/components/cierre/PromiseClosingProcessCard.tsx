@@ -26,6 +26,7 @@ import { ContratoGestionCard } from './ContratoGestionCard';
 import { ContratoSection } from './ContratoSection';
 import { CondicionesSection } from './CondicionesSection';
 import { PagoSection } from './PagoSection';
+import { DatosRequeridosSection } from './DatosRequeridosSection';
 import { RegistroPagoModal } from './RegistroPagoModal';
 import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import type { ContractTemplate } from '@/types/contracts';
@@ -179,14 +180,14 @@ export function PromiseClosingProcessCard({
       if (result.success && result.data) {
         // Solo actualizar si hay cambios reales (evitar loop infinito)
         setContractData(prev => {
-          const hasChanges = 
+          const hasChanges =
             prev?.contract_version !== result.data!.contract_version ||
             prev?.contract_template_id !== result.data!.contract_template_id ||
             prev?.contract_content !== result.data!.contract_content ||
             prev?.contrato_definido !== result.data!.contrato_definido;
-          
+
           if (!hasChanges) return prev;
-          
+
           return {
             contract_version: result.data!.contract_version,
             contract_template_id: result.data!.contract_template_id,
@@ -251,10 +252,10 @@ export function PromiseClosingProcessCard({
     if (result.success && result.data) {
       // Solo actualizar si hay cambios reales (evitar loop infinito)
       setCondicionesData(prev => {
-        const hasChanges = 
+        const hasChanges =
           prev?.condiciones_comerciales_id !== result.data!.condiciones_comerciales_id ||
           prev?.condiciones_comerciales_definidas !== result.data!.condiciones_comerciales_definidas;
-        
+
         if (!hasChanges) return prev;
         return result.data!;
       });
@@ -266,12 +267,12 @@ export function PromiseClosingProcessCard({
     if (result.success && result.data) {
       // Solo actualizar si hay cambios reales (evitar loop infinito)
       setContractData(prev => {
-        const hasChanges = 
+        const hasChanges =
           prev?.contract_version !== result.data!.contract_version ||
           prev?.contract_template_id !== result.data!.contract_template_id ||
           prev?.contract_content !== result.data!.contract_content ||
           prev?.contrato_definido !== result.data!.contrato_definido;
-        
+
         if (!hasChanges) return prev;
         return result.data!;
       });
@@ -313,11 +314,11 @@ export function PromiseClosingProcessCard({
     if (result.success && result.data) {
       // Solo actualizar si hay cambios reales (evitar loop infinito)
       setPagoData(prev => {
-        const hasChanges = 
+        const hasChanges =
           prev?.pago_registrado !== result.data!.pago_registrado ||
           prev?.pago_concepto !== result.data!.pago_concepto ||
           prev?.pago_monto !== result.data!.pago_monto;
-        
+
         if (!hasChanges) return prev;
         return result.data!;
       });
@@ -674,19 +675,6 @@ export function PromiseClosingProcessCard({
       setIsAuthorizing(false);
     }
   };
-  // Calcular completitud de datos del cliente para contrato (usar datos locales)
-  const clientCompletion = {
-    name: !!localPromiseData.name?.trim(),
-    phone: !!localPromiseData.phone?.trim(),
-    email: !!localPromiseData.email?.trim(),
-    address: !!localPromiseData.address?.trim(),
-    event_name: !!localPromiseData.event_name?.trim(),
-    event_location: !!(localPromiseData.event_location?.trim() || localPromiseData.address?.trim()),
-    event_date: !!localPromiseData.event_date,
-  };
-  const completedFields = Object.values(clientCompletion).filter(Boolean).length;
-  const totalFields = Object.keys(clientCompletion).length;
-  const clientPercentage = Math.round((completedFields / totalFields) * 100);
 
   // Verificar si tiene condiciones comerciales y formatear descripción
   const hasCondiciones = !!cotizacion.condiciones_comerciales_id;
@@ -800,88 +788,10 @@ export function PromiseClosingProcessCard({
           />
 
           {/* DATOS REQUERIDOS PARA CONTRATO */}
-          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
-            <div className="flex items-start gap-2 mb-2">
-              {clientPercentage === 100 ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
-                    Datos Requeridos {completedFields}/{totalFields}
-                  </span>
-                  <button
-                    onClick={() => setShowEditPromiseModal(true)}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-                  >
-                    Editar
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="border-t border-zinc-700/50 pt-2">
-              <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs">
-                <div className="flex items-center gap-1">
-                  {clientCompletion.name ? (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                  ) : (
-                    <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
-                  )}
-                  <span className={clientCompletion.name ? 'text-zinc-400' : 'text-zinc-500'}>Nombre</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {clientCompletion.phone ? (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                  ) : (
-                    <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
-                  )}
-                  <span className={clientCompletion.phone ? 'text-zinc-400' : 'text-zinc-500'}>Teléfono</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {clientCompletion.email ? (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                  ) : (
-                    <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
-                  )}
-                  <span className={clientCompletion.email ? 'text-zinc-400' : 'text-zinc-500'}>Correo</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {clientCompletion.address ? (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                  ) : (
-                    <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
-                  )}
-                  <span className={clientCompletion.address ? 'text-zinc-400' : 'text-zinc-500'}>Dirección</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {clientCompletion.event_name ? (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                  ) : (
-                    <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
-                  )}
-                  <span className={clientCompletion.event_name ? 'text-zinc-400' : 'text-zinc-500'}>Evento</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {clientCompletion.event_location ? (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                  ) : (
-                    <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
-                  )}
-                  <span className={clientCompletion.event_location ? 'text-zinc-400' : 'text-zinc-500'}>Locación</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {clientCompletion.event_date ? (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                  ) : (
-                    <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
-                  )}
-                  <span className={clientCompletion.event_date ? 'text-zinc-400' : 'text-zinc-500'}>Fecha</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <DatosRequeridosSection
+            promiseData={localPromiseData}
+            onEditarClick={() => setShowEditPromiseModal(true)}
+          />
 
           {/* CONTRATO DIGITAL */}
           <ContratoSection

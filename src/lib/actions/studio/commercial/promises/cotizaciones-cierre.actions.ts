@@ -640,6 +640,12 @@ export async function actualizarContratoCierre(
       templateId &&
       templateId.trim() !== '' &&
       registroActual.contract_template_id !== templateId;
+    
+    // Detectar si es la primera vez que se asocia una plantilla (sin contrato previo definido)
+    const isFirstTimeAssociating = !isClearing &&
+      registroActual &&
+      !registroActual.contract_template_id &&
+      !registroActual.contract_content;
 
     // Si es edición manual y existe un registro, siempre versionar
     if (isManualEdit && registroActual && !isClearing) {
@@ -675,6 +681,31 @@ export async function actualizarContratoCierre(
           contract_template_id: templateId,
           contract_content: contentToSave,
           contract_version: newVersion,
+          contrato_definido: true,
+        },
+      });
+
+      revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+      if (cotizacion.promise_id) {
+        revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+        revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`);
+      }
+
+      return {
+        success: true,
+        data: {
+          id: registro.id,
+          cotizacion_id: registro.cotizacion_id,
+        },
+      };
+    } else if (isFirstTimeAssociating) {
+      // Primera vez asociando plantilla: empezar en versión 1
+      const registro = await prisma.studio_cotizaciones_cierre.update({
+        where: { cotizacion_id: cotizacionId },
+        data: {
+          contract_template_id: templateId,
+          contract_content: contentToSave,
+          contract_version: 1,
           contrato_definido: true,
         },
       });
