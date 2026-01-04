@@ -167,8 +167,66 @@ export function useCotizacionesRealtime({
         return;
       }
 
+      // Extraer información de cambios para pasar en el payload
+      const oldRecord = p.old || p.payload?.old || p.old_record || p.payload?.old_record;
+      const newRecord = p.new || p.payload?.new || p.record || p.payload?.record || cotizacion;
+      
+      // Detectar cambios importantes
+      let cambioDetectado: {
+        statusChanged?: boolean;
+        oldStatus?: string;
+        newStatus?: string;
+        camposCambiados?: string[];
+      } | null = null;
+
+      if (oldRecord && newRecord) {
+        const camposImportantes = ['status', 'name', 'price', 'description', 'archived', 'order', 'evento_id', 'condiciones_comerciales_id', 'selected_by_prospect'];
+        const camposCambiados: string[] = [];
+        
+        camposImportantes.forEach(campo => {
+          const oldValue = oldRecord[campo];
+          const newValue = newRecord[campo];
+          const changed = (oldValue === null || oldValue === undefined) !== (newValue === null || newValue === undefined) ||
+                         oldValue !== newValue;
+          if (changed) {
+            camposCambiados.push(campo);
+          }
+        });
+
+        // Si ignoreCierreEvents es true, verificar si solo cambió updated_at
+        if (ignoreCierreEvents) {
+          if (camposCambiados.length === 0) {
+            // Solo cambió updated_at, ignorar el evento
+            return;
+          }
+        }
+
+        // Detectar cambio de estado específicamente
+        if (oldRecord.status !== newRecord.status) {
+          cambioDetectado = {
+            statusChanged: true,
+            oldStatus: oldRecord.status,
+            newStatus: newRecord.status,
+            camposCambiados,
+          };
+        } else if (camposCambiados.length > 0) {
+          cambioDetectado = {
+            statusChanged: false,
+            camposCambiados,
+          };
+        }
+      }
+
+      // Crear payload enriquecido con información de cambios
+      const enrichedPayload = {
+        ...payload,
+        changeInfo: cambioDetectado,
+        oldRecord,
+        newRecord,
+      };
+
       if (cotizacionId && onUpdatedRef.current) {
-        onUpdatedRef.current(cotizacionId, payload);
+        onUpdatedRef.current(cotizacionId, enrichedPayload);
       }
     },
     [promiseId, extractCotizacion, ignoreCierreEvents]

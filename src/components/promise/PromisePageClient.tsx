@@ -183,8 +183,28 @@ function PromisePageContent({
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
+    ignoreCierreEvents: true, // Ignorar eventos de cierre internos, pero escuchar cambios de estado
     onCotizacionInserted: reloadCotizaciones,
-    onCotizacionUpdated: reloadCotizaciones,
+    onCotizacionUpdated: (cotizacionId: string, payload?: unknown) => {
+      const p = payload as any;
+      const changeInfo = p?.changeInfo;
+      
+      // Recargar siempre que cambie el estado (especialmente de en_cierre a pendiente)
+      if (changeInfo?.statusChanged) {
+        reloadCotizaciones();
+        return;
+      }
+      
+      // También recargar si hay otros campos importantes cambiados
+      if (changeInfo?.camposCambiados?.length) {
+        const camposImportantes = changeInfo.camposCambiados.filter(
+          (campo: string) => campo !== 'updated_at'
+        );
+        if (camposImportantes.length > 0) {
+          reloadCotizaciones();
+        }
+      }
+    },
     onCotizacionDeleted: (cotizacionId) => {
       setCotizaciones((prev) => prev.filter((c) => c.id !== cotizacionId));
     },
@@ -215,6 +235,14 @@ function PromisePageContent({
           cot.status === 'contract_signed')
     );
   }, [cotizaciones]);
+
+  // Resetear hideCotizacionesPaquetes cuando ya no hay cotización autorizada (cancelación de cierre)
+  useEffect(() => {
+    if (!cotizacionAutorizada && hideCotizacionesPaquetes) {
+      setHideCotizacionesPaquetes(false);
+      setIsLoadingContratacion(false);
+    }
+  }, [cotizacionAutorizada, hideCotizacionesPaquetes]);
 
   // Callback para activar skeleton desde modales
   const handlePreparing = useCallback(() => {

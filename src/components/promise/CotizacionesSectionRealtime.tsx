@@ -36,6 +36,7 @@ interface CotizacionesSectionRealtimeProps {
   showOfferConditions?: boolean;
   showPackages?: boolean;
   paquetes?: PublicPaquete[];
+  autoGenerateContract?: boolean;
 }
 
 export function CotizacionesSectionRealtime({
@@ -50,6 +51,7 @@ export function CotizacionesSectionRealtime({
   showOfferConditions = false,
   showPackages = false,
   paquetes = [],
+  autoGenerateContract = false,
 }: CotizacionesSectionRealtimeProps) {
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
 
@@ -100,6 +102,7 @@ export function CotizacionesSectionRealtime({
       showOfferConditions={showOfferConditions}
       showPackages={showPackages}
       paquetes={paquetes.map(p => ({ id: p.id, cover_url: p.cover_url }))}
+      autoGenerateContract={autoGenerateContract}
     />
   );
 }

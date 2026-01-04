@@ -62,18 +62,6 @@ export function renderCotizacionBlock(
 export function renderCondicionesComercialesBlock(
   condiciones: CondicionesComercialesData
 ): string {
-  console.log('[renderCondicionesComercialesBlock] Datos recibidos:', {
-    condiciones,
-    tieneDescuentoAplicado: condiciones.descuento_aplicado !== undefined && condiciones.descuento_aplicado > 0,
-    tienePorcentajeDescuento: condiciones.porcentaje_descuento !== undefined && condiciones.porcentaje_descuento > 0,
-    tieneTotalContrato: condiciones.total_contrato !== undefined,
-    tieneTotalFinal: condiciones.total_final !== undefined,
-    total_contrato: condiciones.total_contrato,
-    total_final: condiciones.total_final,
-    descuento_aplicado: condiciones.descuento_aplicado,
-    porcentaje_descuento: condiciones.porcentaje_descuento,
-  });
-
   let html = '<div class="condiciones-comerciales space-y-4 p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg">';
 
   html += `<h3 class="text-lg font-semibold text-zinc-200 mb-3">${condiciones.nombre}</h3>`;
@@ -94,19 +82,10 @@ export function renderCondicionesComercialesBlock(
   
   const tieneDescuento = tieneDescuentoPorMonto || tieneDescuentoPorPorcentaje || tieneDiferencia;
 
-  console.log('[renderCondicionesComercialesBlock] Evaluación de descuento:', {
-    tieneDescuentoPorMonto,
-    tieneDescuentoPorPorcentaje,
-    tieneDiferencia,
-    tieneDescuento,
-  });
-
   // Mostrar desglose siempre que tengamos total_contrato y total_final válidos
   const debeMostrarDesglose = condiciones.total_contrato !== undefined && 
     condiciones.total_final !== undefined &&
     condiciones.total_contrato > 0;
-
-  console.log('[renderCondicionesComercialesBlock] Debe mostrar desglose:', debeMostrarDesglose);
   
   if (debeMostrarDesglose) {
     html += '<div class="calculo-total space-y-2 mb-4 pt-3 border-t border-zinc-800">';

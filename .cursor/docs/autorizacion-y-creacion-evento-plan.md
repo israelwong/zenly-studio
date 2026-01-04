@@ -86,51 +86,51 @@ ADD COLUMN IF NOT EXISTS contract_signed_ip_snapshot TEXT;
 -- ============================================
 -- COMENTARIOS PARA DOCUMENTACIÓN
 -- ============================================
-COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_name_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_name_snapshot IS
 'Snapshot inmutable del nombre de la condición comercial al momento de autorizar';
 
-COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_description_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_description_snapshot IS
 'Snapshot inmutable de la descripción de la condición comercial';
 
-COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_advance_percentage_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_advance_percentage_snapshot IS
 'Snapshot inmutable del porcentaje de anticipo';
 
-COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_advance_type_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_advance_type_snapshot IS
 'Snapshot inmutable del tipo de anticipo (percentage/amount)';
 
-COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_advance_amount_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_advance_amount_snapshot IS
 'Snapshot inmutable del monto fijo de anticipo';
 
-COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_discount_percentage_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.condiciones_comerciales_discount_percentage_snapshot IS
 'Snapshot inmutable del porcentaje de descuento';
 
-COMMENT ON COLUMN public.studio_cotizaciones.contract_template_id_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.contract_template_id_snapshot IS
 'Snapshot del ID de la plantilla de contrato utilizada';
 
-COMMENT ON COLUMN public.studio_cotizaciones.contract_template_name_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.contract_template_name_snapshot IS
 'Snapshot del nombre de la plantilla de contrato';
 
-COMMENT ON COLUMN public.studio_cotizaciones.contract_content_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.contract_content_snapshot IS
 'Snapshot del contenido HTML del contrato renderizado y firmado';
 
-COMMENT ON COLUMN public.studio_cotizaciones.contract_version_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.contract_version_snapshot IS
 'Snapshot de la versión del contrato al momento de autorizar';
 
-COMMENT ON COLUMN public.studio_cotizaciones.contract_signed_at_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.contract_signed_at_snapshot IS
 'Snapshot de la fecha y hora de firma del contrato';
 
-COMMENT ON COLUMN public.studio_cotizaciones.contract_signed_ip_snapshot IS 
+COMMENT ON COLUMN public.studio_cotizaciones.contract_signed_ip_snapshot IS
 'Snapshot de la IP desde donde se firmó el contrato';
 
 -- ============================================
 -- ÍNDICES PARA OPTIMIZACIÓN
 -- ============================================
-CREATE INDEX IF NOT EXISTS idx_cotizaciones_evento_id 
-ON public.studio_cotizaciones(evento_id) 
+CREATE INDEX IF NOT EXISTS idx_cotizaciones_evento_id
+ON public.studio_cotizaciones(evento_id)
 WHERE evento_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_cotizaciones_status_autorizada 
-ON public.studio_cotizaciones(status) 
+CREATE INDEX IF NOT EXISTS idx_cotizaciones_status_autorizada
+ON public.studio_cotizaciones(status)
 WHERE status = 'autorizada';
 ```
 
@@ -141,7 +141,7 @@ WHERE status = 'autorizada';
 ```prisma
 model studio_cotizaciones {
   // ... campos existentes
-  
+
   // Snapshots de Condiciones Comerciales (inmutables)
   condiciones_comerciales_name_snapshot              String?
   condiciones_comerciales_description_snapshot       String?
@@ -149,7 +149,7 @@ model studio_cotizaciones {
   condiciones_comerciales_advance_type_snapshot      String?
   condiciones_comerciales_advance_amount_snapshot    Decimal? @db.Decimal(10, 2)
   condiciones_comerciales_discount_percentage_snapshot Float?
-  
+
   // Snapshots de Contrato (inmutables)
   contract_template_id_snapshot    String?
   contract_template_name_snapshot  String?
@@ -157,10 +157,10 @@ model studio_cotizaciones {
   contract_version_snapshot        Int?
   contract_signed_at_snapshot      DateTime?
   contract_signed_ip_snapshot      String?
-  
+
   // Relaciones
   evento                           studio_events? @relation(fields: [evento_id], references: [id])
-  
+
   @@index([evento_id])
   @@index([status])
 }
@@ -177,7 +177,7 @@ model studio_cotizaciones {
 ```typescript
 /**
  * Autoriza una cotización y crea el evento asociado
- * 
+ *
  * Proceso:
  * 1. Valida que la cotización esté en estado 'en_cierre'
  * 2. Valida que exista registro de cierre con datos completos
@@ -190,7 +190,7 @@ model studio_cotizaciones {
  * 9. Archiva otras cotizaciones de la promesa
  * 10. Elimina registro temporal de cierre
  * 11. Crea log de autorización
- * 
+ *
  * @returns Evento creado y cotización autorizada
  */
 export async function autorizarYCrearEvento(
@@ -218,7 +218,7 @@ export async function autorizarYCrearEvento(
     });
 
     if (!studio) {
-      return { success: false, error: 'Studio no encontrado' };
+      return { success: false, error: "Studio no encontrado" };
     }
 
     // 2. Validar cotización y promesa
@@ -238,11 +238,14 @@ export async function autorizarYCrearEvento(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotización no encontrada' };
+      return { success: false, error: "Cotización no encontrada" };
     }
 
-    if (cotizacion.status !== 'en_cierre') {
-      return { success: false, error: 'La cotización debe estar en estado de cierre' };
+    if (cotizacion.status !== "en_cierre") {
+      return {
+        success: false,
+        error: "La cotización debe estar en estado de cierre",
+      };
     }
 
     // 3. Validar registro de cierre
@@ -255,59 +258,90 @@ export async function autorizarYCrearEvento(
     });
 
     if (!registroCierre) {
-      return { success: false, error: 'No se encontró el registro de cierre' };
+      return { success: false, error: "No se encontró el registro de cierre" };
     }
 
     // 4. Validaciones de datos completos
-    if (!registroCierre.condiciones_comerciales_definidas || !registroCierre.condiciones_comerciales_id) {
-      return { success: false, error: 'Debe definir las condiciones comerciales' };
+    if (
+      !registroCierre.condiciones_comerciales_definidas ||
+      !registroCierre.condiciones_comerciales_id
+    ) {
+      return {
+        success: false,
+        error: "Debe definir las condiciones comerciales",
+      };
     }
 
-    if (!registroCierre.contrato_definido || !registroCierre.contract_template_id) {
-      return { success: false, error: 'Debe definir el contrato' };
+    if (
+      !registroCierre.contrato_definido ||
+      !registroCierre.contract_template_id
+    ) {
+      return { success: false, error: "Debe definir el contrato" };
     }
 
-    if (!registroCierre.contract_signed_at) {
-      return { success: false, error: 'El contrato debe estar firmado por el cliente' };
+    // Validación: contrato firmado SOLO si la cotización fue seleccionada por el prospecto
+    if (cotizacion.selected_by_prospect && !registroCierre.contract_signed_at) {
+      return {
+        success: false,
+        error:
+          "El contrato debe estar firmado por el cliente antes de autorizar",
+      };
     }
 
     // 5. Obtener primera etapa del pipeline de eventos
     const primeraEtapa = await prisma.studio_event_pipeline_stages.findFirst({
       where: { studio_id: studio.id },
-      orderBy: { order: 'asc' },
+      orderBy: { order: "asc" },
     });
 
     if (!primeraEtapa) {
-      return { success: false, error: 'No se encontró una etapa inicial en el pipeline de eventos' };
+      return {
+        success: false,
+        error: "No se encontró una etapa inicial en el pipeline de eventos",
+      };
     }
 
     // 6. Obtener etapa "aprobado" del pipeline de promesas
-    const etapaAprobado = await prisma.studio_promise_pipeline_stages.findFirst({
-      where: {
-        studio_id: studio.id,
-        slug: 'aprobado',
-      },
-    });
+    const etapaAprobado = await prisma.studio_promise_pipeline_stages.findFirst(
+      {
+        where: {
+          studio_id: studio.id,
+          slug: "aprobado",
+        },
+      }
+    );
 
     if (!etapaAprobado) {
-      return { success: false, error: 'No se encontró la etapa "aprobado" en el pipeline de promesas' };
+      return {
+        success: false,
+        error: 'No se encontró la etapa "aprobado" en el pipeline de promesas',
+      };
     }
 
     // 7. TRANSACCIÓN ATÓMICA
     const result = await prisma.$transaction(async (tx) => {
       // 7.1. Crear snapshots de condiciones comerciales
-      const condicionSnapshot = registroCierre.condiciones_comerciales ? {
-        name: registroCierre.condiciones_comerciales.name,
-        description: registroCierre.condiciones_comerciales.description,
-        advance_percentage: registroCierre.condiciones_comerciales.advance_percentage 
-          ? Number(registroCierre.condiciones_comerciales.advance_percentage) 
-          : null,
-        advance_type: registroCierre.condiciones_comerciales.advance_type,
-        advance_amount: registroCierre.condiciones_comerciales.advance_amount,
-        discount_percentage: registroCierre.condiciones_comerciales.discount_percentage 
-          ? Number(registroCierre.condiciones_comerciales.discount_percentage) 
-          : null,
-      } : null;
+      const condicionSnapshot = registroCierre.condiciones_comerciales
+        ? {
+            name: registroCierre.condiciones_comerciales.name,
+            description: registroCierre.condiciones_comerciales.description,
+            advance_percentage: registroCierre.condiciones_comerciales
+              .advance_percentage
+              ? Number(
+                  registroCierre.condiciones_comerciales.advance_percentage
+                )
+              : null,
+            advance_type: registroCierre.condiciones_comerciales.advance_type,
+            advance_amount:
+              registroCierre.condiciones_comerciales.advance_amount,
+            discount_percentage: registroCierre.condiciones_comerciales
+              .discount_percentage
+              ? Number(
+                  registroCierre.condiciones_comerciales.discount_percentage
+                )
+              : null,
+          }
+        : null;
 
       // 7.2. Crear snapshots de contrato
       const contratoSnapshot = {
@@ -329,9 +363,14 @@ export async function autorizarYCrearEvento(
           event_type_id: cotizacion.promise.event_type_id,
           stage_id: primeraEtapa.id,
           event_date: cotizacion.promise.event_date,
-          status: 'ACTIVE',
-          name: cotizacion.promise.event_name || `Evento de ${cotizacion.promise.contact?.name || 'Cliente'}`,
-          address: cotizacion.promise.event_location || cotizacion.promise.contact?.address || null,
+          status: "ACTIVE",
+          name:
+            cotizacion.promise.event_name ||
+            `Evento de ${cotizacion.promise.contact?.name || "Cliente"}`,
+          address:
+            cotizacion.promise.event_location ||
+            cotizacion.promise.contact?.address ||
+            null,
         },
       });
 
@@ -339,16 +378,22 @@ export async function autorizarYCrearEvento(
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
-          status: 'autorizada',
+          status: "autorizada",
           evento_id: evento.id,
           // Snapshots de condiciones comerciales
           condiciones_comerciales_id: null, // ❌ No usar FK
-          condiciones_comerciales_name_snapshot: condicionSnapshot?.name || null,
-          condiciones_comerciales_description_snapshot: condicionSnapshot?.description || null,
-          condiciones_comerciales_advance_percentage_snapshot: condicionSnapshot?.advance_percentage || null,
-          condiciones_comerciales_advance_type_snapshot: condicionSnapshot?.advance_type || null,
-          condiciones_comerciales_advance_amount_snapshot: condicionSnapshot?.advance_amount || null,
-          condiciones_comerciales_discount_percentage_snapshot: condicionSnapshot?.discount_percentage || null,
+          condiciones_comerciales_name_snapshot:
+            condicionSnapshot?.name || null,
+          condiciones_comerciales_description_snapshot:
+            condicionSnapshot?.description || null,
+          condiciones_comerciales_advance_percentage_snapshot:
+            condicionSnapshot?.advance_percentage || null,
+          condiciones_comerciales_advance_type_snapshot:
+            condicionSnapshot?.advance_type || null,
+          condiciones_comerciales_advance_amount_snapshot:
+            condicionSnapshot?.advance_amount || null,
+          condiciones_comerciales_discount_percentage_snapshot:
+            condicionSnapshot?.discount_percentage || null,
           // Snapshots de contrato
           contract_template_id: null, // ❌ No usar FK
           contract_template_id_snapshot: contratoSnapshot.template_id,
@@ -363,15 +408,19 @@ export async function autorizarYCrearEvento(
 
       // 7.5. Registrar pago inicial (si aplica)
       let pagoRegistrado = false;
-      if (options?.registrarPago && options?.montoInicial && options.montoInicial > 0) {
+      if (
+        options?.registrarPago &&
+        options?.montoInicial &&
+        options.montoInicial > 0
+      ) {
         await tx.studio_pagos.create({
           data: {
             evento_id: evento.id,
             monto: options.montoInicial,
-            concepto: 'Pago inicial / Anticipo',
+            concepto: "Pago inicial / Anticipo",
             fecha: new Date(),
             metodo_pago_id: registroCierre.pago_metodo_id,
-            status: 'COMPLETED',
+            status: "COMPLETED",
           },
         });
         pagoRegistrado = true;
@@ -391,10 +440,10 @@ export async function autorizarYCrearEvento(
         where: {
           promise_id: promiseId,
           id: { not: cotizacionId },
-          status: { in: ['pendiente', 'en_cierre', 'autorizada'] },
+          status: { in: ["pendiente", "en_cierre", "autorizada"] },
         },
         data: {
-          status: 'archivada',
+          status: "archivada",
           updated_at: new Date(),
         },
       });
@@ -408,7 +457,7 @@ export async function autorizarYCrearEvento(
       await tx.studio_promise_logs.create({
         data: {
           promise_id: promiseId,
-          action: 'cotizacion_autorizada_evento_creado',
+          action: "cotizacion_autorizada_evento_creado",
           description: `Cotización autorizada y evento creado exitosamente`,
           metadata: {
             cotizacion_id: cotizacionId,
@@ -431,10 +480,13 @@ export async function autorizarYCrearEvento(
       data: result,
     };
   } catch (error) {
-    console.error('[autorizarYCrearEvento] Error:', error);
+    console.error("[autorizarYCrearEvento] Error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al autorizar cotización y crear evento',
+      error:
+        error instanceof Error
+          ? error.message
+          : "Error al autorizar cotización y crear evento",
     };
   }
 }
@@ -463,12 +515,14 @@ export function getCondicionesComerciales(cotizacion: {
     return {
       name: cotizacion.condiciones_comerciales_name_snapshot,
       description: cotizacion.condiciones_comerciales_description_snapshot,
-      advance_percentage: cotizacion.condiciones_comerciales_advance_percentage_snapshot,
+      advance_percentage:
+        cotizacion.condiciones_comerciales_advance_percentage_snapshot,
       advance_type: cotizacion.condiciones_comerciales_advance_type_snapshot,
-      advance_amount: cotizacion.condiciones_comerciales_advance_amount_snapshot 
-        ? Number(cotizacion.condiciones_comerciales_advance_amount_snapshot) 
+      advance_amount: cotizacion.condiciones_comerciales_advance_amount_snapshot
+        ? Number(cotizacion.condiciones_comerciales_advance_amount_snapshot)
         : null,
-      discount_percentage: cotizacion.condiciones_comerciales_discount_percentage_snapshot,
+      discount_percentage:
+        cotizacion.condiciones_comerciales_discount_percentage_snapshot,
     };
   }
 
@@ -477,15 +531,16 @@ export function getCondicionesComerciales(cotizacion: {
     return {
       name: cotizacion.condiciones_comerciales.name,
       description: cotizacion.condiciones_comerciales.description,
-      advance_percentage: cotizacion.condiciones_comerciales.advance_percentage 
-        ? Number(cotizacion.condiciones_comerciales.advance_percentage) 
+      advance_percentage: cotizacion.condiciones_comerciales.advance_percentage
+        ? Number(cotizacion.condiciones_comerciales.advance_percentage)
         : null,
       advance_type: cotizacion.condiciones_comerciales.advance_type,
-      advance_amount: cotizacion.condiciones_comerciales.advance_amount 
-        ? Number(cotizacion.condiciones_comerciales.advance_amount) 
+      advance_amount: cotizacion.condiciones_comerciales.advance_amount
+        ? Number(cotizacion.condiciones_comerciales.advance_amount)
         : null,
-      discount_percentage: cotizacion.condiciones_comerciales.discount_percentage 
-        ? Number(cotizacion.condiciones_comerciales.discount_percentage) 
+      discount_percentage: cotizacion.condiciones_comerciales
+        .discount_percentage
+        ? Number(cotizacion.condiciones_comerciales.discount_percentage)
         : null,
     };
   }
@@ -532,9 +587,10 @@ export function getContrato(cotizacion: {
 **Ubicación:** `PromiseClosingProcessCard.tsx`
 
 **Requisitos para habilitar:**
+
 - ✅ Condiciones comerciales definidas
 - ✅ Contrato definido
-- ✅ Contrato firmado (`contract_signed_at !== null`)
+- ✅ Contrato firmado (`contract_signed_at !== null`) **SOLO si `selected_by_prospect === true`**
 - ✅ Datos del cliente completos
 
 **Implementación:**
@@ -547,13 +603,17 @@ const [autorizando, setAutorizando] = useState(false);
 
 // Validar si se puede autorizar
 const puedeAutorizar = useMemo(() => {
+  const contratoFirmado = cotizacion.selected_by_prospect
+    ? contractData?.contract_signed_at !== null // Solo requerido si seleccionada por prospecto
+    : true; // Si no fue seleccionada por prospecto, no requiere firma
+
   return (
     condicionesData?.condiciones_comerciales_definidas &&
     contractData?.contrato_definido &&
-    contractData?.contract_signed_at && // Contrato firmado
+    contratoFirmado &&
     clientCompletion.percentage === 100 // Datos completos
   );
-}, [condicionesData, contractData, clientCompletion]);
+}, [condicionesData, contractData, clientCompletion, cotizacion.selected_by_prospect]);
 
 const handleAutorizar = async () => {
   setAutorizando(true);
@@ -566,7 +626,7 @@ const handleAutorizar = async () => {
 
     if (result.success && result.data) {
       toast.success('¡Cotización autorizada y evento creado!');
-      
+
       // Redirigir al evento
       router.push(`/${studioSlug}/studio/business/events/${result.data.evento_id}`);
     } else {
@@ -624,7 +684,7 @@ const handleAutorizar = async () => {
         </li>
       </ul>
     </div>
-    
+
     <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
       <p className="text-sm text-amber-300">
         ⚠️ Esta acción es irreversible. Se creará el evento y la cotización quedará autorizada.
@@ -636,29 +696,51 @@ const handleAutorizar = async () => {
 
 ### 2. Vista Post-Autorización en Promise
 
-**Opción A: Redirigir al Evento (Recomendado)**
+**Ubicación:** `PromiseClosingProcessSection.tsx` ✅ **YA PREPARADO**
 
-```typescript
-// Después de autorizar exitosamente
-router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
-```
+**Lógica actual (líneas 93-100, 218-234):**
 
-**Opción B: Mostrar Card de Resumen (Alternativa)**
+- Ya busca cotización en cierre/aprobada/autorizada (línea 93-100)
+- Ya muestra `PromiseClosingProcessCard` cuando encuentra cotización en cierre/aprobada/autorizada (línea 218-234)
+- Necesitamos actualizar para mostrar `CotizacionAutorizadaCard` cuando `status === 'autorizada' && evento_id !== null`
+
+**Implementación:**
 
 ```typescript
 // En PromiseClosingProcessSection.tsx
 
-{cotizacion.status === 'autorizada' && cotizacion.evento_id ? (
-  <CotizacionAutorizadaCard
-    cotizacion={cotizacion}
-    eventoId={cotizacion.evento_id}
-    studioSlug={studioSlug}
-  />
-) : (
-  <PromiseClosingProcessCard
-    // ... props normales
-  />
-)}
+// Buscar cotización autorizada con evento
+const cotizacionAutorizada = cotizaciones.find(
+  (c) => c.status === 'autorizada' && c.evento_id && !c.archived
+);
+
+// Buscar cotización en cierre o aprobada (sin autorizar aún)
+const closingOrApprovedQuote = cotizaciones.find(
+  (c) =>
+    (c.status === 'en_cierre' || c.status === 'aprobada' || c.status === 'approved') &&
+    c.status !== 'autorizada' &&
+    !c.archived
+);
+
+// Mostrar CotizacionAutorizadaCard si está autorizada
+if (cotizacionAutorizada && promiseId) {
+  return (
+    <CotizacionAutorizadaCard
+      cotizacion={cotizacionAutorizada}
+      eventoId={cotizacionAutorizada.evento_id!}
+      studioSlug={studioSlug}
+    />
+  );
+}
+
+// Mostrar PromiseClosingProcessCard si está en cierre/aprobada
+if (closingOrApprovedQuote && promiseId) {
+  return (
+    <PromiseClosingProcessCard
+      // ... props normales
+    />
+  );
+}
 ```
 
 **Componente:** `CotizacionAutorizadaCard.tsx`
@@ -694,7 +776,7 @@ export function CotizacionAutorizadaCard({
           </div>
         </div>
       </ZenCardHeader>
-      
+
       <ZenCardContent>
         <div className="space-y-4">
           {/* Resumen de Cotización */}
@@ -758,7 +840,7 @@ export function CotizacionAutorizadaCard({
             <ArrowRight className="w-4 h-4 mr-2" />
             Gestionar Evento
           </ZenButton>
-          
+
           <p className="text-xs text-zinc-500 text-center mt-2">
             Este evento ya fue creado y está en gestión
           </p>
@@ -771,68 +853,54 @@ export function CotizacionAutorizadaCard({
 
 ### 3. Ocultar Cotización Autorizada del Panel
 
-**Archivo:** `PromiseQuotesPanel.tsx`
+**Archivo:** `PromiseQuotesPanel.tsx` ✅ **YA IMPLEMENTADO**
 
-**Lógica:**
-- Solo mostrar cotizaciones: `pendiente`, `en_cierre`
-- NO mostrar: `autorizada` (se muestra en card de evento autorizado)
-- NO mostrar: `archivada` (histórico, no relevante)
+**Lógica actual (líneas 288-290):**
 
-```typescript
-// Filtrar solo cotizaciones activas (pendiente, en_cierre)
-const cotizacionesActivas = cotizaciones.filter(
-  cot => cot.status === 'pendiente' || cot.status === 'en_cierre'
-);
+- Ya filtra cotizaciones para el listado excluyendo `aprobada`, `autorizada`, `approved`, `en_cierre` (a menos que estén archivadas o canceladas)
+- Ya maneja el filtro de archivadas (líneas 148-156, 242-248)
+- La cotización en cierre/aprobada/autorizada se muestra en `PromiseClosingProcessCard` (no en el panel)
 
-return (
-  <div>
-    {cotizacionesActivas.length === 0 ? (
-      <div className="text-center py-8 text-zinc-400 text-sm">
-        No hay cotizaciones activas
-      </div>
-    ) : (
-      cotizacionesActivas.map(cot => (
-        <CotizacionCard key={cot.id} cotizacion={cot} />
-      ))
-    )}
-  </div>
-);
-```
+**No requiere cambios adicionales** - El filtro ya está implementado correctamente.
 
 ---
 
 ## ✅ Checklist de Implementación
 
 ### Fase 1: Base de Datos
+
 - [ ] Crear migración SQL manualmente en `/supabase/migrations/`
 - [ ] Ejecutar migración en desarrollo
 - [ ] Actualizar Prisma schema con campos snapshot
 - [ ] Generar tipos de Prisma (`npx prisma generate`)
 
 ### Fase 2: Server Actions
+
 - [ ] Crear `autorizarYCrearEvento` en `cotizaciones-cierre.actions.ts`
 - [ ] Crear helpers `getCondicionesComerciales` y `getContrato`
-- [ ] Implementar validaciones pre-autorización
+- [ ] Implementar validaciones pre-autorización: contrato firmado SOLO si `selected_by_prospect === true`
 - [ ] Implementar transacción atómica completa
 - [ ] Agregar manejo de errores y rollback
 
 ### Fase 3: UI - Botón de Autorización
+
 - [ ] Agregar botón "Autorizar y Crear Evento" en `PromiseClosingProcessCard`
-- [ ] Implementar validación de requisitos (`puedeAutorizar`)
+- [ ] Implementar validación de requisitos (`puedeAutorizar`) con lógica: contrato firmado SOLO si `selected_by_prospect === true`
 - [ ] Crear modal de confirmación con resumen
 - [ ] Implementar lógica de autorización
 - [ ] Agregar toast de éxito/error
 - [ ] Implementar redirección al evento
 
 ### Fase 4: UI - Vista Post-Autorización
+
 - [ ] Implementar redirección automática al evento después de autorizar
 - [ ] Crear `CotizacionAutorizadaCard` con botón "Gestionar Evento"
-- [ ] Actualizar `PromiseClosingProcessSection` para mostrar card según status
+- [ ] Actualizar `PromiseClosingProcessSection` para mostrar `CotizacionAutorizadaCard` cuando `status === 'autorizada' && evento_id !== null`
 - [ ] Botón "Gestionar Evento" redirige a `/events/[eventoId]`
-- [ ] Filtrar panel de cotizaciones: solo `pendiente` y `en_cierre`
-- [ ] NO mostrar cotizaciones `autorizada` ni `archivada` en panel
+- [x] Filtrar panel de cotizaciones: ✅ **YA IMPLEMENTADO** en `PromiseQuotesPanel.tsx`
 
 ### Fase 5: Actualizar Queries Existentes
+
 - [ ] Identificar componentes que leen condiciones comerciales
 - [ ] Actualizar para usar helper `getCondicionesComerciales`
 - [ ] Identificar componentes que leen contratos
@@ -840,6 +908,7 @@ return (
 - [ ] Actualizar reportes y vistas
 
 ### Fase 6: Testing
+
 - [ ] Probar autorización con todos los datos completos
 - [ ] Verificar snapshots guardados correctamente
 - [ ] Verificar evento creado con datos correctos
@@ -849,8 +918,11 @@ return (
 - [ ] Verificar redirección al evento
 - [ ] Probar validaciones (contrato sin firmar, datos incompletos)
 - [ ] Verificar que cambios en tablas maestras no afectan cotizaciones autorizadas
+- [ ] Probar autorización con cotización seleccionada por prospecto (requiere contrato firmado)
+- [ ] Probar autorización con cotización NO seleccionada por prospecto (no requiere contrato firmado)
 
 ### Fase 7: Migración de Datos Existentes (Opcional)
+
 - [ ] Crear script de migración para cotizaciones autorizadas legacy
 - [ ] Ejecutar migración en desarrollo
 - [ ] Validar integridad de datos migrados
@@ -866,6 +938,7 @@ return (
 2. **Mostrar card de resumen en Promise** (para consulta posterior)
 
 **Razones para mantener card en Promise:**
+
 - ✅ Estudio puede consultar qué se autorizó
 - ✅ Antecedente visible del cierre
 - ✅ Acceso rápido al evento desde promise
@@ -891,6 +964,7 @@ router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
 ```
 
 **En el panel de cotizaciones:**
+
 - Solo mostrar cotizaciones: `pendiente`, `en_cierre`
 - NO mostrar: `autorizada` (ya está en card de evento autorizado)
 - NO mostrar: `archivada` (histórico)
@@ -901,7 +975,7 @@ router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
 
 1. **Inmutabilidad:** Los snapshots NO deben modificarse después de autorizar
 2. **Linealidad:** No hay vuelta atrás después de autorizar
-3. **Validación estricta:** Contrato DEBE estar firmado antes de autorizar
+3. **Validación estricta:** Contrato DEBE estar firmado antes de autorizar **SOLO si `selected_by_prospect === true`** (cotización seleccionada por prospecto)
 4. **Transacción atómica:** Todo o nada (rollback automático en caso de error)
 5. **Trazabilidad:** Log completo de la autorización
 6. **Limpieza:** Eliminar registro temporal después de autorizar
@@ -975,6 +1049,7 @@ router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
 ## 📌 Resumen Ejecutivo
 
 ### Flujo Completo
+
 1. Usuario en Promise → Cotización en cierre
 2. Click "Autorizar y Crear Evento" → Validaciones
 3. Transacción atómica → Crear snapshots + Evento
@@ -982,16 +1057,19 @@ router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
 5. Promise muestra `CotizacionAutorizadaCard` con botón "Gestionar Evento"
 
 ### Panel de Cotizaciones
+
 - ✅ Mostrar: `pendiente`, `en_cierre`
 - ❌ NO mostrar: `autorizada`, `archivada`
 
 ### Card de Evento Autorizado (en Promise)
+
 - Resumen de cotización
 - Condiciones comerciales (snapshot)
 - Contrato firmado (snapshot)
 - Botón "Gestionar Evento" → `/events/[eventoId]`
 
 ### Migraciones
+
 - Crear manualmente en `/supabase/migrations/`
 - Campos snapshot en `studio_cotizaciones`
 - Actualizar Prisma schema
@@ -1002,4 +1080,3 @@ router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
 **Última actualización:** 2026-01-04  
 **Estado:** Listo para implementación  
 **Prioridad:** Alta
-

@@ -1035,3 +1035,317 @@ export async function obtenerVersionesContratoCierre(
   }
 }
 
+/**
+ * Autoriza una cotización y crea el evento asociado
+ *
+ * Proceso:
+ * 1. Valida que la cotización esté en estado 'en_cierre'
+ * 2. Valida que exista registro de cierre con datos completos
+ * 3. Valida que el contrato esté firmado (solo si selected_by_prospect === true)
+ * 4. Lee datos de cierre y crea snapshots
+ * 5. Crea el evento
+ * 6. Actualiza cotización con snapshots (inmutables)
+ * 7. Registra pago inicial (si aplica)
+ * 8. Cambia etapa de promesa a 'aprobado'
+ * 9. Archiva otras cotizaciones de la promesa
+ * 10. Elimina registro temporal de cierre
+ * 11. Crea log de autorización
+ *
+ * @returns Evento creado y cotización autorizada
+ */
+export async function autorizarYCrearEvento(
+  studioSlug: string,
+  promiseId: string,
+  cotizacionId: string,
+  options?: {
+    registrarPago?: boolean;
+    montoInicial?: number;
+  }
+): Promise<{
+  success: boolean;
+  data?: {
+    evento_id: string;
+    cotizacion_id: string;
+    pago_registrado: boolean;
+  };
+  error?: string;
+}> {
+  try {
+    // 1. Validar studio
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    // 2. Validar cotización y promesa
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        promise_id: promiseId,
+        studio_id: studio.id,
+      },
+      include: {
+        promise: {
+          include: {
+            contact: true,
+          },
+        },
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    if (cotizacion.status !== 'en_cierre') {
+      return {
+        success: false,
+        error: 'La cotización debe estar en estado de cierre',
+      };
+    }
+
+    // 3. Validar registro de cierre
+    const registroCierre = await prisma.studio_cotizaciones_cierre.findUnique({
+      where: { cotizacion_id: cotizacionId },
+      include: {
+        condiciones_comerciales: true,
+        contract_template: true,
+      },
+    });
+
+    if (!registroCierre) {
+      return { success: false, error: 'No se encontró el registro de cierre' };
+    }
+
+    // 4. Validaciones de datos completos
+    if (
+      !registroCierre.condiciones_comerciales_definidas ||
+      !registroCierre.condiciones_comerciales_id
+    ) {
+      return {
+        success: false,
+        error: 'Debe definir las condiciones comerciales',
+      };
+    }
+
+    if (
+      !registroCierre.contrato_definido ||
+      !registroCierre.contract_template_id
+    ) {
+      return { success: false, error: 'Debe definir el contrato' };
+    }
+
+    // Validación: contrato firmado SOLO si la cotización fue seleccionada por el prospecto
+    if (cotizacion.selected_by_prospect && !registroCierre.contract_signed_at) {
+      return {
+        success: false,
+        error:
+          'El contrato debe estar firmado por el cliente antes de autorizar',
+      };
+    }
+
+    // 5. Obtener primera etapa del pipeline de eventos
+    const primeraEtapa = await prisma.studio_manager_pipeline_stages.findFirst({
+      where: {
+        studio_id: studio.id,
+        is_active: true,
+      },
+      orderBy: { order: 'asc' },
+    });
+
+    if (!primeraEtapa) {
+      return {
+        success: false,
+        error: 'No se encontró una etapa inicial en el pipeline de eventos',
+      };
+    }
+
+    // 6. Obtener etapa "aprobado" del pipeline de promesas
+    const etapaAprobado = await prisma.studio_promise_pipeline_stages.findFirst({
+      where: {
+        studio_id: studio.id,
+        slug: 'aprobado',
+      },
+    });
+
+    if (!etapaAprobado) {
+      return {
+        success: false,
+        error: 'No se encontró la etapa "aprobado" en el pipeline de promesas',
+      };
+    }
+
+    // 7. TRANSACCIÓN ATÓMICA
+    const result = await prisma.$transaction(async (tx) => {
+      // 7.1. Crear snapshots de condiciones comerciales
+      const condicionSnapshot = registroCierre.condiciones_comerciales
+        ? {
+            name: registroCierre.condiciones_comerciales.name,
+            description: registroCierre.condiciones_comerciales.description,
+            advance_percentage: registroCierre.condiciones_comerciales
+              .advance_percentage
+              ? Number(
+                  registroCierre.condiciones_comerciales.advance_percentage
+                )
+              : null,
+            advance_type: registroCierre.condiciones_comerciales.advance_type,
+            advance_amount:
+              registroCierre.condiciones_comerciales.advance_amount,
+            discount_percentage: registroCierre.condiciones_comerciales
+              .discount_percentage
+              ? Number(
+                  registroCierre.condiciones_comerciales.discount_percentage
+                )
+              : null,
+          }
+        : null;
+
+      // 7.2. Crear snapshots de contrato
+      const contratoSnapshot = {
+        template_id: registroCierre.contract_template_id,
+        template_name: registroCierre.contract_template?.name || null,
+        content: registroCierre.contract_content,
+        version: registroCierre.contract_version,
+        signed_at: registroCierre.contract_signed_at,
+        signed_ip: null, // TODO: Obtener IP de firma desde tabla de versiones si existe
+      };
+
+      // 7.3. Crear evento
+      const evento = await tx.studio_events.create({
+        data: {
+          studio_id: studio.id,
+          contact_id: cotizacion.promise.contact_id,
+          promise_id: promiseId,
+          cotizacion_id: cotizacionId,
+          event_type_id: cotizacion.promise.event_type_id || null,
+          stage_id: primeraEtapa.id,
+          event_date: cotizacion.promise.event_date || new Date(),
+          status: 'ACTIVE',
+        },
+      });
+
+      // 7.4. Actualizar cotización con snapshots (inmutables)
+      await tx.studio_cotizaciones.update({
+        where: { id: cotizacionId },
+        data: {
+          status: 'autorizada',
+          evento_id: evento.id,
+          // Snapshots de condiciones comerciales
+          condiciones_comerciales_id: null, // ❌ No usar FK
+          condiciones_comerciales_name_snapshot:
+            condicionSnapshot?.name || null,
+          condiciones_comerciales_description_snapshot:
+            condicionSnapshot?.description || null,
+          condiciones_comerciales_advance_percentage_snapshot:
+            condicionSnapshot?.advance_percentage || null,
+          condiciones_comerciales_advance_type_snapshot:
+            condicionSnapshot?.advance_type || null,
+          condiciones_comerciales_advance_amount_snapshot:
+            condicionSnapshot?.advance_amount || null,
+          condiciones_comerciales_discount_percentage_snapshot:
+            condicionSnapshot?.discount_percentage || null,
+          // Snapshots de contrato
+          contract_template_id_snapshot: contratoSnapshot.template_id,
+          contract_template_name_snapshot: contratoSnapshot.template_name,
+          contract_content_snapshot: contratoSnapshot.content,
+          contract_version_snapshot: contratoSnapshot.version,
+          contract_signed_at_snapshot: contratoSnapshot.signed_at,
+          contract_signed_ip_snapshot: contratoSnapshot.signed_ip,
+          updated_at: new Date(),
+        },
+      });
+
+      // 7.5. Registrar pago inicial (si aplica)
+      let pagoRegistrado = false;
+      if (
+        options?.registrarPago &&
+        options?.montoInicial &&
+        options.montoInicial > 0
+      ) {
+        await tx.studio_pagos.create({
+          data: {
+            evento_id: evento.id,
+            monto: options.montoInicial,
+            concepto: 'Pago inicial / Anticipo',
+            fecha: new Date(),
+            metodo_pago_id: registroCierre.pago_metodo_id,
+            status: 'COMPLETED',
+          },
+        });
+        pagoRegistrado = true;
+      }
+
+      // 7.6. Cambiar etapa de promesa a "aprobado"
+      await tx.studio_promises.update({
+        where: { id: promiseId },
+        data: {
+          pipeline_stage_id: etapaAprobado.id,
+          updated_at: new Date(),
+        },
+      });
+
+      // 7.7. Archivar otras cotizaciones de la promesa
+      await tx.studio_cotizaciones.updateMany({
+        where: {
+          promise_id: promiseId,
+          id: { not: cotizacionId },
+          status: { in: ['pendiente', 'en_cierre', 'autorizada'] },
+        },
+        data: {
+          status: 'archivada',
+          updated_at: new Date(),
+        },
+      });
+
+      // 7.8. Eliminar registro temporal de cierre
+      await tx.studio_cotizaciones_cierre.delete({
+        where: { cotizacion_id: cotizacionId },
+      });
+
+      // 7.9. Crear log de autorización
+      await tx.studio_promise_logs.create({
+        data: {
+          promise_id: promiseId,
+          user_id: null,
+          content: 'Cotización autorizada y evento creado exitosamente',
+          log_type: 'system',
+          metadata: {
+            action: 'cotizacion_autorizada_evento_creado',
+            cotizacion_id: cotizacionId,
+            evento_id: evento.id,
+            contract_signed: !!registroCierre.contract_signed_at,
+            pago_registrado: pagoRegistrado,
+          },
+        },
+      });
+
+      return {
+        evento_id: evento.id,
+        cotizacion_id: cotizacionId,
+        pago_registrado: pagoRegistrado,
+      };
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidatePath(`/${studioSlug}/studio/business/events/${result.evento_id}`);
+
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    console.error('[autorizarYCrearEvento] Error:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Error al autorizar cotización y crear evento',
+    };
+  }
+}
+

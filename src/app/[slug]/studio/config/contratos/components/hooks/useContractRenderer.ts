@@ -185,24 +185,8 @@ export function useContractRenderer({
     }
 
     // Renderizar bloque de condiciones comerciales
-    console.log('[useContractRenderer] Condiciones comerciales:', {
-      hasCondicionesData: !!condicionesData,
-      condicionesData: condicionesData,
-      condicionesDataKeys: condicionesData ? Object.keys(condicionesData) : [],
-      condicionesDataValues: condicionesData ? {
-        nombre: condicionesData.nombre,
-        descripcion: condicionesData.descripcion,
-        porcentaje_descuento: condicionesData.porcentaje_descuento,
-        descuento_aplicado: condicionesData.descuento_aplicado,
-        total_contrato: condicionesData.total_contrato,
-        total_final: condicionesData.total_final,
-        monto_anticipo: condicionesData.monto_anticipo,
-      } : null,
-    });
-
     if (condicionesData) {
       const condicionesHtml = renderCondicionesComercialesBlock(condicionesData);
-      console.log('[useContractRenderer] HTML generado para condiciones:', condicionesHtml.substring(0, 200));
       
       // Reemplazar @condiciones_comerciales o {condiciones_comerciales}
       rendered = rendered.replace("@condiciones_comerciales", condicionesHtml);

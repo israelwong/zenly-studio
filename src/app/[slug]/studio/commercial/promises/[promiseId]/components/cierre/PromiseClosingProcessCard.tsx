@@ -18,7 +18,7 @@ import {
 import { ContactEventFormModal } from '@/components/shared/contact-info';
 import { cancelarCierre, autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
-import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosCondicionesCierre, obtenerDatosPagoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosCondicionesCierre, obtenerDatosPagoCierre, autorizarYCrearEvento } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { CondicionesComercialeSelectorSimpleModal } from '../condiciones-comerciales/CondicionesComercialeSelectorSimpleModal';
 import { ContractTemplateSimpleSelectorModal } from '../contratos/ContractTemplateSimpleSelectorModal';
 import { ContractPreviewForPromiseModal } from '../contratos/ContractPreviewForPromiseModal';
@@ -137,7 +137,7 @@ export function PromiseClosingProcessCard({
     setLocalPromiseData(promiseData);
   }, [promiseData]);
 
-  const loadRegistroCierre = async () => {
+  const loadRegistroCierre = useCallback(async () => {
     setLoadingRegistro(true);
     try {
       const result = await obtenerRegistroCierre(studioSlug, cotizacion.id);
@@ -173,20 +173,30 @@ export function PromiseClosingProcessCard({
     } finally {
       setLoadingRegistro(false);
     }
-  };
+  }, [studioSlug, cotizacion.id]);
 
   // Actualizar solo los datos del contrato localmente (sin recargar todo el registro)
   const updateContractLocally = useCallback(async () => {
     try {
       const result = await obtenerDatosContratoCierre(studioSlug, cotizacion.id);
       if (result.success && result.data) {
+        // Comparar fechas correctamente (pueden ser Date o string)
+        const normalizeDate = (date: Date | string | null | undefined): string | null => {
+          if (!date) return null;
+          if (date instanceof Date) return date.toISOString();
+          return String(date);
+        };
+
         // Solo actualizar si hay cambios reales (evitar loop infinito)
         setContractData(prev => {
+          const prevSignedAt = normalizeDate(prev?.contract_signed_at);
+          const newSignedAt = normalizeDate(result.data!.contract_signed_at);
+          
           const hasChanges =
             prev?.contract_version !== result.data!.contract_version ||
             prev?.contract_template_id !== result.data!.contract_template_id ||
             prev?.contract_content !== result.data!.contract_content ||
-            prev?.contract_signed_at !== result.data!.contract_signed_at ||
+            prevSignedAt !== newSignedAt ||
             prev?.contrato_definido !== result.data!.contrato_definido;
 
           if (!hasChanges) return prev;
@@ -212,7 +222,7 @@ export function PromiseClosingProcessCard({
   }, [cotizacion.id]);
 
   // Escuchar cambios en tiempo real del proceso de cierre (contratos, pagos, etc.)
-  // Solo actualizar localmente sin recargar todo el componente
+  // Y cambios en el estado de la cotización (pendiente → en_cierre, en_cierre → pendiente)
   useCotizacionesRealtime({
     studioSlug,
     promiseId: promiseId || null,
@@ -220,11 +230,46 @@ export function PromiseClosingProcessCard({
     onCotizacionUpdated: useCallback((cotizacionId: string, payload?: unknown) => {
       // Solo actualizar si es la cotización actual
       if (cotizacionId === cotizacion.id) {
-        // Actualizar el contrato localmente para reflejar cambios (firma, regeneración, etc.)
-        // Esto incluye cambios en studio_cotizaciones_cierre que disparan updated_at en studio_cotizaciones
-        updateContractLocally();
+        const p = payload as any;
+        
+        // Verificar si es un evento de cierre real (table: 'studio_cotizaciones_cierre')
+        const isCierreEvent = p?.table === 'studio_cotizaciones_cierre' || p?.payload?.table === 'studio_cotizaciones_cierre';
+        
+        if (isCierreEvent) {
+          // Verificar si el evento incluye cambios en contract_signed_at
+          const record = p.record || p.new || p.payload?.new || p.payload?.record;
+          const oldRecord = p.old || p.payload?.old || p.payload?.old_record;
+          
+          // Si hay un cambio en contract_signed_at, forzar actualización inmediata
+          const signedAtChanged = record?.contract_signed_at && 
+            (!oldRecord || oldRecord.contract_signed_at !== record.contract_signed_at);
+          
+          // Actualizar el contrato localmente para reflejar cambios (firma, regeneración, etc.)
+          updateContractLocally();
+          return;
+        }
+
+        // Verificar si cambió el estado de la cotización
+        const changeInfo = p?.changeInfo;
+        if (changeInfo?.statusChanged) {
+          const oldStatus = changeInfo.oldStatus;
+          const newStatus = changeInfo.newStatus;
+          
+          // Si cambió de pendiente a en_cierre (o estados relacionados), recargar registro completo
+          // También si cambió de en_cierre a pendiente (cancelación de cierre)
+          const estadosCierre = ['en_cierre', 'contract_pending', 'contract_generated', 'contract_signed'];
+          const estadosPendiente = ['pendiente', 'pending'];
+          
+          const pasoACierre = estadosPendiente.includes(oldStatus) && estadosCierre.includes(newStatus);
+          const salioDeCierre = estadosCierre.includes(oldStatus) && estadosPendiente.includes(newStatus);
+          
+          if (pasoACierre || salioDeCierre) {
+            // Recargar registro completo cuando cambia el estado de cierre
+            loadRegistroCierre();
+          }
+        }
       }
-    }, [cotizacion.id, updateContractLocally]),
+    }, [cotizacion.id, updateContractLocally, loadRegistroCierre]),
   });
 
   const handleCancelarCierre = async () => {
@@ -474,9 +519,9 @@ export function PromiseClosingProcessCard({
         errors.push(`Completa los datos faltantes para generar el contrato: ${fieldsList}`);
       }
 
-      // Validar estado del contrato
-      if (cotizacion.status !== 'contract_signed') {
-        errors.push('No se puede autorizar hasta que el cliente firme el contrato');
+      // Validar estado del contrato: SOLO si selected_by_prospect === true
+      if (!contractData?.contract_signed_at) {
+        errors.push('El contrato debe estar firmado por el cliente antes de autorizar');
       }
 
       // Pago es opcional (warning)
@@ -607,6 +652,28 @@ export function PromiseClosingProcessCard({
     setShowConfirmAutorizarModal(false);
 
     try {
+      // Si la cotización está en estado 'en_cierre', usar el nuevo flujo
+      if (cotizacion.status === 'en_cierre') {
+        const result = await autorizarYCrearEvento(
+          studioSlug,
+          promiseId,
+          cotizacion.id,
+          {
+            registrarPago: pagoData?.pago_registrado || false,
+            montoInicial: pagoData?.pago_monto || undefined,
+          }
+        );
+
+        if (result.success && result.data) {
+          toast.success('¡Cotización autorizada y evento creado!');
+          router.push(`/${studioSlug}/studio/business/events/${result.data.evento_id}`);
+        } else {
+          toast.error(result.error || 'Error al autorizar cotización');
+        }
+        return;
+      }
+
+      // FLUJO LEGACY: Para cotizaciones en otros estados (mantener compatibilidad)
       // Calcular monto total con descuentos
       let montoTotal = cotizacion.price;
       if (condicionesData?.condiciones_comerciales?.discount_percentage) {
@@ -715,6 +782,40 @@ export function PromiseClosingProcessCard({
   };
 
   const condicionTexto = getCondicionTexto();
+
+  // Validar si se puede autorizar (para cotizaciones en cierre)
+  const puedeAutorizar = useMemo(() => {
+    if (cotizacion.status !== 'en_cierre') {
+      return false; // Solo para cotizaciones en cierre
+    }
+
+    // Condiciones comerciales definidas
+    if (!condicionesData?.condiciones_comerciales_definidas || !condicionesData?.condiciones_comerciales_id) {
+      return false;
+    }
+
+    // Contrato definido
+    if (!contractData?.contrato_definido || !contractData?.contract_template_id) {
+      return false;
+    }
+
+    // Contrato firmado SOLO si selected_by_prospect === true
+    const contratoFirmado = cotizacion.selected_by_prospect
+      ? contractData?.contract_signed_at !== null
+      : true; // Si no fue seleccionada por prospecto, no requiere firma
+
+    if (!contratoFirmado) {
+      return false;
+    }
+
+    // Datos del cliente completos
+    const clientValidation = validateClientContractData(localPromiseData);
+    if (!clientValidation.isValid) {
+      return false;
+    }
+
+    return true;
+  }, [cotizacion.status, cotizacion.selected_by_prospect, condicionesData, contractData, localPromiseData]);
 
   if (isLoadingPromiseData) {
     return (
@@ -826,9 +927,10 @@ export function PromiseClosingProcessCard({
             variant="primary"
             className="w-full"
             onClick={handleAutorizar}
-            disabled={isAuthorizing || loadingRegistro}
+            disabled={isAuthorizing || loadingRegistro || !puedeAutorizar}
             loading={isAuthorizing}
           >
+            <CheckCircle2 className="w-4 h-4 mr-2" />
             Autorizar y Crear Evento
           </ZenButton>
           <ZenButton

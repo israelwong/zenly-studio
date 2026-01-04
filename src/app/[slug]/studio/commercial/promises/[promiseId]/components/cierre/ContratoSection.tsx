@@ -1,8 +1,11 @@
 'use client';
 
-import React, { memo } from 'react';
-import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import React, { memo, useState, useEffect } from 'react';
+import { CheckCircle2, AlertCircle, Loader2, Eye } from 'lucide-react';
 import { ContratoGestionCard } from './ContratoGestionCard';
+import { ContractPreviewForPromiseModal } from '../contratos/ContractPreviewForPromiseModal';
+import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
+import type { ContractTemplate } from '@/types/contracts';
 
 interface ContractData {
   contract_template_id?: string | null;
@@ -70,9 +73,54 @@ export const ContratoSection = memo(function ContratoSection({
   condicionesComerciales,
   promiseData,
 }: ContratoSectionProps) {
+  const [showContractPreview, setShowContractPreview] = useState(false);
+  const [contractTemplate, setContractTemplate] = useState<ContractTemplate | null>(null);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
+
   // Calcular estado del contrato dentro del componente
   const tieneContratoGenerado = contractData?.contrato_definido && contractData?.contract_template_id;
   const contratoFirmado = !!contractData?.contract_signed_at;
+
+  // Cargar template cuando hay template_id y se necesita para el preview
+  useEffect(() => {
+    if (contratoFirmado && contractData?.contract_template_id) {
+      // Cargar template si no está cargado o si cambió el template_id
+      const shouldLoad = !contractTemplate || contractTemplate.id !== contractData.contract_template_id;
+      if (shouldLoad) {
+        loadTemplate();
+      }
+    } else {
+      // Limpiar template si no hay contrato firmado o no hay template_id
+      setContractTemplate(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractData?.contract_template_id, contratoFirmado]);
+
+  const loadTemplate = async () => {
+    if (!contractData?.contract_template_id) return;
+    setLoadingTemplate(true);
+    try {
+      const result = await getContractTemplate(studioSlug, contractData.contract_template_id);
+      if (result.success && result.data) {
+        setContractTemplate(result.data);
+      }
+    } catch (error) {
+      console.error('[ContratoSection] Error loading template:', error);
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
+
+  const handleViewContract = () => {
+    if (contractData?.contract_template_id && contractTemplate) {
+      setShowContractPreview(true);
+    } else if (contractData?.contract_template_id) {
+      // Si no hay template cargado, cargar primero
+      loadTemplate().then(() => {
+        setShowContractPreview(true);
+      });
+    }
+  };
 
   let contratoIcon: React.ReactNode;
   let contratoEstado: string;
@@ -85,7 +133,7 @@ export const ContratoSection = memo(function ContratoSection({
       contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
       contratoEstado = 'Firmado por el cliente';
       contratoColor = 'text-emerald-400';
-      contratoBoton = 'Ver';
+      contratoBoton = null;
     } else {
       switch (cotizacionStatus) {
         case 'contract_pending':
@@ -104,7 +152,7 @@ export const ContratoSection = memo(function ContratoSection({
           contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
           contratoEstado = 'Firmado por el cliente';
           contratoColor = 'text-emerald-400';
-          contratoBoton = 'Ver';
+          contratoBoton = null;
           break;
         case 'en_cierre':
           if (tieneContratoGenerado) {
@@ -167,6 +215,15 @@ export const ContratoSection = memo(function ContratoSection({
                 {contratoBoton}
               </button>
             )}
+            {contratoFirmado && contractData?.contract_template_id && (
+              <button
+                onClick={handleViewContract}
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
+              >
+                <Eye className="h-3 w-3" />
+                Ver contrato
+              </button>
+            )}
           </div>
           {!contractData?.contrato_definido && (
             <span className="text-sm text-zinc-300">
@@ -215,6 +272,23 @@ export const ContratoSection = memo(function ContratoSection({
             isContractSigned={contratoFirmado}
           />
         </div>
+      )}
+
+      {/* Modal Preview de Contrato Firmado */}
+      {contratoFirmado && contractTemplate && (
+        <ContractPreviewForPromiseModal
+          isOpen={showContractPreview}
+          onClose={() => setShowContractPreview(false)}
+          onConfirm={() => setShowContractPreview(false)}
+          onEdit={() => {}}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+          cotizacionId={cotizacionId}
+          template={contractTemplate}
+          customContent={contractData?.contract_content}
+          condicionesComerciales={condicionesComerciales || undefined}
+          isContractSigned={true}
+        />
       )}
     </div>
   );

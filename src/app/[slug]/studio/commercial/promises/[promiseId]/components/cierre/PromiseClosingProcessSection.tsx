@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from '@/components/ui/zen';
 import { FileText, Loader2, HelpCircle } from 'lucide-react';
 import { PromiseClosingProcessCard } from './PromiseClosingProcessCard';
+import { CotizacionAutorizadaCard } from './CotizacionAutorizadaCard';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -74,28 +75,58 @@ export function PromiseClosingProcessSection({
       loadCotizaciones();
     },
     onCotizacionUpdated: (cotizacionId: string, payload?: unknown) => {
-      // Solo recargar si NO es un evento de cierre
       const p = payload as any;
-      const isCierreEvent = p?.table === 'studio_cotizaciones_cierre' || p?.payload?.table === 'studio_cotizaciones_cierre';
       
-      if (!isCierreEvent) {
-        // Es un cambio en la cotización (status, nombre, etc.) → recargar
-        loadCotizaciones();
+      // Verificar si cambió el estado (importante para mostrar/ocultar el card de cierre)
+      const changeInfo = p?.changeInfo;
+      
+      // Estados de cierre y relacionados
+      const estadosCierre = ['en_cierre', 'contract_pending', 'contract_generated', 'contract_signed', 'aprobada', 'approved', 'autorizada'];
+      
+      // Si cambió el estado, recargar SIEMPRE (importante para detectar cuando prospecto autoriza)
+      if (changeInfo?.statusChanged) {
+        const oldStatus = changeInfo.oldStatus;
+        const newStatus = changeInfo.newStatus;
+        
+        // Recargar si cambió a un estado de cierre o desde un estado de cierre
+        const pasoACierre = estadosCierre.includes(newStatus);
+        const salioDeCierre = estadosCierre.includes(oldStatus);
+        
+        // Recargar siempre que cambie el estado (para asegurar que se muestre/oculte el card correcto)
+        if (pasoACierre || salioDeCierre || oldStatus !== newStatus) {
+          loadCotizaciones();
+          return;
+        }
       }
-      // Si es evento de cierre → PromiseClosingProcessCard lo maneja internamente
+      
+      // También recargar si hay otros campos importantes cambiados
+      if (changeInfo?.camposCambiados?.length) {
+        // Verificar que NO sea solo updated_at
+        const camposImportantes = changeInfo.camposCambiados.filter(
+          (campo: string) => campo !== 'updated_at'
+        );
+        if (camposImportantes.length > 0) {
+          loadCotizaciones();
+        }
+      }
     },
     onCotizacionDeleted: () => {
       loadCotizaciones();
     },
   });
 
-  // Buscar cotización en cierre o aprobada
+  // Buscar cotización autorizada con evento
+  const cotizacionAutorizada = cotizaciones.find(
+    (c) => c.status === 'autorizada' && c.evento_id && !c.archived
+  );
+
+  // Buscar cotización en cierre o aprobada (sin autorizar aún)
   const closingOrApprovedQuote = cotizaciones.find(
     (c) =>
       (c.status === 'en_cierre' ||
         c.status === 'aprobada' ||
-        c.status === 'autorizada' ||
         c.status === 'approved') &&
+      c.status !== 'autorizada' &&
       !c.archived
   );
 
@@ -211,6 +242,17 @@ export function PromiseClosingProcessSection({
           showDismissCheckbox={false}
         />
       </>
+    );
+  }
+
+  // Si hay cotización autorizada con evento, mostrar card de autorizada
+  if (cotizacionAutorizada && promiseId && cotizacionAutorizada.evento_id) {
+    return (
+      <CotizacionAutorizadaCard
+        cotizacion={cotizacionAutorizada}
+        eventoId={cotizacionAutorizada.evento_id}
+        studioSlug={studioSlug}
+      />
     );
   }
 

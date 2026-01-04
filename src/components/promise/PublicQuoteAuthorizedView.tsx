@@ -101,6 +101,22 @@ export function PublicQuoteAuthorizedView({
   // Esto cubre el caso cuando el contrato fue generado manualmente por el estudio
   const condicionesComerciales = currentContract?.condiciones_comerciales || null;
 
+  // Cargar contrato inicialmente si no está disponible
+  useEffect(() => {
+    // Si no hay contractData pero hay template_id o el estado indica que debería haber contrato
+    const shouldLoadContract = !contractData && (
+      initialCotizacion.contract?.template_id ||
+      initialCotizacion.status === 'contract_generated' ||
+      initialCotizacion.status === 'contract_signed' ||
+      initialCotizacion.status === 'en_cierre'
+    );
+
+    if (shouldLoadContract) {
+      updateContractLocally();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo al montar
+
   // Cargar información bancaria automáticamente cuando el contrato esté firmado
   useEffect(() => {
     if (isContractSigned && !bankInfo && !loadingBankInfo && studio.id) {
@@ -435,34 +451,11 @@ export function PublicQuoteAuthorizedView({
                 <ZenCard>
                   <div className="p-6">
                     {!isContractSigned ? (
-                      <>
-                        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                          <p className="text-sm text-amber-400">
-                            ⚠️ Primero debes firmar el contrato para continuar con el pago
-                          </p>
-                        </div>
-                        <p className="text-sm text-zinc-300 mb-4">
-                          Consulta los datos bancarios del estudio para realizar tu transferencia SPEI.
+                      <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                        <p className="text-sm text-amber-400">
+                          ⚠️ Primero debes firmar el contrato para continuar con el pago
                         </p>
-                        <ZenButton
-                          onClick={handleShowBankInfo}
-                          disabled={loadingBankInfo}
-                          variant="outline"
-                          className="w-full"
-                        >
-                          {loadingBankInfo ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                              Cargando...
-                            </>
-                          ) : (
-                            <>
-                              <Building2 className="h-4 w-4 mr-2" />
-                              Ver Cuenta CLABE para Pago
-                            </>
-                          )}
-                        </ZenButton>
-                      </>
+                      </div>
                     ) : (
                       <>
                         {loadingBankInfo ? (

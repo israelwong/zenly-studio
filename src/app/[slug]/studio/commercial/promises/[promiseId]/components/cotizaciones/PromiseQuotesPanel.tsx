@@ -181,8 +181,15 @@ export function PromiseQuotesPanel({
     onCotizacionInserted: () => {
       loadCotizaciones();
     },
-    onCotizacionUpdated: () => {
-      loadCotizaciones();
+    onCotizacionUpdated: (cotizacionId: string, payload?: unknown) => {
+      // Verificar si hay cambios importantes (estado, nombre, etc.)
+      const p = payload as any;
+      const changeInfo = p?.changeInfo;
+      
+      // Recargar si cambió el estado o cualquier campo importante
+      if (changeInfo?.statusChanged || changeInfo?.camposCambiados?.length) {
+        loadCotizaciones();
+      }
     },
     onCotizacionDeleted: (cotizacionId) => {
       // Actualización optimista: remover del estado local

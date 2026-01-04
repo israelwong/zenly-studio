@@ -496,6 +496,7 @@ export async function getPublicPromiseData(
       show_standard_conditions: boolean;
       show_offer_conditions: boolean;
       portafolios: boolean;
+      auto_generate_contract: boolean;
     };
     portafolios?: Array<{
       id: string;
@@ -1113,6 +1114,7 @@ export async function getPublicPromiseData(
           show_standard_conditions: shareSettings.show_standard_conditions,
           show_offer_conditions: shareSettings.show_offer_conditions,
           portafolios: shareSettings.portafolios,
+          auto_generate_contract: shareSettings.auto_generate_contract,
         },
         portafolios: portafolios.length > 0 ? portafolios : undefined,
       },
