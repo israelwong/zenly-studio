@@ -13,6 +13,7 @@ import { generatePDFFromElement } from '@/lib/utils/pdf-generator';
 interface PublicContractViewProps {
   isOpen: boolean;
   onClose: () => void;
+  onContractSigned?: () => void;
   cotizacionId: string;
   promiseId: string;
   studioSlug: string;
@@ -52,6 +53,7 @@ interface PublicContractViewProps {
 export function PublicContractView({
   isOpen,
   onClose,
+  onContractSigned,
   cotizacionId,
   promiseId,
   studioSlug,
@@ -276,10 +278,13 @@ export function PublicContractView({
 
       if (result.success) {
         toast.success('Contrato firmado exitosamente');
-        // Cerrar modal y recargar para actualizar estado
+        // Cerrar modal y actualizar estado local
         // La firma se guardó en studio_cotizaciones_cierre.contract_signed_at (tabla temporal)
         onClose();
-        window.location.reload();
+        // Llamar al callback para actualizar el estado en el componente padre
+        if (onContractSigned) {
+          onContractSigned();
+        }
       } else {
         console.error('[handleConfirmSign] Error en firma:', result.error);
         toast.error(result.error || 'Error al firmar contrato');

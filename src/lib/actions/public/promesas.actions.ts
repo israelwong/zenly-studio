@@ -1435,6 +1435,7 @@ export async function getPublicCotizacionContract(
     template_id: string | null;
     content: string | null;
     version: number;
+    signed_at: Date | null;
     condiciones_comerciales: {
       id: string;
       name: string;
@@ -1469,6 +1470,7 @@ export async function getPublicCotizacionContract(
             contract_template_id: true,
             contract_content: true,
             contract_version: true,
+            contract_signed_at: true,
             condiciones_comerciales: {
               select: {
                 id: true,
@@ -1497,6 +1499,7 @@ export async function getPublicCotizacionContract(
         template_id: cierre.contract_template_id,
         content: cierre.contract_content,
         version: cierre.contract_version || 1,
+        signed_at: cierre.contract_signed_at,
         condiciones_comerciales: cierre.condiciones_comerciales ? {
           id: cierre.condiciones_comerciales.id,
           name: cierre.condiciones_comerciales.name,

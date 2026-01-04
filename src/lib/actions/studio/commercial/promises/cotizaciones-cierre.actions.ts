@@ -89,6 +89,7 @@ export async function obtenerRegistroCierre(
         contract_template_id: registro.contract_template_id,
         contract_content: registro.contract_content,
         contract_version: registro.contract_version,
+        contract_signed_at: registro.contract_signed_at,
         contrato_definido: registro.contrato_definido,
         pago_registrado: registro.pago_registrado,
         pago_concepto: registro.pago_concepto,
@@ -272,6 +273,7 @@ export async function obtenerDatosContratoCierre(
     contract_version?: number;
     contract_template_id?: string | null;
     contract_content?: string | null;
+    contract_signed_at?: Date | null;
     contrato_definido?: boolean;
     ultima_version_info?: {
       version: number;
@@ -309,6 +311,7 @@ export async function obtenerDatosContratoCierre(
         contract_version: true,
         contract_template_id: true,
         contract_content: true,
+        contract_signed_at: true,
         contrato_definido: true,
       },
     });
@@ -335,6 +338,7 @@ export async function obtenerDatosContratoCierre(
         contract_version: registro.contract_version,
         contract_template_id: registro.contract_template_id,
         contract_content: registro.contract_content,
+        contract_signed_at: registro.contract_signed_at,
         contrato_definido: registro.contrato_definido,
         ultima_version_info: ultimaVersion ? {
           version: ultimaVersion.version,

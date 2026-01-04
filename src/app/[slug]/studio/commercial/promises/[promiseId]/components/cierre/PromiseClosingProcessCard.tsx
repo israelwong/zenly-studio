@@ -112,6 +112,7 @@ export function PromiseClosingProcessCard({
     contract_template_id?: string | null;
     contract_content?: string | null;
     contract_version?: number;
+    contract_signed_at?: Date | null;
     contrato_definido?: boolean;
     ultima_version_info?: {
       version: number;
@@ -154,6 +155,7 @@ export function PromiseClosingProcessCard({
           contract_template_id: data.contract_template_id,
           contract_content: data.contract_content,
           contract_version: data.contract_version,
+          contract_signed_at: data.contract_signed_at,
           contrato_definido: data.contrato_definido,
           ultima_version_info: data.ultima_version_info,
         });
@@ -184,6 +186,7 @@ export function PromiseClosingProcessCard({
             prev?.contract_version !== result.data!.contract_version ||
             prev?.contract_template_id !== result.data!.contract_template_id ||
             prev?.contract_content !== result.data!.contract_content ||
+            prev?.contract_signed_at !== result.data!.contract_signed_at ||
             prev?.contrato_definido !== result.data!.contrato_definido;
 
           if (!hasChanges) return prev;
@@ -192,6 +195,7 @@ export function PromiseClosingProcessCard({
             contract_version: result.data!.contract_version,
             contract_template_id: result.data!.contract_template_id,
             contract_content: result.data!.contract_content,
+            contract_signed_at: result.data!.contract_signed_at,
             contrato_definido: result.data!.contrato_definido,
             ultima_version_info: result.data!.ultima_version_info,
           };
@@ -271,6 +275,7 @@ export function PromiseClosingProcessCard({
           prev?.contract_version !== result.data!.contract_version ||
           prev?.contract_template_id !== result.data!.contract_template_id ||
           prev?.contract_content !== result.data!.contract_content ||
+          prev?.contract_signed_at !== result.data!.contract_signed_at ||
           prev?.contrato_definido !== result.data!.contrato_definido;
 
         if (!hasChanges) return prev;

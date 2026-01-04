@@ -65,6 +65,7 @@ export function PublicQuoteAuthorizedView({
     template_id: string | null;
     content: string | null;
     version?: number;
+    signed_at?: Date | null;
     condiciones_comerciales: {
       id: string;
       name: string;
@@ -78,6 +79,7 @@ export function PublicQuoteAuthorizedView({
     template_id: initialCotizacion.contract.template_id,
     content: initialCotizacion.contract.content,
     version: initialCotizacion.contract.version,
+    signed_at: initialCotizacion.contract.signed_at,
     condiciones_comerciales: initialCotizacion.contract.condiciones_comerciales,
   } : null);
 
@@ -144,6 +146,7 @@ export function PublicQuoteAuthorizedView({
               template_id: contract.template_id,
               content: contract.content,
               version: contract.version,
+              signed_at: contract.signed_at,
               condiciones_comerciales: contract.condiciones_comerciales,
             });
           } else {
@@ -165,15 +168,37 @@ export function PublicQuoteAuthorizedView({
       const result = await getPublicCotizacionContract(studioSlug, cotizacion.id);
       if (result.success && result.data) {
         // Actualizar solo el estado del contrato, sin tocar cotizacion
-        setContractData({
+        const contractUpdate = {
           template_id: result.data.template_id,
           content: result.data.content,
           version: result.data.version || 1,
+          signed_at: result.data.signed_at,
           condiciones_comerciales: result.data.condiciones_comerciales,
-        });
+        };
+        setContractData(contractUpdate);
       }
     } catch (error) {
       console.error('[PublicQuoteAuthorizedView] Error updating contract locally:', error);
+    }
+  }, [studioSlug, cotizacion.id]);
+
+  // Callback cuando se firma el contrato
+  const handleContractSigned = useCallback(async () => {
+    try {
+      // Recargar datos del contrato para obtener contract_signed_at actualizado
+      const result = await getPublicCotizacionContract(studioSlug, cotizacion.id);
+      if (result.success && result.data) {
+        const contractUpdate = {
+          template_id: result.data.template_id,
+          content: result.data.content,
+          version: result.data.version || 1,
+          signed_at: result.data.signed_at, // Incluir fecha de firma
+          condiciones_comerciales: result.data.condiciones_comerciales,
+        };
+        setContractData(contractUpdate);
+      }
+    } catch (error) {
+      console.error('[PublicQuoteAuthorizedView] Error updating contract after signing:', error);
     }
   }, [studioSlug, cotizacion.id]);
 
@@ -431,6 +456,7 @@ export function PublicQuoteAuthorizedView({
         <PublicContractView
           isOpen={showContractView}
           onClose={() => setShowContractView(false)}
+          onContractSigned={handleContractSigned}
           cotizacionId={cotizacion.id}
           promiseId={promiseId}
           studioSlug={studioSlug}

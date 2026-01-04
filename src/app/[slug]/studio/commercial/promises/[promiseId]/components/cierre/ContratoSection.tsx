@@ -8,6 +8,7 @@ interface ContractData {
   contract_template_id?: string | null;
   contract_content?: string | null;
   contract_version?: number;
+  contract_signed_at?: Date | null;
   contrato_definido?: boolean;
   ultima_version_info?: {
     version: number;
@@ -71,6 +72,7 @@ export const ContratoSection = memo(function ContratoSection({
 }: ContratoSectionProps) {
   // Calcular estado del contrato dentro del componente
   const tieneContratoGenerado = contractData?.contrato_definido && contractData?.contract_template_id;
+  const contratoFirmado = !!contractData?.contract_signed_at;
 
   let contratoIcon: React.ReactNode;
   let contratoEstado: string;
@@ -78,50 +80,58 @@ export const ContratoSection = memo(function ContratoSection({
   let contratoBoton: string | null = null;
 
   if (isClienteNuevo) {
-    switch (cotizacionStatus) {
-      case 'contract_pending':
-        contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
-        contratoEstado = 'Pendiente de confirmación del cliente';
-        contratoColor = 'text-amber-400';
-        contratoBoton = null;
-        break;
-      case 'contract_generated':
-        contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
-        contratoEstado = 'Generado, esperando firma del cliente';
-        contratoColor = 'text-blue-400';
-        contratoBoton = null;
-        break;
-      case 'contract_signed':
-        contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
-        contratoEstado = 'Firmado por el cliente';
-        contratoColor = 'text-emerald-400';
-        contratoBoton = null;
-        break;
-      case 'en_cierre':
-        if (tieneContratoGenerado) {
+    // Si el contrato está firmado (verificar desde tabla temporal)
+    if (contratoFirmado) {
+      contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+      contratoEstado = 'Firmado por el cliente';
+      contratoColor = 'text-emerald-400';
+      contratoBoton = null;
+    } else {
+      switch (cotizacionStatus) {
+        case 'contract_pending':
+          contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+          contratoEstado = 'Pendiente de confirmación del cliente';
+          contratoColor = 'text-amber-400';
+          contratoBoton = null;
+          break;
+        case 'contract_generated':
           contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
           contratoEstado = 'Generado, esperando firma del cliente';
           contratoColor = 'text-blue-400';
-          contratoBoton = 'Editar';
-        } else {
-          contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
-          contratoEstado = 'Pendiente de generación';
-          contratoColor = 'text-amber-400';
-          contratoBoton = 'Generar';
-        }
-        break;
-      default:
-        if (tieneContratoGenerado) {
-          contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
-          contratoEstado = 'Generado, esperando firma del cliente';
-          contratoColor = 'text-blue-400';
-          contratoBoton = 'Editar';
-        } else {
-          contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
-          contratoEstado = 'Pendiente de generación';
-          contratoColor = 'text-amber-400';
-          contratoBoton = 'Generar';
-        }
+          contratoBoton = null;
+          break;
+        case 'contract_signed':
+          contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+          contratoEstado = 'Firmado por el cliente';
+          contratoColor = 'text-emerald-400';
+          contratoBoton = null;
+          break;
+        case 'en_cierre':
+          if (tieneContratoGenerado) {
+            contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+            contratoEstado = 'Generado, esperando firma del cliente';
+            contratoColor = 'text-blue-400';
+            contratoBoton = 'Editar';
+          } else {
+            contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+            contratoEstado = 'Pendiente de generación';
+            contratoColor = 'text-amber-400';
+            contratoBoton = 'Generar';
+          }
+          break;
+        default:
+          if (tieneContratoGenerado) {
+            contratoIcon = <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+            contratoEstado = 'Generado, esperando firma del cliente';
+            contratoColor = 'text-blue-400';
+            contratoBoton = 'Editar';
+          } else {
+            contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+            contratoEstado = 'Pendiente de generación';
+            contratoColor = 'text-amber-400';
+            contratoBoton = 'Generar';
+          }
+      }
     }
   } else {
     if (tieneContratoGenerado) {
@@ -213,6 +223,7 @@ export const ContratoSection = memo(function ContratoSection({
     prevProps.contractData?.contract_template_id === nextProps.contractData?.contract_template_id &&
     prevProps.contractData?.contract_content === nextProps.contractData?.contract_content &&
     prevProps.contractData?.contract_version === nextProps.contractData?.contract_version &&
+    prevProps.contractData?.contract_signed_at === nextProps.contractData?.contract_signed_at &&
     prevProps.contractData?.contrato_definido === nextProps.contractData?.contrato_definido &&
     prevProps.loadingRegistro === nextProps.loadingRegistro &&
     prevProps.showContratoOptionsModal === nextProps.showContratoOptionsModal &&
