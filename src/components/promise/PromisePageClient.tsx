@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Calendar } from 'lucide-react';
+import { Calendar, Building2 } from 'lucide-react';
 import { PromiseHeroSection } from './PromiseHeroSection';
 import { CotizacionesSectionRealtime } from './CotizacionesSectionRealtime';
 import { PaquetesSection } from './PaquetesSection';
@@ -9,9 +9,11 @@ import { ComparadorButton } from './ComparadorButton';
 import { PortafoliosCard } from './PortafoliosCard';
 import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { PublicQuoteAuthorizedView } from './PublicQuoteAuthorizedView';
+import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { usePromiseSettingsRealtime } from '@/hooks/usePromiseSettingsRealtime';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 
 interface PromiseShareSettings {
@@ -107,10 +109,37 @@ export function PromisePageClient({
 }: PromisePageClientProps) {
   const [shareSettings, setShareSettings] = useState<PromiseShareSettings>(initialShareSettings);
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
+  const [showBankInfoModal, setShowBankInfoModal] = useState(false);
+  const [bankInfo, setBankInfo] = useState<{ banco?: string | null; titular?: string | null; clabe?: string | null } | null>(null);
+  const [loadingBankInfo, setLoadingBankInfo] = useState(false);
 
   const handleSettingsUpdated = useCallback((settings: PromiseShareSettings) => {
     setShareSettings(settings);
   }, []);
+
+  const handleShowBankInfo = useCallback(async () => {
+    if (bankInfo) {
+      setShowBankInfoModal(true);
+      return;
+    }
+
+    setLoadingBankInfo(true);
+    try {
+      const result = await obtenerInfoBancariaStudio(studio.id);
+      if (result.success && result.data) {
+        setBankInfo({
+          banco: result.data.banco,
+          titular: result.data.titular,
+          clabe: result.data.clabe,
+        });
+        setShowBankInfoModal(true);
+      }
+    } catch (error) {
+      console.error('[PromisePageClient] Error loading bank info:', error);
+    } finally {
+      setLoadingBankInfo(false);
+    }
+  }, [studio.id, bankInfo]);
 
   // Sincronizar cotizaciones cuando cambian las iniciales (SSR)
   useEffect(() => {
@@ -207,12 +236,22 @@ export function PromisePageClient({
               )}
             </div>
           </div>
-          <a
-            href={`/${studioSlug}`}
-            className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
-          >
-            Ver perfil
-          </a>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleShowBankInfo}
+              disabled={loadingBankInfo}
+              className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Cuenta CLABE</span>
+            </button>
+            <a
+              href={`/${studioSlug}`}
+              className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
+            >
+              Ver perfil
+            </a>
+          </div>
         </div>
       </header>
 
@@ -342,6 +381,16 @@ export function PromisePageClient({
         {/* Footer by Zen */}
         <PublicPageFooter />
       </div>
+
+      {/* Modal de información bancaria */}
+      {bankInfo && (
+        <BankInfoModal
+          isOpen={showBankInfoModal}
+          onClose={() => setShowBankInfoModal(false)}
+          bankInfo={bankInfo}
+          studioName={studio.studio_name}
+        />
+      )}
     </div>
   );
 }
