@@ -107,7 +107,7 @@ export const PublicContractCard = memo(function PublicContractCard({
               <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
                 <p className="text-sm text-zinc-300 leading-relaxed">
                   {isContractSigned
-                    ? 'Tu contrato ha sido firmado correctamente. El estudio procederá con la autorización del evento.'
+                    ? 'Tu contrato ha sido firmado correctamente..'
                     : 'Revisa detalladamente tu contrato y confirma tu aceptación firmándolo digitalmente para continuar con el proceso.'}
                 </p>
                 {contract?.version && (

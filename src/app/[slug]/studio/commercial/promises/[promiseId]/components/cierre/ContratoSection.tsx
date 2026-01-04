@@ -85,7 +85,7 @@ export const ContratoSection = memo(function ContratoSection({
       contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
       contratoEstado = 'Firmado por el cliente';
       contratoColor = 'text-emerald-400';
-      contratoBoton = null;
+      contratoBoton = 'Ver';
     } else {
       switch (cotizacionStatus) {
         case 'contract_pending':
@@ -104,7 +104,7 @@ export const ContratoSection = memo(function ContratoSection({
           contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
           contratoEstado = 'Firmado por el cliente';
           contratoColor = 'text-emerald-400';
-          contratoBoton = null;
+          contratoBoton = 'Ver';
           break;
         case 'en_cierre':
           if (tieneContratoGenerado) {
