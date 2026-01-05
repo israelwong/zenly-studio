@@ -34,10 +34,10 @@ interface StudioSidebarProps {
 }
 
 // Componente para grupo de menú con soporte para modo colapsado
-const MenuGroup = ({ 
-    group, 
-    children, 
-    isCollapsed 
+const MenuGroup = ({
+    group,
+    children,
+    isCollapsed
 }: {
     group: { id: string; title: string; icon: React.ComponentType<{ className?: string }> },
     children: React.ReactNode,
@@ -72,7 +72,7 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
     const { isOpen, toggleSidebar, isCollapsed, toggleCollapse, isMobile } = useZenSidebar();
     const [isHovered, setIsHovered] = React.useState(false);
     const [isMac, setIsMac] = React.useState(false);
-    
+
     // En desktop, si está colapsado y se hace hover, expandir temporalmente
     const isExpandedOnHover = !isMobile && isCollapsed && isHovered;
 
@@ -94,7 +94,7 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
                 { id: 'dashboard', name: 'Dashboard', href: `/commercial/dashboard`, icon: Home },
                 { id: 'catalogo', name: 'Catálogo', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
                 { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
-                // { id: 'portafolios', name: 'Portafolios', href: `/commercial/portafolios`, icon: FolderOpen },
+                { id: 'portafolios', name: 'Portafolios', href: `/commercial/portafolios`, icon: FolderOpen },
                 { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
             ],
         },
@@ -128,18 +128,18 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
     ];
 
     return (
-        <ZenSidebar 
+        <ZenSidebar
             className={`${className} ${isOpen ? '' : 'hidden lg:block'}`}
             isHovered={isExpandedOnHover}
             onMouseEnter={() => !isMobile && setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
             <ZenSidebarContent className={isCollapsed && !isExpandedOnHover ? "px-1.5" : "px-4"}>
-                    {/* Botón toggle collapse - Solo visible en desktop */}
-                    <div className={cn(
-                        "flex items-center justify-between pt-4",
-                        isCollapsed ? "pb-2 px-1.5 lg:px-1.5" : "pb-6 px-3 lg:px-3"
-                    )}>
+                {/* Botón toggle collapse - Solo visible en desktop */}
+                <div className={cn(
+                    "flex items-center justify-between pt-4",
+                    isCollapsed ? "pb-2 px-1.5 lg:px-1.5" : "pb-6 px-3 lg:px-3"
+                )}>
                     {/* Botón de cerrar - Solo visible en mobile */}
                     <div className="flex justify-end lg:hidden">
                         <ZenButton
@@ -176,7 +176,7 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
                         </button>
                     </div>
                 </div>
-                
+
                 {/* Divisor debajo del botón toggle - solo cuando está colapsado */}
                 {isCollapsed && !isExpandedOnHover && (
                     <div className="hidden lg:block">
@@ -240,7 +240,9 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
                                                     : "gap-2 px-2.5 py-0.5",
                                                 "text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/40"
                                             )}
-                                            title={isCollapsed && !isExpandedOnHover ? item.name : undefined}
+                                            data-tooltip-id="my-tooltip"
+                                            data-tooltip-content={item.name}
+                                            data-tooltip-place="right"
                                         >
                                             <item.icon className={cn(
                                                 "shrink-0 text-zinc-500 group-hover:text-zinc-300",

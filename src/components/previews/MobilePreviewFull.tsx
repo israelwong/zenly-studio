@@ -23,6 +23,8 @@ interface MobilePreviewFullProps {
     hidePortfolioHeader?: boolean;
     // Ocultar header completo (regresar y compartir) - para landing pages
     hideHeader?: boolean;
+    // Ocultar footer (PublicPageFooter) - para editores comerciales
+    hideFooter?: boolean;
 }
 
 /**
@@ -38,7 +40,8 @@ export function MobilePreviewFull({
     onBack,
     isEditMode = false,
     hidePortfolioHeader = false,
-    hideHeader = false
+    hideHeader = false,
+    hideFooter = false
 }: MobilePreviewFullProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -100,9 +103,11 @@ export function MobilePreviewFull({
                             />
 
                             {/* Footer dentro del contenido */}
-                            <div className="mt-4">
-                                <PublicPageFooter />
-                            </div>
+                            {!hideFooter && (
+                                <div className="mt-4">
+                                    <PublicPageFooter />
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

@@ -913,6 +913,7 @@ export async function reorderPortfolios(studioSlug: string, portfolioIds: string
         );
 
         console.log('[reorderPortfolios] Reorden exitoso');
+        revalidatePath(`/${studioSlug}/studio/commercial/portafolios`);
         revalidatePath(`/${studioSlug}?section=portafolio`);
 
         return { success: true };

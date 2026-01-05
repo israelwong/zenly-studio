@@ -397,7 +397,7 @@ function ArchivedCard({ item, onRestore, onDelete, isRestoring, isDeleting, acti
         if (item.type === 'post') {
             router.push(`/${item.slug}/profile/posts?edit=${item.id}`);
         } else if (item.type === 'portfolio') {
-            router.push(`/${item.slug}/profile/portfolio/${item.slug}`);
+            router.push(`/${item.slug}/studio/commercial/portafolios/${item.id}`);
         }
     };
 

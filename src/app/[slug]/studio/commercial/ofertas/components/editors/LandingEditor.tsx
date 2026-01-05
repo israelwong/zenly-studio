@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ZenButton } from "@/components/ui/zen";
 import { ContentBlocksEditor } from "@/components/shared/content-blocks";
-import { CategorizedComponentSelector, ComponentOption } from "@/app/[slug]/profile/portfolio/components/CategorizedComponentSelector";
+import { CategorizedComponentSelector, ComponentOption } from "@/app/[slug]/studio/commercial/portafolios/components/CategorizedComponentSelector";
 import { useOfferEditor } from "../OfferEditorContext";
 import { ContentBlock } from "@/types/content-blocks";
 

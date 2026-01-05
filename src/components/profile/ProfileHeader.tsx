@@ -100,7 +100,7 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
 
     const handleNewPortfolio = () => {
         if (studioSlug) {
-            router.push(`/${studioSlug}/profile/portfolio/nuevo`);
+            router.push(`/${studioSlug}/studio/commercial/portafolios/nuevo`);
         }
     };
 

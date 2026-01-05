@@ -197,7 +197,7 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
                             </Link>
                         </ZenDropdownMenuItem>
                         <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                            <Link href={`/${studioSlug}/profile/portfolio/nuevo`} target="_blank" rel="noopener noreferrer">
+                            <Link href={`/${studioSlug}/studio/commercial/portafolios/nuevo`} target="_blank" rel="noopener noreferrer">
                                 <Plus className="mr-2 h-4 w-4" />
                                 <span>Portafolio</span>
                             </Link>

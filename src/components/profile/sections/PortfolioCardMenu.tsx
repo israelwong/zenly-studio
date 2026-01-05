@@ -49,7 +49,7 @@ export function PortfolioCardMenu({ portfolioId, portfolioSlug, studioSlug, isPu
     }
 
     const handleEdit = () => {
-        router.push(`/${studioSlug}/profile/portfolio/${portfolioId}`);
+        router.push(`/${studioSlug}/studio/commercial/portafolios/${portfolioId}`);
         setIsOpen(false);
     };
 
