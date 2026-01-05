@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Send, Loader2 } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import {
@@ -81,6 +82,15 @@ export function SolicitarPaqueteModal({
     setIsSubmitting(true);
     setProgressError(null);
     setProgressStep('validating');
+    
+    // CRÍTICO: Cuando se muestra el overlay, ocultar inmediatamente cotizaciones/paquetes
+    // Esto asegura que se desmonten desde el inicio del proceso
+    flushSync(() => {
+      onCloseDetailSheet?.(); // Cierra DetailSheet
+      (onSuccessContext || onSuccess)?.(); // Oculta UI de cotización/paquete - EJECUTAR INMEDIATAMENTE
+      (onPreparingContext || onPreparing)?.(); // Activa skeleton - EJECUTAR INMEDIATAMENTE
+    });
+    
     // Ocultar el modal de formulario inmediatamente cuando iniciamos el proceso
     setShowProgressOverlay(true);
 
@@ -123,13 +133,8 @@ export function SolicitarPaqueteModal({
         return;
       }
 
-      // CRÍTICO: Después de 'registering', ejecutar en paralelo:
-      // - Cerrar DetailSheet
-      // - Ocultar UI de cotización/paquete (usar contexto si está disponible)
-      // - Activar skeleton para proceso de contratación
-      onCloseDetailSheet?.(); // Cierra DetailSheet
-      (onSuccessContext || onSuccess)?.(); // Oculta UI de cotización/paquete
-      (onPreparingContext || onPreparing)?.(); // Activa skeleton
+      // Los callbacks ya se ejecutaron cuando se abrió el overlay (step "validating")
+      // No es necesario ejecutarlos nuevamente aquí
 
       // Paso 4: Recopilando datos de cotización (~800ms)
       setProgressStep('collecting');

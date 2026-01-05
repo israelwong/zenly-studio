@@ -186,9 +186,21 @@ export function PromiseQuotesPanel({
       const p = payload as any;
       const changeInfo = p?.changeInfo;
       
-      // Recargar si cambió el estado o cualquier campo importante
-      if (changeInfo?.statusChanged || changeInfo?.camposCambiados?.length) {
+      // Recargar SIEMPRE que cambie el estado (importante para detectar cuando prospecto autoriza)
+      if (changeInfo?.statusChanged) {
         loadCotizaciones();
+        return;
+      }
+      
+      // También recargar si hay otros campos importantes cambiados
+      if (changeInfo?.camposCambiados?.length) {
+        // Verificar que NO sea solo updated_at
+        const camposImportantes = changeInfo.camposCambiados.filter(
+          (campo: string) => campo !== 'updated_at'
+        );
+        if (camposImportantes.length > 0) {
+          loadCotizaciones();
+        }
       }
     },
     onCotizacionDeleted: (cotizacionId) => {

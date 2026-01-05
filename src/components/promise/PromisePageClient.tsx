@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Calendar, Building2 } from 'lucide-react';
 import { PromiseHeroSection } from './PromiseHeroSection';
 import { CotizacionesSectionRealtime } from './CotizacionesSectionRealtime';
@@ -116,15 +117,14 @@ function PromisePageContent({
   handlePreparingRef: React.MutableRefObject<() => void>;
   handleSuccessRef: React.MutableRefObject<() => void>;
 }) {
-  const { 
+  const {
     showProgressOverlay, 
     progressStep, 
     progressError, 
     autoGenerateContract, 
     setShowProgressOverlay,
     setProgressStep,
-    setProgressError,
-    setOnPreparing
+    setProgressError
   } = usePromisePageContext();
   const [shareSettings, setShareSettings] = useState<PromiseShareSettings>(initialShareSettings);
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
@@ -133,6 +133,26 @@ function PromisePageContent({
   const [loadingBankInfo, setLoadingBankInfo] = useState(false);
   const [isLoadingContratacion, setIsLoadingContratacion] = useState(false);
   const [hideCotizacionesPaquetes, setHideCotizacionesPaquetes] = useState(false);
+  // Estado para rastrear si estamos en proceso de autorización (para evitar restauración prematura)
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+
+
+  // Restaurar estado cuando hay un error en el proceso
+  useEffect(() => {
+    if (progressStep === 'error') {
+      // Si hay un error, restaurar el estado para mostrar nuevamente las cotizaciones/paquetes
+      setHideCotizacionesPaquetes(false);
+      setIsLoadingContratacion(false);
+      setIsAuthorizing(false);
+    }
+  }, [progressStep]);
+
+  // Marcar que estamos en proceso de autorización cuando el overlay se muestra
+  useEffect(() => {
+    if (showProgressOverlay && progressStep === 'validating') {
+      setIsAuthorizing(true);
+    }
+  }, [showProgressOverlay, progressStep]);
 
   const handleSettingsUpdated = useCallback((settings: PromiseShareSettings) => {
     setShareSettings(settings);
@@ -183,28 +203,8 @@ function PromisePageContent({
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
-    ignoreCierreEvents: true, // Ignorar eventos de cierre internos, pero escuchar cambios de estado
     onCotizacionInserted: reloadCotizaciones,
-    onCotizacionUpdated: (cotizacionId: string, payload?: unknown) => {
-      const p = payload as any;
-      const changeInfo = p?.changeInfo;
-      
-      // Recargar siempre que cambie el estado (especialmente de en_cierre a pendiente)
-      if (changeInfo?.statusChanged) {
-        reloadCotizaciones();
-        return;
-      }
-      
-      // También recargar si hay otros campos importantes cambiados
-      if (changeInfo?.camposCambiados?.length) {
-        const camposImportantes = changeInfo.camposCambiados.filter(
-          (campo: string) => campo !== 'updated_at'
-        );
-        if (camposImportantes.length > 0) {
-          reloadCotizaciones();
-        }
-      }
-    },
+    onCotizacionUpdated: reloadCotizaciones,
     onCotizacionDeleted: (cotizacionId) => {
       setCotizaciones((prev) => prev.filter((c) => c.id !== cotizacionId));
     },
@@ -237,22 +237,43 @@ function PromisePageContent({
   }, [cotizaciones]);
 
   // Resetear hideCotizacionesPaquetes cuando ya no hay cotización autorizada (cancelación de cierre)
+  // CRÍTICO: NO restaurar si estamos en proceso de autorización o si el overlay está activo
   useEffect(() => {
-    if (!cotizacionAutorizada && hideCotizacionesPaquetes) {
+    // Solo restaurar si NO estamos en proceso de autorización y NO hay overlay activo
+    // Esto evita que se restaure el estado mientras el overlay está procesando o justo después de cerrarse
+    if (!cotizacionAutorizada && hideCotizacionesPaquetes && !isAuthorizing && !showProgressOverlay && progressStep !== 'validating' && progressStep !== 'sending' && progressStep !== 'registering' && progressStep !== 'collecting' && progressStep !== 'generating_contract' && progressStep !== 'preparing' && progressStep !== 'completed') {
       setHideCotizacionesPaquetes(false);
       setIsLoadingContratacion(false);
+      setIsAuthorizing(false);
     }
-  }, [cotizacionAutorizada, hideCotizacionesPaquetes]);
+  }, [cotizacionAutorizada, hideCotizacionesPaquetes, showProgressOverlay, progressStep, isAuthorizing]);
+
+  // Cuando hay cotización autorizada, marcar que el proceso de autorización terminó exitosamente
+  useEffect(() => {
+    if (cotizacionAutorizada && isAuthorizing) {
+      setIsAuthorizing(false);
+    }
+  }, [cotizacionAutorizada, isAuthorizing]);
 
   // Callback para activar skeleton desde modales
+  // CRÍTICO: Estos callbacks deben ejecutarse de forma síncrona para cambios inmediatos de UI
   const handlePreparing = useCallback(() => {
-    setIsLoadingContratacion(true);
+    // Usar flushSync para forzar que React procese el cambio de estado inmediatamente
+    flushSync(() => {
+      setIsLoadingContratacion(true);
+    });
   }, []);
 
   // Callback para ocultar UI de cotización/paquete inmediatamente
+  // CRÍTICO: Este callback debe ejecutarse cuando se muestra el overlay (step "validating")
+  // para ocultar las cotizaciones/paquetes desde el inicio del proceso
   const handleSuccess = useCallback(() => {
-    setHideCotizacionesPaquetes(true);
-    setIsLoadingContratacion(true);
+    // Usar flushSync para forzar que React procese los cambios de estado inmediatamente
+    // Esto asegura que la UI se actualice antes de que el overlay se cierre
+    flushSync(() => {
+      setHideCotizacionesPaquetes(true);
+      setIsLoadingContratacion(true);
+    });
   }, []);
 
   // Actualizar los refs que se pasan al Provider cuando cambian los callbacks
@@ -336,30 +357,17 @@ function PromisePageContent({
           studioLogoUrl={studio.logo_url}
         />
 
-        {/* Si se ocultaron las secciones, mostrar skeleton inmediatamente mientras carga el proceso de contratación */}
-        {hideCotizacionesPaquetes && isLoadingContratacion && !cotizacionAutorizada ? (
-          <div className="max-w-4xl mx-auto px-4 py-8">
-            <div className="mb-8 text-center">
-              <div className="h-8 w-64 bg-zinc-800 rounded animate-pulse mx-auto mb-2" />
-              <div className="h-4 w-96 bg-zinc-800 rounded animate-pulse mx-auto" />
-            </div>
-            <div className="space-y-6">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="relative">
-                  <div className="flex items-start gap-4">
-                    <div className="shrink-0 w-10 h-10 rounded-full bg-zinc-800 animate-pulse" />
-                    <div className="flex-1 space-y-3">
-                      <div className="h-6 w-48 bg-zinc-800 rounded animate-pulse" />
-                      <div className="h-4 w-full bg-zinc-800 rounded animate-pulse" />
-                      <div className="h-32 w-full bg-zinc-800 rounded-lg animate-pulse" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : cotizacionAutorizada ? (
-          isLoadingContratacion ? (
+        {/* LÓGICA DE RENDERIZADO MEJORADA:
+            1. Si hideCotizacionesPaquetes es true, NUNCA mostrar cotizaciones/paquetes
+            2. Si hideCotizacionesPaquetes es true y isLoadingContratacion es true, mostrar skeleton
+            3. Si hideCotizacionesPaquetes es true y hay cotizacionAutorizada, mostrar componente de contratación
+            4. Si hideCotizacionesPaquetes es false, mostrar cotizaciones/paquetes normalmente
+        */}
+        {/* CRÍTICO: Mostrar skeleton/proceso de contratación si hideCotizacionesPaquetes es true O si el overlay está activo */}
+        {(hideCotizacionesPaquetes || showProgressOverlay) ? (
+          // Se ocultaron las secciones o el overlay está activo - mostrar proceso de contratación o skeleton
+          isLoadingContratacion || !cotizacionAutorizada ? (
+            // Mostrar skeleton mientras carga o mientras Realtime actualiza
             <div className="max-w-4xl mx-auto px-4 py-8">
               <div className="mb-8 text-center">
                 <div className="h-8 w-64 bg-zinc-800 rounded animate-pulse mx-auto mb-2" />
@@ -381,6 +389,7 @@ function PromisePageContent({
               </div>
             </div>
           ) : (
+            // Mostrar componente de contratación cuando esté listo
             <PublicQuoteAuthorizedView
               cotizacion={cotizacionAutorizada}
               promiseId={promiseId}
@@ -407,6 +416,34 @@ function PromisePageContent({
               eventTypeId={promise.event_type_id}
             />
           )
+        ) : cotizacionAutorizada ? (
+          // Si hay cotización autorizada pero NO se ocultaron las secciones (caso edge)
+          // Mostrar componente de contratación directamente
+          <PublicQuoteAuthorizedView
+            cotizacion={cotizacionAutorizada}
+            promiseId={promiseId}
+            studioSlug={studioSlug}
+            promise={{
+              contact_name: promise.contact_name,
+              contact_phone: promise.contact_phone,
+              contact_email: promise.contact_email,
+              contact_address: promise.contact_address,
+              event_type_name: promise.event_type_name,
+              event_date: promise.event_date,
+              event_location: promise.event_location,
+              event_name: promise.event_name || null,
+            }}
+            studio={{
+              studio_name: studio.studio_name,
+              representative_name: studio.representative_name,
+              phone: studio.phone,
+              email: studio.email,
+              address: studio.address,
+              id: studio.id,
+            }}
+            cotizacionPrice={cotizacionAutorizada.price}
+            eventTypeId={promise.event_type_id}
+          />
         ) : (
           <>
             {/* Fecha sugerida de contratación */}
@@ -437,7 +474,8 @@ function PromisePageContent({
             )}
 
             {/* Cotizaciones personalizadas */}
-            {!hideCotizacionesPaquetes && cotizaciones.length > 0 && (
+            {/* CRÍTICO: Ocultar también cuando el overlay está activo para evitar renderizado durante transición */}
+            {!hideCotizacionesPaquetes && !showProgressOverlay && cotizaciones.length > 0 && (
               <CotizacionesSectionRealtime
                 initialCotizaciones={cotizaciones}
                 promiseId={promiseId}
@@ -455,7 +493,8 @@ function PromisePageContent({
             )}
 
             {/* Paquetes disponibles */}
-            {!hideCotizacionesPaquetes && shareSettings.show_packages && paquetes.length > 0 && (
+            {/* CRÍTICO: Ocultar también cuando el overlay está activo para evitar renderizado durante transición */}
+            {!hideCotizacionesPaquetes && !showProgressOverlay && shareSettings.show_packages && paquetes.length > 0 && (
               <PaquetesSection
                 paquetes={paquetes}
                 promiseId={promiseId}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { FileText, CheckCircle2, Edit2, Download, Loader2 } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { ContractPreview } from '@/components/shared/contracts/ContractPreview';
@@ -77,32 +77,29 @@ export function PublicContractView({
   const [eventData, setEventData] = useState<any>(null);
   const printableRef = useRef<HTMLDivElement>(null);
 
-  // Cargar contrato y datos
-  // IMPORTANTE: Priorizar contractContent personalizado sobre la plantilla por defecto
-  // Si hay contractContent personalizado, usarlo directamente
-  // Solo si NO hay contractContent pero sí hay contractTemplateId, cargar la plantilla por defecto
-  useEffect(() => {
-    if (isOpen) {
-      if (contractContent) {
-        // PRIORIDAD 1: Si hay contenido personalizado, usarlo directamente
-        // Esto asegura que se muestre la versión personalizada del contrato
-        setRenderedContent(contractContent);
-        setTemplateContent(null); // Limpiar template content para evitar conflictos
-        loadPromiseData();
-      } else if (contractTemplateId) {
-        // PRIORIDAD 2: Si NO hay contenido personalizado pero sí hay template_id,
-        // cargar plantilla por defecto y datos para renderizar dinámicamente
-        loadContractFromTemplate();
-      }
-    } else {
-      // Resetear estados al cerrar
-      setRenderedContent(null);
-      setTemplateContent(null);
-      setEventData(null);
-    }
-  }, [isOpen, contractContent, contractTemplateId, cotizacionId, promiseId, studioSlug]);
+  // Memoizar funciones de carga para evitar recrearlas en cada render
+  const loadPromiseData = useCallback(async () => {
+    setLoadingData(true);
+    try {
+      const { getPromiseContractData } = await import('@/lib/actions/studio/business/contracts/renderer.actions');
+      const result = await getPromiseContractData(
+        studioSlug,
+        promiseId,
+        cotizacionId,
+        condicionesComerciales || undefined
+      );
 
-  const loadContractFromTemplate = async () => {
+      if (result.success && result.data) {
+        setEventData(result.data);
+      }
+    } catch (error) {
+      console.error('[loadPromiseData] Error:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  }, [studioSlug, promiseId, cotizacionId, condicionesComerciales]);
+
+  const loadContractFromTemplate = useCallback(async () => {
     setLoadingContract(true);
     setLoadingData(true);
     try {
@@ -148,39 +145,35 @@ export function PublicContractView({
       setLoadingContract(false);
       setLoadingData(false);
     }
-  };
+  }, [studioSlug, promiseId, cotizacionId, contractTemplateId, condicionesComerciales]);
 
-  const loadPromiseData = async () => {
-    setLoadingData(true);
-    try {
-      const { getPromiseContractData } = await import('@/lib/actions/studio/business/contracts/renderer.actions');
-      const result = await getPromiseContractData(
-        studioSlug,
-        promiseId,
-        cotizacionId,
-        condicionesComerciales || undefined
-      );
-
-      if (result.success && result.data) {
-        setEventData(result.data);
-        
-        // Si el contenido ya está renderizado pero tiene variables de cotización sin renderizar,
-        // necesitamos volver a renderizarlo con los datos completos
-        if (renderedContent && (
-          renderedContent.includes('@cotizacion_autorizada') || 
-          renderedContent.includes('{cotizacion_autorizada}') ||
-          renderedContent.includes('[SERVICIOS_INCLUIDOS]')
-        )) {
-          // El contenido tiene variables sin renderizar, se renderizará en el componente ContractPreview
-          // No necesitamos hacer nada aquí, ContractPreview lo manejará con cotizacionData
-        }
+  // Cargar contrato y datos
+  // IMPORTANTE: Priorizar contractContent personalizado sobre la plantilla por defecto
+  // Si hay contractContent personalizado, usarlo directamente
+  // Solo si NO hay contractContent pero sí hay contractTemplateId, cargar la plantilla por defecto
+  useEffect(() => {
+    if (isOpen) {
+      if (contractContent) {
+        // PRIORIDAD 1: Si hay contenido personalizado, usarlo directamente
+        // Esto asegura que se muestre la versión personalizada del contrato
+        setRenderedContent(contractContent);
+        setTemplateContent(null); // Limpiar template content para evitar conflictos
+        // Cargar datos en segundo plano, pero mostrar contenido inmediatamente
+        loadPromiseData();
+      } else if (contractTemplateId) {
+        // PRIORIDAD 2: Si NO hay contenido personalizado pero sí hay template_id,
+        // cargar plantilla por defecto y datos para renderizar dinámicamente
+        loadContractFromTemplate();
       }
-    } catch (error) {
-      console.error('[loadPromiseData] Error:', error);
-    } finally {
+    } else {
+      // Resetear estados al cerrar
+      setRenderedContent(null);
+      setTemplateContent(null);
+      setEventData(null);
+      setLoadingContract(false);
       setLoadingData(false);
     }
-  };
+  }, [isOpen, contractContent, contractTemplateId, loadPromiseData, loadContractFromTemplate]);
 
   // Calcular total con descuentos y condiciones comerciales
   const calcularTotal = () => {
@@ -339,7 +332,8 @@ export function PublicContractView({
       >
         <div className="space-y-4">
           {/* Contenido del contrato */}
-          {loadingContract || loadingData ? (
+          {/* Mostrar spinner solo si NO hay contenido disponible Y está cargando */}
+          {loadingContract && !templateContent && !renderedContent ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
             </div>
