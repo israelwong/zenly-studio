@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { StickyNote } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { usePromiseLogs } from '@/hooks/usePromiseLogs';
 import { usePromiseLogsRealtime } from '@/hooks/usePromiseLogsRealtime';
@@ -56,14 +56,14 @@ export function PromiseNotesButton({
   return (
     <>
       <ZenButton
-        variant="outline"
+        variant="ghost"
         size="sm"
-        className="gap-2"
+        className="gap-1.5 px-2.5 py-1.5 h-7 text-xs"
         title="Bitácora"
         onClick={() => setIsSheetOpen(true)}
       >
-        <StickyNote className="h-4 w-4" />
         <span>Bitácora</span>
+        <ChevronRight className="h-3.5 w-3.5" />
       </ZenButton>
 
       <BitacoraSheet

@@ -872,27 +872,114 @@ export function PromiseClosingProcessCard({
       </ZenCardHeader>
 
       <ZenCardContent className="p-4 flex-1 overflow-y-auto">
-        {/* Header: Nombre + Preview y Editar */}
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <h4 className="text-base font-semibold text-white flex-1">{cotizacion.name}</h4>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 transition-colors text-xs text-zinc-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Edit2 className="h-3 w-3" />
-              Editar
-            </button>
-            <button
-              onClick={handleOpenPreview}
-              disabled={loadingCotizacion}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 transition-colors text-xs text-zinc-300 hover:text-white shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Eye className="h-3 w-3" />
-              {loadingCotizacion ? 'Cargando...' : 'Preview'}
-            </button>
-          </div>
-        </div>
+        {loadingRegistro ? (
+          <>
+            {/* Skeleton: Header con nombre y botones */}
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse flex-1" />
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="h-7 w-20 bg-zinc-800 rounded animate-pulse" />
+                <div className="h-7 w-20 bg-zinc-800 rounded animate-pulse" />
+              </div>
+            </div>
+
+            {/* Skeleton: Secciones del proceso */}
+            <div className="space-y-2 mb-4">
+              {/* Condiciones Comerciales */}
+              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <div className="h-4 w-4 bg-zinc-700 rounded shrink-0 mt-0.5 animate-pulse" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="h-3 w-40 bg-zinc-700 rounded animate-pulse" />
+                      <div className="h-3 w-16 bg-zinc-700 rounded animate-pulse" />
+                    </div>
+                    <div className="h-4 w-32 bg-zinc-700 rounded animate-pulse" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Datos Requeridos */}
+              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
+                <div className="flex items-start gap-2 mb-2">
+                  <div className="h-4 w-4 bg-zinc-700 rounded shrink-0 mt-0.5 animate-pulse" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="h-3 w-36 bg-zinc-700 rounded animate-pulse" />
+                      <div className="h-3 w-16 bg-zinc-700 rounded animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-zinc-700/50 pt-2">
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-1">
+                    {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                      <div key={i} className="flex items-center gap-1">
+                        <div className="h-3 w-3 bg-zinc-700 rounded shrink-0 animate-pulse" />
+                        <div className="h-3 w-16 bg-zinc-700 rounded animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Contrato Digital */}
+              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <div className="h-4 w-4 bg-zinc-700 rounded shrink-0 mt-0.5 animate-pulse" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="h-3 w-32 bg-zinc-700 rounded animate-pulse" />
+                      <div className="h-3 w-16 bg-zinc-700 rounded animate-pulse" />
+                    </div>
+                    <div className="h-4 w-28 bg-zinc-700 rounded animate-pulse" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Pago Inicial */}
+              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <div className="h-4 w-4 bg-zinc-700 rounded shrink-0 mt-0.5 animate-pulse" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="h-3 w-28 bg-zinc-700 rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-zinc-700 rounded animate-pulse" />
+                    </div>
+                    <div className="h-4 w-32 bg-zinc-700 rounded animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Skeleton: Botones de acción */}
+            <div className="space-y-2">
+              <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
+              <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Header: Nombre + Preview y Editar */}
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h4 className="text-base font-semibold text-white flex-1">{cotizacion.name}</h4>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`)}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 transition-colors text-xs text-zinc-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Edit2 className="h-3 w-3" />
+                  Editar
+                </button>
+                <button
+                  onClick={handleOpenPreview}
+                  disabled={loadingCotizacion}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 transition-colors text-xs text-zinc-300 hover:text-white shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Eye className="h-3 w-3" />
+                  {loadingCotizacion ? 'Cargando...' : 'Preview'}
+                </button>
+              </div>
+            </div>
 
         <div className="space-y-2 mb-4">
           {/* CONDICIONES COMERCIALES */}
@@ -937,16 +1024,16 @@ export function PromiseClosingProcessCard({
           />
         </div>
 
-        {/* CTAs */}
-        <div className="space-y-2">
-          <ZenButton
-            variant="primary"
-            className="w-full"
-            onClick={handleAutorizar}
-            disabled={isAuthorizing || loadingRegistro || !puedeAutorizar}
-            loading={isAuthorizing}
-          >
-            <CheckCircle2 className="w-4 h-4 mr-2" />
+            {/* CTAs */}
+            <div className="space-y-2">
+              <ZenButton
+                variant="primary"
+                className="w-full"
+                onClick={handleAutorizar}
+                disabled={isAuthorizing || loadingRegistro || !puedeAutorizar}
+                loading={isAuthorizing || loadingRegistro}
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
             Autorizar y Crear Evento
           </ZenButton>
           <ZenButton
@@ -955,9 +1042,11 @@ export function PromiseClosingProcessCard({
             onClick={() => setShowCancelModal(true)}
           >
             <XCircle className="h-4 w-4 mr-2" />
-            Cancelar Cierre
-          </ZenButton>
-        </div>
+                Cancelar Cierre
+              </ZenButton>
+            </div>
+          </>
+        )}
       </ZenCardContent>
 
       {/* Modal de Confirmación Cancelar Cierre */}

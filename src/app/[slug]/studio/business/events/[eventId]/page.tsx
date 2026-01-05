@@ -209,11 +209,32 @@ export default function EventDetailPage() {
         onConfirm={handleCancelConfirm}
         title="Cancelar Evento"
         description={
-          cotizacionesCount > 0
-            ? `Se cancelarán todas las cotizaciones asociadas a este evento (${cotizacionesCount} cotización${cotizacionesCount > 1 ? 'es' : ''}). Las cotizaciones no se eliminarán, solo cambiarán su estado a "cancelada".`
-            : '¿Estás seguro de cancelar este evento?'
+          <div className="space-y-3">
+            <p className="text-sm text-zinc-300 font-medium">
+              Al cancelar este evento, se realizarán las siguientes acciones:
+            </p>
+            <ul className="text-sm text-zinc-400 space-y-2 list-disc list-inside">
+              <li>El evento cambiará a estado <strong className="text-zinc-300">Cancelado</strong></li>
+              {cotizacionesCount > 0 && (
+                <li>
+                  Se cancelarán todas las cotizaciones asociadas ({cotizacionesCount} cotización{cotizacionesCount > 1 ? 'es' : ''}). 
+                  Las cotizaciones no se eliminarán, solo cambiarán su estado a <strong className="text-zinc-300">cancelada</strong>
+                </li>
+              )}
+              {eventData?.promise_id && (
+                <>
+                  <li>La promesa regresará a la etapa <strong className="text-zinc-300">Pendiente</strong></li>
+                  <li>Se agregará la etiqueta <strong className="text-zinc-300">Cancelada</strong> a la promesa</li>
+                </>
+              )}
+              <li>Se eliminará el agendamiento asociado al evento</li>
+            </ul>
+            <p className="text-sm text-amber-400 font-medium pt-2 border-t border-zinc-800">
+              ⚠️ Esta acción no se puede deshacer. ¿Deseas continuar?
+            </p>
+          </div>
         }
-        confirmText="Cancelar evento"
+        confirmText="Sí, cancelar evento"
         cancelText="No cancelar"
         variant="destructive"
         loading={isCancelling}

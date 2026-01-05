@@ -75,7 +75,7 @@ export function EventDetailHeader({
             <span className="text-xs font-medium">Plantillas de contrato</span>
           </ZenButton>
           <div className="h-6 w-px bg-zinc-700 mx-1" />
-          
+
           {/* Botón de bitácora */}
           {eventData?.promise?.id && (
             <>

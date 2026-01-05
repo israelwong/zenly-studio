@@ -5,6 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, FileText, Share2, ExternalLink, Settings, Copy, ChevronDown, Check } from 'lucide-react';
 import { PromiseNotesButton } from './components/PromiseNotesButton';
 import { PromiseShareOptionsModal } from './components/PromiseShareOptionsModal';
+import { PromiseDetailHeader } from './components/PromiseDetailHeader';
+import { PromiseToolbar } from './components/PromiseToolbar';
+import { BitacoraSheet } from '@/components/shared/bitacora';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenConfirmModal, ZenBadge } from '@/components/ui/zen';
 import { PromiseCardView } from './components/PromiseCardView';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
@@ -42,6 +45,7 @@ export default function EditarPromesaPage() {
   const [isChangingStage, setIsChangingStage] = useState(false);
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [logsSheetOpen, setLogsSheetOpen] = useState(false);
   const [promiseData, setPromiseData] = useState<{
     id: string;
     name: string;
@@ -345,44 +349,139 @@ export default function EditarPromesaPage() {
           <ZenCardHeader className="border-b border-zinc-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-zinc-800 rounded animate-pulse" />
+                <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse" />
                 <div className="space-y-2">
-                  <div className="h-6 w-48 bg-zinc-800 rounded animate-pulse" />
-                  <div className="h-4 w-64 bg-zinc-800 rounded animate-pulse" />
+                  <div className="h-6 w-32 bg-zinc-800 rounded animate-pulse" />
+                  <div className="h-5 w-24 bg-zinc-800 rounded-full animate-pulse" />
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                {/* Skeleton del select */}
-                <div className="h-8 w-32 bg-zinc-800 rounded-lg animate-pulse" />
-                <div className="flex items-center gap-2">
-                  {/* Skeleton de QuickActions */}
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 bg-zinc-800 rounded-lg animate-pulse" />
-                    <div className="h-8 w-8 bg-zinc-800 rounded-lg animate-pulse" />
-                    <div className="h-8 w-8 bg-zinc-800 rounded-lg animate-pulse" />
-                  </div>
-                  {/* Skeleton del menú modal */}
-                  <div className="h-8 w-8 bg-zinc-800 rounded-lg animate-pulse" />
-                </div>
+              <div className="flex items-center gap-2">
+                {/* Skeleton de botones del header */}
+                <div className="h-7 w-32 bg-zinc-800 rounded animate-pulse" />
+                <div className="h-7 w-28 bg-zinc-800 rounded animate-pulse" />
+                <div className="h-8 w-8 bg-zinc-800 rounded animate-pulse" />
               </div>
             </div>
           </ZenCardHeader>
+          {/* Skeleton de toolbar */}
+          <div className="flex items-center justify-between gap-1.5 px-6 py-2.5 border-b border-zinc-800 bg-zinc-900/50">
+            <div className="flex items-center gap-1.5">
+              <div className="h-7 w-24 bg-zinc-800 rounded animate-pulse" />
+              <div className="h-7 w-24 bg-zinc-800 rounded animate-pulse" />
+            </div>
+            <div className="h-7 w-20 bg-zinc-800 rounded animate-pulse" />
+          </div>
           <ZenCardContent className="p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="space-y-2">
-                    <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
-                    <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
+              {/* Columna 1: Información del contacto */}
+              <div className="lg:col-span-1 flex flex-col h-full">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-4">
+                  <div className="space-y-2">
+                    <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-6 w-full bg-zinc-800 rounded animate-pulse" />
                   </div>
-                ))}
+                  <div className="space-y-2">
+                    <div className="h-4 w-20 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-6 w-full bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-28 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-6 w-full bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-20 w-full bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-36 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-6 w-full bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-40 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-6 w-full bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-28 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-24 w-full bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-6 w-full bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                </div>
               </div>
-              <div className="lg:col-span-1 space-y-4">
-                <div className="h-64 bg-zinc-800 rounded-lg animate-pulse" />
+
+              {/* Columna 2: Cotizaciones + Agendamiento + Etiquetas */}
+              <div className="lg:col-span-1 space-y-6">
+                {/* Skeleton de Cotizaciones */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-3">
+                  <div className="h-5 w-32 bg-zinc-800 rounded animate-pulse" />
+                  <div className="space-y-2">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="h-24 bg-zinc-800 rounded animate-pulse" />
+                    ))}
+                  </div>
+                </div>
+                {/* Skeleton de Agendamiento */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-3">
+                  <div className="h-5 w-28 bg-zinc-800 rounded animate-pulse" />
+                  <div className="h-32 bg-zinc-800 rounded animate-pulse" />
+                </div>
+                {/* Skeleton de Etiquetas */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-3">
+                  <div className="h-5 w-24 bg-zinc-800 rounded animate-pulse" />
+                  <div className="flex gap-2 flex-wrap">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-6 w-20 bg-zinc-800 rounded-full animate-pulse" />
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="lg:col-span-1 space-y-4">
-                <div className="h-32 bg-zinc-800 rounded-lg animate-pulse" />
-                <div className="h-64 bg-zinc-800 rounded-lg animate-pulse" />
+
+              {/* Columna 3: Proceso de Cierre */}
+              <div className="lg:col-span-1 flex flex-col h-full">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg h-full flex flex-col">
+                  <div className="border-b border-zinc-800 py-3 px-4 shrink-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-zinc-700 shrink-0" />
+                        <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+                      </div>
+                      <div className="h-6 w-6 bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="p-4 flex-1 space-y-4">
+                    {/* Skeleton: Header con nombre y botones */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse flex-1" />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="h-7 w-20 bg-zinc-800 rounded animate-pulse" />
+                        <div className="h-7 w-20 bg-zinc-800 rounded animate-pulse" />
+                      </div>
+                    </div>
+                    {/* Skeleton: Secciones del proceso */}
+                    <div className="space-y-2">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
+                          <div className="flex items-start gap-2">
+                            <div className="h-4 w-4 bg-zinc-700 rounded shrink-0 mt-0.5 animate-pulse" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="h-3 w-32 bg-zinc-700 rounded animate-pulse" />
+                                <div className="h-3 w-16 bg-zinc-700 rounded animate-pulse" />
+                              </div>
+                              <div className="h-4 w-28 bg-zinc-700 rounded animate-pulse" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Skeleton: Botones de acción */}
+                    <div className="space-y-2 pt-2">
+                      <div className="h-10 w-full bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </ZenCardContent>
@@ -443,222 +542,44 @@ export default function EditarPromesaPage() {
         variant="default"
         padding="none"
       >
-        <ZenCardHeader className="border-b border-zinc-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/${studioSlug}/studio/commercial/promises`)}
-                className="p-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </ZenButton>
-              <div className="flex items-baseline gap-2">
-                <ZenCardTitle>Promesa</ZenCardTitle>
-                {(() => {
-                  // Verificar estado del evento primero
-                  if (loading || !pipelineStages.length || !currentPipelineStageId || !promiseData) {
-                    return (
-                      <div className="flex items-center gap-1.5 pb-0.5">
-                        <Loader2 className="h-3 w-3 animate-spin text-zinc-500" />
-                        <span className="text-xs text-zinc-500">Cargando...</span>
-                      </div>
-                    );
-                  }
-
-                  const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
-                  const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' ||
-                    currentStage?.name.toLowerCase().includes('aprobado');
-                  const hasEvent = promiseData.has_event || false;
-                  const isRestricted = isApprovedStage && hasEvent;
-                  const eventoId = promiseData.evento_id || null;
-
-                  // Filtrar etapas: si está restringido, solo mostrar "archived" además de la actual
-                  const availableStages = isRestricted
-                    ? pipelineStages.filter((s) => s.slug === 'archived' || s.id === currentPipelineStageId)
-                    : pipelineStages;
-
-                  // Determinar variante del badge
-                  const badgeVariant = isArchived ? 'warning' : isApprovedStage ? 'success' : 'default';
-
-                  return (
-                    <ZenDropdownMenu>
-                      <ZenDropdownMenuTrigger asChild>
-                        <button
-                          disabled={isChangingStage}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                        >
-                          {isChangingStage ? (
-                            <>
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                              <span>Actualizando...</span>
-                            </>
-                          ) : (
-                            <>
-                              <span>{currentStage?.name}</span>
-                              <ChevronDown className="h-2.5 w-2.5" />
-                            </>
-                          )}
-                        </button>
-                      </ZenDropdownMenuTrigger>
-                      <ZenDropdownMenuContent align="start">
-                        {availableStages.map((stage) => (
-                          <ZenDropdownMenuItem
-                            key={stage.id}
-                            onClick={() => handlePipelineStageChange(stage.id)}
-                            disabled={stage.id === currentPipelineStageId}
-                          >
-                            <span className="flex-1">{stage.name}</span>
-                            {stage.id === currentPipelineStageId && (
-                              <Check className="h-4 w-4 text-emerald-500 ml-2" />
-                            )}
-                          </ZenDropdownMenuItem>
-                        ))}
-                      </ZenDropdownMenuContent>
-                    </ZenDropdownMenu>
-                  );
-                })()}
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {(() => {
-                // Mostrar botón de gestionar evento si está aprobado y tiene evento
-                if (loading || !pipelineStages.length || !currentPipelineStageId || !promiseData) {
-                  return null;
-                }
-
-                const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
-                const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' ||
-                  currentStage?.name.toLowerCase().includes('aprobado');
-                const hasEvent = promiseData.has_event || false;
-                const isRestricted = isApprovedStage && hasEvent;
-                const eventoId = promiseData.evento_id || null;
-
-                if (isRestricted && eventoId) {
-                  return (
-                    <ZenButton
-                      variant="primary"
-                      size="sm"
-                      onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventoId}`)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                      Gestionar Evento
-                    </ZenButton>
-                  );
-                }
-
-                return null;
-              })()}
-              <div className="flex items-center gap-2">
-                {/* Botón de plantillas de contrato */}
-                <ZenButton
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTemplatesModalOpen(true)}
-                  className="gap-2"
-                >
-                  <FileText className="h-4 w-4" />
-                  <span>Plantillas de contrato</span>
-                </ZenButton>
-                {promiseId && (
-                  <PromiseNotesButton
-                    studioSlug={studioSlug}
-                    promiseId={promiseId}
-                    contactId={contactData?.contactId}
-                  />
-                )}
-                {/* Botón Compartir */}
-                {promiseId && contactData && (
-                  <ZenDropdownMenu>
-                    <ZenDropdownMenuTrigger asChild>
-                      <ZenButton
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                      >
-                        <Share2 className="h-4 w-4" />
-                        <span>Compartir</span>
-                      </ZenButton>
-                    </ZenDropdownMenuTrigger>
-                    <ZenDropdownMenuContent align="end">
-                      <ZenDropdownMenuItem
-                        onClick={async () => {
-                          const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
-                          try {
-                            await navigator.clipboard.writeText(previewUrl);
-                            toast.success('Link copiado al portapapeles');
-                          } catch (error) {
-                            toast.error('Error al copiar link');
-                          }
-                        }}
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copiar link
-                      </ZenDropdownMenuItem>
-                      <ZenDropdownMenuItem
-                        onClick={() => {
-                          const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
-                          window.open(previewUrl, '_blank');
-                        }}
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Abrir vista previa
-                      </ZenDropdownMenuItem>
-                      <ZenDropdownMenuSeparator />
-                      <ZenDropdownMenuItem
-                        onClick={() => setIsShareModalOpen(true)}
-                      >
-                        <Settings className="h-4 w-4 mr-2" />
-                        Configurar compartir
-                      </ZenDropdownMenuItem>
-                    </ZenDropdownMenuContent>
-                  </ZenDropdownMenu>
-                )}
-                <ZenDropdownMenu>
-                  <ZenDropdownMenuTrigger asChild>
-                    <ZenButton
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      disabled={isArchiving || isUnarchiving || isDeleting}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </ZenButton>
-                  </ZenDropdownMenuTrigger>
-                  <ZenDropdownMenuContent align="end">
-                    {isArchived ? (
-                      <ZenDropdownMenuItem
-                        onClick={() => handleUnarchive()}
-                        disabled={isUnarchiving}
-                      >
-                        <ArchiveRestore className="h-4 w-4 mr-2" />
-                        {isUnarchiving ? 'Desarchivando...' : 'Desarchivar'}
-                      </ZenDropdownMenuItem>
-                    ) : (
-                      <ZenDropdownMenuItem
-                        onClick={() => setShowArchiveModal(true)}
-                        disabled={isArchiving}
-                      >
-                        <Archive className="h-4 w-4 mr-2" />
-                        {isArchiving ? 'Archivando...' : 'Archivar'}
-                      </ZenDropdownMenuItem>
-                    )}
-                    <ZenDropdownMenuSeparator />
-                    <ZenDropdownMenuItem
-                      onClick={() => setShowDeleteModal(true)}
-                      disabled={isDeleting}
-                      className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      {isDeleting ? 'Eliminando...' : 'Eliminar'}
-                    </ZenDropdownMenuItem>
-                  </ZenDropdownMenuContent>
-                </ZenDropdownMenu>
-              </div>
-            </div>
-          </div>
-        </ZenCardHeader>
+        <PromiseDetailHeader
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+          loading={loading}
+          pipelineStages={pipelineStages}
+          currentPipelineStageId={currentPipelineStageId}
+          isChangingStage={isChangingStage}
+          promiseData={promiseData}
+          contactData={contactData}
+          isArchived={isArchived}
+          onPipelineStageChange={handlePipelineStageChange}
+          onTemplatesClick={() => setTemplatesModalOpen(true)}
+          onAutomateClick={() => setIsShareModalOpen(true)}
+          onArchive={() => setShowArchiveModal(true)}
+          onUnarchive={handleUnarchive}
+          onDelete={() => setShowDeleteModal(true)}
+          isArchiving={isArchiving}
+          isUnarchiving={isUnarchiving}
+          isDeleting={isDeleting}
+        />
+        <PromiseToolbar
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+          contactData={contactData}
+          onCopyLink={async () => {
+            const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
+            try {
+              await navigator.clipboard.writeText(previewUrl);
+              toast.success('Link copiado al portapapeles');
+            } catch (error) {
+              toast.error('Error al copiar link');
+            }
+          }}
+          onPreview={() => {
+            const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
+            window.open(previewUrl, '_blank');
+          }}
+        />
         <ZenCardContent className="p-6">
           <PromiseCardView
             studioSlug={studioSlug}
@@ -757,6 +678,16 @@ export default function EditarPromesaPage() {
         studioSlug={studioSlug}
         eventTypeId={promiseData?.event_type_id || undefined}
       />
+
+      {/* Sheet de bitácora */}
+      {promiseId && (
+        <BitacoraSheet
+          open={logsSheetOpen}
+          onOpenChange={setLogsSheetOpen}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+        />
+      )}
     </div>
   );
 }

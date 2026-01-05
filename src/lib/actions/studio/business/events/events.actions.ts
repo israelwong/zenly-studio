@@ -1609,31 +1609,11 @@ export async function cancelarEvento(
         }
       }
 
-      // 4. Convertir agendamiento de evento a promesa si el evento tiene promesa asociada
+      // 4. Eliminar agendamiento asociado al evento
       if (agendamiento) {
-        if (evento.promise_id) {
-          // Convertir agendamiento de evento a promesa
-          await tx.studio_agenda.update({
-            where: { id: agendamiento.id },
-            data: {
-              evento_id: null,
-              promise_id: evento.promise_id,
-              contexto: 'promise',
-              agenda_tipo: 'promise',
-              status: 'pendiente', // Resetear status a pendiente
-              updated_at: new Date(),
-            },
-          });
-        } else {
-          // Si no hay promesa asociada, solo cancelar el agendamiento
-          await tx.studio_agenda.update({
-            where: { id: agendamiento.id },
-            data: {
-              status: 'cancelado',
-              updated_at: new Date(),
-            },
-          });
-        }
+        await tx.studio_agenda.delete({
+          where: { id: agendamiento.id },
+        });
       }
     }, {
       timeout: 10000, // Aumentar timeout a 10 segundos
