@@ -914,7 +914,7 @@ export function CondicionesComercialesManager({
         title="Gestionar Condiciones Comerciales"
         description="Crea y gestiona condiciones comerciales reutilizables"
         maxWidth="xl"
-        zIndex={10080}
+        zIndex={10090}
       >
         {viewingOfferCondition ? (
           <div className="space-y-4">

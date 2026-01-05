@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, AlertCircle, Loader2, XCircle, Eye, MoreVertical, Edit2, HelpCircle, Share2 } from 'lucide-react';
 import {
@@ -92,6 +92,7 @@ export function PromiseClosingProcessCard({
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showShareOptionsModal, setShowShareOptionsModal] = useState(false);
   const [localPromiseData, setLocalPromiseData] = useState(promiseData);
+  const toastShownRef = useRef(false); // Evitar toasts duplicados
 
   // Estados separados para cada sección (evita re-renders completos)
   const [condicionesData, setCondicionesData] = useState<{
@@ -254,6 +255,12 @@ export function PromiseClosingProcessCard({
         if (changeInfo?.statusChanged) {
           const oldStatus = changeInfo.oldStatus;
           const newStatus = changeInfo.newStatus;
+          
+          // Si cambió a autorizada desde en_cierre, no hacer nada (ya se manejó en handleConfirmAutorizar)
+          if (oldStatus === 'en_cierre' && newStatus === 'autorizada') {
+            // El toast ya se mostró en handleConfirmAutorizar, no mostrar otro
+            return;
+          }
           
           // Si cambió de pendiente a en_cierre (o estados relacionados), recargar registro completo
           // También si cambió de en_cierre a pendiente (cancelación de cierre)
@@ -501,11 +508,36 @@ export function PromiseClosingProcessCard({
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    // Detectar caso de uso
+    // Cliente creado manualmente: selected_by_prospect === false/null/undefined
+    const isClienteManual = !cotizacion.selected_by_prospect || 
+                            cotizacion.selected_by_prospect === null || 
+                            cotizacion.selected_by_prospect === undefined;
     const isClienteNuevo = cotizacion.selected_by_prospect === true; // Caso 1 y 2
-    const isClienteExistente = !cotizacion.selected_by_prospect; // Caso 3
 
-    if (isClienteNuevo) {
+    if (isClienteManual) {
+      // Cliente creado manualmente: solo requiere datos del cliente completos
+      const clientValidation = validateClientContractData(localPromiseData);
+      if (!clientValidation.isValid) {
+        const fieldsList = clientValidation.missingFields.map(f => f.label).join(', ');
+        errors.push(`Completa los datos requeridos: ${fieldsList}`);
+      }
+
+      // Condiciones comerciales son opcionales (warning)
+      if (!condicionesData?.condiciones_comerciales_id) {
+        warnings.push('No se han definido condiciones comerciales.');
+      }
+
+      // Contrato es opcional (warning si está definido pero no firmado)
+      const tieneContrato = contractData?.contrato_definido && contractData?.contract_template_id;
+      if (tieneContrato && !contractData?.contract_signed_at) {
+        warnings.push('El contrato está definido pero no está firmado. Se puede autorizar sin firma.');
+      }
+
+      // Pago es opcional (warning)
+      if (!pagoData?.pago_registrado) {
+        warnings.push('No se ha registrado un pago inicial. Se creará como promesa de pago.');
+      }
+    } else if (isClienteNuevo) {
       // Caso 1 y 2: Contacto directo o Leadform
       // Debe tener condiciones comerciales (seleccionadas por prospecto)
       if (!condicionesData?.condiciones_comerciales_id) {
@@ -519,38 +551,9 @@ export function PromiseClosingProcessCard({
         errors.push(`Completa los datos faltantes para generar el contrato: ${fieldsList}`);
       }
 
-      // Validar estado del contrato: SOLO si selected_by_prospect === true
+      // Validar estado del contrato: debe estar firmado
       if (!contractData?.contract_signed_at) {
         errors.push('El contrato debe estar firmado por el cliente antes de autorizar');
-      }
-
-      // Pago es opcional (warning)
-      if (!pagoData?.pago_registrado) {
-        warnings.push('No se ha registrado un pago inicial. Se creará como promesa de pago.');
-      }
-    } else {
-      // Caso 3: Cliente existente
-      // Validar completitud de datos requeridos
-      const clientValidation = validateClientContractData(localPromiseData);
-      if (!clientValidation.isValid) {
-        const fieldsList = clientValidation.missingFields.map(f => f.label).join(', ');
-        errors.push(`Completa los datos requeridos: ${fieldsList}`);
-      }
-
-      // Si quiere generar contrato pero no hay condiciones comerciales
-      const generarContrato = contractData?.contrato_definido && contractData?.contract_template_id;
-      if (generarContrato && !condicionesData?.condiciones_comerciales_id) {
-        errors.push('Se requieren condiciones comerciales para generar el contrato');
-      }
-
-      // Si no hay completitud de datos, no puede generar contrato
-      if (!clientValidation.isValid && generarContrato) {
-        errors.push('No se puede generar contrato sin completar todos los datos requeridos');
-      }
-
-      // Condiciones comerciales son opcionales (warning)
-      if (!condicionesData?.condiciones_comerciales_id) {
-        warnings.push('No se han definido condiciones comerciales.');
       }
 
       // Pago es opcional (warning)
@@ -650,6 +653,7 @@ export function PromiseClosingProcessCard({
   const handleConfirmAutorizar = async () => {
     setIsAuthorizing(true);
     setShowConfirmAutorizarModal(false);
+    toastShownRef.current = false; // Resetear flag antes de autorizar
 
     try {
       // Si la cotización está en estado 'en_cierre', usar el nuevo flujo
@@ -665,7 +669,11 @@ export function PromiseClosingProcessCard({
         );
 
         if (result.success && result.data) {
-          toast.success('¡Cotización autorizada y evento creado!');
+          // Solo mostrar toast si no se ha mostrado ya
+          if (!toastShownRef.current) {
+            toast.success('¡Cotización autorizada y evento creado!');
+            toastShownRef.current = true;
+          }
           router.push(`/${studioSlug}/studio/business/events/${result.data.evento_id}`);
         } else {
           toast.error(result.error || 'Error al autorizar cotización');
@@ -789,26 +797,34 @@ export function PromiseClosingProcessCard({
       return false; // Solo para cotizaciones en cierre
     }
 
-    // Condiciones comerciales definidas
+    // Cliente creado manualmente: selected_by_prospect === false/null/undefined
+    const isClienteManual = !cotizacion.selected_by_prospect || 
+                            cotizacion.selected_by_prospect === null || 
+                            cotizacion.selected_by_prospect === undefined;
+
+    // Si es cliente manual, solo requiere datos del cliente completos
+    if (isClienteManual) {
+      const clientValidation = validateClientContractData(localPromiseData);
+      return clientValidation.isValid;
+    }
+
+    // Si es cliente nuevo (selected_by_prospect === true), requiere todo:
+    // 1. Condiciones comerciales definidas
     if (!condicionesData?.condiciones_comerciales_definidas || !condicionesData?.condiciones_comerciales_id) {
       return false;
     }
 
-    // Contrato definido
+    // 2. Contrato definido
     if (!contractData?.contrato_definido || !contractData?.contract_template_id) {
       return false;
     }
 
-    // Contrato firmado SOLO si selected_by_prospect === true
-    const contratoFirmado = cotizacion.selected_by_prospect
-      ? contractData?.contract_signed_at !== null
-      : true; // Si no fue seleccionada por prospecto, no requiere firma
-
-    if (!contratoFirmado) {
+    // 3. Contrato firmado
+    if (!contractData?.contract_signed_at) {
       return false;
     }
 
-    // Datos del cliente completos
+    // 4. Datos del cliente completos
     const clientValidation = validateClientContractData(localPromiseData);
     if (!clientValidation.isValid) {
       return false;

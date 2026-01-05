@@ -1260,12 +1260,12 @@ export async function cancelarEvento(
       },
     });
 
-    // Obtener TODAS las cotizaciones asociadas al evento
+    // Obtener TODAS las cotizaciones asociadas al evento (incluyendo estados legacy)
     const todasLasCotizaciones = await prisma.studio_cotizaciones.findMany({
       where: {
         evento_id: eventoId,
         status: {
-          in: ['aprobada', 'autorizada'],
+          in: ['aprobada', 'autorizada', 'approved', 'en_cierre'], // Incluir estados legacy
         },
       },
       select: {
@@ -1353,13 +1353,13 @@ export async function cancelarEvento(
         },
       });
 
-      // 2. Cancelar TODAS las cotizaciones asociadas al evento
+      // 2. Cancelar TODAS las cotizaciones asociadas al evento (incluyendo estados legacy)
       if (todasLasCotizaciones.length > 0) {
         await tx.studio_cotizaciones.updateMany({
           where: {
             evento_id: eventoId,
             status: {
-              in: ['aprobada', 'autorizada'],
+              in: ['aprobada', 'autorizada', 'approved', 'en_cierre'], // Incluir estados legacy
             },
           },
           data: {
@@ -1371,88 +1371,110 @@ export async function cancelarEvento(
         });
       }
 
+      // 2.1. Limpiar registro de cierre si existe (para eventos legacy)
+      if (evento.cotizacion_id) {
+        await tx.studio_cotizaciones_cierre.deleteMany({
+          where: {
+            cotizacion_id: evento.cotizacion_id,
+          },
+        }).catch((error) => {
+          // Ignorar error si no existe registro de cierre
+          console.log('[CANCELAR EVENTO] No se encontró registro de cierre para limpiar:', error);
+        });
+      }
+
       // 3. Actualizar promesa a etapa "pending" y liberar relación con evento
-      if (evento.promise_id && evento.promise && etapaPendiente) {
-        await tx.studio_promises.update({
+      if (evento.promise_id && etapaPendiente) {
+        // Verificar que la promesa existe antes de actualizar
+        const promesaExiste = await tx.studio_promises.findUnique({
           where: { id: evento.promise_id },
-          data: {
-            pipeline_stage_id: etapaPendiente.id,
-            status: 'pending',
-            updated_at: new Date(),
-          },
+          select: { id: true },
         });
 
-        // Crear o encontrar etiqueta "cancelada" y agregarla a la promesa
-        const tagSlug = 'cancelada';
-        let tagCancelada = await tx.studio_promise_tags.findUnique({
-          where: {
-            studio_id_slug: {
-              studio_id: studio.id,
-              slug: tagSlug,
-            },
-          },
-        });
-
-        if (!tagCancelada) {
-          // Crear tag si no existe
-          tagCancelada = await tx.studio_promise_tags.create({
+        if (promesaExiste) {
+          await tx.studio_promises.update({
+            where: { id: evento.promise_id },
             data: {
-              studio_id: studio.id,
-              name: 'Cancelada',
-              slug: tagSlug,
-              color: '#EF4444', // Rojo para cancelada
-              order: 0,
+              pipeline_stage_id: etapaPendiente.id,
+              status: 'pending',
+              updated_at: new Date(),
             },
           });
-        } else if (!tagCancelada.is_active) {
-          // Reactivar tag si está inactivo
-          tagCancelada = await tx.studio_promise_tags.update({
-            where: { id: tagCancelada.id },
-            data: { is_active: true },
+
+          // Crear o encontrar etiqueta "cancelada" y agregarla a la promesa
+          const tagSlug = 'cancelada';
+          let tagCancelada = await tx.studio_promise_tags.findUnique({
+            where: {
+              studio_id_slug: {
+                studio_id: studio.id,
+                slug: tagSlug,
+              },
+            },
           });
-        }
 
-        // Agregar tag a la promesa si no está ya asignado
-        const existingTagRelation = await tx.studio_promises_tags.findFirst({
-          where: {
-            promise_id: evento.promise_id,
-            tag_id: tagCancelada.id,
-          },
-        });
+          if (!tagCancelada) {
+            // Crear tag si no existe
+            tagCancelada = await tx.studio_promise_tags.create({
+              data: {
+                studio_id: studio.id,
+                name: 'Cancelada',
+                slug: tagSlug,
+                color: '#EF4444', // Rojo para cancelada
+                order: 0,
+              },
+            });
+          } else if (!tagCancelada.is_active) {
+            // Reactivar tag si está inactivo
+            tagCancelada = await tx.studio_promise_tags.update({
+              where: { id: tagCancelada.id },
+              data: { is_active: true },
+            });
+          }
 
-        if (!existingTagRelation) {
-          await tx.studio_promises_tags.create({
-            data: {
+          // Agregar tag a la promesa si no está ya asignado
+          const existingTagRelation = await tx.studio_promises_tags.findFirst({
+            where: {
               promise_id: evento.promise_id,
               tag_id: tagCancelada.id,
             },
           });
+
+          if (!existingTagRelation) {
+            await tx.studio_promises_tags.create({
+              data: {
+                promise_id: evento.promise_id,
+                tag_id: tagCancelada.id,
+              },
+            });
+          }
         }
       }
 
       // 4. Convertir agendamiento de evento a promesa si el evento tiene promesa asociada
-      if (agendamiento && evento.promise_id) {
-        // Convertir agendamiento de evento a promesa
-        await tx.studio_agenda.update({
-          where: { id: agendamiento.id },
-          data: {
-            evento_id: null,
-            promise_id: evento.promise_id,
-            contexto: 'promise',
-            agenda_tipo: 'promise',
-            status: 'pendiente', // Resetear status a pendiente
-            updated_at: new Date(),
-          },
-        });
-      } else if (agendamiento) {
-        // Si no hay promesa asociada, solo cancelar el agendamiento
-        await tx.studio_agenda.update({
-          where: { id: agendamiento.id },
-          data: {
-            status: 'cancelado',
-            updated_at: new Date(),
-          },
-        });
+      if (agendamiento) {
+        if (evento.promise_id) {
+          // Convertir agendamiento de evento a promesa
+          await tx.studio_agenda.update({
+            where: { id: agendamiento.id },
+            data: {
+              evento_id: null,
+              promise_id: evento.promise_id,
+              contexto: 'promise',
+              agenda_tipo: 'promise',
+              status: 'pendiente', // Resetear status a pendiente
+              updated_at: new Date(),
+            },
+          });
+        } else {
+          // Si no hay promesa asociada, solo cancelar el agendamiento
+          await tx.studio_agenda.update({
+            where: { id: agendamiento.id },
+            data: {
+              status: 'cancelado',
+              updated_at: new Date(),
+            },
+          });
+        }
       }
     }, {
       timeout: 10000, // Aumentar timeout a 10 segundos

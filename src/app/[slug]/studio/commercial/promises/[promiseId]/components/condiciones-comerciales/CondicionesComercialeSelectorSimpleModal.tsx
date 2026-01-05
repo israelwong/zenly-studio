@@ -127,7 +127,7 @@ export function CondicionesComercialeSelectorSimpleModal({
         isOpen={isOpen}
         onClose={onClose}
         title="Definir Condiciones Comerciales"
-        description="Selecciona las condiciones comerciales para esta cotización. Se guardarán automáticamente."
+        description="Selecciona las condiciones comerciales para esta cotización."
         maxWidth="md"
         onSave={handleConfirm}
         onCancel={onClose}
@@ -142,17 +142,17 @@ export function CondicionesComercialeSelectorSimpleModal({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Botón Gestionar */}
-            <div className="flex items-center justify-end">
-              <ZenButton
-                variant="outline"
-                size="sm"
+            {/* Mensaje informativo con link a gestión */}
+            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4">
+              <p className="text-sm text-zinc-300 mb-1">
+                ¿Necesitas crear o editar tus condiciones comerciales?
+              </p>
+              <button
                 onClick={handleManagerOpen}
-                className="gap-2"
+                className="text-sm text-blue-400 hover:text-blue-300 underline transition-colors"
               >
-                <Settings className="w-4 h-4" />
-                Gestionar Condiciones
-              </ZenButton>
+                Gestionar tus condiciones comerciales
+              </button>
             </div>
 
             {/* Lista de Condiciones */}
@@ -162,10 +162,12 @@ export function CondicionesComercialeSelectorSimpleModal({
                   No hay condiciones comerciales disponibles
                 </p>
                 <ZenButton
-                  variant="outline"
+                  variant="primary"
                   size="sm"
                   onClick={handleManagerOpen}
+                  className="gap-2"
                 >
+                  <Settings className="w-4 h-4" />
                   Crear Primera Condición
                 </ZenButton>
               </div>
@@ -190,18 +192,20 @@ export function CondicionesComercialeSelectorSimpleModal({
         )}
       </ZenDialog>
 
-      {/* Modal Manager */}
-      <CondicionesComercialesManager
-        studioSlug={studioSlug}
-        isOpen={showManager}
-        onClose={handleManagerClose}
-        onRefresh={loadCondiciones}
-        onSelect={(condicionId) => {
-          setTempSelectedId(condicionId);
-          setShowManager(false);
-          toast.success('Condición seleccionada');
-        }}
-      />
+      {/* Modal Manager - z-index mayor para estar por encima del modal padre */}
+      {showManager && (
+        <CondicionesComercialesManager
+          studioSlug={studioSlug}
+          isOpen={showManager}
+          onClose={handleManagerClose}
+          onRefresh={loadCondiciones}
+          onSelect={(condicionId) => {
+            setTempSelectedId(condicionId);
+            setShowManager(false);
+            toast.success('Condición seleccionada');
+          }}
+        />
+      )}
     </>
   );
 }

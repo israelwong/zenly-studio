@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 
 interface CierreResponse {
@@ -1038,18 +1039,20 @@ export async function obtenerVersionesContratoCierre(
 /**
  * Autoriza una cotización y crea el evento asociado
  *
- * Proceso:
- * 1. Valida que la cotización esté en estado 'en_cierre'
- * 2. Valida que exista registro de cierre con datos completos
- * 3. Valida que el contrato esté firmado (solo si selected_by_prospect === true)
- * 4. Lee datos de cierre y crea snapshots
- * 5. Crea el evento
- * 6. Actualiza cotización con snapshots (inmutables)
- * 7. Registra pago inicial (si aplica)
- * 8. Cambia etapa de promesa a 'aprobado'
- * 9. Archiva otras cotizaciones de la promesa
- * 10. Elimina registro temporal de cierre
- * 11. Crea log de autorización
+ * ORDEN DE EJECUCIÓN (en transacción atómica):
+ * 1. Validar studio, cotización y registro de cierre
+ * 2. Validar datos según tipo de cliente (manual vs nuevo)
+ * 3. Crear snapshots de condiciones comerciales (si existen)
+ * 4. Crear snapshots de contrato (si existe)
+ * 5. Crear o actualizar evento (con cotizacion_id para establecer relación)
+ * 6. Actualizar cotización con snapshots y status 'autorizada'
+ *    (La relación evento_autorizado se establece automáticamente cuando evento tiene cotizacion_id)
+ * 7. Registrar pago inicial (si aplica)
+ * 8. Cambiar etapa de promesa a 'aprobado'
+ * 9. Archivar otras cotizaciones de la promesa
+ * 10. Crear agenda en calendario (si hay fecha de evento)
+ * 11. Eliminar registro temporal de cierre
+ * 12. Crear log de autorización
  *
  * @returns Evento creado y cotización autorizada
  */
@@ -1121,34 +1124,44 @@ export async function autorizarYCrearEvento(
       return { success: false, error: 'No se encontró el registro de cierre' };
     }
 
-    // 4. Validaciones de datos completos
-    if (
-      !registroCierre.condiciones_comerciales_definidas ||
-      !registroCierre.condiciones_comerciales_id
-    ) {
-      return {
-        success: false,
-        error: 'Debe definir las condiciones comerciales',
-      };
+    // 4. Validaciones según tipo de cliente
+    const isClienteManual = !cotizacion.selected_by_prospect || 
+                            cotizacion.selected_by_prospect === null || 
+                            cotizacion.selected_by_prospect === undefined;
+
+    if (isClienteManual) {
+      // Cliente creado manualmente: solo requiere datos del cliente completos
+      // No requiere condiciones comerciales ni contrato
+    } else {
+      // Cliente nuevo (selected_by_prospect === true): requiere condiciones comerciales y contrato
+      if (
+        !registroCierre.condiciones_comerciales_definidas ||
+        !registroCierre.condiciones_comerciales_id
+      ) {
+        return {
+          success: false,
+          error: 'Debe definir las condiciones comerciales',
+        };
+      }
+
+      if (
+        !registroCierre.contrato_definido ||
+        !registroCierre.contract_template_id
+      ) {
+        return { success: false, error: 'Debe definir el contrato' };
+      }
+
+      // Validación: contrato firmado SOLO si la cotización fue seleccionada por el prospecto
+      if (!registroCierre.contract_signed_at) {
+        return {
+          success: false,
+          error:
+            'El contrato debe estar firmado por el cliente antes de autorizar',
+        };
+      }
     }
 
-    if (
-      !registroCierre.contrato_definido ||
-      !registroCierre.contract_template_id
-    ) {
-      return { success: false, error: 'Debe definir el contrato' };
-    }
-
-    // Validación: contrato firmado SOLO si la cotización fue seleccionada por el prospecto
-    if (cotizacion.selected_by_prospect && !registroCierre.contract_signed_at) {
-      return {
-        success: false,
-        error:
-          'El contrato debe estar firmado por el cliente antes de autorizar',
-      };
-    }
-
-    // 5. Obtener primera etapa del pipeline de eventos
+    // 5. Obtener primera etapa del pipeline de eventos (debe ser "Planeación" con order: 0)
     const primeraEtapa = await prisma.studio_manager_pipeline_stages.findFirst({
       where: {
         studio_id: studio.id,
@@ -1160,28 +1173,56 @@ export async function autorizarYCrearEvento(
     if (!primeraEtapa) {
       return {
         success: false,
-        error: 'No se encontró una etapa inicial en el pipeline de eventos',
+        error: 'No se encontró una etapa inicial activa en el pipeline de eventos. Asegúrate de tener al menos una etapa con order: 0.',
       };
     }
 
-    // 6. Obtener etapa "aprobado" del pipeline de promesas
+    // 6. Obtener etapa "approved" del pipeline de promesas
     const etapaAprobado = await prisma.studio_promise_pipeline_stages.findFirst({
       where: {
         studio_id: studio.id,
-        slug: 'aprobado',
+        slug: 'approved',
       },
     });
 
     if (!etapaAprobado) {
       return {
         success: false,
-        error: 'No se encontró la etapa "aprobado" en el pipeline de promesas',
+        error: 'No se encontró la etapa "approved" en el pipeline de promesas',
       };
     }
 
-    // 7. TRANSACCIÓN ATÓMICA
+    // 7. Verificar si ya existe un evento para esta promesa
+    const eventoExistente = await prisma.studio_events.findFirst({
+      where: {
+        promise_id: promiseId,
+        studio_id: studio.id,
+      },
+      select: { 
+        id: true, 
+        cotizacion_id: true,
+        status: true,
+      },
+    });
+
+    // Validar solo si hay conflicto con otra cotización
+    if (eventoExistente && eventoExistente.status !== 'CANCELLED') {
+      // Si ya existe un evento activo asociado a otra cotización, retornar error
+      if (eventoExistente.cotizacion_id && 
+          eventoExistente.cotizacion_id !== cotizacionId && 
+          eventoExistente.status === 'ACTIVE') {
+        return {
+          success: false,
+          error: 'Ya existe un evento activo para esta promesa asociado a otra cotización',
+        };
+      }
+      // Si existe evento para esta misma cotización pero está cancelado, permitir reactivarlo
+      // Si existe evento para esta misma cotización y está activo, actualizar en la transacción
+    }
+
+    // 8. TRANSACCIÓN ATÓMICA
     const result = await prisma.$transaction(async (tx) => {
-      // 7.1. Crear snapshots de condiciones comerciales
+      // 8.1. Crear snapshots de condiciones comerciales (solo si existen)
       const condicionSnapshot = registroCierre.condiciones_comerciales
         ? {
             name: registroCierre.condiciones_comerciales.name,
@@ -1204,38 +1245,61 @@ export async function autorizarYCrearEvento(
           }
         : null;
 
-      // 7.2. Crear snapshots de contrato
-      const contratoSnapshot = {
-        template_id: registroCierre.contract_template_id,
-        template_name: registroCierre.contract_template?.name || null,
-        content: registroCierre.contract_content,
-        version: registroCierre.contract_version,
-        signed_at: registroCierre.contract_signed_at,
-        signed_ip: null, // TODO: Obtener IP de firma desde tabla de versiones si existe
-      };
+      // 8.2. Crear snapshots de contrato (solo si existe)
+      const contratoSnapshot = registroCierre.contract_template_id
+        ? {
+            template_id: registroCierre.contract_template_id,
+            template_name: registroCierre.contract_template?.name || null,
+            content: registroCierre.contract_content,
+            version: registroCierre.contract_version || 1,
+            signed_at: registroCierre.contract_signed_at,
+            signed_ip: null, // TODO: Obtener IP de firma desde tabla de versiones si existe
+          }
+        : null;
 
-      // 7.3. Crear evento
-      const evento = await tx.studio_events.create({
-        data: {
-          studio_id: studio.id,
-          contact_id: cotizacion.promise.contact_id,
-          promise_id: promiseId,
-          cotizacion_id: cotizacionId,
-          event_type_id: cotizacion.promise.event_type_id || null,
-          stage_id: primeraEtapa.id,
-          event_date: cotizacion.promise.event_date || new Date(),
-          status: 'ACTIVE',
-        },
-      });
+      // 8.3. Crear o actualizar evento
+      let evento;
+      if (eventoExistente && eventoExistente.status !== 'CANCELLED') {
+        // Actualizar evento existente (puede ser que esté asociado a otra cotización o necesite actualización)
+        evento = await tx.studio_events.update({
+          where: { id: eventoExistente.id },
+          data: {
+            cotizacion_id: cotizacionId,
+            event_type_id: cotizacion.promise.event_type_id || null,
+            stage_id: primeraEtapa.id,
+            event_date: cotizacion.promise.event_date || new Date(),
+            status: 'ACTIVE',
+            updated_at: new Date(),
+          },
+        });
+      } else {
+        // Crear nuevo evento
+        evento = await tx.studio_events.create({
+          data: {
+            studio_id: studio.id,
+            contact_id: cotizacion.promise.contact_id,
+            promise_id: promiseId,
+            cotizacion_id: cotizacionId,
+            event_type_id: cotizacion.promise.event_type_id || null,
+            stage_id: primeraEtapa.id,
+            event_date: cotizacion.promise.event_date || new Date(),
+            status: 'ACTIVE',
+          },
+        });
+      }
 
-      // 7.4. Actualizar cotización con snapshots (inmutables)
+      // 8.4. Actualizar cotización con snapshots (inmutables)
+      // NOTA: La relación evento_autorizado se establece automáticamente cuando el evento tiene cotizacion_id
+      // No necesitamos actualizar evento_id en la cotización, solo los snapshots
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
           status: 'autorizada',
-          evento_id: evento.id,
+          // Desconectar relación de condiciones comerciales (usar snapshots en su lugar)
+          condiciones_comerciales: {
+            disconnect: true,
+          },
           // Snapshots de condiciones comerciales
-          condiciones_comerciales_id: null, // ❌ No usar FK
           condiciones_comerciales_name_snapshot:
             condicionSnapshot?.name || null,
           condiciones_comerciales_description_snapshot:
@@ -1245,21 +1309,23 @@ export async function autorizarYCrearEvento(
           condiciones_comerciales_advance_type_snapshot:
             condicionSnapshot?.advance_type || null,
           condiciones_comerciales_advance_amount_snapshot:
-            condicionSnapshot?.advance_amount || null,
+            condicionSnapshot?.advance_amount 
+              ? new Prisma.Decimal(condicionSnapshot.advance_amount)
+              : null,
           condiciones_comerciales_discount_percentage_snapshot:
             condicionSnapshot?.discount_percentage || null,
           // Snapshots de contrato
-          contract_template_id_snapshot: contratoSnapshot.template_id,
-          contract_template_name_snapshot: contratoSnapshot.template_name,
-          contract_content_snapshot: contratoSnapshot.content,
-          contract_version_snapshot: contratoSnapshot.version,
-          contract_signed_at_snapshot: contratoSnapshot.signed_at,
-          contract_signed_ip_snapshot: contratoSnapshot.signed_ip,
+          contract_template_id_snapshot: contratoSnapshot?.template_id || null,
+          contract_template_name_snapshot: contratoSnapshot?.template_name || null,
+          contract_content_snapshot: contratoSnapshot?.content || null,
+          contract_version_snapshot: contratoSnapshot?.version || null,
+          contract_signed_at_snapshot: contratoSnapshot?.signed_at || null,
+          contract_signed_ip_snapshot: contratoSnapshot?.signed_ip || null,
           updated_at: new Date(),
         },
       });
 
-      // 7.5. Registrar pago inicial (si aplica)
+      // 8.5. Registrar pago inicial (si aplica)
       let pagoRegistrado = false;
       if (
         options?.registrarPago &&
@@ -1279,7 +1345,7 @@ export async function autorizarYCrearEvento(
         pagoRegistrado = true;
       }
 
-      // 7.6. Cambiar etapa de promesa a "aprobado"
+      // 8.6. Cambiar etapa de promesa a "aprobado"
       await tx.studio_promises.update({
         where: { id: promiseId },
         data: {
@@ -1288,7 +1354,7 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 7.7. Archivar otras cotizaciones de la promesa
+      // 8.7. Archivar otras cotizaciones de la promesa
       await tx.studio_cotizaciones.updateMany({
         where: {
           promise_id: promiseId,
@@ -1301,12 +1367,37 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 7.8. Eliminar registro temporal de cierre
+      // 8.8. Crear agenda en calendario si hay fecha de evento
+      if (cotizacion.promise.event_date) {
+        const agendaExistente = await tx.studio_agenda.findFirst({
+          where: {
+            evento_id: evento.id,
+            date: cotizacion.promise.event_date,
+          },
+        });
+
+        if (!agendaExistente) {
+          await tx.studio_agenda.create({
+            data: {
+              studio_id: studio.id,
+              evento_id: evento.id,
+              promise_id: promiseId,
+              date: cotizacion.promise.event_date,
+              concept: cotizacion.promise.event_name || 'Evento',
+              address: cotizacion.promise.event_location || cotizacion.promise.contact?.address || null,
+              contexto: 'evento',
+              status: 'pendiente',
+            },
+          });
+        }
+      }
+
+      // 8.9. Eliminar registro temporal de cierre
       await tx.studio_cotizaciones_cierre.delete({
         where: { cotizacion_id: cotizacionId },
       });
 
-      // 7.9. Crear log de autorización
+      // 8.10. Crear log de autorización
       await tx.studio_promise_logs.create({
         data: {
           promise_id: promiseId,

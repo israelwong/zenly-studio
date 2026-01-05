@@ -123,15 +123,15 @@ export async function createCotizacion(
         return { success: false, error: 'El evento no tiene tipo de evento asociado' };
       }
     } else {
-      // Si no hay promise_id, necesitamos crear un evento b?sico
+      // Si no hay promise_id, necesitamos crear un evento básico
       // Por ahora, retornamos error ya que es requerido
       return {
         success: false,
-        error: 'Se requiere un promise_id para crear la cotizaci?n',
+        error: 'Se requiere un promise_id para crear la cotización',
       };
     }
 
-    // Crear cotizaci?n
+    // Crear cotización
     const cotizacion = await prisma.studio_cotizaciones.create({
       data: {
         studio_id: studio.id,
@@ -147,7 +147,7 @@ export async function createCotizacion(
       },
     });
 
-    // Crear items de la cotizaci?n
+    // Crear items de la cotización
     const itemsToCreate = Object.entries(validatedData.items)
       .filter(([, quantity]) => quantity > 0)
       .map(([itemId, quantity], index) => ({
@@ -162,10 +162,10 @@ export async function createCotizacion(
         data: itemsToCreate,
       });
 
-      // Calcular y guardar precios de los items (despu?s de crear los items)
+      // Calcular y guardar precios de los items (después de crear los items)
       await calcularYGuardarPreciosCotizacion(cotizacion.id, validatedData.studio_slug).catch((error) => {
-        console.error('[COTIZACIONES] Error calculando precios en creaci?n:', error);
-        // No fallar la creaci?n si el c?lculo de precios falla
+        console.error('[COTIZACIONES] Error calculando precios en creación:', error);
+        // No fallar la creación si el cálculo de precios falla
       });
     }
 
@@ -176,7 +176,7 @@ export async function createCotizacion(
         validatedData.studio_slug,
         validatedData.promise_id,
         'quotation_created',
-        'user', // Asumimos que es acci?n de usuario
+        'user', // Asumimos que es acción de usuario
         null, // TODO: Obtener userId del contexto
         {
           quotationName: cotizacion.name,
@@ -184,7 +184,7 @@ export async function createCotizacion(
         }
       ).catch((error) => {
         // No fallar si el log falla, solo registrar error
-        console.error('[COTIZACIONES] Error registrando log de cotizaci?n creada:', error);
+        console.error('[COTIZACIONES] Error registrando log de cotización creada:', error);
       });
     }
 
@@ -198,11 +198,11 @@ export async function createCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error creando cotizaci?n:', error);
+    console.error('[COTIZACIONES] Error creando cotización:', error);
     if (error instanceof Error) {
       return { success: false, error: error.message };
     }
-    return { success: false, error: 'Error al crear cotizaci?n' };
+    return { success: false, error: 'Error al crear cotización' };
   }
 }
 
@@ -286,7 +286,7 @@ export async function getCotizacionesByPromiseId(
 }
 
 /**
- * Obtener cotizaci?n por ID con todos sus datos
+ * Obtener cotización por ID con todos sus datos
  */
 export async function getCotizacionById(
   cotizacionId: string,
@@ -382,7 +382,7 @@ export async function getCotizacionById(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Los items ya vienen ordenados por order: "asc" desde la consulta
@@ -437,16 +437,16 @@ export async function getCotizacionById(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error obteniendo cotizaci?n:', error);
+    console.error('[COTIZACIONES] Error obteniendo cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al obtener cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al obtener cotización',
     };
   }
 }
 
 /**
- * Eliminar cotizaci?n
+ * Eliminar cotización
  */
 export async function deleteCotizacion(
   cotizacionId: string,
@@ -462,7 +462,7 @@ export async function deleteCotizacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Verificar que la cotizaci?n existe y pertenece al studio
+    // Verificar que la cotización existe y pertenece al studio
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
@@ -471,10 +471,10 @@ export async function deleteCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // Eliminar la cotizaci?n (los items se eliminan en cascade)
+    // Eliminar la cotización (los items se eliminan en cascade)
     await prisma.studio_cotizaciones.delete({
       where: { id: cotizacionId },
     });
@@ -486,14 +486,14 @@ export async function deleteCotizacion(
         studioSlug,
         cotizacion.promise_id,
         'quotation_deleted',
-        'user', // Asumimos que es acci?n de usuario
+        'user', // Asumimos que es acción de usuario
         null, // TODO: Obtener userId del contexto
         {
           quotationName: cotizacion.name,
         }
       ).catch((error) => {
         // No fallar si el log falla, solo registrar error
-        console.error('[COTIZACIONES] Error registrando log de cotizaci?n eliminada:', error);
+        console.error('[COTIZACIONES] Error registrando log de cotización eliminada:', error);
       });
     }
 
@@ -507,16 +507,16 @@ export async function deleteCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error eliminando cotizaci?n:', error);
+    console.error('[COTIZACIONES] Error eliminando cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al eliminar cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al eliminar cotización',
     };
   }
 }
 
 /**
- * Archivar cotizaci?n
+ * Archivar cotización
  */
 export async function archiveCotizacion(
   cotizacionId: string,
@@ -540,11 +540,11 @@ export async function archiveCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     if (cotizacion.archived) {
-      return { success: false, error: 'La cotizaci?n ya est? archivada' };
+      return { success: false, error: 'La cotización ya está archivada' };
     }
 
     await prisma.studio_cotizaciones.update({
@@ -562,16 +562,16 @@ export async function archiveCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error archivando cotizaci?n:', error);
+    console.error('[COTIZACIONES] Error archivando cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al archivar cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al archivar cotización',
     };
   }
 }
 
 /**
- * Desarchivar cotizaci?n
+ * Desarchivar cotización
  */
 export async function unarchiveCotizacion(
   cotizacionId: string,
@@ -595,11 +595,11 @@ export async function unarchiveCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     if (!cotizacion.archived) {
-      return { success: false, error: 'La cotizaci?n no est? archivada' };
+      return { success: false, error: 'La cotización no está archivada' };
     }
 
     await prisma.studio_cotizaciones.update({
@@ -617,21 +617,21 @@ export async function unarchiveCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error desarchivando cotizaci?n:', error);
+    console.error('[COTIZACIONES] Error desarchivando cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al desarchivar cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al desarchivar cotización',
     };
   }
 }
 
 /**
- * Duplicar cotizaci?n
+ * Duplicar cotización
  * 
  * NOTA: Las etiquetas (tags) pertenecen a las promesas, no a las cotizaciones.
- * La cotizaci?n duplicada usa la misma promesa (promise_id), por lo que
+ * La cotización duplicada usa la misma promesa (promise_id), por lo que
  * comparte las mismas etiquetas de la promesa. No se copian etiquetas porque
- * no hay relaci?n directa entre cotizaciones y etiquetas.
+ * no hay relación directa entre cotizaciones y etiquetas.
  */
 export async function duplicateCotizacion(
   cotizacionId: string,
@@ -647,7 +647,7 @@ export async function duplicateCotizacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener la cotizaci?n original con sus items
+    // Obtener la cotización original con sus items
     const original = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
@@ -659,10 +659,10 @@ export async function duplicateCotizacion(
     });
 
     if (!original) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
-    // Obtener el order m?ximo para colocar la duplicada al final
+    // Obtener el order máximo para colocar la duplicada al final
     const maxOrder = await prisma.studio_cotizaciones.findFirst({
       where: {
         promise_id: original.promise_id,
@@ -677,11 +677,11 @@ export async function duplicateCotizacion(
 
     const newOrder = (maxOrder?.order ?? -1) + 1;
 
-    // Generar nombre ?nico para la cotizaci?n duplicada
+    // Generar nombre único para la cotización duplicada
     let newName = `${original.name} (Copia)`;
     let counter = 1;
 
-    // Verificar si ya existe una cotizaci?n con ese nombre en la promise
+    // Verificar si ya existe una cotización con ese nombre en la promise
     while (true) {
       const existing = await prisma.studio_cotizaciones.findFirst({
         where: {
@@ -692,7 +692,7 @@ export async function duplicateCotizacion(
       });
 
       if (!existing) {
-        break; // Nombre ?nico encontrado
+        break; // Nombre único encontrado
       }
 
       // Si existe, incrementar el contador
@@ -700,7 +700,7 @@ export async function duplicateCotizacion(
       newName = `${original.name} (Copia ${counter})`;
     }
 
-    // Crear nueva cotizaci?n
+    // Crear nueva cotización con snapshots copiados
     const nuevaCotizacion = await prisma.studio_cotizaciones.create({
       data: {
         studio_id: original.studio_id,
@@ -716,10 +716,24 @@ export async function duplicateCotizacion(
         condiciones_comerciales_id: original.condiciones_comerciales_id,
         archived: false,
         order: newOrder,
+        // Snapshots de condiciones comerciales (copiar de original)
+        condiciones_comerciales_name_snapshot: original.condiciones_comerciales_name_snapshot,
+        condiciones_comerciales_description_snapshot: original.condiciones_comerciales_description_snapshot,
+        condiciones_comerciales_advance_percentage_snapshot: original.condiciones_comerciales_advance_percentage_snapshot,
+        condiciones_comerciales_advance_type_snapshot: original.condiciones_comerciales_advance_type_snapshot,
+        condiciones_comerciales_advance_amount_snapshot: original.condiciones_comerciales_advance_amount_snapshot,
+        condiciones_comerciales_discount_percentage_snapshot: original.condiciones_comerciales_discount_percentage_snapshot,
+        // Snapshots de contrato (copiar de original)
+        contract_template_id_snapshot: original.contract_template_id_snapshot,
+        contract_template_name_snapshot: original.contract_template_name_snapshot,
+        contract_content_snapshot: original.contract_content_snapshot,
+        contract_version_snapshot: original.contract_version_snapshot,
+        contract_signed_at_snapshot: original.contract_signed_at_snapshot,
+        contract_signed_ip_snapshot: original.contract_signed_ip_snapshot,
       },
     });
 
-    // Duplicar items
+    // Duplicar items con snapshots copiados
     if (original.cotizacion_items.length > 0) {
       await prisma.studio_cotizacion_items.createMany({
         data: original.cotizacion_items.map((item) => ({
@@ -730,6 +744,7 @@ export async function duplicateCotizacion(
           position: item.position,
           unit_price: item.unit_price,
           subtotal: item.subtotal,
+          // Campos operacionales (mutables)
           name: item.name,
           description: item.description,
           cost: item.cost,
@@ -740,13 +755,31 @@ export async function duplicateCotizacion(
           category_name: item.category_name,
           seccion_name: item.seccion_name,
           is_custom: item.is_custom,
+          // Snapshots (inmutables - copiar de original)
+          name_snapshot: item.name_snapshot,
+          description_snapshot: item.description_snapshot,
+          category_name_snapshot: item.category_name_snapshot,
+          seccion_name_snapshot: item.seccion_name_snapshot,
+          cost_snapshot: item.cost_snapshot,
+          expense_snapshot: item.expense_snapshot,
+          unit_price_snapshot: item.unit_price_snapshot,
+          profit_snapshot: item.profit_snapshot,
+          public_price_snapshot: item.public_price_snapshot,
+          profit_type_snapshot: item.profit_type_snapshot,
         })),
+      });
+
+      // Recalcular precios y actualizar snapshots con datos actuales del catálogo
+      // Esto asegura que los snapshots estén sincronizados con el catálogo actual
+      await calcularYGuardarPreciosCotizacion(nuevaCotizacion.id, studioSlug).catch((error) => {
+        console.error('[COTIZACIONES] Error calculando precios en duplicación:', error);
+        // No fallar la duplicación si el cálculo de precios falla
       });
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
 
-    // Retornar la cotizaci?n completa para actualizaci?n optimista
+    // Retornar la cotización completa para actualización optimista
     const cotizacionCompleta = await prisma.studio_cotizaciones.findUnique({
       where: { id: nuevaCotizacion.id },
       select: {
@@ -786,10 +819,10 @@ export async function duplicateCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error duplicando cotizaci?n:', error);
+    console.error('[COTIZACIONES] Error duplicando cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al duplicar cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al duplicar cotización',
     };
   }
 }
@@ -828,7 +861,7 @@ export async function reorderCotizaciones(
       return { success: false, error: 'Algunas cotizaciones no fueron encontradas' };
     }
 
-    // Actualizar el orden de cada cotizaci?n usando transacci?n
+    // Actualizar el orden de cada cotización usando transacción
     await prisma.$transaction(
       cotizacionIds.map((id, index) =>
         prisma.studio_cotizaciones.update({
@@ -857,7 +890,7 @@ export async function reorderCotizaciones(
 }
 
 /**
- * Actualizar nombre de cotizaci?n
+ * Actualizar nombre de cotización
  */
 export async function updateCotizacionName(
   cotizacionId: string,
@@ -866,7 +899,7 @@ export async function updateCotizacionName(
 ): Promise<CotizacionResponse> {
   try {
     if (!newName.trim()) {
-      return { success: false, error: 'El nombre no puede estar vac?o' };
+      return { success: false, error: 'El nombre no puede estar vacío' };
     }
 
     const studio = await prisma.studios.findUnique({
@@ -886,7 +919,7 @@ export async function updateCotizacionName(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     const updated = await prisma.studio_cotizaciones.update({
@@ -901,14 +934,14 @@ export async function updateCotizacionName(
         studioSlug,
         cotizacion.promise_id,
         'quotation_updated',
-        'user', // Asumimos que es acci?n de usuario
+        'user', // Asumimos que es acción de usuario
         null, // TODO: Obtener userId del contexto
         {
           quotationName: updated.name,
         }
       ).catch((error) => {
         // No fallar si el log falla, solo registrar error
-        console.error('[COTIZACIONES] Error registrando log de cotizaci?n actualizada:', error);
+        console.error('[COTIZACIONES] Error registrando log de cotización actualizada:', error);
       });
     }
 
@@ -931,9 +964,9 @@ export async function updateCotizacionName(
 }
 
 /**
- * Actualizar cotizaci?n completa (nombre, descripci?n, precio, items)
- * IMPORTANTE: NO archiva otras cotizaciones - solo actualiza la cotizaci?n actual
- * El archivado de otras cotizaciones solo ocurre cuando se autoriza una cotizaci?n
+ * Actualizar cotización completa (nombre, descripción, precio, items)
+ * IMPORTANTE: NO archiva otras cotizaciones - solo actualiza la cotización actual
+ * El archivado de otras cotizaciones solo ocurre cuando se autoriza una cotización
  */
 export async function updateCotizacion(
   data: UpdateCotizacionData
@@ -951,7 +984,7 @@ export async function updateCotizacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener cotizaci?n existente
+    // Obtener cotización existente
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: validatedData.cotizacion_id,
@@ -963,15 +996,15 @@ export async function updateCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // No permitir actualizar si est? autorizada o aprobada
     if (cotizacion.status === 'autorizada' || cotizacion.status === 'aprobada') {
-      return { success: false, error: 'No se puede actualizar una cotizaci?n autorizada o aprobada' };
+      return { success: false, error: 'No se puede actualizar una cotización autorizada o aprobada' };
     }
 
-    // Preparar items antes de la transacci?n
+    // Preparar items antes de la transacción
     const itemsToCreate = Object.entries(validatedData.items)
       .filter(([, quantity]) => quantity > 0)
       .map(([itemId, quantity], index) => ({
@@ -981,9 +1014,9 @@ export async function updateCotizacion(
         order: index,
       }));
 
-    // Transacci?n para garantizar consistencia
+    // Transacción para garantizar consistencia
     await prisma.$transaction(async (tx) => {
-      // 1. Actualizar cotizaci?n
+      // 1. Actualizar cotización
       await tx.studio_cotizaciones.update({
         where: { id: validatedData.cotizacion_id },
         data: {
@@ -1009,18 +1042,18 @@ export async function updateCotizacion(
       }
 
       // NOTA: No archivamos otras cotizaciones aqu?
-      // El archivado solo ocurre cuando se autoriza una cotizaci?n (en autorizarCotizacion)
+      // El archivado solo ocurre cuando se autoriza una cotización (en autorizarCotizacion)
     });
 
-    // Calcular y guardar precios de los items (despu?s de la transacci?n)
+    // Calcular y guardar precios de los items (después de la transacción)
     if (itemsToCreate.length > 0) {
       await calcularYGuardarPreciosCotizacion(validatedData.cotizacion_id, validatedData.studio_slug).catch((error) => {
         console.error('[COTIZACIONES] Error calculando precios:', error);
-        // No fallar la actualizaci?n si el c?lculo de precios falla
+        // No fallar la actualización si el cálculo de precios falla
       });
     }
 
-    // Obtener cotizaci?n actualizada
+    // Obtener cotización actualizada
     const updated = await prisma.studio_cotizaciones.findUnique({
       where: { id: validatedData.cotizacion_id },
       select: {
@@ -1061,7 +1094,7 @@ export async function updateCotizacion(
     revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises`);
     if (cotizacion.promise_id) {
       revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises/${cotizacion.promise_id}`);
-      // Revalidar ruta de revisi?n si es una revisi?n
+      // Revalidar ruta de revisión si es una revisión
       if (cotizacion.revision_of_id) {
         revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises/${cotizacion.promise_id}/cotizacion/${validatedData.cotizacion_id}/revision`);
       }
@@ -1076,10 +1109,10 @@ export async function updateCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error actualizando cotizaci?n:', error);
+    console.error('[COTIZACIONES] Error actualizando cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al actualizar cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al actualizar cotización',
     };
   }
 }
@@ -1336,16 +1369,16 @@ export async function autorizarCotizacion(
       },
     };
   } catch (error) {
-    console.error('[AUTORIZACION] Error autorizando cotizaci?n:', error);
+    console.error('[AUTORIZACION] Error autorizando cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al autorizar cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al autorizar cotización',
     };
   }
 }
 
 /**
- * Cancela solo una cotizaci?n autorizada/aprobada
+ * Cancela solo una cotización autorizada/aprobada
  * - Cambia status a "cancelada"
  * - Libera evento_id si existe
  */
@@ -1373,7 +1406,7 @@ export async function cancelarCotizacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Solo se pueden cancelar cotizaciones autorizadas o aprobadas
@@ -1385,7 +1418,7 @@ export async function cancelarCotizacion(
       where: { id: cotizacionId },
       data: {
         status: 'cancelada',
-        evento_id: null, // Liberar relaci?n con evento
+        evento_id: null, // Liberar relación con evento
         discount: null, // Limpiar descuento al cancelar
         updated_at: new Date(),
       },
@@ -1404,17 +1437,17 @@ export async function cancelarCotizacion(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error cancelando cotizaci?n:', error);
+    console.error('[COTIZACIONES] Error cancelando cotización:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al cancelar cotizaci?n',
+      error: error instanceof Error ? error.message : 'Error al cancelar cotización',
     };
   }
 }
 
 /**
- * Cancela una cotizaci?n y elimina el evento asociado
- * - Cancela la cotizaci?n
+ * Cancela una cotización y elimina el evento asociado
+ * - Cancela la cotización
  * - Elimina el evento si existe y no tiene otras cotizaciones autorizadas
  */
 export async function cancelarCotizacionYEvento(
@@ -1441,7 +1474,7 @@ export async function cancelarCotizacionYEvento(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotizaci?n no encontrada' };
+      return { success: false, error: 'Cotización no encontrada' };
     }
 
     // Solo se pueden cancelar cotizaciones autorizadas o aprobadas
@@ -1452,7 +1485,7 @@ export async function cancelarCotizacionYEvento(
     const eventoId = cotizacion.evento_id;
 
     await prisma.$transaction(async (tx) => {
-      // 1. Cancelar cotizaci?n
+      // 1. Cancelar cotización
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
@@ -1531,10 +1564,10 @@ export async function cancelarCotizacionYEvento(
       },
     };
   } catch (error) {
-    console.error('[COTIZACIONES] Error cancelando cotizaci?n y evento:', error);
+    console.error('[COTIZACIONES] Error cancelando cotización y evento:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al cancelar cotizaci?n y evento',
+      error: error instanceof Error ? error.message : 'Error al cancelar cotización y evento',
     };
   }
 }
@@ -1597,12 +1630,14 @@ export async function pasarACierre(
     }
 
     await prisma.$transaction(async (tx) => {
-      // 1. Pasar cotización a cierre y marcar como seleccionada por prospecto
+      // 1. Pasar cotización a cierre
+      // Si se pasa manualmente desde el panel, es cliente creado manualmente (selected_by_prospect: false)
+      // Si viene del flujo público, ya tiene selected_by_prospect: true
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
           status: 'en_cierre',
-          selected_by_prospect: true,
+          selected_by_prospect: false, // Cliente creado manualmente, no requiere firma de contrato
           selected_at: new Date(),
           updated_at: new Date(),
         },
