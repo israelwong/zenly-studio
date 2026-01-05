@@ -1131,7 +1131,13 @@ export async function autorizarYCrearEvento(
       where: { cotizacion_id: cotizacionId },
       include: {
         condiciones_comerciales: true,
-        contract_template: true,
+        contract_template: {
+          select: {
+            id: true,
+            name: true,
+            content: true, // Incluir contenido de la plantilla
+          },
+        },
       },
     });
 
@@ -1257,11 +1263,13 @@ export async function autorizarYCrearEvento(
 
       // 7.3. Crear snapshots de contrato (si existe, incluso para clientes manuales)
       // Para clientes manuales no se requiere contrato, pero si existe debe guardarse
-      const contratoSnapshot = registroCierre.contract_template_id && registroCierre.contract_content
+      // Si hay template_id pero no content personalizado, usar el contenido de la plantilla
+      const contratoSnapshot = registroCierre.contract_template_id
         ? {
             template_id: registroCierre.contract_template_id,
             template_name: registroCierre.contract_template?.name || null,
-            content: registroCierre.contract_content,
+            // Priorizar contenido personalizado, si no existe usar el de la plantilla
+            content: registroCierre.contract_content || registroCierre.contract_template?.content || null,
             version: registroCierre.contract_version || 1,
             signed_at: registroCierre.contract_signed_at,
             signed_ip: null, // TODO: Obtener IP de firma desde tabla de versiones si existe
