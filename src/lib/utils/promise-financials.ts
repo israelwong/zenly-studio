@@ -22,13 +22,19 @@ export interface PromiseFinancials {
 export async function getPromiseFinancials(
   promiseId: string
 ): Promise<PromiseFinancials> {
-  // 1. Obtener todas las cotizaciones aprobadas de la promesa
+  // 1. Obtener todas las cotizaciones aprobadas de la promesa con snapshots de condiciones comerciales
   const cotizaciones = await prisma.studio_cotizaciones.findMany({
     where: {
       promise_id: promiseId,
       status: { in: ['aprobada', 'autorizada', 'approved'] },
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      price: true,
+      discount: true,
+      // Snapshots de condiciones comerciales (inmutables)
+      condiciones_comerciales_discount_percentage_snapshot: true,
       pagos: {
         where: {
           status: { in: ['paid', 'completed', 'succeeded'] },
@@ -39,11 +45,22 @@ export async function getPromiseFinancials(
   });
 
   // 2. Calcular total a pagar (suma de cotizaciones aprobadas considerando descuentos)
-  // Precio final = price - discount (si discount existe)
+  // Priorizar descuento de snapshots de condiciones comerciales sobre campo discount directo
   const contractValue = cotizaciones.reduce((sum, c) => {
     const precioBase = Number(c.price);
-    const descuento = c.discount ? Number(c.discount) : 0;
-    const precioFinal = precioBase - descuento;
+    
+    // Calcular descuento: priorizar snapshot de condiciones comerciales
+    let descuentoMonto = 0;
+    if (c.condiciones_comerciales_discount_percentage_snapshot != null) {
+      // Usar descuento porcentual de condiciones comerciales (snapshot)
+      const descuentoPorcentaje = Number(c.condiciones_comerciales_discount_percentage_snapshot);
+      descuentoMonto = precioBase * (descuentoPorcentaje / 100);
+    } else if (c.discount) {
+      // Fallback al campo discount directo
+      descuentoMonto = Number(c.discount);
+    }
+    
+    const precioFinal = precioBase - descuentoMonto;
     return sum + precioFinal;
   }, 0);
 
@@ -60,14 +77,25 @@ export async function getPromiseFinancials(
   // 5. Detalle por cotización
   const cotizacionesDetalle = cotizaciones.map((c) => {
     const precioBase = Number(c.price);
-    const descuento = c.discount ? Number(c.discount) : 0;
-    const precioFinal = precioBase - descuento;
+    
+    // Calcular descuento: priorizar snapshot de condiciones comerciales
+    let descuentoMonto = 0;
+    if (c.condiciones_comerciales_discount_percentage_snapshot != null) {
+      // Usar descuento porcentual de condiciones comerciales (snapshot)
+      const descuentoPorcentaje = Number(c.condiciones_comerciales_discount_percentage_snapshot);
+      descuentoMonto = precioBase * (descuentoPorcentaje / 100);
+    } else if (c.discount) {
+      // Fallback al campo discount directo
+      descuentoMonto = Number(c.discount);
+    }
+    
+    const precioFinal = precioBase - descuentoMonto;
     const pagado = c.pagos.reduce((sum, p) => sum + Number(p.amount), 0);
     return {
       id: c.id,
       name: c.name,
       price: precioBase,
-      discount: c.discount,
+      discount: descuentoMonto > 0 ? descuentoMonto : (c.discount || null),
       precioFinal,
       pagado,
       pendiente: precioFinal - pagado,
@@ -99,7 +127,7 @@ export async function getPromisePaidAmount(promiseId: string): Promise<number> {
 
 /**
  * Calcula el contract value de una promesa desde cotizaciones aprobadas
- * Considera descuentos aplicados a las cotizaciones
+ * Considera descuentos aplicados a las cotizaciones (prioriza snapshots de condiciones comerciales)
  */
 export async function getPromiseContractValue(
   promiseId: string
@@ -109,13 +137,29 @@ export async function getPromiseContractValue(
       promise_id: promiseId,
       status: { in: ['aprobada', 'autorizada', 'approved'] },
     },
-    select: { price: true, discount: true },
+    select: { 
+      price: true, 
+      discount: true,
+      // Snapshots de condiciones comerciales (inmutables)
+      condiciones_comerciales_discount_percentage_snapshot: true,
+    },
   });
 
   return cotizaciones.reduce((sum, c) => {
     const precioBase = Number(c.price);
-    const descuento = c.discount ? Number(c.discount) : 0;
-    return sum + (precioBase - descuento);
+    
+    // Calcular descuento: priorizar snapshot de condiciones comerciales
+    let descuentoMonto = 0;
+    if (c.condiciones_comerciales_discount_percentage_snapshot != null) {
+      // Usar descuento porcentual de condiciones comerciales (snapshot)
+      const descuentoPorcentaje = Number(c.condiciones_comerciales_discount_percentage_snapshot);
+      descuentoMonto = precioBase * (descuentoPorcentaje / 100);
+    } else if (c.discount) {
+      // Fallback al campo discount directo
+      descuentoMonto = Number(c.discount);
+    }
+    
+    return sum + (precioBase - descuentoMonto);
   }, 0);
 }
 

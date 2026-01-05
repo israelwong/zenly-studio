@@ -38,6 +38,7 @@ export interface EventoBasico {
     name: string;
     phone: string;
     email: string | null;
+    address: string | null;
     avatar_url?: string | null;
     acquisition_channel?: {
       id: string;
@@ -60,6 +61,7 @@ export interface EventoBasico {
       name: string;
       phone: string;
       email: string | null;
+      address: string | null;
     } | null;
   } | null;
 }
@@ -122,6 +124,13 @@ export interface EventoDetalle extends EventoBasico {
     updated_at: Date;
     promise_id: string | null;
     condiciones_comerciales_id: string | null;
+    // Snapshots de condiciones comerciales (inmutables)
+    condiciones_comerciales_name_snapshot?: string | null;
+    condiciones_comerciales_description_snapshot?: string | null;
+    condiciones_comerciales_advance_percentage_snapshot?: number | null;
+    condiciones_comerciales_advance_type_snapshot?: string | null;
+    condiciones_comerciales_advance_amount_snapshot?: number | null;
+    condiciones_comerciales_discount_percentage_snapshot?: number | null;
     revision_of_id?: string | null;
     revision_number?: number;
     revision_status?: string | null;
@@ -786,6 +795,7 @@ export async function obtenerEventoDetalle(
             name: true,
             phone: true,
             email: true,
+            address: true,
             avatar_url: true,
             acquisition_channel_id: true,
             social_network_id: true,
@@ -827,6 +837,7 @@ export async function obtenerEventoDetalle(
                 name: true,
                 phone: true,
                 email: true,
+                address: true,
                 acquisition_channel_id: true,
                 social_network_id: true,
                 referrer_contact_id: true,
@@ -900,6 +911,13 @@ export async function obtenerEventoDetalle(
             updated_at: true,
             promise_id: true,
             condiciones_comerciales_id: true,
+            // Snapshots de condiciones comerciales (inmutables)
+            condiciones_comerciales_name_snapshot: true,
+            condiciones_comerciales_description_snapshot: true,
+            condiciones_comerciales_advance_percentage_snapshot: true,
+            condiciones_comerciales_advance_type_snapshot: true,
+            condiciones_comerciales_advance_amount_snapshot: true,
+            condiciones_comerciales_discount_percentage_snapshot: true,
             revision_of_id: true,
             revision_number: true,
             revision_status: true,
@@ -1095,6 +1113,133 @@ export async function obtenerEventoDetalle(
     const eventAddress = evento.promise?.address || null;
     const eventDate = evento.promise?.event_date || evento.event_date;
 
+    // Obtener cotizaciones del evento: primero por evento_id, luego por promise_id si no hay por evento_id
+    const cotizacionesPorEventoId = evento.cotizaciones || [];
+    const promiseId = evento.promise_id;
+    
+    // Si no hay cotizaciones por evento_id, buscar por promise_id
+    let todasLasCotizaciones = cotizacionesPorEventoId;
+    if (todasLasCotizaciones.length === 0 && promiseId) {
+      const cotizacionesPorPromiseId = await prisma.studio_cotizaciones.findMany({
+        where: {
+          promise_id: promiseId,
+          status: {
+            in: ['autorizada', 'aprobada', 'approved'],
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          discount: true,
+          status: true,
+          created_at: true,
+          updated_at: true,
+          promise_id: true,
+          condiciones_comerciales_id: true,
+          condiciones_comerciales_name_snapshot: true,
+          condiciones_comerciales_description_snapshot: true,
+          condiciones_comerciales_advance_percentage_snapshot: true,
+          condiciones_comerciales_advance_type_snapshot: true,
+          condiciones_comerciales_advance_amount_snapshot: true,
+          condiciones_comerciales_discount_percentage_snapshot: true,
+          revision_of_id: true,
+          revision_number: true,
+          revision_status: true,
+          cotizacion_items: {
+            select: {
+              id: true,
+              item_id: true,
+              quantity: true,
+              name: true,
+              description: true,
+              unit_price: true,
+              subtotal: true,
+              cost: true,
+              cost_snapshot: true,
+              profit_type: true,
+              profit_type_snapshot: true,
+              task_type: true,
+              assigned_to_crew_member_id: true,
+              scheduler_task_id: true,
+              assignment_date: true,
+              delivery_date: true,
+              internal_delivery_days: true,
+              client_delivery_days: true,
+              status: true,
+              seccion_name: true,
+              category_name: true,
+              seccion_name_snapshot: true,
+              category_name_snapshot: true,
+              order: true,
+              items: {
+                select: {
+                  service_categories: {
+                    select: {
+                      order: true,
+                      section_categories: {
+                        select: {
+                          service_sections: {
+                            select: {
+                              order: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              service_categories: {
+                select: {
+                  order: true,
+                  section_categories: {
+                    select: {
+                      service_sections: {
+                        select: {
+                          order: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              assigned_to_crew_member: {
+                select: {
+                  id: true,
+                  name: true,
+                  tipo: true,
+                },
+              },
+              scheduler_task: {
+                select: {
+                  id: true,
+                  name: true,
+                  start_date: true,
+                  end_date: true,
+                  status: true,
+                  progress_percent: true,
+                  completed_at: true,
+                  assigned_to_user_id: true,
+                  depends_on_task_id: true,
+                  sync_status: true,
+                  invitation_status: true,
+                  google_event_id: true,
+                },
+              },
+            },
+            orderBy: {
+              order: 'asc',
+            },
+          },
+        },
+        orderBy: {
+          order: 'asc',
+        },
+      });
+      todasLasCotizaciones = cotizacionesPorPromiseId;
+    }
+
     // Convertir Decimal a number para serialización y mapear promise
     const eventoSerializado = {
       ...evento,
@@ -1143,7 +1288,7 @@ export async function obtenerEventoDetalle(
           subtotal: item.subtotal ? Number(item.subtotal) : 0,
         })),
       } : null,
-      cotizaciones: evento.cotizaciones.map(cot => {
+      cotizaciones: todasLasCotizaciones.map(cot => {
         // Ordenar items por orden de sección, categoría y order del item
         const itemsOrdenados = cot.cotizacion_items
           .map((item) => {
@@ -1190,6 +1335,20 @@ export async function obtenerEventoDetalle(
           ...cot,
           price: Number(cot.price),
           discount: cot.discount ? Number(cot.discount) : null,
+          // Incluir snapshots de condiciones comerciales (inmutables)
+          // Convertir Decimal a number para serialización JSON
+          condiciones_comerciales_name_snapshot: cot.condiciones_comerciales_name_snapshot,
+          condiciones_comerciales_description_snapshot: cot.condiciones_comerciales_description_snapshot,
+          condiciones_comerciales_advance_percentage_snapshot: cot.condiciones_comerciales_advance_percentage_snapshot != null
+            ? Number(cot.condiciones_comerciales_advance_percentage_snapshot)
+            : null,
+          condiciones_comerciales_advance_type_snapshot: cot.condiciones_comerciales_advance_type_snapshot,
+          condiciones_comerciales_advance_amount_snapshot: cot.condiciones_comerciales_advance_amount_snapshot != null
+            ? Number(cot.condiciones_comerciales_advance_amount_snapshot)
+            : null,
+          condiciones_comerciales_discount_percentage_snapshot: cot.condiciones_comerciales_discount_percentage_snapshot != null
+            ? Number(cot.condiciones_comerciales_discount_percentage_snapshot)
+            : null,
           cotizacion_items: itemsOrdenados,
         };
       }),

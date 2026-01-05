@@ -1192,37 +1192,32 @@ export async function autorizarYCrearEvento(
       };
     }
 
-    // 7. Verificar si ya existe un evento para esta promesa
-    const eventoExistente = await prisma.studio_events.findFirst({
-      where: {
-        promise_id: promiseId,
-        studio_id: studio.id,
-      },
-      select: { 
-        id: true, 
-        cotizacion_id: true,
-        status: true,
-      },
-    });
-
-    // Validar solo si hay conflicto con otra cotización
-    if (eventoExistente && eventoExistente.status !== 'CANCELLED') {
-      // Si ya existe un evento activo asociado a otra cotización, retornar error
-      if (eventoExistente.cotizacion_id && 
-          eventoExistente.cotizacion_id !== cotizacionId && 
-          eventoExistente.status === 'ACTIVE') {
-        return {
-          success: false,
-          error: 'Ya existe un evento activo para esta promesa asociado a otra cotización',
-        };
-      }
-      // Si existe evento para esta misma cotización pero está cancelado, permitir reactivarlo
-      // Si existe evento para esta misma cotización y está activo, actualizar en la transacción
-    }
-
-    // 8. TRANSACCIÓN ATÓMICA
+    // 7. TRANSACCIÓN ATÓMICA
     const result = await prisma.$transaction(async (tx) => {
-      // 8.1. Crear snapshots de condiciones comerciales (solo si existen)
+      // 7.1. Verificar si ya existe un evento para esta promesa (dentro de la transacción para evitar race conditions)
+      const eventoExistente = await tx.studio_events.findFirst({
+        where: {
+          promise_id: promiseId,
+          studio_id: studio.id,
+        },
+        select: { 
+          id: true, 
+          cotizacion_id: true,
+          status: true,
+        },
+      });
+
+      // Validar solo si hay conflicto con otra cotización activa
+      if (eventoExistente && eventoExistente.status === 'ACTIVE') {
+        // Si ya existe un evento activo asociado a otra cotización, retornar error
+        if (eventoExistente.cotizacion_id && 
+            eventoExistente.cotizacion_id !== cotizacionId) {
+          throw new Error('Ya existe un evento activo para esta promesa asociado a otra cotización');
+        }
+        // Si existe evento para esta misma cotización y está activo, actualizar
+      }
+
+      // 7.2. Crear snapshots de condiciones comerciales (solo si existen)
       const condicionSnapshot = registroCierre.condiciones_comerciales
         ? {
             name: registroCierre.condiciones_comerciales.name,
@@ -1245,7 +1240,7 @@ export async function autorizarYCrearEvento(
           }
         : null;
 
-      // 8.2. Crear snapshots de contrato (solo si existe)
+      // 7.3. Crear snapshots de contrato (solo si existe)
       const contratoSnapshot = registroCierre.contract_template_id
         ? {
             template_id: registroCierre.contract_template_id,
@@ -1257,10 +1252,10 @@ export async function autorizarYCrearEvento(
           }
         : null;
 
-      // 8.3. Crear o actualizar evento
+      // 7.4. Crear o actualizar evento
       let evento;
-      if (eventoExistente && eventoExistente.status !== 'CANCELLED') {
-        // Actualizar evento existente (puede ser que esté asociado a otra cotización o necesite actualización)
+      if (eventoExistente) {
+        // Actualizar evento existente (puede estar cancelado o activo)
         evento = await tx.studio_events.update({
           where: { id: eventoExistente.id },
           data: {
@@ -1273,7 +1268,7 @@ export async function autorizarYCrearEvento(
           },
         });
       } else {
-        // Crear nuevo evento
+        // Crear nuevo evento solo si no existe ninguno
         evento = await tx.studio_events.create({
           data: {
             studio_id: studio.id,
@@ -1288,7 +1283,7 @@ export async function autorizarYCrearEvento(
         });
       }
 
-      // 8.4. Actualizar cotización con snapshots (inmutables)
+      // 7.5. Actualizar cotización con snapshots (inmutables)
       // NOTA: La relación evento_autorizado se establece automáticamente cuando el evento tiene cotizacion_id
       // No necesitamos actualizar evento_id en la cotización, solo los snapshots
       await tx.studio_cotizaciones.update({

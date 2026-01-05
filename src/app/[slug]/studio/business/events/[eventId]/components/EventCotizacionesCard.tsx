@@ -153,9 +153,33 @@ export function EventCotizacionesCard({
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const printableRef = useRef<HTMLDivElement>(null);
 
+  // Debug: Log para ver qué cotizaciones estamos recibiendo
+  React.useEffect(() => {
+    console.log('[EventCotizacionesCard] Cotizaciones recibidas:', {
+      total: cotizaciones?.length || 0,
+      cotizaciones: cotizaciones?.map(c => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+      })),
+    });
+  }, [cotizaciones]);
+
   const cotizacionesAprobadas = (cotizaciones || []).filter(
     (c) => c.status === 'autorizada' || c.status === 'aprobada' || c.status === 'approved'
   ) as CotizacionAprobada[];
+
+  // Debug: Log para ver qué cotizaciones pasaron el filtro
+  React.useEffect(() => {
+    console.log('[EventCotizacionesCard] Cotizaciones aprobadas:', {
+      total: cotizacionesAprobadas.length,
+      cotizaciones: cotizacionesAprobadas.map(c => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+      })),
+    });
+  }, [cotizacionesAprobadas]);
 
   // Separar cotizaciones activas de revisiones pendientes
   const cotizacionesActivas = cotizacionesAprobadas.filter(
@@ -521,18 +545,87 @@ export function EventCotizacionesCard({
                               <span className="text-zinc-500">Total:</span>
                               <span className="text-zinc-300">{formatAmount(cotizacion.price)}</span>
                             </div>
-                            {cotizacion.discount && cotizacion.discount > 0 && (
-                              <div className="flex justify-between">
-                                <span className="text-zinc-500">Descuento:</span>
-                                <span className="text-red-400">-{formatAmount(cotizacion.discount)}</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between pt-0.5 border-t border-zinc-800">
-                              <span className="text-emerald-400 font-medium">A pagar:</span>
-                              <span className="text-emerald-400 font-medium">
-                                {formatAmount(cotizacion.price - (cotizacion.discount || 0))}
-                              </span>
-                            </div>
+                            
+                            {/* Desglose de condiciones comerciales usando snapshots */}
+                            {(() => {
+                              // Usar snapshots de condiciones comerciales (inmutables)
+                              const condicionSnapshot = {
+                                name: cotizacion.condiciones_comerciales_name_snapshot,
+                                description: cotizacion.condiciones_comerciales_description_snapshot,
+                                advance_percentage: cotizacion.condiciones_comerciales_advance_percentage_snapshot != null
+                                  ? Number(cotizacion.condiciones_comerciales_advance_percentage_snapshot)
+                                  : null,
+                                advance_type: cotizacion.condiciones_comerciales_advance_type_snapshot,
+                                advance_amount: cotizacion.condiciones_comerciales_advance_amount_snapshot != null
+                                  ? Number(cotizacion.condiciones_comerciales_advance_amount_snapshot)
+                                  : null,
+                                discount_percentage: cotizacion.condiciones_comerciales_discount_percentage_snapshot != null
+                                  ? Number(cotizacion.condiciones_comerciales_discount_percentage_snapshot)
+                                  : null,
+                              };
+
+                              const precioBase = cotizacion.price;
+                              
+                              // Calcular descuento
+                              const descuentoMonto = condicionSnapshot.discount_percentage
+                                ? precioBase * (condicionSnapshot.discount_percentage / 100)
+                                : (cotizacion.discount || 0);
+                              
+                              const subtotal = precioBase - descuentoMonto;
+                              
+                              // Calcular anticipo
+                              let anticipoMonto = 0;
+                              if (condicionSnapshot.advance_type === 'fixed_amount' && condicionSnapshot.advance_amount) {
+                                anticipoMonto = Number(condicionSnapshot.advance_amount);
+                              } else if (condicionSnapshot.advance_type === 'percentage' && condicionSnapshot.advance_percentage) {
+                                anticipoMonto = subtotal * (condicionSnapshot.advance_percentage / 100);
+                              }
+                              
+                              const diferido = subtotal - anticipoMonto;
+
+                              return (
+                                <>
+                                  {descuentoMonto > 0 && (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span className="text-zinc-500">Descuento:</span>
+                                        <span className="text-red-400">-{formatAmount(descuentoMonto)}</span>
+                                      </div>
+                                      <div className="flex justify-between pt-0.5 border-t border-zinc-800">
+                                        <span className="text-zinc-400 font-medium">Subtotal:</span>
+                                        <span className="text-zinc-300 font-medium">{formatAmount(subtotal)}</span>
+                                      </div>
+                                    </>
+                                  )}
+                                  {anticipoMonto > 0 && (
+                                    <>
+                                      <div className={`flex justify-between ${descuentoMonto > 0 ? '' : 'pt-0.5 border-t border-zinc-800'}`}>
+                                        <span className="text-zinc-500">
+                                          Anticipo {condicionSnapshot.advance_type === 'fixed_amount' 
+                                            ? '(monto fijo)' 
+                                            : condicionSnapshot.advance_percentage 
+                                              ? `(${condicionSnapshot.advance_percentage}%)` 
+                                              : ''}:
+                                        </span>
+                                        <span className="text-emerald-400 font-medium">{formatAmount(anticipoMonto)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-zinc-500">Diferido:</span>
+                                        <span className="text-amber-400 font-medium">{formatAmount(diferido)}</span>
+                                      </div>
+                                    </>
+                                  )}
+                                  {anticipoMonto === 0 && descuentoMonto === 0 && (
+                                    <div className="flex justify-between pt-0.5 border-t border-zinc-800">
+                                      <span className="text-emerald-400 font-medium">A pagar:</span>
+                                      <span className="text-emerald-400 font-medium">
+                                        {formatAmount(precioBase)}
+                                      </span>
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
 
                           <p className="text-xs text-zinc-600 mt-1.5">
