@@ -104,7 +104,7 @@ export function PortfolioEditorSkeleton() {
                             {/* Simulador de móvil con dimensiones reales del componente */}
                             <div className="bg-zinc-900 border border-zinc-700 rounded-3xl shadow-2xl w-[375px] h-[812px] flex flex-col relative overflow-hidden">
                                 {/* Header */}
-                                <div className="flex-shrink-0 rounded-t-3xl bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3 animate-pulse">
+                                <div className="shrink-0 rounded-t-3xl bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3 animate-pulse">
                                     <div className="flex items-center justify-between">
                                         <div className="h-9 w-24 bg-zinc-800 rounded"></div>
                                         <div className="h-9 w-9 bg-zinc-800 rounded-full"></div>
@@ -142,7 +142,7 @@ export function PortfolioEditorSkeleton() {
                                 </div>
 
                                 {/* Footer */}
-                                <div className="flex-shrink-0 border-t border-zinc-800 p-4 bg-zinc-900 rounded-b-3xl animate-pulse">
+                                <div className="shrink-0 border-t border-zinc-800 p-4 bg-zinc-900 rounded-b-3xl animate-pulse">
                                     <div className="flex items-center justify-between">
                                         <div className="h-6 w-24 bg-zinc-800 rounded"></div>
                                         <div className="h-6 w-32 bg-zinc-800 rounded"></div>

@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { PortfolioEditor } from "../components/PortfolioEditorWrapper";
+import { PortfolioEditor } from "../components/editors/PortfolioEditor";
+import { PortfolioEditorSkeleton } from "../components/editors/PortfolioEditorSkeleton";
 import { getStudioPortfolioById } from "@/lib/actions/studio/portfolios/portfolios.actions";
 import { PortfolioFormData } from "@/lib/actions/schemas/portfolio-schemas";
 import { ContentBlock } from "@/types/content-blocks";
@@ -123,32 +124,7 @@ export default function EditarPortfolioPage() {
     if (loading) {
         return (
             <div className="w-full max-w-7xl mx-auto">
-                <div className="space-y-6">
-                    {/* Header Skeleton */}
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                            <div className="h-9 w-9 bg-zinc-800/50 rounded-md animate-pulse" />
-                            <div className="h-8 w-48 bg-zinc-800/50 rounded animate-pulse" />
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="h-9 w-24 bg-zinc-800/50 rounded-md animate-pulse" />
-                            <div className="h-9 w-32 bg-zinc-800/50 rounded-md animate-pulse" />
-                        </div>
-                    </div>
-                    {/* Content Skeleton */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="bg-zinc-900/50 rounded-lg border border-zinc-800 p-6">
-                            <div className="space-y-4">
-                                <div className="h-6 w-32 bg-zinc-800/50 rounded animate-pulse" />
-                                <div className="h-10 w-full bg-zinc-800/50 rounded animate-pulse" />
-                                <div className="h-24 w-full bg-zinc-800/50 rounded animate-pulse" />
-                            </div>
-                        </div>
-                        <div className="hidden lg:block">
-                            <div className="h-96 bg-zinc-800/50 rounded-lg animate-pulse" />
-                        </div>
-                    </div>
-                </div>
+                <PortfolioEditorSkeleton />
             </div>
         );
     }

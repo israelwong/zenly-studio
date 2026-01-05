@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { PortfolioEditor } from "../components/PortfolioEditorWrapper";
+import { PortfolioEditor } from "../components/editors/PortfolioEditor";
 
 export default function NuevoPortfolioPage() {
     const params = useParams();

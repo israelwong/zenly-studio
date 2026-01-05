@@ -192,24 +192,35 @@ export async function obtenerConfiguracionesSeguridad(
 
         let settings = await Promise.race([findSettingsPromise, findTimeoutPromise]);
 
-        // Si no existen, crear con valores por defecto (solo si no fue timeout)
+        // Si no existen o fue timeout, usar upsert para evitar condición de carrera
         if (!settings) {
             try {
-                const createSettingsPromise = prisma.user_security_settings.create({
-                    data: {
+                // Usar upsert en lugar de create para evitar unique constraint error
+                // Si existe, retorna el existente; si no, crea uno nuevo
+                const upsertSettingsPromise = prisma.user_security_settings.upsert({
+                    where: { user_id: dbUser.id },
+                    update: {}, // No actualizar si ya existe
+                    create: {
                         user_id: dbUser.id,
                         email_notifications: true,
                         device_alerts: true,
                         session_timeout: 30
                     }
                 });
-                const createTimeoutPromise = new Promise<null>((resolve) => 
+                const upsertTimeoutPromise = new Promise<null>((resolve) => 
                     setTimeout(() => resolve(null), 2000)
                 );
-                settings = await Promise.race([createSettingsPromise, createTimeoutPromise]);
-            } catch (createError) {
-                // Si falla la creación, retornar null (se usará default en el layout)
-                return null;
+                settings = await Promise.race([upsertSettingsPromise, upsertTimeoutPromise]);
+            } catch (upsertError) {
+                // Si falla el upsert, intentar obtener de nuevo por si otro proceso lo creó
+                try {
+                    settings = await prisma.user_security_settings.findUnique({
+                        where: { user_id: dbUser.id }
+                    });
+                } catch (findError) {
+                    // Si todo falla, retornar null (se usará default en el layout)
+                    return null;
+                }
             }
         }
 

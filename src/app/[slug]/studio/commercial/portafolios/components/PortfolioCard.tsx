@@ -139,7 +139,7 @@ export function PortfolioCard({ portfolio, studioSlug, onUpdate, onDuplicatingSt
                     newPublishedState ? "Portfolio publicado" : "Portfolio despublicado"
                 );
                 // La actualización optimista ya aplicó el cambio
-                // PortfoliosList recargará desde el servidor en background para sincronización completa
+                // El componente padre recargará desde el servidor en background para sincronización completa
             } else {
                 // Revertir en caso de error
                 setLocalPortfolio(portfolio);

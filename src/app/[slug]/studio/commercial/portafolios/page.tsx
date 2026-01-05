@@ -248,10 +248,56 @@ export default function PortafoliosPage() {
 
                 <ZenCardContent className="p-6">
                     {loading ? (
-                        <div className="space-y-4">
-                            {[1, 2, 3].map((i) => (
-                                <div key={i} className="h-24 bg-zinc-800/50 rounded-lg animate-pulse" />
-                            ))}
+                        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <div className="min-w-[1000px]">
+                                    {/* Header skeleton */}
+                                    <div className="border-b border-zinc-800">
+                                        <div className="grid grid-cols-7 gap-4 px-4 py-4">
+                                            <div className="h-4 w-8 bg-zinc-800/50 rounded animate-pulse"></div>
+                                            <div className="h-4 w-16 bg-zinc-800/50 rounded animate-pulse"></div>
+                                            <div className="h-4 w-32 bg-zinc-800/50 rounded animate-pulse"></div>
+                                            <div className="h-4 w-24 bg-zinc-800/50 rounded animate-pulse"></div>
+                                            <div className="h-4 w-20 bg-zinc-800/50 rounded animate-pulse"></div>
+                                            <div className="h-4 w-24 bg-zinc-800/50 rounded animate-pulse"></div>
+                                            <div className="h-4 w-24 bg-zinc-800/50 rounded animate-pulse"></div>
+                                        </div>
+                                    </div>
+                                    {/* Rows skeleton */}
+                                    <div className="divide-y divide-zinc-800">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <div key={i} className="grid grid-cols-7 gap-4 px-4 py-4">
+                                                <div className="flex items-center justify-center">
+                                                    <div className="h-4 w-4 bg-zinc-800/50 rounded animate-pulse"></div>
+                                                </div>
+                                                <div className="flex items-center justify-center">
+                                                    <div className="h-5 w-11 bg-zinc-800/50 rounded-full animate-pulse"></div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-10 w-10 bg-zinc-800/50 rounded-lg animate-pulse"></div>
+                                                    <div className="flex-1 space-y-1">
+                                                        <div className="h-4 w-32 bg-zinc-800/50 rounded animate-pulse"></div>
+                                                        <div className="h-3 w-48 bg-zinc-800/50 rounded animate-pulse"></div>
+                                                        <div className="h-3 w-24 bg-zinc-800/50 rounded animate-pulse"></div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <div className="h-4 w-20 bg-zinc-800/50 rounded animate-pulse"></div>
+                                                </div>
+                                                <div className="flex items-center justify-center">
+                                                    <div className="h-4 w-12 bg-zinc-800/50 rounded animate-pulse"></div>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <div className="h-4 w-24 bg-zinc-800/50 rounded animate-pulse"></div>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <div className="h-4 w-24 bg-zinc-800/50 rounded animate-pulse"></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     ) : portfolios.length === 0 ? (
                         <div className="text-center py-12">

@@ -93,8 +93,8 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
             items: [
                 { id: 'dashboard', name: 'Dashboard', href: `/commercial/dashboard`, icon: Home },
                 { id: 'catalogo', name: 'Catálogo', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
-                { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
                 { id: 'portafolios', name: 'Portafolios', href: `/commercial/portafolios`, icon: FolderOpen },
+                { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },
                 { id: 'promises', name: 'Promesas', href: `/commercial/promises`, icon: File },
             ],
         },

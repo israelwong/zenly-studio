@@ -5,7 +5,7 @@ import { ZenButton, ZenInput, ZenCard, ZenCardContent, ZenCardHeader, ZenCardTit
 import { MobilePreviewFull } from "@/components/previews";
 import { ContentBlocksEditor } from "@/components/shared/content-blocks";
 import { ContentBlock } from "@/types/content-blocks";
-import { CategorizedComponentSelector, ComponentOption } from "./CategorizedComponentSelector";
+import { CategorizedComponentSelector, ComponentOption } from "../CategorizedComponentSelector";
 import { TipoEventoSelector } from "@/components/shared/tipos-evento";
 import { obtenerIdentidadStudio } from "@/lib/actions/studio/profile/identidad";
 import { obtenerTiposEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
