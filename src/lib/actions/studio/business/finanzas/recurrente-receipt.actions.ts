@@ -43,10 +43,6 @@ export async function obtenerDatosComprobanteRecurrente(
                 email: true,
                 address: true,
                 logo_url: true,
-                bank_name: true,
-                account_number: true,
-                account_holder: true,
-                clabe_number: true,
                 phones: {
                     where: { is_active: true },
                     select: { number: true },
@@ -59,6 +55,19 @@ export async function obtenerDatosComprobanteRecurrente(
         if (!studio) {
             return { success: false, error: 'Studio no encontrado' };
         }
+
+        // Obtener método de pago de transferencia configurado (para info bancaria en comprobantes)
+        const metodoTransferencia = await prisma.studio_metodos_pago.findFirst({
+            where: {
+                studio_id: studio.id,
+                payment_method: { in: ['transferencia', 'spei_directo'] },
+                status: 'active',
+                banco: { not: null },
+                beneficiario: { not: null },
+                cuenta_clabe: { not: null },
+            },
+            orderBy: { order: 'asc' },
+        });
 
         // Obtener gasto con personal
         const gasto = await prisma.studio_gastos.findFirst({
@@ -96,10 +105,10 @@ export async function obtenerDatosComprobanteRecurrente(
                     email: studio.email,
                     phone: studio.phones[0]?.number || null,
                     logo_url: studio.logo_url,
-                    bank_name: studio.bank_name,
-                    account_number: studio.account_number,
-                    account_holder: studio.account_holder,
-                    clabe_number: studio.clabe_number,
+                    bank_name: metodoTransferencia?.banco || null,
+                    account_number: null, // Ya no se usa, se usa cuenta_clabe
+                    account_holder: metodoTransferencia?.beneficiario || null,
+                    clabe_number: metodoTransferencia?.cuenta_clabe || null,
                 },
                 personal: {
                     name: gasto.personal.name,

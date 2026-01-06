@@ -757,10 +757,6 @@ model studios {
   updated_at                                      DateTime                         @updatedAt
   isotipo_url                                     String?
   slogan                                          String?
-  account_holder                                  String?
-  account_number                                  String?
-  bank_name                                       String?
-  clabe_number                                    String?
   presentation                                    String?
   keywords                                        String?
   latitude                                        Float?
