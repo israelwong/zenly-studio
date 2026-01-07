@@ -97,6 +97,15 @@ export async function createStudioAndSubscription(
     const validated = SignupStep2Schema.parse(data);
     const supabase = await createClient();
 
+    // Verificar si se permiten nuevos registros
+    const { areNewStudiosAllowed } = await import('@/lib/utils/studio-access');
+    if (!areNewStudiosAllowed()) {
+      return {
+        success: false,
+        error: "Los registros de nuevos estudios están temporalmente deshabilitados. Estamos en desarrollo y próximamente estaremos disponibles.",
+      };
+    }
+
     // Verificar que el slug no existe
     const existingStudio = await prisma.studios.findUnique({
       where: { slug: validated.studio_slug },
