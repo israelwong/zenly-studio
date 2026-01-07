@@ -135,6 +135,7 @@ const ZenInput = React.forwardRef<HTMLInputElement, ZenInputProps>(
               'flex items-center gap-2',
               'mb-2'
             )}
+            suppressHydrationWarning
           >
             {label}
             {required && (
@@ -170,6 +171,7 @@ const ZenInput = React.forwardRef<HTMLInputElement, ZenInputProps>(
               error && errorId,
               hint && hintId
             )}
+            suppressHydrationWarning
             {...props}
           />
         </div>
@@ -184,6 +186,7 @@ const ZenInput = React.forwardRef<HTMLInputElement, ZenInputProps>(
               'mt-1'
             )}
             role="alert"
+            suppressHydrationWarning
           >
             {error}
           </p>
@@ -198,6 +201,7 @@ const ZenInput = React.forwardRef<HTMLInputElement, ZenInputProps>(
               ZEN_COLORS.text.muted,
               'mt-1'
             )}
+            suppressHydrationWarning
           >
             {hint}
           </p>

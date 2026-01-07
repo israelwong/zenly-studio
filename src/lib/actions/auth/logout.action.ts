@@ -27,11 +27,22 @@ export async function logout(redirectTo?: string) {
         console.log("✅ Sesión cerrada exitosamente");
 
         // Redirigir a la ruta especificada o al login por defecto
+        // redirect() lanza NEXT_REDIRECT que es parte del funcionamiento normal de Next.js
         redirect(redirectTo || "/login");
 
     } catch (error) {
+        // Verificar si es un error de redirección de Next.js (NEXT_REDIRECT)
+        // Si es así, re-lanzarlo porque es parte del funcionamiento normal
+        if (error && typeof error === 'object' && 'digest' in error) {
+            const nextError = error as { digest?: string };
+            if (nextError.digest?.startsWith('NEXT_REDIRECT')) {
+                throw error; // Re-lanzar el error de redirección
+            }
+        }
+
+        // Solo loggear errores reales, no redirecciones
         console.error("Error en logout:", error);
-        // Aún así redirigir en caso de error
+        // Aún así redirigir en caso de error real
         redirect(redirectTo || "/login");
     }
 }

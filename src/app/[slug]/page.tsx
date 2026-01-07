@@ -1,5 +1,5 @@
 import React from 'react';
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { getStudioProfileBySlug } from '@/lib/actions/public/profile.actions';
 import { getPublicActiveOffers } from '@/lib/actions/studio/offers/offers.actions';
 import { ProfilePageClient } from './profile/public/ProfilePageClient';
@@ -24,7 +24,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
         if (!result.success || !result.data) {
             console.error('❌ [PublicProfilePage] Failed to fetch profile:', result.error);
-            notFound();
+            redirect('/');
         }
 
         const profileData = result.data;
@@ -54,7 +54,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
         );
     } catch (error) {
         console.error('❌ [PublicProfilePage] Error:', error);
-        notFound();
+        redirect('/');
     }
 }
 

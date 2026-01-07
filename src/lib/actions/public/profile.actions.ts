@@ -256,7 +256,7 @@ export async function getStudioProfileBySlug(
                         take: 50
                     },
                     faq: {
-                        where: { is_active: true },
+                        where: isOwner ? {} : { is_active: true },
                         select: {
                             id: true,
                             pregunta: true,

@@ -5,6 +5,12 @@ import { cn } from '@/lib/utils';
 import { ZEN_COLORS } from '../tokens/colors';
 import { ZEN_SPACING } from '../tokens/spacing';
 
+// Hook para generar IDs estables en SSR
+function useStableId(prefix: string = 'zen-textarea'): string {
+  const reactId = React.useId();
+  return `${prefix}-${reactId.replace(/:/g, '')}`;
+}
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -74,8 +80,9 @@ const ZenTextarea = React.forwardRef<HTMLTextAreaElement, ZenTextareaProps>(
     value,
     ...props
   }, ref) => {
-    // Generar ID único si no se proporciona
-    const textareaId = id || React.useId();
+    // Generar ID único si no se proporciona - usando hook estable para SSR
+    const generatedId = useStableId();
+    const textareaId = id || generatedId;
     const errorId = `${textareaId}-error`;
     const hintId = `${textareaId}-hint`;
     const countId = `${textareaId}-count`;
@@ -131,6 +138,7 @@ const ZenTextarea = React.forwardRef<HTMLTextAreaElement, ZenTextareaProps>(
             'flex items-center gap-2',
             'mb-2'
           )}
+          suppressHydrationWarning
         >
           {Icon && <Icon className="h-4 w-4" />}
           <span>
@@ -161,6 +169,7 @@ const ZenTextarea = React.forwardRef<HTMLTextAreaElement, ZenTextareaProps>(
             hint && hintId,
             maxLength && countId
           )}
+          suppressHydrationWarning
           {...props}
         />
 
@@ -176,6 +185,7 @@ const ZenTextarea = React.forwardRef<HTMLTextAreaElement, ZenTextareaProps>(
                   ZEN_COLORS.semantic.error.text
                 )}
                 role="alert"
+                suppressHydrationWarning
               >
                 {error}
               </p>
@@ -189,6 +199,7 @@ const ZenTextarea = React.forwardRef<HTMLTextAreaElement, ZenTextareaProps>(
                   'text-xs font-normal leading-normal',
                   ZEN_COLORS.text.muted
                 )}
+                suppressHydrationWarning
               >
                 {hint}
               </p>
@@ -209,6 +220,7 @@ const ZenTextarea = React.forwardRef<HTMLTextAreaElement, ZenTextareaProps>(
                     : ZEN_COLORS.text.muted
               )}
               aria-live="polite"
+              suppressHydrationWarning
             >
               {currentLength}/{maxLength}
             </p>

@@ -93,15 +93,22 @@ export function EditContactInfoModal({
                         type === 'website' ? 'Sitio web actualizado' :
                             'Dirección actualizada'
                 );
+                
+                // Ejecutar onSuccess primero para refrescar datos
                 onSuccess?.();
+                
+                // Esperar un momento para que se refleje la actualización antes de cerrar
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Cerrar modal después de que se vea la actualización
                 onClose();
             } else {
                 toast.error(result?.error || 'Error al actualizar');
+                setSaving(false);
             }
         } catch (error) {
             console.error('Error updating contact info:', error);
             toast.error('Error al actualizar');
-        } finally {
             setSaving(false);
         }
     };
@@ -129,6 +136,7 @@ export function EditContactInfoModal({
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
                         placeholder={config.placeholder}
+                        disabled={saving}
                     />
 
                     {type === 'address' && (
@@ -139,6 +147,7 @@ export function EditContactInfoModal({
                             onChange={(e) => setMapsUrl(e.target.value)}
                             placeholder="https://maps.google.com/..."
                             hint="Link directo a tu ubicación en Google Maps"
+                            disabled={saving}
                         />
                     )}
 
@@ -161,7 +170,7 @@ export function EditContactInfoModal({
                             {saving ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                    Guardando...
+                                    Actualizando...
                                 </>
                             ) : (
                                 'Guardar'

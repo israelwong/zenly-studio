@@ -39,15 +39,22 @@ export function EditPresentationModal({
 
             if (result.success) {
                 toast.success('Presentación actualizada');
+                
+                // Ejecutar onSuccess primero para refrescar datos
                 onSuccess?.();
+                
+                // Esperar un momento para que se refleje la actualización antes de cerrar
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Cerrar modal después de que se vea la actualización
                 onClose();
             } else {
                 toast.error(result.error || 'Error al actualizar');
+                setSaving(false);
             }
         } catch (error) {
             console.error('Error updating presentation:', error);
             toast.error('Error al actualizar');
-        } finally {
             setSaving(false);
         }
     };
@@ -70,6 +77,7 @@ export function EditPresentationModal({
                         placeholder="Describe brevemente tu estudio fotográfico..."
                         rows={4}
                         maxLength={500}
+                        disabled={saving}
                     />
 
                     <div className="flex gap-3 pt-4">
@@ -91,7 +99,7 @@ export function EditPresentationModal({
                             {saving ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                    Guardando...
+                                    Actualizando...
                                 </>
                             ) : (
                                 'Guardar'

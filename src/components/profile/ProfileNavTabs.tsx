@@ -8,6 +8,8 @@ interface ProfileNavTabsProps {
     activeTab: string;
     onTabChange: (tab: string) => void;
     onSearchClick?: () => void;
+    hasActiveFAQs?: boolean; // Si hay FAQs activas para mostrar
+    isOwner?: boolean; // Si el usuario es el dueño del estudio
 }
 
 /**
@@ -18,15 +20,19 @@ interface ProfileNavTabsProps {
  * - Perfil público (navegación de tabs)
  * - Preview del builder
  */
-export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick }: ProfileNavTabsProps) {
+export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiveFAQs = false, isOwner = false }: ProfileNavTabsProps) {
     const { user } = useAuth();
 
     const baseTabs = [
         { id: 'inicio', label: 'Inicio', icon: Home },
         { id: 'portafolio', label: 'Portafolio', icon: Folder },
         { id: 'contacto', label: 'Contacto', icon: Phone },
-        { id: 'faq', label: 'FAQ', icon: HelpCircle },
     ];
+
+    // Agregar tab FAQ solo si hay FAQs activas o si el usuario es el dueño
+    if (hasActiveFAQs || isOwner) {
+        baseTabs.push({ id: 'faq', label: 'FAQ', icon: HelpCircle });
+    }
 
     // Agregar tab "Archivados" solo si usuario autenticado
     const tabs = user

@@ -32,6 +32,11 @@ export default async function ClienteLayout({ children, params }: ClienteLayoutP
   // Cargar datos del studio (memoizado con React.cache)
   const studioInfo: StudioPublicInfo | null = await obtenerStudioPublicInfo(slug);
 
+  // Si el studio no existe, redirigir a root
+  if (!studioInfo) {
+    redirect('/');
+  }
+
   return (
     <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden">
       <ClientHeader slug={slug} cliente={cliente} studioInfo={studioInfo} />

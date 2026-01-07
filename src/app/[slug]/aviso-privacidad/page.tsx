@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { obtenerAvisoPrivacidadPublico } from '@/lib/actions/public/promesas.actions';
 import { MarkdownPreview } from '@/components/shared/avisos-privacidad/MarkdownPreview';
@@ -71,9 +71,9 @@ export default async function AvisoPrivacidadPage({ params }: AvisoPrivacidadPag
     obtenerStudioPublicInfo(slug),
   ]);
 
-  // Si el studio no existe, 404
+  // Si el studio no existe, redirigir a root
   if (!result.success || !studioInfo) {
-    notFound();
+    redirect('/');
   }
 
   // Si no hay aviso activo, mostrar mensaje

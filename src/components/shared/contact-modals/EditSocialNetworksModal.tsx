@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { X, ExternalLink } from 'lucide-react';
+import { ZenButton, ZenInput } from '@/components/ui/zen';
+import { X, ExternalLink, Loader2, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     obtenerRedesSocialesStudio,
@@ -71,14 +72,20 @@ export function EditSocialNetworksModal({
 }: EditSocialNetworksModalProps) {
     const [redes, setRedes] = useState<Record<string, { id: string; url: string; platformId: string }>>({});
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
     const [plataformaIds, setPlataformaIds] = useState<Record<string, string>>({});
     const [editingValues, setEditingValues] = useState<Record<string, string>>({});
+    const [originalValues, setOriginalValues] = useState<Record<string, string>>({});
     const [confirmDelete, setConfirmDelete] = useState<{ slug: string; name: string } | null>(null);
 
     useEffect(() => {
         if (isOpen) {
             loadData();
+        } else {
+            // Resetear estados al cerrar
+            setEditingValues({});
+            setOriginalValues({});
+            setSaving(false);
         }
     }, [isOpen, studioSlug]);
 
@@ -114,6 +121,7 @@ export function EditSocialNetworksModal({
                 setRedes(redesMap);
                 setPlataformaIds(platformIds);
                 setEditingValues(initialValues);
+                setOriginalValues(initialValues);
             }
 
             // Cargar IDs de plataformas para crear nuevas
@@ -134,30 +142,10 @@ export function EditSocialNetworksModal({
         }
     };
 
-    const handleSave = async (slug: string, value: string) => {
+    const buildFullUrl = (slug: string, value: string): string => {
         const trimmedValue = value.trim();
+        if (!trimmedValue) return '';
 
-        // Si está vacío y existe, eliminar
-        if (!trimmedValue && redes[slug]) {
-            setSaving(slug);
-            const result = await eliminarRedSocial(studioSlug, redes[slug].id);
-            if (result.success) {
-                const newRedes = { ...redes };
-                delete newRedes[slug];
-                setRedes(newRedes);
-                toast.success('Red social eliminada');
-                onSuccess?.();
-            } else {
-                toast.error('Error al eliminar');
-            }
-            setSaving(null);
-            return;
-        }
-
-        // Si está vacío y no existe, no hacer nada
-        if (!trimmedValue) return;
-
-        // Construir URL completa
         const redConfig = REDES_PRINCIPALES.find(r => r.slug === slug);
         let fullUrl = trimmedValue;
 
@@ -165,95 +153,150 @@ export function EditSocialNetworksModal({
         if (trimmedValue.startsWith('http')) {
             try {
                 const url = new URL(trimmedValue);
-                // Extraer el username de la URL
-                // Ejemplo: https://www.facebook.com/prosocialmx → prosocialmx
-                // Ejemplo: https://instagram.com/usuario → usuario
                 const pathParts = url.pathname.split('/').filter(p => p);
                 const username = pathParts[0] || '';
 
-                // Si encontramos username, construir URL limpia
                 if (username) {
                     fullUrl = `${redConfig?.baseUrl}${username}`;
                 } else {
-                    fullUrl = trimmedValue; // Usar URL original si no encontramos username
+                    fullUrl = trimmedValue;
                 }
             } catch {
-                // Si falla el parsing, asumir que es username
                 fullUrl = `${redConfig?.baseUrl}${trimmedValue}`;
             }
         } else {
-            // Es solo username, construir URL completa
             fullUrl = `${redConfig?.baseUrl}${trimmedValue}`;
         }
 
-        setSaving(slug);
+        return fullUrl;
+    };
+
+    const handleSaveAll = async () => {
+        setSaving(true);
 
         try {
-            if (redes[slug]) {
-                // Actualizar existente
-                const result = await actualizarRedSocial(studioSlug, redes[slug].id, {
-                    platform_id: redes[slug].platformId,
-                    url: fullUrl
-                });
-                if (result.success) {
-                    setRedes({
-                        ...redes,
-                        [slug]: { ...redes[slug], url: fullUrl }
-                    });
-                    // Actualizar valor de edición con el username limpio
-                    setEditingValues({
-                        ...editingValues,
-                        [slug]: trimmedValue.startsWith('http')
-                            ? new URL(trimmedValue).pathname.split('/').filter(p => p)[0] || trimmedValue
-                            : trimmedValue
-                    });
-                    toast.success('Actualizado');
-                    onSuccess?.();
-                } else {
-                    toast.error(result.error || 'Error al actualizar');
-                }
-            } else {
-                // Crear nuevo
-                const platformId = plataformaIds[slug];
-                if (!platformId) {
-                    toast.error('Plataforma no encontrada');
-                    setSaving(null);
-                    return;
+            const promises: Promise<void>[] = [];
+
+            // Procesar cada red social
+            for (const red of REDES_PRINCIPALES) {
+                const currentValue = editingValues[red.slug]?.trim() || '';
+                const originalValue = originalValues[red.slug]?.trim() || '';
+                const existing = redes[red.slug];
+
+                // Si no hay cambios, continuar
+                if (currentValue === originalValue) continue;
+
+                // Si está vacío y existe, eliminar
+                if (!currentValue && existing) {
+                    promises.push(
+                        eliminarRedSocial(studioSlug, existing.id).then(result => {
+                            if (result.success) {
+                                const newRedes = { ...redes };
+                                delete newRedes[red.slug];
+                                setRedes(newRedes);
+                                const newValues = { ...editingValues };
+                                delete newValues[red.slug];
+                                setEditingValues(newValues);
+                                const newOriginal = { ...originalValues };
+                                delete newOriginal[red.slug];
+                                setOriginalValues(newOriginal);
+                            } else {
+                                throw new Error(result.error || 'Error al eliminar');
+                            }
+                        })
+                    );
+                    continue;
                 }
 
-                const result = await crearRedSocial(studioSlug, {
-                    platform_id: platformId,
-                    url: fullUrl
-                });
+                // Si está vacío y no existe, continuar
+                if (!currentValue) continue;
 
-                if (result.success && result.data) {
-                    setRedes({
-                        ...redes,
-                        [slug]: {
-                            id: result.data.id,
-                            url: fullUrl,
-                            platformId: platformId
-                        }
-                    });
-                    // Actualizar valor de edición con el username limpio
-                    setEditingValues({
-                        ...editingValues,
-                        [slug]: trimmedValue.startsWith('http')
-                            ? new URL(trimmedValue).pathname.split('/').filter(p => p)[0] || trimmedValue
-                            : trimmedValue
-                    });
-                    toast.success('Red social agregada');
-                    onSuccess?.();
+                // Construir URL completa
+                const fullUrl = buildFullUrl(red.slug, currentValue);
+
+                if (existing) {
+                    // Actualizar existente
+                    promises.push(
+                        actualizarRedSocial(studioSlug, existing.id, {
+                            platform_id: existing.platformId,
+                            url: fullUrl
+                        }).then(result => {
+                            if (result.success) {
+                                setRedes(prev => ({
+                                    ...prev,
+                                    [red.slug]: { ...prev[red.slug], url: fullUrl }
+                                }));
+                                const cleanValue = currentValue.startsWith('http')
+                                    ? new URL(currentValue).pathname.split('/').filter(p => p)[0] || currentValue
+                                    : currentValue;
+                                setEditingValues(prev => ({ ...prev, [red.slug]: cleanValue }));
+                                setOriginalValues(prev => ({ ...prev, [red.slug]: cleanValue }));
+                            } else {
+                                throw new Error(result.error || 'Error al actualizar');
+                            }
+                        })
+                    );
                 } else {
-                    toast.error(result.error || 'Error al crear');
+                    // Crear nuevo
+                    const platformId = plataformaIds[red.slug];
+                    if (!platformId) {
+                        toast.error(`Plataforma ${red.name} no encontrada`);
+                        continue;
+                    }
+
+                    promises.push(
+                        crearRedSocial(studioSlug, {
+                            platform_id: platformId,
+                            url: fullUrl
+                        }).then(result => {
+                            if (result.success && result.data) {
+                                setRedes(prev => ({
+                                    ...prev,
+                                    [red.slug]: {
+                                        id: result.data!.id,
+                                        url: fullUrl,
+                                        platformId: platformId
+                                    }
+                                }));
+                                const cleanValue = currentValue.startsWith('http')
+                                    ? new URL(currentValue).pathname.split('/').filter(p => p)[0] || currentValue
+                                    : currentValue;
+                                setEditingValues(prev => ({ ...prev, [red.slug]: cleanValue }));
+                                setOriginalValues(prev => ({ ...prev, [red.slug]: cleanValue }));
+                            } else {
+                                throw new Error(result.error || 'Error al crear');
+                            }
+                        })
+                    );
                 }
             }
+
+            // Ejecutar todas las operaciones
+            await Promise.all(promises);
+
+            if (promises.length > 0) {
+                toast.success('Redes sociales actualizadas');
+                onSuccess?.();
+                
+                // Esperar un momento para que se refleje la actualización antes de cerrar
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                onClose();
+            } else {
+                // No hay cambios
+                onClose();
+            }
         } catch (error) {
-            console.error('Error saving:', error);
-            toast.error('Error al guardar');
-        } finally {
-            setSaving(null);
+            console.error('Error saving social networks:', error);
+            toast.error('Error al guardar redes sociales');
+            setSaving(false);
         }
+    };
+
+    const handleCancel = () => {
+        // Restaurar valores originales
+        setEditingValues(originalValues);
+        onClose();
     };
 
     const handleDeleteClick = (slug: string) => {
@@ -267,9 +310,7 @@ export function EditSocialNetworksModal({
         if (!confirmDelete) return;
 
         const { slug } = confirmDelete;
-
-        // Marcar como guardando ANTES de cerrar el modal
-        setSaving(slug);
+        setSaving(true);
 
         try {
             const result = await eliminarRedSocial(studioSlug, redes[slug].id);
@@ -284,94 +325,148 @@ export function EditSocialNetworksModal({
                 const newValues = { ...editingValues };
                 delete newValues[slug];
                 setEditingValues(newValues);
+                
+                const newOriginal = { ...originalValues };
+                delete newOriginal[slug];
+                setOriginalValues(newOriginal);
 
                 toast.success('Red social eliminada');
                 onSuccess?.();
+                
+                // Esperar un momento para que se refleje la actualización antes de cerrar
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                onClose();
             } else {
                 toast.error('Error al eliminar');
+                setSaving(false);
             }
         } catch (error) {
             console.error('Error deleting social network:', error);
             toast.error('Error al eliminar');
+            setSaving(false);
         } finally {
-            // Cerrar modal y limpiar estados al final
-            setSaving(null);
             setConfirmDelete(null);
         }
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="sm:max-w-lg bg-zinc-900 border-zinc-800">
                 <DialogHeader>
-                    <DialogTitle className="text-lg">Redes sociales</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2 text-zinc-100">
+                        <Share2 className="h-5 w-5 text-emerald-400" />
+                        Editar Redes Sociales
+                    </DialogTitle>
                 </DialogHeader>
 
-                <div className="space-y-2 mt-6">
+                <form onSubmit={(e) => { e.preventDefault(); handleSaveAll(); }} className="space-y-4 mt-4">
                     {loading ? (
                         <div className="text-center py-12 text-zinc-500 text-sm">Cargando...</div>
                     ) : (
-                        REDES_PRINCIPALES.map((red) => {
-                            const existing = redes[red.slug];
-                            const isSaving = saving === red.slug;
-                            const displayValue = editingValues[red.slug] || '';
-                            const IconComponent = red.icon;
+                        <div className="space-y-3">
+                            {REDES_PRINCIPALES.map((red) => {
+                                const existing = redes[red.slug];
+                                const displayValue = editingValues[red.slug] || '';
+                                const IconComponent = red.icon;
+                                const hasValue = displayValue.trim().length > 0;
 
-                            return (
-                                <div
-                                    key={red.slug}
-                                    className="group relative"
-                                >
-                                    <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors">
-                                        <IconComponent className="w-4 h-4 shrink-0 text-zinc-500" />
+                                return (
+                                    <div
+                                        key={red.slug}
+                                        className="group relative"
+                                    >
+                                        <div className={`
+                                            relative rounded-lg border transition-all
+                                            ${saving ? 'border-zinc-700 opacity-50' : 'border-zinc-800 hover:border-zinc-700'}
+                                            ${hasValue ? 'bg-zinc-900/30' : 'bg-zinc-900/50'}
+                                        `}>
+                                            <div className="flex items-center gap-3 p-3">
+                                                <div className={`
+                                                    flex items-center justify-center w-10 h-10 rounded-lg shrink-0 transition-colors
+                                                    ${hasValue ? 'bg-emerald-500/10' : 'bg-zinc-800/50'}
+                                                `}>
+                                                    <IconComponent className={`
+                                                        w-5 h-5 transition-colors
+                                                        ${hasValue ? 'text-emerald-400' : 'text-zinc-500'}
+                                                    `} />
+                                                </div>
 
-                                        <input
-                                            type="text"
-                                            placeholder={red.name}
-                                            value={displayValue}
-                                            onChange={(e) => setEditingValues({ ...editingValues, [red.slug]: e.target.value })}
-                                            onBlur={(e) => handleSave(red.slug, e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.currentTarget.blur();
-                                                }
-                                            }}
-                                            disabled={isSaving}
-                                            className="flex-1 min-w-0 bg-transparent text-sm text-zinc-300 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
-                                        />
+                                                <div className="flex-1 min-w-0">
+                                                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                                                        {red.name}
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder={red.placeholder}
+                                                        value={displayValue}
+                                                        onChange={(e) => setEditingValues({ ...editingValues, [red.slug]: e.target.value })}
+                                                        disabled={saving}
+                                                        className="w-full bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    />
+                                                </div>
 
-                                        {isSaving ? (
-                                            <div className="w-4 h-4 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin" />
-                                        ) : existing ? (
-                                            <div className="flex items-center gap-1">
-                                                <a
-                                                    href={existing.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="p-1 text-zinc-400 hover:text-emerald-400 transition-colors opacity-0 group-hover:opacity-100"
-                                                    title="Ver perfil"
-                                                >
-                                                    <ExternalLink className="w-3.5 h-3.5" />
-                                                </a>
-                                                <button
-                                                    onClick={() => handleDeleteClick(red.slug)}
-                                                    className="p-1 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                                                    title="Eliminar"
-                                                >
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
+                                                {existing && !saving && (
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <a
+                                                            href={existing.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="p-2 text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md transition-colors"
+                                                            title="Ver perfil"
+                                                        >
+                                                            <ExternalLink className="w-4 h-4" />
+                                                        </a>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteClick(red.slug)}
+                                                            disabled={saving}
+                                                            className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            title="Eliminar"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
-                                        ) : null}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })
+                                );
+                            })}
+                        </div>
                     )}
-                </div>
 
-                <p className="mt-6 text-xs text-zinc-500 text-center">
-                    Escribe tu usuario o pega la URL completa
-                </p>
+                    <p className="text-xs text-zinc-500 text-center pt-2">
+                        Escribe tu usuario o pega la URL completa
+                    </p>
+
+                    <div className="flex gap-3 pt-4 border-t border-zinc-800">
+                        <ZenButton
+                            type="button"
+                            variant="outline"
+                            onClick={handleCancel}
+                            disabled={saving}
+                            className="flex-1"
+                        >
+                            Cancelar
+                        </ZenButton>
+                        <ZenButton
+                            type="submit"
+                            variant="primary"
+                            disabled={saving || loading}
+                            className="flex-1"
+                        >
+                            {saving ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                    Actualizando...
+                                </>
+                            ) : (
+                                'Guardar'
+                            )}
+                        </ZenButton>
+                    </div>
+                </form>
             </DialogContent>
 
             {/* Confirm Delete Modal */}
@@ -388,7 +483,7 @@ export function EditSocialNetworksModal({
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="destructive"
-                loading={saving === confirmDelete?.slug}
+                loading={saving}
                 loadingText="Eliminando..."
             />
         </Dialog>

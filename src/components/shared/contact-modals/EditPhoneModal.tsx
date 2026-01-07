@@ -38,16 +38,21 @@ export function EditPhoneModal({
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        if (phone) {
-            setFormData({
-                number: phone.number,
-                type: phone.type
-            });
-        } else {
-            setFormData({
-                number: '',
-                type: 'AMBOS'
-            });
+        if (isOpen) {
+            if (phone) {
+                // Normalizar el tipo a mayúsculas para asegurar consistencia
+                const normalizedType = phone.type?.toUpperCase() as 'LLAMADAS' | 'WHATSAPP' | 'AMBOS' || 'AMBOS';
+                setFormData({
+                    number: phone.number || '',
+                    type: normalizedType
+                });
+            } else {
+                setFormData({
+                    number: '',
+                    type: 'AMBOS'
+                });
+            }
+            setSaving(false); // Reset saving state when modal opens
         }
     }, [phone, isOpen]);
 
@@ -83,18 +88,35 @@ export function EditPhoneModal({
                 toast.success('Teléfono agregado');
             }
 
+            // Ejecutar onSuccess primero para refrescar datos
             onSuccess?.();
+            
+            // Esperar un momento para que se refleje la actualización antes de cerrar
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Resetear estado antes de cerrar
+            setSaving(false);
+            
+            // Cerrar modal después de que se vea la actualización
             onClose();
         } catch (error) {
             console.error('Error saving phone:', error);
             toast.error('Error al guardar teléfono');
         } finally {
+            // Asegurar que siempre se resetee el estado
             setSaving(false);
         }
     };
 
+    const handleClose = () => {
+        if (!saving) {
+            setSaving(false);
+            onClose();
+        }
+    };
+
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog open={isOpen} onOpenChange={handleClose}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
@@ -116,6 +138,7 @@ export function EditPhoneModal({
                         required
                         hint="Ingresa 10 dígitos"
                         maxLength={20}
+                        disabled={saving}
                     />
 
                     <div className="space-y-3">
@@ -125,7 +148,8 @@ export function EditPhoneModal({
                             <label
                                 htmlFor="type-ambos"
                                 className={cn(
-                                    'relative flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all',
+                                    'relative flex items-start gap-3 p-4 rounded-lg border transition-all',
+                                    saving ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
                                     formData.type === 'AMBOS'
                                         ? 'border-emerald-500 bg-emerald-500/10'
                                         : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
@@ -138,6 +162,7 @@ export function EditPhoneModal({
                                     value="AMBOS"
                                     checked={formData.type === 'AMBOS'}
                                     onChange={() => handleTypeSelect('AMBOS')}
+                                    disabled={saving}
                                     className="sr-only"
                                 />
                                 <div className="flex-1 min-w-0">
@@ -172,7 +197,8 @@ export function EditPhoneModal({
                             <label
                                 htmlFor="type-llamadas"
                                 className={cn(
-                                    'relative flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all',
+                                    'relative flex items-start gap-3 p-4 rounded-lg border transition-all',
+                                    saving ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
                                     formData.type === 'LLAMADAS'
                                         ? 'border-emerald-500 bg-emerald-500/10'
                                         : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
@@ -185,6 +211,7 @@ export function EditPhoneModal({
                                     value="LLAMADAS"
                                     checked={formData.type === 'LLAMADAS'}
                                     onChange={() => handleTypeSelect('LLAMADAS')}
+                                    disabled={saving}
                                     className="sr-only"
                                 />
                                 <div className="flex-1 min-w-0">
@@ -210,7 +237,8 @@ export function EditPhoneModal({
                             <label
                                 htmlFor="type-whatsapp"
                                 className={cn(
-                                    'relative flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all',
+                                    'relative flex items-start gap-3 p-4 rounded-lg border transition-all',
+                                    saving ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
                                     formData.type === 'WHATSAPP'
                                         ? 'border-emerald-500 bg-emerald-500/10'
                                         : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
@@ -223,6 +251,7 @@ export function EditPhoneModal({
                                     value="WHATSAPP"
                                     checked={formData.type === 'WHATSAPP'}
                                     onChange={() => handleTypeSelect('WHATSAPP')}
+                                    disabled={saving}
                                     className="sr-only"
                                 />
                                 <div className="flex-1 min-w-0">
@@ -250,7 +279,7 @@ export function EditPhoneModal({
                         <ZenButton
                             type="button"
                             variant="outline"
-                            onClick={onClose}
+                            onClick={handleClose}
                             disabled={saving}
                             className="flex-1"
                         >
@@ -265,7 +294,7 @@ export function EditPhoneModal({
                             {saving ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                    Guardando...
+                                    Actualizando...
                                 </>
                             ) : (
                                 'Guardar'

@@ -52,6 +52,7 @@ export function FaqSection({
     const isOwner = user?.id === ownerId;
     const faqData = faq || data?.faq || [];
     const activeFAQ = faqData.filter(faq => faq.is_active);
+    const allFAQ = faqData; // Todas las FAQs (activas e inactivas)
 
     const handleDataRefresh = () => router.refresh();
 
@@ -178,7 +179,9 @@ export function FaqSection({
         );
     }
 
-    if (!activeFAQ.length && !isOwner) return null;
+    // Si no hay FAQs públicas (activas) y no hay FAQs definidas (en total), ocultar para usuarios no autenticados
+    // Pero mostrar siempre si el usuario es el dueño
+    if (!activeFAQ.length && !allFAQ.length && !isOwner) return null;
 
     return (
         <div className="px-8 py-6 space-y-4">

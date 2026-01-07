@@ -294,7 +294,7 @@ export function ProfileHeader({ data, loading = false, studioSlug, onCreatePost,
                                         {/* Botón Dashboard - Solo desktop */}
                                         <button
                                             onClick={handleDashboard}
-                                            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-md transition-colors"
+                                            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/40 rounded-md transition-all duration-200"
                                             aria-label="Abrir dashboard"
                                         >
                                             <LayoutDashboard className="w-3.5 h-3.5" />

@@ -627,7 +627,7 @@ export function ContactSection({ studio, contactInfo, socialNetworks, studioSlug
                         {socialNetworks.length > 0 ? (
                             <div className="flex items-start gap-3">
                                 <Share2 className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
-                                <div className="flex flex-wrap gap-3">
+                                <div className="flex flex-wrap gap-2.5">
                                     {socialNetworks.map((network) => {
                                         const platformName = network.platform?.name?.toLowerCase() || '';
 
@@ -637,20 +637,22 @@ export function ContactSection({ studio, contactInfo, socialNetworks, studioSlug
                                                 href={network.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="flex items-center gap-2 px-3 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all duration-200 hover:scale-105"
+                                                className="group/social flex items-center gap-2 px-3 py-2 bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 hover:from-zinc-800/80 hover:to-zinc-800/60 border border-zinc-800/50 hover:border-zinc-700/50 rounded-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-emerald-500/5 hover:-translate-y-0.5"
                                                 onClick={(e) => e.stopPropagation()}
                                             >
-                                                {platformName.includes('instagram') && <InstagramIcon className="w-4 h-4 text-zinc-400" />}
-                                                {platformName.includes('facebook') && <FacebookIcon className="w-4 h-4 text-zinc-400" />}
-                                                {platformName.includes('tiktok') && <TikTokIcon className="w-4 h-4 text-zinc-400" />}
-                                                {platformName.includes('youtube') && <YouTubeIcon className="w-4 h-4 text-zinc-400" />}
-                                                {platformName.includes('linkedin') && <LinkedInIcon className="w-4 h-4 text-zinc-400" />}
-                                                {platformName.includes('threads') && <ThreadsIcon className="w-4 h-4 text-zinc-400" />}
-                                                {platformName.includes('spotify') && <SpotifyIcon className="w-4 h-4 text-zinc-400" />}
-                                                <span className="text-sm text-zinc-300">
+                                                <div className="flex items-center justify-center w-7 h-7 rounded-md bg-zinc-800/60 group-hover/social:bg-emerald-500/10 group-hover/social:border group-hover/social:border-emerald-500/20 transition-all duration-300 shrink-0">
+                                                    {platformName.includes('instagram') && <InstagramIcon className="w-4 h-4 text-zinc-300 group-hover/social:text-emerald-400 transition-colors duration-300" />}
+                                                    {platformName.includes('facebook') && <FacebookIcon className="w-4 h-4 text-zinc-300 group-hover/social:text-emerald-400 transition-colors duration-300" />}
+                                                    {platformName.includes('tiktok') && <TikTokIcon className="w-4 h-4 text-zinc-300 group-hover/social:text-emerald-400 transition-colors duration-300" />}
+                                                    {platformName.includes('youtube') && <YouTubeIcon className="w-4 h-4 text-zinc-300 group-hover/social:text-emerald-400 transition-colors duration-300" />}
+                                                    {platformName.includes('linkedin') && <LinkedInIcon className="w-4 h-4 text-zinc-300 group-hover/social:text-emerald-400 transition-colors duration-300" />}
+                                                    {platformName.includes('threads') && <ThreadsIcon className="w-4 h-4 text-zinc-300 group-hover/social:text-emerald-400 transition-colors duration-300" />}
+                                                    {platformName.includes('spotify') && <SpotifyIcon className="w-4 h-4 text-zinc-300 group-hover/social:text-emerald-400 transition-colors duration-300" />}
+                                                </div>
+                                                <span className="text-sm font-medium text-zinc-200 group-hover/social:text-white transition-colors duration-300">
                                                     {network.platform?.name || 'Red social'}
                                                 </span>
-                                                <ExternalLink className="w-3 h-3 text-zinc-500" />
+                                                <ExternalLink className="w-3 h-3 text-zinc-500 group-hover/social:text-emerald-400 group-hover/social:translate-x-0.5 transition-all duration-300 shrink-0" />
                                             </a>
                                         );
                                     })}

@@ -27,18 +27,43 @@ export function EditKeywordsModal({
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        if (isOpen && currentValue) {
-            // Parse keywords from string or array
-            const keywordsArray = Array.isArray(currentValue)
-                ? currentValue
-                : typeof currentValue === 'string'
-                    ? currentValue.split(',').map(k => k.trim()).filter(k => k)
-                    : [];
+        if (isOpen) {
+            let keywordsArray: string[] = [];
+
+            if (currentValue) {
+                if (Array.isArray(currentValue)) {
+                    // Si ya es un array, usarlo directamente
+                    keywordsArray = currentValue.filter(k => k && typeof k === 'string').map(k => k.trim()).filter(k => k);
+                } else if (typeof currentValue === 'string') {
+                    const trimmed = currentValue.trim();
+
+                    // Si es un string vacío, array vacío
+                    if (!trimmed || trimmed === '[]' || trimmed === '""') {
+                        keywordsArray = [];
+                    }
+                    // Si parece ser JSON (empieza con [ o {), intentar parsear
+                    else if ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+                        (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+                        try {
+                            const parsed = JSON.parse(trimmed);
+                            keywordsArray = Array.isArray(parsed)
+                                ? parsed.filter(k => k && typeof k === 'string').map(k => k.trim()).filter(k => k)
+                                : [];
+                        } catch {
+                            // Si falla el parse, tratar como string normal separado por comas
+                            keywordsArray = trimmed.split(',').map(k => k.trim()).filter(k => k && k !== '[]' && k !== '""');
+                        }
+                    }
+                    // Si es un string normal separado por comas
+                    else {
+                        keywordsArray = trimmed.split(',').map(k => k.trim()).filter(k => k && k !== '[]' && k !== '""');
+                    }
+                }
+            }
+
             setKeywords(keywordsArray);
-        } else if (isOpen) {
-            setKeywords([]);
+            setInputValue('');
         }
-        setInputValue('');
     }, [currentValue, isOpen]);
 
     const handleAddKeyword = () => {
@@ -63,10 +88,37 @@ export function EditKeywordsModal({
         setKeywords(keywords.filter((_, i) => i !== index));
     };
 
-    const handleKeyPress = (e: React.KeyboardEvent) => {
+    const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             handleAddKeyword();
+        } else if (e.key === ',') {
+            e.preventDefault();
+            // Extraer la palabra antes de la coma y agregarla
+            const beforeComma = inputValue.trim().slice(0, -1); // Remover la coma
+            if (beforeComma) {
+                setInputValue(beforeComma);
+                handleAddKeyword();
+            }
+        }
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        setInputValue(value);
+
+        // Detectar comas y agregar automáticamente
+        if (value.includes(',')) {
+            const parts = value.split(',');
+            // Agregar todas las partes excepto la última (que puede estar incompleta)
+            for (let i = 0; i < parts.length - 1; i++) {
+                const keyword = parts[i].trim();
+                if (keyword && !keywords.includes(keyword) && keywords.length < 10) {
+                    setKeywords(prev => [...prev, keyword]);
+                }
+            }
+            // Mantener solo la última parte (sin coma) en el input
+            setInputValue(parts[parts.length - 1].trim());
         }
     };
 
@@ -77,12 +129,18 @@ export function EditKeywordsModal({
         try {
             await actualizarPalabrasClave(studioSlug, keywords);
             toast.success('Palabras clave actualizadas');
+            
+            // Ejecutar onSuccess primero para refrescar datos
             onSuccess?.();
+            
+            // Esperar un momento para que se refleje la actualización antes de cerrar
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Cerrar modal después de que se vea la actualización
             onClose();
         } catch (error) {
             console.error('Error updating keywords:', error);
             toast.error('Error al actualizar palabras clave');
-        } finally {
             setSaving(false);
         }
     };
@@ -105,16 +163,16 @@ export function EditKeywordsModal({
                                     label="Agregar palabra clave"
                                     type="text"
                                     value={inputValue}
-                                    onChange={(e) => setInputValue(e.target.value)}
+                                    onChange={handleInputChange}
                                     onKeyPress={handleKeyPress}
-                                    placeholder="Ej: fotografía, bodas, eventos"
-                                    disabled={keywords.length >= 10}
+                                    placeholder="Ej: fotografía, bodas, eventos (separadas por coma)"
+                                    disabled={keywords.length >= 10 || saving}
                                 />
                             </div>
                             <button
                                 type="button"
                                 onClick={handleAddKeyword}
-                                disabled={!inputValue.trim() || keywords.length >= 10}
+                                disabled={!inputValue.trim() || keywords.length >= 10 || saving}
                                 className="mt-7 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white rounded-md transition-colors"
                             >
                                 Agregar
@@ -137,7 +195,8 @@ export function EditKeywordsModal({
                                         <button
                                             type="button"
                                             onClick={() => handleRemoveKeyword(index)}
-                                            className="ml-1 p-0.5 hover:bg-zinc-500 rounded-full transition-colors"
+                                            disabled={saving}
+                                            className="ml-1 p-0.5 hover:bg-zinc-500 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             aria-label={`Eliminar ${keyword}`}
                                         >
                                             <X className="w-3 h-3" />
@@ -164,7 +223,7 @@ export function EditKeywordsModal({
                             {saving ? (
                                 <>
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Guardando...
+                                    Actualizando...
                                 </>
                             ) : (
                                 'Guardar'

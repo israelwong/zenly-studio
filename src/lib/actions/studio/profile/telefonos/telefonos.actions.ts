@@ -55,7 +55,10 @@ export async function crearTelefono(
             }
         });
 
+        // Revalidar todas las rutas que muestran el perfil público
+        revalidatePath(`/${studioSlug}`);
         revalidatePath(`/${studioSlug}/studio/profile/telefonos`);
+        revalidatePath(`/${studioSlug}/profile`, 'page');
         return telefono;
     } catch (error) {
         console.error('Error creando teléfono:', error);
@@ -77,18 +80,35 @@ export async function actualizarTelefono(
             throw new Error('Teléfono no encontrado');
         }
 
+        const updateData: {
+            number?: string;
+            type?: string;
+            label?: string | null;
+            is_active?: boolean;
+        } = {};
+
+        if (data.numero !== undefined) {
+            updateData.number = data.numero;
+        }
+        if (data.tipo !== undefined) {
+            updateData.type = data.tipo;
+        }
+        if (data.etiqueta !== undefined) {
+            updateData.label = data.etiqueta;
+        }
+        if (data.is_active !== undefined) {
+            updateData.is_active = data.is_active;
+        }
+
         const telefono = await prisma.studio_phones.update({
             where: { id: telefonoId },
-            data: {
-                number: data.numero,
-                type: data.tipo,
-                label: data.etiqueta,
-                is_active: data.is_active
-            }
+            data: updateData
         });
 
-        revalidatePath(`/${studioSlug}/studio/profile/telefonos`);
+        // Revalidar todas las rutas que muestran el perfil público
         revalidatePath(`/${studioSlug}`);
+        revalidatePath(`/${studioSlug}/studio/profile/telefonos`);
+        revalidatePath(`/${studioSlug}/profile`, 'page');
         return telefono;
     } catch (error) {
         console.error('Error actualizando teléfono:', error);
@@ -110,7 +130,10 @@ export async function eliminarTelefono(studioSlug: string, telefonoId: string) {
             where: { id: telefonoId }
         });
 
+        // Revalidar todas las rutas que muestran el perfil público
+        revalidatePath(`/${studioSlug}`);
         revalidatePath(`/${studioSlug}/studio/profile/telefonos`);
+        revalidatePath(`/${studioSlug}/profile`, 'page');
     } catch (error) {
         console.error('Error eliminando teléfono:', error);
         throw error;

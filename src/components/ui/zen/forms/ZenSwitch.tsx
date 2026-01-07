@@ -3,6 +3,12 @@
 import React, { useId } from 'react';
 import { cn } from '@/lib/utils';
 
+// Hook para generar IDs estables en SSR
+function useStableId(prefix: string = 'switch'): string {
+    const reactId = useId();
+    return `${prefix}-${reactId.replace(/:/g, '')}`;
+}
+
 export interface ZenSwitchProps {
     checked: boolean;
     onCheckedChange: (checked: boolean) => void;
@@ -34,8 +40,8 @@ export function ZenSwitch({
     id,
     variant = "default"
 }: ZenSwitchProps) {
-    const generatedId = useId();
-    const switchId = id || `switch-${generatedId}`;
+    const generatedId = useStableId();
+    const switchId = id || generatedId;
 
     const checkedColor = variant === "amber" ? "bg-amber-500" :
         variant === "green" ? "bg-green-600" : "bg-blue-600";
@@ -53,6 +59,7 @@ export function ZenSwitch({
                 aria-describedby={description ? `${switchId}-description` : undefined}
                 disabled={disabled}
                 onClick={() => onCheckedChange(!checked)}
+                suppressHydrationWarning
                 className={cn(
                     "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
                     `focus:outline-none focus:ring-2 ${focusRingColor} focus:ring-offset-2 focus:ring-offset-zinc-900`,
@@ -82,6 +89,7 @@ export function ZenSwitch({
                                 "text-sm font-medium cursor-pointer",
                                 disabled ? "text-zinc-500" : "text-zinc-300"
                             )}
+                            suppressHydrationWarning
                         >
                             {label}
                         </label>

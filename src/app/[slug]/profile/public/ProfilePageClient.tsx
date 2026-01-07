@@ -66,6 +66,10 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
     // Verificar si el usuario autenticado es el owner del studio
     const isOwner = user?.id === studio.owner_id;
 
+    // Verificar si hay FAQs activas (solo para usuarios públicos)
+    const faq = (studio as unknown as { faq?: Array<{ id: string; pregunta: string; respuesta: string; orden: number; is_active: boolean }> }).faq || [];
+    const hasActiveFAQs = faq.some(f => f.is_active);
+
     // Detectar scroll para agregar margen al NavTabs
     useEffect(() => {
         const handleScroll = () => {
@@ -285,7 +289,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                     />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[430px_430px] gap-4 p-4 lg:p-6 lg:justify-center">
+                <div className={`grid grid-cols-1 ${offers.length > 0 || isOwner ? 'lg:grid-cols-[430px_430px]' : 'lg:grid-cols-[430px]'} gap-4 p-4 lg:p-6 lg:justify-center`}>
                     {/* Col 1: Main content */}
                     <div className="space-y-4">
                         {/* Navigation Tabs - Sticky con margen dinámico */}
@@ -295,6 +299,8 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                                 activeTab={activeTab}
                                 onTabChange={handleTabChange}
                                 onSearchClick={() => setIsSearchOpen(true)}
+                                hasActiveFAQs={hasActiveFAQs}
+                                isOwner={isOwner}
                             />
                         </div>
 
@@ -317,18 +323,73 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
                     </div>
 
                     {/* Col 2: Sidebar (solo desktop) */}
-                    <aside className="hidden lg:block space-y-4 lg:sticky lg:top-24 lg:h-fit">
-                        {/* Card Ofertas */}
-                        <OffersCard
-                            offers={offers}
-                            studioSlug={studioSlug}
-                            studioId={studio.id}
-                            ownerUserId={studio.owner_id}
-                        />
+                    {/* Mostrar si hay ofertas O si el usuario está autenticado (owner) */}
+                    {(offers.length > 0 || isOwner) && (
+                        <aside className="hidden lg:block space-y-4 lg:sticky lg:top-24 lg:h-fit">
+                            {/* Si hay ofertas, mostrar OffersCard */}
+                            {offers.length > 0 ? (
+                                <OffersCard
+                                    offers={offers}
+                                    studioSlug={studioSlug}
+                                    studioId={studio.id}
+                                    ownerUserId={studio.owner_id}
+                                />
+                            ) : (
+                                /* Si no hay ofertas pero el usuario está autenticado, mostrar banner */
+                                <div className="bg-zinc-900/50 rounded-lg border border-zinc-800/20 p-5">
+                                    <div className="text-center space-y-3">
+                                        <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto">
+                                            <svg
+                                                className="w-6 h-6 text-emerald-500"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M12 4v16m8-8H4"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-semibold text-zinc-100 mb-1">
+                                                Crea tu primera oferta
+                                            </h3>
+                                            <p className="text-xs text-zinc-400 mb-3">
+                                                Comienza a capturar leads desde tus campañas de marketing.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                window.open(`/${studioSlug}/studio/commercial/ofertas/nuevo`, '_blank');
+                                            }}
+                                            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-md transition-colors"
+                                        >
+                                            <svg
+                                                className="w-3.5 h-3.5"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M12 4v16m8-8H4"
+                                                />
+                                            </svg>
+                                            Crear Oferta
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
-                        {/* Card Créditos ZEN */}
-                        <ZenCreditsCard />
-                    </aside>
+                            {/* Card Créditos ZEN - Siempre visible cuando la columna 2 está visible */}
+                            <ZenCreditsCard />
+                        </aside>
+                    )}
                 </div>
             </main>
 

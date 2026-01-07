@@ -69,6 +69,11 @@ export default async function EventoLayout({ children, params }: EventoLayoutPro
     obtenerStudioPublicInfo(slug),
   ]);
 
+  // Si el studio no existe, redirigir a root
+  if (!studioInfo) {
+    redirect('/');
+  }
+
   // Si no se encuentra el evento completo, redirigir al dashboard del cliente
   // Esto evita loops infinitos cuando el evento no tiene cotizaciones aprobadas
   if (!eventoResponse.success || !eventoResponse.data) {
