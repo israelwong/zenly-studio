@@ -21,7 +21,7 @@ export default function CatalogoPage() {
 
     // Actualizar título de la pestaña
     useEffect(() => {
-        document.title = 'ZEN Studio - Catálogo';
+        document.title = 'Zenly Studio - Catálogo';
     }, []);
 
     // Sincronizar con URL cuando cambia el parámetro

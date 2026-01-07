@@ -4,12 +4,12 @@ export default function AboutPage() {
             {/* Hero Section */}
             <section className="relative py-20 px-4 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
                 <div className="container mx-auto max-w-4xl text-center">
-                    <h1 className="text-5xl font-bold mb-6">Acerca de ProSocial Platform</h1>
+                    <h1 className="text-5xl font-bold mb-6">Acerca de Zenly Studio</h1>
                     <p className="text-xl text-gray-300 mb-8">
                         Revolucionando la gestión de estudios creativos
                     </p>
                     <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-                        ProSocial Platform es la solución integral diseñada específicamente para fotógrafos,
+                        Zenly Studio es la solución integral diseñada específicamente para fotógrafos,
                         videógrafos y creativos profesionales que buscan optimizar su flujo de trabajo y hacer crecer su negocio.
                     </p>
                 </div>
@@ -31,7 +31,7 @@ export default function AboutPage() {
                             </p>
                         </div>
                         <div className="bg-zinc-800 p-8 rounded-lg">
-                            <h3 className="text-2xl font-bold mb-4">¿Por qué ProSocial?</h3>
+                            <h3 className="text-2xl font-bold mb-4">¿Por qué Zenly Studio?</h3>
                             <ul className="space-y-3">
                                 <li className="flex items-center">
                                     <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
@@ -60,7 +60,7 @@ export default function AboutPage() {
                 <div className="container mx-auto max-w-6xl">
                     <div className="grid md:grid-cols-4 gap-8">
                         <div>
-                            <h3 className="text-xl font-bold mb-4">ProSocial Platform</h3>
+                            <h3 className="text-xl font-bold mb-4">Zenly Studio</h3>
                             <p className="text-gray-400">
                                 La plataforma integral para gestión de estudios creativos.
                             </p>
@@ -91,7 +91,7 @@ export default function AboutPage() {
                         </div>
                     </div>
                     <div className="border-t border-zinc-700 mt-8 pt-8 text-center text-gray-400">
-                        <p>&copy; 2024 ProSocial Platform. Todos los derechos reservados.</p>
+                        <p>&copy; 2025 Zenly Studio. Todos los derechos reservados.</p>
                     </div>
                 </div>
             </footer>

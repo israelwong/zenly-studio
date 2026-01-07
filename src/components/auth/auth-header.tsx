@@ -5,9 +5,9 @@ interface AuthHeaderProps {
 export function AuthHeader({ subtitle }: AuthHeaderProps) {
     return (
         <div className="flex flex-col items-center space-y-4 mb-8">
-            {/* Título ZEN Platform - Sin link */}
+            {/* Título Zenly Studio - Sin link */}
             <h1 className="text-3xl font-bold text-zinc-100">
-                ZEN <span className="text-emerald-500">Platform</span>
+                Zenly <span className="text-emerald-500">Studio</span>
             </h1>
 
             {/* Subtitle */}

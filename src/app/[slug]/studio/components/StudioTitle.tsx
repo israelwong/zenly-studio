@@ -36,7 +36,7 @@ export function StudioTitle({ studioName, description }: StudioTitleProps) {
         // Cleanup function para restaurar título original si es necesario
         return () => {
             // Opcional: restaurar título por defecto
-            // document.title = 'Zen Studio'
+            // document.title = 'Zenly Studio'
         }
     }, [studioName, description])
 

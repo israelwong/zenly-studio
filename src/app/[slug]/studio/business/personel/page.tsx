@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { PersonelPageClient } from './PersonelPageClient';
 
 export const metadata: Metadata = {
-  title: 'ZEN Studio - Personal',
+  title: 'Zenly Studio - Personal',
   description: 'Gestiona tu equipo de trabajo',
 };
 

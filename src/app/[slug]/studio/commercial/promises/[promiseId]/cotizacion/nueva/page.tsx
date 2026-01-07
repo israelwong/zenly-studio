@@ -16,7 +16,7 @@ export default function NuevaCotizacionPage() {
   const contactId = searchParams.get('contactId') || null;
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Nueva Cotización';
+    document.title = 'Zenly Studio - Nueva Cotización';
   }, []);
 
   return (

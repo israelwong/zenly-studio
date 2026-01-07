@@ -5,6 +5,29 @@ import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { notifyEventCreated } from '@/lib/notifications/studio/helpers/event-notifications';
 
+/**
+ * Normaliza una fecha de pago a fecha local sin hora para evitar problemas de zona horaria
+ */
+function normalizePaymentDate(date: Date | string | undefined | null): Date {
+    if (!date) {
+        return new Date();
+    }
+    
+    if (typeof date === 'string') {
+        const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (dateMatch) {
+            const [, year, month, day] = dateMatch;
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        }
+        return new Date(date);
+    }
+    
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    return new Date(year, month, day);
+}
+
 interface CierreResponse {
   success: boolean;
   data?: {
@@ -1372,7 +1395,8 @@ export async function autorizarYCrearEvento(
         }
         
         // Usar la fecha del registro de cierre si está disponible, sino usar fecha actual
-        const fechaPago = registroCierre.pago_fecha ? new Date(registroCierre.pago_fecha) : new Date();
+        // Normalizar la fecha para evitar problemas de zona horaria
+        const fechaPago = normalizePaymentDate(registroCierre.pago_fecha || new Date());
         const conceptoPago = registroCierre.pago_concepto || 'Pago inicial / Anticipo';
         const contactId = cotizacion.contact_id || cotizacion.promise?.contact_id;
         

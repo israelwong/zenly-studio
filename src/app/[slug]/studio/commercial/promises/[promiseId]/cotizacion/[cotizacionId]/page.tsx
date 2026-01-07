@@ -25,7 +25,7 @@ export default function EditarCotizacionPage() {
 
   useEffect(() => {
     setIsMounted(true);
-    document.title = 'ZEN Studio - Cotización';
+    document.title = 'Zenly Studio - Cotización';
   }, []);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);

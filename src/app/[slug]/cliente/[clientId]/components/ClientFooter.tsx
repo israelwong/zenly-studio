@@ -16,7 +16,7 @@ export function ClientFooter({ studioInfo }: ClientFooterProps) {
   const studioName = studioInfo?.studio_name || 'Portal de Cliente';
   const companyName = usePlatformName();
   const domain = usePlatformDomain();
-  const domainUrl = domain ? `https://${domain}` : 'https://www.zenn.mx';
+  const domainUrl = domain ? `https://${domain}` : 'https://zenly.mx';
 
   return (
     <footer className="border-t border-zinc-800 bg-zinc-900/95 px-4 py-4">

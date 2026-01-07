@@ -7,7 +7,7 @@ import { LayoutDashboard, BarChart3, TrendingUp } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardDescription } from '@/components/ui/zen';
 
 export const metadata: Metadata = {
-  title: 'ZEN Studio - Dashboard',
+  title: 'Zenly Studio - Dashboard',
   description: 'Vista general de tu estudio y contenido',
 };
 

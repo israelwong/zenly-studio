@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { ActionResponse } from '@/types';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { normalizePaymentDate } from '@/lib/actions/utils/payment-date';
 
 /**
  * Obtiene los métodos de pago activos del estudio
@@ -268,7 +269,7 @@ export async function autorizarCotizacionLegacy(
             cotizacion_id: validated.cotizacion_id,
             amount: validated.pago_data.monto,
             payment_method_id: validated.pago_data.payment_method_id,
-            payment_date: validated.pago_data.fecha,
+            payment_date: normalizePaymentDate(validated.pago_data.fecha),
             status: 'completed',
             notes: validated.pago_data.concepto,
           },

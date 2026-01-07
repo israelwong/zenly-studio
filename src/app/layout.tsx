@@ -6,7 +6,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-    title: 'ZEN Platform',
+    title: 'Zenly Studio',
     description: 'Plataforma modular para estudios fotográficos',
 };
 

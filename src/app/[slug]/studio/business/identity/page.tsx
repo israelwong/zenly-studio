@@ -31,7 +31,7 @@ export default function IdentityPage() {
     const [currentTab, setCurrentTab] = useState<TabValue>(tabFromUrl);
 
     useEffect(() => {
-        document.title = 'ZEN Studio - Identidad';
+        document.title = 'Zenly Studio - Identidad';
     }, []);
 
     // Control de hidratación

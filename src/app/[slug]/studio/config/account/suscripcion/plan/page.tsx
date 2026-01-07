@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 
 export default function PlanPage() {
   useEffect(() => {
-    document.title = 'ZEN Studio - Plan';
+    document.title = 'Zenly Studio - Plan';
   }, []);
   return (
     <div className="p-6">

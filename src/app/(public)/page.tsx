@@ -14,7 +14,7 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-black/20"></div>
                 <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
                     <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                        Zen Studio
+                        Zenly Studio
                     </h1>
                     <p className="text-xl md:text-2xl text-gray-300 mb-8">
                         Plataforma integral para estudios creativos
@@ -26,7 +26,7 @@ export default function HomePage() {
 
                     {/* Ejemplos de estudios */}
                     <div className="mb-12 text-sm text-gray-500">
-                        <p>Ejemplos: zen.pro/fotografia-luna • zen.pro/video-pro • zen.pro/estudio-creativo</p>
+                        <p>Ejemplos: zenly.mx/fotografia-luna • zenly.mx/video-pro • zenly.mx/estudio-creativo</p>
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -50,7 +50,7 @@ export default function HomePage() {
             <section className="py-20 px-4">
                 <div className="container mx-auto max-w-6xl">
                     <div className="text-center mb-16">
-                        <h2 className="text-4xl font-bold mb-4">Estudios en zen.pro</h2>
+                        <h2 className="text-4xl font-bold mb-4">Estudios en Zenly Studio</h2>
                         <p className="text-xl text-gray-300">
                             Cada estudio tiene su propio espacio personalizado
                         </p>
@@ -59,7 +59,7 @@ export default function HomePage() {
                     {/* Grid de ejemplos de estudios */}
                     <div className="grid md:grid-cols-3 gap-8 mb-16">
                         <div className="bg-zinc-800 p-6 rounded-lg">
-                            <h3 className="text-xl font-bold mb-2">zen.pro/mi-estudio</h3>
+                            <h3 className="text-xl font-bold mb-2">zenly.mx/mi-estudio</h3>
                             <p className="text-gray-300">URL limpia y profesional para tu estudio</p>
                         </div>
                         <div className="bg-zinc-800 p-6 rounded-lg">
@@ -124,7 +124,7 @@ export default function HomePage() {
                 <div className="container mx-auto max-w-4xl text-center">
                     <h2 className="text-4xl font-bold mb-6">¿Listo para transformar tu estudio?</h2>
                     <p className="text-xl text-gray-300 mb-8">
-                        Únete a cientos de creativos que ya están usando ProSocial Platform para hacer crecer su negocio.
+                        Únete a cientos de creativos que ya están usando Zenly Studio para hacer crecer su negocio.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <a
@@ -148,7 +148,7 @@ export default function HomePage() {
                 <div className="container mx-auto max-w-6xl">
                     <div className="grid md:grid-cols-4 gap-8">
                         <div>
-                            <h3 className="text-xl font-bold mb-4">ProSocial Platform</h3>
+                            <h3 className="text-xl font-bold mb-4">Zenly Studio</h3>
                             <p className="text-gray-400">
                                 La plataforma integral para gestión de estudios creativos.
                             </p>
@@ -179,7 +179,7 @@ export default function HomePage() {
                         </div>
                     </div>
                     <div className="border-t border-zinc-700 mt-8 pt-8 text-center text-gray-400">
-                        <p>&copy; 2024 ProSocial Platform. Todos los derechos reservados.</p>
+                        <p>&copy; 2025 Zenly Studio. Todos los derechos reservados.</p>
                     </div>
                 </div>
             </footer>

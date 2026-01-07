@@ -9,7 +9,7 @@ export default function NuevoPortfolioPage() {
     const studioSlug = params.slug as string;
 
     useEffect(() => {
-        document.title = 'ZEN Studio - Nuevo Portafolio';
+        document.title = 'Zenly Studio - Nuevo Portafolio';
     }, []);
 
     return (

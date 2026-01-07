@@ -87,9 +87,9 @@ export default function EditarPortfolioPage() {
     useEffect(() => {
         const updateTitle = () => {
             if (portfolio) {
-                document.title = `ZEN Studio - ${portfolio.title || 'Portafolio'}`;
+                document.title = `Zenly Studio - ${portfolio.title || 'Portafolio'}`;
             } else {
-                document.title = 'ZEN Studio - Portafolio';
+                document.title = 'Zenly Studio - Portafolio';
             }
         };
 

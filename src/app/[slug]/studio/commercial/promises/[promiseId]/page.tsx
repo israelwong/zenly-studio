@@ -30,7 +30,7 @@ export default function EditarPromesaPage() {
   const promiseId = params.promiseId as string;
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Promesa';
+    document.title = 'Zenly Studio - Promesa';
   }, []);
   const [loading, setLoading] = useState(true);
   const [isArchived, setIsArchived] = useState(false);

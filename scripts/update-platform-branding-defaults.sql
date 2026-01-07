@@ -7,10 +7,10 @@
 -- Actualizar valores por defecto si existe un registro
 UPDATE platform_config
 SET
-  company_name_long = COALESCE(company_name_long, 'ZEN México'),
-  commercial_name = COALESCE(commercial_name, 'Zen Studio'),
-  commercial_name_short = COALESCE(commercial_name_short, 'ZEN'),
-  domain = COALESCE(domain, 'www.zenn.mx'),
+  company_name_long = COALESCE(company_name_long, 'Zenly México'),
+  commercial_name = COALESCE(commercial_name, 'Zenly Studio'),
+  commercial_name_short = COALESCE(commercial_name_short, 'ZENLY'),
+  domain = COALESCE(domain, 'zenly.mx'),
   "updatedAt" = NOW()
 WHERE id IN (SELECT id FROM platform_config LIMIT 1)
   AND (company_name_long IS NULL 

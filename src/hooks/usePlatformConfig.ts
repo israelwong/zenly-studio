@@ -57,11 +57,11 @@ let globalPromise: Promise<PlatformConfig | null> | null = null;
 // Configuración por defecto
 const getDefaultConfig = (): PlatformConfig => ({
     id: 'default',
-    company_name: 'Zen México',
-    company_name_long: 'ZEN México',
-    commercial_name: 'Zen Studio',
-    commercial_name_short: 'ZEN',
-    domain: 'www.zenn.mx',
+    company_name: 'Zenly México',
+    company_name_long: 'Zenly México',
+    commercial_name: 'Zenly Studio',
+    commercial_name_short: 'ZENLY',
+    domain: 'zenly.mx',
     logo_url: null,
     favicon_url: null,
     comercial_email: null,
@@ -209,7 +209,7 @@ export function usePlatformName(): string {
 // Hook para obtener el nombre comercial
 export function useCommercialName(): string {
     const { config } = usePlatformConfig();
-    return config?.commercial_name || config?.company_name || 'Zen Studio';
+    return config?.commercial_name || config?.company_name || 'Zenly Studio';
 }
 
 // Hook para obtener el nombre corto (para UI)
@@ -240,11 +240,12 @@ export function usePlatformIsotipo(): string | null {
 export function usePlatformBranding() {
     const { config } = usePlatformConfig();
     return {
-        companyName: config?.company_name || 'Zen México',
-        companyNameLong: config?.company_name_long || 'ZEN México',
-        commercialName: config?.commercial_name || 'Zen Studio',
-        commercialNameShort: config?.commercial_name_short || 'ZEN',
-        domain: config?.domain || 'www.zenn.mx',
+        companyName: config?.company_name || 'Zenly México',
+        companyNameLong: config?.company_name_long || 'Zenly México',
+        commercialName: config?.commercial_name || 'Zenly Studio',
+        commercialNameShort: config?.commercial_name_short || 'ZENLY',
+        domain: config?.domain || 'zenly.mx',
+        nombre: config?.commercial_name || config?.company_name || 'Zenly Studio',
         isotipo: config?.favicon_url || null, // Isotipo = solo el icono (favicon)
         logotipo: config?.logo_url || null, // Logotipo = icono + nombre (logo_url)
         favicon: config?.favicon_url || null,

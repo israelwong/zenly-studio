@@ -69,11 +69,11 @@ export async function GET() {
             // Si no existe configuración, devolver valores por defecto
             return NextResponse.json({
                 id: 'default',
-                company_name: 'Zen México',
-                company_name_long: 'ZEN México',
-                commercial_name: 'Zen Studio',
-                commercial_name_short: 'ZEN',
-                domain: 'www.zenn.mx',
+                company_name: 'Zenly México',
+                company_name_long: 'Zenly México',
+                commercial_name: 'Zenly Studio',
+                commercial_name_short: 'ZENLY',
+                domain: 'zenly.mx',
                 logo_url: null,
                 favicon_url: null,
                 comercial_email: null,

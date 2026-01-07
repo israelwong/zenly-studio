@@ -1,6 +1,6 @@
 # 🛠️ Scripts de Utilidad
 
-Scripts de desarrollo y mantenimiento para ZEN Platform.
+Scripts de desarrollo y mantenimiento para Zenly Studio.
 
 ---
 

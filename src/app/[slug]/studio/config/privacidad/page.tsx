@@ -17,7 +17,7 @@ export default function PrivacidadPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Privacidad';
+    document.title = 'Zenly Studio - Privacidad';
   }, []);
 
   useEffect(() => {

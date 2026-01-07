@@ -9,7 +9,7 @@ import {
 } from './components';
 
 export const metadata: Metadata = {
-  title: 'ZEN Studio - Seguridad',
+  title: 'Zenly Studio - Seguridad',
   description: 'Gestiona la seguridad de tu cuenta y configura las opciones de protección',
 };
 

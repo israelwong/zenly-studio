@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { PaqueteEditor } from '../components/PaqueteEditor';
 
 export const metadata: Metadata = {
-  title: 'ZEN Studio - Nuevo Paquete',
+  title: 'Zenly Studio - Nuevo Paquete',
   description: 'Crea un nuevo paquete de servicios',
 };
 

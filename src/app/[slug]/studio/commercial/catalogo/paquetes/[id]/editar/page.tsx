@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
 
 export const metadata: Metadata = {
-  title: 'ZEN Studio - Editar Paquete',
+  title: 'Zenly Studio - Editar Paquete',
   description: 'Edita un paquete de servicios',
 };
 

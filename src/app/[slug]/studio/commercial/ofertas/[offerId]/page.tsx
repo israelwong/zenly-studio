@@ -19,9 +19,9 @@ export default function OfertaPage() {
   useEffect(() => {
     const updateTitle = () => {
       if (offer) {
-        document.title = `ZEN Studio - ${offer.name || 'Oferta'}`;
+        document.title = `Zenly Studio - ${offer.name || 'Oferta'}`;
       } else {
-        document.title = 'ZEN Studio - Oferta';
+        document.title = 'Zenly Studio - Oferta';
       }
     };
 

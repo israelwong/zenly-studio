@@ -24,7 +24,7 @@ export async function sendAgentCredentialsEmail(data: AgentCredentialsData) {
 
         // Datos dinámicos de la plataforma
         const platformData = {
-            nombre: platformConfig?.commercial_name || platformConfig?.company_name || 'Zen Studio',
+            nombre: platformConfig?.commercial_name || platformConfig?.company_name || 'Zenly Studio',
             logotipo: platformConfig?.logo_url || null,
             isotipo: platformConfig?.favicon_url || null,
             sitio_web: platformConfig?.domain ? `https://${platformConfig.domain}` : 'https://www.zenn.mx',

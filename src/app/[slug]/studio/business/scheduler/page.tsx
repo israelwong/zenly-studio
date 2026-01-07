@@ -101,7 +101,7 @@ export default function SchedulerPage() {
   const studioSlug = params.slug as string;
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Scheduler';
+    document.title = 'Zenly Studio - Scheduler';
   }, []);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [eventos, setEventos] = useState<EventoConScheduler[]>([]);

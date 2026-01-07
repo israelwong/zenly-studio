@@ -40,20 +40,25 @@ export function formatPercentage(
 
 /**
  * Parsea una fecha de forma segura sin cambios por zona horaria
- * Si es string en formato YYYY-MM-DD, lo parsea como fecha local
+ * Si es string en formato YYYY-MM-DD o YYYY-MM-DD HH:MM:SS, lo parsea como fecha local
  */
 function parseDateSafe(date: Date | string): Date {
     if (typeof date === "string") {
-        // Si es formato YYYY-MM-DD, parsear como fecha local
+        // Si es formato YYYY-MM-DD o YYYY-MM-DD HH:MM:SS, extraer solo la fecha y parsear como local
         const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (dateMatch) {
             const [, year, month, day] = dateMatch;
+            // Crear fecha local a medianoche (ignorar hora si existe)
             return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
         }
-        // Si no, usar Date normal
+        // Si no coincide, usar Date normal
         return new Date(date);
     }
-    return date;
+    // Si es Date, extraer año, mes y día en hora LOCAL (no UTC) para evitar problemas de zona horaria
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    return new Date(year, month, day);
 }
 
 // Función para formatear fechas

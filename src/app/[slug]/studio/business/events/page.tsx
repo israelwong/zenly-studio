@@ -15,7 +15,7 @@ export default function EventsPage() {
   const [metodosSinConfigurar, setMetodosSinConfigurar] = useState(0);
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Eventos';
+    document.title = 'Zenly Studio - Eventos';
   }, []);
 
   useEffect(() => {

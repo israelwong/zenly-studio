@@ -23,7 +23,7 @@ export default function EventSchedulerPage() {
   const [crewManagerOpen, setCrewManagerOpen] = useState(false);
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Scheduler';
+    document.title = 'Zenly Studio - Scheduler';
   }, []);
 
   // Cargar evento solo una vez al montar o cuando cambia eventId/studioSlug

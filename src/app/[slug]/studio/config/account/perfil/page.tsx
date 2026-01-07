@@ -16,7 +16,7 @@ export default function PerfilPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Perfil';
+    document.title = 'Zenly Studio - Perfil';
   }, []);
 
   // Cargar datos del perfil

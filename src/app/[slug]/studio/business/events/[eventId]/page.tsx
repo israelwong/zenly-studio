@@ -28,7 +28,7 @@ export default function EventDetailPage() {
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Evento';
+    document.title = 'Zenly Studio - Evento';
   }, []);
 
   useEffect(() => {

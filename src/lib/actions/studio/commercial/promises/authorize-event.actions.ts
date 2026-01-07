@@ -7,6 +7,7 @@ import {
   type AuthorizeEventAfterContractInput
 } from "@/lib/actions/schemas/client-contract-schemas";
 import { revalidatePath } from "next/cache";
+import { normalizePaymentDate } from "@/lib/actions/utils/payment-date";
 
 /**
  * Autorizar evento después de que el cliente firmó el contrato
@@ -109,7 +110,7 @@ export async function authorizeEventAfterContract(
           event_id: contract.event.id,
           amount: validated.payment_amount,
           payment_method_id: validated.payment_method_id,
-          payment_date: new Date(),
+          payment_date: normalizePaymentDate(new Date()),
           status: "completed",
           notes: "Pago inicial registrado al autorizar evento",
         },

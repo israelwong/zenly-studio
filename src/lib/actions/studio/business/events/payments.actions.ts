@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { normalizePaymentDate } from '@/lib/actions/utils/payment-date';
 
 // Schemas de validación
 const createPaymentSchema = z.object({
@@ -255,7 +256,7 @@ export async function crearPago(
                 metodo_pago: validatedData.metodo_pago,
                 concept: validatedData.concept,
                 description: validatedData.description || null,
-                payment_date: validatedData.payment_date || new Date(),
+                payment_date: normalizePaymentDate(validatedData.payment_date),
                 status: 'completed',
                 transaction_type: 'ingreso',
                 transaction_category: 'abono',
@@ -407,7 +408,7 @@ export async function actualizarPago(
         if (validatedData.metodo_pago !== undefined) updateData.metodo_pago = validatedData.metodo_pago;
         if (validatedData.concept !== undefined) updateData.concept = validatedData.concept;
         if (validatedData.description !== undefined) updateData.description = validatedData.description || null;
-        if (validatedData.payment_date !== undefined) updateData.payment_date = validatedData.payment_date;
+        if (validatedData.payment_date !== undefined) updateData.payment_date = normalizePaymentDate(validatedData.payment_date);
 
         const pago = await prisma.studio_pagos.update({
             where: { id: validatedData.id },
@@ -759,7 +760,7 @@ export async function crearIngresoManual(
                 metodo_pago: validatedData.metodo_pago,
                 concept: validatedData.concept,
                 description: validatedData.description || null,
-                payment_date: validatedData.payment_date || new Date(),
+                payment_date: normalizePaymentDate(validatedData.payment_date),
                 status: 'completed',
                 transaction_type: 'ingreso',
                 transaction_category: 'manual',

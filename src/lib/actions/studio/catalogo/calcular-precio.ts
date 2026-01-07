@@ -1,5 +1,5 @@
 /**
- * FUNCIÓN ÚNICA DE CÁLCULO DE PRECIOS - ZEN PLATFORM
+ * FUNCIÓN ÚNICA DE CÁLCULO DE PRECIOS - ZENLY STUDIO
  * 
  * Esta es la ÚNICA función encargada de calcular precios en todo el sistema.
  * No debe haber otras funciones de cálculo de precios.

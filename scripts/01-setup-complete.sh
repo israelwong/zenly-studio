@@ -7,7 +7,7 @@
 
 set -e  # Salir si hay error
 
-echo "🚀 INICIANDO SETUP COMPLETO ZEN PLATFORM"
+echo "🚀 INICIANDO SETUP COMPLETO ZENLY STUDIO"
 echo "========================================"
 echo ""
 

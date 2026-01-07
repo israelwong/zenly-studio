@@ -137,7 +137,7 @@ export default function PricingPage() {
                 <div className="container mx-auto max-w-6xl">
                     <div className="grid md:grid-cols-4 gap-8">
                         <div>
-                            <h3 className="text-xl font-bold mb-4">ProSocial Platform</h3>
+                            <h3 className="text-xl font-bold mb-4">Zenly Studio</h3>
                             <p className="text-gray-400">
                                 La plataforma integral para gestión de estudios creativos.
                             </p>
@@ -168,7 +168,7 @@ export default function PricingPage() {
                         </div>
                     </div>
                     <div className="border-t border-zinc-700 mt-8 pt-8 text-center text-gray-400">
-                        <p>&copy; 2024 ProSocial Platform. Todos los derechos reservados.</p>
+                        <p>&copy; 2025 Zenly Studio. Todos los derechos reservados.</p>
                     </div>
                 </div>
             </footer>

@@ -5,7 +5,7 @@ import { GuiaDeUso } from './GuiaDeUso';
 
 export default function AyudaPage() {
   useEffect(() => {
-    document.title = 'ZEN Studio - Ayuda';
+    document.title = 'Zenly Studio - Ayuda';
   }, []);
     return (
         <div className="space-y-8">

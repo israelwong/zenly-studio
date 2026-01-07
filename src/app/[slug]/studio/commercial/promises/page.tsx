@@ -34,7 +34,7 @@ export default function PromisesPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Promesas';
+    document.title = 'Zenly Studio - Promesas';
   }, []);
 
   // Cargar conteo de promesas de prueba

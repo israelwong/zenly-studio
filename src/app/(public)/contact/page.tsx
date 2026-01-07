@@ -9,7 +9,7 @@ export default function ContactPage() {
                         ¿Necesitas ayuda? Estamos aquí para ti
                     </p>
                     <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-                        Nuestro equipo de soporte está listo para ayudarte a sacar el máximo provecho de ProSocial Platform.
+                        Nuestro equipo de soporte está listo para ayudarte a sacar el máximo provecho de Zenly Studio.
                     </p>
                 </div>
             </section>
@@ -31,7 +31,7 @@ export default function ContactPage() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-semibold mb-2">Email</h3>
-                                        <p className="text-gray-300">soporte@prosocial.mx</p>
+                                        <p className="text-gray-300">soporte@zenly.mx</p>
                                     </div>
                                 </div>
 
@@ -135,7 +135,7 @@ export default function ContactPage() {
                 <div className="container mx-auto max-w-6xl">
                     <div className="grid md:grid-cols-4 gap-8">
                         <div>
-                            <h3 className="text-xl font-bold mb-4">ProSocial Platform</h3>
+                            <h3 className="text-xl font-bold mb-4">Zenly Studio</h3>
                             <p className="text-gray-400">
                                 La plataforma integral para gestión de estudios creativos.
                             </p>
@@ -166,7 +166,7 @@ export default function ContactPage() {
                         </div>
                     </div>
                     <div className="border-t border-zinc-700 mt-8 pt-8 text-center text-gray-400">
-                        <p>&copy; 2024 ProSocial Platform. Todos los derechos reservados.</p>
+                        <p>&copy; 2025 Zenly Studio. Todos los derechos reservados.</p>
                     </div>
                 </div>
             </footer>

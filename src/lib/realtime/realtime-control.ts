@@ -1,5 +1,5 @@
 // =====================================================
-// CENTRO DE CONTROL REALTIME - ZEN STUDIO
+// CENTRO DE CONTROL REALTIME - ZENLY STUDIO
 // =====================================================
 // Control centralizado para activar/desactivar sistemas Realtime
 // Útil para debugging, mantenimiento y control granular

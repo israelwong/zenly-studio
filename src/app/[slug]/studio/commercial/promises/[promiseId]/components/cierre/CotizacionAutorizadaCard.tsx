@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { CheckCircle2, ArrowRight, FileText, Calendar, DollarSign, Loader2, Eye, CreditCard, Tag, Clock, Receipt, CheckCircle } from 'lucide-react';
 import {
   ZenCard,
@@ -29,12 +29,14 @@ export function CotizacionAutorizadaCard({
   studioSlug,
 }: CotizacionAutorizadaCardProps) {
   const router = useRouter();
+  const params = useParams();
+  const promiseId = params?.promiseId as string || '';
   const [resumen, setResumen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showContractPreview, setShowContractPreview] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
-  
+
   // Cargar resumen del evento creado
   useEffect(() => {
     const loadResumen = async () => {
@@ -55,20 +57,20 @@ export function CotizacionAutorizadaCard({
 
   // Obtener datos procesados desde snapshots inmutables
   const cotizacionData = resumen?.cotizacion || cotizacion;
-  const condiciones = resumen?.cotizacion 
+  const condiciones = resumen?.cotizacion
     ? getCondicionesComerciales(resumen.cotizacion)
     : getCondicionesComerciales(cotizacionData);
   const contrato = resumen?.cotizacion
     ? getContrato(resumen.cotizacion)
     : getContrato(cotizacionData);
-  
+
   // Calcular totales
   const subtotal = cotizacionData.price;
-  const descuento = condiciones?.discount_percentage 
+  const descuento = condiciones?.discount_percentage
     ? subtotal * (condiciones.discount_percentage / 100)
     : (cotizacionData.discount || 0);
   const total = subtotal - descuento;
-  
+
   // Información del pago inicial
   const pagoInicial = resumen?.montoInicial || null;
   const hayPagoInicial = pagoInicial && pagoInicial > 0;
@@ -96,7 +98,7 @@ export function CotizacionAutorizadaCard({
               <div className="h-5 w-48 bg-zinc-800 rounded animate-pulse" />
               <div className="h-4 w-64 bg-zinc-800 rounded animate-pulse mt-1" />
             </div>
-            
+
             {/* Desglose skeleton */}
             <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
               <div className="h-4 w-36 bg-zinc-700 rounded animate-pulse mb-4" />
@@ -252,7 +254,7 @@ export function CotizacionAutorizadaCard({
                     ${formatNumber(subtotal, 2)} MXN
                   </dd>
                 </div>
-                
+
                 {/* Condiciones comerciales */}
                 {condiciones && (
                   <>
@@ -293,7 +295,7 @@ export function CotizacionAutorizadaCard({
                     )}
                   </>
                 )}
-                
+
                 {descuento > 0 && !condiciones?.discount_percentage && (
                   <div className="flex justify-between items-center">
                     <dt className="text-zinc-400">Descuento:</dt>
@@ -302,7 +304,7 @@ export function CotizacionAutorizadaCard({
                     </dd>
                   </div>
                 )}
-                
+
                 <div className="flex justify-between items-center pt-3 border-t border-zinc-700/50 font-semibold">
                   <dt className="text-zinc-200">Total:</dt>
                   <dd className="text-white text-lg">
@@ -341,7 +343,7 @@ export function CotizacionAutorizadaCard({
                         <p className="text-zinc-200 font-medium leading-tight">{primerPago.concept}</p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-start gap-3">
                       <div className="p-1.5 bg-zinc-800/50 rounded-md shrink-0 mt-0.5">
                         <CreditCard className="w-3.5 h-3.5 text-zinc-400" />
@@ -351,7 +353,7 @@ export function CotizacionAutorizadaCard({
                         <p className="text-zinc-300 leading-tight">{primerPago.metodo_pago}</p>
                       </div>
                     </div>
-                    
+
                     {primerPago.payment_date && (
                       <div className="flex items-start gap-3">
                         <div className="p-1.5 bg-zinc-800/50 rounded-md shrink-0 mt-0.5">
@@ -400,7 +402,7 @@ export function CotizacionAutorizadaCard({
 
             {/* Contrato Inmutable */}
             {contrato && contrato.content ? (
-              <div 
+              <div
                 className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-5 cursor-pointer hover:bg-blue-500/20 transition-colors"
                 onClick={() => setShowContractPreview(true)}
               >
@@ -452,7 +454,7 @@ export function CotizacionAutorizadaCard({
                 </div>
               </div>
             ) : resumen?.cotizacion?.contract_content_snapshot ? (
-              <div 
+              <div
                 className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-5 cursor-pointer hover:bg-blue-500/20 transition-colors"
                 onClick={() => setShowContractPreview(true)}
               >
@@ -545,9 +547,9 @@ export function CotizacionAutorizadaCard({
           isOpen={showContractPreview}
           onClose={() => setShowContractPreview(false)}
           onConfirm={() => setShowContractPreview(false)}
-          onEdit={() => {}}
+          onEdit={() => { }}
           studioSlug={studioSlug}
-          promiseId={cotizacion.promise_id || ''}
+          promiseId={promiseId}
           cotizacionId={cotizacion.id}
           eventId={eventoId}
           template={{
@@ -555,6 +557,10 @@ export function CotizacionAutorizadaCard({
             name: contrato?.template_name || resumen?.cotizacion?.contract_template_name_snapshot || 'Contrato',
             content: contrato?.content || resumen?.cotizacion?.contract_content_snapshot || '',
             studio_id: '',
+            slug: '',
+            is_active: true,
+            is_default: false,
+            version: resumen?.cotizacion?.contract_version_snapshot || 1,
             created_at: new Date(),
             updated_at: new Date(),
           }}

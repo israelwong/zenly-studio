@@ -5,6 +5,7 @@ import { OfferLeadForm } from "@/components/offers/OfferLeadForm";
 import { TrackingScripts } from "@/components/offers/TrackingScripts";
 import { OfferHeader } from "@/components/offers/OfferHeader";
 import { OfferInfoCard } from "@/components/offers/OfferInfoCard";
+import { PublicPageFooter } from "@/components/shared/PublicPageFooter";
 import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
 
@@ -135,14 +136,7 @@ export default async function PublicOfferLeadFormPage({
             />
 
             {/* Footer */}
-            <div className="border-t border-zinc-800/30 p-6 text-center">
-              <p className="text-xs text-zinc-500 mb-1">
-                Powered by <Link href="https://www.zenn.mx" className="text-zinc-400 font-medium hover:text-zinc-300 transition-colors">Zen México</Link>
-              </p>
-              <p className="text-xs text-zinc-600">
-                © {new Date().getFullYear()} Todos los derechos reservados
-              </p>
-            </div>
+            <PublicPageFooter />
           </div>
         </div>
       </>

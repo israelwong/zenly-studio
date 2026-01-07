@@ -20,7 +20,7 @@ export default function AutorizarRevisionPage() {
   const cotizacionId = params.cotizacionId as string;
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Autorizar Revisión';
+    document.title = 'Zenly Studio - Autorizar Revisión';
   }, []);
 
   const [loading, setLoading] = useState(true);

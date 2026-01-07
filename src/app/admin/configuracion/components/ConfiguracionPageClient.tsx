@@ -212,7 +212,7 @@ export function ConfiguracionPageClient({ initialConfig }: ConfiguracionPageClie
                                         value={config.commercial_name || ''}
                                         onChange={(e) => handleInputChange('commercial_name', e.target.value)}
                                         className="bg-zinc-800 border-zinc-700 text-white"
-                                        placeholder="Zen Studio"
+                                        placeholder="Zenly Studio"
                                     />
                                     <ZenInput
                                         id="commercial_name_short"

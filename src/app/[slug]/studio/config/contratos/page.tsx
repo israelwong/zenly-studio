@@ -50,7 +50,7 @@ export default function ContratosPage() {
   const [isReordering, setIsReordering] = useState(false);
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Contratos';
+    document.title = 'Zenly Studio - Contratos';
   }, []);
 
   useEffect(() => {

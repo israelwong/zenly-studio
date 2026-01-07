@@ -109,7 +109,7 @@ export async function generateMetadata({ params }: EventoLayoutProps): Promise<M
       };
     }
 
-    const baseTitle = studioInfo.studio_name || 'ZEN Platform';
+    const baseTitle = studioInfo.studio_name || 'Zenly Studio';
     const title = `Evento - ${baseTitle}`;
     const description = `Gestiona tu evento con ${baseTitle}`;
 

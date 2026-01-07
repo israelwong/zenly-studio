@@ -700,7 +700,7 @@ export function HistorialSheet({ open, onOpenChange, studioSlug }: HistorialShee
                             Este documento fue generado automáticamente el {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: es })}
                         </p>
                         <p style={{ margin: '4px 0' }}>
-                            ZEN Platform - Sistema de Gestión Financiera
+                            Zenly Studio - Sistema de Gestión Financiera
                         </p>
                     </div>
                 </div>

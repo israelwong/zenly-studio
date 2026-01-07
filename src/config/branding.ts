@@ -1,5 +1,5 @@
 /**
- * Configuración centralizada de branding ZEN Studio
+ * Configuración centralizada de branding Zenly Studio
  * 
  * @deprecated Este archivo mantiene valores por defecto para compatibilidad.
  * Preferir usar hooks de usePlatformConfig para obtener datos desde BD:
@@ -9,45 +9,46 @@
  * - usePlatformBranding() - Información completa
  * 
  * ESTRATEGIA:
- * - Marca: "ZEN" / "Zen Studio" (en textos, UI, copyright)
- * - Dominio: "www.zenn.mx" (desde BD)
+ * - Marca: "Zenly México" (legal) / "Zenly Studio" (comercial)
+ * - Dominio: "zenly.mx" (desde BD)
  */
 
 export const BRANDING = {
   // Marca principal (valores por defecto, usar BD cuando esté disponible)
-  name: 'ZEN',
-  fullName: 'Zen Studio',
-  tagline: 'Plataforma para fotógrafos profesionales',
-  
+  name: 'ZENLY',
+  fullName: 'Zenly Studio',
+  tagline: 'Plataforma para estudios fotográficos profesionales',
+
   // Dominio comercial (valores por defecto)
-  domain: 'www.zenn.mx',
-  websiteUrl: 'https://www.zenn.mx',
-  
+  domain: 'zenly.mx',
+  websiteUrl: 'https://zenly.mx',
+
   // Copyright
   copyrightYear: new Date().getFullYear(),
-  copyrightText: `© ${new Date().getFullYear()} Zen Studio. Todos los derechos reservados.`,
-  
+  copyrightText: `© ${new Date().getFullYear()} Zenly Studio. Todos los derechos reservados.`,
+
   // Email
-  emailFrom: 'ZEN',
-  emailDomain: 'zenn.mx',
-  
+  emailFrom: 'ZENLY',
+  emailDomain: 'zenly.mx',
+
   // SEO (valores por defecto)
   seo: {
-    title: 'Zen Studio - Plataforma para fotógrafos profesionales',
+    title: 'Zenly Studio - Plataforma para fotógrafos profesionales',
     description: 'Plataforma modular SaaS para estudios fotográficos. Gestiona tu negocio, portafolio, clientes y más.',
     keywords: ['fotografía', 'gestión', 'estudios fotográficos', 'saas', 'portfolio'],
   },
-  
+
   // Social (deprecated - no usar)
   social: {
-    twitter: '@zenstudio',
-    instagram: '@zenstudio',
-    facebook: 'zenstudio',
+    twitter: '@zenlystudio',
+    instagram: '@zenlystudio',
+    facebook: 'zenlystudio',
   },
-  
+
   // Legal
   legal: {
-    companyName: 'Zen México',
+    companyName: 'Zenly México',
+    commercialName: 'Zenly Studio',
     country: 'México',
   }
 } as const;

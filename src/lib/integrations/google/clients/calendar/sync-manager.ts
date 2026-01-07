@@ -62,10 +62,10 @@ async function obtenerNombreEstudio(studioSlug: string): Promise<string> {
       where: { slug: studioSlug },
       select: { studio_name: true },
     });
-    return studio?.studio_name || 'Zen Studio';
+    return studio?.studio_name || 'Zenly Studio';
   } catch (error) {
     console.error('[Google Calendar] Error obteniendo nombre del estudio:', error);
-    return 'Zen Studio';
+    return 'Zenly Studio';
   }
 }
 
@@ -554,7 +554,7 @@ export async function sincronizarEventoPrincipal(
     // Si no tiene google_oauth_email, usar "primary" que es el calendario primario del usuario autenticado
     const calendarId = event.studio.google_oauth_email || 'primary';
     const timezone = await obtenerTimezoneEstudio(studioSlug, userTimezone);
-    const studioName = event.studio.studio_name || 'Zen Studio';
+    const studioName = event.studio.studio_name || 'Zenly Studio';
 
     // Obtener información del evento
     const eventName = event.promise?.name || 'Evento sin nombre';

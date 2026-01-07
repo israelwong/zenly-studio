@@ -23,7 +23,7 @@ export default function IntegracionesPage() {
   const params = useParams();
 
   useEffect(() => {
-    document.title = 'Zen Studio - Integraciones';
+    document.title = 'Zenly Studio - Integraciones';
   }, []);
 
   const studioSlug = params?.slug as string;

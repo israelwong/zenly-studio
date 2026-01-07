@@ -10,11 +10,11 @@ model platform_config {
   id String @id @default(cuid())
 
   // Branding - Información de marca centralizada
-  company_name          String // Nombre legal: "Zen México"
-  company_name_long     String? // Nombre largo: "ZEN México"
-  commercial_name       String? // Nombre comercial: "Zen Studio"
-  commercial_name_short String? // Nombre corto: "ZEN" (para AppHeader, UI)
-  domain                String? // Dominio: "www.zenn.mx"
+  company_name          String // Nombre legal: "Zenly México"
+  company_name_long     String? // Nombre largo: "Zenly México"
+  commercial_name       String? // Nombre comercial: "Zenly Studio"
+  commercial_name_short String? // Nombre corto: "ZENLY" (para AppHeader, UI)
+  domain                String? // Dominio: "zenly.mx"
 
   // Assets visuales
   logo_url           String?

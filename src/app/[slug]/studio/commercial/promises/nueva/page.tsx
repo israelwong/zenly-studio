@@ -23,7 +23,7 @@ export default function NuevaPromesaPage() {
   } | null>(null);
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Nueva Promesa';
+    document.title = 'Zenly Studio - Nueva Promesa';
   }, []);
 
   useEffect(() => {

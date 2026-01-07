@@ -27,7 +27,7 @@ export default function EditarRevisionPage() {
   const originalId = searchParams.get('originalId');
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Revisión';
+    document.title = 'Zenly Studio - Revisión';
   }, []);
 
   const isNewRevision = cotizacionId === 'new' && originalId !== null;

@@ -9,7 +9,7 @@ export default function NuevaOfertaPage() {
   const studioSlug = params.slug as string;
 
   useEffect(() => {
-    document.title = 'ZEN Studio - Nueva Oferta';
+    document.title = 'Zenly Studio - Nueva Oferta';
   }, []);
 
   return (

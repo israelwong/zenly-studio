@@ -1,4 +1,4 @@
-# 🌱 Seeds de Base de Datos - ZEN Platform
+# 🌱 Seeds de Base de Datos - Zenly Studio
 
 ## 📋 Descripción
 

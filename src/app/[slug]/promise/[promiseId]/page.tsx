@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { PromisePageClient } from '@/components/promise/PromisePageClient';
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
+import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { ZenButton, ZenCard } from '@/components/ui/zen';
 import { prisma } from '@/lib/prisma';
 
@@ -127,15 +128,8 @@ export default async function PromisePage({ params }: PromisePageProps) {
           </div>
         </div>
 
-        {/* Footer by Zen */}
-        <footer className="border-t border-zinc-800/30 p-6 text-center">
-          <p className="text-xs text-zinc-500 mb-1">
-            Powered by <Link href="/" className="text-zinc-400 font-medium hover:text-zinc-300 transition-colors">Zen México</Link>
-          </p>
-          <p className="text-xs text-zinc-600">
-            © {new Date().getFullYear()} Todos los derechos reservados
-          </p>
-        </footer>
+        {/* Footer by Zenly */}
+        <PublicPageFooter />
       </div>
     );
   }
