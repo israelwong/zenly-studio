@@ -77,7 +77,7 @@ export function TerminosCondicionesEditor({
           setEditingId(terminoActivo.id);
         } else {
           // No hay término activo, cargar template por defecto del sistema
-          const defaultTemplate = `<p><strong>Términos y Condiciones Generales</strong></p><ul><li>Los paquetes y precios pueden cambiar sin previo aviso.</li><li>Una vez contratado, el precio del paquete o cotización se congela y no está sujeto a cambios.</li><li>Los servicios están sujetos a disponibilidad del estudio.</li><li>Al generar el contrato y pagar el anticipo, tanto el cliente como el estudio se comprometen legalmente a cumplir con los términos establecidos.</li><li>El anticipo pagado no es reembolsable en caso de cancelación por parte del cliente.</li><li>Las fechas y horarios acordados son compromisos vinculantes para ambas partes.</li></ul>`;
+          const defaultTemplate = `<p><strong>Términos y Condiciones Generales</strong></p><ul><li>Los paquetes y precios pueden cambiar sin previo aviso.</li><li>El monto pendiente a diferir debe ser cubierto 2 días previos a la celebración del evento.</li><li>Una vez contratado, el precio del paquete o cotización se congela y no está sujeto a cambios.</li><li>Los servicios están sujetos a disponibilidad del estudio.</li><li>Al generar el contrato y pagar el anticipo, tanto el cliente como el estudio se comprometen legalmente a cumplir con los términos establecidos.</li><li>El anticipo pagado no es reembolsable en caso de cancelación por parte del cliente.</li><li>Las fechas y horarios acordados son compromisos vinculantes para ambas partes.</li></ul>`;
           const defaultForm = {
             title: '',
             content: defaultTemplate,
@@ -144,9 +144,11 @@ export function TerminosCondicionesEditor({
         // Actualizar estado inicial para reflejar los cambios guardados
         setInitialFormData(formData);
         setFormErrors({});
-        
+
         // Mostrar mensaje apropiado
-        if (result.message && result.message.includes('histórico')) {
+        const resultAny = result as Record<string, unknown>;
+        const message = typeof resultAny.message === 'string' ? resultAny.message : undefined;
+        if (message && message.includes('histórico')) {
           toast.success('Términos y condiciones actualizados. La versión anterior se guardó como histórico.');
         } else {
           toast.success(
@@ -156,7 +158,7 @@ export function TerminosCondicionesEditor({
 
         // Notificar al componente padre para que recargue si es necesario
         onRefresh?.();
-        
+
         // Cerrar el modal inmediatamente después de guardar exitosamente
         onClose();
       } else {
@@ -227,7 +229,7 @@ export function TerminosCondicionesEditor({
             <div className="w-px h-6 bg-zinc-700"></div>
             <div className="h-7 w-20 bg-zinc-800 rounded animate-pulse"></div>
           </div>
-          
+
           {/* Skeleton del editor */}
           <div className="w-full p-4 bg-zinc-800 border border-zinc-700 rounded-lg min-h-[500px] animate-pulse">
             <div className="space-y-3">
@@ -239,7 +241,7 @@ export function TerminosCondicionesEditor({
               <div className="h-4 bg-zinc-700 rounded w-3/4"></div>
             </div>
           </div>
-          
+
           {/* Skeleton del switch */}
           <div className="flex items-start gap-3 p-3 border border-zinc-700 rounded-lg bg-zinc-800/30">
             <div className="h-5 w-10 bg-zinc-700 rounded-full animate-pulse mt-0.5"></div>

@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { TerminosCondicionesSchema, type TerminosCondicionesForm } from "@/lib/actions/schemas/terminos-condiciones-schemas";
 
 // Template por defecto de términos y condiciones (HTML simple)
-const DEFAULT_TERMINOS_CONDICIONES_CONTENT = `<p><strong>Términos y Condiciones Generales</strong></p><ul><li>Los paquetes y precios pueden cambiar sin previo aviso.</li><li>Una vez contratado, el precio del paquete o cotización se congela y no está sujeto a cambios.</li><li>Los servicios están sujetos a disponibilidad del estudio.</li><li>Al generar el contrato y pagar el anticipo, tanto el cliente como el estudio se comprometen legalmente a cumplir con los términos establecidos.</li><li>El anticipo pagado no es reembolsable en caso de cancelación por parte del cliente.</li><li>Las fechas y horarios acordados son compromisos vinculantes para ambas partes.</li></ul>`;
+const DEFAULT_TERMINOS_CONDICIONES_CONTENT = `<p><strong>Términos y Condiciones Generales</strong></p><ul><li>Los paquetes y precios pueden cambiar sin previo aviso.</li><li>El monto pendiente a diferir debe ser cubierto 2 días previos a la celebración del evento.</li><li>Una vez contratado, el precio del paquete o cotización se congela y no está sujeto a cambios.</li><li>Los servicios están sujetos a disponibilidad del estudio.</li><li>Al generar el contrato y pagar el anticipo, tanto el cliente como el estudio se comprometen legalmente a cumplir con los términos establecidos.</li><li>El anticipo pagado no es reembolsable en caso de cancelación por parte del cliente.</li><li>Las fechas y horarios acordados son compromisos vinculantes para ambas partes.</li></ul>`;
 
 // Obtener todos los términos y condiciones de un studio
 export async function obtenerTerminosCondiciones(studioSlug: string) {
@@ -86,7 +86,7 @@ export async function obtenerTerminosCondicionesActivos(studioSlug: string) {
             }
         }
 
-        const terminos = terminoActivo 
+        const terminos = terminoActivo
             ? [terminoActivo]
             : await prisma.studio_terminos_condiciones.findMany({
                 where: {
@@ -302,7 +302,7 @@ export async function actualizarTerminosCondiciones(
         }
 
         // Si el contenido o título cambió, crear nueva versión (histórico)
-        const contenidoCambio = 
+        const contenidoCambio =
             terminoExistente.content !== validationResult.data.content ||
             terminoExistente.title !== validationResult.data.title;
 

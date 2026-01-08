@@ -204,6 +204,25 @@ function SortableCondicionItem({
   );
 }
 
+// Función helper para ordenar condiciones: estándar primero, luego especiales
+const sortCondiciones = (condiciones: CondicionComercial[]): CondicionComercial[] => {
+  return [...condiciones].sort((a, b) => {
+    const aType = a.type || 'standard';
+    const bType = b.type || 'standard';
+    
+    // Si ambos son del mismo tipo, mantener orden original
+    if (aType === bType) {
+      return (a.order || 0) - (b.order || 0);
+    }
+    
+    // Estándar primero, luego ofertas
+    if (aType === 'standard' && bType === 'offer') return -1;
+    if (aType === 'offer' && bType === 'standard') return 1;
+    
+    return 0;
+  });
+};
+
 export function CondicionesComercialesManager({
   studioSlug,
   isOpen,
@@ -435,7 +454,7 @@ export function CondicionesComercialesManager({
       const result = await obtenerTodasCondicionesComerciales(studioSlug);
 
       if (result.success && result.data) {
-        setCondiciones(result.data);
+        setCondiciones(sortCondiciones(result.data));
       } else {
         toast.error(result.error || 'Error al cargar condiciones');
       }
@@ -519,7 +538,7 @@ export function CondicionesComercialesManager({
       const result = await eliminarCondicionComercial(studioSlug, pendingDeleteId);
       if (result.success) {
         // Actualizar estado local en lugar de recargar todo
-        setCondiciones(prev => prev.filter(c => c.id !== pendingDeleteId));
+        setCondiciones(prev => sortCondiciones(prev.filter(c => c.id !== pendingDeleteId)));
         toast.success('Condición eliminada exitosamente');
         onRefresh?.();
       } else {
@@ -581,7 +600,7 @@ export function CondicionesComercialesManager({
         };
 
         setCondiciones(prev =>
-          prev.map(c => (c.id === viewingOfferCondition.id ? condicionMapeada : c))
+          sortCondiciones(prev.map(c => (c.id === viewingOfferCondition.id ? condicionMapeada : c)))
         );
 
         toast.success('Condición convertida a estándar exitosamente');
@@ -647,7 +666,7 @@ export function CondicionesComercialesManager({
         };
 
         setCondiciones(prev =>
-          prev.map(c => (c.id === id ? condicionMapeada : c))
+          sortCondiciones(prev.map(c => (c.id === id ? condicionMapeada : c)))
         );
 
         toast.success(`Condición ${newStatus ? 'activada' : 'desactivada'} exitosamente`);
@@ -684,7 +703,7 @@ export function CondicionesComercialesManager({
       setIsReordering(true);
 
       // Actualizar estado local primero
-      setCondiciones(newCondiciones);
+      setCondiciones(sortCondiciones(newCondiciones));
 
       // Actualizar orden en el servidor
       const condicionesConOrden = newCondiciones.map((condicion, index) => ({
@@ -878,11 +897,11 @@ export function CondicionesComercialesManager({
         if (editingId) {
           // Actualizar condición existente en el estado local
           setCondiciones(prev =>
-            prev.map(c => (c.id === editingId ? condicionMapeada : c))
+            sortCondiciones(prev.map(c => (c.id === editingId ? condicionMapeada : c)))
           );
         } else {
           // Agregar nueva condición al estado local
-          setCondiciones(prev => [...prev, condicionMapeada]);
+          setCondiciones(prev => sortCondiciones([...prev, condicionMapeada]));
         }
 
         toast.success(
