@@ -272,6 +272,13 @@ export async function getEvents(
 
     const where: Prisma.studio_eventsWhereInput = {
       studio_id: studio.id,
+      // Solo mostrar eventos con cotización aprobada o autorizada
+      cotizacion_id: { not: null },
+      cotizacion: {
+        status: {
+          in: ['aprobada', 'autorizada', 'approved'],
+        },
+      },
     };
 
     if (status) {
