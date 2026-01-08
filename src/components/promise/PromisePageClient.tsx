@@ -15,20 +15,10 @@ import { usePromiseSettingsRealtime } from '@/hooks/usePromiseSettingsRealtime';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
+import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { PromisePageProvider, usePromisePageContext } from './PromisePageContext';
 import { ProgressOverlay } from './ProgressOverlay';
-
-interface PromiseShareSettings {
-  show_packages: boolean;
-  show_categories_subtotals: boolean;
-  show_items_prices: boolean;
-  min_days_to_hire: number;
-  show_standard_conditions: boolean;
-  show_offer_conditions: boolean;
-  portafolios: boolean;
-  auto_generate_contract: boolean;
-}
 
 interface PromisePageClientProps {
   promise: {
@@ -59,6 +49,7 @@ interface PromisePageClientProps {
     promise_share_default_show_standard_conditions: boolean;
     promise_share_default_show_offer_conditions: boolean;
     promise_share_default_portafolios: boolean;
+    promise_share_default_auto_generate_contract: boolean;
   };
   cotizaciones: PublicCotizacion[];
   paquetes: PublicPaquete[];
@@ -113,15 +104,15 @@ function PromisePageContent({
   promiseId,
   handlePreparingRef,
   handleSuccessRef,
-}: PromisePageClientProps & { 
+}: PromisePageClientProps & {
   handlePreparingRef: React.MutableRefObject<() => void>;
   handleSuccessRef: React.MutableRefObject<() => void>;
 }) {
   const {
-    showProgressOverlay, 
-    progressStep, 
-    progressError, 
-    autoGenerateContract, 
+    showProgressOverlay,
+    progressStep,
+    progressError,
+    autoGenerateContract,
     setShowProgressOverlay,
     setProgressStep,
     setProgressError
@@ -221,6 +212,7 @@ function PromisePageContent({
       promise_share_default_show_standard_conditions: studio.promise_share_default_show_standard_conditions,
       promise_share_default_show_offer_conditions: studio.promise_share_default_show_offer_conditions,
       promise_share_default_portafolios: studio.promise_share_default_portafolios,
+      promise_share_default_auto_generate_contract: studio.promise_share_default_auto_generate_contract,
     },
     onSettingsUpdated: handleSettingsUpdated,
   });
@@ -280,7 +272,7 @@ function PromisePageContent({
   useEffect(() => {
     handlePreparingRef.current = handlePreparing;
   }, [handlePreparing, handlePreparingRef]);
-  
+
   useEffect(() => {
     handleSuccessRef.current = handleSuccess;
   }, [handleSuccess, handleSuccessRef]);
@@ -573,19 +565,19 @@ export function PromisePageClient(props: PromisePageClientProps) {
   const handlePreparingRef = useRef<() => void>(() => {
     // Esta función se actualizará desde PromisePageContent
   });
-  
+
   // Callback para ocultar UI - definido aquí para pasarlo al Provider
   const handleSuccessRef = useRef<() => void>(() => {
     // Esta función se actualizará desde PromisePageContent
   });
 
   return (
-    <PromisePageProvider 
+    <PromisePageProvider
       onPreparing={() => handlePreparingRef.current()}
       onSuccess={() => handleSuccessRef.current()}
     >
-      <PromisePageContent 
-        {...props} 
+      <PromisePageContent
+        {...props}
         handlePreparingRef={handlePreparingRef}
         handleSuccessRef={handleSuccessRef}
       />

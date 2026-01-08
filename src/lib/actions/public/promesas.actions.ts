@@ -464,6 +464,7 @@ export async function getPublicPromiseData(
       promise_share_default_show_standard_conditions: boolean;
       promise_share_default_show_offer_conditions: boolean;
       promise_share_default_portafolios: boolean;
+      promise_share_default_auto_generate_contract: boolean;
     };
     cotizaciones: PublicCotizacion[];
     paquetes: PublicPaquete[];

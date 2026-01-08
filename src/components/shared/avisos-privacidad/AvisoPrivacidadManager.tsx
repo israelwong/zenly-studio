@@ -58,6 +58,7 @@ export function AvisoPrivacidadManager({
   useEffect(() => {
     if (isOpen) {
       autoOpenedRef.current = false;
+      setLoading(true); // Set loading immediately when opening
       loadAvisos();
     } else {
       autoOpenedRef.current = false;
@@ -70,8 +71,9 @@ export function AvisoPrivacidadManager({
       setFormData(emptyForm);
       setInitialFormData(emptyForm);
       setFormErrors({});
+      setLoading(true); // Reset loading state when closing
     }
-  }, [isOpen]);
+  }, [isOpen, studioSlug]);
 
   const loadAvisos = async () => {
     try {
@@ -80,12 +82,59 @@ export function AvisoPrivacidadManager({
 
       if (result.success && result.data) {
         setAvisos(result.data);
+        // Preparar formulario después de cargar
+        const activeAviso = result.data.find((a: AvisoPrivacidad) => a.is_active);
+        if (activeAviso) {
+          // Editar aviso existente
+          setEditingId(activeAviso.id);
+          setFormData({
+            content: activeAviso.content,
+            version: activeAviso.version,
+          });
+          setInitialFormData({
+            content: activeAviso.content,
+            version: activeAviso.version,
+          });
+        } else {
+          // Crear nuevo aviso si no existe
+          setEditingId(null);
+          const emptyForm = {
+            content: '',
+            version: '1.0',
+          };
+          setFormData(emptyForm);
+          setInitialFormData(emptyForm);
+        }
+        setFormErrors({});
+        autoOpenedRef.current = true;
       } else {
         toast.error(result.error || 'Error al cargar avisos de privacidad');
+        setAvisos([]); // Set empty array on error
+        // Preparar formulario vacío en caso de error
+        setEditingId(null);
+        const emptyForm = {
+          content: '',
+          version: '1.0',
+        };
+        setFormData(emptyForm);
+        setInitialFormData(emptyForm);
+        setFormErrors({});
+        autoOpenedRef.current = true;
       }
     } catch (error) {
       console.error('Error loading avisos:', error);
       toast.error('Error al cargar avisos de privacidad');
+      setAvisos([]); // Set empty array on error
+      // Preparar formulario vacío en caso de error
+      setEditingId(null);
+      const emptyForm = {
+        content: '',
+        version: '1.0',
+      };
+      setFormData(emptyForm);
+      setInitialFormData(emptyForm);
+      setFormErrors({});
+      autoOpenedRef.current = true;
     } finally {
       setLoading(false);
     }
@@ -125,39 +174,9 @@ export function AvisoPrivacidadManager({
     setPendingClose(null);
   };
 
-  // Cargar y preparar el formulario automáticamente cuando se abre el modal
-  useEffect(() => {
-    if (isOpen && !loading && !autoOpenedRef.current) {
-      autoOpenedRef.current = true;
-      const activeAviso = avisos.find((a) => a.is_active);
-      if (activeAviso) {
-        // Editar aviso existente
-        setEditingId(activeAviso.id);
-        setFormData({
-          content: activeAviso.content,
-          version: activeAviso.version,
-        });
-        setInitialFormData({
-          content: activeAviso.content,
-          version: activeAviso.version,
-        });
-      } else {
-        // Crear nuevo aviso si no existe
-        setEditingId(null);
-        const emptyForm = {
-          content: '',
-          version: '1.0',
-        };
-        setFormData(emptyForm);
-        setInitialFormData(emptyForm);
-      }
-      setFormErrors({});
-    }
-  }, [isOpen, loading, avisos]);
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setFormErrors({});
     setIsSubmitting(true);
 
@@ -209,6 +228,7 @@ export function AvisoPrivacidadManager({
 
         // Notificar al padre solo para actualizar la vista externa (sin refrescar todo)
         onRefresh?.();
+        onClose();
       } else {
         if (result.error && typeof result.error === 'object') {
           setFormErrors(result.error as any);
@@ -234,14 +254,35 @@ export function AvisoPrivacidadManager({
         title="Aviso de Privacidad"
         description="Gestiona el aviso de privacidad de tu estudio (requerido por LFPDPPP en México)"
         maxWidth="xl"
+        onSave={handleSubmit}
+        onCancel={handleClose}
+        saveLabel={editingId ? 'Actualizar' : 'Crear'}
+        cancelLabel="Cancelar"
+        isLoading={isSubmitting}
       >
         <div className="space-y-4">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+            <div className="space-y-4 animate-pulse">
+              {/* Skeleton: Información estática */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-zinc-800">
+                <div className="space-y-2">
+                  <div className="h-3 w-16 bg-zinc-800 rounded" />
+                  <div className="h-4 w-40 bg-zinc-800 rounded" />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-3 w-16 bg-zinc-800 rounded" />
+                  <div className="h-4 w-32 bg-zinc-800 rounded" />
+                </div>
+              </div>
+
+              {/* Skeleton: Editor de texto */}
+              <div className="space-y-2">
+                <div className="h-96 w-full bg-zinc-800 rounded-lg border border-zinc-800" />
+                <div className="h-3 w-64 bg-zinc-800 rounded" />
+              </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <>
               {/* Información estática */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-zinc-800">
                 <div>
@@ -275,21 +316,7 @@ export function AvisoPrivacidadManager({
                   Se mostrará en tu perfil de usuario, cotizaciones y portal de cliente
                 </p>
               </div>
-
-              <div className="flex items-center justify-end pt-4 border-t border-zinc-800 gap-2">
-                <ZenButton
-                  type="button"
-                  variant="outline"
-                  onClick={handleClose}
-                  disabled={isSubmitting}
-                >
-                  Cancelar
-                </ZenButton>
-                <ZenButton type="submit" loading={isSubmitting}>
-                  {editingId ? 'Actualizar' : 'Crear'} Aviso
-                </ZenButton>
-              </div>
-            </form>
+            </>
           )}
         </div>
       </ZenDialog>

@@ -8,16 +8,7 @@ import {
   RealtimeChannelPresets,
   subscribeToChannel,
 } from '@/lib/realtime/core';
-
-interface PromiseShareSettings {
-  show_packages: boolean;
-  show_categories_subtotals: boolean;
-  show_items_prices: boolean;
-  min_days_to_hire: number;
-  show_standard_conditions: boolean;
-  show_offer_conditions: boolean;
-  portafolios: boolean;
-}
+import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 
 interface StudioDefaults {
   promise_share_default_show_packages: boolean;
@@ -27,6 +18,7 @@ interface StudioDefaults {
   promise_share_default_show_standard_conditions: boolean;
   promise_share_default_show_offer_conditions: boolean;
   promise_share_default_portafolios: boolean;
+  promise_share_default_auto_generate_contract: boolean;
 }
 
 interface UsePromiseSettingsRealtimeProps {
@@ -84,6 +76,7 @@ export function usePromiseSettingsRealtime({
       show_standard_conditions: record.share_show_standard_conditions ?? studioDefaults.promise_share_default_show_standard_conditions,
       show_offer_conditions: record.share_show_offer_conditions ?? studioDefaults.promise_share_default_show_offer_conditions,
       portafolios: record.share_portafolios ?? studioDefaults.promise_share_default_portafolios,
+      auto_generate_contract: record.share_auto_generate_contract ?? studioDefaults.promise_share_default_auto_generate_contract,
     };
   }, [promiseId, studioDefaults]);
 
@@ -107,7 +100,8 @@ export function usePromiseSettingsRealtime({
           record.share_min_days_to_hire !== oldRecord.share_min_days_to_hire ||
           record.share_show_standard_conditions !== oldRecord.share_show_standard_conditions ||
           record.share_show_offer_conditions !== oldRecord.share_show_offer_conditions ||
-          record.share_portafolios !== oldRecord.share_portafolios;
+          record.share_portafolios !== oldRecord.share_portafolios ||
+          record.share_auto_generate_contract !== oldRecord.share_auto_generate_contract;
 
         if (!shareFieldsChanged) {
           return;
