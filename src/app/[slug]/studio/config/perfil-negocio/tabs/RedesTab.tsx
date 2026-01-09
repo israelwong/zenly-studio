@@ -1,18 +1,22 @@
 'use client';
 
-import React from 'react';
-import { SocialSection } from '@/app/[slug]/studio/business/identity/components/SocialSection';
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { FaqSection } from '@/components/profile/sections/FaqSection';
 import { BuilderProfileData } from '@/types/builder-profile';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface RedesTabProps {
     builderData: BuilderProfileData | null;
     loading: boolean;
     studioSlug: string;
-    onUpdate: (data: BuilderProfileData | null) => void;
+    onUpdate?: (updater: (prev: BuilderProfileData | null) => BuilderProfileData | null) => void;
     onDataChange?: () => Promise<void>;
 }
 
 export function RedesTab({ builderData, loading, studioSlug, onDataChange }: RedesTabProps) {
+    const { user } = useAuth();
+    
     if (loading) {
         return (
             <div className="space-y-6">
@@ -22,11 +26,19 @@ export function RedesTab({ builderData, loading, studioSlug, onDataChange }: Red
         );
     }
 
+    const faq = builderData?.faq || [];
+    // En el contexto de configuración, si hay usuario autenticado, es el owner
+    const ownerId = user?.id || null;
+
     return (
-        <SocialSection
+        <FaqSection
+            faq={faq}
+            loading={loading}
             studioSlug={studioSlug}
-            redesSociales={builderData?.socialNetworks || []}
-            onDataChange={onDataChange}
+            ownerId={ownerId}
+            data={undefined}
+            viewMode="compact"
+            onSuccess={onDataChange}
         />
     );
 }

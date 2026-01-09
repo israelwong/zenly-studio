@@ -76,7 +76,9 @@ export async function createFAQ(studioSlug: string, data: { pregunta: string; re
             }
         });
 
+        // Revalidar rutas públicas y del editor
         revalidatePath(`/${studioSlug}`);
+        revalidatePath(`/${studioSlug}/studio/config/perfil-negocio`);
 
         return {
             success: true,
@@ -129,7 +131,9 @@ export async function deleteFAQ(faqId: string, studioSlug: string) {
             where: { id: faqId }
         });
 
+        // Revalidar rutas públicas y del editor
         revalidatePath(`/${studioSlug}`);
+        revalidatePath(`/${studioSlug}/studio/config/perfil-negocio`);
 
         return { success: true };
     } catch (error) {
@@ -156,7 +160,9 @@ export async function reorderFAQs(studioSlug: string, faqIds: string[]) {
             )
         );
 
+        // Revalidar rutas públicas y del editor
         revalidatePath(`/${studioSlug}`);
+        revalidatePath(`/${studioSlug}/studio/config/perfil-negocio`);
 
         return { success: true };
     } catch (error) {
@@ -211,7 +217,9 @@ export async function reorderFAQ(faqId: string, newIndex: number, studioSlug: st
             )
         );
 
+        // Revalidar rutas públicas y del editor
         revalidatePath(`/${studioSlug}`);
+        revalidatePath(`/${studioSlug}/studio/config/perfil-negocio`);
 
         return { success: true };
     } catch (error) {

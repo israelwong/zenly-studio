@@ -26,6 +26,7 @@ interface FaqSectionProps {
     viewMode?: 'compact' | 'expanded';
     studioSlug: string;
     ownerId?: string | null;
+    onSuccess?: () => void | Promise<void>;
 }
 
 /**
@@ -38,7 +39,8 @@ export function FaqSection({
     loading = false,
     viewMode = 'compact',
     studioSlug,
-    ownerId
+    ownerId,
+    onSuccess
 }: FaqSectionProps) {
     const { user } = useAuth();
     const router = useRouter();
@@ -54,7 +56,10 @@ export function FaqSection({
     const activeFAQ = faqData.filter(faq => faq.is_active);
     const allFAQ = faqData; // Todas las FAQs (activas e inactivas)
 
-    const handleDataRefresh = () => router.refresh();
+    const handleDataRefresh = async () => {
+        router.refresh();
+        await onSuccess?.();
+    };
 
     const toggleItem = (id: string) => {
         setOpenItems(prev => {
@@ -180,13 +185,15 @@ export function FaqSection({
     }
 
     // Si no hay FAQs públicas (activas) y no hay FAQs definidas (en total), ocultar para usuarios no autenticados
-    // Pero mostrar siempre si el usuario es el dueño
-    if (!activeFAQ.length && !allFAQ.length && !isOwner) return null;
+    // En modo preview (ownerId === null), mostrar mensaje informativo si no hay FAQs activas
+    // Solo mostrar si el usuario es el dueño (para edición) o si es modo preview
+    const isPreviewMode = ownerId === null;
+    if (!activeFAQ.length && !allFAQ.length && !isOwner && !isPreviewMode) return null;
 
     return (
         <div className="px-8 py-6 space-y-4">
-            {/* Formulario crear */}
-            {isCreating && (
+            {/* Formulario crear - solo para owner, no en preview */}
+            {isCreating && isOwner && (
                 <div className="rounded-lg p-4 -mx-6 border border-purple-500/50 bg-zinc-900/50 space-y-3">
                     <ZenInput
                         label="Pregunta"
@@ -227,7 +234,7 @@ export function FaqSection({
                 </div>
             )}
 
-            {/* Empty state */}
+            {/* Empty state para owner */}
             {!activeFAQ.length && isOwner && !isCreating && (
                 <div className="rounded-lg p-6 -mx-6 border border-dashed border-purple-600/30 bg-purple-600/5 text-center">
                     <p className="text-sm text-zinc-400 mb-3">
@@ -243,6 +250,19 @@ export function FaqSection({
                 </div>
             )}
 
+            {/* Empty state para preview (no owner, sin FAQs activas) */}
+            {!activeFAQ.length && !isOwner && !isCreating && isPreviewMode && (
+                <div className="rounded-lg p-6 -mx-6 border border-dashed border-zinc-800 bg-zinc-900/30 text-center">
+                    <p className="text-sm text-zinc-400">
+                        Agrega preguntas y respuestas frecuentes
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-2">
+                        Sección no visible para visitante si FAQs no definidas
+                    </p>
+                </div>
+            )}
+
+
             {/* Lista de FAQs */}
             {activeFAQ.length > 0 && (
                 <div className="space-y-2">
@@ -255,8 +275,8 @@ export function FaqSection({
                             const isFirst = index === 0;
                             const isLast = index === activeFAQ.length - 1;
 
-                            // Modo edición
-                            if (isEditing) {
+                            // Modo edición - solo para owner, no en preview
+                            if (isEditing && isOwner) {
                                 return (
                                     <div key={faqItem.id} className="rounded-lg p-4 -mx-6 border border-purple-500/50 bg-zinc-800/30 space-y-3">
                                         <ZenInput

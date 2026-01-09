@@ -16,7 +16,7 @@ import { IdentidadTab } from './tabs/IdentidadTab';
 import { ContactoTab } from './tabs/ContactoTab';
 import { RedesTab } from './tabs/RedesTab';
 
-type TabValue = 'identidad' | 'contacto' | 'redes';
+type TabValue = 'identidad' | 'contacto' | 'faq';
 
 export default function PerfilNegocioPage() {
     const params = useParams();
@@ -31,7 +31,7 @@ export default function PerfilNegocioPage() {
 
     // Obtener tab inicial de manera segura - validar que sea un tab válido
     const getValidTab = (tab: string | null): TabValue => {
-        const validTabs: TabValue[] = ['identidad', 'contacto', 'redes'];
+        const validTabs: TabValue[] = ['identidad', 'contacto', 'faq'];
         return (validTabs.includes(tab as TabValue) ? tab : 'identidad') as TabValue;
     };
 
@@ -112,7 +112,11 @@ export default function PerfilNegocioPage() {
         }
     };
 
-    // Transformar datos para preview - estructura compatible con ProfileHeader y ContactSection
+    // Determinar qué tab mostrar en el preview según la pestaña activa del editor
+    const previewTab = currentTab === 'faq' ? 'faq' : 'contacto';
+    const previewVariant = currentTab === 'faq' ? 'faq' : 'info';
+
+    // Transformar datos para preview - estructura compatible con ProfileHeader y ContactSection/FaqSection
     const previewData = builderData ? {
         // Datos para ProfileHeader (nivel superior)
         studio_name: builderData.studio.studio_name,
@@ -163,6 +167,8 @@ export default function PerfilNegocioPage() {
             } : null,
             order: network.order,
         })),
+        // Datos para ProfileContent con variant='faq' (FaqSection)
+        faq: builderData.faq || [],
     } : null;
 
     // Evitar hidration mismatch - solo renderizar tabs después de montar
@@ -304,10 +310,10 @@ export default function PerfilNegocioPage() {
                                             Contacto
                                         </TabsTrigger>
                                         <TabsTrigger
-                                            value="redes"
+                                            value="faq"
                                             className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-zinc-400 hover:text-white transition-colors"
                                         >
-                                            Redes Sociales
+                                            FAQ
                                         </TabsTrigger>
                                     </TabsList>
 
@@ -331,7 +337,7 @@ export default function PerfilNegocioPage() {
                                         />
                                     </TabsContent>
 
-                                    <TabsContent value="redes">
+                                    <TabsContent value="faq">
                                         <RedesTab
                                             builderData={builderData}
                                             loading={loading}
@@ -438,8 +444,10 @@ export default function PerfilNegocioPage() {
                                 {/* Navbar */}
                                 <div className="flex-shrink-0 mb-4 bg-zinc-900/50 backdrop-blur-lg rounded-lg border border-zinc-800/20">
                                     <ProfileNavTabs
-                                        activeTab="contacto"
+                                        activeTab={previewTab}
                                         onTabChange={() => { }}
+                                        hasActiveFAQs={(builderData?.faq || []).some(f => f.is_active)}
+                                        isOwner={isOwner}
                                     />
                                 </div>
 
@@ -447,10 +455,11 @@ export default function PerfilNegocioPage() {
                                 <div className="flex-1 overflow-y-auto max-h-[600px]">
                                     <div className="bg-zinc-900/30 rounded-lg border border-zinc-800/20 overflow-hidden">
                                         <ProfileContent
-                                            variant="info"
+                                            variant={previewVariant}
                                             data={previewData as unknown as Record<string, unknown>}
                                             loading={loading}
                                             studioSlug={studioSlug}
+                                            ownerUserId={null}
                                         />
                                     </div>
                                 </div>
