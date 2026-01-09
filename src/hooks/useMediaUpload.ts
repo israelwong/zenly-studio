@@ -1,5 +1,5 @@
 import { useState, useCallback, createElement } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createBrowserClient } from '@/lib/supabase/browser';
 import { optimizeImage, analyzeVideo, validateFileSize, formatBytes } from '@/lib/utils/image-optimizer';
 import { generateVideoThumbnail, optimizeVideoThumbnail } from '@/lib/utils/video-thumbnail';
 import { deleteFileStorage } from '@/lib/actions/shared/media.actions';
@@ -16,14 +16,6 @@ interface UploadedFile {
   compressionRatio?: number;
   thumbnailUrl?: string;
 }
-
-// Supabase client para uploads directo
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
 
 const BUCKET_NAME = 'Studio';
 
@@ -63,9 +55,44 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
 
   const uploadFiles = useCallback(
     async (files: File[], studioSlug: string, category: string, subcategory?: string): Promise<UploadedFile[]> => {
-      if (!supabase) {
-        toast.error("Cliente Supabase no configurado");
+      if (typeof window === 'undefined') {
+        toast.error("Esta función solo está disponible en el navegador");
         return [];
+      }
+
+      // Usar directamente el cliente SSR singleton - evita múltiples instancias y sesiones desincronizadas
+      const supabase = createBrowserClient();
+
+      // Verificar que haya sesión antes de subir
+      let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        console.error('❌ [useMediaUpload] Error de autenticación:', {
+          sessionError: sessionError?.message,
+          hasSession: !!session,
+          hasAccessToken: !!session?.access_token,
+          userId: session?.user?.id,
+          userEmail: session?.user?.email,
+        });
+        toast.error("Debes estar autenticado para subir archivos");
+        return [];
+      }
+
+      // 🔧 CRÍTICO: Establecer explícitamente la sesión para asegurar que el token se incluya en las requests de Storage
+      // El cliente SSR puede no sincronizar automáticamente la sesión en todas las requests
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+
+      if (setSessionError) {
+        console.warn('[useMediaUpload] Error al establecer sesión:', setSessionError);
+      } else {
+        // Re-leer la sesión después de establecerla para asegurar que está sincronizada
+        const { data: { session: updatedSession } } = await supabase.auth.getSession();
+        if (updatedSession) {
+          session = updatedSession;
+        }
       }
 
       setIsUploading(true);
@@ -147,6 +174,7 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
             // Generar ruta
             const filePath = generateSupabasePath(studioSlug, category, subcategory, file.name);
 
+
             // Subir directamente a Supabase desde cliente
             const { data, error: uploadError } = await supabase.storage
               .from(BUCKET_NAME)
@@ -157,13 +185,14 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
               });
 
             if (uploadError) {
-              console.error(`Error subiendo ${file.name}:`, uploadError);
               const errorMsg = uploadError.message || 'Error desconocido';
 
               // Detectar errores RLS
               if (errorMsg.includes('row level security') || errorMsg.includes('policy')) {
-                toast.error(`Permiso denegado: No tienes permisos para subir archivos. ${errorMsg}`);
+                console.error('[useMediaUpload] Error RLS:', errorMsg);
+                toast.error(`Permiso denegado: No tienes permisos para subir archivos`);
               } else {
+                console.error(`[useMediaUpload] Error subiendo ${file.name}:`, uploadError);
                 toast.error(`Error subiendo ${file.name}: ${errorMsg}`);
               }
               continue;
@@ -215,21 +244,36 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
 
         // Toast final - con icono de check y duración normal
         if (uploadedFiles.length > 0) {
+          // Cerrar el toast anterior con duración infinita antes de mostrar el éxito
+          toast.dismiss(batchToastId);
+          // Pequeño delay para asegurar que el dismiss se procese
+          await new Promise(resolve => setTimeout(resolve, 100));
           toast.success(
             `${uploadedFiles.length} archivo${uploadedFiles.length > 1 ? 's subidos' : ' subido'} correctamente`,
             {
-              id: batchToastId,
               duration: 4000 // Auto-dismiss después de 4s
             }
           );
         } else {
-          toast.error('No se pudo subir ningún archivo', { id: batchToastId });
+          // Cerrar el toast anterior con duración infinita antes de mostrar el error
+          toast.dismiss(batchToastId);
+          // Pequeño delay para asegurar que el dismiss se procese
+          await new Promise(resolve => setTimeout(resolve, 100));
+          toast.error('No se pudo subir ningún archivo', {
+            duration: 5000 // Auto-dismiss después de 5s
+          });
         }
 
         return uploadedFiles;
       } catch (error) {
         console.error('Error en uploadFiles:', error);
-        toast.error('Error al subir archivos', { id: batchToastId });
+        // Cerrar el toast anterior con duración infinita antes de mostrar el error
+        toast.dismiss(batchToastId);
+        // Pequeño delay para asegurar que el dismiss se procese
+        await new Promise(resolve => setTimeout(resolve, 100));
+        toast.error('Error al subir archivos', {
+          duration: 5000 // Auto-dismiss después de 5s
+        });
         return [];
       } finally {
         setIsUploading(false);

@@ -66,49 +66,15 @@ export function PostEditorSheet({
     const [isValidatingSlug, setIsValidatingSlug] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-    // Generar slug automáticamente SIEMPRE cuando cambia el título
+    // Generar slug automáticamente cuando cambia el título (solo en modo create)
     useEffect(() => {
-        if (formData.title) {
+        if (formData.title && mode === "create") {
             const newSlug = generateSlug(formData.title);
             if (newSlug !== formData.slug) {
                 setFormData(prev => ({ ...prev, slug: newSlug }));
             }
         }
-    }, [formData.title]);
-
-    // Validar disponibilidad del slug (solo después de la carga inicial)
-    useEffect(() => {
-        // No validar durante la carga inicial del post
-        if (isInitialLoad) {
-            return;
-        }
-
-        const validateSlug = async () => {
-            if (!formData.slug || formData.slug.length < 3) {
-                setTitleError(null);
-                return;
-            }
-
-            setIsValidatingSlug(true);
-
-            try {
-                const exists = await checkPostSlugExists(studioSlug, formData.slug, mode === "edit" ? postId : undefined);
-
-                if (exists) {
-                    setTitleError("Este título ya está en uso. Por favor, elige otro.");
-                } else {
-                    setTitleError(null);
-                }
-            } catch (error) {
-                console.error("Error validating slug:", error);
-            } finally {
-                setIsValidatingSlug(false);
-            }
-        };
-
-        const debounceTimer = setTimeout(validateSlug, 500);
-        return () => clearTimeout(debounceTimer);
-    }, [formData.slug, studioSlug, mode, postId, isInitialLoad]);
+    }, [formData.title, formData.slug, mode]);
 
     // Cargar post si es modo edición
     useEffect(() => {
@@ -158,7 +124,8 @@ export function PostEditorSheet({
         };
 
         loadPost();
-    }, [mode, postId, isOpen, onClose, generateMissingThumbnails, studioSlug]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mode, postId, isOpen, studioSlug]);
 
     // Reset form cuando se cierra
     useEffect(() => {
@@ -187,18 +154,14 @@ export function PostEditorSheet({
         }
     }, [isOpen, mode]);
 
-    // Generar slug automáticamente
+    // Validar slug único (solo después de la carga inicial)
     useEffect(() => {
-        if (formData.title && mode === "create") {
-            const newSlug = generateSlug(formData.title);
-            setFormData(prev => ({ ...prev, slug: newSlug }));
+        if (isInitialLoad) {
+            return;
         }
-    }, [formData.title, mode]);
 
-    // Validar slug único
-    useEffect(() => {
         const validateSlug = async () => {
-            if (!formData.slug || !formData.slug.trim()) {
+            if (!formData.slug || !formData.slug.trim() || formData.slug.length < 3) {
                 setTitleError(null);
                 setIsValidatingSlug(false);
                 return;
@@ -232,7 +195,7 @@ export function PostEditorSheet({
         }, 500);
 
         return () => clearTimeout(timeoutId);
-    }, [formData.slug, studioSlug, mode, postId]);
+    }, [formData.slug, studioSlug, mode, postId, isInitialLoad]);
 
     // Helper para obtener dimensions de imagen
     const getImageDimensions = (file: File): Promise<{ width: number; height: number } | undefined> => {
@@ -268,6 +231,18 @@ export function PostEditorSheet({
 
             const uploadedFiles = await uploadFiles(files, studioSlug, 'posts', 'content');
 
+            if (uploadedFiles.length === 0) {
+                toast.error('No se pudieron subir los archivos. Verifica que tengas permisos y que los archivos sean válidos.');
+                return;
+            }
+
+            // Verificar que todos los archivos subidos tengan URL válida
+            const invalidFiles = uploadedFiles.filter(f => !f.url || !f.id);
+            if (invalidFiles.length > 0) {
+                console.error('[PostEditorSheet] Archivos con datos inválidos:', invalidFiles);
+                toast.error(`${invalidFiles.length} archivo(s) no se procesaron correctamente`);
+            }
+
             const mediaItemsPromises = uploadedFiles.map(async (uploadedFile, index) => {
                 const originalFile = files[index];
                 const isVideo = originalFile.type.startsWith('video/');
@@ -288,7 +263,7 @@ export function PostEditorSheet({
                     mime_type: originalFile.type,
                     dimensions: dimensions,
                     duration_seconds: undefined,
-                    display_order: formData.media.length + index,
+                    display_order: 0, // Se calculará en el setFormData
                     alt_text: undefined,
                     thumbnail_url: uploadedFile.thumbnailUrl,
                 } as PostMediaItem;
@@ -298,17 +273,20 @@ export function PostEditorSheet({
 
             setFormData(prev => ({
                 ...prev,
-                media: [...prev.media, ...mediaItems]
+                media: [...prev.media, ...mediaItems.map((item, index) => ({
+                    ...item,
+                    display_order: prev.media.length + index
+                }))]
             }));
 
-            toast.success(`${files.length} archivo(s) subido(s)`);
+            toast.success(`${uploadedFiles.length} archivo${uploadedFiles.length > 1 ? 's' : ''} subido${uploadedFiles.length > 1 ? 's' : ''} correctamente`);
         } catch (error) {
-            console.error('Error uploading files:', error);
+            console.error('[PostEditorSheet] Error uploading files:', error);
             toast.error('Error al subir archivos');
         } finally {
             setIsMediaUploading(false);
         }
-    }, [uploadFiles, studioSlug, formData.media.length]);
+    }, [uploadFiles, studioSlug]);
 
     // Manejar eliminación de media
     const handleDeleteMedia = useCallback((mediaId: string) => {
@@ -449,12 +427,12 @@ export function PostEditorSheet({
         <>
             {/* Overlay */}
             <div
-                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300"
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] transition-opacity duration-300"
                 onClick={onClose}
             />
 
             {/* Sheet */}
-            <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-50 overflow-y-auto shadow-2xl">
+            <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[70] overflow-y-auto shadow-2xl">
                 {/* Header */}
                 <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
                     <div className="flex items-center justify-between gap-3">

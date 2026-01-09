@@ -213,7 +213,7 @@ export function validateFileSize(file: File): {
   error?: string;
   maxSize?: string;
 } {
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+  const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
   const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
 
   if (file.type.startsWith('image/')) {

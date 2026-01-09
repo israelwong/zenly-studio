@@ -104,6 +104,11 @@
 }
 
 /* Sonner Toast Styles - Fix para toasts apilados sin texto visible */
+/* Asegurar que los toasts estén por encima de todos los elementos */
+[data-sonner-toaster] {
+  z-index: 9999 !important; /* Por encima de header (z-50), overlay (z-60), sheet (z-70), drag (z-1000) */
+}
+
 [data-sonner-toast]:not([data-type="success"]):not([data-type="error"]):not(
     [data-type="info"]
   ):not([data-type="warning"]) {

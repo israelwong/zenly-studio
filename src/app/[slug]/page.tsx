@@ -5,6 +5,7 @@ import { getPublicActiveOffers } from '@/lib/actions/studio/offers/offers.action
 import { ProfilePageClient } from './profile/public/ProfilePageClient';
 import { Metadata } from 'next';
 import type { PublicProfileData } from '@/types/public-profile';
+import { Toaster } from '@/components/ui/shadcn/sonner';
 
 interface PublicProfilePageProps {
     params: Promise<{ slug: string }>;
@@ -46,11 +47,14 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
         } as PublicProfileData;
 
         return (
-            <ProfilePageClient
-                profileData={mappedProfileData}
-                studioSlug={slug}
-                offers={offers}
-            />
+            <>
+                <ProfilePageClient
+                    profileData={mappedProfileData}
+                    studioSlug={slug}
+                    offers={offers}
+                />
+                <Toaster position="top-right" richColors />
+            </>
         );
     } catch (error) {
         console.error('❌ [PublicProfilePage] Error:', error);
