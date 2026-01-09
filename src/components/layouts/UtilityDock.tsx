@@ -20,6 +20,7 @@ export function UtilityDock({
 }: UtilityDockProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [hasGoogleCalendar, setHasGoogleCalendar] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -70,17 +71,25 @@ export function UtilityDock({
   }, [isMounted, studioSlug]);
 
   return (
-    <aside className="w-12 shrink-0 border-l border-zinc-800 bg-zinc-950/50 flex flex-col items-center py-4 gap-2 z-20">
+    <aside
+      className={`shrink-0 border-l border-zinc-800 bg-zinc-950/50 flex flex-col py-4 gap-2 z-20 transition-all duration-200 ease-in-out ${
+        isHovered ? 'w-36 items-start px-3' : 'w-12 items-center px-0'
+      }`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {/* Agenda */}
       {onAgendaClick && (
         <ZenButton
           variant="ghost"
-          size="icon"
-          className="rounded-full h-10 w-10 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+          size={isHovered ? 'sm' : 'icon'}
+          className={`rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors ${
+            isHovered ? 'h-10 w-full justify-start gap-2 px-3' : 'h-10 w-10'
+          }`}
           onClick={onAgendaClick}
-          title="Agenda"
         >
-          <Calendar className="h-5 w-5" />
+          <Calendar className="h-5 w-5 shrink-0" />
+          {isHovered && <span className="text-sm font-medium">Agenda</span>}
           <span className="sr-only">Agenda</span>
         </ZenButton>
       )}
@@ -89,29 +98,35 @@ export function UtilityDock({
       {onTareasOperativasClick && isMounted && hasGoogleCalendar && (
         <ZenButton
           variant="ghost"
-          size="icon"
-          className="rounded-full h-10 w-10 text-purple-400 hover:text-purple-300 hover:bg-purple-900/20 transition-colors"
+          size={isHovered ? 'sm' : 'icon'}
+          className={`rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-900/20 transition-colors ${
+            isHovered ? 'h-10 w-full justify-start gap-2 px-3' : 'h-10 w-10'
+          }`}
           onClick={onTareasOperativasClick}
-          title="Tareas Operativas"
         >
-          <CalendarCheck className="h-5 w-5" />
+          <CalendarCheck className="h-5 w-5 shrink-0" />
+          {isHovered && <span className="text-sm font-medium">Tareas Operativas</span>}
           <span className="sr-only">Tareas Operativas</span>
         </ZenButton>
       )}
 
       {/* Divider */}
-      {onContactsClick && <div className="w-8 h-px bg-zinc-800 my-2" />}
+      {onContactsClick && (
+        <div className={`h-px bg-zinc-800 my-2 ${isHovered ? 'w-full' : 'w-8'}`} />
+      )}
 
       {/* Contactos */}
       {onContactsClick && (
         <ZenButton
           variant="ghost"
-          size="icon"
-          className="rounded-full h-10 w-10 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+          size={isHovered ? 'sm' : 'icon'}
+          className={`rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors ${
+            isHovered ? 'h-10 w-full justify-start gap-2 px-3' : 'h-10 w-10'
+          }`}
           onClick={onContactsClick}
-          title="Contactos"
         >
-          <ContactRound className="h-5 w-5" />
+          <ContactRound className="h-5 w-5 shrink-0" />
+          {isHovered && <span className="text-sm font-medium">Contactos</span>}
           <span className="sr-only">Contactos</span>
         </ZenButton>
       )}
