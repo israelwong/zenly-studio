@@ -32,6 +32,7 @@ interface PostFeedCardProps {
         is_published: boolean;
         is_featured?: boolean;
         published_at: Date | null;
+        view_count?: number;
     };
     onPostClick?: (postSlug: string) => void;
     onEditPost?: (postId: string) => void; // Callback para editar post

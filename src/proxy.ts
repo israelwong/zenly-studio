@@ -222,12 +222,11 @@ export async function proxy(request: NextRequest) {
     // - /[slug]/studio (panel privado del studio)  
     // - /[slug]/cliente (portal de clientes)
     // - /[slug]/preview (preview de promesas - pública)
-    // - /[slug]/post (posts públicos)
     // - /[slug]/profile (perfil público)
     // - /[slug]/offer (ofertas públicas)
     // - /[slug]/promise (promesas públicas)
     // - /[slug]/aviso-privacidad (aviso de privacidad público)
-    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/cliente') || subPath.startsWith('/preview') || subPath.startsWith('/post') || subPath.startsWith('/profile') || subPath.startsWith('/offer') || subPath.startsWith('/promise') || subPath.startsWith('/aviso-privacidad')) {
+    if (!subPath || subPath.startsWith('/studio') || subPath.startsWith('/cliente') || subPath.startsWith('/preview') || subPath.startsWith('/profile') || subPath.startsWith('/offer') || subPath.startsWith('/promise') || subPath.startsWith('/aviso-privacidad')) {
       return NextResponse.next();
     }
 

@@ -98,6 +98,23 @@ export function PostEditorSheet({
                             studioSlug
                         );
 
+                        /* PROBLEMA: Parpadeo al abrir el sheet
+                         * 
+                         * CAUSA RAÍZ:
+                         * - setFormData causa un re-render completo del componente
+                         * - ImageGrid se monta con media vacío primero, luego se actualiza con los datos
+                         * - generateMissingThumbnails es asíncrono y causa múltiples actualizaciones
+                         * 
+                         * DIFERENCIA CON ContentBlocksEditor (que funciona bien):
+                         * - En ContentBlocksEditor, cada bloque es un componente separado (SortableBlock)
+                         * - Cuando se carga un bloque, solo ese componente se re-renderiza
+                         * - Aquí, todo el PostEditorSheet se re-renderiza cuando cambia formData.media
+                         * 
+                         * SOLUCIÓN:
+                         * 1. Cargar datos parciales primero (sin thumbnails) y luego actualizar
+                         * 2. Usar React.memo en ImageGrid para evitar re-renders cuando media no cambia realmente
+                         * 3. O usar un estado separado para loading que no cause re-render del grid completo
+                         */
                         setFormData({
                             title: post.title || "",
                             slug: generateSlug(post.title || ""), // Generar slug desde el título, no usar el de DB
@@ -231,8 +248,9 @@ export function PostEditorSheet({
 
             const uploadedFiles = await uploadFiles(files, studioSlug, 'posts', 'content');
 
+            // Si no se subió ningún archivo, el hook ya mostró los errores específicos
+            // (tamaño, permisos, etc.), así que solo retornamos sin mostrar toast adicional
             if (uploadedFiles.length === 0) {
-                toast.error('No se pudieron subir los archivos. Verifica que tengas permisos y que los archivos sean válidos.');
                 return;
             }
 
@@ -243,15 +261,11 @@ export function PostEditorSheet({
                 toast.error(`${invalidFiles.length} archivo(s) no se procesaron correctamente`);
             }
 
-            const mediaItemsPromises = uploadedFiles.map(async (uploadedFile, index) => {
+            // Crear mediaItems de forma síncrona primero (sin dimensions) para evitar parpadeos
+            const baseMediaItems: PostMediaItem[] = uploadedFiles.map((uploadedFile, index) => {
                 const originalFile = files[index];
                 const isVideo = originalFile.type.startsWith('video/');
                 const isImage = originalFile.type.startsWith('image/');
-
-                let dimensions: { width: number; height: number } | undefined;
-                if (isImage) {
-                    dimensions = await getImageDimensions(originalFile);
-                }
 
                 return {
                     id: uploadedFile.id,
@@ -261,7 +275,7 @@ export function PostEditorSheet({
                     storage_path: uploadedFile.url,
                     storage_bytes: uploadedFile.size,
                     mime_type: originalFile.type,
-                    dimensions: dimensions,
+                    dimensions: undefined, // Se actualizará después
                     duration_seconds: undefined,
                     display_order: 0, // Se calculará en el setFormData
                     alt_text: undefined,
@@ -269,14 +283,60 @@ export function PostEditorSheet({
                 } as PostMediaItem;
             });
 
-            const mediaItems = await Promise.all(mediaItemsPromises);
+            /* PROBLEMA: Parpadeos al subir imágenes
+             * 
+             * CAUSA RAÍZ:
+             * - setFormData causa re-render completo de ImageGrid
+             * - Dos actualizaciones de estado (una inmediata, otra para dimensions) causan múltiples parpadeos
+             * - El array media se recrea completamente en cada actualización
+             * 
+             * DIFERENCIA CON ContentBlocksEditor (que funciona bien):
+             * - En ContentBlocksEditor, handleDropFiles actualiza solo el bloque específico:
+             *   `handleUpdateBlock(blockId, { media: updatedMedia })`
+             * - Solo ese SortableBlock se re-renderiza, no todo el editor
+             * - Aquí, se actualiza todo formData.media, causando re-render completo de ImageGrid
+             * 
+             * SOLUCIÓN:
+             * 1. Usar React.memo en ImageGrid para evitar re-renders cuando media no cambia realmente
+             * 2. O usar una estructura similar donde cada item de media sea un componente separado
+             * 3. O batch las actualizaciones usando React.startTransition o useDeferredValue
+             */
+            // Actualizar estado inmediatamente para evitar parpadeos
+            setFormData(prev => {
+                const startOrder = prev.media.length;
+                return {
+                    ...prev,
+                    media: [...prev.media, ...baseMediaItems.map((item, index) => ({
+                        ...item,
+                        display_order: startOrder + index
+                    }))]
+                };
+            });
 
+            // Actualizar dimensions de forma asíncrona después (sin bloquear UI)
+            const mediaItemsWithDimensions = await Promise.all(
+                baseMediaItems.map(async (item, index) => {
+                    const originalFile = files[index];
+                    const isImage = originalFile.type.startsWith('image/');
+
+                    if (isImage) {
+                        const dimensions = await getImageDimensions(originalFile);
+                        return { ...item, dimensions };
+                    }
+                    return item;
+                })
+            );
+
+            // Actualizar solo las dimensions sin recrear todo el array
             setFormData(prev => ({
                 ...prev,
-                media: [...prev.media, ...mediaItems.map((item, index) => ({
-                    ...item,
-                    display_order: prev.media.length + index
-                }))]
+                media: prev.media.map(item => {
+                    const updatedItem = mediaItemsWithDimensions.find(m => m.id === item.id);
+                    if (updatedItem && updatedItem.dimensions) {
+                        return { ...item, dimensions: updatedItem.dimensions };
+                    }
+                    return item;
+                })
             }));
 
             toast.success(`${uploadedFiles.length} archivo${uploadedFiles.length > 1 ? 's' : ''} subido${uploadedFiles.length > 1 ? 's' : ''} correctamente`);
@@ -289,6 +349,22 @@ export function PostEditorSheet({
     }, [uploadFiles, studioSlug]);
 
     // Manejar eliminación de media
+    /* PROBLEMA: Parpadeo al eliminar imágenes
+     * 
+     * CAUSA RAÍZ:
+     * - filter() crea un nuevo array, causando re-render completo de ImageGrid
+     * - Los items restantes se remontan aunque no hayan cambiado
+     * 
+     * DIFERENCIA CON ContentBlocksEditor (que funciona bien):
+     * - En ContentBlocksEditor, removeMedia actualiza solo el bloque específico:
+     *   `onUpdate(block.id, { media: newMedia })`
+     * - Solo ese SortableBlock se re-renderiza
+     * - Aquí, se actualiza todo formData.media, causando re-render completo
+     * 
+     * SOLUCIÓN:
+     * 1. Usar React.memo en SortableImageItem para evitar re-renders innecesarios
+     * 2. O usar una key estable que no cambie cuando solo se elimina un item
+     */
     const handleDeleteMedia = useCallback((mediaId: string) => {
         setFormData(prev => ({
             ...prev,
@@ -296,16 +372,61 @@ export function PostEditorSheet({
         }));
     }, []);
 
-    // Manejar reordenamiento de media
+    // Manejar reordenamiento de media - optimizado para evitar parpadeos
+    /* PROBLEMA: Parpadeo al reordenar imágenes
+     * 
+     * CAUSA RAÍZ:
+     * - Aunque se intenta mantener referencias, sort() y map() crean nuevos arrays
+     * - ImageGrid re-renderiza todos los items aunque solo cambió el orden
+     * - DndKit ya maneja el reordenamiento visual, pero el estado causa parpadeo adicional
+     * 
+     * DIFERENCIA CON ContentBlocksEditor (que funciona bien):
+     * - En ContentBlocksEditor, onReorder actualiza solo el bloque específico:
+     *   `onUpdate(block.id, { media: reorderedMedia })`
+     * - Solo ese SortableBlock se re-renderiza
+     * - Aquí, se actualiza todo formData.media, causando re-render completo
+     * 
+     * SOLUCIÓN:
+     * 1. Usar React.memo en SortableImageItem con comparación personalizada
+     * 2. O usar useMemo para memoizar el array ordenado antes de pasarlo a ImageGrid
+     * 3. O sincronizar mejor con DndKit para evitar actualización de estado durante el drag
+     */
     const handleReorderMedia = useCallback((reorderedMedia: MediaItem[]) => {
-        const convertedMedia: PostMediaItem[] = reorderedMedia.map((item, index) => ({
-            ...item as PostMediaItem,
-            display_order: index
-        }));
-        setFormData(prev => ({
-            ...prev,
-            media: convertedMedia
-        }));
+        setFormData(prev => {
+            // Crear un mapa de los nuevos items por ID para acceso rápido
+            const reorderedMap = new Map<string, number>();
+            reorderedMedia.forEach((item, index) => {
+                // MediaItem de @/types/content-blocks tiene id: string (no opcional)
+                // pero verificamos por seguridad
+                if (item.id) {
+                    reorderedMap.set(item.id as string, index);
+                }
+            });
+
+            // Reordenar el array existente manteniendo las referencias cuando sea posible
+            const newMedia = prev.media
+                .slice()
+                .sort((a, b) => {
+                    const aId: string | undefined = a.id;
+                    const bId: string | undefined = b.id;
+                    const orderA = (aId && typeof aId === 'string' && aId.length > 0)
+                        ? (reorderedMap.get(aId) ?? prev.media.length)
+                        : prev.media.length;
+                    const orderB = (bId && typeof bId === 'string' && bId.length > 0)
+                        ? (reorderedMap.get(bId) ?? prev.media.length)
+                        : prev.media.length;
+                    return orderA - orderB;
+                })
+                .map((item, index) => ({
+                    ...item,
+                    display_order: index
+                }));
+
+            return {
+                ...prev,
+                media: newMedia
+            };
+        });
     }, []);
 
     // Manejar click de upload
@@ -324,17 +445,42 @@ export function PostEditorSheet({
     }, [handleDropFiles]);
 
     // Manejar agregar tag
-    const handleAddTag = useCallback(() => {
-        const trimmedTag = tagInput.trim();
-        if (trimmedTag && !formData.tags.includes(trimmedTag)) {
+    const handleAddTag = useCallback((tag?: string) => {
+        const tagToAdd = tag || tagInput.trim();
+        if (!tagToAdd) return;
+
+        // Procesar múltiples tags separados por coma o punto
+        const tagsToProcess = tagToAdd
+            .split(/[,.]/)
+            .map(t => t.trim())
+            .filter(t => t.length > 0);
+
+        if (tagsToProcess.length === 0) return;
+
+        const newTags: string[] = [];
+        const duplicateTags: string[] = [];
+
+        tagsToProcess.forEach(tag => {
+            const normalizedTag = tag.toLowerCase();
+            if (!formData.tags.some(t => t.toLowerCase() === normalizedTag)) {
+                newTags.push(tag);
+            } else {
+                duplicateTags.push(tag);
+            }
+        });
+
+        if (newTags.length > 0) {
             setFormData(prev => ({
                 ...prev,
-                tags: [...prev.tags, trimmedTag]
+                tags: [...prev.tags, ...newTags]
             }));
-            setTagInput("");
-        } else if (formData.tags.includes(trimmedTag)) {
-            toast.error("Esta palabra clave ya existe");
         }
+
+        if (duplicateTags.length > 0) {
+            toast.error(`${duplicateTags.length} palabra(s) clave ya existe(n)`);
+        }
+
+        setTagInput("");
     }, [tagInput, formData.tags]);
 
     // Manejar eliminar tag
@@ -420,6 +566,21 @@ export function PostEditorSheet({
     const postSize = useMemo(() => {
         return calculateTotalStorage(formData.media);
     }, [formData.media]);
+
+    // Memoizar el array de media para evitar re-renders innecesarios en ImageGrid
+    // Usar una comparación más inteligente: solo actualizar si realmente cambió el contenido
+    const memoizedMedia = useMemo(() => {
+        return formData.media as MediaItem[];
+    }, [
+        // Solo recalcular si cambió la longitud o los IDs
+        formData.media.length,
+        formData.media.map(m => m.id).join(',')
+    ]);
+
+    // Memoizar el estado de uploading para evitar cambios frecuentes
+    const isUploadingState = useMemo(() => {
+        return isMediaUploading || isUploading;
+    }, [isMediaUploading, isUploading]);
 
     if (!isOpen) return null;
 
@@ -537,7 +698,7 @@ export function PostEditorSheet({
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                     <p className="text-xs text-zinc-500 break-all">
                                         URL: <span className="text-zinc-400 font-mono">
-                                            /{studioSlug}/post/{formData.slug}
+                                            /{studioSlug}?post={formData.slug}
                                         </span>
                                     </p>
                                     <div className="flex items-center gap-2">
@@ -551,7 +712,7 @@ export function PostEditorSheet({
                                             <button
                                                 type="button"
                                                 onClick={async () => {
-                                                    const postUrl = `${window.location.origin}/${studioSlug}/post/${formData.slug}`;
+                                                    const postUrl = `${window.location.origin}/${studioSlug}?post=${formData.slug}`;
                                                     try {
                                                         await navigator.clipboard.writeText(postUrl);
                                                         setLinkCopied(true);
@@ -597,7 +758,7 @@ export function PostEditorSheet({
                                 )}
                             </div>
                             <ImageGrid
-                                media={formData.media as MediaItem[]}
+                                media={memoizedMedia}
                                 columns={3}
                                 gap={2}
                                 showDeleteButtons={true}
@@ -607,7 +768,7 @@ export function PostEditorSheet({
                                 lightbox={true}
                                 onDrop={handleDropFiles}
                                 onUploadClick={handleUploadClick}
-                                isUploading={isMediaUploading || isUploading}
+                                isUploading={isUploadingState}
                             />
                         </div>
 
@@ -620,20 +781,35 @@ export function PostEditorSheet({
                                 <div className="flex-1">
                                     <ZenInput
                                         value={tagInput}
-                                        onChange={(e) => setTagInput(e.target.value)}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            const lastChar = value[value.length - 1];
+
+                                            // Si el último carácter es coma o punto, agregar el tag antes del separador
+                                            if (lastChar === ',' || lastChar === '.') {
+                                                const tagBeforeSeparator = value.slice(0, -1).trim();
+                                                if (tagBeforeSeparator) {
+                                                    handleAddTag(tagBeforeSeparator);
+                                                } else {
+                                                    setTagInput("");
+                                                }
+                                            } else {
+                                                setTagInput(value);
+                                            }
+                                        }}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                                 e.preventDefault();
                                                 handleAddTag();
                                             }
                                         }}
-                                        placeholder="Escribe y presiona Enter"
+                                        placeholder="Escribe y presiona Enter, coma o punto"
                                         label=""
                                     />
                                 </div>
                                 <ZenButton
                                     type="button"
-                                    onClick={handleAddTag}
+                                    onClick={() => handleAddTag()}
                                     variant="outline"
                                     size="md"
                                     className="h-10 px-3 shrink-0"
