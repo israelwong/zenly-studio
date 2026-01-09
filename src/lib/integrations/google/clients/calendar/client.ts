@@ -88,11 +88,37 @@ export async function getGoogleCalendarClient(studioSlug: string) {
     const { credentials } = await oauth2Client.refreshAccessToken();
     // Actualizar credenciales con el nuevo access_token si fue refrescado
     oauth2Client.setCredentials(credentials);
-  } catch (error) {
+  } catch (error: any) {
     console.error('[getGoogleCalendarClient] Error refrescando token:', error);
-    throw new Error(
-      'Error al refrescar access token. Por favor, reconecta tu cuenta de Google.'
-    );
+    
+    // Verificar si el error es invalid_grant (token revocado/expirado)
+    const isInvalidGrant = error?.message?.includes('invalid_grant') || 
+                          error?.code === 'invalid_grant' ||
+                          error?.response?.data?.error === 'invalid_grant';
+    
+    if (isInvalidGrant) {
+      // Verificar si realmente hay una cuenta conectada antes de pedir reconexión
+      const studioWithToken = await prisma.studios.findUnique({
+        where: { slug: studioSlug },
+        select: {
+          google_oauth_refresh_token: true,
+          google_oauth_email: true,
+        },
+      });
+      
+      // Si no hay refresh token guardado, no hay cuenta conectada
+      if (!studioWithToken?.google_oauth_refresh_token) {
+        throw new Error('No hay cuenta de Google Calendar conectada');
+      }
+      
+      // Si hay refresh token pero falla, necesita reconectar
+      throw new Error(
+        'Error al refrescar access token. Por favor, reconecta tu cuenta de Google Calendar.'
+      );
+    }
+    
+    // Para otros errores, relanzar el error original
+    throw error;
   }
 
   // Crear cliente de Calendar

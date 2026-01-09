@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { User, Search, Plus } from 'lucide-react';
+import { User, Search, Plus, Users as UsersIcon } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenInput, ZenBadge } from '@/components/ui/zen';
 import { getContacts } from '@/lib/actions/studio/commercial/contacts';
 import { ContactModal } from '@/components/shared/contacts/ContactModal';
 import { Contact } from '@/lib/actions/schemas/contacts-schemas';
 import { toast } from 'sonner';
+import { GoogleBundleModal } from '@/components/shared/integrations/GoogleBundleModal';
+import { obtenerEstadoConexion } from '@/lib/integrations/google';
 
 export default function ClientesPage() {
   const params = useParams();
@@ -23,10 +25,42 @@ export default function ClientesPage() {
   const [statusFilter] = useState<'cliente'>('cliente');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [isGoogleContactsConnected, setIsGoogleContactsConnected] = useState(false);
+  const [googleContactsEmail, setGoogleContactsEmail] = useState<string | null>(null);
+  const [showGoogleBundleModal, setShowGoogleBundleModal] = useState(false);
+  const [checkingGoogleStatus, setCheckingGoogleStatus] = useState(true);
+
+  const verificarEstadoGoogle = useCallback(async () => {
+    try {
+      setCheckingGoogleStatus(true);
+      const status = await obtenerEstadoConexion(studioSlug);
+      const hasContactsScope = status.scopes?.some((scope) => scope.includes('contacts')) || false;
+      
+      setIsGoogleContactsConnected(hasContactsScope && !!status.email);
+      setGoogleContactsEmail(status.email || null);
+    } catch (error) {
+      console.error('Error verificando estado de Google:', error);
+      setIsGoogleContactsConnected(false);
+      setGoogleContactsEmail(null);
+    } finally {
+      setCheckingGoogleStatus(false);
+    }
+  }, [studioSlug]);
 
   useEffect(() => {
     document.title = 'Zenly Studio - Clientes';
-  }, []);
+    verificarEstadoGoogle();
+
+    // Escuchar cambios en la conexión de Google Contacts
+    const handleConnectionChange = () => {
+      verificarEstadoGoogle();
+    };
+    window.addEventListener('google-contacts-connection-changed', handleConnectionChange);
+
+    return () => {
+      window.removeEventListener('google-contacts-connection-changed', handleConnectionChange);
+    };
+  }, [verificarEstadoGoogle]);
 
   const loadContacts = useCallback(async () => {
     try {
@@ -110,24 +144,73 @@ export default function ClientesPage() {
         </ZenCardHeader>
 
         <ZenCardContent className="p-6 flex-1 min-h-0 overflow-hidden">
-          {/* Filtros */}
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
-              <ZenInput
-                placeholder="Buscar por nombre, teléfono o email..."
-                value={search}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-10"
-              />
+          {/* Barra de herramientas */}
+          <div className="mb-6 flex items-center gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                <ZenInput
+                  placeholder="Buscar por nombre, teléfono o email..."
+                  value={search}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
+            <div className="text-sm text-zinc-400 shrink-0">
+              {loading ? (
+                <span className="text-zinc-500">Cargando...</span>
+              ) : (
+                <span>
+                  {contacts.length} {contacts.length === 1 ? 'cliente' : 'clientes'}
+                </span>
+              )}
+            </div>
+            <div className="h-5 w-px bg-zinc-700 shrink-0" />
+            {!checkingGoogleStatus && (
+              isGoogleContactsConnected ? (
+                <ZenBadge variant="success" size="sm" className="gap-1 shrink-0">
+                  <UsersIcon className="h-3 w-3" />
+                  Google Contacts
+                </ZenBadge>
+              ) : (
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowGoogleBundleModal(true)}
+                  className="h-7 px-2 text-xs gap-1 shrink-0"
+                >
+                  <UsersIcon className="h-3 w-3" />
+                  Conectar Google
+                </ZenButton>
+              )
+            )}
           </div>
 
           {/* Lista de contactos */}
           {loading ? (
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-20 bg-zinc-800/50 rounded-lg animate-pulse" />
+                <div
+                  key={i}
+                  className="flex items-center gap-4 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800"
+                >
+                  {/* Avatar skeleton */}
+                  <div className="h-12 w-12 rounded-full bg-zinc-800 animate-pulse shrink-0" />
+                  {/* Contenido skeleton */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+                      <div className="h-5 w-16 bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />
+                      <div className="h-3 w-32 bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                  </div>
+                  {/* Botón skeleton */}
+                  <div className="h-7 w-16 bg-zinc-800 rounded animate-pulse shrink-0" />
+                </div>
               ))}
             </div>
           ) : contacts.length === 0 ? (
@@ -240,6 +323,17 @@ export default function ClientesPage() {
         contactId={editingContactId || undefined}
         studioSlug={studioSlug}
         onSuccess={handleModalSuccess}
+      />
+
+      {/* Modal de integración Google */}
+      <GoogleBundleModal
+        isOpen={showGoogleBundleModal}
+        onClose={() => {
+          setShowGoogleBundleModal(false);
+          verificarEstadoGoogle();
+        }}
+        studioSlug={studioSlug}
+        context="contacts"
       />
     </div>
   );

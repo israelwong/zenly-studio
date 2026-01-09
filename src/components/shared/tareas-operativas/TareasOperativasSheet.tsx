@@ -81,28 +81,47 @@ export function TareasOperativasSheet({
 
   const loadGoogleCalendarInfo = useCallback(async () => {
     try {
-      const enabled = await tieneGoogleCalendarHabilitado(studioSlug);
-      setHasCalendarEnabled(enabled);
-
-      // Obtener información de la cuenta conectada
+      // Primero verificar estado de conexión real
       const connectionStatus = await obtenerEstadoConexion(studioSlug);
+      
+      // Verificar si realmente está conectado Y tiene scope de Calendar
+      const hasCalendarScope = connectionStatus.scopes?.some(
+        (scope) => scope.includes('calendar') || scope.includes('calendar.events')
+      ) || false;
+      
+      const isReallyConnected = connectionStatus.success && 
+                                connectionStatus.isConnected && 
+                                hasCalendarScope;
+      
+      setHasCalendarEnabled(isReallyConnected);
+      
       if (connectionStatus.success && connectionStatus.email) {
         setGoogleEmail(connectionStatus.email);
         setGoogleName(connectionStatus.name || null);
       }
 
-      if (enabled) {
+      // Solo intentar obtener calendario si realmente está conectado
+      if (isReallyConnected) {
         try {
           const calendarId = await obtenerOCrearCalendarioSecundario(studioSlug);
-          // URL para abrir el calendario en Google Calendar
-          setGoogleCalendarUrl(`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(calendarId)}`);
+          // URL para abrir el calendario en Google Calendar (solo si hay calendario)
+          if (calendarId) {
+            setGoogleCalendarUrl(`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(calendarId)}`);
+          }
         } catch (error) {
+          // Si falla al obtener calendario, puede ser error de token inválido
+          // No mostrar error si no hay cuenta realmente conectada
           console.error('Error obteniendo calendario:', error);
+          // Si el error indica que necesita reconectar, actualizar estado
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes('reconecta') || errorMessage.includes('invalid_grant')) {
+            setHasCalendarEnabled(false);
+          }
         }
       }
     } catch (error) {
       console.error('Error verificando Google Calendar:', error);
-      // Si hay error, asumir que no está conectado (pero ya verificamos)
+      // Si hay error, asumir que no está conectado
       setHasCalendarEnabled(false);
     }
   }, [studioSlug]);

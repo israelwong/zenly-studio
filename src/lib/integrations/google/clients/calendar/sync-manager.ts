@@ -160,6 +160,11 @@ export async function sincronizarTareaConGoogle(
     const timezone = await obtenerTimezoneEstudio(studioSlug, userTimezone);
     const calendarId = await obtenerOCrearCalendarioSecundario(studioSlug);
 
+    // Si no hay calendario secundario (no hay cuenta conectada), no sincronizar
+    if (!calendarId) {
+      throw new Error('No hay cuenta de Google Calendar conectada');
+    }
+
     // Obtener nombre del item (más descriptivo que el nombre de la tarea)
     const itemName = task.cotizacion_item?.name || 
                      task.cotizacion_item?.name_snapshot || 

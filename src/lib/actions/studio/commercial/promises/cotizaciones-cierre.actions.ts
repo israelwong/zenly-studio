@@ -1134,6 +1134,12 @@ export async function autorizarYCrearEvento(
         promise: {
           include: {
             contact: true,
+            event_type: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
@@ -1478,13 +1484,26 @@ export async function autorizarYCrearEvento(
         });
 
         if (!agendaExistente) {
+          // Construir concepto: "Nombre Evento (Tipo Evento)" o solo "Nombre Evento"
+          const eventTypeName = cotizacion.promise.event_type?.name;
+          const eventName = cotizacion.promise.event_name;
+          let concept = 'Evento';
+          
+          if (eventName && eventTypeName) {
+            concept = `${eventName} (${eventTypeName})`;
+          } else if (eventName) {
+            concept = eventName;
+          } else if (eventTypeName) {
+            concept = eventTypeName;
+          }
+          
           await tx.studio_agenda.create({
             data: {
               studio_id: studio.id,
               evento_id: evento.id,
               promise_id: promiseId,
               date: cotizacion.promise.event_date,
-              concept: cotizacion.promise.event_name || 'Evento',
+              concept: concept,
               address: cotizacion.promise.event_location || cotizacion.promise.contact?.address || null,
               contexto: 'evento',
               status: 'pendiente',

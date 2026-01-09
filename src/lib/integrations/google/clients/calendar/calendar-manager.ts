@@ -14,18 +14,24 @@ import { obtenerTimezoneEstudio } from './timezone';
  */
 export async function obtenerOCrearCalendarioSecundario(
   studioSlug: string
-): Promise<string> {
+): Promise<string | null> {
   // Obtener studio y su google_calendar_secondary_id
   const studio = await prisma.studios.findUnique({
     where: { slug: studioSlug },
     select: {
       id: true,
       google_calendar_secondary_id: true,
+      google_oauth_refresh_token: true,
     },
   });
 
   if (!studio) {
     throw new Error('Studio no encontrado');
+  }
+
+  // Si no hay cuenta de Google conectada, retornar null silenciosamente
+  if (!studio.google_oauth_refresh_token) {
+    return null;
   }
 
   // Si ya existe ID guardado, verificar que sigue existiendo en Google
@@ -60,6 +66,19 @@ export async function obtenerOCrearCalendarioSecundario(
         );
         return studio.google_calendar_secondary_id;
       } else {
+        // Verificar si es error de token inválido
+        const isTokenError = errorCode === 401 || 
+                            errorMessage?.includes('invalid_grant') ||
+                            errorMessage?.includes('refresh token') ||
+                            errorMessage?.includes('Error al refrescar access token');
+        
+        if (isTokenError) {
+          // Si hay token pero falla al refrescar, necesita reconectar
+          throw new Error(
+            'Error al verificar calendario secundario. Por favor, reconecta tu cuenta de Google Calendar.'
+          );
+        }
+        
         // Otro tipo de error, relanzar
         console.error(
           '[Google Calendar] Error verificando calendario secundario:',

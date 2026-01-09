@@ -794,15 +794,48 @@ export async function crearAgendamiento(
             }
         }
 
-        // Validar que evento_id existe si se proporciona
+        // Validar que evento_id existe si se proporciona y obtener datos del evento para mejorar concepto
+        let eventoData: { event_type_name: string | null; event_name: string | null } | null = null;
         if (validatedData.evento_id) {
             const evento = await prisma.studio_events.findUnique({
                 where: { id: validatedData.evento_id },
-                select: { studio_id: true },
+                select: { 
+                    studio_id: true,
+                    event_type: {
+                        select: {
+                            name: true,
+                        },
+                    },
+                    promise: {
+                        select: {
+                            name: true,
+                        },
+                    },
+                },
             });
 
             if (!evento || evento.studio_id !== studio.id) {
                 return { success: false, error: 'Evento no encontrado o no pertenece al studio' };
+            }
+
+            eventoData = {
+                event_type_name: evento.event_type?.name || null,
+                event_name: evento.promise?.name || null,
+            };
+        }
+
+        // Mejorar concepto si no se proporciona y hay evento
+        let concept = validatedData.concept;
+        if (!concept && validatedData.evento_id && eventoData) {
+            const eventTypeName = eventoData.event_type_name;
+            const eventName = eventoData.event_name;
+            
+            if (eventName && eventTypeName) {
+                concept = `${eventName} (${eventTypeName})`;
+            } else if (eventName) {
+                concept = eventName;
+            } else if (eventTypeName) {
+                concept = eventTypeName;
             }
         }
 
@@ -815,7 +848,7 @@ export async function crearAgendamiento(
                 date: validatedData.date,
                 time: validatedData.time || null,
                 address: validatedData.address || null,
-                concept: validatedData.concept || null,
+                concept: concept || null,
                 description: validatedData.description || null,
                 link_meeting_url: validatedData.link_meeting_url || null,
                 type_scheduling: validatedData.type_scheduling || null,
