@@ -108,3 +108,50 @@ export const autorizarRevisionCotizacionSchema = z.object({
 
 export type AutorizarRevisionCotizacionData = z.infer<typeof autorizarRevisionCotizacionSchema>;
 
+// ============================================================================
+// Schemas para Negociación de Cotizaciones
+// ============================================================================
+
+// Schema para condición comercial temporal (solo para negociación)
+export const condicionComercialTemporalSchema = z.object({
+  name: z.string().min(1, 'El nombre es requerido'),
+  description: z.string().optional(),
+  discount_percentage: z.number().min(0).max(100).optional().nullable(),
+  advance_percentage: z.number().min(0).max(100).optional().nullable(),
+  advance_type: z.enum(['percentage', 'amount']).optional().nullable(),
+  advance_amount: z.number().min(0).optional().nullable(),
+  metodo_pago_id: z.string().cuid().optional().nullable(),
+});
+
+export type CondicionComercialTemporal = z.infer<typeof condicionComercialTemporalSchema>;
+
+// Schema para crear versión negociada
+export const crearVersionNegociadaSchema = z.object({
+  studio_slug: z.string().min(1, 'Studio slug requerido'),
+  cotizacion_original_id: z.string().cuid('ID de cotización original inválido'),
+  nombre: z.string().min(1, 'El nombre es requerido'),
+  descripcion: z.string().optional(),
+  precio_personalizado: z.number().min(0).optional().nullable(),
+  descuento_adicional: z.number().min(0).optional().nullable(),
+  condicion_comercial_id: z.string().cuid().optional().nullable(),
+  condicion_comercial_temporal: condicionComercialTemporalSchema.optional().nullable(),
+  items_cortesia: z.array(z.string().cuid()).default([]),
+  notas: z.string().optional(),
+});
+
+export type CrearVersionNegociadaData = z.infer<typeof crearVersionNegociadaSchema>;
+
+// Schema para aplicar cambios de negociación a cotización existente
+export const aplicarCambiosNegociacionSchema = z.object({
+  studio_slug: z.string().min(1, 'Studio slug requerido'),
+  cotizacion_id: z.string().cuid('ID de cotización inválido'),
+  precio_personalizado: z.number().min(0).optional().nullable(),
+  descuento_adicional: z.number().min(0).optional().nullable(),
+  condicion_comercial_id: z.string().cuid().optional().nullable(),
+  condicion_comercial_temporal: condicionComercialTemporalSchema.optional().nullable(),
+  items_cortesia: z.array(z.string().cuid()).default([]),
+  notas: z.string().optional(),
+});
+
+export type AplicarCambiosNegociacionData = z.infer<typeof aplicarCambiosNegociacionSchema>;
+

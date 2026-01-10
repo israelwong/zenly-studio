@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square } from 'lucide-react';
+import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ZenBadge,
@@ -683,21 +683,34 @@ export function PromiseQuotesPanelCard({
                         Editar nombre
                       </ZenDropdownMenuItem>
                       {promiseId && (
-                        <ZenDropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const params = new URLSearchParams();
-                            if (contactId) {
-                              params.set('contactId', contactId);
-                            }
-                            const queryString = params.toString();
-                            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
-                          }}
-                          disabled={loading || isDuplicating}
-                        >
-                          <Edit2 className="h-4 w-4 mr-2" />
-                          Editar cotización
-                        </ZenDropdownMenuItem>
+                        <>
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const params = new URLSearchParams();
+                              if (contactId) {
+                                params.set('contactId', contactId);
+                              }
+                              const queryString = params.toString();
+                              router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+                            }}
+                            disabled={loading || isDuplicating}
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Editar cotización
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
+                            }}
+                            disabled={loading || isDuplicating}
+                            className="text-emerald-400 focus:text-emerald-300"
+                          >
+                            <Handshake className="h-4 w-4 mr-2" />
+                            Negociar
+                          </ZenDropdownMenuItem>
+                        </>
                       )}
                       {!isRevision && (
                         <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
