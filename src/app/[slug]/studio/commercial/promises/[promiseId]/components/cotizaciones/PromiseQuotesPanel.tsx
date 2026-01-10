@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Package, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, Package, Sparkles, Loader2, CheckSquare, Square, Archive, ArchiveRestore, Trash2, Eye, EyeOff, X, MoreVertical, ChevronDown } from 'lucide-react';
 import {
   ZenButton,
   ZenCard,
@@ -34,6 +34,10 @@ import { obtenerPaquetes } from '@/lib/actions/studio/paquetes/paquetes.actions'
 import {
   getCotizacionesByPromiseId,
   reorderCotizaciones,
+  archiveCotizacion,
+  unarchiveCotizacion,
+  deleteCotizacion,
+  toggleCotizacionVisibility,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { PromiseQuotesPanelCard } from './PromiseQuotesPanelCard';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
@@ -79,6 +83,12 @@ export function PromiseQuotesPanel({
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [isReordering, setIsReordering] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  // Ref para rastrear cambios locales y evitar recargas innecesarias desde realtime
+  const localChangesRef = useRef<Set<string>>(new Set());
+  // Estados para modo selección múltiple
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -90,6 +100,13 @@ export function PromiseQuotesPanel({
   useEffect(() => {
     setIsHydrated(true);
   }, []);
+
+  // Limpiar selección cuando se sale del modo selección
+  useEffect(() => {
+    if (!selectionMode) {
+      setSelectedIds(new Set());
+    }
+  }, [selectionMode]);
 
   useEffect(() => {
     const loadPackages = async () => {
@@ -174,24 +191,43 @@ export function PromiseQuotesPanel({
       loadCotizaciones();
     },
     onCotizacionUpdated: (cotizacionId: string, payload?: unknown) => {
+      // Si este cambio fue iniciado localmente, ignorar para evitar recarga innecesaria
+      if (localChangesRef.current.has(cotizacionId)) {
+        // Limpiar después de un breve delay para permitir que el cambio se propague
+        setTimeout(() => {
+          localChangesRef.current.delete(cotizacionId);
+        }, 1000);
+        return;
+      }
+
       // Verificar si hay cambios importantes (estado, nombre, etc.)
       const p = payload as any;
       const changeInfo = p?.changeInfo;
 
-      // Recargar SIEMPRE que cambie el estado (importante para detectar cuando prospecto autoriza)
+      // Recargar solo si cambió el estado Y no fue un cambio local
+      // (importante para detectar cuando prospecto autoriza desde otra sesión)
       if (changeInfo?.statusChanged) {
-        loadCotizaciones();
+        const newStatus = p?.newRecord?.status || p?.new?.status;
+        // Solo recargar si cambió a estados críticos que requieren sincronización completa
+        const estadosCriticos = ['aprobada', 'autorizada', 'approved', 'en_cierre'];
+        if (estadosCriticos.includes(newStatus)) {
+          loadCotizaciones();
+        }
         return;
       }
 
-      // También recargar si hay otros campos importantes cambiados
+      // También recargar si hay otros campos importantes cambiados (solo si no es cambio local)
       if (changeInfo?.camposCambiados?.length) {
         // Verificar que NO sea solo updated_at
         const camposImportantes = changeInfo.camposCambiados.filter(
           (campo: string) => campo !== 'updated_at'
         );
         if (camposImportantes.length > 0) {
-          loadCotizaciones();
+          // Solo recargar si no es un cambio de nombre (que ya se actualiza localmente)
+          const esCambioNombre = camposImportantes.length === 1 && camposImportantes[0] === 'name';
+          if (!esCambioNombre) {
+            loadCotizaciones();
+          }
         }
       }
     },
@@ -383,6 +419,205 @@ export function PromiseQuotesPanel({
 
   const cotizacionesNoOrdenables = [...cotizacionesArchivadas, ...cotizacionesCanceladas];
 
+  // Funciones para modo selección
+  const handleToggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    const allIds = new Set(cotizacionesParaListado.map((c) => c.id));
+    setSelectedIds(allIds);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedIds.size === 0) return;
+
+    setIsBulkActionLoading(true);
+    const idsArray = Array.from(selectedIds);
+    
+    try {
+      // Marcar como cambios locales
+      idsArray.forEach((id) => localChangesRef.current.add(id));
+
+      // Actualización optimista
+      setCotizaciones((prev) =>
+        prev.map((c) =>
+          selectedIds.has(c.id) ? { ...c, status: 'archivada' as const, archived: true } : c
+        )
+      );
+
+      // Ejecutar acciones en paralelo
+      const results = await Promise.allSettled(
+        idsArray.map((id) => archiveCotizacion(id, studioSlug))
+      );
+
+      const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
+      
+      if (failed.length > 0) {
+        toast.error(`${failed.length} de ${idsArray.length} cotizaciones no se pudieron archivar`);
+        // Revertir cambios optimistas de las que fallaron
+        loadCotizaciones();
+      } else {
+        toast.success(`${idsArray.length} cotización${idsArray.length > 1 ? 'es' : ''} archivada${idsArray.length > 1 ? 's' : ''} exitosamente`);
+      }
+
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    } catch (error) {
+      console.error('Error en bulk archive:', error);
+      toast.error('Error al archivar cotizaciones');
+      loadCotizaciones();
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkUnarchive = async () => {
+    if (selectedIds.size === 0) return;
+
+    setIsBulkActionLoading(true);
+    const idsArray = Array.from(selectedIds);
+    
+    try {
+      // Marcar como cambios locales
+      idsArray.forEach((id) => localChangesRef.current.add(id));
+
+      // Actualización optimista
+      setCotizaciones((prev) =>
+        prev.map((c) =>
+          selectedIds.has(c.id) ? { ...c, status: 'pendiente' as const, archived: false } : c
+        )
+      );
+
+      // Ejecutar acciones en paralelo
+      const results = await Promise.allSettled(
+        idsArray.map((id) => unarchiveCotizacion(id, studioSlug))
+      );
+
+      const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
+      
+      if (failed.length > 0) {
+        toast.error(`${failed.length} de ${idsArray.length} cotizaciones no se pudieron desarchivar`);
+        loadCotizaciones();
+      } else {
+        toast.success(`${idsArray.length} cotización${idsArray.length > 1 ? 'es' : ''} desarchivada${idsArray.length > 1 ? 's' : ''} exitosamente`);
+      }
+
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    } catch (error) {
+      console.error('Error en bulk unarchive:', error);
+      toast.error('Error al desarchivar cotizaciones');
+      loadCotizaciones();
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    // Confirmación
+    const confirmed = window.confirm(
+      `¿Estás seguro de eliminar ${selectedIds.size} cotización${selectedIds.size > 1 ? 'es' : ''}? Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) return;
+
+    setIsBulkActionLoading(true);
+    const idsArray = Array.from(selectedIds);
+    
+    try {
+      // Marcar como cambios locales
+      idsArray.forEach((id) => localChangesRef.current.add(id));
+
+      // Actualización optimista
+      setCotizaciones((prev) => prev.filter((c) => !selectedIds.has(c.id)));
+
+      // Ejecutar acciones en paralelo
+      const results = await Promise.allSettled(
+        idsArray.map((id) => deleteCotizacion(id, studioSlug))
+      );
+
+      const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
+      
+      if (failed.length > 0) {
+        toast.error(`${failed.length} de ${idsArray.length} cotizaciones no se pudieron eliminar`);
+        loadCotizaciones();
+      } else {
+        toast.success(`${idsArray.length} cotización${idsArray.length > 1 ? 'es' : ''} eliminada${idsArray.length > 1 ? 's' : ''} exitosamente`);
+      }
+
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    } catch (error) {
+      console.error('Error en bulk delete:', error);
+      toast.error('Error al eliminar cotizaciones');
+      loadCotizaciones();
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkToggleVisibility = async (visible: boolean) => {
+    if (selectedIds.size === 0) return;
+
+    setIsBulkActionLoading(true);
+    const idsArray = Array.from(selectedIds);
+    
+    try {
+      // Marcar como cambios locales
+      idsArray.forEach((id) => localChangesRef.current.add(id));
+
+      // Actualización optimista
+      setCotizaciones((prev) =>
+        prev.map((c) => (selectedIds.has(c.id) ? { ...c, visible_to_client: visible } : c))
+      );
+
+      // Ejecutar acciones en paralelo
+      const results = await Promise.allSettled(
+        idsArray.map((id) => toggleCotizacionVisibility(id, studioSlug))
+      );
+
+      const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
+      
+      if (failed.length > 0) {
+        toast.error(`Error al cambiar visibilidad de ${failed.length} cotización${failed.length > 1 ? 'es' : ''}`);
+        loadCotizaciones();
+      } else {
+        toast.success(
+          `${idsArray.length} cotización${idsArray.length > 1 ? 'es' : ''} ${visible ? 'visible' : 'oculta'}${idsArray.length > 1 ? 's' : ''} exitosamente`
+        );
+      }
+
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    } catch (error) {
+      console.error('Error en bulk toggle visibility:', error);
+      toast.error('Error al cambiar visibilidad');
+      loadCotizaciones();
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  };
+
+  const handleCancelSelection = () => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  };
+
   // Función helper para renderizar una tarjeta de cotización
   const renderCotizacionCard = (cotizacion: CotizacionListItem) => (
     <PromiseQuotesPanelCard
@@ -393,6 +628,9 @@ export function PromiseQuotesPanel({
       contactId={contactId}
       isDuplicating={duplicatingId === cotizacion.id}
       hasApprovedQuote={hasApprovedQuote}
+      selectionMode={selectionMode}
+      isSelected={selectedIds.has(cotizacion.id)}
+      onToggleSelect={() => handleToggleSelection(cotizacion.id)}
       onDuplicateStart={(id) => setDuplicatingId(id)}
       onDuplicateComplete={(newCotizacion) => {
         setDuplicatingId(null);
@@ -402,35 +640,46 @@ export function PromiseQuotesPanel({
         setDuplicatingId(null);
       }}
       onDelete={(id) => {
+        // Marcar como cambio local para evitar recarga desde realtime
+        localChangesRef.current.add(id);
         setCotizaciones((prev) => prev.filter((c) => c.id !== id));
       }}
       onArchive={(id) => {
+        // Marcar como cambio local para evitar recarga desde realtime
+        localChangesRef.current.add(id);
         // Actualización local: cambiar status a archivada
         setCotizaciones((prev) =>
           prev.map((c) => (c.id === id ? { ...c, status: 'archivada' as const, archived: true } : c))
         );
       }}
       onUpdate={(cotizacionId) => {
+        // Marcar como cambio local para evitar recarga desde realtime
+        localChangesRef.current.add(cotizacionId);
         // Actualización optimista: marcar como cancelada
         setCotizaciones((prev) =>
           prev.map((c) => (c.id === cotizacionId ? { ...c, status: 'cancelada' as const } : c))
         );
-        // Refrescar desde servidor para sincronizar
-        router.refresh();
+        // NO refrescar - la actualización local es suficiente y realtime sincronizará si es necesario
       }}
       onVisibilityToggle={(cotizacionId, visible) => {
+        // Marcar como cambio local para evitar recarga desde realtime
+        localChangesRef.current.add(cotizacionId);
         // Actualización optimista: cambiar solo visible_to_client
         setCotizaciones((prev) =>
           prev.map((c) => (c.id === cotizacionId ? { ...c, visible_to_client: visible } : c))
         );
       }}
       onUnarchive={(id) => {
+        // Marcar como cambio local para evitar recarga desde realtime
+        localChangesRef.current.add(id);
         // Actualización local: cambiar status a pendiente
         setCotizaciones((prev) =>
           prev.map((c) => (c.id === id ? { ...c, status: 'pendiente' as const, archived: false } : c))
         );
       }}
       onNameUpdate={(id, newName) => {
+        // Marcar como cambio local para evitar recarga desde realtime
+        localChangesRef.current.add(id);
         setCotizaciones((prev) =>
           prev.map((c) => (c.id === id ? { ...c, name: newName } : c))
         );
@@ -450,59 +699,206 @@ export function PromiseQuotesPanel({
       <ZenCard className="min-h-[500px] flex flex-col">
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
           <div className="flex items-center justify-between">
-            <ZenCardTitle className="text-sm font-medium flex items-center pt-1">Cotizaciones</ZenCardTitle>
-            {!hasApprovedQuote && (
-              <ZenDropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-                <ZenDropdownMenuTrigger asChild>
+            <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
+              Cotizaciones
+              {selectionMode && selectedIds.size > 0 && (
+                <span className="ml-2 text-xs text-zinc-400 font-normal">
+                  ({selectedIds.size} seleccionada{selectedIds.size > 1 ? 's' : ''})
+                </span>
+              )}
+            </ZenCardTitle>
+            <div className="flex items-center gap-1">
+              {!selectionMode ? (
+                <>
+                  {cotizacionesParaListado.length > 1 && (
+                    <ZenButton
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => setSelectionMode(true)}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5 mr-1" />
+                      Seleccionar
+                    </ZenButton>
+                  )}
+                  {!hasApprovedQuote && (
+                    <ZenDropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+                      <ZenDropdownMenuTrigger asChild>
+                        <ZenButton
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          disabled={isMenuDisabled}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </ZenButton>
+                      </ZenDropdownMenuTrigger>
+                      <ZenDropdownMenuContent align="end" className="min-w-[200px]">
+                        {loadingPackages ? (
+                          <div className="px-2 py-3 flex items-center gap-2 text-sm text-zinc-400">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Cargando paquetes...</span>
+                          </div>
+                        ) : packages.length > 0 ? (
+                          <>
+                            {packages.map((pkg) => (
+                              <ZenDropdownMenuItem
+                                key={pkg.id}
+                                onClick={() => handleCreateFromPackage(pkg.id)}
+                              >
+                                <Package className="h-4 w-4 mr-2" />
+                                <span className="flex-1">{pkg.name}</span>
+                                {pkg.precio !== null && (
+                                  <span className="text-xs text-zinc-400 ml-2">
+                                    ${pkg.precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                  </span>
+                                )}
+                              </ZenDropdownMenuItem>
+                            ))}
+                            <ZenDropdownMenuSeparator />
+                            <ZenDropdownMenuItem onClick={handleCreateCustom}>
+                              <Sparkles className="h-4 w-4 mr-2" />
+                              Personalizada
+                            </ZenDropdownMenuItem>
+                          </>
+                        ) : (
+                          <ZenDropdownMenuItem onClick={handleCreateCustom}>
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            Personalizada
+                          </ZenDropdownMenuItem>
+                        )}
+                      </ZenDropdownMenuContent>
+                    </ZenDropdownMenu>
+                  )}
+                </>
+              ) : (
+                <>
                   <ZenButton
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0"
-                    disabled={isMenuDisabled}
+                    className="h-6 px-2 text-xs shrink-0"
+                    onClick={selectedIds.size === cotizacionesParaListado.length ? handleDeselectAll : handleSelectAll}
+                    title={selectedIds.size === cotizacionesParaListado.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    {selectedIds.size === cotizacionesParaListado.length ? (
+                      <Square className="h-3.5 w-3.5" />
+                    ) : (
+                      <CheckSquare className="h-3.5 w-3.5" />
+                    )}
                   </ZenButton>
-                </ZenDropdownMenuTrigger>
-                <ZenDropdownMenuContent align="end" className="min-w-[200px]">
-                  {loadingPackages ? (
-                    <div className="px-2 py-3 flex items-center gap-2 text-sm text-zinc-400">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Cargando paquetes...</span>
-                    </div>
-                  ) : packages.length > 0 ? (
-                    <>
-                      {packages.map((pkg) => (
-                        <ZenDropdownMenuItem
-                          key={pkg.id}
-                          onClick={() => handleCreateFromPackage(pkg.id)}
-                        >
-                          <Package className="h-4 w-4 mr-2" />
-                          <span className="flex-1">{pkg.name}</span>
-                          {pkg.precio !== null && (
-                            <span className="text-xs text-zinc-400 ml-2">
-                              ${pkg.precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                            </span>
-                          )}
-                        </ZenDropdownMenuItem>
-                      ))}
-                      <ZenDropdownMenuSeparator />
-                      <ZenDropdownMenuItem onClick={handleCreateCustom}>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        Personalizada
-                      </ZenDropdownMenuItem>
-                    </>
-                  ) : (
-                    <ZenDropdownMenuItem onClick={handleCreateCustom}>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Personalizada
-                    </ZenDropdownMenuItem>
-                  )}
-                </ZenDropdownMenuContent>
-              </ZenDropdownMenu>
-            )}
+                  <ZenButton
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs shrink-0"
+                    onClick={handleCancelSelection}
+                    title="Cancelar selección"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </ZenButton>
+                </>
+              )}
+            </div>
           </div>
         </ZenCardHeader>
         <ZenCardContent className="p-4 flex flex-col">
+          {/* Barra de acciones para selección múltiple - Sticky dentro del panel */}
+          {selectionMode && selectedIds.size > 0 && (() => {
+            // Calcular estados de las cotizaciones seleccionadas
+            const selectedCotizaciones = cotizaciones.filter((c) => selectedIds.has(c.id));
+            const allArchived = selectedCotizaciones.every((c) => c.status === 'archivada');
+            const allVisible = selectedCotizaciones.every((c) => c.visible_to_client === true);
+            const allHidden = selectedCotizaciones.every((c) => c.visible_to_client === false);
+
+            return (
+              <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 px-4 pt-3 pb-3 bg-zinc-950/95 backdrop-blur-sm border-b border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-300 font-medium whitespace-nowrap">
+                      {selectedIds.size} seleccionada{selectedIds.size > 1 ? 's' : ''}
+                    </span>
+                    {isBulkActionLoading && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+                    )}
+                  </div>
+                  <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                      <ZenButton
+                        variant="default"
+                        size="sm"
+                        className="h-7 px-3 text-xs"
+                        disabled={isBulkActionLoading}
+                      >
+                        Acciones
+                        <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
+                      </ZenButton>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end" className="min-w-[180px]">
+                      {allArchived ? (
+                        <ZenDropdownMenuItem
+                          onClick={handleBulkUnarchive}
+                          disabled={isBulkActionLoading}
+                        >
+                          <ArchiveRestore className="h-4 w-4 mr-2" />
+                          Desarchivar
+                        </ZenDropdownMenuItem>
+                      ) : (
+                        <ZenDropdownMenuItem
+                          onClick={handleBulkArchive}
+                          disabled={isBulkActionLoading}
+                        >
+                          <Archive className="h-4 w-4 mr-2" />
+                          Archivar
+                        </ZenDropdownMenuItem>
+                      )}
+                      <ZenDropdownMenuItem
+                        onClick={handleBulkDelete}
+                        disabled={isBulkActionLoading}
+                        className="text-red-400 focus:text-red-300"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Eliminar
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuSeparator />
+                      {allHidden ? (
+                        <ZenDropdownMenuItem
+                          onClick={() => handleBulkToggleVisibility(true)}
+                          disabled={isBulkActionLoading}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Mostrar todas
+                        </ZenDropdownMenuItem>
+                      ) : allVisible ? (
+                        <ZenDropdownMenuItem
+                          onClick={() => handleBulkToggleVisibility(false)}
+                          disabled={isBulkActionLoading}
+                        >
+                          <EyeOff className="h-4 w-4 mr-2" />
+                          Ocultar todas
+                        </ZenDropdownMenuItem>
+                      ) : (
+                        <>
+                          <ZenDropdownMenuItem
+                            onClick={() => handleBulkToggleVisibility(true)}
+                            disabled={isBulkActionLoading}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Mostrar todas
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuItem
+                            onClick={() => handleBulkToggleVisibility(false)}
+                            disabled={isBulkActionLoading}
+                          >
+                            <EyeOff className="h-4 w-4 mr-2" />
+                            Ocultar todas
+                          </ZenDropdownMenuItem>
+                        </>
+                      )}
+                    </ZenDropdownMenuContent>
+                  </ZenDropdownMenu>
+                </div>
+              </div>
+            );
+          })()}
           <div
             className="relative overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-600 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500"
             style={{
@@ -571,22 +967,28 @@ export function PromiseQuotesPanel({
               </div>
             ) : (
               <>
-                {/* Pendientes (ordenables) */}
+                {/* Pendientes (ordenables solo si no está en modo selección) */}
                 {cotizacionesPendientes.length > 0 && (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext
-                      items={cotizacionesPendientes.map((c) => c.id)}
-                      strategy={verticalListSortingStrategy}
+                  selectionMode ? (
+                    <div className="space-y-2">
+                      {cotizacionesPendientes.map((cotizacion) => renderCotizacionCard(cotizacion))}
+                    </div>
+                  ) : (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
                     >
-                      <div className={`space-y-2 ${isReordering ? 'pointer-events-none opacity-50' : ''}`}>
-                        {cotizacionesPendientes.map((cotizacion) => renderCotizacionCard(cotizacion))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
+                      <SortableContext
+                        items={cotizacionesPendientes.map((c) => c.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className={`space-y-2 ${isReordering ? 'pointer-events-none opacity-50' : ''}`}>
+                          {cotizacionesPendientes.map((cotizacion) => renderCotizacionCard(cotizacion))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  )
                 )}
 
                 {/* Divisor sutil */}

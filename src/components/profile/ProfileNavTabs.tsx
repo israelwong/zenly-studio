@@ -29,13 +29,13 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
         { id: 'contacto', label: 'Contacto', icon: Phone },
     ];
 
-    // Agregar tab FAQ solo si hay FAQs activas o si el usuario es el dueño
-    if (hasActiveFAQs || isOwner) {
+    // Agregar tab FAQ si hay FAQs activas o si hay usuario autenticado
+    if (hasActiveFAQs || user) {
         baseTabs.push({ id: 'faq', label: 'FAQ', icon: HelpCircle });
     }
 
-    // Agregar tab "Archivados" solo si usuario autenticado
-    const tabs = user
+    // Agregar tab "Archivados" solo si el usuario es el owner (no solo autenticado)
+    const tabs = isOwner
         ? [...baseTabs, { id: 'archivados', label: 'Archivados', icon: Archive }]
         : baseTabs;
 

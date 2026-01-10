@@ -149,6 +149,10 @@ async function eliminarEventosEnLotes(
   } else {
     try {
       calendarId = await obtenerOCrearCalendarioSecundario(studioSlug);
+      // Si retorna null, no hay cuenta conectada, no hay nada que eliminar
+      if (!calendarId) {
+        console.warn('[Desconexión] No hay cuenta de Google Calendar conectada');
+      }
     } catch (error) {
       console.warn(
         '[Desconexión] No se pudo obtener calendario secundario, continuando sin eliminar tareas'

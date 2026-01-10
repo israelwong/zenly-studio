@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff } from 'lucide-react';
+import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ZenBadge,
@@ -53,6 +53,9 @@ interface PromiseQuotesPanelCardProps {
   onPasarACierre?: (id: string) => void;
   onCierreCancelado?: (id: string) => void;
   hasApprovedQuote?: boolean; // Indica si ya hay una cotización aprobada
+  selectionMode?: boolean; // Modo selección múltiple
+  isSelected?: boolean; // Si está seleccionada
+  onToggleSelect?: () => void; // Callback para toggle de selección
 }
 
 export function PromiseQuotesPanelCard({
@@ -73,6 +76,9 @@ export function PromiseQuotesPanelCard({
   onPasarACierre,
   onCierreCancelado,
   hasApprovedQuote = false,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: PromiseQuotesPanelCardProps) {
   const router = useRouter();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -195,6 +201,12 @@ export function PromiseQuotesPanelCard({
   };
 
   const handleClick = () => {
+    // En modo selección, toggle de selección en lugar de navegar
+    if (selectionMode && onToggleSelect) {
+      onToggleSelect();
+      return;
+    }
+
     // Si la cotización tiene evento_id asociado, redirigir al evento
     // Esto aplica para estados: aprobada/autorizada/approved, en_cierre, contract_signed
     const estadosConEvento = ['aprobada', 'autorizada', 'approved', 'en_cierre', 'contract_signed'];
@@ -514,8 +526,11 @@ export function PromiseQuotesPanelCard({
         style={style}
         className={`p-3 border rounded-lg transition-colors relative ${isArchivada
           ? 'bg-zinc-900/30 border-zinc-800/50 opacity-50 grayscale'
+          : selectionMode && isSelected
+          ? 'bg-emerald-950/40 border-emerald-800/30'
           : 'bg-zinc-800/50 border-zinc-700'
-          } ${isArchivada ? 'cursor-default' : 'cursor-pointer hover:bg-zinc-800'
+          } ${
+          isArchivada ? 'cursor-default' : selectionMode ? 'cursor-pointer hover:bg-zinc-800' : 'cursor-pointer hover:bg-zinc-800'
           }`}
         onClick={handleClick}
       >
@@ -528,14 +543,32 @@ export function PromiseQuotesPanelCard({
           </div>
         )}
         <div className="flex items-start justify-between gap-2">
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 -ml-1 -mt-1 text-zinc-500 hover:text-zinc-400 transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-4 w-4" />
-          </div>
+          {/* Checkbox de selección o grip vertical */}
+          {selectionMode ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect?.();
+              }}
+              className="p-1 -ml-1 -mt-1 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0"
+            >
+              {isSelected ? (
+                <CheckSquare className="h-4 w-4 text-emerald-400" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
+            </button>
+          ) : (
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing p-1 -ml-1 -mt-1 text-zinc-500 hover:text-zinc-400 transition-colors shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVertical className="h-4 w-4" />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <h4 className={`text-sm font-medium truncate mb-1 ${isArchivada ? 'text-zinc-500' : 'text-zinc-200'
               }`}>
@@ -601,25 +634,28 @@ export function PromiseQuotesPanelCard({
             </div>
           </div>
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {/* Icono de visibilidad */}
-            {!(isArchivada && hasApprovedQuote) && (
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-                onClick={handleToggleVisibility}
-                disabled={loading || isDuplicating}
-                title={cotizacion.visible_to_client ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
-              >
-                {cotizacion.visible_to_client ? (
-                  <Eye className="h-4 w-4 text-emerald-400" />
-                ) : (
-                  <EyeOff className="h-4 w-4 text-zinc-500" />
+            {/* Ocultar botones en modo selección */}
+            {!selectionMode && (
+              <>
+                {/* Icono de visibilidad */}
+                {!(isArchivada && hasApprovedQuote) && (
+                  <ZenButton
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={handleToggleVisibility}
+                    disabled={loading || isDuplicating}
+                    title={cotizacion.visible_to_client ? 'Ocultar del prospecto' : 'Mostrar al prospecto'}
+                  >
+                    {cotizacion.visible_to_client ? (
+                      <Eye className="h-4 w-4 text-emerald-400" />
+                    ) : (
+                      <EyeOff className="h-4 w-4 text-zinc-500" />
+                    )}
+                  </ZenButton>
                 )}
-              </ZenButton>
-            )}
-            {/* Ocultar menú si es archivada Y hay cotización en cierre */}
-            {!(isArchivada && hasApprovedQuote) && (
+                {/* Ocultar menú si es archivada Y hay cotización en cierre */}
+                {!(isArchivada && hasApprovedQuote) && (
               <ZenDropdownMenu>
                 <ZenDropdownMenuTrigger asChild>
                   <ZenButton
@@ -760,6 +796,8 @@ export function PromiseQuotesPanelCard({
                   ) : null}
                 </ZenDropdownMenuContent>
               </ZenDropdownMenu>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -106,6 +106,7 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
             items: [
                 { id: 'events', name: 'Eventos', href: `/business/events`, icon: FileText },
                 { id: 'scheduler', name: 'Cronograma', href: `/business/scheduler`, icon: Calendar },
+                { id: 'clientes', name: 'Clientes', href: `/business/clientes`, icon: User },
                 { id: 'personal', name: 'Personal', href: `/business/personel`, icon: Users },
                 { id: 'finanzas', name: 'Finanzas', href: `/business/finanzas`, icon: DollarSign },
             ],
