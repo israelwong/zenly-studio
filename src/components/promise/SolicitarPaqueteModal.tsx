@@ -180,7 +180,10 @@ export function SolicitarPaqueteModal({
           onClose();
         }
       }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent 
+          className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
+          overlayZIndex={120}
+        >
           <DialogHeader>
             <DialogTitle>Solicitar Paquete</DialogTitle>
             <DialogDescription>
@@ -228,7 +231,14 @@ export function SolicitarPaqueteModal({
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-zinc-500">Diferido</span>
+                        <span className="text-xs text-zinc-500">
+                          Diferido
+                          {precioCalculado.diferido > 0 && (
+                            <span className="text-[10px] text-zinc-600 ml-1">
+                              (a liquidar 2 días antes del evento)
+                            </span>
+                          )}
+                        </span>
                         <span className="text-sm font-medium text-zinc-300">
                           {formatPrice(precioCalculado.diferido)}
                         </span>

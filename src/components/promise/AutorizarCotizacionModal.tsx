@@ -16,7 +16,6 @@ import type { PublicCotizacion } from '@/types/public-promise';
 import { toast } from 'sonner';
 import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.actions';
 import { updatePublicPromiseData } from '@/lib/actions/public/promesas.actions';
-import { getTotalServicios } from '@/lib/utils/public-promise';
 import { usePromisePageContext } from './PromisePageContext';
 
 interface PrecioCalculado {
@@ -64,6 +63,15 @@ export function AutorizarCotizacionModal({
   onCloseDetailSheet,
 }: AutorizarCotizacionModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [formDataToSubmit, setFormDataToSubmit] = useState<{
+    contact_name: string;
+    contact_phone: string;
+    contact_email: string;
+    contact_address: string;
+    event_name: string;
+    event_location: string;
+  } | null>(null);
   const {
     onPreparing: onPreparingContext,
     onSuccess: onSuccessContext,
@@ -142,8 +150,25 @@ export function AutorizarCotizacionModal({
       // Los callbacks ya se ejecutaron cuando se abrió el overlay (step "validating")
       // No es necesario ejecutarlos nuevamente aquí
 
-      // Paso 4: Recopilando datos de cotización (~800ms)
+      // Paso 4: Recopilando datos de cotización y recargando estado (~800ms)
       setProgressStep('collecting');
+      // Recargar cotizaciones en paralelo (no bloquear el flujo)
+      (async () => {
+        try {
+          const { getPublicPromiseData } = await import('@/lib/actions/public/promesas.actions');
+          const reloadResult = await getPublicPromiseData(studioSlug, promiseId);
+          if (reloadResult.success && reloadResult.data?.cotizaciones) {
+            // Disparar evento personalizado para que PromisePageClient recargue
+            window.dispatchEvent(new CustomEvent('reloadCotizaciones', { 
+              detail: { cotizaciones: reloadResult.data.cotizaciones } 
+            }));
+          }
+        } catch (error) {
+          console.error('[AutorizarCotizacionModal] Error al recargar cotizaciones:', error);
+        }
+      })();
+      
+      // Esperar 800ms antes de continuar
       await new Promise(resolve => setTimeout(resolve, 800));
 
       // Paso 5: Generando contrato (condicional, ~1200ms)
@@ -161,6 +186,9 @@ export function AutorizarCotizacionModal({
       await new Promise(resolve => setTimeout(resolve, 800));
 
       setIsSubmitting(false);
+      // Esperar un poco más para asegurar que las cotizaciones se hayan recargado
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Cerrar el overlay y el modal después de que termine el proceso completo
       setShowProgressOverlay(false);
       // Cerrar el modal después de un pequeño delay para asegurar que el overlay se haya cerrado completamente
@@ -175,6 +203,25 @@ export function AutorizarCotizacionModal({
     }
   };
 
+
+  const handleConfirmClick = (data: {
+    contact_name: string;
+    contact_phone: string;
+    contact_email: string;
+    contact_address: string;
+    event_name: string;
+    event_location: string;
+  }) => {
+    setFormDataToSubmit(data);
+    setShowConfirmModal(true);
+  };
+
+  const handleContinue = () => {
+    if (formDataToSubmit) {
+      setShowConfirmModal(false);
+      handleSubmitForm(formDataToSubmit);
+    }
+  };
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -202,7 +249,10 @@ export function AutorizarCotizacionModal({
           onClose();
         }
       }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent 
+          className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
+          overlayZIndex={120}
+        >
           <DialogHeader>
             <DialogTitle>Solicitar Contratación</DialogTitle>
             <DialogDescription>
@@ -231,7 +281,7 @@ export function AutorizarCotizacionModal({
                       </span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
+                  <div className="flex justify-between items-center pt-2">
                     <span className="text-sm font-semibold text-white">Total a pagar</span>
                     <span className="text-2xl font-bold text-emerald-400">
                       {formatPrice(precioCalculado.precioConDescuento)}
@@ -250,28 +300,25 @@ export function AutorizarCotizacionModal({
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-zinc-500">Diferido</span>
+                        <span className="text-xs text-zinc-500">
+                          Diferido
+                          {precioCalculado.diferido > 0 && (
+                            <span className="text-[10px] text-zinc-600 ml-1">
+                              (a liquidar 2 días antes del evento)
+                            </span>
+                          )}
+                        </span>
                         <span className="text-sm font-medium text-zinc-300">
                           {formatPrice(precioCalculado.diferido)}
                         </span>
                       </div>
                     </div>
                   )}
-                  <p className="text-xs text-zinc-500 mt-2 pt-2 border-t border-zinc-700">
-                    Incluye {getTotalServicios(cotizacion.servicios)} servicio
-                    {getTotalServicios(cotizacion.servicios) !== 1 ? 's' : ''}
-                  </p>
                 </div>
               ) : (
-                <>
-                  <p className="text-2xl font-bold text-emerald-400">
-                    {formatPrice(precioFinal)}
-                  </p>
-                  <p className="text-sm text-zinc-400 mt-1">
-                    Incluye {getTotalServicios(cotizacion.servicios)} servicio
-                    {getTotalServicios(cotizacion.servicios) !== 1 ? 's' : ''}
-                  </p>
-                </>
+                <p className="text-2xl font-bold text-emerald-400">
+                  {formatPrice(precioFinal)}
+                </p>
               )}
             </div>
 
@@ -279,7 +326,7 @@ export function AutorizarCotizacionModal({
             <PublicPromiseDataForm
               promiseId={promiseId}
               studioSlug={studioSlug}
-              onSubmit={handleSubmitForm}
+              onSubmit={handleConfirmClick}
               isSubmitting={isSubmitting}
               showEventTypeAndDate={true}
             />
@@ -314,20 +361,40 @@ export function AutorizarCotizacionModal({
                   disabled={isSubmitting}
                   className="flex-1"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Confirmar Solicitud
-                    </>
-                  )}
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Confirmar Solicitud
                 </ZenButton>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación */}
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent className="sm:max-w-md" overlayZIndex={130}>
+          <DialogHeader>
+            <DialogTitle>Confirmar Solicitud</DialogTitle>
+            <DialogDescription>
+              Al confirmar la solicitud de la cotización iniciarás el proceso de contratación.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
+            <ZenButton
+              variant="outline"
+              onClick={() => setShowConfirmModal(false)}
+              className="flex-1"
+            >
+              Cancelar
+            </ZenButton>
+            <ZenButton
+              onClick={handleContinue}
+              className="flex-1"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              Continuar
+            </ZenButton>
           </div>
         </DialogContent>
       </Dialog>

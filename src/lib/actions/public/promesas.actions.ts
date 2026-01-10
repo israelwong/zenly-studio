@@ -580,7 +580,14 @@ export async function getPublicPromiseData(
         quotes: {
           where: {
             visible_to_client: true,
-            status: 'pendiente', // Solo mostrar cotizaciones pendientes al cliente
+            OR: [
+              { status: 'pendiente' }, // Cotizaciones pendientes
+              {
+                // Cotizaciones autorizadas por el prospecto (en proceso de contratación)
+                selected_by_prospect: true,
+                status: { in: ['en_cierre', 'contract_generated', 'contract_signed'] },
+              },
+            ],
           },
           select: {
             id: true,

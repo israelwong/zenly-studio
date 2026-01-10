@@ -5,7 +5,6 @@ import { ChevronRight, Tag as TagIcon, Sparkles } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
-import { getTotalServicios, getFirstServicios } from '@/lib/utils/public-promise';
 import { trackCotizacionClick } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 
 interface CondicionComercial {
@@ -163,7 +162,7 @@ export function CotizacionesSection({
                           {cotizacion.name}
                         </ZenCardTitle>
                         {cotizacion.description && (
-                          <p className="text-sm text-zinc-400 mt-1 line-clamp-2">
+                          <p className="text-sm text-zinc-400 mt-0.5 line-clamp-2">
                             {cotizacion.description}
                           </p>
                         )}
@@ -174,9 +173,9 @@ export function CotizacionesSection({
 
                   <ZenCardContent>
                     {/* Precio */}
-                    <div className="mb-4">
+                    <div className="mb-2">
                       {hasDiscount && (
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-sm text-zinc-500 line-through">
                             {formatPrice(cotizacion.price)}
                           </span>
@@ -190,44 +189,9 @@ export function CotizacionesSection({
                       </p>
                     </div>
 
-                    {/* Servicios preview */}
-                    <div className="space-y-2">
-                      {(() => {
-                        const totalServicios = getTotalServicios(cotizacion.servicios);
-                        const primerosServicios = getFirstServicios(cotizacion.servicios, 3);
-                        return (
-                          <>
-                            <p className="text-xs text-zinc-500 font-medium">
-                              Incluye {totalServicios} servicio
-                              {totalServicios !== 1 ? 's' : ''}
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {primerosServicios.map((servicio) => (
-                                <ZenBadge
-                                  key={servicio.id}
-                                  variant="outline"
-                                  className="bg-zinc-800/50 text-zinc-300 border-zinc-700 text-xs px-2 py-0.5"
-                                >
-                                  {servicio.name}
-                                </ZenBadge>
-                              ))}
-                              {totalServicios > 3 && (
-                                <ZenBadge
-                                  variant="outline"
-                                  className="bg-zinc-800/50 text-zinc-400 border-zinc-700 text-xs px-2 py-0.5"
-                                >
-                                  +{totalServicios - 3} más
-                                </ZenBadge>
-                              )}
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-
                     {/* Badge si viene de paquete */}
                     {cotizacion.paquete_origen && (
-                      <div className="mt-3 pt-3 border-t border-zinc-800">
+                      <div className="mt-2 pt-2 border-t border-zinc-800">
                         <div className="flex items-center gap-2">
                           <TagIcon className="h-3 w-3 text-blue-400" />
                           <span className="text-xs text-zinc-400">

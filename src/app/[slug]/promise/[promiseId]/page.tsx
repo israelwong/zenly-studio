@@ -19,7 +19,7 @@ interface PromisePageProps {
 export default async function PromisePage({ params }: PromisePageProps) {
   const { slug, promiseId } = await params;
 
-  // Obtener información del studio (para verificación y header)
+  // Obtener informaci?n del studio (para verificaci?n y header)
   const studio = await prisma.studios.findUnique({
     where: { slug },
     select: {
@@ -107,14 +107,14 @@ export default async function PromisePage({ params }: PromisePageProps) {
                   </svg>
                 </div>
                 <h2 className="text-xl font-semibold text-white mb-2">
-                  {result.error || 'Información no disponible'}
+                  {result.error || 'Informaci?n no disponible'}
                 </h2>
                 <p className="text-sm text-zinc-400">
                   {result.error === 'Promesa no encontrada'
-                    ? 'Lo sentimos, la promesa solicitada ya no está disponible.'
+                    ? 'Lo sentimos, la promesa solicitada ya no est? disponible.'
                     : result.error === 'No hay cotizaciones ni paquetes disponibles para mostrar'
-                      ? 'Esta promesa aún no tiene cotizaciones o paquetes disponibles para compartir.'
-                      : 'Esta información ya no se encuentra disponible.'}
+                      ? 'Esta promesa a?n no tiene cotizaciones o paquetes disponibles para compartir.'
+                      : 'Esta informaci?n ya no se encuentra disponible.'}
                 </p>
               </div>
               {studio && (
@@ -155,7 +155,7 @@ export default async function PromisePage({ params }: PromisePageProps) {
 }
 
 /**
- * Generar metadata para SEO y favicon dinámico
+ * Generar metadata para SEO y favicon din?mico
  */
 export async function generateMetadata({
   params,
@@ -168,15 +168,21 @@ export async function generateMetadata({
     if (!result.success || !result.data) {
       return {
         title: 'Promesa no encontrada',
-        description: 'La información solicitada no está disponible',
+        description: 'La informaci?n solicitada no est? disponible',
       };
     }
 
     const { promise, studio } = result.data;
-    const title = `${promise.event_type_name || 'Evento'} - ${studio.studio_name}`;
-    const description = `Información de tu ${promise.event_type_name || 'evento'} con ${studio.studio_name}`;
+    const eventType = promise.event_type_name || 'Evento';
+    const eventName = promise.event_name || '';
+    const studioName = studio.studio_name;
+    
+    const title = eventName 
+      ? `${eventType} ${eventName} | ${studioName}`
+      : `${eventType} | ${studioName}`;
+    const description = `Informaci?n de tu ${promise.event_type_name || 'evento'} con ${studio.studio_name}`;
 
-    // Configurar favicon dinámico usando el logo del studio
+    // Configurar favicon din?mico usando el logo del studio
     const icons = studio.logo_url ? {
       icon: [
         { url: studio.logo_url, type: 'image/png' },
@@ -203,7 +209,7 @@ export async function generateMetadata({
     console.error('[generateMetadata] Error:', error);
     return {
       title: 'Promesa no encontrada',
-      description: 'La información solicitada no está disponible',
+      description: 'La informaci?n solicitada no est? disponible',
     };
   }
 }

@@ -233,6 +233,22 @@ function PromisePageContent({
     }
   }, [studioSlug, promiseId]);
 
+  // Escuchar evento personalizado para recargar cotizaciones después de autorizar
+  useEffect(() => {
+    const handleReloadEvent = (event: CustomEvent) => {
+      if (event.detail?.cotizaciones) {
+        setCotizaciones(event.detail.cotizaciones);
+      } else {
+        reloadCotizaciones();
+      }
+    };
+
+    window.addEventListener('reloadCotizaciones', handleReloadEvent as EventListener);
+    return () => {
+      window.removeEventListener('reloadCotizaciones', handleReloadEvent as EventListener);
+    };
+  }, [reloadCotizaciones]);
+
   // Escuchar cambios en tiempo real de cotizaciones
   useCotizacionesRealtime({
     studioSlug,
@@ -270,6 +286,14 @@ function PromisePageContent({
           cot.status === 'contract_signed')
     );
   }, [cotizaciones]);
+
+  // Si hay cotización autorizada al cargar, ocultar cotizaciones/paquetes y mostrar proceso de contratación
+  useEffect(() => {
+    if (cotizacionAutorizada && !hideCotizacionesPaquetes && !isAuthorizing && !showProgressOverlay) {
+      setHideCotizacionesPaquetes(true);
+      setIsLoadingContratacion(false); // No mostrar skeleton si ya tenemos la cotización
+    }
+  }, [cotizacionAutorizada, hideCotizacionesPaquetes, isAuthorizing, showProgressOverlay]);
 
   // Resetear hideCotizacionesPaquetes cuando ya no hay cotización autorizada (cancelación de cierre)
   // CRÍTICO: NO restaurar si estamos en proceso de autorización o si el overlay está activo

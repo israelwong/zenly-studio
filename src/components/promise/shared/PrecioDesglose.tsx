@@ -71,7 +71,14 @@ export const PrecioDesglose = forwardRef<HTMLDivElement, PrecioDesgloseProps>(
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-400">Diferido</span>
+                <span className="text-sm text-zinc-400">
+                  Diferido
+                  {diferido > 0 && (
+                    <span className="text-xs text-zinc-500 ml-1">
+                      (a liquidar 2 días antes del evento)
+                    </span>
+                  )}
+                </span>
                 <span className="text-sm font-medium text-zinc-300">
                   {formatPrice(diferido)}
                 </span>
