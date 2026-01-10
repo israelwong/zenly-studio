@@ -13,7 +13,6 @@ import {
     File,
     Briefcase, Users, Sparkles, Mail, FileText,
     UserCog, DollarSign, Megaphone, ShoppingBagIcon, Plug, Settings,
-    Home,
     CreditCard,
     Bell,
     BarChart3,
@@ -25,6 +24,7 @@ import {
     PanelLeftOpen,
     Search,
     Globe,
+    Target,
 } from 'lucide-react';
 
 interface StudioSidebarProps {
@@ -85,13 +85,23 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
     // Nota: Profile y Content ahora están en /profile/edit/ con su propio sidebar
     const builderNavItems = [
 
+        // Analytics (nuevo - hasta arriba)
+        {
+            id: 'analytics',
+            title: 'Analytics',
+            icon: BarChart3,
+            items: [
+                { id: 'analytics-perfil', name: 'Perfil de Negocio', href: `/analytics/perfil`, icon: User },
+                { id: 'analytics-conversiones', name: 'Conversiones', href: `/analytics/marketing`, icon: Target },
+            ],
+        },
+
         // Comercial
         {
             id: 'commercial',
             title: 'Comercial',
             icon: ShoppingBagIcon,
             items: [
-                { id: 'dashboard', name: 'Dashboard', href: `/commercial/dashboard`, icon: Home },
                 { id: 'catalogo', name: 'Catálogo', href: `/commercial/catalogo`, icon: ShoppingBagIcon },
                 { id: 'portafolios', name: 'Portafolios', href: `/commercial/portafolios`, icon: FolderOpen },
                 { id: 'ofertas', name: 'Ofertas', href: `/commercial/ofertas`, icon: Megaphone },

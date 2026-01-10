@@ -2,21 +2,21 @@ import React, { Suspense } from 'react';
 import { Metadata } from 'next';
 import { getStudioProfileBySlug } from '@/lib/actions/public/profile.actions';
 import { getStudioAnalyticsSummary, getTopContent } from '@/lib/actions/studio/analytics/analytics-dashboard.actions';
-import { AnalyticsOverviewCards, TopContentList, AnalyticsSkeleton, TrafficSourceStats } from './components';
+import { AnalyticsOverviewCards, TopContentList, AnalyticsSkeleton, TrafficSourceStats } from '../components';
 import { BarChart3, TrendingUp, Globe } from 'lucide-react';
 
 export const metadata: Metadata = {
-    title: 'Zenly Studio - Dashboard',
-    description: 'Vista general de tu estudio y contenido',
+    title: 'Analytics - Perfil de Negocio',
+    description: 'Estadísticas del perfil público y contenido',
 };
 
-interface DashboardPageProps {
+interface PerfilAnalyticsPageProps {
     params: Promise<{
         slug: string;
     }>;
 }
 
-async function DashboardContent({ studioSlug }: { studioSlug: string }) {
+async function PerfilAnalyticsContent({ studioSlug }: { studioSlug: string }) {
     // Obtener studio profile
     const result = await getStudioProfileBySlug({ slug: studioSlug });
 
@@ -98,37 +98,37 @@ async function DashboardContent({ studioSlug }: { studioSlug: string }) {
                     analyticsData.profile.topReferrers?.length ||
                     analyticsData.profile.topUtmSources?.length
                 ) && (
-                        <div>
-                            <div className="flex items-center gap-2 mb-6">
-                                <div className="p-1.5 rounded-lg bg-purple-500/10">
-                                    <Globe className="w-5 h-5 text-purple-400" />
-                                </div>
-                                <h2 className="text-xl font-bold text-white">
-                                    Origen del Tráfico
-                                </h2>
+                    <div>
+                        <div className="flex items-center gap-2 mb-6">
+                            <div className="p-1.5 rounded-lg bg-purple-500/10">
+                                <Globe className="w-5 h-5 text-purple-400" />
                             </div>
-                            <TrafficSourceStats
-                                trafficSources={analyticsData.profile.trafficSources}
-                                topReferrers={analyticsData.profile.topReferrers}
-                                topUtmSources={analyticsData.profile.topUtmSources}
-                                utmMediums={analyticsData.profile.utmMediums}
-                                utmCampaigns={analyticsData.profile.utmCampaigns}
-                            />
+                            <h2 className="text-xl font-bold text-white">
+                                Origen del Tráfico
+                            </h2>
                         </div>
-                    )}
+                        <TrafficSourceStats
+                            trafficSources={analyticsData.profile.trafficSources}
+                            topReferrers={analyticsData.profile.topReferrers}
+                            topUtmSources={analyticsData.profile.topUtmSources}
+                            utmMediums={analyticsData.profile.utmMediums}
+                            utmCampaigns={analyticsData.profile.utmCampaigns}
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );
 }
 
-export default async function DashboardPage({ params }: DashboardPageProps) {
+export default async function PerfilAnalyticsPage({ params }: PerfilAnalyticsPageProps) {
     const { slug } = await params;
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
             {/* Content */}
             <Suspense fallback={<AnalyticsSkeleton />}>
-                <DashboardContent studioSlug={slug} />
+                <PerfilAnalyticsContent studioSlug={slug} />
             </Suspense>
         </div>
     );
