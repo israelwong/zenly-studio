@@ -27,10 +27,16 @@ export function ProfileContentView({ activeTab, profileData, onPostClick, onPort
 
     switch (activeTab) {
         case 'inicio':
+        case 'inicio-fotos':
+        case 'inicio-videos':
+            // Determinar filtro según el tab activo
+            const filter = activeTab === 'inicio-fotos' ? 'photos' : 
+                          activeTab === 'inicio-videos' ? 'videos' : 'all';
             return (
                 <ProfileContent
                     variant="inicio"
                     data={{ posts: posts || [] }}
+                    filter={filter}
                     onPostClick={onPostClick}
                     onEditPost={onEditPost}
                     studioId={studioId}

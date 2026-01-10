@@ -141,7 +141,7 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
         const sectionParam = searchParams.get('section');
 
         // Sincronizar tab desde URL
-        if (sectionParam && ['inicio', 'portafolio', 'contacto', 'faq', 'archivados'].includes(sectionParam)) {
+        if (sectionParam && ['inicio', 'inicio-fotos', 'inicio-videos', 'portafolio', 'contacto', 'faq', 'archivados'].includes(sectionParam)) {
             setActiveTab(sectionParam);
         }
 
@@ -173,7 +173,8 @@ export function ProfilePageClient({ profileData, studioSlug, offers = [] }: Prof
     const buildUrl = (params: { post?: string; portfolio?: string; tab?: string }) => {
         const urlParams = new URLSearchParams();
 
-        if (params.tab && params.tab !== 'inicio') {
+        // Incluir section si no es 'inicio' o si es un filtro de inicio
+        if (params.tab && (params.tab !== 'inicio' || params.tab.startsWith('inicio-'))) {
             urlParams.set('section', params.tab);
         }
         if (params.post) {

@@ -10,6 +10,7 @@ interface ProfileContentProps {
     data?: Record<string, unknown>;
     loading?: boolean;
     hidePortfolioHeader?: boolean; // Ocultar título y categoría en portfolio-detail cuando está en modo preview del editor
+    filter?: 'all' | 'photos' | 'videos'; // Filtro para posts (solo en variant 'inicio')
     onPostClick?: (postSlug: string) => void;
     onPortfolioClick?: (portfolioSlug: string) => void;
     onEditPost?: (postId: string) => void;
@@ -31,6 +32,7 @@ export function ProfileContent({
     data,
     loading = false,
     hidePortfolioHeader = false,
+    filter = 'all',
     onPostClick,
     onPortfolioClick,
     onEditPost,
@@ -79,7 +81,7 @@ export function ProfileContent({
     if (variant === 'inicio' || variant === 'posts') {
         const posts = Array.isArray(data?.posts) ? (data.posts as unknown[]) : [];
         if (variant === 'inicio' || (variant === 'posts' && !data?.portfolios)) {
-            return <MainSection posts={posts as Parameters<typeof MainSection>[0]['posts']} onPostClick={onPostClick} onEditPost={onEditPost} studioId={studioId} ownerUserId={ownerUserId} />;
+            return <MainSection posts={posts as Parameters<typeof MainSection>[0]['posts']} filter={filter} onPostClick={onPostClick} onEditPost={onEditPost} studioId={studioId} ownerUserId={ownerUserId} />;
         }
         // Fallback a PostSection si no hay posts pero hay variant posts
         return <PostSection posts={posts as Parameters<typeof PostSection>[0]['posts']} />;
