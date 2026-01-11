@@ -2,8 +2,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { UserSearch, Plus, Receipt, AlertTriangle, Trash2, Eye, EyeOff } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
+import { UserSearch, Plus, Receipt, AlertTriangle, Trash2, Eye, EyeOff, MoreVertical, FileText, Shield, CreditCard, Tag } from 'lucide-react';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import { PromisesWrapper } from './components';
 import { PromiseMainToolbar } from './components/PromiseMainToolbar';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
@@ -12,7 +12,6 @@ import { AvisoPrivacidadManager } from '@/components/shared/avisos-privacidad/Av
 import { PipelineConfigModal } from './components/PipelineConfigModal';
 import { PromiseTagsManageModal } from './components/PromiseTagsManageModal';
 import { PaymentMethodsModal } from '@/components/shared/payments/PaymentMethodsModal';
-import { FileText } from 'lucide-react';
 import { getTestPromisesCount, deleteTestPromises } from '@/lib/actions/studio/commercial/promises/promises.actions';
 import { getPipelineStages } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
@@ -129,6 +128,35 @@ export default function PromisesPage() {
                 <Plus className="h-4 w-4 mr-2" />
                 Registrar Promesa
               </ZenButton>
+              <ZenDropdownMenu>
+                <ZenDropdownMenuTrigger asChild>
+                  <ZenButton variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <MoreVertical className="h-4 w-4" />
+                  </ZenButton>
+                </ZenDropdownMenuTrigger>
+                <ZenDropdownMenuContent align="end">
+                  <ZenDropdownMenuItem onClick={() => setShowTerminosManager(true)}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Términos y Condiciones
+                  </ZenDropdownMenuItem>
+                  <ZenDropdownMenuItem onClick={() => setShowAvisoPrivacidad(true)}>
+                    <Shield className="h-4 w-4 mr-2" />
+                    Aviso de Privacidad
+                  </ZenDropdownMenuItem>
+                  <ZenDropdownMenuItem onClick={() => setShowCondicionesManager(true)}>
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Condiciones Comerciales
+                  </ZenDropdownMenuItem>
+                  <ZenDropdownMenuItem onClick={() => setShowPaymentMethods(true)}>
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Métodos de Pago
+                  </ZenDropdownMenuItem>
+                  <ZenDropdownMenuItem onClick={() => setShowTagsModal(true)}>
+                    <Tag className="h-4 w-4 mr-2" />
+                    Etiquetas
+                  </ZenDropdownMenuItem>
+                </ZenDropdownMenuContent>
+              </ZenDropdownMenu>
             </div>
           </div>
         </ZenCardHeader>

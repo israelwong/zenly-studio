@@ -12,6 +12,7 @@ export const createPromiseSchema = z.object({
   event_type_id: z.string().min(1, 'El tipo de evento es requerido'),
   event_location: z.string().max(200, 'El lugar del evento es demasiado largo').optional().or(z.literal('')),
   event_name: z.string().max(200, 'El nombre del evento es demasiado largo').optional().or(z.literal('')), // Nombre del evento (opcional)
+  duration_hours: z.number().int().positive('La duración debe ser un número positivo').optional().or(z.null()),
   interested_dates: z.array(z.string().datetime()).optional(),
   promise_pipeline_stage_id: z.string().cuid().optional(),
   acquisition_channel_id: z.string().min(1, 'El canal de adquisición es requerido'),
@@ -81,6 +82,7 @@ export interface PromiseWithContact {
   event_type_id: string | null;
   event_name: string | null; // Nombre del evento (opcional)
   event_location: string | null; // Locación del evento
+  duration_hours: number | null; // Duración del evento en horas
   interested_dates: string[] | null;
   event_date: Date | null; // Fecha del evento (consolidado)
   defined_date: Date | null; // Fecha definida del evento (legacy)

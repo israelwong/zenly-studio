@@ -131,6 +131,10 @@ export async function getPromises(
           orderBy: { created_at: 'asc' },
         },
         quotes: {
+          where: {
+            archived: false,
+            status: { not: 'archivada' },
+          },
           select: {
             id: true,
           },
@@ -221,6 +225,8 @@ export async function getPromises(
         status: promise.contact.status,
         event_type_id: promise.event_type_id,
         event_name: promise.name || null,
+        event_location: promise.event_location || null,
+        duration_hours: promise.duration_hours || null,
         interested_dates: promise.tentative_dates
           ? (promise.tentative_dates as string[])
           : null,
@@ -376,6 +382,10 @@ export async function getPromiseByIdAsPromiseWithContact(
           orderBy: { created_at: 'asc' },
         },
         quotes: {
+          where: {
+            archived: false,
+            status: { not: 'archivada' },
+          },
           select: {
             id: true,
           },
@@ -460,6 +470,7 @@ export async function getPromiseByIdAsPromiseWithContact(
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       event_location: promise.event_location || null,
+      duration_hours: promise.duration_hours || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
@@ -601,6 +612,11 @@ export async function createPromise(
       ? validatedData.event_location.trim() || null
       : null;
 
+    // duration_hours solo se guarda si hay event_type_id (igual que event_location)
+    const durationHours = validatedData.event_type_id && validatedData.duration_hours
+      ? validatedData.duration_hours
+      : null;
+
     // Parsear fecha de forma segura (sin cambios por zona horaria)
     // Si hay una sola fecha en interested_dates, guardarla también como event_date
     let eventDate: Date | null = null;
@@ -623,6 +639,7 @@ export async function createPromise(
         event_type_id: validatedData.event_type_id || null,
         event_location: eventLocation,
         name: validatedData.event_name?.trim() || null,
+        duration_hours: durationHours,
         pipeline_stage_id: stageId,
         status: 'pending',
         event_date: eventDate, // ✅ Guardar como event_date si hay una sola fecha
@@ -661,6 +678,8 @@ export async function createPromise(
       status: contact.status,
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
+      event_location: promise.event_location || null,
+      duration_hours: promise.duration_hours || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
@@ -911,6 +930,14 @@ export async function updatePromise(
         updateData.name = eventNameValue;
       }
 
+      // duration_hours solo se guarda si hay event_type_id (igual que event_location)
+      if (validatedData.duration_hours !== undefined) {
+        const durationHoursUpdate = validatedData.event_type_id && validatedData.duration_hours
+          ? validatedData.duration_hours
+          : null;
+        updateData.duration_hours = durationHoursUpdate;
+      }
+
       if (validatedData.promise_pipeline_stage_id !== undefined) {
         updateData.pipeline_stage = validatedData.promise_pipeline_stage_id
           ? { connect: { id: validatedData.promise_pipeline_stage_id } }
@@ -979,6 +1006,19 @@ export async function updatePromise(
         ? validatedData.event_location.trim() || null
         : null;
 
+      // Parsear fecha de forma segura (sin cambios por zona horaria)
+      let eventDateCreate: Date | null = null;
+      if (validatedData.interested_dates && validatedData.interested_dates.length === 1) {
+        const dateString = validatedData.interested_dates[0];
+        const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (dateMatch) {
+          const [, year, month, day] = dateMatch;
+          eventDateCreate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } else {
+          eventDateCreate = new Date(dateString);
+        }
+      }
+
       promise = await prisma.studio_promises.create({
         data: {
           studio_id: contact.studio_id,
@@ -986,6 +1026,9 @@ export async function updatePromise(
           event_type_id: validatedData.event_type_id || null,
           event_location: eventLocationCreate,
           name: validatedData.event_name?.trim() || null,
+          duration_hours: durationHoursCreate,
+          name: validatedData.event_name?.trim() || null,
+          duration_hours: durationHoursCreate,
           pipeline_stage_id: stageId,
           status: 'pending',
           tentative_dates: validatedData.interested_dates
@@ -1043,6 +1086,7 @@ export async function updatePromise(
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
       event_location: promise.event_location || null,
+      duration_hours: promise.duration_hours || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,
@@ -1254,6 +1298,8 @@ export async function movePromise(
       status: contact.status,
       event_type_id: promise.event_type_id,
       event_name: promise.name || null,
+      event_location: promise.event_location || null,
+      duration_hours: promise.duration_hours || null,
       interested_dates: promise.tentative_dates
         ? (promise.tentative_dates as string[])
         : null,

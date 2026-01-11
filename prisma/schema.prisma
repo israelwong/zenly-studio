@@ -1317,6 +1317,7 @@ model studio_promises {
   name                            String?
   address                         String?
   event_date                      DateTime?
+  duration_hours                  Int?
   pipeline_stage_id               String?
   status                          String                          @default("pending")
   defined_date                    DateTime?

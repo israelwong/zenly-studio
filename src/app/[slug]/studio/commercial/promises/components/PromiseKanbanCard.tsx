@@ -10,7 +10,7 @@ import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge
 import { getPromiseTagsByPromiseId, getPromiseTags, addTagToPromise, removeTagFromPromise, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
 import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
-import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getCotizacionesByPromiseId, type CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 
 interface PromiseKanbanCardProps {
@@ -92,6 +92,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     const [fallbackTags, setFallbackTags] = useState<PromiseTag[]>((promise.tags as PromiseTag[]) || []);
     const [fallbackAgendamiento, setFallbackAgendamiento] = useState<AgendaItem | null>(null);
     const [fallbackCotizacionesCount, setFallbackCotizacionesCount] = useState<number>(0);
+    const [fallbackCotizaciones, setFallbackCotizaciones] = useState<CotizacionListItem[]>([]);
 
     // Sincronizar fallbackTags cuando promise.tags cambia desde el padre
     useEffect(() => {
@@ -140,6 +141,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                     const cotizacionesResult = await getCotizacionesByPromiseId(promiseId);
                     if (cotizacionesResult.success && cotizacionesResult.data) {
                         setFallbackCotizacionesCount(cotizacionesResult.data.length);
+                        setFallbackCotizaciones(cotizacionesResult.data);
                     }
                 } catch (error) {
                     console.error('Error loading cotizaciones:', error);
@@ -216,6 +218,21 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         contexto: 'promise' as const,
     } : fallbackAgendamiento;
     const finalCotizacionesCount = promise.cotizaciones_count !== undefined ? promise.cotizaciones_count : fallbackCotizacionesCount;
+
+    // Calcular stats de cotizaciones (pendientes y en negociación)
+    // Solo usar fallbackCotizaciones ya que las cotizaciones completas no vienen en PromiseWithContact
+    // Excluir cotizaciones archivadas (campo archived = true)
+    // Nota: La consulta ya filtra por status !== 'archivada', pero verificamos archived por seguridad
+    const cotizacionesPendientes = fallbackCotizaciones.filter(
+        (cot: CotizacionListItem) =>
+            cot.status === 'pendiente' &&
+            !cot.archived
+    ).length;
+    const cotizacionesEnNegociacion = fallbackCotizaciones.filter(
+        (cot: CotizacionListItem) =>
+            cot.status === 'negociacion' &&
+            !cot.archived
+    ).length;
 
     // Formatear fecha y hora del agendamiento
     const formatAgendamientoDate = (agenda: AgendaItem): string => {
@@ -478,6 +495,32 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                 <div className="flex items-center gap-1.5 text-xs text-zinc-500">
                                     <Tag className="h-3 w-3 shrink-0" />
                                     <span>Registro manual</span>
+                                </div>
+                            )}
+
+                            {/* Mini stat de cotizaciones */}
+                            {finalCotizacionesCount > 0 && (
+                                <div className="flex items-center gap-2 text-xs text-blue-400/80">
+                                    <FileText className="h-3 w-3 shrink-0" />
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-medium">
+                                            {finalCotizacionesCount} {finalCotizacionesCount === 1 ? 'cotización' : 'cotizaciones'}
+                                        </span>
+                                        {(cotizacionesPendientes > 0 || cotizacionesEnNegociacion > 0) && (
+                                            <div className="flex items-center gap-1.5">
+                                                {cotizacionesPendientes > 0 && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400/90 text-[10px] font-medium border border-blue-500/30">
+                                                        {cotizacionesPendientes} pendiente{cotizacionesPendientes !== 1 ? 's' : ''}
+                                                    </span>
+                                                )}
+                                                {cotizacionesEnNegociacion > 0 && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400/90 text-[10px] font-medium border border-amber-500/30">
+                                                        {cotizacionesEnNegociacion} negociación
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 

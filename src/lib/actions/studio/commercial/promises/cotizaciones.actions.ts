@@ -188,6 +188,8 @@ export async function getCotizacionesByPromiseId(
     const cotizaciones = await prisma.studio_cotizaciones.findMany({
       where: {
         promise_id: promiseId,
+        archived: false, // Excluir cotizaciones archivadas
+        status: { not: 'archivada' }, // También excluir por status
       },
       select: {
         id: true,

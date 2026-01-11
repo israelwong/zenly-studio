@@ -12,6 +12,7 @@ import { CalendarIcon, AlertCircle, X } from 'lucide-react';
 import { createPromise, updatePromise, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/commercial/promises';
 import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/events.actions';
 import { getContacts, getAcquisitionChannels, getSocialNetworks } from '@/lib/actions/studio/commercial/contacts';
+import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 import { useContactRefresh } from '@/hooks/useContactRefresh';
@@ -31,6 +32,7 @@ interface ContactEventFormModalProps {
         event_type_id?: string;
         event_location?: string;
         event_name?: string; // Nombre del evento (opcional)
+        duration_hours?: number | null;
         event_date?: Date | null; // Fecha única del evento
         interested_dates?: string[];
         acquisition_channel_id?: string;
@@ -66,6 +68,7 @@ export function ContactEventFormModal({
         event_type_id: initialData?.event_type_id || '',
         event_location: initialData?.event_location || '',
         event_name: initialData?.event_name || '',
+        duration_hours: initialData?.duration_hours ?? undefined,
         interested_dates: initialData?.interested_dates,
         acquisition_channel_id: initialData?.acquisition_channel_id ?? '',
         social_network_id: initialData?.social_network_id,
@@ -78,7 +81,7 @@ export function ContactEventFormModal({
     const [nameInput, setNameInput] = useState(initialData?.name || '');
     const [showContactSuggestions, setShowContactSuggestions] = useState(false);
     const [filteredContactSuggestions, setFilteredContactSuggestions] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
-    const [allContacts, setAllContacts] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
+    const [allContacts, setAllContacts] = useState<Array<{ id: string; name: string; phone: string; email: string | null; status?: string; type?: 'contact' | 'crew' }>>([]);
     // Helper para parsear fecha de forma segura (sin cambios por zona horaria)
     const parseDateSafe = (date: Date | string): Date => {
         if (typeof date === "string") {
@@ -117,7 +120,7 @@ export function ContactEventFormModal({
         initialData?.referrer_name || ''
     );
     const [showReferrerSuggestions, setShowReferrerSuggestions] = useState(false);
-    const [filteredReferrerContacts, setFilteredReferrerContacts] = useState<Array<{ id: string; name: string; phone: string }>>([]);
+    const [filteredReferrerContacts, setFilteredReferrerContacts] = useState<Array<{ id: string; name: string; phone: string; status?: string; type?: 'contact' | 'crew' }>>([]);
     const [selectedContactIndex, setSelectedContactIndex] = useState(-1);
     const [selectedReferrerIndex, setSelectedReferrerIndex] = useState(-1);
     const [conflictosPorFecha, setConflictosPorFecha] = useState<Map<string, AgendaItem[]>>(new Map());
@@ -158,22 +161,48 @@ export function ContactEventFormModal({
 
     const loadAllContacts = async () => {
         try {
-            const result = await getContacts(studioSlug, {
-                page: 1,
-                limit: 100,
-                status: 'all',
-            });
-            if (result.success && result.data) {
-                const contacts = result.data.contacts.map((c) => ({
+            const [contactsResult, crewResult] = await Promise.all([
+                getContacts(studioSlug, {
+                    page: 1,
+                    limit: 100,
+                    status: 'all',
+                }),
+                obtenerCrewMembers(studioSlug),
+            ]);
+
+            const combined: Array<{ id: string; name: string; phone: string; email: string | null; status?: string; type?: 'contact' | 'crew' }> = [];
+
+            // Agregar contactos con su status
+            if (contactsResult.success && contactsResult.data) {
+                const contacts = contactsResult.data.contacts.map((c) => ({
                     id: c.id,
                     name: c.name,
                     phone: c.phone,
                     email: c.email || null,
+                    status: c.status || 'prospecto', // prospecto, cliente
+                    type: 'contact' as const,
                 }));
-                setAllContacts(contacts);
+                combined.push(...contacts);
             }
+
+            // Agregar crew members con status "personal" (solo los que tienen teléfono)
+            if (crewResult.success && crewResult.data) {
+                const crew = crewResult.data
+                    .filter((member) => member.phone && member.phone.trim() !== '')
+                    .map((member) => ({
+                        id: member.id,
+                        name: member.name,
+                        phone: member.phone!,
+                        email: member.email || null,
+                        status: 'personal',
+                        type: 'crew' as const,
+                    }));
+                combined.push(...crew);
+            }
+
+            setAllContacts(combined);
         } catch (error) {
-            console.error('Error loading contacts:', error);
+            console.error('Error loading contacts and crew:', error);
         }
     };
 
@@ -210,6 +239,7 @@ export function ContactEventFormModal({
                     event_type_id: initialData.event_type_id || '',
                     event_location: initialData.event_location || '',
                     event_name: initialData.event_name || '',
+                    duration_hours: initialData.duration_hours ?? undefined,
                     interested_dates: initialData.interested_dates,
                     acquisition_channel_id: initialData.acquisition_channel_id ?? '',
                     social_network_id: initialData.social_network_id,
@@ -515,11 +545,17 @@ export function ContactEventFormModal({
                 ? (formData.event_location || '').trim() || undefined
                 : undefined;
 
+            // duration_hours solo se guarda si hay event_type_id (igual que event_location)
+            const durationHours = formData.event_type_id && formData.event_type_id !== 'none' && formData.duration_hours
+                ? formData.duration_hours
+                : undefined;
+
             // Normalizar teléfono antes de enviar
             const formDataToSubmit = {
                 ...formData,
                 phone: normalizedPhone,
                 event_location: eventLocation,
+                duration_hours: durationHours,
             };
 
             let result;
@@ -812,25 +848,65 @@ export function ContactEventFormModal({
                         </div>
                     </div>
 
-                    {/* Lugar del Evento */}
-                    <div>
-                        <label className="text-sm font-medium text-zinc-300 block mb-2">
-                            Lugar del Evento
-                        </label>
-                        <ZenInput
-                            type="text"
-                            placeholder="Ej: Salón de eventos, Playa, Jardín... (opcional)"
-                            value={formData.event_location || ''}
-                            onChange={(e) => {
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    event_location: e.target.value,
-                                }));
-                            }}
-                            disabled={!formData.event_type_id || formData.event_type_id === 'none'}
-                            className="w-full h-10 disabled:opacity-50 disabled:cursor-not-allowed"
-                            error={errors.event_location}
-                        />
+                    {/* Lugar del Evento y Duración */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Lugar del Evento */}
+                        <div>
+                            <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                Lugar del Evento
+                            </label>
+                            <ZenInput
+                                type="text"
+                                placeholder="Ej: Salón de eventos, Playa, Jardín... (opcional)"
+                                value={formData.event_location || ''}
+                                onChange={(e) => {
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        event_location: e.target.value,
+                                    }));
+                                }}
+                                disabled={!formData.event_type_id || formData.event_type_id === 'none'}
+                                className="w-full h-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                error={errors.event_location}
+                            />
+                        </div>
+
+                        {/* Duración del Evento */}
+                        <div>
+                            <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                Duración del Evento (horas)
+                            </label>
+                            <ZenInput
+                                type="number"
+                                min="1"
+                                step="1"
+                                placeholder="Ej: 6"
+                                value={formData.duration_hours?.toString() || ''}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (value === '') {
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            duration_hours: undefined,
+                                        }));
+                                    } else {
+                                        const numValue = parseInt(value, 10);
+                                        if (!isNaN(numValue) && numValue > 0) {
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                duration_hours: numValue,
+                                            }));
+                                        }
+                                    }
+                                    if (errors.duration_hours) {
+                                        setErrors((prev) => ({ ...prev, duration_hours: '' }));
+                                    }
+                                }}
+                                disabled={!formData.event_type_id || formData.event_type_id === 'none'}
+                                className="w-full h-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                error={errors.duration_hours}
+                            />
+                        </div>
                     </div>
 
                     {/* Canal de Adquisición */}
@@ -929,10 +1005,22 @@ export function ContactEventFormModal({
                                                 const filtered = allContacts.filter((c) =>
                                                     c.name.toLowerCase().includes(afterAt.toLowerCase())
                                                 );
-                                                setFilteredReferrerContacts(filtered.map((c) => ({ id: c.id, name: c.name, phone: c.phone })));
+                                                setFilteredReferrerContacts(filtered.map((c) => ({
+                                                    id: c.id,
+                                                    name: c.name,
+                                                    phone: c.phone,
+                                                    status: c.status,
+                                                    type: c.type,
+                                                })));
                                                 setShowReferrerSuggestions(true);
                                             } else {
-                                                setFilteredReferrerContacts(allContacts.slice(0, 10).map((c) => ({ id: c.id, name: c.name, phone: c.phone })));
+                                                setFilteredReferrerContacts(allContacts.slice(0, 10).map((c) => ({
+                                                    id: c.id,
+                                                    name: c.name,
+                                                    phone: c.phone,
+                                                    status: c.status,
+                                                    type: c.type,
+                                                })));
                                                 setShowReferrerSuggestions(true);
                                             }
                                             setFormData((prev) => ({ ...prev, referrer_name: undefined }));
@@ -982,6 +1070,16 @@ export function ContactEventFormModal({
                                             >
                                                 <span className="font-medium">{contact.name}</span>
                                                 <span className="text-zinc-400 text-xs">({contact.phone})</span>
+                                                {contact.status && (
+                                                    <span className={`ml-auto text-xs px-2 py-0.5 rounded ${contact.status === 'personal'
+                                                            ? 'bg-purple-500/20 text-purple-300'
+                                                            : contact.status === 'cliente'
+                                                                ? 'bg-emerald-500/20 text-emerald-300'
+                                                                : 'bg-blue-500/20 text-blue-300'
+                                                        }`}>
+                                                        {contact.status === 'personal' ? 'Personal' : contact.status === 'cliente' ? 'Cliente' : 'Prospecto'}
+                                                    </span>
+                                                )}
                                             </button>
                                         ))}
                                     </div>
@@ -1013,56 +1111,80 @@ export function ContactEventFormModal({
                                 </button>
                             </PopoverTrigger>
                             <PopoverContent
-                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-[9999]"
+                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-[9999] overflow-visible"
                                 align="start"
                                 sideOffset={4}
                                 onOpenAutoFocus={(e) => e.preventDefault()}
                             >
-                                {context === 'event' ? (
-                                    <Calendar
-                                        mode="single"
-                                        selected={selectedDates.length > 0 ? selectedDates[0] : undefined}
-                                        onSelect={(date: Date | undefined) => {
-                                            if (date) {
-                                                setSelectedDates([date]);
-                                                setMonth(date);
-                                            } else {
-                                                setSelectedDates([]);
-                                                setMonth(undefined);
-                                            }
-                                        }}
-                                        month={month}
-                                        onMonthChange={setMonth}
-                                        numberOfMonths={1}
-                                        locale={es}
-                                        buttonVariant="ghost"
-                                        className="border border-zinc-700 rounded-lg"
-                                    />
-                                ) : (
-                                    <Calendar
-                                        mode="multiple"
-                                        selected={selectedDates}
-                                        onSelect={(dates) => {
-                                            const dateArray = dates as Date[] | undefined;
-                                            if (dateArray) {
-                                                setSelectedDates(dateArray);
-                                                if (dateArray.length > 0) {
-                                                    setMonth(dateArray[0]);
+                                <div className="p-3">
+                                    {context === 'event' ? (
+                                        <Calendar
+                                            mode="single"
+                                            selected={selectedDates.length > 0 ? selectedDates[0] : undefined}
+                                            onSelect={(date: Date | undefined) => {
+                                                if (date) {
+                                                    setSelectedDates([date]);
+                                                    setMonth(date);
+                                                    // NO cerrar popover automáticamente - esperar botón Confirmar
+                                                } else {
+                                                    setSelectedDates([]);
+                                                    setMonth(undefined);
                                                 }
-                                            } else {
-                                                setSelectedDates([]);
-                                                setMonth(undefined);
-                                            }
-                                        }}
-                                        month={month}
-                                        onMonthChange={setMonth}
-                                        numberOfMonths={1}
-                                        locale={es}
-                                        buttonVariant="ghost"
-                                        className="border border-zinc-700 rounded-lg"
-                                        required={false}
-                                    />
-                                )}
+                                            }}
+                                            month={month}
+                                            onMonthChange={setMonth}
+                                            numberOfMonths={1}
+                                            locale={es}
+                                            buttonVariant="ghost"
+                                            className="border border-zinc-700 rounded-lg"
+                                        />
+                                    ) : (
+                                        <Calendar
+                                            mode="multiple"
+                                            selected={selectedDates}
+                                            onSelect={(dates) => {
+                                                const dateArray = dates as Date[] | undefined;
+                                                if (dateArray) {
+                                                    setSelectedDates(dateArray);
+                                                    if (dateArray.length > 0) {
+                                                        setMonth(dateArray[0]);
+                                                    }
+                                                    // NO cerrar popover automáticamente - esperar botón Confirmar
+                                                } else {
+                                                    setSelectedDates([]);
+                                                    setMonth(undefined);
+                                                }
+                                            }}
+                                            month={month}
+                                            onMonthChange={setMonth}
+                                            numberOfMonths={1}
+                                            locale={es}
+                                            buttonVariant="ghost"
+                                            className="border border-zinc-700 rounded-lg"
+                                            required={false}
+                                        />
+                                    )}
+                                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-700 mt-3 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCalendarOpen(false);
+                                            }}
+                                            className="px-3 py-1.5 text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCalendarOpen(false);
+                                            }}
+                                            className="px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors"
+                                        >
+                                            Confirmar
+                                        </button>
+                                    </div>
+                                </div>
                             </PopoverContent>
                         </Popover>
                         <p className="text-xs text-zinc-400 mt-1">
