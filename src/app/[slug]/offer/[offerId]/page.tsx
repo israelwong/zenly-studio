@@ -128,8 +128,8 @@ export default async function PublicOfferPage({
 
         {/* Wrapper con fondo glassmorphism */}
         <OfferBackgroundWrapper coverUrl={offer.cover_media_url}>
-          <div className="min-h-screen relative">
-
+          {/* Contenido principal */}
+          <div className="min-h-screen">
             {/* Header sticky fixed en top */}
             <OfferHeader
               studioSlug={slug}
@@ -139,9 +139,9 @@ export default async function PublicOfferPage({
             />
 
             {/* Container mobile centrado con padding-top para header */}
-            <div className="max-w-md mx-auto min-h-screen pt-[81px] px-4 md:px-0 md:py-24">
-              {/* Wrapper con scroll y glassmorphism */}
-              <div className="min-h-[calc(100vh-81px)] bg-zinc-950/50 backdrop-blur-md rounded-xl mb-4 md:mb-0 overflow-hidden">
+            <div className="max-w-md mx-auto min-h-screen md:py-24 pt-[81px] px-4 md:px-0">
+              {/* Wrapper con scroll y glassmorphism - opacidad reducida para ver fondo dinámico */}
+              <div className="min-h-[calc(100vh-81px)] bg-zinc-950/60 backdrop-blur-sm rounded-xl overflow-hidden border border-zinc-800/50">
                 {/* Content */}
                 <OfferLandingPage
                   studioSlug={slug}
@@ -204,19 +204,19 @@ export async function generateMetadata({
     }
 
     const offer = offerResult.data;
-    
+
     // Obtener información completa del estudio
     const studio = await prisma.studios.findUnique({
       where: { slug },
       select: { studio_name: true, logo_url: true },
     });
 
-    const title = studio?.studio_name 
+    const title = studio?.studio_name
       ? `${offer.name} - ${studio.studio_name}`
       : offer.name;
     const description =
       offer.description ||
-      (studio?.studio_name 
+      (studio?.studio_name
         ? `Oferta especial de ${studio.studio_name}`
         : `Oferta especial`);
 
