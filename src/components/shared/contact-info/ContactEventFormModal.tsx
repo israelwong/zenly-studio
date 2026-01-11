@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ZenDialog, ZenInput, ZenTextarea, ZenCard, ZenCardContent } from '@/components/ui/zen';
+import { ZenDialog, ZenInput, ZenTextarea, ZenCard, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { toast } from 'sonner';
@@ -11,7 +11,7 @@ import { es } from 'date-fns/locale';
 import { CalendarIcon, AlertCircle, X } from 'lucide-react';
 import { createPromise, updatePromise, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/commercial/promises';
 import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/events.actions';
-import { getContacts, getAcquisitionChannels, getSocialNetworks } from '@/lib/actions/studio/commercial/contacts';
+import { getContacts, getAcquisitionChannels, getSocialNetworks, createContact } from '@/lib/actions/studio/commercial/contacts';
 import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
@@ -125,6 +125,11 @@ export function ContactEventFormModal({
     const [selectedReferrerIndex, setSelectedReferrerIndex] = useState(-1);
     const [conflictosPorFecha, setConflictosPorFecha] = useState<Map<string, AgendaItem[]>>(new Map());
     const referrerSyncedRef = useRef(false);
+    const [showCreateReferrerModal, setShowCreateReferrerModal] = useState(false);
+    const [newReferrerName, setNewReferrerName] = useState('');
+    const [newReferrerPhone, setNewReferrerPhone] = useState('');
+    const [isCreatingReferrer, setIsCreatingReferrer] = useState(false);
+    const [referrerSearchQuery, setReferrerSearchQuery] = useState('');
 
     const loadEventTypes = async () => {
         try {
@@ -225,6 +230,56 @@ export function ContactEventFormModal({
         const digitsOnly = value.replace(/\D/g, '');
         // Tomar los últimos 10 dígitos
         return digitsOnly.slice(-10);
+    };
+
+    const handleCreateReferrerContact = async () => {
+        if (!newReferrerName.trim() || !newReferrerPhone.trim()) {
+            toast.error('Nombre y teléfono son requeridos');
+            return;
+        }
+
+        // Normalizar teléfono (solo números)
+        const normalizedPhone = normalizePhone(newReferrerPhone);
+        if (normalizedPhone.length !== 10) {
+            toast.error('El teléfono debe tener 10 dígitos');
+            return;
+        }
+
+        setIsCreatingReferrer(true);
+        try {
+            const result = await createContact(studioSlug, {
+                name: newReferrerName.trim(),
+                phone: normalizedPhone,
+                status: 'prospecto',
+            });
+
+            if (result.success && result.data) {
+                // Recargar contactos para incluir el nuevo
+                await loadAllContacts();
+
+                // Asociar el nuevo contacto como referido
+                setReferrerInputValue(`@${result.data.name}`);
+                setFormData((prev) => ({
+                    ...prev,
+                    referrer_contact_id: result.data!.id,
+                    referrer_name: undefined,
+                }));
+
+                // Cerrar modal y limpiar
+                setShowCreateReferrerModal(false);
+                setNewReferrerName('');
+                setNewReferrerPhone('');
+                setShowReferrerSuggestions(false);
+                toast.success('Contacto creado y asociado como referido');
+            } else {
+                toast.error(result.error || 'Error al crear contacto');
+            }
+        } catch (error) {
+            console.error('Error creating referrer contact:', error);
+            toast.error('Error al crear contacto');
+        } finally {
+            setIsCreatingReferrer(false);
+        }
     };
 
     useEffect(() => {
@@ -1001,9 +1056,11 @@ export function ContactEventFormModal({
 
                                         if (value.includes('@')) {
                                             const afterAt = value.split('@').pop() || '';
-                                            if (afterAt.trim()) {
+                                            const searchText = afterAt.trim();
+                                            setReferrerSearchQuery(searchText);
+                                            if (searchText) {
                                                 const filtered = allContacts.filter((c) =>
-                                                    c.name.toLowerCase().includes(afterAt.toLowerCase())
+                                                    c.name.toLowerCase().includes(searchText.toLowerCase())
                                                 );
                                                 setFilteredReferrerContacts(filtered.map((c) => ({
                                                     id: c.id,
@@ -1025,7 +1082,24 @@ export function ContactEventFormModal({
                                             }
                                             setFormData((prev) => ({ ...prev, referrer_name: undefined }));
                                         } else {
-                                            setShowReferrerSuggestions(false);
+                                            // Sin @: mostrar sugerencias y botón crear si hay texto
+                                            const searchText = value.trim();
+                                            setReferrerSearchQuery(searchText);
+                                            if (searchText) {
+                                                const filtered = allContacts.filter((c) =>
+                                                    c.name.toLowerCase().includes(searchText.toLowerCase())
+                                                );
+                                                setFilteredReferrerContacts(filtered.map((c) => ({
+                                                    id: c.id,
+                                                    name: c.name,
+                                                    phone: c.phone,
+                                                    status: c.status,
+                                                    type: c.type,
+                                                })));
+                                                setShowReferrerSuggestions(true);
+                                            } else {
+                                                setShowReferrerSuggestions(false);
+                                            }
                                             setFormData((prev) => ({
                                                 ...prev,
                                                 referrer_name: value || undefined,
@@ -1035,7 +1109,45 @@ export function ContactEventFormModal({
                                     }}
                                     onKeyDown={handleReferrerInputKeyDown}
                                     onFocus={() => {
-                                        if (referrerInputValue.includes('@')) {
+                                        const value = referrerInputValue;
+                                        if (value.includes('@')) {
+                                            const afterAt = value.split('@').pop() || '';
+                                            const searchText = afterAt.trim();
+                                            setReferrerSearchQuery(searchText);
+                                            if (searchText) {
+                                                const filtered = allContacts.filter((c) =>
+                                                    c.name.toLowerCase().includes(searchText.toLowerCase())
+                                                );
+                                                setFilteredReferrerContacts(filtered.map((c) => ({
+                                                    id: c.id,
+                                                    name: c.name,
+                                                    phone: c.phone,
+                                                    status: c.status,
+                                                    type: c.type,
+                                                })));
+                                            } else {
+                                                setFilteredReferrerContacts(allContacts.slice(0, 10).map((c) => ({
+                                                    id: c.id,
+                                                    name: c.name,
+                                                    phone: c.phone,
+                                                    status: c.status,
+                                                    type: c.type,
+                                                })));
+                                            }
+                                            setShowReferrerSuggestions(true);
+                                        } else if (value.trim()) {
+                                            const searchText = value.trim();
+                                            setReferrerSearchQuery(searchText);
+                                            const filtered = allContacts.filter((c) =>
+                                                c.name.toLowerCase().includes(searchText.toLowerCase())
+                                            );
+                                            setFilteredReferrerContacts(filtered.map((c) => ({
+                                                id: c.id,
+                                                name: c.name,
+                                                phone: c.phone,
+                                                status: c.status,
+                                                type: c.type,
+                                            })));
                                             setShowReferrerSuggestions(true);
                                         }
                                     }}
@@ -1048,40 +1160,72 @@ export function ContactEventFormModal({
                                     disabled={loading}
                                 />
 
-                                {showReferrerSuggestions && filteredReferrerContacts.length > 0 && (
+                                {showReferrerSuggestions && (
                                     <div className="absolute z-50 mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-48 overflow-y-auto">
-                                        {filteredReferrerContacts.map((contact, index) => (
+                                        {filteredReferrerContacts.length > 0 ? (
+                                            <>
+                                                {filteredReferrerContacts.map((contact, index) => (
+                                                    <button
+                                                        key={contact.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const hasAt = referrerInputValue.includes('@');
+                                                            setReferrerInputValue(hasAt ? `@${contact.name}` : contact.name);
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                referrer_contact_id: contact.id,
+                                                                referrer_name: undefined,
+                                                            }));
+                                                            setShowReferrerSuggestions(false);
+                                                            setSelectedReferrerIndex(-1);
+                                                        }}
+                                                        onMouseEnter={() => setSelectedReferrerIndex(index)}
+                                                        className={`w-full px-3 py-2 text-left text-sm text-white hover:bg-zinc-800 flex items-center gap-2 transition-colors ${selectedReferrerIndex === index ? 'bg-zinc-800' : ''
+                                                            }`}
+                                                    >
+                                                        <span className="font-medium">{contact.name}</span>
+                                                        <span className="text-zinc-400 text-xs">({contact.phone})</span>
+                                                        {contact.status && (
+                                                            <span className={`ml-auto text-xs px-2 py-0.5 rounded ${contact.status === 'personal'
+                                                                ? 'bg-purple-500/20 text-purple-300'
+                                                                : contact.status === 'cliente'
+                                                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                                                    : 'bg-blue-500/20 text-blue-300'
+                                                                }`}>
+                                                                {contact.status === 'personal' ? 'Personal' : contact.status === 'cliente' ? 'Cliente' : 'Prospecto'}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                                {referrerSearchQuery.trim() && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setNewReferrerName(referrerSearchQuery);
+                                                            setShowCreateReferrerModal(true);
+                                                            setShowReferrerSuggestions(false);
+                                                        }}
+                                                        className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 transition-colors border-t border-zinc-700"
+                                                    >
+                                                        <span className="text-emerald-400">+</span>
+                                                        <span>Crear contacto "{referrerSearchQuery}"</span>
+                                                    </button>
+                                                )}
+                                            </>
+                                        ) : referrerSearchQuery.trim() ? (
                                             <button
-                                                key={contact.id}
                                                 type="button"
                                                 onClick={() => {
-                                                    setReferrerInputValue(`@${contact.name}`);
-                                                    setFormData((prev) => ({
-                                                        ...prev,
-                                                        referrer_contact_id: contact.id,
-                                                        referrer_name: undefined,
-                                                    }));
+                                                    setNewReferrerName(referrerSearchQuery);
+                                                    setShowCreateReferrerModal(true);
                                                     setShowReferrerSuggestions(false);
-                                                    setSelectedReferrerIndex(-1);
                                                 }}
-                                                onMouseEnter={() => setSelectedReferrerIndex(index)}
-                                                className={`w-full px-3 py-2 text-left text-sm text-white hover:bg-zinc-800 flex items-center gap-2 transition-colors ${selectedReferrerIndex === index ? 'bg-zinc-800' : ''
-                                                    }`}
+                                                className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 transition-colors"
                                             >
-                                                <span className="font-medium">{contact.name}</span>
-                                                <span className="text-zinc-400 text-xs">({contact.phone})</span>
-                                                {contact.status && (
-                                                    <span className={`ml-auto text-xs px-2 py-0.5 rounded ${contact.status === 'personal'
-                                                            ? 'bg-purple-500/20 text-purple-300'
-                                                            : contact.status === 'cliente'
-                                                                ? 'bg-emerald-500/20 text-emerald-300'
-                                                                : 'bg-blue-500/20 text-blue-300'
-                                                        }`}>
-                                                        {contact.status === 'personal' ? 'Personal' : contact.status === 'cliente' ? 'Cliente' : 'Prospecto'}
-                                                    </span>
-                                                )}
+                                                <span className="text-emerald-400">+</span>
+                                                <span>Crear contacto "{referrerSearchQuery}"</span>
                                             </button>
-                                        ))}
+                                        ) : null}
                                     </div>
                                 )}
                             </div>
@@ -1312,6 +1456,66 @@ export function ContactEventFormModal({
                     </div>
                 </form>
             )}
+
+            {/* Modal rápido para crear contacto referido */}
+            <ZenDialog
+                isOpen={showCreateReferrerModal}
+                onClose={() => {
+                    setShowCreateReferrerModal(false);
+                    setNewReferrerName('');
+                    setNewReferrerPhone('');
+                }}
+                title="Crear Contacto Referido"
+                description="Ingresa los datos mínimos para crear el contacto, después los podrás completar"
+                maxWidth="sm"
+                zIndex={10100}
+            >
+                <div className="space-y-4">
+                    <ZenInput
+                        label="Nombre"
+                        value={newReferrerName}
+                        onChange={(e) => setNewReferrerName(e.target.value)}
+                        placeholder="Nombre del referido"
+                        required
+                        autoFocus
+                    />
+                    <ZenInput
+                        label="Teléfono"
+                        type="tel"
+                        value={newReferrerPhone}
+                        onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            if (value.length <= 10) {
+                                setNewReferrerPhone(value);
+                            }
+                        }}
+                        placeholder="10 dígitos"
+                        required
+                        maxLength={10}
+                    />
+                    <div className="flex justify-end gap-2 pt-4 border-t border-zinc-800">
+                        <ZenButton
+                            variant="ghost"
+                            onClick={() => {
+                                setShowCreateReferrerModal(false);
+                                setNewReferrerName('');
+                                setNewReferrerPhone('');
+                            }}
+                            disabled={isCreatingReferrer}
+                        >
+                            Cancelar
+                        </ZenButton>
+                        <ZenButton
+                            variant="primary"
+                            onClick={handleCreateReferrerContact}
+                            loading={isCreatingReferrer}
+                            disabled={!newReferrerName.trim() || !newReferrerPhone.trim() || newReferrerPhone.length !== 10}
+                        >
+                            Crear y Asociar
+                        </ZenButton>
+                    </div>
+                </div>
+            </ZenDialog>
         </ZenDialog>
     );
 }

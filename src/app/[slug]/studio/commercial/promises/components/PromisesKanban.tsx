@@ -27,7 +27,7 @@ import {
 import { ZenInput, ZenButton } from '@/components/ui/zen';
 import { PromiseKanbanCard } from './PromiseKanbanCard';
 import { PipelineConfigModal } from './PipelineConfigModal';
-import { ContactEventFormModal } from '@/components/shared/contact-info';
+import { ContactEventFormModal } from '@/components/shared/contact-info/ContactEventFormModal';
 import { PromiseTagsManageModal } from './PromiseTagsManageModal';
 import { movePromise } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';

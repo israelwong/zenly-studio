@@ -130,7 +130,7 @@ export default function PromisesPage() {
               </ZenButton>
               <ZenDropdownMenu>
                 <ZenDropdownMenuTrigger asChild>
-                  <ZenButton variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <ZenButton variant="ghost" size="sm" className="h-8 w-8 p-0" suppressHydrationWarning>
                     <MoreVertical className="h-4 w-4" />
                   </ZenButton>
                 </ZenDropdownMenuTrigger>
