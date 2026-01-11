@@ -356,7 +356,7 @@ export async function autorizarCotizacionLegacy(
     revalidatePath(`/${validated.studio_slug}/studio/commercial/promises/${validated.promise_id}`);
     revalidatePath(`/${validated.studio_slug}/studio/business/events`);
     revalidatePath(`/${validated.studio_slug}/studio/business/events/${eventId}`);
-    revalidatePath(`/${validated.studio_slug}/studio/dashboard/agenda`);
+    // Agenda ahora es un sheet, no necesita revalidación de ruta
 
     return {
       success: true,

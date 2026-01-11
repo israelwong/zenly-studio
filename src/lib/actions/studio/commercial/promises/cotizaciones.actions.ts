@@ -1668,7 +1668,7 @@ export async function cancelarCotizacionYEvento(
       revalidatePath(`/${studioSlug}/studio/business/events`);
       revalidatePath(`/${studioSlug}/studio/business/events/${eventoId}`);
     }
-    revalidatePath(`/${studioSlug}/studio/dashboard/agenda`);
+    // Agenda ahora es un sheet, no necesita revalidación de ruta
 
     return {
       success: true,

@@ -84,7 +84,8 @@ export async function notifyAgendaCreated(
   }
 
   // Determinar contexto y ruta
-  let route = '/{slug}/studio/dashboard/agenda';
+  // La agenda ahora es un sheet, así que redirigimos al dashboard comercial
+  let route = '/{slug}/studio/commercial/dashboard';
   
   if (promiseId) {
     route = '/{slug}/studio/commercial/promises/{promise_id}';

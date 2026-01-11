@@ -41,12 +41,14 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
         );
     }
 
-    // Agregar tab FAQ si hay FAQs activas o si hay usuario autenticado
-    if (hasActiveFAQs || user) {
+    // Agregar tab FAQ:
+    // - Si es owner: siempre mostrar (puede gestionar FAQs)
+    // - Si es público: solo mostrar si hay FAQs activas
+    if (isOwner || hasActiveFAQs) {
         baseTabs.push({ id: 'faq', label: 'FAQ', icon: HelpCircle });
     }
 
-    // Agregar tab "Archivados" solo si el usuario es el owner (no solo autenticado)
+    // Agregar tab "Archivados" solo si el usuario es el owner
     const tabs = isOwner
         ? [...baseTabs, { id: 'archivados', label: 'Archivados', icon: Archive }]
         : baseTabs;

@@ -1507,7 +1507,7 @@ export async function deletePromise(
     });
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidatePath(`/${studioSlug}/studio/dashboard/agenda`); // Revalidar calendario
+      // Agenda ahora es un sheet, no necesita revalidación de ruta
     return { success: true };
   } catch (error) {
     console.error('[PROMISES] Error eliminando promise:', error);
@@ -1637,7 +1637,7 @@ export async function deleteTestPromises(
     // Revalidar rutas
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/crm`);
-    revalidatePath(`/${studioSlug}/studio/dashboard/agenda`);
+    // Agenda ahora es un sheet, no necesita revalidación de ruta
 
     return {
       success: true,

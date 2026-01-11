@@ -1710,7 +1710,7 @@ export async function cancelarEvento(
     // Revalidar paths
     revalidatePath(`/${studioSlug}/studio/business/events`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventoId}`);
-    revalidatePath(`/${studioSlug}/studio/dashboard/agenda`); // Revalidar calendario
+    // Agenda ahora es un sheet, no necesita revalidación de ruta
     if (evento.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${evento.promise_id}`);
       revalidatePath(`/${studioSlug}/studio/commercial/promises`);

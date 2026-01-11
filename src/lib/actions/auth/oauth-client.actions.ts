@@ -25,13 +25,13 @@ export async function iniciarVinculacionRecursoGoogleClient(
           if (referrerPath.includes(`/${studioSlug}/`)) {
             currentPath = referrerPath;
           } else {
-            currentPath = `/${studioSlug}/studio/dashboard`;
+            currentPath = `/${studioSlug}/studio/commercial/dashboard`;
           }
         } catch {
-          currentPath = `/${studioSlug}/studio/dashboard`;
+          currentPath = `/${studioSlug}/studio/commercial/dashboard`;
         }
       } else {
-        currentPath = `/${studioSlug}/studio/dashboard`;
+        currentPath = `/${studioSlug}/studio/commercial/dashboard`;
       }
     }
     

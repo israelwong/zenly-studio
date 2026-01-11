@@ -508,7 +508,7 @@ export async function GET(request: NextRequest) {
       // Validar y obtener URL segura de redirección
       const redirectPath = getSafeRedirectUrl(
         next,
-        `/${studioSlug}/studio/dashboard`, // Fallback al dashboard del studio
+        `/${studioSlug}/studio/commercial/dashboard`, // Fallback al dashboard del studio
         request
       );
       
