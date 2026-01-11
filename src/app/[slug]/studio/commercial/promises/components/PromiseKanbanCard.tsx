@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound, Tag, Percent, HandCoins } from 'lucide-react';
+import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Eye, X, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials, formatDate } from '@/lib/actions/utils/formatting';
-import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge } from '@/components/ui/zen';
-import { getPromiseTagsByPromiseId, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
+import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenDialog, ZenButton } from '@/components/ui/zen';
+import { getPromiseTagsByPromiseId, getPromiseTags, addTagToPromise, removeTagFromPromise, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
+import { toast } from 'sonner';
 import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
@@ -17,10 +18,16 @@ interface PromiseKanbanCardProps {
     onClick?: (promise: PromiseWithContact) => void;
     studioSlug?: string;
     onArchived?: () => void;
+    onTagsUpdated?: () => void;
 }
 
-export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: PromiseKanbanCardProps) {
+export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, onTagsUpdated }: PromiseKanbanCardProps) {
     const [showArchiveModal, setShowArchiveModal] = useState(false);
+    const [showTagsModal, setShowTagsModal] = useState(false);
+    const [availableTags, setAvailableTags] = useState<PromiseTag[]>([]);
+    const [isLoadingTags, setIsLoadingTags] = useState(false);
+    const [isAddingTag, setIsAddingTag] = useState<string | null>(null);
+    const [isRemovingTag, setIsRemovingTag] = useState<string | null>(null);
     const {
         attributes,
         listeners,
@@ -36,7 +43,6 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
             ? 'none'
             : `${transition}, all 0.2s cubic-bezier(0.18, 0.67, 0.6, 1.22)`,
         opacity: isDragging ? 0 : 1,
-        cursor: isDragging ? 'grabbing' : 'pointer',
     };
 
     // Obtener fecha de evento (event_date tiene prioridad, luego defined_date, luego interested_dates)
@@ -82,9 +88,17 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
 
 
     // Si los datos no vienen en la promesa, cargarlos (fallback para compatibilidad)
-    const [fallbackTags, setFallbackTags] = useState<PromiseTag[]>([]);
+    // Inicializar con promise.tags si existe para que las actualizaciones locales funcionen
+    const [fallbackTags, setFallbackTags] = useState<PromiseTag[]>((promise.tags as PromiseTag[]) || []);
     const [fallbackAgendamiento, setFallbackAgendamiento] = useState<AgendaItem | null>(null);
     const [fallbackCotizacionesCount, setFallbackCotizacionesCount] = useState<number>(0);
+
+    // Sincronizar fallbackTags cuando promise.tags cambia desde el padre
+    useEffect(() => {
+        if (promise.tags) {
+            setFallbackTags(promise.tags as PromiseTag[]);
+        }
+    }, [promise.tags]);
 
     useEffect(() => {
         const promiseId = promise.promise_id;
@@ -136,6 +150,58 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
         loadData();
     }, [promise.promise_id, studioSlug, promise.tags, promise.agenda, promise.cotizaciones_count]);
 
+    // Cargar tags disponibles cuando se abre el modal
+    useEffect(() => {
+        if (!showTagsModal || !studioSlug) {
+            setAvailableTags([]);
+            setIsLoadingTags(false);
+            return;
+        }
+
+        let cancelled = false;
+        const loadAvailableTags = async () => {
+            setIsLoadingTags(true);
+            try {
+                const result = await getPromiseTags(studioSlug);
+                if (cancelled) return;
+
+                if (result.success && result.data) {
+                    // Filtrar tags que ya están asignadas a la promesa
+                    // Usar fallbackTags que siempre está actualizado
+                    const currentTagIds = fallbackTags.map(t => t.id);
+                    const filtered = result.data.filter(tag => !currentTagIds.includes(tag.id));
+                    if (!cancelled) {
+                        setAvailableTags(filtered);
+                    }
+                } else {
+                    console.error('Error loading tags:', result.error);
+                    if (!cancelled) {
+                        toast.error(result.error || 'Error al cargar etiquetas');
+                        setAvailableTags([]);
+                    }
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error('Error loading tags:', error);
+                    toast.error('Error al cargar etiquetas');
+                    setAvailableTags([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoadingTags(false);
+                }
+            }
+        };
+
+        loadAvailableTags();
+
+        return () => {
+            cancelled = true;
+        };
+        // Solo ejecutar cuando se abre el modal, no cuando cambian las tags
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showTagsModal, studioSlug]);
+
     // Usar datos de la promesa o fallback
     const finalTags = promise.tags || fallbackTags;
     const finalAgendamiento: AgendaItem | null = promise.agenda && promise.agenda.date ? {
@@ -175,11 +241,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
     };
 
     // Confirmar archivar promesa
-    const handleConfirmArchive = (e?: React.MouseEvent) => {
-        if (e) {
-            e.stopPropagation();
-            e.preventDefault();
-        }
+    const handleConfirmArchive = () => {
         if (!promise.promise_id) return;
         setShowArchiveModal(false);
         // Usar setTimeout para asegurar que el modal se cierre antes de ejecutar onArchived
@@ -188,15 +250,66 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
         }, 0);
     };
 
-    const handleClick = (e: React.MouseEvent) => {
-        // Si hay arrastre activo, prevenir el clic
-        if (isDragging) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-        }
+    // Agregar etiqueta a la promesa
+    const handleAddTag = async (tagId: string) => {
+        if (!promise.promise_id) return;
 
-        // Ejecutar onClick normalmente
+        setIsAddingTag(tagId);
+        try {
+            const result = await addTagToPromise(promise.promise_id, tagId);
+            if (result.success) {
+                // Buscar el tag en availableTags para agregarlo localmente
+                const tagToAdd = availableTags.find(tag => tag.id === tagId);
+                if (tagToAdd) {
+                    // Actualizar tags localmente
+                    setFallbackTags(prev => [...prev, tagToAdd]);
+                    // Remover de availableTags
+                    setAvailableTags(prev => prev.filter(tag => tag.id !== tagId));
+                }
+                toast.success('Etiqueta agregada');
+                // No cerrar el modal automáticamente para permitir agregar más
+            } else {
+                toast.error(result.error || 'Error al agregar etiqueta');
+            }
+        } catch (error) {
+            console.error('Error adding tag:', error);
+            toast.error('Error al agregar etiqueta');
+        } finally {
+            setIsAddingTag(null);
+        }
+    };
+
+    // Eliminar etiqueta de la promesa
+    const handleRemoveTag = async (tagId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!promise.promise_id) return;
+
+        setIsRemovingTag(tagId);
+        try {
+            const result = await removeTagFromPromise(promise.promise_id, tagId);
+            if (result.success) {
+                // Guardar el tag eliminado para poder restaurarlo si es necesario
+                const removedTag = finalTags.find(t => t.id === tagId);
+                // Actualizar tags localmente
+                setFallbackTags(prev => prev.filter(t => t.id !== tagId));
+                // Si el modal está abierto, agregar el tag de vuelta a availableTags
+                if (showTagsModal && removedTag) {
+                    setAvailableTags(prev => [...prev, removedTag as PromiseTag]);
+                }
+                toast.success('Etiqueta eliminada');
+                // NO llamar a onTagsUpdated para evitar recargar todo el kanban
+            } else {
+                toast.error(result.error || 'Error al eliminar etiqueta');
+            }
+        } catch (error) {
+            console.error('Error removing tag:', error);
+            toast.error('Error al eliminar etiqueta');
+        } finally {
+            setIsRemovingTag(null);
+        }
+    };
+
+    const handleViewDetails = () => {
         if (onClick) {
             onClick(promise);
         }
@@ -208,28 +321,70 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
                 ref={setNodeRef}
                 style={style}
                 {...attributes}
-                {...listeners}
+                // ⚠️ NO listeners aquí - solo en el handle
                 data-id={promise.promise_id || promise.id}
-                onClick={handleClick}
                 className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700 hover:border-zinc-600 transition-all duration-200 hover:shadow-lg relative"
             >
-                {/* Icono de archivar en esquina superior derecha - mostrar solo si NO está archivada */}
-                {promise.promise_id && studioSlug && !isArchived && (
-                    <button
-                        onClick={handleArchiveClick}
-                        className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
-                        title="Archivar promesa"
-                    >
-                        <Archive className="h-4 w-4" />
-                    </button>
+                {/* Drag Handle - Esquina superior izquierda */}
+                <div
+                    {...listeners}
+                    className="absolute top-2 left-2 p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 cursor-grab active:cursor-grabbing z-20"
+                    title="Arrastrar para mover"
+                >
+                    <GripVertical className="h-4 w-4" />
+                </div>
+
+                {/* Botones de Acciones - Esquina superior derecha */}
+                {promise.promise_id && studioSlug && (
+                    <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
+                        {/* Botón Ver detalles */}
+                        <button
+                            onClick={handleViewDetails}
+                            className="p-1 rounded-md bg-zinc-800/60 hover:bg-emerald-500/20 border border-zinc-700/50 hover:border-emerald-500/50 transition-colors text-zinc-400 hover:text-emerald-400 z-20"
+                            title="Ver detalles"
+                        >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+
+                        {/* Menú dropdown */}
+                        <ZenDropdownMenu>
+                            <ZenDropdownMenuTrigger asChild>
+                                <button
+                                    className="p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
+                                    title="Más opciones"
+                                >
+                                    <MoreVertical className="h-4 w-4" />
+                                </button>
+                            </ZenDropdownMenuTrigger>
+                            <ZenDropdownMenuContent align="end">
+                                <ZenDropdownMenuItem onClick={handleViewDetails}>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Ver detalles
+                                </ZenDropdownMenuItem>
+                                <ZenDropdownMenuItem onClick={() => setShowTagsModal(true)}>
+                                    <Tag className="h-4 w-4 mr-2" />
+                                    Agregar etiquetas
+                                </ZenDropdownMenuItem>
+                                {!isArchived && (
+                                    <>
+                                        <ZenDropdownMenuSeparator />
+                                        <ZenDropdownMenuItem onClick={handleArchiveClick}>
+                                            <Archive className="h-4 w-4 mr-2" />
+                                            Archivar
+                                        </ZenDropdownMenuItem>
+                                    </>
+                                )}
+                            </ZenDropdownMenuContent>
+                        </ZenDropdownMenu>
+                    </div>
                 )}
 
-                <div className="space-y-2.5 relative z-10">
-                    {/* Header: Avatar, Nombre y Tipo de evento */}
-                    <div className="flex items-center gap-2.5">
+                <div className="space-y-1.5 relative z-10">
+                    {/* Header: Avatar, Nombre y Tipo evento */}
+                    <div className="flex items-start gap-2 pl-8">
                         {/* Avatar - solo mostrar si hay imagen o nombre válido */}
                         {(promise.avatar_url || (promise.name && formatInitials(promise.name))) && (
-                            <ZenAvatar className="h-12 w-12 flex-shrink-0">
+                            <ZenAvatar className="h-10 w-10 shrink-0">
                                 {promise.avatar_url ? (
                                     <ZenAvatarImage
                                         src={promise.avatar_url}
@@ -242,8 +397,9 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
                             </ZenAvatar>
                         )}
 
-                        {/* Nombre, Teléfono y Tipo de evento */}
-                        <div className="flex-1 min-w-0">
+                        {/* Información del contacto - Reorganizada */}
+                        <div className="flex-1 min-w-0 space-y-1">
+                            {/* Nombre contacto */}
                             <div className="flex items-center gap-2">
                                 <h3 className="font-medium text-white text-sm leading-tight truncate">{promise.name}</h3>
                                 {/* Badge de prueba */}
@@ -254,24 +410,29 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
                                     </span>
                                 )}
                             </div>
-                            {promise.phone && (
-                                <div className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5">
-                                    <Phone className="h-3 w-3 flex-shrink-0" />
-                                    <span className="truncate">{promise.phone}</span>
-                                </div>
-                            )}
+
+                            {/* Tipo evento */}
                             {promise.event_type && (
-                                <p className="text-xs text-zinc-400 mt-0.5">{promise.event_type.name}</p>
+                                <div className="text-xs text-zinc-400">
+                                    <span className="truncate">{promise.event_type.name}</span>
+                                </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Fecha de interés - Color dinámico según urgencia */}
+                    {/* Línea separadora sutil */}
+                    <div className="border-t border-zinc-700/30 pt-1.5"></div>
+
+                    {/* Fecha de evento - Separada debajo */}
                     {eventDate && (
                         <div className={`flex items-center gap-1.5 text-xs ${getDateColor()}`}>
-                            <Calendar className="h-3 w-3 flex-shrink-0" />
+                            <Calendar className="h-3 w-3 shrink-0" />
                             <span className="font-medium">
-                                {formatDate(eventDate)}
+                                {new Intl.DateTimeFormat("es-MX", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric"
+                                }).format(eventDate)}
                                 {daysRemaining !== null && (
                                     <span className="ml-1.5 font-normal opacity-80">
                                         {isExpired
@@ -284,86 +445,73 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
                         </div>
                     )}
 
-                    {/* Etiquetas - Badges minimalistas full rounded */}
-                    {finalTags.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            {finalTags.map((tag) => (
-                                <span
-                                    key={tag.id}
-                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                                    style={{
-                                        backgroundColor: `${tag.color}20`,
-                                        color: tag.color,
-                                    }}
-                                >
-                                    {tag.name}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Badge de procedencia */}
-                    {promise.offer ? (
-                        <div className="flex items-start gap-1.5 text-xs">
-                            <Tag className="h-3 w-3 mt-0.5 flex-shrink-0 text-purple-400" />
-                            <div className="flex-1 min-w-0">
-                                <div className="text-purple-300 font-medium truncate">
-                                    {promise.offer.name}
-                                </div>
-                                {promise.offer.business_term && (
-                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                        {promise.offer.business_term.discount_percentage !== null && (
-                                            <span className="inline-flex items-center gap-0.5 text-purple-400/80">
-                                                <Percent className="h-2.5 w-2.5" />
-                                                {promise.offer.business_term.discount_percentage}% desc.
-                                            </span>
-                                        )}
-                                        {promise.offer.business_term.advance_percentage !== null && (
-                                            <span className="inline-flex items-center gap-0.5 text-purple-400/80">
-                                                <HandCoins className="h-2.5 w-2.5" />
-                                                {promise.offer.business_term.advance_percentage}% anticipo
-                                            </span>
+                    {/* Detalles - Mostrados directamente debajo de la fecha */}
+                    {(promise.offer || finalAgendamiento || promise.updated_at || promise.last_log) && (
+                        <div className="space-y-1.5">
+                            {/* Badge de procedencia */}
+                            {promise.offer ? (
+                                <div className="flex items-start gap-1.5 text-xs">
+                                    <Tag className="h-3 w-3 mt-0.5 shrink-0 text-purple-400" />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-purple-300 font-medium truncate">
+                                            {promise.offer.name}
+                                        </div>
+                                        {promise.offer.business_term && (
+                                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                {promise.offer.business_term.discount_percentage !== null && (
+                                                    <span className="inline-flex items-center gap-0.5 text-purple-400/80">
+                                                        <Percent className="h-2.5 w-2.5" />
+                                                        {promise.offer.business_term.discount_percentage}% desc.
+                                                    </span>
+                                                )}
+                                                {promise.offer.business_term.advance_percentage !== null && (
+                                                    <span className="inline-flex items-center gap-0.5 text-purple-400/80">
+                                                        <HandCoins className="h-2.5 w-2.5" />
+                                                        {promise.offer.business_term.advance_percentage}% anticipo
+                                                    </span>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                            <Tag className="h-3 w-3 flex-shrink-0" />
-                            <span>Registro manual</span>
-                        </div>
-                    )}
-
-                    {/* Cita agendada */}
-                    {finalAgendamiento && (
-                        <div className={`flex items-center gap-1.5 text-xs ${finalAgendamiento.type_scheduling === 'virtual' ? 'text-blue-400' : 'text-zinc-400'}`}>
-                            {finalAgendamiento.type_scheduling === 'virtual' ? (
-                                <Video className="h-3 w-3 flex-shrink-0" />
+                                </div>
                             ) : (
-                                <MapPin className="h-3 w-3 flex-shrink-0" />
+                                <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                                    <Tag className="h-3 w-3 shrink-0" />
+                                    <span>Registro manual</span>
+                                </div>
                             )}
-                            <span>
-                                Cita {getTipoCita(finalAgendamiento)} - {formatAgendamientoDate(finalAgendamiento)}
-                            </span>
-                        </div>
-                    )}
 
-                    {/* Última interacción - solo tiempo relativo */}
-                    {promise.updated_at && (
-                        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                            <Calendar className="h-3 w-3 flex-shrink-0" />
-                            <span>
-                                Últ. interacción: {formatRelativeTime(promise.updated_at)}
-                            </span>
-                        </div>
-                    )}
+                            {/* Cita agendada */}
+                            {finalAgendamiento && (
+                                <div className={`flex items-center gap-1.5 text-xs ${finalAgendamiento.type_scheduling === 'virtual' ? 'text-blue-400' : 'text-zinc-400'}`}>
+                                    {finalAgendamiento.type_scheduling === 'virtual' ? (
+                                        <Video className="h-3 w-3 shrink-0" />
+                                    ) : (
+                                        <MapPin className="h-3 w-3 shrink-0" />
+                                    )}
+                                    <span>
+                                        Cita {getTipoCita(finalAgendamiento)} - {formatAgendamientoDate(finalAgendamiento)}
+                                    </span>
+                                </div>
+                            )}
 
-                    {/* Último log asociado */}
-                    {promise.last_log && (
-                        <div className="flex items-start gap-1.5 text-xs text-zinc-500">
-                            <MessageSquare className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                            <p className="line-clamp-2 flex-1">{promise.last_log.content}</p>
+                            {/* Última interacción */}
+                            {promise.updated_at && (
+                                <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                                    <Calendar className="h-3 w-3 shrink-0" />
+                                    <span>
+                                        Últ. interacción: {formatRelativeTime(promise.updated_at)}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Último log asociado */}
+                            {promise.last_log && (
+                                <div className="flex items-start gap-1.5 text-xs text-zinc-500">
+                                    <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
+                                    <p className="line-clamp-2 flex-1">{promise.last_log.content}</p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -380,6 +528,45 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived }: 
                 cancelText="Cancelar"
                 variant="destructive"
             />
+
+            {/* Modal de etiquetas */}
+            <ZenDialog
+                isOpen={showTagsModal}
+                onClose={() => setShowTagsModal(false)}
+                title="Agregar etiquetas"
+                description="Selecciona una etiqueta para agregar a esta promesa"
+                maxWidth="md"
+            >
+                <div className="space-y-4">
+                    {isLoadingTags ? (
+                        <div className="text-center py-8 text-zinc-400">Cargando etiquetas...</div>
+                    ) : availableTags.length === 0 ? (
+                        <div className="text-center py-8 text-zinc-400">
+                            No hay etiquetas disponibles para agregar
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto">
+                            {availableTags.map((tag) => (
+                                <button
+                                    key={tag.id}
+                                    onClick={() => handleAddTag(tag.id)}
+                                    disabled={isAddingTag === tag.id}
+                                    className="flex items-center gap-3 p-3 rounded-lg border border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <div
+                                        className="w-4 h-4 rounded-full shrink-0"
+                                        style={{ backgroundColor: tag.color }}
+                                    />
+                                    <span className="text-sm text-zinc-200 flex-1">{tag.name}</span>
+                                    {isAddingTag === tag.id && (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent" />
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </ZenDialog>
         </>
     );
 }

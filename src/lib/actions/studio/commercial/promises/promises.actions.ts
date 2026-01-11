@@ -93,6 +93,14 @@ export async function getPromises(
           select: {
             id: true,
             status: true,
+            promise_id: true, // Incluir promise_id para validación explícita
+            cotizacion_id: true, // Incluir cotizacion_id para validar que tenga cotización autorizada
+            cotizacion: {
+              select: {
+                id: true,
+                status: true,
+              },
+            },
           },
         },
         logs: {
@@ -178,6 +186,30 @@ export async function getPromises(
           updated_at: pt.tag.updated_at,
         })) || [];
 
+      // Validar que el evento realmente pertenezca a esta promesa Y tenga cotización autorizada
+      // Un evento solo es válido si tiene una cotización autorizada/aprobada asociada
+      let validEvent = null;
+      if (promise.event) {
+        // Validación 1: el evento debe tener el promise_id correcto
+        const hasCorrectPromiseId = promise.event.promise_id === promise.id;
+        
+        // Validación 2: el evento debe tener cotización autorizada/aprobada
+        const cotizacionStatus = promise.event.cotizacion?.status;
+        const hasAuthorizedCotizacion = promise.event.cotizacion_id && 
+          cotizacionStatus && 
+          ['autorizada', 'aprobada', 'approved'].includes(cotizacionStatus.toLowerCase());
+        
+        if (hasCorrectPromiseId && hasAuthorizedCotizacion) {
+          validEvent = {
+            id: promise.event.id,
+            status: promise.event.status,
+          };
+        } else {
+          // No asignar el evento si no cumple las condiciones
+          validEvent = null;
+        }
+      }
+
       return {
         id: promise.contact.id,
         promise_id: promise.id,
@@ -203,7 +235,7 @@ export async function getPromises(
         last_log: promise.logs?.[0] || null,
         tags: tags.length > 0 ? tags : undefined,
         cotizaciones_count: promise.quotes?.length || 0,
-        event: promise.event || null,
+        event: validEvent,
         agenda: promise.agenda?.[0] || null,
         offer: promise.offer ? {
           id: promise.offer.id,
@@ -306,6 +338,14 @@ export async function getPromiseByIdAsPromiseWithContact(
           select: {
             id: true,
             status: true,
+            promise_id: true, // Incluir promise_id para validación explícita
+            cotizacion_id: true, // Incluir cotizacion_id para validar que tenga cotización autorizada
+            cotizacion: {
+              select: {
+                id: true,
+                status: true,
+              },
+            },
           },
         },
         logs: {
@@ -390,6 +430,23 @@ export async function getPromiseByIdAsPromiseWithContact(
         updated_at: pt.tag.updated_at,
       })) || [];
 
+    // Validar que el evento tenga cotización autorizada (misma lógica que en getPromises)
+    let validEvent = null;
+    if (promise.event) {
+      const hasCorrectPromiseId = promise.event.promise_id === promise.id;
+      const cotizacionStatus = promise.event.cotizacion?.status;
+      const hasAuthorizedCotizacion = promise.event.cotizacion_id && 
+        cotizacionStatus && 
+        ['autorizada', 'aprobada', 'approved'].includes(cotizacionStatus.toLowerCase());
+      
+      if (hasCorrectPromiseId && hasAuthorizedCotizacion) {
+        validEvent = {
+          id: promise.event.id,
+          status: promise.event.status,
+        };
+      }
+    }
+
     const promiseWithContact: PromiseWithContact = {
       id: promise.contact.id,
       promise_id: promise.id,
@@ -423,7 +480,7 @@ export async function getPromiseByIdAsPromiseWithContact(
       last_log: promise.logs?.[0] || null,
       tags: tags.length > 0 ? tags : undefined,
       cotizaciones_count: promise.quotes?.length || 0,
-      event: promise.event || null,
+      event: validEvent,
       agenda: promise.agenda?.[0] || null,
       offer: promise.offer ? {
         id: promise.offer.id,
@@ -1071,6 +1128,14 @@ export async function movePromise(
           select: {
             id: true,
             status: true,
+            promise_id: true, // Incluir promise_id para validación explícita
+            cotizacion_id: true, // Incluir cotizacion_id para validar que tenga cotización autorizada
+            cotizacion: {
+              select: {
+                id: true,
+                status: true,
+              },
+            },
           },
         },
       },
@@ -1096,11 +1161,29 @@ export async function movePromise(
     const newStageName = newStage.name;
     const newStageSlug = newStage.slug;
 
-    // Restricción: Si la promesa está en "approved" y tiene evento asociado,
+    // Restricción: Si la promesa está en "approved" y tiene evento asociado CON cotización autorizada,
     // solo se puede mover a "archived"
+    // Un evento solo es válido si tiene una cotización autorizada/aprobada asociada
+    const eventId = promise.event?.id;
+    const hasEventId = Boolean(
+      eventId &&
+      typeof eventId === 'string' &&
+      eventId.trim() !== ''
+    );
+    
+    // Validar que el evento tenga cotización autorizada
+    const cotizacionStatus = promise.event?.cotizacion?.status;
+    const hasAuthorizedCotizacion = Boolean(
+      promise.event?.cotizacion_id &&
+      cotizacionStatus &&
+      ['autorizada', 'aprobada', 'approved'].includes(cotizacionStatus.toLowerCase())
+    );
+    
+    const hasValidEvent = hasEventId && hasAuthorizedCotizacion;
+    
     if (
       promise.pipeline_stage?.slug === 'approved' &&
-      promise.event &&
+      hasValidEvent &&
       newStageSlug !== 'archived'
     ) {
       return {

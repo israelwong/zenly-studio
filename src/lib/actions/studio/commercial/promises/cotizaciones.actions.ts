@@ -70,19 +70,17 @@ export async function createCotizacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener o crear evento
-    let eventoId: string;
+    // Obtener datos del promise (sin crear evento)
+    // El evento solo se crea cuando se autoriza la cotización
     let eventTypeId: string;
     let contactId: string | null = validatedData.contact_id || null;
-    let contact: { id: string; name: string; phone: string; email: string | null } | null = null;
 
     if (validatedData.promise_id) {
-      // Si hay promise_id, obtener el promise y su evento asociado
+      // Si hay promise_id, obtener el promise
       const promise = await prisma.studio_promises.findUnique({
         where: { id: validatedData.promise_id },
         include: {
           contact: true,
-          event: true,
         },
       });
 
@@ -91,63 +89,25 @@ export async function createCotizacion(
       }
 
       contactId = promise.contact_id || validatedData.contact_id || null;
-      contact = promise.contact;
-
-      // Buscar evento existente asociado al promise
-      let evento = await prisma.studio_events.findUnique({
-        where: { promise_id: validatedData.promise_id },
-      });
-
-      if (!evento) {
-        // Crear evento si no existe
-        if (!contactId || !contact) {
-          return { success: false, error: 'El promise no tiene contacto asociado' };
-        }
-
-        // Crear evento usando contact_id directamente
-        evento = await prisma.studio_events.create({
-          data: {
-            studio_id: studio.id,
-            contact_id: contactId,
-            promise_id: validatedData.promise_id,
-            event_type_id: promise.event_type_id || null,
-            event_date: promise.defined_date || new Date(),
-            status: 'ACTIVE',
-          },
-        });
-
-        // Actualizar contacto de "prospecto" a "cliente" cuando se crea un evento
-        if (contact && contact.status === 'prospecto') {
-          await prisma.studio_contacts.update({
-            where: { id: contactId },
-            data: {
-              status: 'cliente',
-              updated_at: new Date(),
-            },
-          });
-        }
-      }
-
-      eventoId = evento.id;
-      eventTypeId = evento.event_type_id || promise.event_type_id || '';
+      eventTypeId = promise.event_type_id || '';
 
       if (!eventTypeId) {
-        return { success: false, error: 'El evento no tiene tipo de evento asociado' };
+        return { success: false, error: 'El promise no tiene tipo de evento asociado' };
       }
     } else {
-      // Si no hay promise_id, necesitamos crear un evento básico
-      // Por ahora, retornamos error ya que es requerido
+      // Si no hay promise_id, retornamos error ya que es requerido
       return {
         success: false,
         error: 'Se requiere un promise_id para crear la cotización',
       };
     }
 
-    // Crear cotización
+    // Crear cotización SIN evento (evento_id será null)
+    // El evento se creará cuando se autorice la cotización
     const cotizacion = await prisma.studio_cotizaciones.create({
       data: {
         studio_id: studio.id,
-        evento_id: eventoId,
+        evento_id: null, // No crear evento al crear cotización
         event_type_id: eventTypeId,
         promise_id: validatedData.promise_id || null,
         contact_id: contactId,

@@ -6,6 +6,9 @@ import { Search, Settings, Archive, X } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
+  closestCorners,
+  pointerWithin,
+  getFirstCollision,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -14,6 +17,7 @@ import {
   DragStartEvent,
   DragOverlay,
   useDroppable,
+  CollisionDetection,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -64,6 +68,7 @@ export function PromisesKanban({
   const isPromiseFormModalOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
   const setIsPromiseFormModalOpen = externalSetIsOpen || setInternalIsOpen;
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activePromiseStageId, setActivePromiseStageId] = useState<string | null>(null);
   const [localPromises, setLocalPromises] = useState<PromiseWithContact[]>(promises);
   const prevPromisesRef = useRef<PromiseWithContact[]>(promises);
   const isDraggingRef = useRef(false);
@@ -109,6 +114,49 @@ export function PromisesKanban({
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Estrategia de detección de colisiones mejorada - solo detecta columnas, ignora cards
+  const collisionDetection: CollisionDetection = (args) => {
+    // Obtener todas las colisiones posibles
+    const pointerIntersections = pointerWithin(args);
+    const cornersCollisions = closestCorners(args);
+    
+    // Combinar ambas estrategias
+    const allCollisions = [...pointerIntersections, ...cornersCollisions];
+    
+    // Filtrar para SOLO considerar columnas (stages), ignorar items sortables (promises)
+    // Las columnas son los IDs de las etapas del pipeline
+    const stageIds = new Set(pipelineStages.map(stage => stage.id));
+    
+    // Buscar solo columnas droppables, ignorar completamente los cards
+    const columnCollisions = allCollisions.filter(collision => 
+      stageIds.has(collision.id as string)
+    );
+    
+    // Si encontramos una columna, devolverla
+    if (columnCollisions.length > 0) {
+      // Si hay múltiples columnas, usar la más cercana al puntero
+      return [columnCollisions[0]];
+    }
+    
+    // Si no hay columna detectada pero estamos arrastrando, usar la columna inicial
+    // Esto evita que los cards interfieran cuando el puntero está sobre ellos
+    if (activePromiseStageId && stageIds.has(activePromiseStageId)) {
+      return [{ id: activePromiseStageId }];
+    }
+    
+    // Fallback: intentar encontrar la columna más cercana usando closestCorners
+    // pero filtrando solo columnas
+    const closestColumn = cornersCollisions.find(collision => 
+      stageIds.has(collision.id as string)
+    );
+    
+    if (closestColumn) {
+      return [closestColumn];
+    }
+    
+    return [];
+  };
 
   // Sincronizar búsqueda externa si cambia (solo una vez al cargar)
   useEffect(() => {
@@ -309,6 +357,7 @@ export function PromisesKanban({
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
+    setActivePromiseStageId(null);
     // NO resetear isDraggingRef aquí - se reseteará después de completar la actualización
 
     if (!over || active.id === over.id) {
@@ -332,9 +381,19 @@ export function PromisesKanban({
 
     // Restricción: Si la promesa está en "approved" y tiene evento asociado,
     // solo se puede mover a "archived"
+    // Un evento solo existe cuando se autoriza una cotización, antes de eso no hay evento
+    // Verificar que realmente tenga un evento con ID válido (no null, no undefined, no string vacío)
+    const eventId = promise.event?.id;
+    const hasEvent = Boolean(
+      eventId && 
+      typeof eventId === 'string' && 
+      eventId.trim() !== ''
+    );
+    
+    // Solo bloquear si está en approved, tiene evento válido, y NO va a archived
     if (
       promise.promise_pipeline_stage?.slug === 'approved' &&
-      promise.event &&
+      hasEvent &&
       stage.slug !== 'archived'
     ) {
       toast.error('Esta promesa tiene un evento asociado. Solo puede archivarse.');
@@ -457,8 +516,15 @@ export function PromisesKanban({
   };
 
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
+    const promiseId = event.active.id as string;
+    setActiveId(promiseId);
     isDraggingRef.current = true;
+    
+    // Identificar la columna inicial donde está el card
+    const promise = localPromises.find((p: PromiseWithContact) => p.promise_id === promiseId);
+    if (promise?.promise_pipeline_stage?.id) {
+      setActivePromiseStageId(promise.promise_pipeline_stage.id);
+    }
   };
 
   const handlePromiseClick = (promise: PromiseWithContact) => {
@@ -550,7 +616,7 @@ export function PromisesKanban({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-4 flex-shrink-0">
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-4 shrink-0">
         <div className="flex-1 w-full relative">
           <div className="relative">
             <ZenInput
@@ -601,7 +667,7 @@ export function PromisesKanban({
       {/* Kanban Board */}
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -617,6 +683,7 @@ export function PromisesKanban({
                 studioSlug={studioSlug}
                 isFlexible={false}
                 onPromiseArchived={handlePromiseArchived}
+                onPromiseUpdated={onPromiseUpdated}
               />
             ))
           ) : (
@@ -631,6 +698,7 @@ export function PromisesKanban({
                   studioSlug={studioSlug}
                   isFlexible={true}
                   onPromiseArchived={handlePromiseArchived}
+                  onPromiseUpdated={onPromiseUpdated}
                 />
               ))}
             </div>
@@ -646,10 +714,11 @@ export function PromisesKanban({
         >
           {activePromise ? (
             <div className="opacity-95 scale-105 rotate-3 shadow-2xl transform-gpu will-change-transform animate-in fade-in-0 zoom-in-95 duration-200">
-              <PromiseKanbanCard 
-                promise={activePromise} 
-                studioSlug={studioSlug} 
-                onArchived={() => activePromise.promise_id && handlePromiseArchived(activePromise.promise_id)} 
+              <PromiseKanbanCard
+                promise={activePromise}
+                studioSlug={studioSlug}
+                onArchived={() => activePromise.promise_id && handlePromiseArchived(activePromise.promise_id)}
+                onTagsUpdated={onPromiseUpdated}
               />
             </div>
           ) : null}
@@ -690,13 +759,15 @@ function KanbanColumn({
   studioSlug,
   isFlexible = false,
   onPromiseArchived,
+  onPromiseUpdated,
 }: {
   stage: PipelineStage;
   promises: PromiseWithContact[];
   onPromiseClick: (promise: PromiseWithContact) => void;
   studioSlug: string;
   isFlexible?: boolean;
-              onPromiseArchived?: (promiseId: string) => void;
+  onPromiseArchived?: (promiseId: string) => void;
+  onPromiseUpdated?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -707,13 +778,14 @@ function KanbanColumn({
       ref={setNodeRef}
       className={`${isFlexible
         ? 'flex-1 min-w-[280px]'
-        : 'w-[280px] min-w-[280px] max-w-[280px] flex-shrink-0'
+        : 'w-[280px] min-w-[280px] max-w-[280px] shrink-0'
         } flex flex-col rounded-lg border-2 p-4 h-full overflow-hidden transition-all duration-300 ease-in-out ${isOver
           ? 'bg-zinc-800/80'
           : 'bg-zinc-900/50 border-zinc-700'
         }`}
       style={{
         borderColor: isOver ? stage.color : undefined,
+        // Expandir área de detección con padding negativo visual pero manteniendo el área droppable
       }}
     >
       {/* Header de columna */}
@@ -733,9 +805,9 @@ function KanbanColumn({
         </span>
       </div>
 
-      {/* Lista de promises */}
+      {/* Lista de promises - Área droppable expandida */}
       <div
-        className="space-y-3 flex-1 overflow-y-auto min-h-0"
+        className="space-y-3 flex-1 overflow-y-auto min-h-0 -mx-2 px-2"
         style={{
           minHeight: promises.length === 0 ? '200px' : 'auto',
         }}
@@ -751,6 +823,7 @@ function KanbanColumn({
               onClick={onPromiseClick}
               studioSlug={studioSlug}
               onArchived={() => promise.promise_id && onPromiseArchived?.(promise.promise_id)}
+              onTagsUpdated={onPromiseUpdated}
             />
           ))}
         </SortableContext>
