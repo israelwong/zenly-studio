@@ -18,30 +18,33 @@ function BackgroundBlobs() {
     <>
       {/* Blob 1 - Color dominante (grande, arriba) */}
       <div
-        className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[450px] rounded-full blur-3xl animate-pulse transition-opacity duration-[2000ms]"
+        className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[450px] rounded-full blur-3xl animate-pulse"
         style={{
           backgroundColor: colors.primary,
           animationDuration: '8s',
           opacity: 0.5,
+          transition: 'background-color 1.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       />
 
       {/* Blob 2 - Color dominante (mediano, centro-izq) */}
       <div
-        className="absolute top-60 left-1/2 -translate-x-1/2 w-[800px] h-[350px] rounded-full blur-3xl transition-opacity duration-[2000ms] delay-300"
+        className="absolute top-60 left-1/2 -translate-x-1/2 w-[800px] h-[350px] rounded-full blur-3xl"
         style={{
           backgroundColor: colors.primary,
           opacity: 0.4,
+          transition: 'background-color 1.2s cubic-bezier(0.4, 0, 0.2, 1) 150ms, opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1) 150ms',
         }}
       />
 
       {/* Blob 3 - Color acento (grande, abajo centro) */}
       <div
-        className="absolute top-96 left-1/2 -translate-x-1/2 w-[600px] h-[450px] rounded-full blur-3xl animate-pulse transition-opacity duration-[2000ms] delay-500"
+        className="absolute top-96 left-1/2 -translate-x-1/2 w-[600px] h-[450px] rounded-full blur-3xl animate-pulse"
         style={{
           backgroundColor: colors.accent,
           animationDuration: '10s',
           opacity: 0.45,
+          transition: 'background-color 1.2s cubic-bezier(0.4, 0, 0.2, 1) 250ms, opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1) 250ms',
         }}
       />
     </>
