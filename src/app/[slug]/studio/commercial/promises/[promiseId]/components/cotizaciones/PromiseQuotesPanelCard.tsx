@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake } from 'lucide-react';
+import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ZenBadge,
@@ -27,6 +27,8 @@ import {
   duplicateCotizacion,
   updateCotizacionName,
   toggleCotizacionVisibility,
+  toggleNegociacionStatus,
+  quitarCancelacionCotizacion,
   cancelarCotizacion,
   cancelarCotizacionYEvento,
   pasarACierre,
@@ -147,6 +149,10 @@ export function PromiseQuotesPanelCard({
     if (revisionStatus === 'pending_revision') {
       return 'warning';
     }
+    // En negociación - usar warning (amber)
+    if (status === 'negociacion') {
+      return 'warning';
+    }
     // En cierre - usar info (azul)
     if (status === 'en_cierre') {
       return 'info';
@@ -181,6 +187,10 @@ export function PromiseQuotesPanelCard({
     // Si es revisión pendiente (no autorizada aún)
     if (revisionStatus === 'pending_revision') {
       return 'Revisión';
+    }
+    // En negociación
+    if (status === 'negociacion') {
+      return 'Negociación';
     }
     // En cierre
     if (status === 'en_cierre') {
@@ -440,6 +450,36 @@ export function PromiseQuotesPanelCard({
     }
   };
 
+  const handleToggleNegociacion = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (isProcessingRef.current || loading) return;
+    
+    // Solo permitir quitar de negociación (volver a pendiente)
+    if (cotizacion.status !== 'negociacion') {
+      return;
+    }
+    
+    isProcessingRef.current = true;
+    setLoading(true);
+    try {
+      const result = await toggleNegociacionStatus(cotizacion.id, studioSlug);
+      if (result.success) {
+        toast.success('Cotización vuelta a estado pendiente');
+        // Recargar desde servidor para sincronizar
+        router.refresh();
+        onUpdate?.(cotizacion.id);
+      } else {
+        toast.error(result.error || 'Error al cambiar estado de negociación');
+      }
+    } catch {
+      toast.error('Error al cambiar estado de negociación');
+    } finally {
+      setLoading(false);
+      isProcessingRef.current = false;
+    }
+  };
+
   const handlePasarACierreClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!promiseId) {
@@ -525,6 +565,33 @@ export function PromiseQuotesPanelCard({
     } catch {
       toast.error('Error al cancelar cotización y evento');
       setShowCancelModal(false);
+    } finally {
+      setLoading(false);
+      isProcessingRef.current = false;
+    }
+  };
+
+  const handleQuitarCancelacion = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isProcessingRef.current || loading) return;
+    
+    if (cotizacion.status !== 'cancelada') {
+      return;
+    }
+    
+    isProcessingRef.current = true;
+    setLoading(true);
+    try {
+      const result = await quitarCancelacionCotizacion(cotizacion.id, studioSlug);
+      if (result.success) {
+        toast.success('Cancelación quitada, cotización vuelta a estado pendiente');
+        router.refresh();
+        onUpdate?.(cotizacion.id);
+      } else {
+        toast.error(result.error || 'Error al quitar cancelación');
+      }
+    } catch {
+      toast.error('Error al quitar cancelación');
     } finally {
       setLoading(false);
       isProcessingRef.current = false;
@@ -681,6 +748,19 @@ export function PromiseQuotesPanelCard({
                     )}
                   </ZenButton>
                 )}
+                {/* Icono de negociación - solo mostrar si está en negociación */}
+                {!(isArchivada && hasApprovedQuote) && cotizacion.status === 'negociacion' && (
+                  <ZenButton
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={handleToggleNegociacion}
+                    disabled={loading || isDuplicating}
+                    title="Quitar de negociación"
+                  >
+                    <Handshake className="h-4 w-4 text-amber-400" />
+                  </ZenButton>
+                )}
                 {/* Ocultar menú si es archivada Y hay cotización en cierre */}
                 {!(isArchivada && hasApprovedQuote) && (
               <ZenDropdownMenu>
@@ -732,7 +812,7 @@ export function PromiseQuotesPanelCard({
                               router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
                             }}
                             disabled={loading || isDuplicating}
-                            className="text-emerald-400 focus:text-emerald-300"
+                            className="text-amber-400 focus:text-amber-300"
                           >
                             <Handshake className="h-4 w-4 mr-2" />
                             Negociar
@@ -813,7 +893,16 @@ export function PromiseQuotesPanelCard({
                     </>
                   ) : isCancelada ? (
                     <>
-                      {/* Cancelada: duplicar, eliminar */}
+                      {/* Cancelada: quitar cancelación, duplicar, eliminar */}
+                      <ZenDropdownMenuItem
+                        onClick={handleQuitarCancelacion}
+                        disabled={loading || isDuplicating}
+                        className="text-emerald-400 focus:text-emerald-300"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Quitar cancelación
+                      </ZenDropdownMenuItem>
+                      <ZenDropdownMenuSeparator />
                       {!isRevision && (
                         <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
                           <Copy className="h-4 w-4 mr-2" />

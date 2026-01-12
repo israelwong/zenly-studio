@@ -84,7 +84,7 @@ export function CotizacionForm({
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [precioPersonalizado, setPrecioPersonalizado] = useState<string | number>('');
-  const [visibleToClient, setVisibleToClient] = useState(true);
+  const [visibleToClient, setVisibleToClient] = useState(false);
   const [items, setItems] = useState<{ [servicioId: string]: number }>({});
   const [catalogo, setCatalogo] = useState<SeccionData[]>([]);
   const [configuracionPrecios, setConfiguracionPrecios] = useState<ConfiguracionPrecios | null>(null);
@@ -193,7 +193,7 @@ export function CotizacionForm({
           setNombre(cotizacionData.name);
           setDescripcion(cotizacionData.description || '');
           setPrecioPersonalizado(cotizacionData.price);
-          setVisibleToClient((cotizacionData as { visible_to_client?: boolean }).visible_to_client ?? true);
+          setVisibleToClient((cotizacionData as { visible_to_client?: boolean }).visible_to_client ?? false);
 
           // Cargar items de la cotización (filtrar items sin item_id válido)
           const cotizacionItems: { [id: string]: number } = {};

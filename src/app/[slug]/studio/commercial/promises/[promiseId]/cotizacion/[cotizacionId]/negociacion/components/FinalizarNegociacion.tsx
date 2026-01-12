@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/zen';
 import {
   crearVersionNegociada,
-  aplicarCambiosNegociacion,
 } from '@/lib/actions/studio/commercial/promises/negociacion.actions';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -29,10 +28,10 @@ interface FinalizarNegociacionProps {
   calculoNegociado: CalculoNegociacionResult | null;
   validacionMargen: ValidacionMargen | null;
   cotizacionOriginal: CotizacionCompleta;
-  onFinalizar: (opcion: 'crear_version' | 'aplicar_cambios', nombre?: string) => Promise<void>;
   studioSlug: string;
   promiseId: string;
   cotizacionId: string;
+  onNotasChange: (notas: string) => void;
 }
 
 export function FinalizarNegociacion({
@@ -43,11 +42,9 @@ export function FinalizarNegociacion({
   studioSlug,
   promiseId,
   cotizacionId,
+  onNotasChange,
 }: FinalizarNegociacionProps) {
   const router = useRouter();
-  const [opcionFinalizar, setOpcionFinalizar] = useState<
-    'crear_version' | 'aplicar_cambios' | null
-  >(null);
   const [nombreVersion, setNombreVersion] = useState(
     `${cotizacionOriginal.name} - Negociada`
   );
@@ -61,13 +58,8 @@ export function FinalizarNegociacion({
     negociacionState.itemsCortesia.size > 0;
 
   const handleFinalizar = async () => {
-    if (!opcionFinalizar) {
-      toast.error('Selecciona una opción para finalizar');
-      return;
-    }
-
-    if (opcionFinalizar === 'crear_version' && !nombreVersion.trim()) {
-      toast.error('El nombre de la versión es requerido');
+    if (!nombreVersion.trim()) {
+      toast.error('El nombre de la cotización es requerido');
       return;
     }
 
@@ -105,50 +97,27 @@ export function FinalizarNegociacion({
     setLoading(true);
 
     try {
-      if (opcionFinalizar === 'crear_version') {
-        const result = await crearVersionNegociada({
-          studio_slug: studioSlug,
-          cotizacion_original_id: cotizacionId,
-          nombre: nombreVersion.trim(),
-          descripcion: cotizacionOriginal.description || undefined,
-          precio_personalizado: negociacionState.precioPersonalizado ?? undefined,
-          descuento_adicional: negociacionState.descuentoAdicional ?? undefined,
-          condicion_comercial_id: negociacionState.condicionComercialId ?? undefined,
-          condicion_comercial_temporal:
-            negociacionState.condicionComercialTemporal ?? undefined,
-          items_cortesia: Array.from(negociacionState.itemsCortesia),
-          notas: negociacionState.notas || undefined,
-        });
+      const result = await crearVersionNegociada({
+        studio_slug: studioSlug,
+        cotizacion_original_id: cotizacionId,
+        nombre: nombreVersion.trim(),
+        descripcion: cotizacionOriginal.description || undefined,
+        precio_personalizado: negociacionState.precioPersonalizado ?? undefined,
+        descuento_adicional: negociacionState.descuentoAdicional ?? undefined,
+        condicion_comercial_id: negociacionState.condicionComercialId ?? undefined,
+        condicion_comercial_temporal:
+          negociacionState.condicionComercialTemporal ?? undefined,
+        items_cortesia: Array.from(negociacionState.itemsCortesia),
+        notas: negociacionState.notas || undefined,
+      });
 
-        if (result.success && result.data) {
-          toast.success('Versión negociada creada exitosamente');
-          router.push(
-            `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${result.data.id}`
-          );
-        } else {
-          toast.error(result.error || 'Error al crear versión negociada');
-        }
+      if (result.success && result.data) {
+        toast.success('Cotización en negociación creada exitosamente');
+        router.push(
+          `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${result.data.id}`
+        );
       } else {
-        const result = await aplicarCambiosNegociacion({
-          studio_slug: studioSlug,
-          cotizacion_id: cotizacionId,
-          precio_personalizado: negociacionState.precioPersonalizado ?? undefined,
-          descuento_adicional: negociacionState.descuentoAdicional ?? undefined,
-          condicion_comercial_id: negociacionState.condicionComercialId ?? undefined,
-          condicion_comercial_temporal:
-            negociacionState.condicionComercialTemporal ?? undefined,
-          items_cortesia: Array.from(negociacionState.itemsCortesia),
-          notas: negociacionState.notas || undefined,
-        });
-
-        if (result.success) {
-          toast.success('Cambios aplicados exitosamente');
-          router.push(
-            `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacionId}`
-          );
-        } else {
-          toast.error(result.error || 'Error al aplicar cambios');
-        }
+        toast.error(result.error || 'Error al crear cotización en negociación');
       }
     } catch (error) {
       console.error('[NEGOCIACION] Error finalizando:', error);
@@ -165,67 +134,22 @@ export function FinalizarNegociacion({
   return (
     <ZenCard>
       <ZenCardHeader>
-        <ZenCardTitle>Finalizar Negociación</ZenCardTitle>
+        <ZenCardTitle>Crear Cotización en Negociación</ZenCardTitle>
         <ZenCardDescription>
-          Elige cómo deseas aplicar los cambios de negociación
+          Se creará una nueva cotización con estado "negociación" basada en la cotización original
         </ZenCardDescription>
       </ZenCardHeader>
       <ZenCardContent className="space-y-6">
-        {/* Opciones */}
-        <div className="space-y-3">
-          <label className="flex items-start gap-3 p-4 rounded-lg border border-zinc-800 cursor-pointer hover:bg-zinc-900/50 transition-colors">
-            <input
-              type="radio"
-              name="finalizar"
-              value="crear_version"
-              checked={opcionFinalizar === 'crear_version'}
-              onChange={() => setOpcionFinalizar('crear_version')}
-              className="mt-1"
-            />
-            <div className="flex-1">
-              <div className="font-medium text-zinc-200">
-                Crear nueva versión negociada
-              </div>
-              <div className="text-sm text-zinc-400 mt-1">
-                Crea una nueva cotización como revisión con los cambios aplicados.
-                La original se mantiene intacta.
-              </div>
-            </div>
-          </label>
-
-          <label className="flex items-start gap-3 p-4 rounded-lg border border-zinc-800 cursor-pointer hover:bg-zinc-900/50 transition-colors">
-            <input
-              type="radio"
-              name="finalizar"
-              value="aplicar_cambios"
-              checked={opcionFinalizar === 'aplicar_cambios'}
-              onChange={() => setOpcionFinalizar('aplicar_cambios')}
-              className="mt-1"
-            />
-            <div className="flex-1">
-              <div className="font-medium text-zinc-200">
-                Aplicar cambios a cotización actual
-              </div>
-              <div className="text-sm text-zinc-400 mt-1">
-                Modifica la cotización actual directamente con los cambios de
-                negociación.
-              </div>
-            </div>
-          </label>
+        {/* Nombre de la cotización */}
+        <div className="space-y-2">
+          <ZenInput
+            label="Nombre de la cotización"
+            value={nombreVersion}
+            onChange={(e) => setNombreVersion(e.target.value)}
+            placeholder="Ej: Cotización Básica - Negociada"
+            required
+          />
         </div>
-
-        {/* Nombre de versión (solo si crear versión) */}
-        {opcionFinalizar === 'crear_version' && (
-          <div className="space-y-2">
-            <ZenInput
-              label="Nombre de la versión"
-              value={nombreVersion}
-              onChange={(e) => setNombreVersion(e.target.value)}
-              placeholder="Ej: Cotización Básica - Oferta Especial"
-              required
-            />
-          </div>
-        )}
 
         {/* Notas */}
         <div className="space-y-2">
@@ -301,13 +225,11 @@ export function FinalizarNegociacion({
           <ZenButton
             variant="primary"
             onClick={handleFinalizar}
-            disabled={!opcionFinalizar || loading}
+            disabled={loading}
             loading={loading}
             className="flex-1"
           >
-            {opcionFinalizar === 'crear_version'
-              ? 'Crear Versión Negociada'
-              : 'Aplicar Cambios'}
+            Crear Cotización en Negociación
           </ZenButton>
         </div>
       </ZenCardContent>

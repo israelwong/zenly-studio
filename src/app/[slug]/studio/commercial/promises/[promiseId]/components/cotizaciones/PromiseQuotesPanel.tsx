@@ -399,14 +399,14 @@ export function PromiseQuotesPanel({
     }
   );
 
-  // Filtrar cotizaciones para el listado (solo pendiente, archivada, cancelada)
+  // Filtrar cotizaciones para el listado (pendiente, archivada, cancelada, negociacion)
   const cotizacionesParaListado = cotizaciones.filter(
-    (c) => ['pendiente', 'archivada', 'cancelada'].includes(c.status)
+    (c) => ['pendiente', 'archivada', 'cancelada', 'negociacion'].includes(c.status)
   );
 
-  // Separar en grupos: pendientes (ordenables) y archivadas/canceladas (no ordenables)
+  // Separar en grupos: pendientes/negociacion (ordenables) y archivadas/canceladas (no ordenables)
   const cotizacionesPendientes = cotizacionesParaListado
-    .filter((c) => c.status === 'pendiente')
+    .filter((c) => c.status === 'pendiente' || c.status === 'negociacion')
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   const cotizacionesArchivadas = cotizacionesParaListado

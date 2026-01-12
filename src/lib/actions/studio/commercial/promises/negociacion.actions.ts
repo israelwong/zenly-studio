@@ -112,8 +112,8 @@ export async function loadCotizacionParaNegociacion(
 }
 
 /**
- * Crear versión negociada de una cotización
- * Crea una nueva cotización como revisión con los cambios de negociación aplicados
+ * Crear nueva cotización en negociación
+ * Crea una nueva cotización independiente (no revisión) con status 'negociacion'
  */
 export async function crearVersionNegociada(
   data: CrearVersionNegociadaData
@@ -171,23 +171,29 @@ export async function crearVersionNegociada(
       };
     }
 
-    // Calcular número de revisión
-    const revisionesExistentes = await prisma.studio_cotizaciones.count({
-      where: {
-        revision_of_id: validatedData.cotizacion_original_id,
-      },
-    });
-
-    const revisionNumber = revisionesExistentes + 1;
-
     // Calcular precio final
     const precioFinal =
       validatedData.precio_personalizado ?? cotizacionOriginal.price;
 
-    // Transacción para crear versión negociada
+    // Obtener el order máximo para colocar la nueva cotización al final
+    const maxOrder = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise_id: cotizacionOriginal.promise_id,
+      },
+      orderBy: {
+        order: 'desc',
+      },
+      select: {
+        order: true,
+      },
+    });
+
+    const newOrder = (maxOrder?.order ?? -1) + 1;
+
+    // Transacción para crear nueva cotización en negociación
     const nuevaVersion = await prisma.$transaction(async (tx) => {
-      // 1. Crear nueva cotización como revisión negociada
-      const revision = await tx.studio_cotizaciones.create({
+      // 1. Crear nueva cotización con status 'negociacion' (no es revisión)
+      const nuevaCotizacion = await tx.studio_cotizaciones.create({
         data: {
           studio_id: studio.id,
           promise_id: cotizacionOriginal.promise_id,
@@ -199,10 +205,9 @@ export async function crearVersionNegociada(
           name: validatedData.nombre,
           description: validatedData.descripcion || null,
           price: precioFinal,
-          status: 'pendiente',
-          revision_of_id: validatedData.cotizacion_original_id,
-          revision_number: revisionNumber,
-          revision_status: 'pending_revision',
+          status: 'negociacion', // Nueva cotización con status negociacion
+          order: newOrder,
+          // NO es revisión - no incluir revision_of_id, revision_number, revision_status
           // Campos de negociación
           negociacion_precio_personalizado: validatedData.precio_personalizado
             ? validatedData.precio_personalizado
@@ -219,7 +224,7 @@ export async function crearVersionNegociada(
       if (cotizacionOriginal.cotizacion_items.length > 0) {
         await tx.studio_cotizacion_items.createMany({
           data: cotizacionOriginal.cotizacion_items.map((item) => ({
-            cotizacion_id: revision.id,
+            cotizacion_id: nuevaCotizacion.id,
             item_id: item.item_id,
             quantity: item.quantity,
             order: item.order,
@@ -233,7 +238,7 @@ export async function crearVersionNegociada(
       if (validatedData.condicion_comercial_temporal) {
         await tx.studio_condiciones_comerciales_negociacion.create({
           data: {
-            cotizacion_id: revision.id,
+            cotizacion_id: nuevaCotizacion.id,
             promise_id: cotizacionOriginal.promise_id,
             studio_id: studio.id,
             name: validatedData.condicion_comercial_temporal.name,
@@ -259,14 +264,14 @@ export async function crearVersionNegociada(
       // 4. Asignar condición comercial existente si se proporcionó
       if (validatedData.condicion_comercial_id) {
         await tx.studio_cotizaciones.update({
-          where: { id: revision.id },
+          where: { id: nuevaCotizacion.id },
           data: {
             condiciones_comerciales_id: validatedData.condicion_comercial_id,
           },
         });
       }
 
-      return revision;
+      return nuevaCotizacion;
     });
 
     // Calcular y guardar precios de los items (después de la transacción)
@@ -381,6 +386,7 @@ export async function aplicarCambiosNegociacion(
         where: { id: validatedData.cotizacion_id },
         data: {
           price: precioFinal,
+          status: 'negociacion', // Cambiar estado a negociación al guardar
           negociacion_precio_personalizado:
             validatedData.precio_personalizado ?? null,
           negociacion_descuento_adicional:

@@ -115,7 +115,7 @@ export async function createCotizacion(
         description: validatedData.descripcion || null,
         price: validatedData.precio,
         status: 'pendiente',
-        visible_to_client: validatedData.visible_to_client ?? true,
+        visible_to_client: validatedData.visible_to_client ?? false,
       },
     });
 
@@ -188,8 +188,15 @@ export async function getCotizacionesByPromiseId(
     const cotizaciones = await prisma.studio_cotizaciones.findMany({
       where: {
         promise_id: promiseId,
-        archived: false, // Excluir cotizaciones archivadas
-        status: { not: 'archivada' }, // También excluir por status
+        // Incluir: pendiente, negociacion, archivada, cancelada
+        // Excluir solo estados avanzados: en_cierre, aprobada, autorizada, etc.
+        OR: [
+          // Estados básicos que queremos mostrar
+          { status: 'pendiente' },
+          { status: 'negociacion' },
+          { status: 'archivada' },
+          { status: 'cancelada' },
+        ],
       },
       select: {
         id: true,
@@ -1034,6 +1041,169 @@ export async function toggleCotizacionVisibility(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al cambiar visibilidad',
+    };
+  }
+}
+
+/**
+ * Toggle estado de negociación de cotización
+ * Cambia entre 'pendiente' y 'negociacion'
+ */
+export async function toggleNegociacionStatus(
+  cotizacionId: string,
+  studioSlug: string
+): Promise<CotizacionResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        studio_id: studio.id,
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    // Solo permitir quitar de negociación (volver a pendiente)
+    // No permitir pasar a negociación desde aquí (eso se hace desde la ruta de negociación)
+    if (cotizacion.status !== 'negociacion') {
+      return { 
+        success: false, 
+        error: 'Solo se puede quitar de negociación a cotizaciones que están en estado negociación' 
+      };
+    }
+
+    const updated = await prisma.studio_cotizaciones.update({
+      where: { id: cotizacionId },
+      data: { status: 'pendiente' },
+    });
+
+    // Registrar log si hay promise_id
+    if (cotizacion.promise_id) {
+      const { logPromiseAction } = await import('./promise-logs.actions');
+      await logPromiseAction(
+        studioSlug,
+        cotizacion.promise_id,
+        'quotation_updated',
+        'user',
+        null,
+        {
+          quotationName: updated.name,
+          status: 'pendiente',
+        }
+      ).catch((error) => {
+        console.error('[COTIZACIONES] Error registrando log de negociación:', error);
+      });
+    }
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return {
+      success: true,
+      data: {
+        id: updated.id,
+        name: updated.name,
+      },
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error cambiando estado de negociación:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al cambiar estado de negociación',
+    };
+  }
+}
+
+/**
+ * Quitar cancelación de cotización
+ * Cambia el estado de 'cancelada' a 'pendiente'
+ */
+export async function quitarCancelacionCotizacion(
+  cotizacionId: string,
+  studioSlug: string
+): Promise<CotizacionResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        studio_id: studio.id,
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    // Solo permitir quitar cancelación si está cancelada
+    if (cotizacion.status !== 'cancelada') {
+      return { 
+        success: false, 
+        error: 'Solo se puede quitar cancelación a cotizaciones que están canceladas' 
+      };
+    }
+
+    const updated = await prisma.studio_cotizaciones.update({
+      where: { id: cotizacionId },
+      data: { status: 'pendiente' },
+    });
+
+    // Registrar log si hay promise_id
+    if (cotizacion.promise_id) {
+      const { logPromiseAction } = await import('./promise-logs.actions');
+      await logPromiseAction(
+        studioSlug,
+        cotizacion.promise_id,
+        'quotation_updated',
+        'user',
+        null,
+        {
+          quotationName: updated.name,
+          status: 'pendiente',
+        }
+      ).catch((error) => {
+        console.error('[COTIZACIONES] Error registrando log de quitar cancelación:', error);
+      });
+    }
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    if (cotizacion.promise_id) {
+      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+    }
+
+    return {
+      success: true,
+      data: {
+        id: updated.id,
+        name: updated.name,
+      },
+    };
+  } catch (error) {
+    console.error('[COTIZACIONES] Error quitando cancelación:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al quitar cancelación',
     };
   }
 }
