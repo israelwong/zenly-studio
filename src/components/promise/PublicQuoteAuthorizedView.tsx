@@ -374,6 +374,8 @@ export function PublicQuoteAuthorizedView({
                   cotizacionPrice={cotizacion.price}
                   cotizacionDiscount={cotizacion.discount}
                   condicionesComerciales={condicionesComerciales}
+                  negociacionPrecioOriginal={cotizacion.negociacion_precio_original}
+                  negociacionPrecioPersonalizado={cotizacion.negociacion_precio_personalizado}
                 />
               </div>
             </div>

@@ -17,22 +17,36 @@ interface CondicionesFinancierasResumenProps {
   precioBase: number;
   condicion: CondicionComercial;
   dropdownMenu?: React.ReactNode;
+  negociacionPrecioOriginal?: number | null;
+  negociacionPrecioPersonalizado?: number | null;
 }
 
 export function CondicionesFinancierasResumen({
   precioBase,
   condicion,
   dropdownMenu,
+  negociacionPrecioOriginal,
+  negociacionPrecioPersonalizado,
 }: CondicionesFinancierasResumenProps) {
-  // Calcular descuento
-  const descuentoMonto = condicion.discount_percentage
+  // Verificar si es modo negociación
+  const esNegociacion = negociacionPrecioPersonalizado !== null && negociacionPrecioPersonalizado !== undefined && negociacionPrecioPersonalizado > 0;
+  const precioOriginalNegociacion = negociacionPrecioOriginal ?? precioBase;
+  const precioNegociado = negociacionPrecioPersonalizado ?? null;
+  const ahorroTotal = esNegociacion && precioNegociado !== null 
+    ? precioOriginalNegociacion - precioNegociado 
+    : 0;
+
+  // Calcular descuento (solo en modo normal)
+  const descuentoMonto = !esNegociacion && condicion.discount_percentage
     ? precioBase * (condicion.discount_percentage / 100)
     : 0;
 
-  // Calcular subtotal (precio - descuento)
-  const subtotal = precioBase - descuentoMonto;
+  // Calcular subtotal (precio - descuento) o precio negociado
+  const subtotal = esNegociacion && precioNegociado !== null 
+    ? precioNegociado 
+    : precioBase - descuentoMonto;
 
-  // Calcular anticipo
+  // Calcular anticipo basado en subtotal (precio negociado en negociación, subtotal en normal)
   let anticipoMonto = 0;
   if (condicion.advance_type === 'percentage' && condicion.advance_percentage) {
     anticipoMonto = subtotal * (condicion.advance_percentage / 100);
@@ -82,34 +96,64 @@ export function CondicionesFinancierasResumen({
 
         {/* Desglose Financiero */}
         <div className="space-y-2 text-sm">
-        {/* Precio Base */}
-        <div className="flex justify-between items-center">
-          <span className="text-zinc-400">Precio base:</span>
-          <span className="text-white font-medium tabular-nums">
-            ${formatMoney(precioBase)}
-          </span>
-        </div>
+        {esNegociacion ? (
+          <>
+            {/* MODO NEGOCIACIÓN: Precio original → Precio negociado → Ahorro total */}
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-400">Precio original:</span>
+              <span className="text-white font-medium tabular-nums">
+                ${formatMoney(precioOriginalNegociacion)}
+              </span>
+            </div>
+            {precioNegociado !== null && (
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-400">Precio negociado:</span>
+                <span className="text-blue-400 font-medium tabular-nums">
+                  ${formatMoney(precioNegociado)}
+                </span>
+              </div>
+            )}
+            {ahorroTotal > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-400">Ahorro total:</span>
+                <span className="text-emerald-400 font-medium tabular-nums">
+                  ${formatMoney(ahorroTotal)}
+                </span>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* MODO NORMAL: Precio base → Descuento → Subtotal */}
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-400">Precio base:</span>
+              <span className="text-white font-medium tabular-nums">
+                ${formatMoney(precioBase)}
+              </span>
+            </div>
 
-        {/* Descuento (si existe) */}
-        {descuentoMonto > 0 && (
-          <div className="flex justify-between items-center">
-            <span className="text-zinc-400">
-              Descuento ({condicion.discount_percentage}%):
-            </span>
-            <span className="text-red-400 font-medium tabular-nums">
-              -${formatMoney(descuentoMonto)}
-            </span>
-          </div>
-        )}
+            {/* Descuento (si existe) */}
+            {descuentoMonto > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-400">
+                  Descuento ({condicion.discount_percentage}%):
+                </span>
+                <span className="text-red-400 font-medium tabular-nums">
+                  -${formatMoney(descuentoMonto)}
+                </span>
+              </div>
+            )}
 
-        {/* Subtotal (si hay descuento) */}
-        {descuentoMonto > 0 && (
-          <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
-            <span className="text-zinc-300 font-medium">Subtotal:</span>
-            <span className="text-white font-semibold tabular-nums">
-              ${formatMoney(subtotal)}
-            </span>
-          </div>
+            {/* Subtotal (si hay descuento) */}
+            {descuentoMonto > 0 && (
+              <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
+                <span className="text-zinc-300 font-medium">Subtotal:</span>
+                <span className="text-white font-semibold tabular-nums">
+                  ${formatMoney(subtotal)}
+                </span>
+              </div>
+            )}
+          </>
         )}
 
         {/* Anticipo */}

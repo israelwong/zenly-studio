@@ -19,6 +19,8 @@ interface PublicQuoteFinancialCardProps {
     advance_amount: number | null;
     discount_percentage: number | null;
   } | null;
+  negociacionPrecioOriginal?: number | null;
+  negociacionPrecioPersonalizado?: number | null;
 }
 
 export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
@@ -27,6 +29,8 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
   cotizacionPrice,
   cotizacionDiscount,
   condicionesComerciales,
+  negociacionPrecioOriginal,
+  negociacionPrecioPersonalizado,
 }: PublicQuoteFinancialCardProps) {
   // Calcular descuento de cotización (si existe)
   const descuentoCotizacionMonto = cotizacionDiscount && cotizacionDiscount > 0
@@ -88,6 +92,8 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
             <CondicionesFinancierasResumen
               condicion={condicionesComerciales}
               precioBase={precioBaseParaCondiciones}
+              negociacionPrecioOriginal={negociacionPrecioOriginal}
+              negociacionPrecioPersonalizado={negociacionPrecioPersonalizado}
             />
           ) : (
             <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 text-center">
@@ -113,7 +119,9 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
     prevProps.condicionesComerciales?.id === nextProps.condicionesComerciales?.id &&
     prevProps.condicionesComerciales?.advance_percentage === nextProps.condicionesComerciales?.advance_percentage &&
     prevProps.condicionesComerciales?.advance_amount === nextProps.condicionesComerciales?.advance_amount &&
-    prevProps.condicionesComerciales?.discount_percentage === nextProps.condicionesComerciales?.discount_percentage
+    prevProps.condicionesComerciales?.discount_percentage === nextProps.condicionesComerciales?.discount_percentage &&
+    prevProps.negociacionPrecioOriginal === nextProps.negociacionPrecioOriginal &&
+    prevProps.negociacionPrecioPersonalizado === nextProps.negociacionPrecioPersonalizado
   );
 });
 

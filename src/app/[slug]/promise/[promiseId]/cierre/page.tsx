@@ -98,6 +98,8 @@ function CierrePageClient({
     price: number;
     discount: number | null;
     status: string;
+    negociacion_precio_original?: number | null;
+    negociacion_precio_personalizado?: number | null;
   };
   studioSlug: string;
   promiseId: string;
