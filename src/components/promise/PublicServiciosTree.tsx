@@ -242,12 +242,19 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                     >
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
-                                          <h6 className="text-sm text-zinc-300 leading-tight">
-                                            {servicio.name_snapshot || servicio.name}
-                                            <span className="ml-2 text-xs text-zinc-500">
-                                              x{cantidad}
-                                            </span>
-                                          </h6>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <h6 className="text-sm text-zinc-300 leading-tight">
+                                              {servicio.name_snapshot || servicio.name}
+                                              <span className="ml-2 text-xs text-zinc-500">
+                                                x{cantidad}
+                                              </span>
+                                            </h6>
+                                            {servicio.is_courtesy && (
+                                              <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">
+                                                Cortesía
+                                              </span>
+                                            )}
+                                          </div>
                                           {(servicio.description_snapshot || servicio.description) && (
                                             <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                                               {servicio.description_snapshot || servicio.description}

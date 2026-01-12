@@ -27,6 +27,7 @@ export interface CotizacionItem {
   description?: string | null;
   category_name?: string | null;
   seccion_name?: string | null;
+  is_courtesy?: boolean; // Flag para identificar items marcados como cortesía
 }
 
 /**
@@ -39,6 +40,12 @@ export interface CotizacionCompleta {
   price: number;
   status: string;
   items: CotizacionItem[];
+  // Datos de negociación guardados (opcionales, solo si la cotización ya está en negociación)
+  negociacion_precio_personalizado?: number | null;
+  negociacion_descuento_adicional?: number | null;
+  negociacion_notas?: string | null;
+  condiciones_comerciales_id?: string | null;
+  condicion_comercial_temporal?: CondicionComercialTemporal | null;
 }
 
 /**

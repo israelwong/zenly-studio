@@ -16,10 +16,12 @@ import type { CotizacionCompleta } from '@/lib/utils/negociacion-calc';
 import type { ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { toast } from 'sonner';
 import { NegociacionHeader } from './components/NegociacionHeader';
+import { NegociacionItemsTree } from './components/NegociacionItemsTree';
+import { CalculoConCondiciones } from './components/CalculoConCondiciones';
 import { ComparacionView } from './components/ComparacionView';
+import { SelectorCondicionesComerciales } from './components/SelectorCondicionesComerciales';
+import { DesgloseDinamico } from './components/DesgloseDinamico';
 import { PrecioSimulador } from './components/PrecioSimulador';
-import { CondicionesSimulador } from './components/CondicionesSimulador';
-import { ItemsCortesiaSelector } from './components/ItemsCortesiaSelector';
 import { ImpactoUtilidad } from './components/ImpactoUtilidad';
 import { FinalizarNegociacion } from './components/FinalizarNegociacion';
 import {
@@ -63,6 +65,9 @@ export default function NegociacionPage() {
       metodo_pago_id: string | null;
     }>
   >([]);
+  const [condicionComercialCompleta, setCondicionComercialCompleta] = useState<
+    CondicionComercial | CondicionComercialTemporal | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [negociacionState, setNegociacionState] = useState<NegociacionState>({
     precioPersonalizado: null,
@@ -79,7 +84,7 @@ export default function NegociacionPage() {
       try {
         setLoading(true);
 
-        // Cargar cotización
+        // Cargar cotizaciรณn
         const cotizacionResult = await loadCotizacionParaNegociacion(
           cotizacionId,
           studioSlug
@@ -87,7 +92,7 @@ export default function NegociacionPage() {
 
         if (!cotizacionResult.success || !cotizacionResult.data) {
           toast.error(
-            cotizacionResult.error || 'Error al cargar cotización'
+            cotizacionResult.error || 'Error al cargar cotizaciรณn'
           );
           router.back();
           return;
@@ -95,7 +100,35 @@ export default function NegociacionPage() {
 
         setCotizacionOriginal(cotizacionResult.data);
 
-        // Cargar configuración de precios
+        // Si la cotización ya está en negociación, inicializar el estado con los valores guardados
+        if (cotizacionResult.data.status === 'negociacion') {
+          const cotizacion = cotizacionResult.data;
+          
+          // Identificar items marcados como cortesía
+          const itemsCortesia = new Set<string>();
+          cotizacion.items.forEach((item) => {
+            if (item.is_courtesy) {
+              itemsCortesia.add(item.id);
+            }
+          });
+
+          // Inicializar estado con valores guardados
+          setNegociacionState({
+            precioPersonalizado: cotizacion.negociacion_precio_personalizado ?? null,
+            descuentoAdicional: cotizacion.negociacion_descuento_adicional ?? null,
+            condicionComercialId: cotizacion.condiciones_comerciales_id ?? null,
+            condicionComercialTemporal: cotizacion.condicion_comercial_temporal ?? null,
+            itemsCortesia,
+            notas: cotizacion.negociacion_notas || '',
+          });
+
+          // Si hay condición comercial temporal, establecerla como completa
+          if (cotizacion.condicion_comercial_temporal) {
+            setCondicionComercialCompleta(cotizacion.condicion_comercial_temporal);
+          }
+        }
+
+        // Cargar configuraciรณn de precios
         try {
           const configData = await obtenerConfiguracionPrecios(studioSlug);
           if (configData) {
@@ -112,7 +145,7 @@ export default function NegociacionPage() {
               sobreprecio: parseFloat(configData.sobreprecio || '0.05'),
             });
           } else {
-            // Usar valores por defecto si no hay configuración
+            // Usar valores por defecto si no hay configuraciรณn
             setConfigPrecios({
               utilidad_servicio: 0.30,
               utilidad_producto: 0.20,
@@ -121,7 +154,7 @@ export default function NegociacionPage() {
             });
           }
         } catch (configError) {
-          console.error('[NEGOCIACION] Error cargando configuración:', configError);
+          console.error('[NEGOCIACION] Error cargando configuraciรณn:', configError);
           // Usar valores por defecto en caso de error
           setConfigPrecios({
             utilidad_servicio: 0.30,
@@ -135,7 +168,7 @@ export default function NegociacionPage() {
         const errorMessage =
           error instanceof Error
             ? error.message
-            : 'Error al cargar datos de negociación';
+            : 'Error al cargar datos de negociaciรณn';
         toast.error(errorMessage);
         router.back();
       } finally {
@@ -148,22 +181,26 @@ export default function NegociacionPage() {
 
   // Calcular precio negociado en tiempo real
   const calculoNegociado = useMemo(() => {
-    if (
-      !cotizacionOriginal ||
-      !configPrecios ||
-      negociacionState.itemsCortesia.size === 0 &&
-        negociacionState.precioPersonalizado === null &&
-        negociacionState.descuentoAdicional === null &&
-        negociacionState.condicionComercialId === null &&
-        negociacionState.condicionComercialTemporal === null
-    ) {
+    if (!cotizacionOriginal || !configPrecios) {
+      return null;
+    }
+
+    // Calcular siempre si hay algún cambio en la negociación
+    const tieneCambios =
+      negociacionState.itemsCortesia.size > 0 ||
+      negociacionState.precioPersonalizado !== null ||
+      negociacionState.descuentoAdicional !== null ||
+      negociacionState.condicionComercialId !== null ||
+      negociacionState.condicionComercialTemporal !== null;
+
+    if (!tieneCambios) {
       return null;
     }
 
     try {
-      // Obtener condición comercial seleccionada
+      // Obtener condiciรณn comercial seleccionada
       let condicionComercial: CondicionComercial | CondicionComercialTemporal | null = null;
-      
+
       if (negociacionState.condicionComercialId) {
         const condicion = condicionesComerciales.find(
           (c) => c.id === negociacionState.condicionComercialId
@@ -184,9 +221,58 @@ export default function NegociacionPage() {
         condicionComercial = negociacionState.condicionComercialTemporal;
       }
 
+      // Si hay precio personalizado, usarlo como precio final (sin aplicar descuentos de condición comercial)
+      // El precio personalizado ya viene del input "Precio negociado" que es el precio final deseado
+      if (negociacionState.precioPersonalizado !== null) {
+        // Calcular costos y gastos (siempre se suman, incluso si es cortesía)
+        const costoTotal = cotizacionOriginal.items.reduce((sum, item) => {
+          return sum + (item.cost || 0) * item.quantity;
+        }, 0);
+        const gastoTotal = cotizacionOriginal.items.reduce((sum, item) => {
+          return sum + (item.expense || 0) * item.quantity;
+        }, 0);
+        const utilidadNeta = negociacionState.precioPersonalizado - costoTotal - gastoTotal;
+        const margenPorcentaje =
+          negociacionState.precioPersonalizado > 0
+            ? (utilidadNeta / negociacionState.precioPersonalizado) * 100
+            : 0;
+
+        // Calcular utilidad original para el impacto
+        const costoTotalOriginal = cotizacionOriginal.items.reduce(
+          (sum, item) => sum + ((item.cost ?? 0) * item.quantity),
+          0
+        );
+        const gastoTotalOriginal = cotizacionOriginal.items.reduce(
+          (sum, item) => sum + ((item.expense ?? 0) * item.quantity),
+          0
+        );
+        const utilidadNetaOriginal =
+          cotizacionOriginal.price - costoTotalOriginal - gastoTotalOriginal;
+        const impactoUtilidad = utilidadNeta - utilidadNetaOriginal;
+
+        return {
+          precioFinal: negociacionState.precioPersonalizado,
+          precioBase: negociacionState.precioPersonalizado,
+          descuentoTotal: 0,
+          costoTotal,
+          gastoTotal,
+          utilidadNeta,
+          margenPorcentaje,
+          impactoUtilidad,
+          items: cotizacionOriginal.items.map((item) => ({
+            id: item.id,
+            precioOriginal: (item.unit_price || 0) * item.quantity,
+            precioNegociado: negociacionState.itemsCortesia.has(item.id)
+              ? 0
+              : (item.unit_price || 0) * item.quantity,
+            isCortesia: negociacionState.itemsCortesia.has(item.id),
+          })),
+        };
+      }
+
       return calcularPrecioNegociado({
         cotizacionOriginal,
-        precioPersonalizado: negociacionState.precioPersonalizado,
+        precioPersonalizado: null,
         descuentoAdicional: negociacionState.descuentoAdicional,
         condicionComercial,
         itemsCortesia: negociacionState.itemsCortesia,
@@ -200,10 +286,10 @@ export default function NegociacionPage() {
     cotizacionOriginal,
     configPrecios,
     negociacionState,
-    condicionesComerciales,
+    condicionComercialCompleta,
   ]);
 
-  // Validación de margen
+  // Validaciรณn de margen
   const validacionMargen = useMemo(() => {
     if (!calculoNegociado) return null;
 
@@ -222,7 +308,7 @@ export default function NegociacionPage() {
           <ZenCardContent className="flex items-center justify-center py-12">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
-              <p className="text-zinc-400">Cargando datos de negociación...</p>
+              <p className="text-zinc-400">Cargando datos de negociaciรณn...</p>
             </div>
           </ZenCardContent>
         </ZenCard>
@@ -236,7 +322,7 @@ export default function NegociacionPage() {
         <ZenCard>
           <ZenCardContent className="py-12">
             <p className="text-red-400 text-center">
-              Error al cargar datos de negociación
+              Error al cargar datos de negociaciรณn
             </p>
           </ZenCardContent>
         </ZenCard>
@@ -251,123 +337,188 @@ export default function NegociacionPage() {
         onBack={() => router.back()}
       />
 
-      {/* Vista comparativa */}
-      <ComparacionView
-        original={{
-          precioFinal: cotizacionOriginal.price,
-          costoTotal:
-            calculoNegociado?.costoTotal ??
-            cotizacionOriginal.items.reduce(
-              (sum, item) => sum + (item.cost || 0) * item.quantity,
-              0
-            ),
-          gastoTotal:
-            calculoNegociado?.gastoTotal ??
-            cotizacionOriginal.items.reduce(
-              (sum, item) => sum + (item.expense || 0) * item.quantity,
-              0
-            ),
-          utilidadNeta:
-            cotizacionOriginal.price -
-            (calculoNegociado?.costoTotal ??
-              cotizacionOriginal.items.reduce(
-                (sum, item) => sum + (item.cost || 0) * item.quantity,
-                0
-              )) -
-            (calculoNegociado?.gastoTotal ??
-              cotizacionOriginal.items.reduce(
-                (sum, item) => sum + (item.expense || 0) * item.quantity,
-                0
-              )),
-          margenPorcentaje: 0,
-        }}
-        negociada={calculoNegociado}
-      />
-
-      {/* Simuladores */}
+      {/* Layout de 2 columnas: Items Tree y otros componentes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <PrecioSimulador
-          cotizacion={cotizacionOriginal}
-          precioPersonalizado={negociacionState.precioPersonalizado}
-          onPrecioChange={(precio) =>
+        {/* Columna 1: Items con estructura anidada */}
+        <NegociacionItemsTree
+          items={cotizacionOriginal.items}
+          itemsCortesia={negociacionState.itemsCortesia}
+          onItemsChange={(items) =>
             setNegociacionState((prev) => ({
               ...prev,
-              precioPersonalizado: precio,
+              itemsCortesia: items,
             }))
           }
-          validacionMargen={validacionMargen}
         />
 
-        <CondicionesSimulador
-          studioSlug={studioSlug}
-          condicionSeleccionada={negociacionState.condicionComercialId}
-          condicionTemporal={negociacionState.condicionComercialTemporal}
-          onCondicionChange={(condicionId, condicionTemporal) =>
-            setNegociacionState((prev) => ({
-              ...prev,
-              condicionComercialId: condicionId,
-              condicionComercialTemporal: condicionTemporal,
-            }))
-          }
-          onCondicionesLoaded={setCondicionesComerciales}
-        />
-      </div>
-
-      {/* Items de cortesía */}
-      <ItemsCortesiaSelector
-        items={cotizacionOriginal.items}
-        itemsCortesia={negociacionState.itemsCortesia}
-        onItemsChange={(items) =>
-          setNegociacionState((prev) => ({
-            ...prev,
-            itemsCortesia: items,
-          }))
-        }
-      />
-
-      {/* Impacto en utilidad */}
-      {calculoNegociado && (() => {
-        const costoTotalOriginal = cotizacionOriginal.items.reduce(
-          (sum, item) => sum + ((item.cost ?? 0) * item.quantity),
-          0
-        );
-        const gastoTotalOriginal = cotizacionOriginal.items.reduce(
-          (sum, item) => sum + ((item.expense ?? 0) * item.quantity),
-          0
-        );
-        const utilidadNetaOriginal =
-          cotizacionOriginal.price - costoTotalOriginal - gastoTotalOriginal;
-        const margenOriginal =
-          cotizacionOriginal.price > 0
-            ? (utilidadNetaOriginal / cotizacionOriginal.price) * 100
-            : 0;
-
-        return (
-          <ImpactoUtilidad
+        {/* Columna 2: Condiciones y Cálculos */}
+        <div className="space-y-6">
+          {/* 1. Precio cotización original */}
+          <ComparacionView
             original={{
               precioFinal: cotizacionOriginal.price,
-              utilidadNeta: utilidadNetaOriginal,
-              margenPorcentaje: margenOriginal,
+              costoTotal:
+                calculoNegociado?.costoTotal ??
+                cotizacionOriginal.items.reduce(
+                  (sum, item) => sum + (item.cost || 0) * item.quantity,
+                  0
+                ),
+              gastoTotal:
+                calculoNegociado?.gastoTotal ??
+                cotizacionOriginal.items.reduce(
+                  (sum, item) => sum + (item.expense || 0) * item.quantity,
+                  0
+                ),
+              utilidadNeta:
+                cotizacionOriginal.price -
+                (calculoNegociado?.costoTotal ??
+                  cotizacionOriginal.items.reduce(
+                    (sum, item) => sum + (item.cost || 0) * item.quantity,
+                    0
+                  )) -
+                (calculoNegociado?.gastoTotal ??
+                  cotizacionOriginal.items.reduce(
+                    (sum, item) => sum + (item.expense || 0) * item.quantity,
+                    0
+                  )),
+              margenPorcentaje: 0,
             }}
             negociada={calculoNegociado}
-            validacionMargen={validacionMargen}
           />
-        );
-      })()}
 
-      {/* Finalizar negociación */}
-      <FinalizarNegociacion
-        negociacionState={negociacionState}
-        calculoNegociado={calculoNegociado}
-        validacionMargen={validacionMargen}
-        cotizacionOriginal={cotizacionOriginal}
-        onNotasChange={(notas) =>
-          setNegociacionState((prev) => ({ ...prev, notas }))
-        }
-        studioSlug={studioSlug}
-        promiseId={promiseId}
-        cotizacionId={cotizacionId}
-      />
+          {/* 2. Selector de condiciones comerciales */}
+          <SelectorCondicionesComerciales
+            studioSlug={studioSlug}
+            condicionSeleccionada={negociacionState.condicionComercialId}
+            condicionTemporal={negociacionState.condicionComercialTemporal}
+            onCondicionChange={(condicionId, condicionTemporal, condicionCompleta) => {
+              setNegociacionState((prev) => ({
+                ...prev,
+                condicionComercialId: condicionId,
+                condicionComercialTemporal: condicionTemporal,
+              }));
+              if (condicionTemporal) {
+                setCondicionComercialCompleta(condicionTemporal);
+              } else if (condicionCompleta) {
+                setCondicionComercialCompleta(condicionCompleta);
+              } else {
+                setCondicionComercialCompleta(null);
+              }
+            }}
+            onCondicionesLoaded={(condiciones) => {
+              setCondicionesComerciales(condiciones);
+            }}
+          />
+
+          {/* 3. Desglose de precio con condiciones comerciales aplicadas */}
+          {(() => {
+            let precioConCondiciones: number | null = null;
+            if (condicionComercialCompleta && configPrecios) {
+              const calculoConCondicion = calcularPrecioNegociado({
+                cotizacionOriginal,
+                precioPersonalizado: null,
+                descuentoAdicional: null,
+                condicionComercial: condicionComercialCompleta,
+                itemsCortesia: new Set(),
+                configPrecios,
+              });
+              precioConCondiciones = calculoConCondicion?.precioFinal ?? null;
+            }
+
+            return (
+              <>
+                <CalculoConCondiciones
+                  cotizacionOriginal={cotizacionOriginal}
+                  condicionComercial={condicionComercialCompleta}
+                  configuracionPrecios={configPrecios}
+                />
+
+                {/* 4. Precio de Negociación */}
+                <PrecioSimulador
+                  cotizacion={cotizacionOriginal}
+                  precioPersonalizado={negociacionState.precioPersonalizado}
+                  onPrecioChange={(precio) =>
+                    setNegociacionState((prev) => ({
+                      ...prev,
+                      precioPersonalizado: precio,
+                    }))
+                  }
+                  validacionMargen={validacionMargen}
+                  precioReferencia={precioConCondiciones}
+                  itemsCortesia={negociacionState.itemsCortesia}
+                />
+
+                {/* 5. Desglose Dinámico */}
+                {(() => {
+                  // Calcular precio base para el desglose: precio de referencia - items cortesía
+                  const montoItemsCortesia = cotizacionOriginal.items.reduce((sum, item) => {
+                    const isCortesia = negociacionState.itemsCortesia.has(item.id);
+                    if (isCortesia) {
+                      return sum + (item.unit_price || 0) * item.quantity;
+                    }
+                    return sum;
+                  }, 0);
+                  const precioBaseDesglose = (precioConCondiciones ?? cotizacionOriginal.price) - montoItemsCortesia;
+
+                  return (
+                    <DesgloseDinamico
+                      cotizacionOriginal={cotizacionOriginal}
+                      precioBase={precioBaseDesglose}
+                      precioPersonalizado={negociacionState.precioPersonalizado}
+                      itemsCortesia={negociacionState.itemsCortesia}
+                    />
+                  );
+                })()}
+
+                {/* 5. Impacto en utilidad */}
+                {calculoNegociado && (() => {
+                  const costoTotalOriginal = cotizacionOriginal.items.reduce(
+                    (sum, item) => sum + ((item.cost ?? 0) * item.quantity),
+                    0
+                  );
+                  const gastoTotalOriginal = cotizacionOriginal.items.reduce(
+                    (sum, item) => sum + ((item.expense ?? 0) * item.quantity),
+                    0
+                  );
+                  const utilidadNetaOriginal =
+                    cotizacionOriginal.price - costoTotalOriginal - gastoTotalOriginal;
+                  const margenOriginal =
+                    cotizacionOriginal.price > 0
+                      ? (utilidadNetaOriginal / cotizacionOriginal.price) * 100
+                      : 0;
+
+                  return (
+                    <ImpactoUtilidad
+                      original={{
+                        precioFinal: cotizacionOriginal.price,
+                        utilidadNeta: utilidadNetaOriginal,
+                        margenPorcentaje: margenOriginal,
+                      }}
+                      negociada={calculoNegociado}
+                      validacionMargen={validacionMargen}
+                    />
+                  );
+                })()}
+
+                {/* 6. Finalizar negociación */}
+                <FinalizarNegociacion
+                  negociacionState={negociacionState}
+                  calculoNegociado={calculoNegociado}
+                  validacionMargen={validacionMargen}
+                  cotizacionOriginal={cotizacionOriginal}
+                  onNotasChange={(notas) =>
+                    setNegociacionState((prev) => ({ ...prev, notas }))
+                  }
+                  studioSlug={studioSlug}
+                  promiseId={promiseId}
+                  cotizacionId={cotizacionId}
+                />
+              </>
+            );
+          })()}
+
+        </div>
+      </div>
     </div>
   );
 }

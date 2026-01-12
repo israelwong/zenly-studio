@@ -276,14 +276,20 @@ function PromisePageContent({
     onSettingsUpdated: handleSettingsUpdated,
   });
 
-  // Detectar si hay cotización autorizada (en_cierre, contract_generated, contract_signed)
+  // Detectar si hay cotización autorizada (SOLO en_cierre, contract_generated, contract_signed)
+  // Excluir explícitamente 'negociacion', 'pendiente' y cualquier otro estado
+  // Solo mostrar "en proceso" si la cotización está realmente autorizada por el prospecto
   const cotizacionAutorizada = useMemo(() => {
     return cotizaciones.find(
-      (cot) =>
-        cot.selected_by_prospect &&
-        (cot.status === 'en_cierre' ||
-          cot.status === 'contract_generated' ||
-          cot.status === 'contract_signed')
+      (cot) => {
+        // Verificar que tenga selected_by_prospect: true
+        if (!cot.selected_by_prospect) return false;
+
+        // Verificar que el status sea EXACTAMENTE uno de los estados autorizados
+        if (!cot.status) return false;
+        const estadosAutorizados = ['en_cierre'];
+        return estadosAutorizados.includes(cot.status);
+      }
     );
   }, [cotizaciones]);
 

@@ -8,15 +8,10 @@ import {
   ZenCardTitle,
   ZenCardDescription,
   ZenInput,
-  ZenBadge,
 } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { CotizacionCompleta } from '@/lib/utils/negociacion-calc';
 import type { ValidacionMargen } from '@/lib/utils/negociacion-calc';
-import {
-  getColorIndicadorMargen,
-  getBgColorIndicadorMargen,
-} from '@/lib/utils/negociacion-calc';
 import { AlertCircle } from 'lucide-react';
 
 interface PrecioSimuladorProps {
@@ -24,6 +19,8 @@ interface PrecioSimuladorProps {
   precioPersonalizado: number | null;
   onPrecioChange: (precio: number | null) => void;
   validacionMargen: ValidacionMargen | null;
+  precioReferencia: number | null; // Precio con condiciones comerciales aplicadas (Total a pagar)
+  itemsCortesia: Set<string>; // Items marcados como cortesía
 }
 
 export function PrecioSimulador({
@@ -31,6 +28,8 @@ export function PrecioSimulador({
   precioPersonalizado,
   onPrecioChange,
   validacionMargen,
+  precioReferencia,
+  itemsCortesia,
 }: PrecioSimuladorProps) {
   const [inputValue, setInputValue] = useState(
     precioPersonalizado?.toString() || ''
@@ -42,6 +41,21 @@ export function PrecioSimulador({
       sum + ((item.cost ?? 0) * item.quantity) + ((item.expense ?? 0) * item.quantity),
     0
   );
+
+  // Precio de referencia: si hay condiciones comerciales, usar ese; sino el precio original
+  const precioRef = precioReferencia ?? cotizacion.price;
+
+  // Calcular monto de items de cortesía (los que están marcados como cortesía)
+  const montoItemsCortesia = cotizacion.items.reduce((sum, item) => {
+    const isCortesia = itemsCortesia.has(item.id);
+    if (isCortesia) {
+      return sum + (item.unit_price || 0) * item.quantity;
+    }
+    return sum;
+  }, 0);
+
+  // Cálculo: Precio de referencia (Total a pagar) - Monto de items de cortesía
+  const calculoItemsSeleccionados = precioRef - montoItemsCortesia;
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
@@ -62,13 +76,38 @@ export function PrecioSimulador({
         </ZenCardDescription>
       </ZenCardHeader>
       <ZenCardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-zinc-400">Precio sugerido:</span>
-            <span className="font-semibold text-zinc-200">
-              {formatearMoneda(cotizacion.price)}
-            </span>
+        <div className="grid grid-cols-2 gap-4">
+          {/* Input: Cálculo de items seleccionados (Total a pagar - items cortesía) */}
+          <div>
+            <label className="text-xs text-zinc-500 mb-1 block">
+              Cálculo de items seleccionados
+            </label>
+            <ZenInput
+              type="text"
+              value={formatearMoneda(calculoItemsSeleccionados)}
+              readOnly
+              className="mt-0 bg-zinc-900/50"
+            />
           </div>
+
+          {/* Input: Precio negociado */}
+          <div>
+            <label className="text-xs text-zinc-500 mb-1 block">
+              Precio negociado (MXN)
+            </label>
+            <ZenInput
+              type="number"
+              value={inputValue}
+              onChange={(e) => handleInputChange(e.target.value)}
+              placeholder={precioRef.toString()}
+              min={precioMinimo}
+              step="0.01"
+              className="mt-0"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-zinc-700">
           <div className="flex items-center justify-between text-sm">
             <span className="text-zinc-400">Precio mínimo:</span>
             <span className="font-semibold text-red-400">
@@ -77,40 +116,6 @@ export function PrecioSimulador({
           </div>
         </div>
 
-        <ZenInput
-          label="Precio negociado (MXN)"
-          type="number"
-          value={inputValue}
-          onChange={(e) => handleInputChange(e.target.value)}
-          placeholder={cotizacion.price.toString()}
-          min={precioMinimo}
-          step="0.01"
-        />
-
-        {validacionMargen && (
-          <div
-            className={`p-3 rounded-lg border ${getBgColorIndicadorMargen(
-              validacionMargen.nivel
-            )}`}
-          >
-            <div className="flex items-start gap-2">
-              <AlertCircle
-                className={`h-4 w-4 mt-0.5 ${getColorIndicadorMargen(
-                  validacionMargen.nivel
-                )}`}
-              />
-              <div className="flex-1">
-                <p
-                  className={`text-sm ${getColorIndicadorMargen(
-                    validacionMargen.nivel
-                  )}`}
-                >
-                  {validacionMargen.mensaje}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {precioPersonalizado !== null &&
           precioPersonalizado < precioMinimo && (

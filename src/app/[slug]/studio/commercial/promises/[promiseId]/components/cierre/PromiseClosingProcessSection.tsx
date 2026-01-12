@@ -319,7 +319,8 @@ export function PromiseClosingProcessSection({
         onAuthorizeClick={onAuthorizeClick}
         isLoadingPromiseData={false}
         onCierreCancelado={() => {
-          // Realtime sincronizará automáticamente ambos componentes
+          // Recargar cotizaciones inmediatamente cuando se cancela el cierre
+          loadCotizaciones();
         }}
         contactId={contactId}
         eventTypeId={eventTypeId}
@@ -339,7 +340,8 @@ export function PromiseClosingProcessSection({
         onAuthorizeClick={onAuthorizeClick}
         isLoadingPromiseData={false}
         onCierreCancelado={() => {
-          // Realtime sincronizará automáticamente ambos componentes
+          // Recargar cotizaciones inmediatamente cuando se cancela el cierre
+          loadCotizaciones();
         }}
         contactId={contactId}
         eventTypeId={eventTypeId}

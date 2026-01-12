@@ -254,6 +254,12 @@ export function PromiseQuotesPanelCard({
       return;
     }
 
+    // Si está en negociación, redirigir a la página de negociación para editar
+    if (cotizacion.status === 'negociacion') {
+      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
+      return;
+    }
+
     const params = new URLSearchParams();
     if (contactId) {
       params.set('contactId', contactId);
@@ -411,22 +417,22 @@ export function PromiseQuotesPanelCard({
     e.stopPropagation();
     e.preventDefault();
     if (isProcessingRef.current || loading) return;
-    
+
     const newVisibility = !cotizacion.visible_to_client;
-    
+
     // Actualización optimista inmediata
     if (onVisibilityToggle) {
       onVisibilityToggle(cotizacion.id, newVisibility);
     }
-    
+
     isProcessingRef.current = true;
     setLoading(true);
     try {
       const result = await toggleCotizacionVisibility(cotizacion.id, studioSlug);
       if (result.success) {
         toast.success(
-          newVisibility 
-            ? 'Cotización visible para el prospecto' 
+          newVisibility
+            ? 'Cotización visible para el prospecto'
             : 'Cotización ocultada del prospecto'
         );
         // Recargar desde servidor para sincronizar
@@ -454,12 +460,12 @@ export function PromiseQuotesPanelCard({
     e.stopPropagation();
     e.preventDefault();
     if (isProcessingRef.current || loading) return;
-    
+
     // Solo permitir quitar de negociación (volver a pendiente)
     if (cotizacion.status !== 'negociacion') {
       return;
     }
-    
+
     isProcessingRef.current = true;
     setLoading(true);
     try {
@@ -574,11 +580,11 @@ export function PromiseQuotesPanelCard({
   const handleQuitarCancelacion = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isProcessingRef.current || loading) return;
-    
+
     if (cotizacion.status !== 'cancelada') {
       return;
     }
-    
+
     isProcessingRef.current = true;
     setLoading(true);
     try {
@@ -602,6 +608,7 @@ export function PromiseQuotesPanelCard({
   const isPendiente = cotizacion.status === 'pendiente';
   const isArchivada = cotizacion.status === 'archivada';
   const isCancelada = cotizacion.status === 'cancelada';
+  const isNegociacion = cotizacion.status === 'negociacion';
   const isRevision = cotizacion.revision_status === 'pending_revision' || cotizacion.revision_status === 'active';
 
   return (
@@ -612,10 +619,9 @@ export function PromiseQuotesPanelCard({
         className={`p-3 border rounded-lg transition-colors relative ${isArchivada
           ? 'bg-zinc-900/30 border-zinc-800/50 opacity-50 grayscale'
           : selectionMode && isSelected
-          ? 'bg-emerald-950/40 border-emerald-800/30'
-          : 'bg-zinc-800/50 border-zinc-700'
-          } ${
-          isArchivada ? 'cursor-default' : selectionMode ? 'cursor-pointer hover:bg-zinc-800' : 'cursor-pointer hover:bg-zinc-800'
+            ? 'bg-emerald-950/40 border-emerald-800/30'
+            : 'bg-zinc-800/50 border-zinc-700'
+          } ${isArchivada ? 'cursor-default' : selectionMode ? 'cursor-pointer hover:bg-zinc-800' : 'cursor-pointer hover:bg-zinc-800'
           }`}
         onClick={handleClick}
       >
@@ -702,7 +708,7 @@ export function PromiseQuotesPanelCard({
               {/* Mostrar precio original si hay descuento aplicado */}
               {(() => {
                 const tieneDescuento = cotizacion.discount && cotizacion.discount > 0;
-                
+
                 if (tieneDescuento) {
                   return (
                     <div className="mt-0.5">
@@ -763,168 +769,262 @@ export function PromiseQuotesPanelCard({
                 )}
                 {/* Ocultar menú si es archivada Y hay cotización en cierre */}
                 {!(isArchivada && hasApprovedQuote) && (
-              <ZenDropdownMenu>
-                <ZenDropdownMenuTrigger asChild>
-                  <ZenButton
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0"
-                    disabled={loading || isDuplicating}
-                  >
-                    <MoreVertical className="h-4 w-4 text-zinc-400" />
-                  </ZenButton>
-                </ZenDropdownMenuTrigger>
-                <ZenDropdownMenuContent align="end">
-                  {/* Menú según estado: pendiente, archivada, cancelada */}
-                  {isPendiente ? (
-                    <>
-                      {/* Pendiente: editar nombre, editar cotización, duplicar, archivar, pasar a cierre, eliminar */}
-                      <ZenDropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartEditName(e);
-                        }}
+                  <ZenDropdownMenu>
+                    <ZenDropdownMenuTrigger asChild>
+                      <ZenButton
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
                         disabled={loading || isDuplicating}
                       >
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        Editar nombre
-                      </ZenDropdownMenuItem>
-                      {promiseId && (
+                        <MoreVertical className="h-4 w-4 text-zinc-400" />
+                      </ZenButton>
+                    </ZenDropdownMenuTrigger>
+                    <ZenDropdownMenuContent align="end">
+                      {/* Menú según estado: pendiente, negociacion, archivada, cancelada */}
+                      {isPendiente ? (
                         <>
+                          {/* Pendiente: editar nombre, editar cotización, duplicar, archivar, pasar a cierre, eliminar */}
                           <ZenDropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              const params = new URLSearchParams();
-                              if (contactId) {
-                                params.set('contactId', contactId);
-                              }
-                              const queryString = params.toString();
-                              router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+                              handleStartEditName(e);
                             }}
                             disabled={loading || isDuplicating}
                           >
                             <Edit2 className="h-4 w-4 mr-2" />
-                            Editar cotización
+                            Editar nombre
+                          </ZenDropdownMenuItem>
+                          {promiseId && (
+                            <>
+                              <ZenDropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const params = new URLSearchParams();
+                                  if (contactId) {
+                                    params.set('contactId', contactId);
+                                  }
+                                  const queryString = params.toString();
+                                  router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+                                }}
+                                disabled={loading || isDuplicating}
+                              >
+                                <Edit2 className="h-4 w-4 mr-2" />
+                                Editar cotización
+                              </ZenDropdownMenuItem>
+                              <ZenDropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
+                                }}
+                                disabled={loading || isDuplicating}
+                                className="text-amber-400 focus:text-amber-300"
+                              >
+                                <Handshake className="h-4 w-4 mr-2" />
+                                Negociar
+                              </ZenDropdownMenuItem>
+                            </>
+                          )}
+                          {!isRevision && (
+                            <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicar
+                            </ZenDropdownMenuItem>
+                          )}
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowArchiveModal(true);
+                            }}
+                            disabled={loading || isDuplicating}
+                          >
+                            <Archive className="h-4 w-4 mr-2" />
+                            Archivar
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          {!hasApprovedQuote && (
+                            <ZenDropdownMenuItem
+                              onClick={handlePasarACierreClick}
+                              disabled={loading || isDuplicating || !promiseId}
+                              className="text-emerald-400 focus:text-emerald-300"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Pasar a Cierre
+                            </ZenDropdownMenuItem>
+                          )}
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDeleteModal(true);
+                            }}
+                            disabled={loading || isDuplicating}
+                            className="text-red-400 focus:text-red-300"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </ZenDropdownMenuItem>
+                        </>
+                      ) : isNegociacion ? (
+                        <>
+                          {/* Negociación: editar nombre, editar cotización, cancelar, archivar, pasar a cierre, eliminar */}
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEditName(e);
+                            }}
+                            disabled={loading || isDuplicating}
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Editar nombre
+                          </ZenDropdownMenuItem>
+                          {promiseId && (
+                            <>
+                              <ZenDropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const params = new URLSearchParams();
+                                  if (contactId) {
+                                    params.set('contactId', contactId);
+                                  }
+                                  const queryString = params.toString();
+                                  router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+                                }}
+                                disabled={loading || isDuplicating}
+                              >
+                                <Edit2 className="h-4 w-4 mr-2" />
+                                Editar cotización
+                              </ZenDropdownMenuItem>
+                              <ZenDropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
+                                }}
+                                disabled={loading || isDuplicating}
+                                className="text-amber-400 focus:text-amber-300"
+                              >
+                                <Handshake className="h-4 w-4 mr-2" />
+                                Editar negociación
+                              </ZenDropdownMenuItem>
+                            </>
+                          )}
+                          {!isRevision && (
+                            <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicar
+                            </ZenDropdownMenuItem>
+                          )}
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowCancelModal(true);
+                            }}
+                            disabled={loading || isDuplicating}
+                            className="text-red-400 focus:text-red-300"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Cancelar
                           </ZenDropdownMenuItem>
                           <ZenDropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
+                              setShowArchiveModal(true);
                             }}
                             disabled={loading || isDuplicating}
-                            className="text-amber-400 focus:text-amber-300"
                           >
-                            <Handshake className="h-4 w-4 mr-2" />
-                            Negociar
+                            <Archive className="h-4 w-4 mr-2" />
+                            Archivar
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          {!hasApprovedQuote && (
+                            <ZenDropdownMenuItem
+                              onClick={handlePasarACierreClick}
+                              disabled={loading || isDuplicating || !promiseId}
+                              className="text-emerald-400 focus:text-emerald-300"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Pasar a Cierre
+                            </ZenDropdownMenuItem>
+                          )}
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDeleteModal(true);
+                            }}
+                            disabled={loading || isDuplicating}
+                            className="text-red-400 focus:text-red-300"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
                           </ZenDropdownMenuItem>
                         </>
-                      )}
-                      {!isRevision && (
-                        <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Duplicar
-                        </ZenDropdownMenuItem>
-                      )}
-                      <ZenDropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowArchiveModal(true);
-                        }}
-                        disabled={loading || isDuplicating}
-                      >
-                        <Archive className="h-4 w-4 mr-2" />
-                        Archivar
-                      </ZenDropdownMenuItem>
-                      <ZenDropdownMenuSeparator />
-                      {!hasApprovedQuote && (
-                        <ZenDropdownMenuItem
-                          onClick={handlePasarACierreClick}
-                          disabled={loading || isDuplicating || !promiseId}
-                          className="text-emerald-400 focus:text-emerald-300"
-                        >
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Pasar a Cierre
-                        </ZenDropdownMenuItem>
-                      )}
-                      <ZenDropdownMenuSeparator />
-                      <ZenDropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowDeleteModal(true);
-                        }}
-                        disabled={loading || isDuplicating}
-                        className="text-red-400 focus:text-red-300"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Eliminar
-                      </ZenDropdownMenuItem>
-                    </>
-                  ) : isArchivada ? (
-                    <>
-                      {/* Archivada: duplicar, desarchivar, eliminar */}
-                      {!isRevision && (
-                        <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Duplicar
-                        </ZenDropdownMenuItem>
-                      )}
-                      <ZenDropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowUnarchiveModal(true);
-                        }}
-                        disabled={loading || isDuplicating}
-                      >
-                        <ArchiveRestore className="h-4 w-4 mr-2" />
-                        Desarchivar
-                      </ZenDropdownMenuItem>
-                      <ZenDropdownMenuSeparator />
-                      <ZenDropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowDeleteModal(true);
-                        }}
-                        disabled={loading || isDuplicating}
-                        className="text-red-400 focus:text-red-300"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Eliminar
-                      </ZenDropdownMenuItem>
-                    </>
-                  ) : isCancelada ? (
-                    <>
-                      {/* Cancelada: quitar cancelación, duplicar, eliminar */}
-                      <ZenDropdownMenuItem
-                        onClick={handleQuitarCancelacion}
-                        disabled={loading || isDuplicating}
-                        className="text-emerald-400 focus:text-emerald-300"
-                      >
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Quitar cancelación
-                      </ZenDropdownMenuItem>
-                      <ZenDropdownMenuSeparator />
-                      {!isRevision && (
-                        <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Duplicar
-                        </ZenDropdownMenuItem>
-                      )}
-                      <ZenDropdownMenuSeparator />
-                      <ZenDropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowDeleteModal(true);
-                        }}
-                        disabled={loading || isDuplicating}
-                        className="text-red-400 focus:text-red-300"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Eliminar
-                      </ZenDropdownMenuItem>
-                    </>
-                  ) : null}
-                </ZenDropdownMenuContent>
-              </ZenDropdownMenu>
+                      ) : isArchivada ? (
+                        <>
+                          {/* Archivada: duplicar, desarchivar, eliminar */}
+                          {!isRevision && (
+                            <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicar
+                            </ZenDropdownMenuItem>
+                          )}
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowUnarchiveModal(true);
+                            }}
+                            disabled={loading || isDuplicating}
+                          >
+                            <ArchiveRestore className="h-4 w-4 mr-2" />
+                            Desarchivar
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDeleteModal(true);
+                            }}
+                            disabled={loading || isDuplicating}
+                            className="text-red-400 focus:text-red-300"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </ZenDropdownMenuItem>
+                        </>
+                      ) : isCancelada ? (
+                        <>
+                          {/* Cancelada: quitar cancelación, duplicar, eliminar */}
+                          <ZenDropdownMenuItem
+                            onClick={handleQuitarCancelacion}
+                            disabled={loading || isDuplicating}
+                            className="text-emerald-400 focus:text-emerald-300"
+                          >
+                            <RotateCcw className="h-4 w-4 mr-2" />
+                            Quitar cancelación
+                          </ZenDropdownMenuItem>
+                          <ZenDropdownMenuSeparator />
+                          {!isRevision && (
+                            <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicar
+                            </ZenDropdownMenuItem>
+                          )}
+                          <ZenDropdownMenuSeparator />
+                          <ZenDropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDeleteModal(true);
+                            }}
+                            disabled={loading || isDuplicating}
+                            className="text-red-400 focus:text-red-300"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </ZenDropdownMenuItem>
+                        </>
+                      ) : null}
+                    </ZenDropdownMenuContent>
+                  </ZenDropdownMenu>
                 )}
               </>
             )}

@@ -437,26 +437,87 @@ export function CotizacionDetailSheet({
             <h3 className="text-lg font-semibold text-white mb-4">
               Condiciones Comerciales
             </h3>
-            <CondicionesComercialesSelector
-              condiciones={condicionesComerciales}
-              selectedCondicionId={selectedCondicionId}
-              selectedMetodoPagoId={selectedMetodoPagoId}
-              onSelectCondicion={handleSelectCondicion}
-              loading={loadingCondiciones}
-            />
+            {/* Si la cotización está en negociación, mostrar solo la condición definida */}
+            {currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id ? (
+              <>
+                {/* Mostrar condición comercial definida */}
+                <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h4 className="text-base font-semibold text-white mb-1">
+                        {currentCotizacion.condiciones_comerciales.name}
+                      </h4>
+                      {currentCotizacion.condiciones_comerciales.description && (
+                        <p className="text-sm text-zinc-400">
+                          {currentCotizacion.condiciones_comerciales.description}
+                        </p>
+                      )}
+                    </div>
+                    <ZenBadge variant="secondary">Definida</ZenBadge>
+                  </div>
+                </div>
 
-            {/* Cálculo de precio según condición comercial */}
-            {precioCalculado && (
-              <PrecioDesglose
-                ref={precioDesgloseRef}
-                precioBase={precioCalculado.precioBase}
-                descuentoCondicion={precioCalculado.descuentoCondicion}
-                precioConDescuento={precioCalculado.precioConDescuento}
-                advanceType={precioCalculado.advanceType}
-                anticipoPorcentaje={precioCalculado.anticipoPorcentaje}
-                anticipo={precioCalculado.anticipo}
-                diferido={precioCalculado.diferido}
-              />
+                {/* Cálculo de precio con la condición comercial definida */}
+                {(() => {
+                  const condicion = currentCotizacion.condiciones_comerciales;
+                  if (!condicion || !condicion.id) return null;
+
+                  const precioBase = finalPrice;
+                  const descuentoCondicion = condicion.discount_percentage ?? 0;
+                  const precioConDescuento = descuentoCondicion > 0
+                    ? precioBase - (precioBase * descuentoCondicion) / 100
+                    : precioBase;
+
+                  const advanceType: 'percentage' | 'fixed_amount' = (condicion.advance_type === 'fixed_amount' || condicion.advance_type === 'percentage')
+                    ? condicion.advance_type
+                    : 'percentage';
+                  const anticipo = advanceType === 'fixed_amount' && condicion.advance_amount
+                    ? condicion.advance_amount
+                    : (condicion.advance_percentage ?? 0) > 0
+                      ? (precioConDescuento * (condicion.advance_percentage ?? 0)) / 100
+                      : 0;
+                  const anticipoPorcentaje = advanceType === 'percentage' ? (condicion.advance_percentage ?? 0) : null;
+                  const diferido = precioConDescuento - anticipo;
+
+                  return (
+                    <PrecioDesglose
+                      ref={precioDesgloseRef}
+                      precioBase={precioBase}
+                      descuentoCondicion={descuentoCondicion}
+                      precioConDescuento={precioConDescuento}
+                      advanceType={advanceType}
+                      anticipoPorcentaje={anticipoPorcentaje}
+                      anticipo={anticipo}
+                      diferido={diferido}
+                    />
+                  );
+                })()}
+              </>
+            ) : (
+              <>
+                {/* Mostrar selector de condiciones comerciales para cotizaciones pendientes */}
+                <CondicionesComercialesSelector
+                  condiciones={condicionesComerciales}
+                  selectedCondicionId={selectedCondicionId}
+                  selectedMetodoPagoId={selectedMetodoPagoId}
+                  onSelectCondicion={handleSelectCondicion}
+                  loading={loadingCondiciones}
+                />
+
+                {/* Cálculo de precio según condición comercial */}
+                {precioCalculado && (
+                  <PrecioDesglose
+                    ref={precioDesgloseRef}
+                    precioBase={precioCalculado.precioBase}
+                    descuentoCondicion={precioCalculado.descuentoCondicion}
+                    precioConDescuento={precioCalculado.precioConDescuento}
+                    advanceType={precioCalculado.advanceType}
+                    anticipoPorcentaje={precioCalculado.anticipoPorcentaje}
+                    anticipo={precioCalculado.anticipo}
+                    diferido={precioCalculado.diferido}
+                  />
+                )}
+              </>
             )}
           </div>
 
@@ -499,9 +560,51 @@ export function CotizacionDetailSheet({
           onClose={() => setShowAutorizarModal(false)}
           promiseId={promiseId}
           studioSlug={studioSlug}
-          condicionesComercialesId={selectedCondicionId}
+          condicionesComercialesId={
+            // Si está en negociación, usar la condición comercial definida
+            currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id
+              ? currentCotizacion.condiciones_comerciales.id
+              : selectedCondicionId
+          }
           condicionesComercialesMetodoPagoId={selectedMetodoPagoId}
-          precioCalculado={precioCalculado}
+          precioCalculado={
+            // Si está en negociación, calcular precio con la condición definida
+            currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id
+              ? (() => {
+                  const condicion = currentCotizacion.condiciones_comerciales;
+                  if (!condicion) return precioCalculado;
+
+                  const precioBase = finalPrice;
+                  const descuentoCondicion = condicion.discount_percentage ?? 0;
+                  const precioConDescuento = descuentoCondicion > 0
+                    ? precioBase - (precioBase * descuentoCondicion) / 100
+                    : precioBase;
+
+                  const advanceType: 'percentage' | 'fixed_amount' = (condicion.advance_type === 'fixed_amount' || condicion.advance_type === 'percentage')
+                    ? condicion.advance_type
+                    : 'percentage';
+                  const anticipo = advanceType === 'fixed_amount' && condicion.advance_amount
+                    ? condicion.advance_amount
+                    : (condicion.advance_percentage ?? 0) > 0
+                      ? (precioConDescuento * (condicion.advance_percentage ?? 0)) / 100
+                      : 0;
+                  const anticipoPorcentaje = advanceType === 'percentage' ? (condicion.advance_percentage ?? 0) : null;
+                  const anticipoMontoFijo: number | null = advanceType === 'fixed_amount' ? (condicion.advance_amount ?? null) : null;
+                  const diferido = precioConDescuento - anticipo;
+
+                  return {
+                    precioBase,
+                    descuentoCondicion,
+                    precioConDescuento,
+                    advanceType,
+                    anticipoPorcentaje,
+                    anticipoMontoFijo,
+                    anticipo,
+                    diferido,
+                  };
+                })()
+              : precioCalculado
+          }
           showPackages={showPackages}
           autoGenerateContract={autoGenerateContract}
           onSuccess={() => {

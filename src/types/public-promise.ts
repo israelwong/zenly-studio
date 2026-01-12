@@ -24,6 +24,7 @@ export interface PublicServicioData {
   // Para cotizaciones
   price?: number;
   quantity?: number;
+  is_courtesy?: boolean; // Si el item es cortesía (no se cobra)
   // Multimedia del item
   media?: Array<{
     id: string;
@@ -64,6 +65,14 @@ export interface PublicCotizacion {
   condiciones_comerciales: {
     metodo_pago: string | null;
     condiciones: string | null;
+    // Para cotizaciones en negociación, incluir datos completos
+    id?: string;
+    name?: string;
+    description?: string | null;
+    advance_percentage?: number | null;
+    advance_type?: string | null;
+    advance_amount?: number | null;
+    discount_percentage?: number | null;
   } | null;
   paquete_origen: {
     id: string;

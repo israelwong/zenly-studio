@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/zen';
 import {
   crearVersionNegociada,
+  aplicarCambiosNegociacion,
 } from '@/lib/actions/studio/commercial/promises/negociacion.actions';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -50,6 +51,9 @@ export function FinalizarNegociacion({
   );
   const [loading, setLoading] = useState(false);
 
+  // Detectar si estamos editando una negociación existente o creando una nueva
+  const isUpdating = cotizacionOriginal.status === 'negociacion';
+
   const tieneCambios =
     negociacionState.precioPersonalizado !== null ||
     negociacionState.descuentoAdicional !== null ||
@@ -58,7 +62,8 @@ export function FinalizarNegociacion({
     negociacionState.itemsCortesia.size > 0;
 
   const handleFinalizar = async () => {
-    if (!nombreVersion.trim()) {
+    // Solo validar nombre si estamos creando una nueva cotización
+    if (!isUpdating && !nombreVersion.trim()) {
       toast.error('El nombre de la cotización es requerido');
       return;
     }
@@ -97,27 +102,47 @@ export function FinalizarNegociacion({
     setLoading(true);
 
     try {
-      const result = await crearVersionNegociada({
-        studio_slug: studioSlug,
-        cotizacion_original_id: cotizacionId,
-        nombre: nombreVersion.trim(),
-        descripcion: cotizacionOriginal.description || undefined,
-        precio_personalizado: negociacionState.precioPersonalizado ?? undefined,
-        descuento_adicional: negociacionState.descuentoAdicional ?? undefined,
-        condicion_comercial_id: negociacionState.condicionComercialId ?? undefined,
-        condicion_comercial_temporal:
-          negociacionState.condicionComercialTemporal ?? undefined,
-        items_cortesia: Array.from(negociacionState.itemsCortesia),
-        notas: negociacionState.notas || undefined,
-      });
+      const result = isUpdating
+        ? await aplicarCambiosNegociacion({
+            studio_slug: studioSlug,
+            cotizacion_id: cotizacionId,
+            precio_personalizado: negociacionState.precioPersonalizado ?? undefined,
+            descuento_adicional: negociacionState.descuentoAdicional ?? undefined,
+            condicion_comercial_id: negociacionState.condicionComercialId ?? undefined,
+            condicion_comercial_temporal:
+              negociacionState.condicionComercialTemporal ?? undefined,
+            items_cortesia: Array.from(negociacionState.itemsCortesia),
+            notas: negociacionState.notas || undefined,
+          })
+        : await crearVersionNegociada({
+            studio_slug: studioSlug,
+            cotizacion_original_id: cotizacionId,
+            nombre: nombreVersion.trim(),
+            descripcion: cotizacionOriginal.description || undefined,
+            precio_personalizado: negociacionState.precioPersonalizado ?? undefined,
+            descuento_adicional: negociacionState.descuentoAdicional ?? undefined,
+            condicion_comercial_id: negociacionState.condicionComercialId ?? undefined,
+            condicion_comercial_temporal:
+              negociacionState.condicionComercialTemporal ?? undefined,
+            items_cortesia: Array.from(negociacionState.itemsCortesia),
+            notas: negociacionState.notas || undefined,
+          });
 
       if (result.success && result.data) {
-        toast.success('Cotización en negociación creada exitosamente');
-        router.push(
-          `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${result.data.id}`
+        toast.success(
+          isUpdating
+            ? 'Cotización en negociación actualizada exitosamente'
+            : 'Cotización en negociación creada exitosamente'
         );
+        // Redirigir a la página de la promesa en el studio
+        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
       } else {
-        toast.error(result.error || 'Error al crear cotización en negociación');
+        toast.error(
+          result.error ||
+            (isUpdating
+              ? 'Error al actualizar cotización en negociación'
+              : 'Error al crear cotización en negociación')
+        );
       }
     } catch (error) {
       console.error('[NEGOCIACION] Error finalizando:', error);
@@ -229,7 +254,7 @@ export function FinalizarNegociacion({
             loading={loading}
             className="flex-1"
           >
-            Crear Cotización en Negociación
+            {isUpdating ? 'Actualizar Negociación' : 'Crear Cotización en Negociación'}
           </ZenButton>
         </div>
       </ZenCardContent>

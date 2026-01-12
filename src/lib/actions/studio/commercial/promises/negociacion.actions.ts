@@ -15,8 +15,8 @@ import { COTIZACION_ITEMS_SELECT_STANDARD } from './cotizacion-structure.utils';
 import type { CotizacionCompleta, CotizacionItem } from '@/lib/utils/negociacion-calc';
 
 /**
- * Cargar cotización completa para negociación
- * Retorna la cotización con todos sus items y datos necesarios para negociación
+ * Cargar cotizaci?n completa para negociaci?n
+ * Retorna la cotizaci?n con todos sus items y datos necesarios para negociaci?n
  */
 export async function loadCotizacionParaNegociacion(
   cotizacionId: string,
@@ -48,6 +48,10 @@ export async function loadCotizacionParaNegociacion(
         price: true,
         status: true,
         promise_id: true,
+        condiciones_comerciales_id: true,
+        negociacion_precio_personalizado: true,
+        negociacion_descuento_adicional: true,
+        negociacion_notas: true,
         cotizacion_items: {
           select: {
             ...COTIZACION_ITEMS_SELECT_STANDARD,
@@ -59,22 +63,36 @@ export async function loadCotizacionParaNegociacion(
             order: 'asc',
           },
         },
+        condicion_comercial_negociacion: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            discount_percentage: true,
+            advance_percentage: true,
+            advance_type: true,
+            advance_amount: true,
+            metodo_pago_id: true,
+            is_temporary: true,
+          },
+        },
       },
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotización no encontrada' };
+      return { success: false, error: 'Cotizaci?n no encontrada' };
     }
 
-    // Validar que la cotización esté en estado pendiente
-    if (cotizacion.status !== 'pendiente') {
+    // Validar que la cotizaci?n est? en estado pendiente o negociacion
+    // Permitir cargar cotizaciones en negociaci?n para poder editarlas
+    if (cotizacion.status !== 'pendiente' && cotizacion.status !== 'negociacion') {
       return {
         success: false,
-        error: 'Solo se pueden negociar cotizaciones en estado pendiente',
+        error: 'Solo se pueden negociar cotizaciones en estado pendiente o negociaci?n',
       };
     }
 
-    // Mapear items al formato esperado
+    // Mapear items al formato esperado (incluir is_courtesy para identificar cortesías)
     const items: CotizacionItem[] = cotizacion.cotizacion_items
       .filter((item) => item.item_id !== null)
       .map((item) => ({
@@ -89,7 +107,11 @@ export async function loadCotizacionParaNegociacion(
         description: item.description_snapshot || item.description || null,
         category_name: item.category_name_snapshot || item.category_name || null,
         seccion_name: item.seccion_name_snapshot || item.seccion_name || null,
+        is_courtesy: item.is_courtesy || false, // Incluir flag de cortesía
       }));
+
+    // Obtener condición comercial temporal si existe
+    const condicionTemporal = cotizacion.condicion_comercial_negociacion;
 
     return {
       success: true,
@@ -100,20 +122,44 @@ export async function loadCotizacionParaNegociacion(
         price: cotizacion.price,
         status: cotizacion.status,
         items,
+        // Datos de negociación guardados (si la cotización ya está en negociación)
+        negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado 
+          ? Number(cotizacion.negociacion_precio_personalizado) 
+          : null,
+        negociacion_descuento_adicional: cotizacion.negociacion_descuento_adicional 
+          ? Number(cotizacion.negociacion_descuento_adicional) 
+          : null,
+        negociacion_notas: cotizacion.negociacion_notas || null,
+        condiciones_comerciales_id: cotizacion.condiciones_comerciales_id || null,
+        condicion_comercial_temporal: condicionTemporal ? {
+          name: condicionTemporal.name,
+          description: condicionTemporal.description || null,
+          discount_percentage: condicionTemporal.discount_percentage 
+            ? Number(condicionTemporal.discount_percentage) 
+            : null,
+          advance_percentage: condicionTemporal.advance_percentage 
+            ? Number(condicionTemporal.advance_percentage) 
+            : null,
+          advance_type: condicionTemporal.advance_type || null,
+          advance_amount: condicionTemporal.advance_amount 
+            ? Number(condicionTemporal.advance_amount) 
+            : null,
+          metodo_pago_id: condicionTemporal.metodo_pago_id || null,
+        } : null,
       },
     };
   } catch (error) {
-    console.error('[NEGOCIACION] Error cargando cotización:', error);
+    console.error('[NEGOCIACION] Error cargando cotizaci?n:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al cargar cotización',
+      error: error instanceof Error ? error.message : 'Error al cargar cotizaci?n',
     };
   }
 }
 
 /**
- * Crear nueva cotización en negociación
- * Crea una nueva cotización independiente (no revisión) con status 'negociacion'
+ * Crear nueva cotizaci?n en negociaci?n
+ * Crea una nueva cotizaci?n independiente (no revisi?n) con status 'negociacion'
  */
 export async function crearVersionNegociada(
   data: CrearVersionNegociadaData
@@ -131,7 +177,7 @@ export async function crearVersionNegociada(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener cotización original
+    // Obtener cotizaci?n original
     const cotizacionOriginal = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: validatedData.cotizacion_original_id,
@@ -156,14 +202,14 @@ export async function crearVersionNegociada(
     });
 
     if (!cotizacionOriginal) {
-      return { success: false, error: 'Cotización original no encontrada' };
+      return { success: false, error: 'Cotizaci?n original no encontrada' };
     }
 
     if (!cotizacionOriginal.promise_id) {
-      return { success: false, error: 'La cotización debe estar asociada a una promesa' };
+      return { success: false, error: 'La cotizaci?n debe estar asociada a una promesa' };
     }
 
-    // Validar que la cotización original esté en estado pendiente
+    // Validar que la cotizaci?n original est? en estado pendiente
     if (cotizacionOriginal.status !== 'pendiente') {
       return {
         success: false,
@@ -175,7 +221,7 @@ export async function crearVersionNegociada(
     const precioFinal =
       validatedData.precio_personalizado ?? cotizacionOriginal.price;
 
-    // Obtener el order máximo para colocar la nueva cotización al final
+    // Obtener el order m?ximo para colocar la nueva cotizaci?n al final
     const maxOrder = await prisma.studio_cotizaciones.findFirst({
       where: {
         promise_id: cotizacionOriginal.promise_id,
@@ -190,9 +236,9 @@ export async function crearVersionNegociada(
 
     const newOrder = (maxOrder?.order ?? -1) + 1;
 
-    // Transacción para crear nueva cotización en negociación
+    // Transacci?n para crear nueva cotizaci?n en negociaci?n
     const nuevaVersion = await prisma.$transaction(async (tx) => {
-      // 1. Crear nueva cotización con status 'negociacion' (no es revisión)
+      // 1. Crear nueva cotizaci?n con status 'negociacion' (no es revisi?n)
       const nuevaCotizacion = await tx.studio_cotizaciones.create({
         data: {
           studio_id: studio.id,
@@ -205,10 +251,12 @@ export async function crearVersionNegociada(
           name: validatedData.nombre,
           description: validatedData.descripcion || null,
           price: precioFinal,
-          status: 'negociacion', // Nueva cotización con status negociacion
+          status: 'negociacion', // Nueva cotizaci?n con status negociacion
           order: newOrder,
-          // NO es revisión - no incluir revision_of_id, revision_number, revision_status
-          // Campos de negociación
+          visible_to_client: cotizacionOriginal.visible_to_client ?? false, // Copiar visibilidad de la original
+          selected_by_prospect: false, // IMPORTANTE: Cotizaciones en negociaci?n NO est?n autorizadas por el prospecto
+          // NO es revisi?n - no incluir revision_of_id, revision_number, revision_status
+          // Campos de negociaci?n
           negociacion_precio_personalizado: validatedData.precio_personalizado
             ? validatedData.precio_personalizado
             : null,
@@ -220,7 +268,7 @@ export async function crearVersionNegociada(
         },
       });
 
-      // 2. Copiar items de la cotización original
+      // 2. Copiar items de la cotizaci?n original
       if (cotizacionOriginal.cotizacion_items.length > 0) {
         await tx.studio_cotizacion_items.createMany({
           data: cotizacionOriginal.cotizacion_items.map((item) => ({
@@ -228,13 +276,13 @@ export async function crearVersionNegociada(
             item_id: item.item_id,
             quantity: item.quantity,
             order: item.order,
-            // Marcar items como cortesía si están en la lista
+            // Marcar items como cortes?a si est?n en la lista
             is_courtesy: validatedData.items_cortesia.includes(item.id),
           })),
         });
       }
 
-      // 3. Crear condición comercial temporal si se proporcionó
+      // 3. Crear condici?n comercial temporal si se proporcion?
       if (validatedData.condicion_comercial_temporal) {
         await tx.studio_condiciones_comerciales_negociacion.create({
           data: {
@@ -261,7 +309,7 @@ export async function crearVersionNegociada(
         });
       }
 
-      // 4. Asignar condición comercial existente si se proporcionó
+      // 4. Asignar condici?n comercial existente si se proporcion?
       if (validatedData.condicion_comercial_id) {
         await tx.studio_cotizaciones.update({
           where: { id: nuevaCotizacion.id },
@@ -274,14 +322,14 @@ export async function crearVersionNegociada(
       return nuevaCotizacion;
     });
 
-    // Calcular y guardar precios de los items (después de la transacción)
+    // Calcular y guardar precios de los items (despu?s de la transacci?n)
     if (cotizacionOriginal.cotizacion_items.length > 0) {
       await calcularYGuardarPreciosCotizacion(
         nuevaVersion.id,
         validatedData.studio_slug
       ).catch((error) => {
         console.error(
-          '[NEGOCIACION] Error calculando precios en versión negociada:',
+          '[NEGOCIACION] Error calculando precios en versi?n negociada:',
           error
         );
       });
@@ -306,20 +354,20 @@ export async function crearVersionNegociada(
       },
     };
   } catch (error) {
-    console.error('[NEGOCIACION] Error creando versión negociada:', error);
+    console.error('[NEGOCIACION] Error creando versi?n negociada:', error);
     return {
       success: false,
       error:
         error instanceof Error
           ? error.message
-          : 'Error al crear versión negociada',
+          : 'Error al crear versi?n negociada',
     };
   }
 }
 
 /**
- * Aplicar cambios de negociación a cotización existente
- * Actualiza la cotización actual con los cambios de negociación
+ * Aplicar cambios de negociaci?n a cotizaci?n existente
+ * Actualiza la cotizaci?n actual con los cambios de negociaci?n
  */
 export async function aplicarCambiosNegociacion(
   data: AplicarCambiosNegociacionData
@@ -337,18 +385,18 @@ export async function aplicarCambiosNegociacion(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Obtener cotización
+    // Obtener cotizaci?n
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: validatedData.cotizacion_id,
         studio_id: studio.id,
       },
-      include: {
-        promise: {
-          select: {
-            id: true,
-          },
-        },
+      select: {
+        id: true,
+        price: true,
+        status: true,
+        promise_id: true,
+        negociacion_created_at: true,
         cotizacion_items: {
           select: {
             id: true,
@@ -358,18 +406,18 @@ export async function aplicarCambiosNegociacion(
     });
 
     if (!cotizacion) {
-      return { success: false, error: 'Cotización no encontrada' };
+      return { success: false, error: 'Cotizaci?n no encontrada' };
     }
 
     if (!cotizacion.promise_id) {
-      return { success: false, error: 'La cotización debe estar asociada a una promesa' };
+      return { success: false, error: 'La cotizaci?n debe estar asociada a una promesa' };
     }
 
-    // Validar que la cotización esté en estado pendiente
-    if (cotizacion.status !== 'pendiente') {
+    // Validar que la cotizaci?n est? en estado pendiente o negociacion
+    if (cotizacion.status !== 'pendiente' && cotizacion.status !== 'negociacion') {
       return {
         success: false,
-        error: 'Solo se pueden aplicar cambios de negociación a cotizaciones pendientes',
+        error: 'Solo se pueden aplicar cambios de negociaci?n a cotizaciones pendientes o en negociaci?n',
       };
     }
 
@@ -379,48 +427,56 @@ export async function aplicarCambiosNegociacion(
       precioFinal = validatedData.precio_personalizado;
     }
 
-    // Transacción para aplicar cambios
+    // Transacci?n para aplicar cambios
     await prisma.$transaction(async (tx) => {
-      // 1. Actualizar cotización con campos de negociación
+      // Preparar datos de actualización
+      const updateData: any = {
+        price: precioFinal,
+        status: 'negociacion', // Cambiar estado a negociaci?n al guardar
+        selected_by_prospect: false, // IMPORTANTE: Asegurar que no est? autorizada por prospecto
+        negociacion_precio_personalizado:
+          validatedData.precio_personalizado ?? null,
+        negociacion_descuento_adicional:
+          validatedData.descuento_adicional ?? null,
+        negociacion_notas: validatedData.notas || null,
+        // Actualizar condici?n comercial si se proporcion?
+        condiciones_comerciales_id:
+          validatedData.condicion_comercial_id || undefined,
+      };
+
+      // Solo establecer negociacion_created_at si no existe (primera vez que se guarda como negociación)
+      if (!cotizacion.negociacion_created_at) {
+        updateData.negociacion_created_at = new Date();
+      }
+
+      // 1. Actualizar cotizaci?n con campos de negociaci?n
       await tx.studio_cotizaciones.update({
         where: { id: validatedData.cotizacion_id },
-        data: {
-          price: precioFinal,
-          status: 'negociacion', // Cambiar estado a negociación al guardar
-          negociacion_precio_personalizado:
-            validatedData.precio_personalizado ?? null,
-          negociacion_descuento_adicional:
-            validatedData.descuento_adicional ?? null,
-          negociacion_notas: validatedData.notas || null,
-          negociacion_created_at: new Date(),
-          // Actualizar condición comercial si se proporcionó
-          condiciones_comerciales_id:
-            validatedData.condicion_comercial_id || undefined,
-        },
+        data: updateData,
       });
 
-      // 2. Actualizar items marcados como cortesía
+      // 2. Actualizar items marcados como cortes?a
       const itemsIds = cotizacion.cotizacion_items.map((item) => item.id);
       for (const itemId of itemsIds) {
         await tx.studio_cotizacion_items.update({
           where: { id: itemId },
           data: {
             is_courtesy: validatedData.items_cortesia.includes(itemId),
-            // Si es cortesía, establecer precio en 0
+            // Si es cortes?a, establecer precio en 0
             unit_price: validatedData.items_cortesia.includes(itemId) ? 0 : undefined,
             subtotal: validatedData.items_cortesia.includes(itemId) ? 0 : undefined,
           },
         });
       }
 
-      // 3. Eliminar condición comercial temporal existente si hay una
+      // 3. Eliminar condici?n comercial temporal existente si hay una
       await tx.studio_condiciones_comerciales_negociacion.deleteMany({
         where: {
           cotizacion_id: validatedData.cotizacion_id,
         },
       });
 
-      // 4. Crear nueva condición comercial temporal si se proporcionó
+      // 4. Crear nueva condici?n comercial temporal si se proporcion?
       if (validatedData.condicion_comercial_temporal) {
         await tx.studio_condiciones_comerciales_negociacion.create({
           data: {
@@ -448,13 +504,13 @@ export async function aplicarCambiosNegociacion(
       }
     });
 
-    // Recalcular precios después de aplicar cambios
+    // Recalcular precios despu?s de aplicar cambios
     await calcularYGuardarPreciosCotizacion(
       validatedData.cotizacion_id,
       validatedData.studio_slug
     ).catch((error) => {
       console.error(
-        '[NEGOCIACION] Error recalculando precios después de aplicar cambios:',
+        '[NEGOCIACION] Error recalculando precios despu?s de aplicar cambios:',
         error
       );
     });
@@ -484,7 +540,7 @@ export async function aplicarCambiosNegociacion(
       error:
         error instanceof Error
           ? error.message
-          : 'Error al aplicar cambios de negociación',
+          : 'Error al aplicar cambios de negociaci?n',
     };
   }
 }

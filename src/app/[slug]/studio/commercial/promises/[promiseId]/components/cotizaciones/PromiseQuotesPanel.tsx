@@ -207,13 +207,22 @@ export function PromiseQuotesPanel({
       // Recargar solo si cambió el estado Y no fue un cambio local
       // (importante para detectar cuando prospecto autoriza desde otra sesión)
       if (changeInfo?.statusChanged) {
+        const oldStatus = changeInfo.oldStatus;
         const newStatus = p?.newRecord?.status || p?.new?.status;
-        // Solo recargar si cambió a estados críticos que requieren sincronización completa
+        
+        // Recargar si cambió a estados críticos
         const estadosCriticos = ['aprobada', 'autorizada', 'approved', 'en_cierre'];
         if (estadosCriticos.includes(newStatus)) {
           loadCotizaciones();
+          return;
         }
-        return;
+        
+        // También recargar si cambió DE 'en_cierre' a otro estado (cancelación de cierre)
+        // Esto permite que la cotización vuelva a aparecer en el panel
+        if (oldStatus === 'en_cierre' && newStatus !== 'en_cierre') {
+          loadCotizaciones();
+          return;
+        }
       }
 
       // También recargar si hay otros campos importantes cambiados (solo si no es cambio local)
@@ -399,9 +408,10 @@ export function PromiseQuotesPanel({
     }
   );
 
-  // Filtrar cotizaciones para el listado (pendiente, archivada, cancelada, negociacion)
+  // Filtrar cotizaciones para el listado (pendiente, negociacion, archivada, cancelada)
+  // Excluir cotizaciones en cierre (se muestran en PromiseClosingProcessCard)
   const cotizacionesParaListado = cotizaciones.filter(
-    (c) => ['pendiente', 'archivada', 'cancelada', 'negociacion'].includes(c.status)
+    (c) => ['pendiente', 'negociacion', 'archivada', 'cancelada'].includes(c.status)
   );
 
   // Separar en grupos: pendientes/negociacion (ordenables) y archivadas/canceladas (no ordenables)

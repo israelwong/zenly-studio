@@ -580,14 +580,9 @@ export async function getPublicPromiseData(
         quotes: {
           where: {
             visible_to_client: true,
-            OR: [
-              { status: 'pendiente' }, // Cotizaciones pendientes
-              {
-                // Cotizaciones autorizadas por el prospecto (en proceso de contratación)
-                selected_by_prospect: true,
-                status: { in: ['en_cierre', 'contract_generated', 'contract_signed'] },
-              },
-            ],
+            status: { 
+              in: ['pendiente', 'negociacion', 'en_cierre', 'contract_generated', 'contract_signed'],
+            },
           },
           select: {
             id: true,
@@ -597,6 +592,7 @@ export async function getPublicPromiseData(
             discount: true,
             status: true,
             selected_by_prospect: true,
+            visible_to_client: true,
             order: true,
             cotizacion_items: {
               select: {
@@ -617,6 +613,7 @@ export async function getPublicPromiseData(
                 subtotal: true,
                 status: true,
                 order: true,
+                is_courtesy: true,
               },
               orderBy: {
                 order: 'asc',
@@ -636,6 +633,10 @@ export async function getPublicPromiseData(
                 id: true,
                 name: true,
                 description: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+                discount_percentage: true,
               },
             },
             paquete: {
@@ -893,6 +894,7 @@ export async function getPublicPromiseData(
           orden: categoria.orden,
           servicios: categoria.items.map(item => {
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
+            const originalItem = itemsFiltrados.find(i => i.id === item.id);
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -901,6 +903,7 @@ export async function getPublicPromiseData(
               description_snapshot: item.descripcion || null, // Ya viene del snapshot
               price: item.unit_price,
               quantity: item.cantidad,
+              is_courtesy: (item as any).is_courtesy || originalItem?.is_courtesy || false,
               ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
             };
           }),
@@ -922,6 +925,16 @@ export async function getPublicPromiseData(
           ? {
             metodo_pago: cot.condiciones_comerciales_metodo_pago?.[0]?.metodos_pago?.payment_method_name || null,
             condiciones: condicionesComerciales.description || null,
+            // Para cotizaciones en negociación, incluir datos completos de la condición comercial
+            ...(cot.status === 'negociacion' ? {
+              id: condicionesComerciales.id,
+              name: condicionesComerciales.name,
+              description: condicionesComerciales.description,
+              advance_percentage: condicionesComerciales.advance_percentage,
+              advance_type: condicionesComerciales.advance_type,
+              advance_amount: condicionesComerciales.advance_amount,
+              discount_percentage: condicionesComerciales.discount_percentage,
+            } : {}),
           }
           : null,
         paquete_origen: cot.paquete

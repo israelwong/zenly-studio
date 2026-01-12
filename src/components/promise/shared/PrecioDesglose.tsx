@@ -10,6 +10,7 @@ interface PrecioDesgloseProps {
   anticipoPorcentaje: number | null;
   anticipo: number;
   diferido: number;
+  cortesias?: number; // Monto total de cortesías (items marcados como cortesía)
 }
 
 const formatPrice = (price: number) => {
@@ -31,9 +32,13 @@ export const PrecioDesglose = forwardRef<HTMLDivElement, PrecioDesgloseProps>(
       anticipoPorcentaje,
       anticipo,
       diferido,
+      cortesias = 0,
     },
     ref
   ) => {
+    // Calcular precio final incluyendo cortesías
+    const precioFinalConCortesias = precioConDescuento - cortesias;
+
     return (
       <div ref={ref} className="mt-4 bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
         <h4 className="text-sm font-semibold text-white mb-3">Resumen de Pago</h4>
@@ -52,10 +57,18 @@ export const PrecioDesglose = forwardRef<HTMLDivElement, PrecioDesgloseProps>(
               </span>
             </div>
           )}
+          {cortesias > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-zinc-400">Cortesías</span>
+              <span className="text-sm font-medium text-emerald-400">
+                -{formatPrice(cortesias)}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
             <span className="text-sm font-semibold text-white">Total a pagar</span>
             <span className="text-lg font-bold text-emerald-400">
-              {formatPrice(precioConDescuento)}
+              {formatPrice(precioFinalConCortesias)}
             </span>
           </div>
           {anticipo > 0 && (
