@@ -83,6 +83,11 @@ export default async function PublicOfferPage({
 
     const offer = offerResult.data;
 
+    // Si el banner redirige directamente al leadform, redirigir
+    if (offer.banner_destination === "LEADFORM_ONLY" || offer.banner_destination === "LEADFORM_WITH_LANDING") {
+      redirect(`/${slug}/offer/${offerId}/leadform${isPreview ? "?preview=true" : ""}`);
+    }
+
     // Obtener datos del estudio para tracking y header
     const studio = await prisma.studios.findUnique({
       where: { slug },

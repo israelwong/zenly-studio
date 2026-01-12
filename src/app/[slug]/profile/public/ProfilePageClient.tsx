@@ -34,6 +34,7 @@ interface PublicOffer {
     start_date?: string | null;
     valid_until?: string | null;
     event_type_name?: string | null;
+    banner_destination?: "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING";
 }
 
 interface ProfilePageClientProps {

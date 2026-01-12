@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ZenInput, ZenTextarea, ZenSwitch, ZenCalendar, ZenButton } from "@/components/ui/zen";
+import { ZenInput, ZenTextarea, ZenSwitch, ZenCalendar, ZenButton, ZenBadge } from "@/components/ui/zen";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/shadcn/popover";
 import { useOfferEditor } from "../OfferEditorContext";
 import { CondicionRadioCard } from "./CondicionRadioCard";
-import { Loader2, Calendar, Plus } from "lucide-react";
+import { Loader2, Calendar, Plus, MousePointerClick, TrendingUp, FileText, Smartphone } from "lucide-react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import { toast } from "sonner";
@@ -503,18 +503,18 @@ export function InfoEditor({
                   No hay condiciones comerciales disponibles.
                 </p>
                 <ZenButton
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setEditingConditionId(null);
-                      setShowConditionFormModal(true);
-                    }}
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Crear primera condición
-                  </ZenButton>
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingConditionId(null);
+                    setShowConditionFormModal(true);
+                  }}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Crear primera condición
+                </ZenButton>
               </div>
             ) : (
               <>
@@ -629,6 +629,82 @@ export function InfoEditor({
         )}
       </div>
 
+      {/* Destino del Banner */}
+      <div className="space-y-3 border-t border-zinc-800 pt-4">
+        <div>
+          <label className="text-sm font-medium text-zinc-300 block mb-1">
+            ¿A dónde quieres enviar al prospecto al hacer click en el banner?
+          </label>
+          <div className="space-y-2 mt-3">
+            <button
+              type="button"
+              onClick={() => updateFormData({ banner_destination: "LEADFORM_ONLY" })}
+              className={`
+                w-full p-4 rounded-lg border-2 transition-all text-left
+                ${formData.banner_destination === "LEADFORM_ONLY"
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                  : 'border-zinc-700 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+                }
+              `}
+            >
+              <div className="text-sm font-medium mb-1">A Leadform</div>
+              <div className="text-xs opacity-75 flex items-center gap-1.5">
+                <MousePointerClick className="h-3 w-3" />
+                Click en banner → <FileText className="h-3 w-3" /> Leadform
+              </div>
+              <div className="text-xs opacity-60 mt-1 text-amber-400">No incluye landing page</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => updateFormData({ banner_destination: "LEADFORM_WITH_LANDING" })}
+              className={`
+                w-full p-4 rounded-lg border-2 transition-all text-left
+                ${formData.banner_destination === "LEADFORM_WITH_LANDING"
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                  : 'border-zinc-700 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+                }
+              `}
+            >
+              <div className="text-sm font-medium mb-1">A Leadform (con Landing para campañas)</div>
+              <div className="text-xs opacity-75 flex items-center gap-1.5">
+                <MousePointerClick className="h-3 w-3" />
+                Click en banner → <Smartphone className="h-3 w-3" /> Landing Page → <FileText className="h-3 w-3" /> Leadform
+              </div>
+              <div className="text-xs opacity-75 flex items-center gap-1.5">
+                <TrendingUp className="h-3 w-3" />
+                Tráfico externo → <Smartphone className="h-3 w-3" /> Landing Page → <FileText className="h-3 w-3" /> Leadform
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => updateFormData({ banner_destination: "LANDING_THEN_LEADFORM" })}
+              className={`
+                w-full p-4 rounded-lg border-2 transition-all text-left
+                ${formData.banner_destination === "LANDING_THEN_LEADFORM"
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                  : 'border-zinc-700 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+                }
+              `}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <div className="text-sm font-medium">A Landing Page</div>
+                <ZenBadge variant="warning" className="rounded-full text-xs px-2 py-0.5">
+                  Recomendado
+                </ZenBadge>
+              </div>
+              <div className="text-xs opacity-75 flex items-center gap-1.5">
+                <MousePointerClick className="h-3 w-3" />
+                Click en banner → <Smartphone className="h-3 w-3" /> Landing Page → <FileText className="h-3 w-3" /> Leadform
+              </div>
+              <div className="text-xs opacity-75 flex items-center gap-1.5">
+                <TrendingUp className="h-3 w-3" />
+                Tráfico externo → <Smartphone className="h-3 w-3" /> Landing Page → <FileText className="h-3 w-3" /> Leadform
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Modal Unificado de Crear/Editar */}
       {showConditionFormModal && (
         <CondicionComercialFormModal
@@ -642,7 +718,7 @@ export function InfoEditor({
           onSuccess={(updatedCondition) => {
             // Recargar condiciones comerciales
             loadBusinessTerms();
-            
+
             // Si la condición editada es la seleccionada, forzar actualización del preview
             if (editingConditionId && formData.business_term_id === editingConditionId && updatedCondition) {
               // Notificar al componente padre para refrescar el preview
@@ -694,14 +770,14 @@ export function InfoEditor({
           .map(t => {
             const tWithAdvance = t as typeof t & { advance_type?: string | null; advance_amount?: number | null };
             return {
-            id: t.id,
-            name: t.name,
-            description: t.description,
-            discount_percentage: t.discount_percentage,
-            advance_percentage: t.advance_percentage,
+              id: t.id,
+              name: t.name,
+              description: t.description,
+              discount_percentage: t.discount_percentage,
+              advance_percentage: t.advance_percentage,
               advance_type: tWithAdvance.advance_type,
               advance_amount: tWithAdvance.advance_amount,
-            type: (t.type || 'standard') as 'standard' | 'offer',
+              type: (t.type || 'standard') as 'standard' | 'offer',
             };
           });
         setBusinessTerms(activeTerms);

@@ -39,6 +39,16 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
   const searchParams = useSearchParams();
   const commercialName = useCommercialName();
   const { activeTab, setActiveTab, isSaving, setIsSaving, formData, contentBlocks, leadformData, updateFormData, updateContentBlocks, updateLeadformData, getOfferData, savedOfferId, setSavedOfferId } = useOfferEditor();
+  
+  // Helper para determinar si la landing page está disponible
+  const hasLandingPage = formData.banner_destination === "LANDING_THEN_LEADFORM" || formData.banner_destination === "LEADFORM_WITH_LANDING";
+  
+  // Redirigir si se deshabilita landing page y estamos en ese tab
+  useEffect(() => {
+    if (!hasLandingPage && activeTab === "landing") {
+      setActiveTab("leadform");
+    }
+  }, [hasLandingPage, activeTab, setActiveTab]);
   const { triggerRefresh } = useStorageRefresh(studioSlug);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -255,11 +265,22 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
     return !!(formData.cover_media_url || contentBlocks.some(block => (block.media || []).length > 0));
   }, [formData.cover_media_url, contentBlocks]);
 
-  const tabs = [
-    { id: "basic" as const, label: "Información", icon: FileText },
-    { id: "landing" as const, label: "Landing Page", icon: Layout },
-    { id: "leadform" as const, label: "Formulario", icon: MessageSquare },
-  ];
+  const tabs = useMemo(() => {
+    const baseTabs = [
+      { id: "basic" as const, label: "Información", icon: FileText },
+    ];
+    
+    // Mostrar tab Landing Page solo si banner_destination incluye landing page
+    // (LANDING_THEN_LEADFORM o LEADFORM_WITH_LANDING)
+    if (hasLandingPage) {
+      baseTabs.push({ id: "landing" as const, label: "Landing Page", icon: Layout });
+    }
+    
+    // Tab Leadform siempre visible
+    baseTabs.push({ id: "leadform" as const, label: "Formulario", icon: MessageSquare });
+    
+    return baseTabs;
+  }, [hasLandingPage]);
 
   // Restaurar cambios al estado inicial
   const handleRestore = () => {
@@ -512,7 +533,8 @@ function OfferEditorContent({ studioSlug, studioId, mode, offer }: OfferEditorPr
                   checked={formData.is_active}
                   onCheckedChange={(checked) => {
                     // Validar que tenga landing page antes de publicar
-                    if (checked && contentBlocks.length === 0) {
+                    // Solo validar landing page si está habilitada y se intenta activar la oferta
+    if (checked && hasLandingPage && contentBlocks.length === 0) {
                       toast.error("Debes crear al menos un bloque en la landing page antes de publicar");
                       return;
                     }

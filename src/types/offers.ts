@@ -24,6 +24,7 @@ export interface StudioOffer {
   created_at: Date;
   updated_at: Date;
   business_term_id?: string | null; // ID de condición comercial
+  banner_destination?: "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING"; // Destino del banner
   landing_page?: StudioOfferLandingPage;
   leadform?: StudioOfferLeadform;
   business_term?: StudioBusinessTerm; // Condición comercial asociada (populated)

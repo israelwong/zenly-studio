@@ -2915,6 +2915,7 @@ model studio_offers {
   start_date        DateTime?
   business_term_id  String?
   event_type_id     String?
+  banner_destination OfferBannerDestination @default(LANDING_THEN_LEADFORM)
   created_by_offers studio_condiciones_comerciales? @relation("offer_exclusive_terms")
   content_blocks    studio_offer_content_blocks[]
   landing_page      studio_offer_landing_pages?
@@ -3500,4 +3501,10 @@ enum AnalyticsEventType {
   OFFER_CLICK
   COTIZACION_CLICK
   PAQUETE_CLICK
+}
+
+enum OfferBannerDestination {
+  LEADFORM_ONLY
+  LANDING_THEN_LEADFORM
+  LEADFORM_WITH_LANDING
 }

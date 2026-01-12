@@ -18,6 +18,7 @@ interface PublicOffer {
     has_date_range?: boolean;
     start_date?: string | null;
     event_type_name?: string | null;
+    banner_destination?: "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING";
 }
 
 interface OfferCardProps {
@@ -116,7 +117,9 @@ export function OfferCard({
             )}
 
             <a
-                href={`/${studioSlug}/offer/${offer.slug}`}
+                href={offer.banner_destination === "LEADFORM_ONLY" || offer.banner_destination === "LEADFORM_WITH_LANDING"
+                    ? `/${studioSlug}/offer/${offer.slug}/leadform`
+                    : `/${studioSlug}/offer/${offer.slug}`}
                 onClick={handleClick}
                 className="block"
             >

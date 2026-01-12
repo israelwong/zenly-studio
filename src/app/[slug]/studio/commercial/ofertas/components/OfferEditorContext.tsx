@@ -21,6 +21,7 @@ interface OfferFormData {
   end_date: Date | null;
   business_term_id: string | null; // Condición comercial especial
   event_type_id: string | null; // Tipo de evento asociado (boda, quinceañera, etc.)
+  banner_destination: "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING"; // Destino del banner
 }
 
 interface LeadFormData {
@@ -91,6 +92,7 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
     end_date: initialOffer?.end_date ? new Date(initialOffer.end_date) : null,
     business_term_id: initialOffer?.business_term_id || null,
     event_type_id: initialOffer?.leadform?.event_type_id || null,
+    banner_destination: (initialOffer?.banner_destination as "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING") || "LANDING_THEN_LEADFORM",
   });
 
   // Estado para landing page
@@ -164,6 +166,7 @@ export function OfferEditorProvider({ children, initialOffer }: OfferEditorProvi
       start_date: formData.start_date,
       end_date: formData.end_date,
       business_term_id: formData.business_term_id,
+      banner_destination: formData.banner_destination,
       landing_page: {
         content_blocks: contentBlocks,
         cta_config: {

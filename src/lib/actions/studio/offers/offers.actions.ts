@@ -105,6 +105,7 @@ export async function createOffer(
           end_date: validatedData.end_date || null,
           business_term_id: validatedData.business_term_id || null,
           event_type_id: validatedData.leadform.event_type_id || null,
+          banner_destination: validatedData.banner_destination || "LANDING_THEN_LEADFORM",
           landing_page: {
             create: {
               cta_config: validatedData.landing_page.cta_config,
@@ -375,6 +376,8 @@ export async function updateOffer(
         updateData.business_term_id = validatedData.business_term_id ?? null;
       if (validatedData.leadform?.event_type_id !== undefined)
         updateData.event_type_id = validatedData.leadform.event_type_id ?? null;
+      if ('banner_destination' in validatedData)
+        updateData.banner_destination = validatedData.banner_destination || "LANDING_THEN_LEADFORM";
 
       if (validatedData.landing_page) {
         updateData.landing_page = {
@@ -629,6 +632,7 @@ export async function getOffer(
         created_at: offer.created_at,
         updated_at: offer.updated_at,
         business_term_id: offer.business_term?.id || null,
+        banner_destination: (offer.banner_destination as "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING") || "LANDING_THEN_LEADFORM",
         business_term: offer.business_term ? {
           id: offer.business_term.id,
           name: offer.business_term.name,
@@ -936,6 +940,7 @@ export async function listOffers(
             created_at: offer.created_at,
             updated_at: offer.updated_at,
             business_term_id: offer.business_term_id,
+            banner_destination: (offer.banner_destination as "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING") || "LANDING_THEN_LEADFORM",
             business_term: offer.business_term
               ? {
                 id: offer.business_term.id,
