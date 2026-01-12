@@ -26,6 +26,8 @@ interface CondicionesSectionProps {
   onDefinirClick: () => void;
   onQuitarCondiciones: () => void;
   isRemovingCondiciones: boolean;
+  negociacionPrecioOriginal?: number | null;
+  negociacionPrecioPersonalizado?: number | null;
 }
 
 export const CondicionesSection = memo(function CondicionesSection({
@@ -35,12 +37,16 @@ export const CondicionesSection = memo(function CondicionesSection({
   onDefinirClick,
   onQuitarCondiciones,
   isRemovingCondiciones,
+  negociacionPrecioOriginal,
+  negociacionPrecioPersonalizado,
 }: CondicionesSectionProps) {
   if (condicionesData?.condiciones_comerciales_definidas && condicionesData?.condiciones_comerciales) {
     return (
       <CondicionesFinancierasResumen
         precioBase={precioBase}
         condicion={condicionesData.condiciones_comerciales as any}
+        negociacionPrecioOriginal={negociacionPrecioOriginal}
+        negociacionPrecioPersonalizado={negociacionPrecioPersonalizado}
         dropdownMenu={
           <ZenDropdownMenu>
             <ZenDropdownMenuTrigger asChild>
@@ -102,7 +108,9 @@ export const CondicionesSection = memo(function CondicionesSection({
     prevProps.condicionesData?.condiciones_comerciales_definidas === nextProps.condicionesData?.condiciones_comerciales_definidas &&
     prevProps.loadingRegistro === nextProps.loadingRegistro &&
     prevProps.isRemovingCondiciones === nextProps.isRemovingCondiciones &&
-    prevProps.precioBase === nextProps.precioBase
+    prevProps.precioBase === nextProps.precioBase &&
+    prevProps.negociacionPrecioOriginal === nextProps.negociacionPrecioOriginal &&
+    prevProps.negociacionPrecioPersonalizado === nextProps.negociacionPrecioPersonalizado
   );
 });
 

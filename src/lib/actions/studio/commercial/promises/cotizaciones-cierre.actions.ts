@@ -137,6 +137,12 @@ export async function obtenerRegistroCierre(
           change_type: ultimaVersion.change_type,
           created_at: ultimaVersion.created_at,
         } : null,
+        negociacion_precio_original: cotizacion.negociacion_precio_original 
+          ? Number(cotizacion.negociacion_precio_original) 
+          : null,
+        negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado 
+          ? Number(cotizacion.negociacion_precio_personalizado) 
+          : null,
       } as any,
     };
   } catch (error) {

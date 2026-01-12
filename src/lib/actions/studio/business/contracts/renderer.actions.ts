@@ -163,6 +163,17 @@ export async function getPromiseContractData(
         cotizacion_cierre: {
           select: {
             contract_signed_at: true,
+            condiciones_comerciales: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+                discount_percentage: true,
+              },
+            },
           },
         },
       },
@@ -202,13 +213,26 @@ export async function getPromiseContractData(
     
     const secciones = estructura.secciones;
 
-    // Usar SOLO condiciones comerciales pasadas como parámetro (de la tabla temporal)
-    // NO usar fallback a cotizacion.condiciones_comerciales
+    // Usar condiciones comerciales pasadas como parámetro, o obtenerlas desde cotizacion_cierre
     let condiciones = condicionesComerciales;
+    
+    // Si no se pasaron condiciones comerciales como parámetro, obtenerlas desde cotizacion_cierre
+    if (!condiciones && cotizacion.cotizacion_cierre?.condiciones_comerciales) {
+      const condicionCierre = cotizacion.cotizacion_cierre.condiciones_comerciales;
+      condiciones = {
+        id: condicionCierre.id,
+        name: condicionCierre.name,
+        description: condicionCierre.description,
+        discount_percentage: condicionCierre.discount_percentage ? Number(condicionCierre.discount_percentage) : null,
+        advance_percentage: condicionCierre.advance_percentage ? Number(condicionCierre.advance_percentage) : null,
+        advance_type: condicionCierre.advance_type,
+        advance_amount: condicionCierre.advance_amount ? Number(condicionCierre.advance_amount) : null,
+      };
+    }
     
     // Si tenemos un ID de condiciones comerciales, obtener datos completos desde la base de datos
     // Esto asegura que siempre tengamos todos los campos necesarios (advance_type, advance_amount, etc.)
-    const condicionId = condicionesComerciales?.id;
+    const condicionId = condiciones?.id;
     
     if (condicionId) {
       const condicionCompleta = await prisma.studio_condiciones_comerciales.findUnique({
@@ -224,7 +248,12 @@ export async function getPromiseContractData(
         },
       });
       if (condicionCompleta) {
-        condiciones = condicionCompleta;
+        condiciones = {
+          ...condicionCompleta,
+          discount_percentage: condicionCompleta.discount_percentage ? Number(condicionCompleta.discount_percentage) : null,
+          advance_percentage: condicionCompleta.advance_percentage ? Number(condicionCompleta.advance_percentage) : null,
+          advance_amount: condicionCompleta.advance_amount ? Number(condicionCompleta.advance_amount) : null,
+        };
       }
     }
 

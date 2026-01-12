@@ -46,11 +46,17 @@ export function CondicionesFinancierasResumen({
     ? precioNegociado 
     : precioBase - descuentoMonto;
 
+  // Verificar si hay anticipo configurado
+  // advance_type puede ser 'percentage', 'amount', o 'fixed_amount' (según el código de ResumenCotizacion)
+  const tieneAnticipoConfigurado = (condicion.advance_type === 'percentage' && condicion.advance_percentage !== null && condicion.advance_percentage !== undefined) ||
+    (condicion.advance_type === 'amount' && condicion.advance_amount !== null && condicion.advance_amount !== undefined) ||
+    (condicion.advance_type === 'fixed_amount' && condicion.advance_amount !== null && condicion.advance_amount !== undefined);
+
   // Calcular anticipo basado en subtotal (precio negociado en negociación, subtotal en normal)
   let anticipoMonto = 0;
-  if (condicion.advance_type === 'percentage' && condicion.advance_percentage) {
+  if (condicion.advance_type === 'percentage' && condicion.advance_percentage !== null && condicion.advance_percentage !== undefined) {
     anticipoMonto = subtotal * (condicion.advance_percentage / 100);
-  } else if (condicion.advance_type === 'amount' && condicion.advance_amount) {
+  } else if ((condicion.advance_type === 'amount' || condicion.advance_type === 'fixed_amount') && condicion.advance_amount !== null && condicion.advance_amount !== undefined) {
     anticipoMonto = condicion.advance_amount;
   }
 
@@ -156,13 +162,21 @@ export function CondicionesFinancierasResumen({
           </>
         )}
 
+          {/* Total a Pagar */}
+          <div className="flex justify-between items-center pt-3 border-t border-zinc-700">
+            <span className="text-white font-semibold">Total a pagar:</span>
+            <span className="text-emerald-400 font-bold text-lg tabular-nums">
+              ${formatMoney(totalAPagar)}
+            </span>
+          </div>
+
         {/* Anticipo */}
-        {anticipoMonto > 0 && (
+        {tieneAnticipoConfigurado && (
           <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
             <span className="text-zinc-400">
-              Anticipo{' '}
+              Anticipo
               {condicion.advance_type === 'percentage' && condicion.advance_percentage
-                ? `(${condicion.advance_percentage}%)`
+                ? ` (${condicion.advance_percentage}%)`
                 : ''}
               :
             </span>
@@ -173,22 +187,22 @@ export function CondicionesFinancierasResumen({
         )}
 
         {/* Diferido */}
-        {anticipoMonto > 0 && diferido > 0 && (
+        {tieneAnticipoConfigurado && (
           <div className="flex justify-between items-center">
-            <span className="text-zinc-400">Diferido:</span>
+            <span className="text-zinc-400">
+              Diferido
+              {diferido > 0 && (
+                <span className="text-xs text-zinc-500 ml-1">
+                  (a liquidar 2 días antes de su evento)
+                </span>
+              )}
+              :
+            </span>
             <span className="text-amber-400 font-medium tabular-nums">
               ${formatMoney(diferido)}
             </span>
           </div>
         )}
-
-          {/* Total a Pagar */}
-          <div className="flex justify-between items-center pt-3 border-t border-zinc-700">
-            <span className="text-white font-semibold">Total a pagar:</span>
-            <span className="text-emerald-400 font-bold text-lg tabular-nums">
-              ${formatMoney(totalAPagar)}
-            </span>
-          </div>
         </div>
       </div>
     </div>

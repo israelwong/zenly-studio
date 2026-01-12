@@ -95,6 +95,14 @@ export function PromiseClosingProcessCard({
   const toastShownRef = useRef(false); // Evitar toasts duplicados
 
   // Estados separados para cada sección (evita re-renders completos)
+  const [negociacionData, setNegociacionData] = useState<{
+    negociacion_precio_original?: number | null;
+    negociacion_precio_personalizado?: number | null;
+  }>({
+    negociacion_precio_original: null,
+    negociacion_precio_personalizado: null,
+  });
+
   const [condicionesData, setCondicionesData] = useState<{
     condiciones_comerciales_id?: string | null;
     condiciones_comerciales_definidas?: boolean;
@@ -169,6 +177,14 @@ export function PromiseClosingProcessCard({
           pago_fecha: data.pago_fecha,
           pago_metodo_id: data.pago_metodo_id,
         });
+
+        // Obtener campos de negociación desde la respuesta
+        if (data.negociacion_precio_original !== undefined || data.negociacion_precio_personalizado !== undefined) {
+          setNegociacionData({
+            negociacion_precio_original: data.negociacion_precio_original ?? null,
+            negociacion_precio_personalizado: data.negociacion_precio_personalizado ?? null,
+          });
+        }
       }
     } catch (error) {
       console.error('[loadRegistroCierre] Error:', error);
@@ -439,6 +455,7 @@ export function PromiseClosingProcessCard({
     setShowCotizacionPreview(true);
 
     try {
+      const { getCotizacionById } = await import('@/lib/actions/studio/commercial/promises/cotizaciones.actions');
       const result = await getCotizacionById(cotizacion.id, studioSlug);
       if (result.success && result.data) {
         setCotizacionCompleta(result.data);
@@ -993,6 +1010,8 @@ export function PromiseClosingProcessCard({
             precioBase={cotizacion.price}
             onDefinirClick={handleDefinirCondiciones}
             onQuitarCondiciones={handleQuitarCondiciones}
+            negociacionPrecioOriginal={negociacionData.negociacion_precio_original}
+            negociacionPrecioPersonalizado={negociacionData.negociacion_precio_personalizado}
             isRemovingCondiciones={isRemovingCondiciones}
           />
 

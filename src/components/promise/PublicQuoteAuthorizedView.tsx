@@ -99,7 +99,21 @@ export function PublicQuoteAuthorizedView({
 
   // Obtener condiciones comerciales (priorizar desde contract, sino desde cotizacion directamente)
   // Esto cubre el caso cuando el contrato fue generado manualmente por el estudio
-  const condicionesComerciales = currentContract?.condiciones_comerciales || null;
+  // También considerar condiciones comerciales directamente de la cotización si tiene campos completos (ej: negociación)
+  const condicionesComerciales = currentContract?.condiciones_comerciales || 
+    (cotizacion.condiciones_comerciales && 
+     'id' in cotizacion.condiciones_comerciales && 
+     'advance_type' in cotizacion.condiciones_comerciales
+      ? {
+          id: cotizacion.condiciones_comerciales.id!,
+          name: cotizacion.condiciones_comerciales.name!,
+          description: cotizacion.condiciones_comerciales.description ?? null,
+          advance_percentage: cotizacion.condiciones_comerciales.advance_percentage ?? null,
+          advance_type: cotizacion.condiciones_comerciales.advance_type!,
+          advance_amount: cotizacion.condiciones_comerciales.advance_amount ?? null,
+          discount_percentage: cotizacion.condiciones_comerciales.discount_percentage ?? null,
+        }
+      : null);
 
   // Cargar contrato inicialmente si no está disponible
   useEffect(() => {
