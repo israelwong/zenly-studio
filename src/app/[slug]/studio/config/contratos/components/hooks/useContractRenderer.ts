@@ -188,9 +188,9 @@ export function useContractRenderer({
     if (condicionesData) {
       const condicionesHtml = renderCondicionesComercialesBlock(condicionesData);
       
-      // Reemplazar @condiciones_comerciales o {condiciones_comerciales}
-      rendered = rendered.replace("@condiciones_comerciales", condicionesHtml);
-      rendered = rendered.replace("{condiciones_comerciales}", condicionesHtml);
+      // Reemplazar @condiciones_comerciales o {condiciones_comerciales} (todas las ocurrencias)
+      rendered = rendered.replaceAll("@condiciones_comerciales", condicionesHtml);
+      rendered = rendered.replaceAll("{condiciones_comerciales}", condicionesHtml);
       
       // También reemplazar @condiciones_pago con el bloque completo si existe
       // Esto permite que el template use @condiciones_pago pero muestre el bloque completo con desglose

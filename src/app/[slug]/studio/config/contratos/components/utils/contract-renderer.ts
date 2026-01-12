@@ -169,6 +169,7 @@ export function renderCondicionesComercialesBlock(
     }
 
     // 4. Anticipo (si aplica) - siempre después del subtotal/precio negociado
+    // Mostrar anticipo si está definido y es mayor a 0
     if (condiciones.monto_anticipo !== undefined && condiciones.monto_anticipo > 0) {
       const montoAnticipoFormateado = new Intl.NumberFormat("es-MX", {
         style: "currency",

@@ -227,13 +227,23 @@ export function PublicContractView({
         
         const totalFinal = cotizacionPrice - descuentoAplicado;
         
+        // Calcular anticipo
+        let montoAnticipo: number | undefined;
+        const advanceType = condicionesComerciales.advance_type as 'percentage' | 'fixed_amount' | null;
+        
+        if (advanceType === 'fixed_amount' && condicionesComerciales.advance_amount) {
+          montoAnticipo = condicionesComerciales.advance_amount;
+        } else if (advanceType === 'percentage' && condicionesComerciales.advance_percentage) {
+          montoAnticipo = (totalFinal * condicionesComerciales.advance_percentage) / 100;
+        }
+        
         return {
           nombre: condicionesComerciales.name,
           descripcion: condicionesComerciales.description || undefined,
           porcentaje_descuento: condicionesComerciales.discount_percentage || undefined,
           porcentaje_anticipo: condicionesComerciales.advance_percentage || undefined,
-          tipo_anticipo: (condicionesComerciales.advance_type as 'percentage' | 'fixed_amount') || undefined,
-          monto_anticipo: condicionesComerciales.advance_amount || undefined,
+          tipo_anticipo: advanceType || undefined,
+          monto_anticipo: montoAnticipo,
           total_contrato: cotizacionPrice, // Precio base antes de descuentos
           total_final: totalFinal, // Precio después de descuentos
           descuento_aplicado: descuentoAplicado, // Monto del descuento aplicado
