@@ -23,6 +23,24 @@ export async function obtenerCondicionesComerciales(studioSlug: string) {
                 studio_id: studio.id,
                 status: 'active',
             },
+            include: {
+                condiciones_comerciales_metodo_pago: {
+                    where: {
+                        status: 'active',
+                    },
+                    include: {
+                        metodos_pago: {
+                            select: {
+                                id: true,
+                                payment_method_name: true,
+                            },
+                        },
+                    },
+                    orderBy: {
+                        orden: 'asc',
+                    },
+                },
+            },
             orderBy: { order: 'asc' },
         });
 

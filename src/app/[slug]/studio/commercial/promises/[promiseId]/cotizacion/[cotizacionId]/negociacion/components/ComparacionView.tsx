@@ -33,42 +33,36 @@ export function ComparacionView({
   return (
     <ZenCard>
       <ZenCardHeader className="pb-2">
-        <ZenCardTitle className="text-sm">Original</ZenCardTitle>
+        <ZenCardTitle className="text-sm">
+          Precio Original {formatearMoneda(original.precioFinal)}
+        </ZenCardTitle>
       </ZenCardHeader>
       <ZenCardContent className="pt-0">
-        <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-zinc-400">Precio:</span>
-              <span className="text-sm font-semibold text-zinc-100">
-                {formatearMoneda(original.precioFinal)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-zinc-400">Costos:</span>
-              <span className="text-xs text-zinc-300">
-                {formatearMoneda(original.costoTotal)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-zinc-400">Gastos:</span>
-              <span className="text-xs text-zinc-300">
-                {formatearMoneda(original.gastoTotal)}
-              </span>
-            </div>
-            <div className="border-t border-zinc-800 pt-1.5 mt-1.5">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-zinc-400">Utilidad:</span>
-                <span className="text-sm font-semibold text-emerald-400">
-                  {formatearMoneda(original.utilidadNeta)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center mt-1">
-                <span className="text-xs text-zinc-400">Margen:</span>
-                <span className="text-xs font-medium text-zinc-300">
-                  {margenOriginal}%
-                </span>
-              </div>
-            </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="flex flex-col">
+            <span className="text-xs text-zinc-400 mb-1">Costos</span>
+            <span className="text-sm text-zinc-300">
+              {formatearMoneda(original.costoTotal)}
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs text-zinc-400 mb-1">Gastos</span>
+            <span className="text-sm text-zinc-300">
+              {formatearMoneda(original.gastoTotal)}
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs text-zinc-400 mb-1">Utilidad</span>
+            <span className="text-sm font-semibold text-emerald-400">
+              {formatearMoneda(original.utilidadNeta)}
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs text-zinc-400 mb-1">Margen</span>
+            <span className="text-sm font-medium text-zinc-300">
+              {margenOriginal}%
+            </span>
+          </div>
         </div>
       </ZenCardContent>
     </ZenCard>

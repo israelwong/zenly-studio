@@ -20,7 +20,6 @@ import { NegociacionItemsTree } from './components/NegociacionItemsTree';
 import { CalculoConCondiciones } from './components/CalculoConCondiciones';
 import { ComparacionView } from './components/ComparacionView';
 import { SelectorCondicionesComerciales } from './components/SelectorCondicionesComerciales';
-import { DesgloseDinamico } from './components/DesgloseDinamico';
 import { PrecioSimulador } from './components/PrecioSimulador';
 import { ImpactoUtilidad } from './components/ImpactoUtilidad';
 import { FinalizarNegociacion } from './components/FinalizarNegociacion';
@@ -434,7 +433,7 @@ export default function NegociacionPage() {
                   configuracionPrecios={configPrecios}
                 />
 
-                {/* 4. Precio de Negociación */}
+                {/* 4. Precio de Negociación con Desglose integrado */}
                 <PrecioSimulador
                   cotizacion={cotizacionOriginal}
                   precioPersonalizado={negociacionState.precioPersonalizado}
@@ -447,30 +446,8 @@ export default function NegociacionPage() {
                   validacionMargen={validacionMargen}
                   precioReferencia={precioConCondiciones}
                   itemsCortesia={negociacionState.itemsCortesia}
+                  showDesglose={true}
                 />
-
-                {/* 5. Desglose Dinámico */}
-                {(() => {
-                  // Calcular precio base para el desglose: precio de referencia - items cortesía
-                  const montoItemsCortesia = cotizacionOriginal.items.reduce((sum, item) => {
-                    const isCortesia = negociacionState.itemsCortesia.has(item.id);
-                    if (isCortesia) {
-                      return sum + (item.unit_price || 0) * item.quantity;
-                    }
-                    return sum;
-                  }, 0);
-                  const precioOriginal = cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price;
-                  const precioBaseDesglose = (precioConCondiciones ?? precioOriginal) - montoItemsCortesia;
-
-                  return (
-                    <DesgloseDinamico
-                      cotizacionOriginal={cotizacionOriginal}
-                      precioBase={precioBaseDesglose}
-                      precioPersonalizado={negociacionState.precioPersonalizado}
-                      itemsCortesia={negociacionState.itemsCortesia}
-                    />
-                  );
-                })()}
 
                 {/* 5. Impacto en utilidad */}
                 {calculoNegociado && (() => {

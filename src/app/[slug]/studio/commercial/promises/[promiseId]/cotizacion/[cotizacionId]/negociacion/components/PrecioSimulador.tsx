@@ -21,6 +21,7 @@ interface PrecioSimuladorProps {
   validacionMargen: ValidacionMargen | null;
   precioReferencia: number | null; // Precio con condiciones comerciales aplicadas (Total a pagar)
   itemsCortesia: Set<string>; // Items marcados como cortesía
+  showDesglose?: boolean; // Mostrar desglose dentro del card
 }
 
 export function PrecioSimulador({
@@ -30,6 +31,7 @@ export function PrecioSimulador({
   validacionMargen,
   precioReferencia,
   itemsCortesia,
+  showDesglose = false,
 }: PrecioSimuladorProps) {
   const [inputValue, setInputValue] = useState(
     precioPersonalizado?.toString() || ''
@@ -109,13 +111,70 @@ export function PrecioSimulador({
 
         <div className="space-y-2 pt-2 border-t border-zinc-700">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-zinc-400">Precio mínimo:</span>
+            <span className="text-zinc-400">Precio mínimo para no generar pérdida:</span>
             <span className="font-semibold text-red-400">
               {formatearMoneda(precioMinimo)}
             </span>
           </div>
         </div>
 
+        {/* Desglose integrado */}
+        {showDesglose && (() => {
+          // Calcular costos y gastos (siempre se suman todos, incluso si es cortesía)
+          const costoTotal = cotizacion.items.reduce((sum, item) => {
+            return sum + (item.cost || 0) * item.quantity;
+          }, 0);
+
+          const gastoTotal = cotizacion.items.reduce((sum, item) => {
+            return sum + (item.expense || 0) * item.quantity;
+          }, 0);
+
+          // Usar precio personalizado si existe, sino el precio base (precio referencia - cortesías)
+          const precioParaCalcular = precioPersonalizado ?? calculoItemsSeleccionados;
+
+          // Calcular utilidad y margen
+          const utilidadNeta = precioParaCalcular - costoTotal - gastoTotal;
+          const margenPorcentaje =
+            precioParaCalcular > 0 ? (utilidadNeta / precioParaCalcular) * 100 : 0;
+
+          return (
+            <div className="pt-4 border-t border-zinc-700">
+              <h4 className="text-sm font-semibold text-white mb-3">Desglose</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-400 mb-1">Costos</span>
+                  <span className="text-sm text-zinc-300">
+                    {formatearMoneda(costoTotal)}
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-400 mb-1">Gastos</span>
+                  <span className="text-sm text-zinc-300">
+                    {formatearMoneda(gastoTotal)}
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-400 mb-1">Utilidad</span>
+                  <span
+                    className={`text-sm font-semibold ${utilidadNeta >= 0 ? 'text-emerald-400' : 'text-red-400'
+                      }`}
+                  >
+                    {formatearMoneda(utilidadNeta)}
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-400 mb-1">Margen</span>
+                  <span
+                    className={`text-sm font-medium ${margenPorcentaje >= 0 ? 'text-emerald-400' : 'text-red-400'
+                      }`}
+                  >
+                    {margenPorcentaje.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {precioPersonalizado !== null &&
           precioPersonalizado < precioMinimo && (
