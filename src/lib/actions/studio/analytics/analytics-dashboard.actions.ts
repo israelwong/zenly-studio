@@ -157,8 +157,8 @@ export async function getConversionMetrics(
             return sum + (s.conversion_value ? Number(s.conversion_value) : 0);
         }, 0);
 
-        const conversionRate = leadformVisits > 0 
-            ? (totalSubmissions / leadformVisits) * 100 
+        const conversionRate = leadformVisits > 0
+            ? (totalSubmissions / leadformVisits) * 100
             : 0;
 
         const clickThroughRate = landingVisits > 0
@@ -271,7 +271,7 @@ export async function getStudioAnalyticsSummary(
         // Obtener owner_id y crear filtro de exclusión
         const ownerId = await getStudioOwnerId(studioId);
         const ownerExclusionFilter = await createOwnerExclusionFilter(studioId, ownerId);
-        
+
         console.log(`[getStudioAnalyticsSummary] Iniciando para studioId: ${studioId}`);
 
         // Límite de tiempo: usar rango proporcionado o últimos 90 días por defecto
@@ -280,7 +280,7 @@ export async function getStudioAnalyticsSummary(
             limit.setDate(limit.getDate() - 90);
             return limit;
         })();
-        
+
         const dateTo = options?.dateTo || new Date();
 
         // Construir filtro de fecha
@@ -295,6 +295,18 @@ export async function getStudioAnalyticsSummary(
             ownerId: ownerId || 'null',
             hasOwnerExclusion: Object.keys(ownerExclusionFilter).length > 0,
         });
+
+        // Verificar cuántos registros hay SIN filtro de owner para debugging
+        const totalProfileViewsWithoutFilter = await prisma.studio_content_analytics.count({
+            where: {
+                studio_id: studioId,
+                content_type: 'PACKAGE',
+                content_id: studioId,
+                event_type: 'PAGE_VIEW',
+                created_at: dateFilter,
+            },
+        });
+        console.log(`[getStudioAnalyticsSummary] 🔍 Total profile views SIN filtro owner: ${totalProfileViewsWithoutFilter}`);
 
         // Paralelizar queries independientes
         console.log(`[getStudioAnalyticsSummary] 🔍 Ejecutando queries...`);
@@ -410,13 +422,13 @@ export async function getStudioAnalyticsSummary(
         });
 
         // Calcular métricas de perfil (manejar arrays vacíos)
-        const profileUniqueVisits = profileViewsFiltered.length > 0 
+        const profileUniqueVisits = profileViewsFiltered.length > 0
             ? calculateUniqueVisits(profileViewsFiltered)
             : { unique: 0, total: 0 };
         const profileRecurrentVisits = profileViewsFiltered.length > 0
             ? calculateRecurrentVisits(profileViewsFiltered)
             : { unique: 0, recurrent: 0, total: 0 };
-        
+
         // Calcular device types
         const profileDeviceTypes = profileViewsFiltered.reduce((acc, item) => {
             try {
@@ -596,13 +608,24 @@ export async function getTopContent(
         // Obtener owner_id y crear filtro de exclusión
         const ownerId = await getStudioOwnerId(studioId);
         const ownerExclusionFilter = await createOwnerExclusionFilter(studioId, ownerId);
-        
+
         console.log(`[getTopContent] 📅 Filtros:`, {
             dateFrom: dateFilter.gte?.toISOString() || 'none',
             dateTo: dateFilter.lte?.toISOString() || 'none',
             ownerId: ownerId || 'null',
             hasOwnerExclusion: Object.keys(ownerExclusionFilter).length > 0,
         });
+
+        // Verificar cuántos registros hay SIN filtro de owner para debugging
+        const totalPostsWithoutFilter = await prisma.studio_content_analytics.count({
+            where: {
+                studio_id: studioId,
+                content_type: 'POST',
+                event_type: 'FEED_VIEW',
+                created_at: dateFilter,
+            },
+        });
+        console.log(`[getTopContent] 🔍 Total posts SIN filtro owner: ${totalPostsWithoutFilter}`);
 
         // Top posts por vistas (excluyendo owner)
         console.log(`[getTopContent] 🔍 Buscando top posts...`);
@@ -625,7 +648,7 @@ export async function getTopContent(
             },
             take: limit
         });
-        
+
         console.log(`[getTopContent] 📊 Top posts encontrados:`, {
             count: topPosts.length,
             topPostIds: topPosts.slice(0, 3).map(p => ({ id: p.content_id, views: p._count.id })),
@@ -633,7 +656,7 @@ export async function getTopContent(
 
         // Obtener detalles de posts
         const postIds = topPosts.map(p => p.content_id);
-        
+
         // Si no hay posts, retornar array vacío
         if (postIds.length === 0) {
             return {
@@ -704,10 +727,10 @@ export async function getTopContent(
             const viewCount = topPosts.find(tp => tp.content_id === post.id)?._count.id || 0;
             const clicksCount = clicksData.find(c => c.content_id === post.id)?._count.id || 0;
             const sharesCount = sharesData.find(s => s.content_id === post.id)?._count.id || 0;
-            
+
             // coverImage debe ser string | undefined (no null)
             const coverImage = post.media[0]?.thumbnail_url || post.media[0]?.file_url;
-            
+
             return {
                 id: post.id,
                 slug: post.slug || '',

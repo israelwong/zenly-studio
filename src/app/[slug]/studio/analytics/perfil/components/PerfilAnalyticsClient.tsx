@@ -128,6 +128,12 @@ export function PerfilAnalyticsClient({
             topContentPosts: topContentData?.posts?.length || 0,
             profileViews: summaryData?.profile?.totalViews || 0,
         });
+        console.log('[PerfilAnalyticsClient] 🎨 Renderizando AnalyticsOverviewCards con datos:', {
+            profile: summaryData?.profile,
+            posts: summaryData?.posts,
+            portfolios: summaryData?.portfolios,
+            offers: summaryData?.offers,
+        });
     }, [summaryData, topContentData]);
 
     if (!summaryData || !topContentData) {
@@ -227,12 +233,6 @@ export function PerfilAnalyticsClient({
 
             {/* Main Stats Grid */}
             <div>
-                {console.log('[PerfilAnalyticsClient] 🎨 Renderizando AnalyticsOverviewCards con datos:', {
-                    profile: summaryData.profile,
-                    posts: summaryData.posts,
-                    portfolios: summaryData.portfolios,
-                    offers: summaryData.offers,
-                })}
                 <AnalyticsOverviewCards data={summaryData} />
             </div>
 
