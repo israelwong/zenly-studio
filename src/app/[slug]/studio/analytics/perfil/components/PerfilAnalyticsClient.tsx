@@ -160,7 +160,7 @@ export function PerfilAnalyticsClient({
                                             Cancelar
                                         </ZenButton>
                                         <ZenButton
-                                            variant="default"
+                                            variant="primary"
                                             size="sm"
                                             onClick={handleApplyRange}
                                             disabled={!tempRange?.from || !tempRange?.to}

@@ -17,56 +17,103 @@ interface PerfilAnalyticsPageProps {
 }
 
 async function PerfilAnalyticsContent({ studioSlug }: { studioSlug: string }) {
-    // Obtener studio profile
-    const result = await getStudioProfileBySlug({ slug: studioSlug });
+    try {
+        // Obtener studio profile
+        const result = await getStudioProfileBySlug({ slug: studioSlug });
 
-    if (!result.success || !result.data) {
+        if (!result.success || !result.data) {
+            return (
+                <div className="text-center py-12">
+                    <p className="text-zinc-400">Error al cargar el studio</p>
+                    <p className="text-xs text-zinc-500 mt-2">
+                        {result.success === false ? result.error : 'No data'}
+                    </p>
+                </div>
+            );
+        }
+
+        const studio = result.data.studio;
+
+        // Obtener datos de analytics con manejo de errores individual
+        let summaryResult;
+        let topContentResult;
+
+        try {
+            [summaryResult, topContentResult] = await Promise.all([
+                getStudioAnalyticsSummary(studio.id),
+                getTopContent(studio.id, 5),
+            ]);
+        } catch (error) {
+            console.error('[PerfilAnalyticsContent] Error en Promise.all:', error);
+            return (
+                <div className="text-center py-12">
+                    <p className="text-zinc-400">Error al cargar analytics</p>
+                    <p className="text-xs text-zinc-500 mt-2">
+                        {error instanceof Error ? error.message : 'Error desconocido'}
+                    </p>
+                </div>
+            );
+        }
+
+        // Validar resultados individualmente con mensajes específicos
+        if (!summaryResult.success) {
+            return (
+                <div className="text-center py-12">
+                    <p className="text-zinc-400">Error al cargar resumen de analytics</p>
+                    <p className="text-xs text-zinc-500 mt-2">
+                        {summaryResult.error || 'Error desconocido'}
+                    </p>
+                </div>
+            );
+        }
+
+        if (!topContentResult.success) {
+            return (
+                <div className="text-center py-12">
+                    <p className="text-zinc-400">Error al cargar contenido destacado</p>
+                    <p className="text-xs text-zinc-500 mt-2">
+                        {topContentResult.error || 'Error desconocido'}
+                    </p>
+                </div>
+            );
+        }
+
+        // Validar que data existe
+        if (!summaryResult.data) {
+            return (
+                <div className="text-center py-12">
+                    <p className="text-zinc-400">No hay datos de resumen disponibles</p>
+                </div>
+            );
+        }
+
+        if (!topContentResult.data) {
+            return (
+                <div className="text-center py-12">
+                    <p className="text-zinc-400">No hay datos de contenido disponibles</p>
+                </div>
+            );
+        }
+
+        return (
+            <PerfilAnalyticsClient
+                studioId={studio.id}
+                studioSlug={studioSlug}
+                initialSummaryData={summaryResult.data}
+                initialTopContentData={topContentResult.data}
+            />
+        );
+    } catch (error) {
+        console.error('[PerfilAnalyticsContent] Error inesperado:', error);
         return (
             <div className="text-center py-12">
-                <p className="text-zinc-400">Error al cargar el studio</p>
+                <p className="text-zinc-400">Error inesperado al cargar la página</p>
                 <p className="text-xs text-zinc-500 mt-2">
-                    {result.success === false ? result.error : 'No data'}
+                    {error instanceof Error ? error.message : 'Error desconocido'}
                 </p>
             </div>
         );
     }
-
-    const studio = result.data.studio;
-
-    // Obtener datos de analytics
-    const [summaryResult, topContentResult] = await Promise.all([
-        getStudioAnalyticsSummary(studio.id),
-        getTopContent(studio.id, 5),
-    ]);
-
-    if (!summaryResult.success || !topContentResult.success) {
-        return (
-            <div className="text-center py-12">
-                <p className="text-zinc-400">Error al cargar analytics</p>
-            </div>
-        );
-    }
-
-    // Validar que data existe
-    if (!summaryResult.data || !topContentResult.data) {
-        return (
-            <div className="text-center py-12">
-                <p className="text-zinc-400">Error al cargar datos de analytics</p>
-            </div>
-        );
-    }
-
-    const analyticsData = summaryResult.data;
-    const topContentData = topContentResult.data;
-
-    return (
-        <PerfilAnalyticsClient
-            studioId={studio.id}
-            studioSlug={studioSlug}
-            initialSummaryData={analyticsData}
-            initialTopContentData={topContentData}
-        />
-    );
 }
 
 export default async function PerfilAnalyticsPage({ params }: PerfilAnalyticsPageProps) {

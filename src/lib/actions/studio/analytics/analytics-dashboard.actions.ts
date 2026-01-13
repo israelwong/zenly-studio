@@ -271,6 +271,8 @@ export async function getStudioAnalyticsSummary(
         // Obtener owner_id y crear filtro de exclusión
         const ownerId = await getStudioOwnerId(studioId);
         const ownerExclusionFilter = await createOwnerExclusionFilter(studioId, ownerId);
+        
+        console.log(`[getStudioAnalyticsSummary] Iniciando para studioId: ${studioId}`);
 
         // Límite de tiempo: usar rango proporcionado o últimos 90 días por defecto
         const dateLimit = options?.dateFrom || (() => {
@@ -377,18 +379,31 @@ export async function getStudioAnalyticsSummary(
 
         // Filtrar en memoria los que tienen profile_view: true en metadata
         const profileViewsFiltered = profileViewsFull.filter(item => {
-            const metadata = item.metadata as Record<string, unknown> | null;
-            return metadata && metadata.profile_view === true;
+            try {
+                const metadata = item.metadata as Record<string, unknown> | null;
+                return metadata && metadata.profile_view === true;
+            } catch {
+                return false;
+            }
         });
 
-        // Calcular métricas de perfil
-        const profileUniqueVisits = calculateUniqueVisits(profileViewsFiltered);
-        const profileRecurrentVisits = calculateRecurrentVisits(profileViewsFiltered);
+        // Calcular métricas de perfil (manejar arrays vacíos)
+        const profileUniqueVisits = profileViewsFiltered.length > 0 
+            ? calculateUniqueVisits(profileViewsFiltered)
+            : { unique: 0, total: 0 };
+        const profileRecurrentVisits = profileViewsFiltered.length > 0
+            ? calculateRecurrentVisits(profileViewsFiltered)
+            : { recurrent: 0, total: 0 };
         
         // Calcular device types
         const profileDeviceTypes = profileViewsFiltered.reduce((acc, item) => {
-            const deviceType = detectDeviceType(item.user_agent);
-            acc[deviceType] = (acc[deviceType] || 0) + 1;
+            try {
+                const deviceType = detectDeviceType(item.user_agent);
+                acc[deviceType] = (acc[deviceType] || 0) + 1;
+            } catch {
+                // Si hay error detectando device, usar 'unknown'
+                acc.unknown = (acc.unknown || 0) + 1;
+            }
             return acc;
         }, {} as Record<string, number>);
 
@@ -402,15 +417,16 @@ export async function getStudioAnalyticsSummary(
 
         // Calcular top referrers (dominios)
         const referrerStats = profileViewsFiltered
-            .filter(item => item.referrer)
+            .filter(item => item.referrer && typeof item.referrer === 'string')
             .reduce((acc, item) => {
                 try {
                     const url = new URL(item.referrer!);
                     const domain = url.hostname.replace('www.', '');
                     acc[domain] = (acc[domain] || 0) + 1;
                 } catch {
-                    // Si no es URL válida, usar referrer tal cual
-                    acc[item.referrer!] = (acc[item.referrer!] || 0) + 1;
+                    // Si no es URL válida, usar referrer tal cual (limitado a 100 caracteres)
+                    const referrer = String(item.referrer).substring(0, 100);
+                    acc[referrer] = (acc[referrer] || 0) + 1;
                 }
                 return acc;
             }, {} as Record<string, number>);
@@ -421,25 +437,28 @@ export async function getStudioAnalyticsSummary(
             .sort((a, b) => b.count - a.count)
             .slice(0, 5);
 
-        // Calcular métricas UTM
+        // Calcular métricas UTM (con validación de tipos)
         const utmSourceStats = profileViewsFiltered
-            .filter(item => item.utm_source)
+            .filter(item => item.utm_source && typeof item.utm_source === 'string')
             .reduce((acc, item) => {
-                acc[item.utm_source!] = (acc[item.utm_source!] || 0) + 1;
+                const source = String(item.utm_source).substring(0, 100);
+                acc[source] = (acc[source] || 0) + 1;
                 return acc;
             }, {} as Record<string, number>);
 
         const utmMediumStats = profileViewsFiltered
-            .filter(item => item.utm_medium)
+            .filter(item => item.utm_medium && typeof item.utm_medium === 'string')
             .reduce((acc, item) => {
-                acc[item.utm_medium!] = (acc[item.utm_medium!] || 0) + 1;
+                const medium = String(item.utm_medium).substring(0, 100);
+                acc[medium] = (acc[medium] || 0) + 1;
                 return acc;
             }, {} as Record<string, number>);
 
         const utmCampaignStats = profileViewsFiltered
-            .filter(item => item.utm_campaign)
+            .filter(item => item.utm_campaign && typeof item.utm_campaign === 'string')
             .reduce((acc, item) => {
-                acc[item.utm_campaign!] = (acc[item.utm_campaign!] || 0) + 1;
+                const campaign = String(item.utm_campaign).substring(0, 100);
+                acc[campaign] = (acc[campaign] || 0) + 1;
                 return acc;
             }, {} as Record<string, number>);
 
@@ -460,6 +479,8 @@ export async function getStudioAnalyticsSummary(
 
         const offerViews = offersStats.find(s => s.event_type === 'SIDEBAR_VIEW')?._count.id || 0;
         const offerClicks = offersStats.find(s => s.event_type === 'OFFER_CLICK')?._count.id || 0;
+
+        console.log(`[getStudioAnalyticsSummary] Completado exitosamente para studioId: ${studioId}`);
 
         return {
             success: true,
@@ -517,6 +538,7 @@ export async function getTopContent(
     }
 ) {
     try {
+        console.log(`[getTopContent] Iniciando para studioId: ${studioId}, limit: ${limit}`);
         // Construir filtro de fecha
         const dateFilter: { gte?: Date; lte?: Date } = {};
         if (options?.dateFrom) {
@@ -557,6 +579,17 @@ export async function getTopContent(
 
         // Obtener detalles de posts
         const postIds = topPosts.map(p => p.content_id);
+        
+        // Si no hay posts, retornar array vacío
+        if (postIds.length === 0) {
+            return {
+                success: true,
+                data: {
+                    posts: []
+                }
+            };
+        }
+
         const posts = await prisma.studio_posts.findMany({
             where: {
                 id: { in: postIds }
@@ -626,6 +659,8 @@ export async function getTopContent(
             };
         }).sort((a, b) => b.analyticsViews - a.analyticsViews);
 
+        console.log(`[getTopContent] Completado exitosamente para studioId: ${studioId}, posts encontrados: ${postsWithViews.length}`);
+
         return {
             success: true,
             data: {
@@ -633,10 +668,10 @@ export async function getTopContent(
             }
         };
     } catch (error) {
-        console.error('[getTopContent] Error:', error);
+        console.error('[getTopContent] Error para studioId:', studioId, error);
         return {
             success: false,
-            error: 'Error al obtener contenido top'
+            error: error instanceof Error ? error.message : 'Error al obtener contenido top'
         };
     }
 }
