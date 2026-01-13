@@ -95,6 +95,23 @@ async function PerfilAnalyticsContent({ studioSlug }: { studioSlug: string }) {
             );
         }
 
+        // Validar que los datos sean serializables antes de pasarlos al cliente
+        try {
+            // Intentar serializar los datos para detectar problemas
+            JSON.stringify(summaryResult.data);
+            JSON.stringify(topContentResult.data);
+        } catch (serializationError) {
+            console.error('[PerfilAnalyticsContent] Error de serialización:', serializationError);
+            return (
+                <div className="text-center py-12">
+                    <p className="text-zinc-400">Error al preparar datos para visualización</p>
+                    <p className="text-xs text-zinc-500 mt-2">
+                        {serializationError instanceof Error ? serializationError.message : 'Error de serialización'}
+                    </p>
+                </div>
+            );
+        }
+
         return (
             <PerfilAnalyticsClient
                 studioId={studio.id}

@@ -393,7 +393,7 @@ export async function getStudioAnalyticsSummary(
             : { unique: 0, total: 0 };
         const profileRecurrentVisits = profileViewsFiltered.length > 0
             ? calculateRecurrentVisits(profileViewsFiltered)
-            : { recurrent: 0, total: 0 };
+            : { unique: 0, recurrent: 0, total: 0 };
         
         // Calcular device types
         const profileDeviceTypes = profileViewsFiltered.reduce((acc, item) => {
@@ -482,38 +482,46 @@ export async function getStudioAnalyticsSummary(
 
         console.log(`[getStudioAnalyticsSummary] Completado exitosamente para studioId: ${studioId}`);
 
+        // Asegurar que todos los valores sean números válidos (no NaN, no Infinity)
+        const safeNumber = (value: number | undefined | null): number => {
+            if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+                return 0;
+            }
+            return value;
+        };
+
         return {
             success: true,
             data: {
                 profile: {
-                    totalViews: profileViewsFiltered.length,
-                    uniqueVisits: profileUniqueVisits.unique,
-                    recurrentVisits: profileRecurrentVisits.recurrent,
-                    mobileViews: profileDeviceTypes.mobile || 0,
-                    desktopViews: profileDeviceTypes.desktop || 0,
+                    totalViews: safeNumber(profileViewsFiltered.length),
+                    uniqueVisits: safeNumber(profileUniqueVisits.unique),
+                    recurrentVisits: safeNumber(profileRecurrentVisits.recurrent),
+                    mobileViews: safeNumber(profileDeviceTypes.mobile),
+                    desktopViews: safeNumber(profileDeviceTypes.desktop),
                     trafficSources: {
-                        profile: trafficSourceStats.profile || 0,
-                        external: trafficSourceStats.external || 0,
-                        unknown: trafficSourceStats.unknown || 0,
+                        profile: safeNumber(trafficSourceStats.profile),
+                        external: safeNumber(trafficSourceStats.external),
+                        unknown: safeNumber(trafficSourceStats.unknown),
                     },
-                    topReferrers: topReferrers,
-                    topUtmSources: topUtmSources,
-                    utmMediums: utmMediumStats,
-                    utmCampaigns: utmCampaignStats,
+                    topReferrers: Array.isArray(topReferrers) ? topReferrers : [],
+                    topUtmSources: Array.isArray(topUtmSources) ? topUtmSources : [],
+                    utmMediums: utmMediumStats && typeof utmMediumStats === 'object' ? utmMediumStats : {},
+                    utmCampaigns: utmCampaignStats && typeof utmCampaignStats === 'object' ? utmCampaignStats : {},
                 },
                 posts: {
-                    totalViews: postViews,
-                    totalClicks: postTotalClicks,
-                    modalOpens: postModalOpens,
-                    mediaClicks: postMediaClicks,
-                    totalShares: postLinkCopies,
+                    totalViews: safeNumber(postViews),
+                    totalClicks: safeNumber(postTotalClicks),
+                    modalOpens: safeNumber(postModalOpens),
+                    mediaClicks: safeNumber(postMediaClicks),
+                    totalShares: safeNumber(postLinkCopies),
                 },
                 portfolios: {
-                    totalViews: portfolioViews,
+                    totalViews: safeNumber(portfolioViews),
                 },
                 offers: {
-                    totalViews: offerViews,
-                    totalClicks: offerClicks,
+                    totalViews: safeNumber(offerViews),
+                    totalClicks: safeNumber(offerClicks),
                 }
             }
         };
@@ -645,17 +653,25 @@ export async function getTopContent(
             })
         ]);
 
-        // Mapear con conteo de vistas, clics y shares
+        // Mapear con conteo de vistas, clics y shares (asegurar serialización)
         const postsWithViews = posts.map(post => {
             const viewCount = topPosts.find(tp => tp.content_id === post.id)?._count.id || 0;
             const clicksCount = clicksData.find(c => c.content_id === post.id)?._count.id || 0;
             const sharesCount = sharesData.find(s => s.content_id === post.id)?._count.id || 0;
+            
+            // Asegurar que coverImage sea string o null (no undefined)
+            const coverImage = post.media[0]?.thumbnail_url || post.media[0]?.file_url || null;
+            
             return {
-                ...post,
-                analyticsViews: viewCount,
-                analyticsClicks: clicksCount,
-                analyticsShares: sharesCount,
-                coverImage: post.media[0]?.thumbnail_url || post.media[0]?.file_url
+                id: post.id,
+                slug: post.slug || '',
+                title: post.title || '',
+                caption: post.caption || null,
+                view_count: typeof post.view_count === 'number' ? post.view_count : 0,
+                analyticsViews: typeof viewCount === 'number' ? viewCount : 0,
+                analyticsClicks: typeof clicksCount === 'number' ? clicksCount : 0,
+                analyticsShares: typeof sharesCount === 'number' ? sharesCount : 0,
+                coverImage: typeof coverImage === 'string' ? coverImage : null,
             };
         }).sort((a, b) => b.analyticsViews - a.analyticsViews);
 

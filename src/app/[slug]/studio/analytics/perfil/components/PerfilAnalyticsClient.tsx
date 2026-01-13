@@ -108,10 +108,26 @@ export function PerfilAnalyticsClient({
         return `${fromFormatted} - ${toFormatted}`;
     };
 
+    // Validar que los datos sean válidos
     if (!summaryData || !topContentData) {
         return (
             <div className="text-center py-12">
                 <p className="text-zinc-400">No hay datos disponibles</p>
+            </div>
+        );
+    }
+
+    // Validar estructura de datos
+    if (!summaryData.profile || !topContentData.posts) {
+        console.error('[PerfilAnalyticsClient] Estructura de datos inválida:', {
+            summaryData: !!summaryData,
+            summaryProfile: !!summaryData?.profile,
+            topContentData: !!topContentData,
+            topContentPosts: !!topContentData?.posts,
+        });
+        return (
+            <div className="text-center py-12">
+                <p className="text-zinc-400">Error en la estructura de datos</p>
             </div>
         );
     }
