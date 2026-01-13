@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, MoreVertical, Eye, X, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, ChevronRight } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials, formatDate } from '@/lib/actions/utils/formatting';
-import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenDialog, ZenButton } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge, ZenDialog, ZenButton } from '@/components/ui/zen';
 import { getPromiseTagsByPromiseId, getPromiseTags, addTagToPromise, removeTagFromPromise, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
 import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
@@ -338,13 +338,14 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 ref={setNodeRef}
                 style={style}
                 {...attributes}
-                // ⚠️ NO listeners aquí - solo en el handle
+                onClick={handleViewDetails}
                 data-id={promise.promise_id || promise.id}
-                className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700 hover:border-zinc-600 transition-all duration-200 hover:shadow-lg relative"
+                className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700 hover:border-zinc-600 transition-all duration-200 hover:shadow-lg relative cursor-pointer"
             >
                 {/* Drag Handle - Esquina superior izquierda */}
                 <div
                     {...listeners}
+                    onClick={(e) => e.stopPropagation()}
                     className="absolute top-2 left-2 p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 cursor-grab active:cursor-grabbing z-20"
                     title="Arrastrar para mover"
                 >
@@ -356,43 +357,29 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                     <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
                         {/* Botón Ver detalles */}
                         <button
-                            onClick={handleViewDetails}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewDetails();
+                            }}
                             className="p-1 rounded-md bg-zinc-800/60 hover:bg-emerald-500/20 border border-zinc-700/50 hover:border-emerald-500/50 transition-colors text-zinc-400 hover:text-emerald-400 z-20"
                             title="Ver detalles"
                         >
                             <ChevronRight className="h-3.5 w-3.5" />
                         </button>
 
-                        {/* Menú dropdown */}
-                        <ZenDropdownMenu>
-                            <ZenDropdownMenuTrigger asChild>
-                                <button
-                                    className="p-1.5 rounded-md hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-zinc-300 z-20"
-                                    title="Más opciones"
-                                >
-                                    <MoreVertical className="h-4 w-4" />
-                                </button>
-                            </ZenDropdownMenuTrigger>
-                            <ZenDropdownMenuContent align="end">
-                                <ZenDropdownMenuItem onClick={handleViewDetails}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    Ver detalles
-                                </ZenDropdownMenuItem>
-                                <ZenDropdownMenuItem onClick={() => setShowTagsModal(true)}>
-                                    <Tag className="h-4 w-4 mr-2" />
-                                    Agregar etiquetas
-                                </ZenDropdownMenuItem>
-                                {!isArchived && (
-                                    <>
-                                        <ZenDropdownMenuSeparator />
-                                        <ZenDropdownMenuItem onClick={handleArchiveClick}>
-                                            <Archive className="h-4 w-4 mr-2" />
-                                            Archivar
-                                        </ZenDropdownMenuItem>
-                                    </>
-                                )}
-                            </ZenDropdownMenuContent>
-                        </ZenDropdownMenu>
+                        {/* Botón Archivar */}
+                        {!isArchived && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleArchiveClick(e);
+                                }}
+                                className="p-1 rounded-md bg-zinc-800/60 hover:bg-red-500/20 transition-colors text-zinc-400 hover:text-red-400 z-20"
+                                title="Archivar promesa"
+                            >
+                                <Archive className="h-3.5 w-3.5" />
+                            </button>
+                        )}
                     </div>
                 )}
 
