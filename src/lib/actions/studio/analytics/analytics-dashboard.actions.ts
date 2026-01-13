@@ -289,7 +289,15 @@ export async function getStudioAnalyticsSummary(
             dateFilter.lte = dateTo;
         }
 
+        console.log(`[getStudioAnalyticsSummary] 📅 Filtros de fecha:`, {
+            dateFrom: dateLimit.toISOString(),
+            dateTo: dateTo.toISOString(),
+            ownerId: ownerId || 'null',
+            hasOwnerExclusion: Object.keys(ownerExclusionFilter).length > 0,
+        });
+
         // Paralelizar queries independientes
+        console.log(`[getStudioAnalyticsSummary] 🔍 Ejecutando queries...`);
         const [postsStats, portfoliosStats, offersStats, profileViewsFull, postClicksData] = await Promise.all([
             // Stats de posts (excluyendo owner)
             prisma.studio_content_analytics.groupBy({
@@ -377,6 +385,14 @@ export async function getStudioAnalyticsSummary(
             })
         ]);
 
+        console.log(`[getStudioAnalyticsSummary] 📊 Resultados de queries:`, {
+            postsStatsCount: postsStats.length,
+            portfoliosStatsCount: portfoliosStats.length,
+            offersStatsCount: offersStats.length,
+            profileViewsFullCount: profileViewsFull.length,
+            postClicksDataCount: postClicksData.length,
+        });
+
         // Filtrar en memoria los que tienen profile_view: true en metadata
         const profileViewsFiltered = profileViewsFull.filter(item => {
             try {
@@ -385,6 +401,12 @@ export async function getStudioAnalyticsSummary(
             } catch {
                 return false;
             }
+        });
+
+        console.log(`[getStudioAnalyticsSummary] 🔍 Profile views filtrados:`, {
+            totalViews: profileViewsFull.length,
+            filteredViews: profileViewsFiltered.length,
+            sampleMetadata: profileViewsFull[0]?.metadata || 'none',
         });
 
         // Calcular métricas de perfil (manejar arrays vacíos)
@@ -480,7 +502,18 @@ export async function getStudioAnalyticsSummary(
         const offerViews = offersStats.find(s => s.event_type === 'SIDEBAR_VIEW')?._count.id || 0;
         const offerClicks = offersStats.find(s => s.event_type === 'OFFER_CLICK')?._count.id || 0;
 
-        console.log(`[getStudioAnalyticsSummary] Completado exitosamente para studioId: ${studioId}`);
+        console.log(`[getStudioAnalyticsSummary] 📈 Métricas calculadas:`, {
+            profileViews: profileViewsFiltered.length,
+            profileUnique: profileUniqueVisits.unique,
+            profileRecurrent: profileRecurrentVisits.recurrent,
+            postViews,
+            postTotalClicks,
+            portfolioViews,
+            offerViews,
+            offerClicks,
+        });
+
+        console.log(`[getStudioAnalyticsSummary] ✅ Completado exitosamente para studioId: ${studioId}`);
 
         // Asegurar que todos los valores sean números válidos (no NaN, no Infinity)
         const safeNumber = (value: number | undefined | null): number => {
@@ -546,7 +579,7 @@ export async function getTopContent(
     }
 ) {
     try {
-        console.log(`[getTopContent] Iniciando para studioId: ${studioId}, limit: ${limit}`);
+        console.log(`[getTopContent] 🚀 Iniciando para studioId: ${studioId}, limit: ${limit}`);
         // Construir filtro de fecha
         const dateFilter: { gte?: Date; lte?: Date } = {};
         if (options?.dateFrom) {
@@ -563,8 +596,16 @@ export async function getTopContent(
         // Obtener owner_id y crear filtro de exclusión
         const ownerId = await getStudioOwnerId(studioId);
         const ownerExclusionFilter = await createOwnerExclusionFilter(studioId, ownerId);
+        
+        console.log(`[getTopContent] 📅 Filtros:`, {
+            dateFrom: dateFilter.gte?.toISOString() || 'none',
+            dateTo: dateFilter.lte?.toISOString() || 'none',
+            ownerId: ownerId || 'null',
+            hasOwnerExclusion: Object.keys(ownerExclusionFilter).length > 0,
+        });
 
         // Top posts por vistas (excluyendo owner)
+        console.log(`[getTopContent] 🔍 Buscando top posts...`);
         const topPosts = await prisma.studio_content_analytics.groupBy({
             by: ['content_id'],
             where: {
@@ -583,6 +624,11 @@ export async function getTopContent(
                 }
             },
             take: limit
+        });
+        
+        console.log(`[getTopContent] 📊 Top posts encontrados:`, {
+            count: topPosts.length,
+            topPostIds: topPosts.slice(0, 3).map(p => ({ id: p.content_id, views: p._count.id })),
         });
 
         // Obtener detalles de posts
@@ -674,7 +720,15 @@ export async function getTopContent(
             };
         }).sort((a, b) => b.analyticsViews - a.analyticsViews);
 
-        console.log(`[getTopContent] Completado exitosamente para studioId: ${studioId}, posts encontrados: ${postsWithViews.length}`);
+        console.log(`[getTopContent] ✅ Completado exitosamente:`, {
+            studioId,
+            postsFound: postsWithViews.length,
+            postsWithViews: postsWithViews.slice(0, 3).map(p => ({
+                id: p.id,
+                title: p.title,
+                views: p.analyticsViews,
+            })),
+        });
 
         return {
             success: true,
