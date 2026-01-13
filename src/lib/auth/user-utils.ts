@@ -88,26 +88,33 @@ export async function updateUserProfile(
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
-    const supabase = await createClient()
+    try {
+        const supabase = await createClient()
 
-    // Obtener usuario de Supabase Auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+        // Obtener usuario de Supabase Auth
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (authError || !user) {
+        if (authError || !user) {
+            return null
+        }
+
+        // Obtener perfil del usuario
+        const profile = await getUserProfile(user.id)
+
+        if (!profile) {
+            return null
+        }
+
+        return {
+            id: user.id,
+            email: user.email!,
+            profile,
+        }
+    } catch (error) {
+        // Si hay error al crear el cliente (por ejemplo, variables de entorno faltantes),
+        // retornar null en lugar de lanzar el error
+        console.warn('[getCurrentUser] Error al obtener usuario:', error instanceof Error ? error.message : error);
         return null
-    }
-
-    // Obtener perfil del usuario
-    const profile = await getUserProfile(user.id)
-
-    if (!profile) {
-        return null
-    }
-
-    return {
-        id: user.id,
-        email: user.email!,
-        profile,
     }
 }
 

@@ -23,14 +23,24 @@ import { getCurrentUser } from "@/lib/auth/user-utils";
 export async function getStudioProfileBySlug(
     input: GetStudioProfileInputForm
 ): Promise<GetStudioProfileOutputForm> {
+    console.log('[getStudioProfileBySlug] 🚀 Iniciando para slug:', input.slug);
     try {
         // Validate input
         const validatedInput = GetStudioProfileInputSchema.parse(input);
         const { slug } = validatedInput;
 
         // Check if user is owner (to include archived posts)
-        const currentUser = await getCurrentUser();
-        const userId = currentUser?.id || null;
+        // Manejar error silenciosamente si no se puede obtener el usuario actual
+        let userId: string | null = null;
+        try {
+            const currentUser = await getCurrentUser();
+            userId = currentUser?.id || null;
+            console.log('[getStudioProfileBySlug] 👤 Usuario actual:', userId ? 'encontrado' : 'no encontrado');
+        } catch (userError) {
+            // Si falla obtener el usuario actual, continuar sin esa información
+            // Esto puede pasar si las variables de entorno de Supabase no están disponibles
+            console.warn('[getStudioProfileBySlug] ⚠️ No se pudo obtener usuario actual:', userError);
+        }
 
         return await retryDatabaseOperation(async () => {
             // First, get studio to check ownership
@@ -488,6 +498,12 @@ export async function getStudioProfileBySlug(
 
             const profileData = PublicProfileDataSchema.parse(profileDataRaw);
 
+            console.log('[getStudioProfileBySlug] ✅ Perfil obtenido exitosamente:', {
+                studioId: profileData.studio.id,
+                postsCount: profileData.posts.length,
+                portfoliosCount: profileData.portfolios.length,
+            });
+
             return {
                 success: true,
                 data: profileData,
@@ -495,7 +511,7 @@ export async function getStudioProfileBySlug(
         });
 
     } catch (error) {
-        console.error('❌ [getStudioProfileBySlug] Error:', error);
+        console.error('[getStudioProfileBySlug] ❌ Error:', error);
 
         if (error instanceof Error) {
             return {
