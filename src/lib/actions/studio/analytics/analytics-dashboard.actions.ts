@@ -272,8 +272,6 @@ export async function getStudioAnalyticsSummary(
         const ownerId = await getStudioOwnerId(studioId);
         const ownerExclusionFilter = await createOwnerExclusionFilter(studioId, ownerId);
 
-        console.log(`[getStudioAnalyticsSummary] Iniciando para studioId: ${studioId}`);
-
         // Límite de tiempo: usar rango proporcionado o últimos 90 días por defecto
         const dateLimit = options?.dateFrom || (() => {
             const limit = new Date();
@@ -397,14 +395,6 @@ export async function getStudioAnalyticsSummary(
             })
         ]);
 
-        console.log(`[getStudioAnalyticsSummary] 📊 Resultados de queries:`, {
-            postsStatsCount: postsStats.length,
-            portfoliosStatsCount: portfoliosStats.length,
-            offersStatsCount: offersStats.length,
-            profileViewsFullCount: profileViewsFull.length,
-            postClicksDataCount: postClicksData.length,
-        });
-
         // Filtrar en memoria los que tienen profile_view: true en metadata
         const profileViewsFiltered = profileViewsFull.filter(item => {
             try {
@@ -513,19 +503,6 @@ export async function getStudioAnalyticsSummary(
 
         const offerViews = offersStats.find(s => s.event_type === 'SIDEBAR_VIEW')?._count.id || 0;
         const offerClicks = offersStats.find(s => s.event_type === 'OFFER_CLICK')?._count.id || 0;
-
-        console.log(`[getStudioAnalyticsSummary] 📈 Métricas calculadas:`, {
-            profileViews: profileViewsFiltered.length,
-            profileUnique: profileUniqueVisits.unique,
-            profileRecurrent: profileRecurrentVisits.recurrent,
-            postViews,
-            postTotalClicks,
-            portfolioViews,
-            offerViews,
-            offerClicks,
-        });
-
-        console.log(`[getStudioAnalyticsSummary] ✅ Completado exitosamente para studioId: ${studioId}`);
 
         // Asegurar que todos los valores sean números válidos (no NaN, no Infinity)
         const safeNumber = (value: number | undefined | null): number => {
@@ -649,11 +626,6 @@ export async function getTopContent(
             take: limit
         });
 
-        console.log(`[getTopContent] 📊 Top posts encontrados:`, {
-            count: topPosts.length,
-            topPostIds: topPosts.slice(0, 3).map(p => ({ id: p.content_id, views: p._count.id })),
-        });
-
         // Obtener detalles de posts
         const postIds = topPosts.map(p => p.content_id);
 
@@ -743,16 +715,6 @@ export async function getTopContent(
             };
         }).sort((a, b) => b.analyticsViews - a.analyticsViews);
 
-        console.log(`[getTopContent] ✅ Completado exitosamente:`, {
-            studioId,
-            postsFound: postsWithViews.length,
-            postsWithViews: postsWithViews.slice(0, 3).map(p => ({
-                id: p.id,
-                title: p.title,
-                views: p.analyticsViews,
-            })),
-        });
-
         return {
             success: true,
             data: {
@@ -760,7 +722,7 @@ export async function getTopContent(
             }
         };
     } catch (error) {
-        console.error('[getTopContent] Error para studioId:', studioId, error);
+        console.error('[getTopContent] Error:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al obtener contenido top'
