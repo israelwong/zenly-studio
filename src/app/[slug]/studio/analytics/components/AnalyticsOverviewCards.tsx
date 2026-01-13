@@ -40,13 +40,6 @@ interface AnalyticsOverviewCardsProps {
 }
 
 export function AnalyticsOverviewCards({ data }: AnalyticsOverviewCardsProps) {
-    console.log('[AnalyticsOverviewCards] 📊 Datos recibidos:', {
-        profileViews: data.profile?.totalViews || 0,
-        uniqueVisits: data.profile?.uniqueVisits || 0,
-        postsViews: data.posts.totalViews,
-        postsClicks: data.posts.totalClicks,
-    });
-
     const formatNumber = (num: number): string => {
         if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
         if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
@@ -136,12 +129,6 @@ export function AnalyticsOverviewCards({ data }: AnalyticsOverviewCardsProps) {
     // Agrupar cards por categoría
     const profileCards = cards.slice(0, 5);
     const contentCards = cards.slice(5);
-
-    console.log('[AnalyticsOverviewCards] 🎨 Renderizando', {
-        profileCardsCount: profileCards.length,
-        contentCardsCount: contentCards.length,
-        totalCards: cards.length,
-    });
 
     return (
         <div className="space-y-6">

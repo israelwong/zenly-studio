@@ -24,15 +24,6 @@ export function PerfilAnalyticsClient({
     initialSummaryData,
     initialTopContentData,
 }: PerfilAnalyticsClientProps) {
-    console.log('[PerfilAnalyticsClient] 🎨 Componente montado:', {
-        studioId,
-        studioSlug,
-        hasSummaryData: !!initialSummaryData,
-        hasTopContentData: !!initialTopContentData,
-        summaryProfile: !!initialSummaryData?.profile,
-        topContentPosts: initialTopContentData?.posts?.length || 0,
-    });
-
     const [mounted, setMounted] = useState(false);
     const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
     const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -51,7 +42,6 @@ export function PerfilAnalyticsClient({
 
     // Evitar problemas de hidratación renderizando Popover solo en cliente
     useEffect(() => {
-        console.log('[PerfilAnalyticsClient] ✅ Componente montado en cliente');
         setMounted(true);
     }, []);
 
@@ -119,28 +109,8 @@ export function PerfilAnalyticsClient({
     };
 
     // Validar que los datos sean válidos
-    useEffect(() => {
-        console.log('[PerfilAnalyticsClient] 📊 Estado actual de datos:', {
-            hasSummaryData: !!summaryData,
-            hasTopContentData: !!topContentData,
-            summaryProfile: !!summaryData?.profile,
-            summaryPosts: !!summaryData?.posts,
-            topContentPosts: topContentData?.posts?.length || 0,
-            profileViews: summaryData?.profile?.totalViews || 0,
-        });
-        console.log('[PerfilAnalyticsClient] 🎨 Renderizando AnalyticsOverviewCards con datos:', {
-            profile: summaryData?.profile,
-            posts: summaryData?.posts,
-            portfolios: summaryData?.portfolios,
-            offers: summaryData?.offers,
-        });
-    }, [summaryData, topContentData]);
 
     if (!summaryData || !topContentData) {
-        console.error('[PerfilAnalyticsClient] ❌ Datos faltantes:', {
-            summaryData: !!summaryData,
-            topContentData: !!topContentData,
-        });
         return (
             <div className="text-center py-12">
                 <p className="text-zinc-400">No hay datos disponibles</p>
@@ -150,22 +120,12 @@ export function PerfilAnalyticsClient({
 
     // Validar estructura de datos
     if (!summaryData.profile || !topContentData.posts) {
-        console.error('[PerfilAnalyticsClient] ❌ Estructura de datos inválida:', {
-            summaryData: !!summaryData,
-            summaryProfile: !!summaryData?.profile,
-            topContentData: !!topContentData,
-            topContentPosts: !!topContentData?.posts,
-            summaryKeys: summaryData ? Object.keys(summaryData) : [],
-            topContentKeys: topContentData ? Object.keys(topContentData) : [],
-        });
         return (
             <div className="text-center py-12">
                 <p className="text-zinc-400">Error en la estructura de datos</p>
             </div>
         );
     }
-
-    console.log('[PerfilAnalyticsClient] ✅ Datos válidos, renderizando UI');
 
     return (
         <div className="space-y-8">
