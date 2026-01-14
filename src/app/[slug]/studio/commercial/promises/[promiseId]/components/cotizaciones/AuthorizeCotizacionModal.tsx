@@ -1217,7 +1217,6 @@ export function AuthorizeCotizacionModal({
           onClose={() => setShowTemplateSelector(false)}
           onSelect={handleTemplateSelected}
           studioSlug={studioSlug}
-          eventTypeId={promiseData?.event_type_id}
           selectedTemplateId={selectedTemplate?.id}
         />
       )}

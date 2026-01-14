@@ -1125,7 +1125,6 @@ export function PromiseClosingProcessCard({
         onClose={() => setShowContratoModal(false)}
         onSelect={handleTemplateSelected}
         studioSlug={studioSlug}
-        eventTypeId={eventTypeId || undefined}
       />
 
       {/* Modal Pago */}

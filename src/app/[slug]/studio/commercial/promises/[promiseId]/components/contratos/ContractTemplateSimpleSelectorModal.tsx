@@ -13,7 +13,6 @@ interface ContractTemplateSimpleSelectorModalProps {
   onClose: () => void;
   onSelect: (template: ContractTemplate) => void;
   studioSlug: string;
-  eventTypeId?: string;
   selectedTemplateId?: string | null;
 }
 
@@ -22,7 +21,6 @@ export function ContractTemplateSimpleSelectorModal({
   onClose,
   onSelect,
   studioSlug,
-  eventTypeId,
   selectedTemplateId,
 }: ContractTemplateSimpleSelectorModalProps) {
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
@@ -36,14 +34,11 @@ export function ContractTemplateSimpleSelectorModal({
       // Primero intentar con filtro de activas
       let result = await getContractTemplates(studioSlug, {
         isActive: true,
-        ...(eventTypeId && { eventTypeId }),
       });
 
       // Si no hay plantillas activas, intentar sin filtro de activas
       if (result.success && result.data && result.data.length === 0) {
-        result = await getContractTemplates(studioSlug, {
-          ...(eventTypeId && { eventTypeId }),
-        });
+        result = await getContractTemplates(studioSlug);
       }
 
       // Si aún no hay plantillas, intentar crear una por defecto
@@ -56,7 +51,6 @@ export function ContractTemplateSimpleSelectorModal({
             // Recargar plantillas después de crear la default
             result = await getContractTemplates(studioSlug, {
               isActive: true,
-              ...(eventTypeId && { eventTypeId }),
             });
           }
         } catch (createError) {
@@ -86,7 +80,7 @@ export function ContractTemplateSimpleSelectorModal({
     } finally {
       setLoading(false);
     }
-  }, [studioSlug, eventTypeId]);
+  }, [studioSlug]);
 
   useEffect(() => {
     if (isOpen) {
@@ -214,7 +208,6 @@ export function ContractTemplateSimpleSelectorModal({
         isOpen={showManagerModal}
         onClose={handleManagerModalClose}
         studioSlug={studioSlug}
-        eventTypeId={eventTypeId}
       />
     </>
   );
