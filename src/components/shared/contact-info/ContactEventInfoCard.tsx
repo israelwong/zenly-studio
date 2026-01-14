@@ -100,6 +100,7 @@ interface ContactEventInfoCardProps {
     event_type_id: string | null;
     event_location: string | null;
     event_name?: string | null; // Nombre del evento (opcional)
+    duration_hours?: number | null; // Duración del evento en horas
     interested_dates: string[] | null;
     acquisition_channel_id: string | null;
     social_network_id: string | null;
@@ -441,6 +442,20 @@ export function ContactEventInfoCard({
         address: contact.address !== undefined ? contact.address : prev.address,
       }));
 
+      // Actualizar datos del evento si vienen en el evento
+      if (contact.event_type_id !== undefined ||
+        contact.event_location !== undefined ||
+        contact.event_name !== undefined ||
+        contact.duration_hours !== undefined) {
+        setEventData((prev) => ({
+          ...prev,
+          event_type_id: contact.event_type_id !== undefined ? contact.event_type_id : prev.event_type_id,
+          event_location: contact.event_location !== undefined ? contact.event_location : prev.event_location,
+          event_name: contact.event_name !== undefined ? contact.event_name : prev.event_name,
+          duration_hours: contact.duration_hours !== undefined ? contact.duration_hours : prev.duration_hours,
+        }));
+      }
+
       // Actualizar datos de adquisición si vienen en el evento
       if (contact.acquisition_channel_id !== undefined ||
         contact.social_network_id !== undefined ||
@@ -470,6 +485,8 @@ export function ContactEventInfoCard({
   }, [initialContactData]);
 
   useEffect(() => {
+    // Actualizar eventData cuando cambian las props iniciales
+    // Esto asegura que duration_hours se actualice cuando cambia desde el contexto
     setEventData(initialEventData);
   }, [initialEventData]);
 
@@ -575,6 +592,7 @@ export function ContactEventInfoCard({
                 ...prev,
                 event_name: promiseNew.name || prev.event_name,
                 event_location: promiseNew.event_location !== undefined ? promiseNew.event_location : prev.event_location,
+                duration_hours: promiseNew.duration_hours !== undefined ? promiseNew.duration_hours : prev.duration_hours,
               }));
             }
           });
@@ -788,18 +806,6 @@ export function ContactEventInfoCard({
               </div>
             )}
 
-            {/* Duración del Evento */}
-            {eventData.duration_hours ? (
-              <div>
-                <label className="text-xs font-medium text-zinc-400 block mb-1">
-                  Duración del Evento
-                </label>
-                <p className="text-sm text-zinc-200">
-                  {eventData.duration_hours} {eventData.duration_hours === 1 ? 'hora' : 'horas'}
-                </p>
-              </div>
-            ) : null}
-
             {/* Locación / Sede */}
             {eventData.event_location ? (
               <div>
@@ -823,6 +829,20 @@ export function ContactEventInfoCard({
                 <p className="text-sm text-zinc-400 italic">No especificada</p>
               </div>
             )}
+
+            {/* Duración del Evento */}
+            <div>
+              <label className="text-xs font-medium text-zinc-400 block mb-1">
+                Duración del Evento
+              </label>
+              {eventData.duration_hours ? (
+                <p className="text-sm text-zinc-200">
+                  {eventData.duration_hours} {eventData.duration_hours === 1 ? 'hora' : 'horas'}
+                </p>
+              ) : (
+                <p className="text-sm text-zinc-400 italic">No definida</p>
+              )}
+            </div>
           </div>
 
           {/* Canal de Adquisición (solo para promesas) */}
@@ -911,6 +931,7 @@ export function ContactEventInfoCard({
               event_type_id: promiseData.event_type_id || undefined,
               event_location: promiseData.event_location || undefined,
               event_name: promiseData.event_name || undefined,
+              duration_hours: eventData.duration_hours ?? promiseData.duration_hours ?? undefined,
               // Si es evento y hay event_date, convertir a formato YYYY-MM-DD (sin cambios por zona horaria)
               interested_dates: context === 'event' && eventData.event_date
                 ? (() => {

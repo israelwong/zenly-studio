@@ -696,6 +696,7 @@ export function ContactEventFormModal({
                             event_type_id: result.data.event_type_id,
                             event_name: result.data.event_name,
                             event_location: result.data.event_location,
+                            duration_hours: result.data.duration_hours,
                             event_type: result.data.event_type,
                             interested_dates: result.data.interested_dates,
                             event_date: result.data.event_date,

@@ -217,6 +217,7 @@ export default function PromiseCierrePage() {
                 event_type_id: contextPromiseData.event_type_id,
                 event_location: contextPromiseData.event_location || null,
                 event_name: contextPromiseData.event_name || null,
+                duration_hours: contextPromiseData.duration_hours ?? null,
                 interested_dates: contextPromiseData.interested_dates,
                 acquisition_channel_id: contextPromiseData.acquisition_channel_id || null,
                 social_network_id: contextPromiseData.social_network_id || null,
