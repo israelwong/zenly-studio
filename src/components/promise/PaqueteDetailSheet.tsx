@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { X, Send, Image as ImageIcon, Video, Images } from 'lucide-react';
+import { X, Send, Image as ImageIcon, Video, Images, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 import { ZenButton, SeparadorZen } from '@/components/ui/zen';
 import type { PublicPaquete } from '@/types/public-promise';
 import { PublicServiciosTree } from './PublicServiciosTree';
@@ -384,6 +385,19 @@ export function PaqueteDetailSheet({
           {condicionesComerciales.length > 0 && terminosCondiciones.length > 0 && (
             <TerminosCondiciones terminos={terminosCondiciones} />
           )}
+
+          {/* Aviso de privacidad */}
+          <div className="pt-4 mt-4 border-t border-zinc-800/50 pb-0">
+            <Link
+              href={`/${studioSlug}/aviso-privacidad`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
+            >
+              <span>Ver aviso de privacidad</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
         </div>
 
         {/* Footer */}

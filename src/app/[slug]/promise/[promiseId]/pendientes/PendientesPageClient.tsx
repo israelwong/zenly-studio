@@ -274,20 +274,18 @@ export function PendientesPageClient({
     onSettingsUpdated: handleSettingsUpdated,
   });
 
-  // Manejar éxito de autorización - redirigir a cierre
+  // Redirigir a cierre cuando el proceso esté completado
+  // El overlay se mantiene abierto hasta que ocurra la redirección
+  const redirectPath = `/${studioSlug}/promise/${promiseId}/cierre`;
   useEffect(() => {
-    if (onSuccess) {
-      const originalOnSuccess = onSuccess;
-      const wrappedOnSuccess = () => {
-        originalOnSuccess();
-        // Redirigir a cierre después de un breve delay para que el overlay se muestre
-        setTimeout(() => {
-          router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
-        }, 100);
-      };
-      // No podemos modificar directamente, pero podemos escuchar el evento
+    if (progressStep === 'completed' && showProgressOverlay) {
+      // Pequeño delay para asegurar que el proceso esté completamente terminado
+      const timer = setTimeout(() => {
+        router.push(redirectPath);
+      }, 300);
+      return () => clearTimeout(timer);
     }
-  }, [onSuccess, router, studioSlug, promiseId]);
+  }, [progressStep, showProgressOverlay, router, redirectPath]);
 
   // Filtrar condiciones comerciales según settings en tiempo real
   const condicionesFiltradas = useMemo(() => {

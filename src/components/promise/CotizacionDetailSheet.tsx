@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images } from 'lucide-react';
+import Link from 'next/link';
+import { X, CheckCircle2, AlertCircle, Tag as TagIcon, Image as ImageIcon, Video, Images, ExternalLink } from 'lucide-react';
 import { ZenButton, ZenBadge, SeparadorZen } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { PublicServiciosTree } from './PublicServiciosTree';
@@ -525,6 +526,19 @@ export function CotizacionDetailSheet({
           {condicionesComerciales.length > 0 && terminosCondiciones.length > 0 && (
             <TerminosCondiciones terminos={terminosCondiciones} />
           )}
+
+          {/* Aviso de privacidad */}
+          <div className="pt-4 mt-4 border-t border-zinc-800/50 pb-0">
+            <Link
+              href={`/${studioSlug}/aviso-privacidad`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
+            >
+              <span>Ver aviso de privacidad</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
         </div>
 
         {/* Footer */}
@@ -571,38 +585,38 @@ export function CotizacionDetailSheet({
             // Si está en negociación, calcular precio con la condición definida
             currentCotizacion.status === 'negociacion' && currentCotizacion.condiciones_comerciales?.id
               ? (() => {
-                  const condicion = currentCotizacion.condiciones_comerciales;
-                  if (!condicion) return precioCalculado;
+                const condicion = currentCotizacion.condiciones_comerciales;
+                if (!condicion) return precioCalculado;
 
-                  const precioBase = finalPrice;
-                  const descuentoCondicion = condicion.discount_percentage ?? 0;
-                  const precioConDescuento = descuentoCondicion > 0
-                    ? precioBase - (precioBase * descuentoCondicion) / 100
-                    : precioBase;
+                const precioBase = finalPrice;
+                const descuentoCondicion = condicion.discount_percentage ?? 0;
+                const precioConDescuento = descuentoCondicion > 0
+                  ? precioBase - (precioBase * descuentoCondicion) / 100
+                  : precioBase;
 
-                  const advanceType: 'percentage' | 'fixed_amount' = (condicion.advance_type === 'fixed_amount' || condicion.advance_type === 'percentage')
-                    ? condicion.advance_type
-                    : 'percentage';
-                  const anticipo = advanceType === 'fixed_amount' && condicion.advance_amount
-                    ? condicion.advance_amount
-                    : (condicion.advance_percentage ?? 0) > 0
-                      ? (precioConDescuento * (condicion.advance_percentage ?? 0)) / 100
-                      : 0;
-                  const anticipoPorcentaje = advanceType === 'percentage' ? (condicion.advance_percentage ?? 0) : null;
-                  const anticipoMontoFijo: number | null = advanceType === 'fixed_amount' ? (condicion.advance_amount ?? null) : null;
-                  const diferido = precioConDescuento - anticipo;
+                const advanceType: 'percentage' | 'fixed_amount' = (condicion.advance_type === 'fixed_amount' || condicion.advance_type === 'percentage')
+                  ? condicion.advance_type
+                  : 'percentage';
+                const anticipo = advanceType === 'fixed_amount' && condicion.advance_amount
+                  ? condicion.advance_amount
+                  : (condicion.advance_percentage ?? 0) > 0
+                    ? (precioConDescuento * (condicion.advance_percentage ?? 0)) / 100
+                    : 0;
+                const anticipoPorcentaje = advanceType === 'percentage' ? (condicion.advance_percentage ?? 0) : null;
+                const anticipoMontoFijo: number | null = advanceType === 'fixed_amount' ? (condicion.advance_amount ?? null) : null;
+                const diferido = precioConDescuento - anticipo;
 
-                  return {
-                    precioBase,
-                    descuentoCondicion,
-                    precioConDescuento,
-                    advanceType,
-                    anticipoPorcentaje,
-                    anticipoMontoFijo,
-                    anticipo,
-                    diferido,
-                  };
-                })()
+                return {
+                  precioBase,
+                  descuentoCondicion,
+                  precioConDescuento,
+                  advanceType,
+                  anticipoPorcentaje,
+                  anticipoMontoFijo,
+                  anticipo,
+                  diferido,
+                };
+              })()
               : precioCalculado
           }
           showPackages={showPackages}

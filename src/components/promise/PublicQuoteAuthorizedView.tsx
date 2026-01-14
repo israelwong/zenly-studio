@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle2, Building2, Copy, Check } from 'lucide-react';
 import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
 import { PublicPromiseDataForm } from '@/components/shared/promise/PublicPromiseDataForm';
@@ -14,6 +14,7 @@ import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { toast } from 'sonner';
 import type { PublicCotizacion } from '@/types/public-promise';
+import confetti from 'canvas-confetti';
 
 interface PublicQuoteAuthorizedViewProps {
   cotizacion: PublicCotizacion;
@@ -60,6 +61,7 @@ export function PublicQuoteAuthorizedView({
   const [bankInfo, setBankInfo] = useState<{ banco?: string | null; titular?: string | null; clabe?: string | null } | null>(null);
   const [loadingBankInfo, setLoadingBankInfo] = useState(false);
   const [copiedClabe, setCopiedClabe] = useState(false);
+  const confettiFiredRef = useRef(false);
 
   // Estado separado para el contrato (se actualiza independientemente)
   const [contractData, setContractData] = useState<{
@@ -100,19 +102,19 @@ export function PublicQuoteAuthorizedView({
   // Obtener condiciones comerciales (priorizar desde contract, sino desde cotizacion directamente)
   // Esto cubre el caso cuando el contrato fue generado manualmente por el estudio
   // También considerar condiciones comerciales directamente de la cotización si tiene campos completos (ej: negociación)
-  const condicionesComerciales = currentContract?.condiciones_comerciales || 
-    (cotizacion.condiciones_comerciales && 
-     'id' in cotizacion.condiciones_comerciales && 
-     'advance_type' in cotizacion.condiciones_comerciales
+  const condicionesComerciales = currentContract?.condiciones_comerciales ||
+    (cotizacion.condiciones_comerciales &&
+      'id' in cotizacion.condiciones_comerciales &&
+      'advance_type' in cotizacion.condiciones_comerciales
       ? {
-          id: cotizacion.condiciones_comerciales.id!,
-          name: cotizacion.condiciones_comerciales.name!,
-          description: cotizacion.condiciones_comerciales.description ?? null,
-          advance_percentage: cotizacion.condiciones_comerciales.advance_percentage ?? null,
-          advance_type: cotizacion.condiciones_comerciales.advance_type!,
-          advance_amount: cotizacion.condiciones_comerciales.advance_amount ?? null,
-          discount_percentage: cotizacion.condiciones_comerciales.discount_percentage ?? null,
-        }
+        id: cotizacion.condiciones_comerciales.id!,
+        name: cotizacion.condiciones_comerciales.name!,
+        description: cotizacion.condiciones_comerciales.description ?? null,
+        advance_percentage: cotizacion.condiciones_comerciales.advance_percentage ?? null,
+        advance_type: cotizacion.condiciones_comerciales.advance_type!,
+        advance_amount: cotizacion.condiciones_comerciales.advance_amount ?? null,
+        discount_percentage: cotizacion.condiciones_comerciales.discount_percentage ?? null,
+      }
       : null);
 
   // Cargar contrato inicialmente si no está disponible
@@ -130,6 +132,30 @@ export function PublicQuoteAuthorizedView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Solo al montar
+
+  // Efecto Confetti: Disparar celebración solo una vez al ingresar a la página
+  // Solo se dispara cuando la cotización está recién autorizada (en_cierre pero sin contrato firmado)
+  useEffect(() => {
+    if (confettiFiredRef.current) return;
+
+    // Solo disparar confetti si estamos en estado de cierre (recién autorizado)
+    // y el contrato aún no está firmado (primera vez que ven esta página)
+    if (isEnCierre && !isContractSigned) {
+      confettiFiredRef.current = true;
+
+      // Delay de 1 segundo para que la página cargue completamente y sea más impactante
+      const timer = setTimeout(() => {
+        // Disparar confetti desde el centro superior de la pantalla
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.3 },
+        });
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isEnCierre, isContractSigned]);
 
   // Cargar información bancaria automáticamente cuando el contrato esté firmado
   useEffect(() => {
@@ -349,84 +375,54 @@ export function PublicQuoteAuthorizedView({
   return (
     <>
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header del proceso */}
+        {/* Header emotivo de celebración */}
         <div className="mb-8 text-center">
-          <h2 className="text-2xl font-bold text-zinc-100 mb-2">
-            Proceso de Contratación
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/20 mb-4 animate-pulse">
+            <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+          </div>
+          <h2 className="text-3xl font-bold text-zinc-100 mb-3">
+            ¡Fecha Reservada con Éxito!
           </h2>
-          <p className="text-zinc-400">
-            Sigue estos 3 pasos para completar tu contratación
+          <p className="text-lg text-zinc-400">
+            Tu evento ha quedado pre-agendado. Solo falta un paso para oficializarlo.
           </p>
         </div>
 
-        {/* Flujo vertical con pasos */}
+        {/* Flujo reorganizado: Paso principal destacado */}
         <div className="relative space-y-6">
-          {/* PASO 1: Cotización Autorizada */}
-          <div className="relative">
-            {/* Línea conectora al siguiente paso - verde porque está completado */}
-            <div className="absolute left-[19px] top-10 w-0.5 h-[calc(100%+1.5rem)] bg-emerald-500/30 z-0" />
-
-            <div className="flex items-start gap-4">
-              {/* Número del paso */}
-              <div className="shrink-0 w-10 h-10 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center relative z-10">
-                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-              </div>
-
-              {/* Contenido */}
-              <div className="flex-1 min-w-0">
-                <div className="mb-2">
-                  <h3 className="text-lg font-semibold text-zinc-100">
-                    Paso 1: Cotización Autorizada
-                  </h3>
-                  <p className="text-sm text-zinc-400">
-                    Has seleccionado tu cotización y condiciones comerciales
-                  </p>
-                </div>
-                <PublicQuoteFinancialCard
-                  cotizacionName={cotizacion.name}
-                  cotizacionDescription={cotizacion.description}
-                  cotizacionPrice={cotizacion.price}
-                  cotizacionDiscount={cotizacion.discount}
-                  condicionesComerciales={condicionesComerciales}
-                  negociacionPrecioOriginal={cotizacion.negociacion_precio_original}
-                  negociacionPrecioPersonalizado={cotizacion.negociacion_precio_personalizado}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* PASO 2: Firma de Contrato */}
+          {/* PASO PRINCIPAL: Firma de Contrato */}
           {(isContractGenerated || isEnCierre) && (
             <div className="relative">
-              {/* Línea conectora al siguiente paso - verde si firmado, azul si pendiente */}
-              <div className={`absolute left-[19px] top-10 w-0.5 h-[calc(100%+1.5rem)] z-0 ${isContractSigned ? 'bg-emerald-500/30' : 'bg-blue-500/30'
-                }`} />
+              {/* Línea conectora al siguiente paso - solo si el contrato está firmado */}
+              {isContractSigned && (
+                <div className="absolute left-[19px] top-10 w-0.5 h-[calc(100%+1.5rem)] bg-emerald-500/30 z-0" />
+              )}
 
               <div className="flex items-start gap-4">
-                {/* Número del paso */}
-                <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative z-10 ${isContractSigned
-                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                  : 'bg-blue-500/20 border-2 border-blue-500'
+                {/* Número del paso - más grande y destacado */}
+                <div className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center relative z-10 transition-all duration-300 ${isContractSigned
+                  ? 'bg-emerald-500/20 border-2 border-emerald-500 scale-110'
+                  : 'bg-blue-500/20 border-2 border-blue-500 ring-2 ring-blue-500/30'
                   }`}>
                   {isContractSigned ? (
-                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                    <CheckCircle2 className="h-6 w-6 text-emerald-400" />
                   ) : (
-                    <span className="text-sm font-bold text-blue-400">2</span>
+                    <span className="text-base font-bold text-blue-400">1</span>
                   )}
                 </div>
 
                 {/* Contenido */}
                 <div className="flex-1 min-w-0">
-                  <div className="mb-2">
-                    <h3 className="text-lg font-semibold text-zinc-100">
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-zinc-100 mb-1">
                       {isContractSigned
-                        ? 'Paso 2: Firma de contrato'
-                        : 'Paso 2: Firma de contrato pendiente'}
+                        ? 'Contrato Firmado ✓'
+                        : 'Firma tu Contrato Digital'}
                     </h3>
                     <p className="text-sm text-zinc-400">
                       {isContractSigned
-                        ? 'Contrato firmado exitosamente'
-                        : 'Revisa y firma tu contrato digital'}
+                        ? '¡Excelente! Tu contrato ha sido firmado exitosamente.'
+                        : 'Revisa y firma tu contrato digital para oficializar tu reserva'}
                     </p>
                   </div>
                   <PublicContractCard
@@ -442,128 +438,110 @@ export function PublicQuoteAuthorizedView({
             </div>
           )}
 
-          {/* PASO 3: Realiza tu Pago */}
-          <div className="relative">
-            <div className="flex items-start gap-4">
-              {/* Número del paso */}
-              <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative z-10 ${isContractSigned
-                ? 'bg-blue-500/20 border-2 border-blue-500'
-                : 'bg-zinc-800 border-2 border-zinc-700'
-                }`}>
-                <span className={`text-sm font-bold ${isContractSigned ? 'text-blue-400' : 'text-zinc-500'
-                  }`}>3</span>
-              </div>
-
-              {/* Contenido */}
-              <div className="flex-1 min-w-0">
-                <div className="mb-2">
-                  <h3 className="text-lg font-semibold text-zinc-100">
-                    Paso 3: Realiza tu Pago
-                  </h3>
-                  <p className="text-sm text-zinc-400">
-                    Realiza el pago de tu anticipo y confirma tu compromiso con el estudio
-                  </p>
+          {/* PASO 2: Realiza tu Pago - SOLO visible si el contrato está firmado */}
+          {isContractSigned && (
+            <div className="relative">
+              <div className="flex items-start gap-4">
+                {/* Número del paso */}
+                <div className="shrink-0 w-10 h-10 rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center relative z-10">
+                  <span className="text-sm font-bold text-blue-400">2</span>
                 </div>
-                <ZenCard>
-                  <div className="p-6">
-                    {!isContractSigned ? (
-                      <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                        <p className="text-sm text-amber-400">
-                          ⚠️ Primero debes firmar el contrato para continuar con el pago
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {loadingBankInfo ? (
-                          <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-5 w-5 animate-spin text-blue-400 mr-2" />
-                            <p className="text-sm text-zinc-400">Cargando información bancaria...</p>
-                          </div>
-                        ) : bankInfo ? (
-                          <div className="space-y-4">
-                            <p className="text-sm text-zinc-400">
-                              Datos bancarios de <span className="text-zinc-200 font-medium">{studio.studio_name}</span>
-                            </p>
 
-                            <div className="space-y-3 text-sm">
-                              {bankInfo.banco && (
-                                <div>
-                                  <span className="text-zinc-400">Banco:</span>
-                                  <p className="text-zinc-100 font-medium mt-1">{bankInfo.banco}</p>
-                                </div>
-                              )}
+                {/* Contenido */}
+                <div className="flex-1 min-w-0">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-zinc-100 mb-1">
+                      Realiza tu Anticipo
+                    </h3>
+                    <p className="text-sm text-zinc-400">
+                      ¡Listo! Ahora puedes realizar tu anticipo a esta cuenta:
+                    </p>
+                  </div>
+                  <ZenCard>
+                    <div className="p-6">
+                      {loadingBankInfo ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-5 w-5 animate-spin text-blue-400 mr-2" />
+                          <p className="text-sm text-zinc-400">Cargando información bancaria...</p>
+                        </div>
+                      ) : bankInfo ? (
+                        <div className="space-y-4">
+                          <div className="space-y-3 text-sm">
+                            {bankInfo.banco && (
+                              <div>
+                                <span className="text-zinc-400">Banco:</span>
+                                <p className="text-zinc-100 font-medium mt-1">{bankInfo.banco}</p>
+                              </div>
+                            )}
 
-                              {bankInfo.titular && (
-                                <div>
-                                  <span className="text-zinc-400">Titular:</span>
-                                  <p className="text-zinc-100 font-medium mt-1">{bankInfo.titular}</p>
-                                </div>
-                              )}
+                            {bankInfo.titular && (
+                              <div>
+                                <span className="text-zinc-400">Titular:</span>
+                                <p className="text-zinc-100 font-medium mt-1">{bankInfo.titular}</p>
+                              </div>
+                            )}
 
-                              {bankInfo.clabe ? (
-                                <div>
-                                  <span className="text-zinc-400">CLABE Interbancaria:</span>
-                                  <div className="flex items-center gap-2 mt-1 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
-                                    <p className="text-zinc-100 font-mono text-base font-bold flex-1">
-                                      {bankInfo.clabe}
-                                    </p>
-                                    <ZenButton
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        navigator.clipboard.writeText(bankInfo.clabe!);
-                                        setCopiedClabe(true);
-                                        toast.success('CLABE copiada al portapapeles');
-                                        setTimeout(() => setCopiedClabe(false), 2000);
-                                      }}
-                                      className="shrink-0"
-                                    >
-                                      {copiedClabe ? (
-                                        <Check className="h-4 w-4 text-emerald-400" />
-                                      ) : (
-                                        <Copy className="h-4 w-4" />
-                                      )}
-                                    </ZenButton>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                                  <p className="text-sm text-yellow-400">
-                                    Información bancaria no disponible. Contacta al estudio.
+                            {bankInfo.clabe ? (
+                              <div>
+                                <span className="text-zinc-400">CLABE Interbancaria:</span>
+                                <div className="flex items-center gap-2 mt-1 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                                  <p className="text-zinc-100 font-mono text-base font-bold flex-1">
+                                    {bankInfo.clabe}
                                   </p>
+                                  <ZenButton
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(bankInfo.clabe!);
+                                      setCopiedClabe(true);
+                                      toast.success('CLABE copiada al portapapeles');
+                                      setTimeout(() => setCopiedClabe(false), 2000);
+                                    }}
+                                    className="shrink-0"
+                                  >
+                                    {copiedClabe ? (
+                                      <Check className="h-4 w-4 text-emerald-400" />
+                                    ) : (
+                                      <Copy className="h-4 w-4" />
+                                    )}
+                                  </ZenButton>
                                 </div>
-                              )}
-                            </div>
-
-                            {bankInfo.clabe && (
-                              <div className="pt-4 border-t border-zinc-800">
-                                <p className="text-xs text-zinc-500">
-                                  💡 Usa esta CLABE para realizar transferencias SPEI. Recuerda guardar tu comprobante de pago.
+                              </div>
+                            ) : (
+                              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                <p className="text-sm text-yellow-400">
+                                  Información bancaria no disponible. Contacta al estudio.
                                 </p>
                               </div>
                             )}
                           </div>
-                        ) : (
-                          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                            <p className="text-sm text-yellow-400">
-                              No se pudo cargar la información bancaria. Contacta al estudio.
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </ZenCard>
-                {isContractSigned && (
+
+                          {bankInfo.clabe && (
+                            <div className="pt-4 border-t border-zinc-800">
+                              <p className="text-xs text-zinc-500">
+                                💡 Usa esta CLABE para realizar transferencias SPEI. Recuerda guardar tu comprobante de pago.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                          <p className="text-sm text-yellow-400">
+                            No se pudo cargar la información bancaria. Contacta al estudio.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </ZenCard>
                   <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                     <p className="text-sm text-blue-400 text-center">
-                      ✅ Confirmado tu pago por el estudio tendrás acceso a tu portal de cliente
+                      ✅ Una vez confirmado tu pago por el estudio, tendrás acceso a tu portal de cliente
                     </p>
                   </div>
-                )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

@@ -28,6 +28,14 @@ export function CondicionesFinancierasResumen({
   negociacionPrecioOriginal,
   negociacionPrecioPersonalizado,
 }: CondicionesFinancierasResumenProps) {
+  // Función helper para formatear dinero (debe estar antes de cualquier uso)
+  const formatMoney = (amount: number) => {
+    return amount.toLocaleString('es-MX', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
   // Verificar si es modo negociación
   // Solo mostrar desglose de negociación si existe precio negociado válido (> 0)
   const precioNegociadoNum = negociacionPrecioPersonalizado !== null && negociacionPrecioPersonalizado !== undefined
@@ -163,13 +171,6 @@ export function CondicionesFinancierasResumen({
   }
 
   const diferido = subtotal - anticipoMonto;
-
-  const formatMoney = (amount: number) => {
-    return amount.toLocaleString('es-MX', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
 
   return (
     <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-5 space-y-3">
