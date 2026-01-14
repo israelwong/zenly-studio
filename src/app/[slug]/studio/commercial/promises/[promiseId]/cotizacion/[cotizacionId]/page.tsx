@@ -7,7 +7,7 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescriptio
 import { CotizacionForm } from '../../../components/CotizacionForm';
 import { archiveCotizacion, deleteCotizacion, getCotizacionById, pasarACierre } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { obtenerCondicionComercial } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
-import { ClosingProcessInfoModal, getClosingProcessInfoDismissed } from '../../components/cierre/ClosingProcessInfoModal';
+import { ClosingProcessInfoModal, getClosingProcessInfoDismissed } from '../../cierre/components/ClosingProcessInfoModal';
 import { ZenBadge } from '@/components/ui/zen';
 import { toast } from 'sonner';
 import { CheckCircle } from 'lucide-react';

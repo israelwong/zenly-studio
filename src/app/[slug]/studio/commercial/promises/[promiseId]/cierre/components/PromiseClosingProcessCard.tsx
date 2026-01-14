@@ -19,9 +19,9 @@ import { ContactEventFormModal } from '@/components/shared/contact-info';
 import { cancelarCierre, autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
 import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosCondicionesCierre, obtenerDatosPagoCierre, autorizarYCrearEvento } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
-import { CondicionesComercialeSelectorSimpleModal } from '../condiciones-comerciales/CondicionesComercialeSelectorSimpleModal';
-import { ContractTemplateSimpleSelectorModal } from '../contratos/ContractTemplateSimpleSelectorModal';
-import { ContractPreviewForPromiseModal } from '../contratos/ContractPreviewForPromiseModal';
+import { CondicionesComercialeSelectorSimpleModal } from '../../components/condiciones-comerciales/CondicionesComercialeSelectorSimpleModal';
+import { ContractTemplateSimpleSelectorModal } from './contratos/ContractTemplateSimpleSelectorModal';
+import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { ContratoGestionCard } from './ContratoGestionCard';
 import { ContratoSection } from './ContratoSection';
 import { CondicionesSection } from './CondicionesSection';
@@ -36,7 +36,7 @@ import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/coti
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
 import { ClosingProcessInfoModal } from './ClosingProcessInfoModal';
-import { PromiseShareOptionsModal } from '../PromiseShareOptionsModal';
+import { PromiseShareOptionsModal } from '../../components/PromiseShareOptionsModal';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 
 interface PromiseClosingProcessCardProps {
@@ -304,6 +304,8 @@ export function PromiseClosingProcessCard({
         setShowCancelModal(false);
         // Notificar al padre para actualizar el panel de cotizaciones
         onCierreCancelado?.(cotizacion.id);
+        // Redirigir a la ruta principal (pendiente)
+        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
       } else {
         toast.error(result.error || 'Error al cancelar cierre');
       }

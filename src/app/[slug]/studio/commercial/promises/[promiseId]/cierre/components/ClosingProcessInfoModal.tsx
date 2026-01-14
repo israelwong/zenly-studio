@@ -90,9 +90,6 @@ export function ClosingProcessInfoModal({
                   La cotización cambiará a estado <span className="text-blue-400 font-medium">"En Cierre"</span>
                 </li>
                 <li>
-                  Se <span className="text-amber-400 font-medium">archivarán automáticamente</span> todas las demás cotizaciones pendientes de esta promesa
-                </li>
-                <li>
                   Podrás gestionar el contrato y registro de pago desde el panel de proceso de cierre
                 </li>
                 <li>

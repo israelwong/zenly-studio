@@ -3,22 +3,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { ContactEventInfoCard } from '@/components/shared/contact-info';
-import { PromiseQuotesPanel } from './components/cotizaciones/PromiseQuotesPanel';
-import { PromiseAgendamiento } from './components/eventos/PromiseAgendamiento';
-import { PromiseTags } from './components/PromiseTags';
+import { PromiseClosingProcessCard } from './components/PromiseClosingProcessCard';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
-import { AuthorizeCotizacionModal } from './components/cotizaciones/AuthorizeCotizacionModal';
 import { getPromiseById } from '@/lib/actions/studio/commercial/promises';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
+import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
-export default function PromisePendientePage() {
+export default function PromiseCierrePage() {
   const params = useParams();
   const studioSlug = params.slug as string;
   const promiseId = params.promiseId as string;
 
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
   const [promiseData, setPromiseData] = useState<{
     name: string;
     phone: string;
@@ -41,37 +38,22 @@ export default function PromisePendientePage() {
     referrer_contact_email?: string | null;
   } | null>(null);
   const [contactId, setContactId] = useState<string | null>(null);
-  const [eventoId, setEventoId] = useState<string | null>(null);
-  const [condicionesComerciales, setCondicionesComerciales] = useState<Array<{
-    id: string;
-    name: string;
-    description?: string | null;
-    advance_percentage?: number | null;
-    discount_percentage?: number | null;
-  }>>([]);
-  const [paymentMethods, setPaymentMethods] = useState<Array<{ id: string; name: string }>>([]);
-  const [selectedCotizacion, setSelectedCotizacion] = useState<{
-    id: string;
-    name: string;
-    price: number;
-    status: string;
-    selected_by_prospect: boolean;
-    condiciones_comerciales_id: string | null;
-    condiciones_comerciales?: {
-      id: string;
-      name: string;
-    } | null;
-  } | null>(null);
+  const [cotizacionEnCierre, setCotizacionEnCierre] = useState<CotizacionListItem | null>(null);
+  const [loadingCotizacion, setLoadingCotizacion] = useState(true);
 
-  // Cargar datos de la promesa
+  // Cargar datos de la promesa y cotización en cierre
   useEffect(() => {
-    const loadPromise = async () => {
+    const loadData = async () => {
       if (!promiseId) return;
 
       try {
-        const result = await getPromiseById(promiseId);
-        if (result.success && result.data) {
-          const data = result.data;
+        const [promiseResult, cotizacionesResult] = await Promise.all([
+          getPromiseById(promiseId),
+          getCotizacionesByPromiseId(promiseId),
+        ]);
+
+        if (promiseResult.success && promiseResult.data) {
+          const data = promiseResult.data;
           setPromiseData({
             name: data.contact_name,
             phone: data.contact_phone,
@@ -94,73 +76,27 @@ export default function PromisePendientePage() {
             referrer_contact_email: data.referrer_contact_email ?? null,
           });
           setContactId(data.contact_id);
-          setEventoId(data.evento_id ?? null);
         }
+
+        // Buscar cotización en cierre o aprobada sin evento
+        if (cotizacionesResult.success && cotizacionesResult.data) {
+          const enCierre = cotizacionesResult.data.find(c => c.status === 'en_cierre');
+          const aprobada = cotizacionesResult.data.find(
+            c => (c.status === 'aprobada' || c.status === 'approved') && !c.evento_id
+          );
+          setCotizacionEnCierre(enCierre || aprobada || null);
+        }
+
+        setLoadingCotizacion(false);
       } catch (error) {
-        console.error('Error loading promise:', error);
-        toast.error('Error al cargar la promesa');
+        console.error('Error loading data:', error);
+        toast.error('Error al cargar los datos');
+        setLoadingCotizacion(false);
       }
     };
 
-    loadPromise();
+    loadData();
   }, [promiseId]);
-
-  // Cargar datos necesarios para el modal de autorización
-  useEffect(() => {
-    if (showAuthorizeModal) {
-      loadAuthorizationData();
-    }
-  }, [showAuthorizeModal]);
-
-  const loadAuthorizationData = async () => {
-    try {
-      const { obtenerCondicionesComerciales } = await import('@/lib/actions/studio/config/condiciones-comerciales.actions');
-      const { getPaymentMethodsForAuthorization } = await import('@/lib/actions/studio/commercial/promises/authorize-legacy.actions');
-
-      const [condicionesResult, paymentMethodsResult, cotizacionesResult] = await Promise.all([
-        obtenerCondicionesComerciales(studioSlug),
-        getPaymentMethodsForAuthorization(studioSlug),
-        promiseId ? getCotizacionesByPromiseId(promiseId) : Promise.resolve({ success: false, data: [] }),
-      ]);
-
-      if (condicionesResult.success && condicionesResult.data) {
-        setCondicionesComerciales(condicionesResult.data.map(cc => ({
-          id: cc.id,
-          name: cc.name,
-          description: cc.description,
-          advance_percentage: cc.advance_percentage,
-          discount_percentage: cc.discount_percentage,
-        })));
-      }
-
-      if (paymentMethodsResult.success && paymentMethodsResult.data) {
-        setPaymentMethods(paymentMethodsResult.data);
-      }
-
-      // Encontrar la cotización aprobada
-      if (cotizacionesResult.success && cotizacionesResult.data) {
-        const approvedQuote = cotizacionesResult.data.find(
-          (c) => c.status === 'aprobada' || c.status === 'autorizada' || c.status === 'approved'
-        );
-        if (approvedQuote) {
-          setSelectedCotizacion({
-            id: approvedQuote.id,
-            name: approvedQuote.name,
-            price: approvedQuote.price,
-            status: approvedQuote.status,
-            selected_by_prospect: approvedQuote.selected_by_prospect ?? false,
-            condiciones_comerciales_id: approvedQuote.condiciones_comerciales_id ?? null,
-            condiciones_comerciales: approvedQuote.condiciones_comerciales ? {
-              id: approvedQuote.condiciones_comerciales.id,
-              name: approvedQuote.condiciones_comerciales.name,
-            } : null,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('[loadAuthorizationData] Error:', error);
-    }
-  };
 
   const handleEditSuccess = useCallback(async () => {
     // Recargar datos después de editar
@@ -185,27 +121,49 @@ export default function PromisePendientePage() {
           social_network_id: data.social_network_id ?? null,
           social_network_name: data.social_network_name ?? null,
           referrer_contact_id: data.referrer_contact_id ?? null,
-          referrer_name: data.referrer_name ?? null,
-          referrer_contact_name: data.referrer_contact_name ?? null,
-          referrer_contact_email: data.referrer_contact_email ?? null,
+          referrer_name: data.referrer_name || null,
+          referrer_contact_name: data.referrer_contact_name || null,
+          referrer_contact_email: data.referrer_contact_email || null,
         });
         setContactId(data.contact_id);
-        setEventoId(data.evento_id ?? null);
       }
     } catch (error) {
       console.error('Error reloading promise:', error);
     }
   }, [promiseId]);
 
-  if (!promiseData || !contactId) {
+  const handleCierreCancelado = useCallback(() => {
+    // Recargar cotizaciones cuando se cancela el cierre
+    const reloadCotizaciones = async () => {
+      try {
+        const result = await getCotizacionesByPromiseId(promiseId);
+        if (result.success && result.data) {
+          const enCierre = result.data.find(c => c.status === 'en_cierre');
+          const aprobada = result.data.find(
+            c => (c.status === 'aprobada' || c.status === 'approved') && !c.evento_id
+          );
+          setCotizacionEnCierre(enCierre || aprobada || null);
+        }
+      } catch (error) {
+        console.error('Error reloading cotizaciones:', error);
+      }
+    };
+    reloadCotizaciones();
+  }, [promiseId]);
+
+  if (!promiseData || !contactId || loadingCotizacion) {
+    return null;
+  }
+
+  if (!cotizacionEnCierre) {
     return null;
   }
 
   return (
     <>
       <div className="space-y-6">
-        {/* Layout de 3 columnas: Info + Cotizaciones + Etiquetas */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
+        {/* Layout de 2 columnas: Info + Proceso de Cierre */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
           {/* Columna 1: Información */}
           <div className="lg:col-span-1 flex flex-col h-full">
             <ContactEventInfoCard
@@ -257,14 +215,10 @@ export default function PromisePendientePage() {
             />
           </div>
 
-          {/* Columna 2: Cotizaciones */}
+          {/* Columna 2: Proceso de Cierre */}
           <div className="lg:col-span-1 flex flex-col h-full">
-            <PromiseQuotesPanel
-              studioSlug={studioSlug}
-              promiseId={promiseId}
-              eventTypeId={promiseData.event_type_id || null}
-              isSaved={true}
-              contactId={contactId}
+            <PromiseClosingProcessCard
+              cotizacion={cotizacionEnCierre}
               promiseData={{
                 name: promiseData.name,
                 phone: promiseData.phone,
@@ -273,28 +227,16 @@ export default function PromisePendientePage() {
                 event_date: promiseData.event_date || null,
                 event_name: promiseData.event_name || null,
                 event_type_name: promiseData.event_type_name || null,
+                event_location: promiseData.event_location || null,
+                duration_hours: promiseData.duration_hours ?? null,
               }}
+              studioSlug={studioSlug}
+              promiseId={promiseId}
               isLoadingPromiseData={false}
-              onAuthorizeClick={() => setShowAuthorizeModal(true)}
-            />
-          </div>
-
-          {/* Columna 3: Agendamiento + Etiquetas */}
-          <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-            {/* Agendamiento */}
-            <PromiseAgendamiento
-              studioSlug={studioSlug}
-              promiseId={promiseId}
-              isSaved={true}
-              eventoId={eventoId}
-            />
-
-            {/* Etiquetas */}
-            <PromiseTags
-              studioSlug={studioSlug}
-              promiseId={promiseId}
-              isSaved={true}
-              eventoId={eventoId}
+              onCierreCancelado={handleCierreCancelado}
+              contactId={contactId}
+              eventTypeId={promiseData.event_type_id || null}
+              acquisitionChannelId={promiseData.acquisition_channel_id || null}
             />
           </div>
         </div>
@@ -325,24 +267,6 @@ export default function PromisePendientePage() {
             referrer_name: promiseData.referrer_name || undefined,
           }}
           onSuccess={handleEditSuccess}
-        />
-      )}
-
-      {/* Modal de Autorización */}
-      {showAuthorizeModal && selectedCotizacion && promiseId && (
-        <AuthorizeCotizacionModal
-          isOpen={showAuthorizeModal}
-          onClose={() => setShowAuthorizeModal(false)}
-          cotizacion={selectedCotizacion}
-          promiseId={promiseId}
-          studioSlug={studioSlug}
-          condicionesComerciales={condicionesComerciales}
-          paymentMethods={paymentMethods}
-          onSuccess={() => {
-            setShowAuthorizeModal(false);
-            // Recargar página para reflejar cambios y redirigir si es necesario
-            window.location.reload();
-          }}
         />
       )}
     </>

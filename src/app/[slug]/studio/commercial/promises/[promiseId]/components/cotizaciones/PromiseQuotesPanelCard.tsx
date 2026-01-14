@@ -35,7 +35,7 @@ import {
   type CotizacionListItem,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { AuthorizeCotizacionModal } from './AuthorizeCotizacionModal';
-import { ClosingProcessInfoModal, getClosingProcessInfoDismissed } from '../cierre/ClosingProcessInfoModal';
+import { ClosingProcessInfoModal, getClosingProcessInfoDismissed } from '../../cierre/components/ClosingProcessInfoModal';
 import { getCotizacionClicks } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 
 interface PromiseQuotesPanelCardProps {
@@ -522,6 +522,8 @@ export function PromiseQuotesPanelCard({
         } else {
           onUpdate?.(cotizacion.id);
         }
+        // Redirigir a la ruta de cierre
+        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
       } else {
         toast.error(result.error || 'Error al pasar cotización a cierre');
       }

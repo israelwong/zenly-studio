@@ -2144,6 +2144,7 @@ model studio_cotizaciones {
 model studio_cotizaciones_cierre {
   id                                String    @id @default(cuid())
   cotizacion_id                     String    @unique
+  previous_status                   String?
   condiciones_comerciales_id        String?
   condiciones_comerciales_definidas Boolean   @default(false)
   contract_template_id              String?

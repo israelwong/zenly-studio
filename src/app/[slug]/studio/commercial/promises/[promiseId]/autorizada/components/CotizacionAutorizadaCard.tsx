@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/zen';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { getCondicionesComerciales, getContrato } from '@/lib/actions/studio/commercial/promises/cotizaciones-helpers';
-import { ContractPreviewForPromiseModal } from '../contratos/ContractPreviewForPromiseModal';
+import { ContractPreviewForPromiseModal } from '../../cierre/components/contratos/ContractPreviewForPromiseModal';
 import { PaymentReceipt } from '@/components/shared/payments/PaymentReceipt';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { formatNumber } from '@/lib/actions/utils/formatting';

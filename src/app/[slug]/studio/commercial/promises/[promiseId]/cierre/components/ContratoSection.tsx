@@ -3,7 +3,7 @@
 import React, { memo, useState, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, Loader2, Eye } from 'lucide-react';
 import { ContratoGestionCard } from './ContratoGestionCard';
-import { ContractPreviewForPromiseModal } from '../contratos/ContractPreviewForPromiseModal';
+import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import type { ContractTemplate } from '@/types/contracts';
 

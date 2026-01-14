@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { ZenButton, ZenDialog } from '@/components/ui/zen';
 import { FileText, Eye, Edit2, Trash2, Loader2, Settings, GitBranch } from 'lucide-react';
-import { ContractTemplateSimpleSelectorModal } from '../contratos/ContractTemplateSimpleSelectorModal';
-import { ContractPreviewForPromiseModal } from '../contratos/ContractPreviewForPromiseModal';
+import { ContractTemplateSimpleSelectorModal } from './contratos/ContractTemplateSimpleSelectorModal';
+import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { ContractTemplateManagerModal } from '@/components/shared/contracts/ContractTemplateManagerModal';
 import { updateContractTemplate, getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';

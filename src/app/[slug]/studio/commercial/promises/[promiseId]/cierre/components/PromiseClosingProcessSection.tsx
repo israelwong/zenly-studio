@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from '@/components/ui/zen';
 import { FileText, HelpCircle } from 'lucide-react';
 import { PromiseClosingProcessCard } from './PromiseClosingProcessCard';
-import { CotizacionAutorizadaCard } from './CotizacionAutorizadaCard';
+import { CotizacionAutorizadaCard } from '../../autorizada/components/CotizacionAutorizadaCard';
 import { getCotizacionesByPromiseId, getCotizacionAutorizadaByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';

@@ -1919,7 +1919,7 @@ export async function cancelarCotizacionYEvento(
 /**
  * Pasa una cotizaciรณn al estado "en_cierre"
  * - Cambia el status a 'en_cierre'
- * - Archiva todas las demรกs cotizaciones pendientes de la misma promesa
+ * - Guarda el estado anterior (pendiente o negociacion) para poder restaurarlo al cancelar
  * - Solo puede haber una cotizaciรณn en cierre a la vez por promesa
  */
 export async function pasarACierre(
@@ -1952,9 +1952,9 @@ export async function pasarACierre(
       return { success: false, error: 'Cotizaciรณn no encontrada' };
     }
 
-    // Verificar que la cotizaciรณn estรฉ pendiente
-    if (cotizacion.status !== 'pendiente') {
-      return { success: false, error: 'Solo se pueden pasar a cierre cotizaciones pendientes' };
+    // Verificar que la cotización esté en estado pendiente o negociación
+    if (cotizacion.status !== 'pendiente' && cotizacion.status !== 'negociacion') {
+      return { success: false, error: 'Solo se pueden pasar a cierre cotizaciones pendientes o en negociación' };
     }
 
     // Verificar que no haya otra cotizaciรณn en cierre en la misma promesa
@@ -1977,6 +1977,9 @@ export async function pasarACierre(
       // 1. Pasar cotizaciรณn a cierre
       // Si se pasa manualmente desde el panel, es cliente creado manualmente (selected_by_prospect: false)
       // Si viene del flujo pรบblico, ya tiene selected_by_prospect: true
+      // Guardar el estado anterior antes de cambiarlo
+      const previousStatus = cotizacion.status;
+      
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
@@ -1988,13 +1991,16 @@ export async function pasarACierre(
       });
 
       // 2. Crear registro de cierre limpio (resetear si ya existe)
+      // Guardar el estado anterior para poder restaurarlo al cancelar
       await tx.studio_cotizaciones_cierre.upsert({
         where: { cotizacion_id: cotizacionId },
         create: {
           cotizacion_id: cotizacionId,
+          previous_status: previousStatus,
         },
         update: {
           // Limpiar todos los campos si el registro ya existรญa
+          previous_status: previousStatus, // Actualizar también el estado anterior
           condiciones_comerciales_id: null,
           condiciones_comerciales_definidas: false,
           contract_template_id: null,
@@ -2005,20 +2011,6 @@ export async function pasarACierre(
           pago_monto: null,
           pago_fecha: null,
           pago_metodo_id: null,
-          updated_at: new Date(),
-        },
-      });
-
-      // 3. Archivar todas las demรกs cotizaciones pendientes de la misma promesa
-      await tx.studio_cotizaciones.updateMany({
-        where: {
-          promise_id: cotizacion.promise_id,
-          id: { not: cotizacionId },
-          status: 'pendiente',
-          archived: false,
-        },
-        data: {
-          archived: true,
           updated_at: new Date(),
         },
       });
@@ -2084,18 +2076,27 @@ export async function cancelarCierre(
     }
 
     await prisma.$transaction(async (tx) => {
-      // 1. Regresar cotizaciรณn a pendiente y limpiar selected_by_prospect
+      // 1. Obtener el estado anterior guardado en el registro de cierre
+      const registroCierre = await tx.studio_cotizaciones_cierre.findUnique({
+        where: { cotizacion_id: cotizacionId },
+        select: { previous_status: true },
+      });
+
+      // 2. Restaurar el estado anterior (pendiente o negociacion)
+      // Si no hay registro o no tiene previous_status, usar 'pendiente' por defecto
+      const statusToRestore = registroCierre?.previous_status || 'pendiente';
+
       await tx.studio_cotizaciones.update({
         where: { id: cotizacionId },
         data: {
-          status: 'pendiente',
+          status: statusToRestore,
           selected_by_prospect: false,
           selected_at: null,
           updated_at: new Date(),
         },
       });
 
-      // 2. Eliminar registro de cierre
+      // 3. Eliminar registro de cierre
       await tx.studio_cotizaciones_cierre.deleteMany({
         where: { cotizacion_id: cotizacionId },
       });

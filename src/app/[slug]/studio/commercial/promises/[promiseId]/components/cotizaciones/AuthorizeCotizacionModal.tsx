@@ -32,8 +32,8 @@ import { getPromiseByIdAsPromiseWithContact } from '@/lib/actions/studio/commerc
 import { CondicionComercialSelectorModal } from '../condiciones-comerciales/CondicionComercialSelectorModal';
 import { ResumenCotizacion } from '@/components/shared/cotizaciones';
 import { ContactEventFormModal } from '@/components/shared/contact-info/ContactEventFormModal';
-import { ContractTemplateSimpleSelectorModal } from '../contratos/ContractTemplateSimpleSelectorModal';
-import { ContractPreviewForPromiseModal } from '../contratos/ContractPreviewForPromiseModal';
+import { ContractTemplateSimpleSelectorModal } from '../../cierre/components/contratos/ContractTemplateSimpleSelectorModal';
+import { ContractPreviewForPromiseModal } from '../../cierre/components/contratos/ContractPreviewForPromiseModal';
 import { ContractEditorModal } from '@/components/shared/contracts/ContractEditorModal';
 import { updateContractTemplate, getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import type { ContractTemplate } from '@/types/contracts';

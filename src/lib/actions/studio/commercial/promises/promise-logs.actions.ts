@@ -15,7 +15,7 @@ const createPromiseLogSchema = z.object({
 export type CreatePromiseLogData = z.infer<typeof createPromiseLogSchema>;
 
 /**
- * Tipos de acciones que pueden generar logs autom?ticos
+ * Tipos de acciones que pueden generar logs automáticos
  */
 export type PromiseLogAction =
   | 'promise_created'
@@ -72,24 +72,24 @@ const LOG_ACTIONS: Record<
     return `Email enviado a ${contactName}`;
   },
   quotation_created: (meta) => {
-    const quotationName = (meta?.quotationName as string) || 'cotizaci?n';
+    const quotationName = (meta?.quotationName as string) || 'cotización';
     const price = meta?.price as number;
     const priceFormatted = price ? `$${price.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '';
-    return `Cotizaci?n creada: ${quotationName}${priceFormatted ? ` (${priceFormatted})` : ''}`;
+    return `Cotización creada: ${quotationName}${priceFormatted ? ` (${priceFormatted})` : ''}`;
   },
   quotation_updated: (meta) => {
-    const quotationName = (meta?.quotationName as string) || 'cotizaci?n';
-    return `Cotizaci?n actualizada: ${quotationName}`;
+    const quotationName = (meta?.quotationName as string) || 'cotización';
+    return `Cotización actualizada: ${quotationName}`;
   },
   quotation_deleted: (meta) => {
-    const quotationName = (meta?.quotationName as string) || 'cotizaci?n';
-    return `Cotizaci?n eliminada: ${quotationName}`;
+    const quotationName = (meta?.quotationName as string) || 'cotización';
+    return `Cotización eliminada: ${quotationName}`;
   },
   quotation_authorized: (meta) => {
-    const quotationName = (meta?.quotationName as string) || 'cotizaci?n';
+    const quotationName = (meta?.quotationName as string) || 'cotización';
     const amount = meta?.amount as number;
     const amountFormatted = amount ? `$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '';
-    return `Cotizaci?n autorizada: ${quotationName}${amountFormatted ? ` (${amountFormatted})` : ''}`;
+    return `Cotización autorizada: ${quotationName}${amountFormatted ? ` (${amountFormatted})` : ''}`;
   },
   contact_updated: (meta) => {
     const changes = meta?.changes as string[] || [];
@@ -217,7 +217,7 @@ export async function getPromiseById(
   event_type_name: string | null;
   event_location: string | null;
   event_name: string | null; // Nombre del evento
-  duration_hours: number | null; // Duraci?n del evento en horas
+  duration_hours: number | null; // Duración del evento en horas
   interested_dates: string[] | null;
   event_date: Date | null;
   defined_date: Date | null;
@@ -320,8 +320,8 @@ export async function getPromiseById(
     const hasAuthorizedQuote = !!cotizacionAutorizada;
     const eventoIdFromQuote = cotizacionAutorizada?.evento_id || null;
     
-    // SOLO usar evento_id de la cotizaci?n autorizada (NO usar promise.event directamente)
-    // porque el evento solo se crea cuando se autoriza una cotizaci?n
+    // SOLO usar evento_id de la cotización autorizada (NO usar promise.event directamente)
+    // porque el evento solo se crea cuando se autoriza una cotización
     const eventoIdFinal = eventoIdFromQuote;
     
     // Obtener el status del evento solo si hay cotizaci?n autorizada
@@ -537,8 +537,8 @@ export async function createPromiseLog(
 }
 
 /**
- * Funci?n helper centralizada para registrar acciones autom?ticas
- * Genera el contenido del log basado en el tipo de acci?n y metadata
+ * Función helper centralizada para registrar acciones automáticas
+ * Genera el contenido del log basado en el tipo de acción y metadata
  */
 export async function logPromiseAction(
   studioSlug: string,
@@ -611,7 +611,7 @@ export async function logPromiseAction(
       data: promiseLog,
     };
   } catch (error) {
-    console.error('[PROMISE_LOGS] Error registrando acci?n:', error);
+    console.error('[PROMISE_LOGS] Error registrando acción:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al registrar acci?n',
