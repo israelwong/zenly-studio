@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ContactEventInfoCard } from '@/components/shared/contact-info';
 import { PromiseQuotesPanel } from './components/cotizaciones/PromiseQuotesPanel';
 import { PromiseAgendamiento } from './components/eventos/PromiseAgendamiento';
@@ -15,10 +15,12 @@ import { toast } from 'sonner';
 
 export default function PromisePendientePage() {
   const params = useParams();
+  const router = useRouter();
   const studioSlug = params.slug as string;
   const promiseId = params.promiseId as string;
   const { promiseData: contextPromiseData, isLoading: contextLoading } = usePromiseContext();
 
+  const [isValidating, setIsValidating] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
   const [promiseData, setPromiseData] = useState<{
@@ -153,11 +155,57 @@ export default function PromisePendientePage() {
     window.location.reload();
   }, []);
 
+  // Validar estado de cotizaciones antes de renderizar
+  useEffect(() => {
+    const validateAndRedirect = async () => {
+      if (!promiseId || contextLoading || !contextPromiseData) {
+        setIsValidating(false);
+        return;
+      }
+
+      try {
+        const cotizacionesResult = await getCotizacionesByPromiseId(promiseId);
+        
+        if (cotizacionesResult.success && cotizacionesResult.data) {
+          // Prioridad 1: Cotización autorizada con evento
+          const cotizacionAutorizada = cotizacionesResult.data.find(
+            c => (c.status === 'aprobada' || c.status === 'approved' || c.status === 'autorizada') && c.evento_id
+          );
+          
+          if (cotizacionAutorizada) {
+            router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+            return;
+          }
+
+          // Prioridad 2: Cotización en cierre o aprobada sin evento
+          const cotizacionEnCierre = cotizacionesResult.data.find(c => c.status === 'en_cierre');
+          const cotizacionAprobada = cotizacionesResult.data.find(
+            c => (c.status === 'aprobada' || c.status === 'approved') && !c.evento_id
+          );
+
+          if (cotizacionEnCierre || cotizacionAprobada) {
+            router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
+            return;
+          }
+        }
+
+        // Si llegamos aquí, es estado pendiente - continuar renderizando
+        setIsValidating(false);
+      } catch (error) {
+        console.error('[PromisePendientePage] Error validating state:', error);
+        setIsValidating(false);
+      }
+    };
+
+    validateAndRedirect();
+  }, [promiseId, studioSlug, contextLoading, contextPromiseData, router]);
+
   // Usar datos del contexto directamente
   const contactId = contextPromiseData?.contact_id || null;
   const eventoId = contextPromiseData?.evento_id || null;
 
-  if (contextLoading || !contextPromiseData || !promiseData || !contactId) {
+  // Mostrar skeleton mientras se valida o carga
+  if (isValidating || contextLoading || !contextPromiseData || !promiseData || !contactId) {
     return <PromisePendienteSkeleton />;
   }
 
