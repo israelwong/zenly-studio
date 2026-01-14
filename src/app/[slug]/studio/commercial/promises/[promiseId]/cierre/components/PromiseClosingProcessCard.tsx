@@ -1260,7 +1260,6 @@ export function PromiseClosingProcessCard({
         isOpen={showInfoModal}
         onClose={() => setShowInfoModal(false)}
         onConfirm={() => setShowInfoModal(false)}
-        showDismissCheckbox={false}
       />
 
       {/* Modal Opciones para Compartir */}

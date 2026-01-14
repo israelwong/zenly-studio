@@ -69,11 +69,29 @@ export async function obtenerTodasCondicionesComerciales(studioSlug: string) {
             throw new Error("Studio no encontrado");
         }
 
-        const condiciones = await prisma.studio_condiciones_comerciales.findMany({
+        const condicionesRaw = await prisma.studio_condiciones_comerciales.findMany({
             where: {
                 studio_id: studio.id,
             },
             orderBy: { order: 'asc' },
+        });
+
+        // Ordenar: condiciones de tipo "offer" al final
+        // Primero ordenar por tipo (standard/null primero, luego offer), luego por order
+        const condiciones = [...condicionesRaw].sort((a, b) => {
+          const aType = a.type || 'standard';
+          const bType = b.type || 'standard';
+          
+          // Si ambos son del mismo tipo, ordenar por order
+          if (aType === bType) {
+            return (a.order || 0) - (b.order || 0);
+          }
+          
+          // Standard primero, luego offer
+          if (aType === 'standard' && bType === 'offer') return -1;
+          if (aType === 'offer' && bType === 'standard') return 1;
+          
+          return 0;
         });
 
         return {

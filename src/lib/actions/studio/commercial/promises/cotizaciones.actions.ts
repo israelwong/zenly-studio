@@ -1952,6 +1952,11 @@ export async function pasarACierre(
       return { success: false, error: 'Cotizaciรณn no encontrada' };
     }
 
+    // Verificar que la cotización NO esté ya en cierre
+    if (cotizacion.status === 'en_cierre') {
+      return { success: false, error: 'Esta cotización ya está en proceso de cierre' };
+    }
+
     // Verificar que la cotización esté en estado pendiente o negociación
     if (cotizacion.status !== 'pendiente' && cotizacion.status !== 'negociacion') {
       return { success: false, error: 'Solo se pueden pasar a cierre cotizaciones pendientes o en negociación' };

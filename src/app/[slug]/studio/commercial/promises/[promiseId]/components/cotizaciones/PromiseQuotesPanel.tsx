@@ -708,7 +708,7 @@ export function PromiseQuotesPanel({
   return (
     <>
       {/* Card "Cotizaciones" */}
-      <ZenCard className="min-h-[500px] flex flex-col">
+      <ZenCard className="h-full flex flex-col">
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
           <div className="flex items-center justify-between">
             <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
@@ -912,7 +912,7 @@ export function PromiseQuotesPanel({
             );
           })()}
           <div
-            className="relative overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-600 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500"
+            className="relative overflow-y-auto flex-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-600 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500"
             style={{
               scrollbarWidth: 'thin',
               scrollbarColor: '#52525b transparent',

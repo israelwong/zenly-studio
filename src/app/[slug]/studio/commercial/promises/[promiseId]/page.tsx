@@ -8,7 +8,8 @@ import { PromiseAgendamiento } from './components/eventos/PromiseAgendamiento';
 import { PromiseTags } from './components/PromiseTags';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
 import { AuthorizeCotizacionModal } from './components/cotizaciones/AuthorizeCotizacionModal';
-import { getPromiseById } from '@/lib/actions/studio/commercial/promises';
+import { PromisePendienteSkeleton } from './components/PromisePendienteSkeleton';
+import { usePromiseContext } from './context/PromiseContext';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { toast } from 'sonner';
 
@@ -16,6 +17,7 @@ export default function PromisePendientePage() {
   const params = useParams();
   const studioSlug = params.slug as string;
   const promiseId = params.promiseId as string;
+  const { promiseData: contextPromiseData, isLoading: contextLoading } = usePromiseContext();
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAuthorizeModal, setShowAuthorizeModal] = useState(false);
@@ -40,8 +42,6 @@ export default function PromisePendientePage() {
     referrer_contact_name?: string | null;
     referrer_contact_email?: string | null;
   } | null>(null);
-  const [contactId, setContactId] = useState<string | null>(null);
-  const [eventoId, setEventoId] = useState<string | null>(null);
   const [condicionesComerciales, setCondicionesComerciales] = useState<Array<{
     id: string;
     name: string;
@@ -63,56 +63,34 @@ export default function PromisePendientePage() {
     } | null;
   } | null>(null);
 
-  // Cargar datos de la promesa
+  // Usar datos del contexto en lugar de cargar de nuevo
   useEffect(() => {
-    const loadPromise = async () => {
-      if (!promiseId) return;
-
-      try {
-        const result = await getPromiseById(promiseId);
-        if (result.success && result.data) {
-          const data = result.data;
-          setPromiseData({
-            name: data.contact_name,
-            phone: data.contact_phone,
-            email: data.contact_email,
-            address: data.contact_address,
-            event_type_id: data.event_type_id || null,
-            event_type_name: data.event_type_name || null,
-            event_location: data.event_location || null,
-            event_name: data.event_name || null,
-            duration_hours: data.duration_hours ?? null,
-            event_date: data.event_date || null,
-            interested_dates: data.interested_dates,
-            acquisition_channel_id: data.acquisition_channel_id ?? null,
-            acquisition_channel_name: data.acquisition_channel_name ?? null,
-            social_network_id: data.social_network_id ?? null,
-            social_network_name: data.social_network_name ?? null,
-            referrer_contact_id: data.referrer_contact_id ?? null,
-            referrer_name: data.referrer_name ?? null,
-            referrer_contact_name: data.referrer_contact_name ?? null,
-            referrer_contact_email: data.referrer_contact_email ?? null,
-          });
-          setContactId(data.contact_id);
-          setEventoId(data.evento_id ?? null);
-        }
-      } catch (error) {
-        console.error('Error loading promise:', error);
-        toast.error('Error al cargar la promesa');
-      }
-    };
-
-    loadPromise();
-  }, [promiseId]);
-
-  // Cargar datos necesarios para el modal de autorización
-  useEffect(() => {
-    if (showAuthorizeModal) {
-      loadAuthorizationData();
+    if (contextPromiseData) {
+      setPromiseData({
+        name: contextPromiseData.name,
+        phone: contextPromiseData.phone,
+        email: contextPromiseData.email,
+        address: contextPromiseData.address,
+        event_type_id: contextPromiseData.event_type_id,
+        event_type_name: contextPromiseData.event_type_name,
+        event_location: contextPromiseData.event_location,
+        event_name: contextPromiseData.event_name,
+        duration_hours: contextPromiseData.duration_hours,
+        event_date: contextPromiseData.event_date,
+        interested_dates: contextPromiseData.interested_dates,
+        acquisition_channel_id: contextPromiseData.acquisition_channel_id,
+        acquisition_channel_name: contextPromiseData.acquisition_channel_name,
+        social_network_id: contextPromiseData.social_network_id,
+        social_network_name: contextPromiseData.social_network_name,
+        referrer_contact_id: contextPromiseData.referrer_contact_id,
+        referrer_name: contextPromiseData.referrer_name,
+        referrer_contact_name: contextPromiseData.referrer_contact_name,
+        referrer_contact_email: contextPromiseData.referrer_contact_email,
+      });
     }
-  }, [showAuthorizeModal]);
+  }, [contextPromiseData]);
 
-  const loadAuthorizationData = async () => {
+  const loadAuthorizationData = useCallback(async () => {
     try {
       const { obtenerCondicionesComerciales } = await import('@/lib/actions/studio/config/condiciones-comerciales.actions');
       const { getPaymentMethodsForAuthorization } = await import('@/lib/actions/studio/commercial/promises/authorize-legacy.actions');
@@ -160,45 +138,27 @@ export default function PromisePendientePage() {
     } catch (error) {
       console.error('[loadAuthorizationData] Error:', error);
     }
-  };
+  }, [studioSlug, promiseId]);
 
-  const handleEditSuccess = useCallback(async () => {
-    // Recargar datos después de editar
-    try {
-      const result = await getPromiseById(promiseId);
-      if (result.success && result.data) {
-        const data = result.data;
-        setPromiseData({
-          name: data.contact_name,
-          phone: data.contact_phone,
-          email: data.contact_email,
-          address: data.contact_address,
-          event_type_id: data.event_type_id || null,
-          event_type_name: data.event_type_name || null,
-          event_location: data.event_location || null,
-          event_name: data.event_name || null,
-          duration_hours: data.duration_hours ?? null,
-          event_date: data.event_date || null,
-          interested_dates: data.interested_dates,
-          acquisition_channel_id: data.acquisition_channel_id ?? null,
-          acquisition_channel_name: data.acquisition_channel_name ?? null,
-          social_network_id: data.social_network_id ?? null,
-          social_network_name: data.social_network_name ?? null,
-          referrer_contact_id: data.referrer_contact_id ?? null,
-          referrer_name: data.referrer_name ?? null,
-          referrer_contact_name: data.referrer_contact_name ?? null,
-          referrer_contact_email: data.referrer_contact_email ?? null,
-        });
-        setContactId(data.contact_id);
-        setEventoId(data.evento_id ?? null);
-      }
-    } catch (error) {
-      console.error('Error reloading promise:', error);
+  // Cargar datos necesarios para el modal de autorización
+  useEffect(() => {
+    if (showAuthorizeModal) {
+      loadAuthorizationData();
     }
-  }, [promiseId]);
+  }, [showAuthorizeModal, loadAuthorizationData]);
 
-  if (!promiseData || !contactId) {
-    return null;
+  const handleEditSuccess = useCallback(() => {
+    // Los datos se actualizarán automáticamente a través del contexto cuando el layout recargue
+    // Por ahora solo recargamos la página para sincronizar
+    window.location.reload();
+  }, []);
+
+  // Usar datos del contexto directamente
+  const contactId = contextPromiseData?.contact_id || null;
+  const eventoId = contextPromiseData?.evento_id || null;
+
+  if (contextLoading || !contextPromiseData || !promiseData || !contactId) {
+    return <PromisePendienteSkeleton />;
   }
 
   return (
@@ -332,15 +292,23 @@ export default function PromisePendientePage() {
       {showAuthorizeModal && selectedCotizacion && promiseId && (
         <AuthorizeCotizacionModal
           isOpen={showAuthorizeModal}
-          onClose={() => setShowAuthorizeModal(false)}
+          onClose={() => {
+            // Solo permitir cerrar si no está procesando
+            if (!showAuthorizeModal) return;
+            setShowAuthorizeModal(false);
+          }}
           cotizacion={selectedCotizacion}
           promiseId={promiseId}
           studioSlug={studioSlug}
           condicionesComerciales={condicionesComerciales}
           paymentMethods={paymentMethods}
-          onSuccess={() => {
-            setShowAuthorizeModal(false);
+          onSuccess={async () => {
+            // Mantener el modal abierto con estado de carga durante la redirección
+            // El modal mostrará "Autorizando..." mientras se procesa
+            // Pequeño delay para que el usuario vea el mensaje de éxito antes de recargar
+            await new Promise(resolve => setTimeout(resolve, 800));
             // Recargar página para reflejar cambios y redirigir si es necesario
+            // El modal se cerrará automáticamente al recargar
             window.location.reload();
           }}
         />

@@ -1,15 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import { getPromiseById, getPipelineStages } from '@/lib/actions/studio/commercial/promises';
 import { getCotizacionesByPromiseId, getCotizacionAutorizadaByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { PromiseDetailHeader } from './components/PromiseDetailHeader';
 import { PromiseDetailToolbar } from './components/PromiseDetailToolbar';
 import { PromiseShareOptionsModal } from './components/PromiseShareOptionsModal';
+import { PromiseLayoutSkeleton } from './components/PromiseLayoutSkeleton';
+import { PromiseProvider } from './context/PromiseContext';
 import { BitacoraSheet } from '@/components/shared/bitacora';
 import { ZenCard, ZenCardContent } from '@/components/ui/zen';
-import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { useContactUpdateListener } from '@/hooks/useContactRefresh';
@@ -42,6 +43,7 @@ export default function PromiseLayout({
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
+  const isDeterminingStateRef = React.useRef(false);
   const [promiseData, setPromiseData] = useState<{
     id: string;
     name: string;
@@ -79,6 +81,25 @@ export default function PromiseLayout({
   useEffect(() => {
     const determineStateAndRedirect = async () => {
       if (!promiseId) return;
+      
+      // Evitar múltiples ejecuciones simultáneas
+      if (isDeterminingStateRef.current) return;
+      
+      // Si ya tenemos datos y estamos en la ruta correcta, evitar recarga innecesaria
+      const isInCierre = pathname.includes('/cierre');
+      const isInAutorizada = pathname.includes('/autorizada');
+      const isInPendiente = !isInCierre && !isInAutorizada;
+      
+      if (promiseData && state !== 'loading') {
+        // Si ya estamos en la ruta correcta según el estado, no recargar
+        if ((isInCierre && state === 'cierre') || 
+            (isInAutorizada && state === 'autorizada') || 
+            (isInPendiente && state === 'pendiente')) {
+          return; // Ya estamos en la ruta correcta con datos cargados
+        }
+      }
+      
+      isDeterminingStateRef.current = true;
 
       try {
         setLoading(true);
@@ -193,12 +214,14 @@ export default function PromiseLayout({
         console.error('Error determining state:', error);
         toast.error('Error al cargar la promesa');
         router.push(`/${studioSlug}/studio/commercial/promises`);
+      } finally {
+        isDeterminingStateRef.current = false;
       }
     };
 
     determineStateAndRedirect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promiseId, studioSlug]);
+  }, [promiseId, studioSlug, pathname]);
 
   // Callback para manejar actualizaciones de contacto
   const handleContactUpdate = React.useCallback((updatedContact: {
@@ -320,59 +343,84 @@ export default function PromiseLayout({
     }
   };
 
+  // Preparar datos para el contexto
+  const contextPromiseData = promiseData ? {
+    id: promiseData.id,
+    name: promiseData.name,
+    phone: promiseData.phone,
+    email: promiseData.email,
+    address: promiseData.address,
+    event_type_id: promiseData.event_type_id,
+    event_type_name: promiseData.event_type_name,
+    event_location: promiseData.event_location,
+    event_name: promiseData.event_name,
+    duration_hours: promiseData.duration_hours,
+    event_date: promiseData.event_date,
+    interested_dates: promiseData.interested_dates,
+    acquisition_channel_id: promiseData.acquisition_channel_id,
+    acquisition_channel_name: promiseData.acquisition_channel_name,
+    social_network_id: promiseData.social_network_id,
+    social_network_name: promiseData.social_network_name,
+    referrer_contact_id: promiseData.referrer_contact_id,
+    referrer_name: promiseData.referrer_name,
+    referrer_contact_name: promiseData.referrer_contact_name,
+    referrer_contact_email: promiseData.referrer_contact_email,
+    contact_id: contactData?.contactId || promiseData.id,
+    evento_id: promiseData.evento_id,
+    promise_id: promiseData.promiseId || promiseId,
+  } : null;
+
   if (loading || !promiseData) {
+    // Renderizar layout skeleton pero permitir que children manejen su propio skeleton
     return (
-      <div className="w-full max-w-7xl mx-auto">
-        <ZenCard variant="default" padding="none">
-          <ZenCardContent className="p-6 flex items-center justify-center min-h-[400px]">
-            <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
-          </ZenCardContent>
-        </ZenCard>
-      </div>
+      <PromiseProvider promiseData={null} isLoading={true}>
+        <PromiseLayoutSkeleton>{children}</PromiseLayoutSkeleton>
+      </PromiseProvider>
     );
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
-      <ZenCard variant="default" padding="none">
-        <PromiseDetailHeader
-          studioSlug={studioSlug}
-          promiseId={promiseId}
-          loading={loading}
-          pipelineStages={pipelineStages}
-          currentPipelineStageId={currentPipelineStageId}
-          isChangingStage={isChangingStage}
-          promiseData={promiseData}
-          contactData={contactData}
-          isArchived={isArchived}
-          onPipelineStageChange={handlePipelineStageChange}
-          onTemplatesClick={() => setTemplatesModalOpen(true)}
-          onAutomateClick={() => setIsShareModalOpen(true)}
-          onArchive={handleArchive}
-          onUnarchive={handleUnarchive}
-          onDelete={handleDelete}
-          isArchiving={false}
-          isUnarchiving={false}
-          isDeleting={false}
-        />
-        <PromiseDetailToolbar
-          studioSlug={studioSlug}
-          promiseId={promiseId}
-          contactData={contactData ? {
-            contactId: contactData.contactId,
-            contactName: promiseData.name,
-            phone: promiseData.phone,
-          } : null}
-          eventoId={promiseData.evento_id || null}
-          onPreview={() => {
-            const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
-            window.open(previewUrl, '_blank');
-          }}
-        />
-        <ZenCardContent className="p-6">
-          {children}
-        </ZenCardContent>
-      </ZenCard>
+    <PromiseProvider promiseData={contextPromiseData} isLoading={false}>
+      <div className="w-full max-w-7xl mx-auto">
+        <ZenCard variant="default" padding="none">
+          <PromiseDetailHeader
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+            loading={loading}
+            pipelineStages={pipelineStages}
+            currentPipelineStageId={currentPipelineStageId}
+            isChangingStage={isChangingStage}
+            promiseData={promiseData}
+            contactData={contactData}
+            isArchived={isArchived}
+            onPipelineStageChange={handlePipelineStageChange}
+            onTemplatesClick={() => setTemplatesModalOpen(true)}
+            onAutomateClick={() => setIsShareModalOpen(true)}
+            onArchive={handleArchive}
+            onUnarchive={handleUnarchive}
+            onDelete={handleDelete}
+            isArchiving={false}
+            isUnarchiving={false}
+            isDeleting={false}
+          />
+          <PromiseDetailToolbar
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+            contactData={contactData ? {
+              contactId: contactData.contactId,
+              contactName: promiseData.name,
+              phone: promiseData.phone,
+            } : null}
+            eventoId={promiseData.evento_id || null}
+            onPreview={() => {
+              const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
+              window.open(previewUrl, '_blank');
+            }}
+          />
+          <ZenCardContent className="p-6">
+            {children}
+          </ZenCardContent>
+        </ZenCard>
 
       {/* Modales compartidos */}
       {promiseId && (
@@ -397,6 +445,7 @@ export default function PromiseLayout({
         onClose={() => setTemplatesModalOpen(false)}
         studioSlug={studioSlug}
       />
-    </div>
+      </div>
+    </PromiseProvider>
   );
 }

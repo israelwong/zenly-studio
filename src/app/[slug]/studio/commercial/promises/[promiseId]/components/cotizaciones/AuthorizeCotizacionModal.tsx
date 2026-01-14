@@ -367,10 +367,18 @@ export function AuthorizeCotizacionModal({
 
         if (result.success) {
           toast.success('Cotización autorizada. Cliente recibirá acceso a su portal.');
-          onSuccess?.();
+          // Si hay onSuccess callback, ejecutarlo y mantener loading durante redirección
+          if (onSuccess) {
+            // Mantener isLoading para mostrar estado de carga durante redirección
+            await onSuccess();
+            // El modal se cerrará automáticamente cuando se recargue la página
+            // No llamar onClose() aquí para que el usuario vea el estado de carga
+            return;
+          }
           onClose();
         } else {
           toast.error(result.error || 'Error al autorizar cotización');
+          setIsLoading(false);
         }
       } else {
         // FLUJO LEGACY: Crea evento inmediatamente
@@ -496,27 +504,36 @@ export function AuthorizeCotizacionModal({
     setShowContractPreview(true);
   };
 
+  const handleClose = () => {
+    // No permitir cerrar mientras está cargando o redirigiendo
+    if (isLoading) return;
+    onClose();
+  };
+
   return (
     <>
       <ZenDialog
         isOpen={isOpen}
-        onClose={onClose}
-        onCancel={onClose}
+        onClose={handleClose}
+        onCancel={handleClose}
         title="Autorizar Cotización"
         description={
-          isClienteNuevo
-            ? cotizacion.status === 'contract_signed'
-              ? 'El cliente firmó el contrato. Confirma para crear el evento.'
-              : 'El cliente debe firmar el contrato antes de autorizar.'
-            : 'Autoriza esta cotización y crea el evento inmediatamente.'
+          isLoading
+            ? 'Procesando autorización y redirigiendo...'
+            : isClienteNuevo
+              ? cotizacion.status === 'contract_signed'
+                ? 'El cliente firmó el contrato. Confirma para crear el evento.'
+                : 'El cliente debe firmar el contrato antes de autorizar.'
+              : 'Autoriza esta cotización y crea el evento inmediatamente.'
         }
         maxWidth="lg"
         onSave={puedeAutorizar ? handleAutorizar : undefined}
-        saveLabel={isLoading ? 'Autorizando...' : 'Autorizar y Crear Evento'}
+        saveLabel={isLoading ? 'Redirigiendo...' : 'Autorizar y Crear Evento'}
         cancelLabel={puedeAutorizar ? 'Cancelar' : 'Cerrar'}
         isLoading={isLoading}
         saveVariant="primary"
         zIndex={10050}
+        closeOnClickOutside={!isLoading}
       >
         <div className="space-y-4">
           {/* ============================================ */}

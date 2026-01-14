@@ -35,7 +35,7 @@ import {
   type CotizacionListItem,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { AuthorizeCotizacionModal } from './AuthorizeCotizacionModal';
-import { ClosingProcessInfoModal, getClosingProcessInfoDismissed } from '../../cierre/components/ClosingProcessInfoModal';
+import { ClosingProcessInfoModal } from '../../cierre/components/ClosingProcessInfoModal';
 import { getCotizacionClicks } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 
 interface PromiseQuotesPanelCardProps {
@@ -493,15 +493,8 @@ export function PromiseQuotesPanelCard({
       return;
     }
 
-    // Verificar si el usuario ya marcó "no volver a mostrar"
-    const isDismissed = getClosingProcessInfoDismissed();
-    if (isDismissed) {
-      // Ejecutar directamente
-      handlePasarACierre();
-    } else {
-      // Mostrar modal informativo
-      setShowClosingProcessInfoModal(true);
-    }
+    // Mostrar modal informativo
+    setShowClosingProcessInfoModal(true);
   };
 
   const handlePasarACierre = async () => {
@@ -510,7 +503,6 @@ export function PromiseQuotesPanelCard({
       return;
     }
 
-    setShowClosingProcessInfoModal(false);
     setLoading(true);
     try {
       const result = await pasarACierre(studioSlug, cotizacion.id);
@@ -522,15 +514,19 @@ export function PromiseQuotesPanelCard({
         } else {
           onUpdate?.(cotizacion.id);
         }
-        // Redirigir a la ruta de cierre
-        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
+        // NO cerrar el modal ni resetear loading - se mantendrá abierto durante la redirección
+        // Usar window.location.href para mantener el modal visible hasta que la nueva página cargue
+        window.location.href = `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`;
+        return; // Salir antes del finally para mantener loading=true y modal abierto
       } else {
         toast.error(result.error || 'Error al pasar cotización a cierre');
+        setShowClosingProcessInfoModal(false);
+        setLoading(false);
       }
     } catch (error) {
       console.error('[handlePasarACierre] Error:', error);
       toast.error('Error al pasar cotización a cierre');
-    } finally {
+      setShowClosingProcessInfoModal(false);
       setLoading(false);
     }
   };
@@ -1113,14 +1109,20 @@ export function PromiseQuotesPanelCard({
       {/* Modal informativo de proceso de cierre */}
       <ClosingProcessInfoModal
         isOpen={showClosingProcessInfoModal}
-        onClose={() => setShowClosingProcessInfoModal(false)}
+        onClose={() => {
+          // No permitir cerrar mientras está procesando
+          if (loading) return;
+          setShowClosingProcessInfoModal(false);
+        }}
         onConfirm={handlePasarACierre}
         onCancel={() => {
+          // No permitir cancelar mientras está procesando
+          if (loading) return;
           setShowClosingProcessInfoModal(false);
           onCierreCancelado?.(cotizacion.id);
         }}
-        showDismissCheckbox={true}
         cotizacionName={cotizacion.name}
+        isLoading={loading}
       />
 
     </>

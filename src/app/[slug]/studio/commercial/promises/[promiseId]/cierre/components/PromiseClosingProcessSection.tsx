@@ -284,7 +284,6 @@ export function PromiseClosingProcessSection({
             isOpen={showInfoModal}
             onClose={() => setShowInfoModal(false)}
             onConfirm={() => setShowInfoModal(false)}
-            showDismissCheckbox={false}
           />
         </>
       );
@@ -391,7 +390,6 @@ export function PromiseClosingProcessSection({
         isOpen={showInfoModal}
         onClose={() => setShowInfoModal(false)}
         onConfirm={() => setShowInfoModal(false)}
-        showDismissCheckbox={false}
       />
     </>
   );

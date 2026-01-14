@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ZenDialog, ZenButton } from '@/components/ui/zen';
 import { CondicionRadioCard } from './CondicionRadioCard';
+import { CondicionesSelectorSkeleton } from './CondicionesSelectorSkeleton';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales/CondicionesComercialesManager';
 import { Settings, Loader2 } from 'lucide-react';
 import { obtenerTodasCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
@@ -55,7 +56,25 @@ export function CondicionesComercialeSelectorSimpleModal({
     try {
       const result = await obtenerTodasCondicionesComerciales(studioSlug);
       if (result.success && result.data) {
-        setCondiciones(result.data);
+        // Ordenar: condiciones de tipo "offer" al final
+        // Primero ordenar por tipo (standard/null primero, luego offer), luego por order
+        const sortedCondiciones = [...result.data].sort((a, b) => {
+          const aType = a.type || 'standard';
+          const bType = b.type || 'standard';
+          
+          // Si ambos son del mismo tipo, ordenar por order
+          if (aType === bType) {
+            return (a.order || 0) - (b.order || 0);
+          }
+          
+          // Standard primero, luego offer
+          if (aType === 'standard' && bType === 'offer') return -1;
+          if (aType === 'offer' && bType === 'standard') return 1;
+          
+          return 0;
+        });
+        
+        setCondiciones(sortedCondiciones);
       } else {
         toast.error('Error al cargar condiciones comerciales');
       }
@@ -105,20 +124,38 @@ export function CondicionesComercialeSelectorSimpleModal({
   const handleManagerClose = async () => {
     setShowManager(false);
     
-    // Recargar condiciones
-    const result = await obtenerTodasCondicionesComerciales(studioSlug);
-    if (result.success && result.data) {
-      // Encontrar la condición nueva
-      const nuevaCondicion = result.data.find(c => !condicionesIdsBeforeManager.has(c.id));
-      
-      setCondiciones(result.data);
-      
-      // Si se creó una nueva, seleccionarla automáticamente
-      if (nuevaCondicion) {
-        setTempSelectedId(nuevaCondicion.id);
-        toast.success(`Condición "${nuevaCondicion.name}" seleccionada`);
+      // Recargar condiciones
+      const result = await obtenerTodasCondicionesComerciales(studioSlug);
+      if (result.success && result.data) {
+        // Ordenar: condiciones de tipo "offer" al final
+        // Primero ordenar por tipo (standard/null primero, luego offer), luego por order
+        const sortedCondiciones = [...result.data].sort((a, b) => {
+          const aType = a.type || 'standard';
+          const bType = b.type || 'standard';
+          
+          // Si ambos son del mismo tipo, ordenar por order
+          if (aType === bType) {
+            return (a.order || 0) - (b.order || 0);
+          }
+          
+          // Standard primero, luego offer
+          if (aType === 'standard' && bType === 'offer') return -1;
+          if (aType === 'offer' && bType === 'standard') return 1;
+          
+          return 0;
+        });
+        
+        // Encontrar la condición nueva
+        const nuevaCondicion = sortedCondiciones.find(c => !condicionesIdsBeforeManager.has(c.id));
+        
+        setCondiciones(sortedCondiciones);
+        
+        // Si se creó una nueva, seleccionarla automáticamente
+        if (nuevaCondicion) {
+          setTempSelectedId(nuevaCondicion.id);
+          toast.success(`Condición "${nuevaCondicion.name}" seleccionada`);
+        }
       }
-    }
   };
 
   return (
@@ -137,9 +174,7 @@ export function CondicionesComercialeSelectorSimpleModal({
         zIndex={10080}
       >
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
-          </div>
+          <CondicionesSelectorSkeleton />
         ) : (
           <div className="space-y-4">
             {/* Mensaje informativo con link a gestión */}
