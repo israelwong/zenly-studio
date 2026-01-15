@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CheckCircle2, Calendar, MapPin, User, Phone, Mail, FileText, Home, Edit, ExternalLink } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCheckbox } from '@/components/ui/zen';
 import { SeparadorZen } from '@/components/ui/zen';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 
 interface PrecioCalculado {
   precioBase: number;
@@ -68,14 +69,10 @@ export function Step3Summary({
     }).format(price);
   };
 
+  // Usar formatDisplayDateLong que usa métodos UTC exclusivamente
   const formatDate = (date: Date | null): string => {
     if (!date) return 'No definida';
-    return new Intl.DateTimeFormat('es-MX', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }).format(date);
+    return formatDisplayDateLong(date);
   };
 
   // Calcular precio final

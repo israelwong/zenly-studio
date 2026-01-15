@@ -9,6 +9,7 @@ import { ContactModal } from '@/components/shared/contacts/ContactModal';
 import { Contact } from '@/lib/actions/schemas/contacts-schemas';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { getEventTypes } from '@/lib/actions/studio/commercial/promises';
 import { ZenDialog, ZenInput, ZenSelect } from '@/components/ui/zen';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
@@ -404,7 +405,7 @@ export default function ClienteDetallePage() {
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {eventFormData.event_date ? (
-                    formatDate(eventFormData.event_date)
+                    formatDisplayDate(eventFormData.event_date)
                   ) : (
                     <span className="text-zinc-500">Selecciona una fecha</span>
                   )}

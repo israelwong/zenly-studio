@@ -8,7 +8,7 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/s
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/shadcn/avatar';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
-import { formatDate } from '@/lib/actions/utils/formatting';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { getContactById } from '@/lib/actions/studio/commercial/contacts/contacts.actions';
 import { logWhatsAppSent, logCallMade, logEmailSent } from '@/lib/actions/studio/commercial/promises';
 import { ContactEventFormModal } from './ContactEventFormModal';
@@ -737,7 +737,7 @@ export function ContactEventInfoCard({
                       className={`${colors.bgColor} ${colors.textColor} ${colors.borderColor} font-medium px-2 py-0.5 text-xs`}
                     >
                       <Calendar className="h-3 w-3 mr-1" />
-                      {formatDate(eventData.event_date)}
+                      {formatDisplayDate(eventData.event_date)}
                     </ZenBadge>
                   );
                 })()}
@@ -758,7 +758,7 @@ export function ContactEventInfoCard({
                         className={`${colors.bgColor} ${colors.textColor} ${colors.borderColor} font-medium px-2 py-0.5 text-xs`}
                       >
                         <Calendar className="h-2.5 w-2.5 mr-1" />
-                        {formatDate(dateObj)}
+                        {formatDisplayDate(dateObj)}
                       </ZenBadge>
                     );
                   })}

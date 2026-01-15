@@ -21,6 +21,7 @@ import { AvatarManager } from '@/components/shared/avatar';
 import { useStorageRefresh } from '@/hooks/useStorageRefresh';
 import { useContactRefresh } from '@/hooks/useContactRefresh';
 import { formatDate } from '@/lib/actions/utils/formatting';
+import { formatDisplayDateShort } from '@/lib/utils/date-formatter';
 import { Calendar, ArrowRight, Package } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -917,7 +918,7 @@ function ContactModalComponent({
                                                                 </span>
                                                             </div>
                                                             <div className="flex items-center gap-3 text-xs text-zinc-400">
-                                                                <span>{formatDate(event.event_date, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                                                <span>{formatDisplayDateShort(event.event_date)}</span>
                                                                 {event.event_type && (
                                                                     <>
                                                                         <span>•</span>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ZenInput, ZenTextarea } from '@/components/ui/zen';
 import { Loader2 } from 'lucide-react';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { toast } from 'sonner';
 
 interface PublicPromiseDataFormProps {
@@ -147,13 +148,10 @@ export function PublicPromiseDataForm({
     });
   };
 
+  // Usar formatDisplayDate que usa métodos UTC exclusivamente
   const formatDate = (date: Date | null) => {
     if (!date) return '';
-    return new Intl.DateTimeFormat('es-MX', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }).format(date);
+    return formatDisplayDate(date);
   };
 
   const getEventNameLabel = (eventTypeName: string | null): string => {

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Edit, MapPin, Calendar } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from '@/components/ui/zen';
-import { formatDate } from '@/lib/actions/utils/formatting';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { ContactEventFormModal } from '@/components/shared/contact-info';
 
 interface EventCardInfoProps {
@@ -111,7 +111,7 @@ export function EventCardInfo({
               Fecha del Evento
             </label>
             <p className="text-sm text-zinc-200">
-              {formatDate(initialData.event_date)}
+              {formatDisplayDate(initialData.event_date)}
             </p>
           </div>
 

@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { EventWithContact } from '@/lib/actions/schemas/events-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
+import { formatDisplayDateShort } from '@/lib/utils/date-formatter';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 
 interface EventKanbanCardProps {
@@ -46,19 +47,8 @@ export function EventKanbanCard({ event, onClick, studioSlug }: EventKanbanCardP
     }
   };
 
-  const formatDate = (date: Date): string => {
-    // Usar métodos UTC para extraer componentes de fecha y evitar problemas de zona horaria
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth();
-    const day = date.getUTCDate();
-    const localDate = new Date(year, month, day);
-    
-    return localDate.toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
+  // Usar formatDisplayDateShort que usa métodos UTC exclusivamente
+  const formatDate = formatDisplayDateShort;
 
   // Calcular días restantes hasta el evento usando métodos UTC
   const getDaysRemaining = (): number | null => {

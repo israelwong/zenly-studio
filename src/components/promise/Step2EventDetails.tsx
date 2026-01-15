@@ -3,6 +3,7 @@
 import React from 'react';
 import { Calendar, MapPin } from 'lucide-react';
 import { ZenInput } from '@/components/ui/zen';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 
 interface BookingFormData {
   contact_name: string;
@@ -30,15 +31,10 @@ export function Step2EventDetails({ formData, errors, onChange, isLoading = fals
     });
   };
 
-  // Formatear fecha para mostrar
+  // Usar formatDisplayDateLong que usa métodos UTC exclusivamente
   const formatDate = (date: Date | null): string => {
     if (!date) return 'No definida';
-    return new Intl.DateTimeFormat('es-MX', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }).format(date);
+    return formatDisplayDateLong(date);
   };
 
   // Determinar tipo de evento y labels correspondientes
