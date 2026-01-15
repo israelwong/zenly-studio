@@ -6,7 +6,12 @@ import { useEvento } from '../context/EventoContext';
 
 function formatFecha(fecha: string): string {
   try {
-    return new Date(fecha.split('T')[0] + 'T00:00:00').toLocaleDateString('es-MX', {
+    const fechaSolo = fecha.split('T')[0];
+    const [year, month, day] = fechaSolo.split('-').map(Number);
+    // Crear fecha usando componentes UTC para evitar problemas de zona horaria
+    const fechaObj = new Date(Date.UTC(year, month - 1, day));
+
+    return fechaObj.toLocaleDateString('es-MX', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',

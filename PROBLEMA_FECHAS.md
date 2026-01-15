@@ -11,28 +11,29 @@ Al crear una promesa desde el formulario `ContactEventFormModal`, cuando el usua
 **Ubicación:** `src/components/shared/contact-info/ContactEventFormModal.tsx`
 
 **Líneas 399-417:**
+
 ```typescript
 // Helper para formatear fecha como YYYY-MM-DD sin zona horaria
 const formatDateForServer = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 useEffect(() => {
-    if (selectedDates.length > 0) {
-        const dateStrings = selectedDates.map((d) => {
-            const date = new Date(d);
-            date.setHours(0, 0, 0, 0);
-            // Enviar solo YYYY-MM-DD para evitar problemas de zona horaria
-            return formatDateForServer(date);
-        });
-        setFormData((prev) => ({
-            ...prev,
-            interested_dates: dateStrings, // Ej: ["2024-01-31"]
-        }));
-    }
+  if (selectedDates.length > 0) {
+    const dateStrings = selectedDates.map((d) => {
+      const date = new Date(d);
+      date.setHours(0, 0, 0, 0);
+      // Enviar solo YYYY-MM-DD para evitar problemas de zona horaria
+      return formatDateForServer(date);
+    });
+    setFormData((prev) => ({
+      ...prev,
+      interested_dates: dateStrings, // Ej: ["2024-01-31"]
+    }));
+  }
 }, [selectedDates]);
 ```
 
@@ -43,6 +44,7 @@ useEffect(() => {
 **Ubicación:** `src/lib/actions/schemas/promises-schemas.ts`
 
 **Línea 16:**
+
 ```typescript
 interested_dates: z.array(
   z.string().refine(
@@ -63,33 +65,31 @@ interested_dates: z.array(
 
 **Ubicación:** `src/lib/actions/studio/commercial/promises/promises.actions.ts`
 
-**Líneas 620-639:**
+**Líneas 620-630:**
+
 ```typescript
-// Parsear fecha de forma segura (sin cambios por zona horaria)
+// Parsear fecha en UTC (sin cambios por zona horaria)
 let eventDate: Date | null = null;
-if (validatedData.interested_dates && validatedData.interested_dates.length === 1) {
+if (
+  validatedData.interested_dates &&
+  validatedData.interested_dates.length === 1
+) {
   const dateString = validatedData.interested_dates[0]; // "2024-01-31"
-  const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (dateMatch) {
-    const [, year, month, day] = dateMatch;
-    // Crear fecha en zona horaria local sin hora (00:00:00)
-    eventDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    // Normalizar a medianoche local para evitar problemas de zona horaria
-    eventDate.setHours(0, 0, 0, 0);
-  }
+  eventDate = toUtcDateOnly(dateString);
 }
 ```
 
-**Problema aquí:** 
-- `new Date(2024, 0, 31)` crea la fecha en la **zona horaria del servidor**
-- Si el servidor está en UTC (Vercel) y se crea `2024-01-31T00:00:00 UTC`
-- Pero cuando Prisma lo guarda en PostgreSQL, puede haber conversiones de zona horaria
+**Problema aquí:**
+
+- Aun normalizando a UTC en servidor, el día sigue cambiando en producción
+- Indica que el desfase podría ocurrir en otra parte del flujo (lectura o UI)
 
 ### 4. Base de Datos (Prisma Schema)
 
 **Ubicación:** `prisma/schema.prisma`
 
 **Línea 1319:**
+
 ```prisma
 model studio_promises {
   ...
@@ -101,6 +101,7 @@ model studio_promises {
 **Tipo en PostgreSQL:** `TIMESTAMP` (puede incluir zona horaria)
 
 **Línea 645 en promises.actions.ts:**
+
 ```typescript
 const promise = await prisma.studio_promises.create({
   data: {
@@ -130,33 +131,67 @@ const promise = await prisma.studio_promises.create({
 **Usuario selecciona:** 31 de enero 2024
 
 **En local (México UTC-6):**
+
 - Cliente envía: `"2024-01-31"`
 - Servidor crea: `new Date(2024, 0, 31)` → `2024-01-31T00:00:00-06:00`
 - Prisma guarda: `2024-01-31T06:00:00Z` (UTC)
 - Al leer: Se muestra correctamente como 31 de enero ✅
 
 **En Vercel (UTC):**
+
 - Cliente envía: `"2024-01-31"`
 - Servidor crea: `new Date(2024, 0, 31)` → `2024-01-31T00:00:00Z` (UTC)
 - Prisma guarda: `2024-01-31T00:00:00Z` (UTC)
 - **PERO:** Si hay alguna conversión adicional o el cliente lee en otra zona horaria, puede mostrar 30 de enero ❌
 
+## Fix Aplicado (enero 2026)
+
+- Se agregó `toUtcDateOnly` en `src/lib/utils/date-only.ts`
+- Se normaliza a UTC en:
+  - `createPromise` y `updatePromise` (event_date)
+  - `actualizarFechaEvento`
+
+**Estado:** El problema persiste en producción.
+
+## Posibles Causas Pendientes
+
+1. **Lectura y render en cliente**
+   - Se está usando `new Date(dbDate)` y luego `getDate()` en local
+   - El valor llega como `Date` con zona UTC y se presenta en zona local
+2. **Tipo de columna en DB**
+   - `event_date` es `TIMESTAMP` (sin zona), posible ambigüedad en conversiones
+3. **Serialización en API/Next**
+   - En el paso server -> client se serializa a ISO y se reinterpreta en local
+
+## Próximos Pasos Recomendados
+
+- Validar cómo se renderiza `event_date` en UI (buscar `new Date(event_date)` y `toLocaleDateString`)
+- Probar lectura en Vercel con `console.log` de:
+  - valor crudo en DB
+  - valor en server actions
+  - valor en cliente
+- Considerar migrar `event_date` a tipo `DATE` si es fecha-only
+
 ## Posibles Soluciones
 
 ### Opción 1: Usar Date-only en PostgreSQL
+
 - Cambiar el tipo de `DateTime` a un tipo de solo fecha (si PostgreSQL lo soporta)
 - O usar `DATE` en lugar de `TIMESTAMP`
 
 ### Opción 2: Guardar como string YYYY-MM-DD
+
 - Cambiar el campo en Prisma a `String` en lugar de `DateTime`
 - Guardar directamente el string `"2024-01-31"`
 - Parsear solo cuando sea necesario para cálculos
 
 ### Opción 3: Normalizar siempre a UTC medianoche
+
 - Asegurar que siempre se guarde como `YYYY-MM-DD 00:00:00 UTC`
 - Usar `Date.UTC()` para crear la fecha
 
 ### Opción 4: Usar biblioteca de manejo de fechas
+
 - Usar `date-fns` o `dayjs` con configuración explícita de zona horaria
 - Normalizar todas las fechas a UTC antes de guardar
 

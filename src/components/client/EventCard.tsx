@@ -20,7 +20,9 @@ export function EventCard({ evento }: EventCardProps) {
   const formatFecha = (fecha: string) => {
     try {
       const fechaSolo = fecha.split('T')[0];
-      const fechaObj = new Date(fechaSolo + 'T00:00:00');
+      const [year, month, day] = fechaSolo.split('-').map(Number);
+      // Crear fecha usando componentes UTC para evitar problemas de zona horaria
+      const fechaObj = new Date(Date.UTC(year, month - 1, day));
 
       return fechaObj.toLocaleDateString('es-MX', {
         day: 'numeric',

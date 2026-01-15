@@ -47,20 +47,34 @@ export function EventKanbanCard({ event, onClick, studioSlug }: EventKanbanCardP
   };
 
   const formatDate = (date: Date): string => {
-    return date.toLocaleDateString('es-MX', {
+    // Usar métodos UTC para extraer componentes de fecha y evitar problemas de zona horaria
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const day = date.getUTCDate();
+    const localDate = new Date(year, month, day);
+    
+    return localDate.toLocaleDateString('es-MX', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
     });
   };
 
-  // Calcular días restantes hasta el evento
+  // Calcular días restantes hasta el evento usando métodos UTC
   const getDaysRemaining = (): number | null => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayYear = today.getUTCFullYear();
+    const todayMonth = today.getUTCMonth();
+    const todayDay = today.getUTCDate();
+    const todayUtc = new Date(Date.UTC(todayYear, todayMonth, todayDay));
+    
     const eventDate = new Date(event.event_date);
-    eventDate.setHours(0, 0, 0, 0);
-    const diffTime = eventDate.getTime() - today.getTime();
+    const eventYear = eventDate.getUTCFullYear();
+    const eventMonth = eventDate.getUTCMonth();
+    const eventDay = eventDate.getUTCDate();
+    const eventUtc = new Date(Date.UTC(eventYear, eventMonth, eventDay));
+    
+    const diffTime = eventUtc.getTime() - todayUtc.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };
