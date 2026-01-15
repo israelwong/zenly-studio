@@ -73,7 +73,8 @@ export function AvisoPrivacidadManager({
       setFormErrors({});
       setLoading(true); // Reset loading state when closing
     }
-  }, [isOpen, studioSlug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const loadAvisos = async () => {
     try {

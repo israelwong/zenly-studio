@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/actions/utils/formatting';
 import { es } from 'date-fns/locale';
-import { CalendarIcon, AlertCircle, X } from 'lucide-react';
+import { CalendarIcon, AlertCircle, X, Plus } from 'lucide-react';
 import { createPromise, updatePromise, getEventTypes, getPromiseIdByContactId } from '@/lib/actions/studio/commercial/promises';
 import { actualizarFechaEvento } from '@/lib/actions/studio/business/events/events.actions';
 import { getContacts, getAcquisitionChannels, getSocialNetworks, createContact } from '@/lib/actions/studio/commercial/contacts';
@@ -16,6 +16,8 @@ import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 import { useContactRefresh } from '@/hooks/useContactRefresh';
+import { TipoEventoQuickAddModal } from '@/components/shared/tipos-evento/TipoEventoQuickAddModal';
+import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 
 interface ContactEventFormModalProps {
     isOpen: boolean;
@@ -60,6 +62,7 @@ export function ContactEventFormModal({
     const [loading, setLoading] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const eventTypeSelectRef = useRef<HTMLSelectElement>(null);
     const [formData, setFormData] = useState<CreatePromiseData>({
         name: initialData?.name || '',
         phone: initialData?.phone || '',
@@ -130,6 +133,29 @@ export function ContactEventFormModal({
     const [newReferrerPhone, setNewReferrerPhone] = useState('');
     const [isCreatingReferrer, setIsCreatingReferrer] = useState(false);
     const [referrerSearchQuery, setReferrerSearchQuery] = useState('');
+    const [showTipoEventoModal, setShowTipoEventoModal] = useState(false);
+
+    const handleTipoEventoCreated = useCallback((newTipoEvento: TipoEventoData) => {
+        // Agregar el nuevo tipo de evento a la lista
+        const newEventType = {
+            id: newTipoEvento.id,
+            name: newTipoEvento.nombre,
+        };
+        setEventTypes((prev) => [...prev, newEventType]);
+
+        // Seleccionar automáticamente el nuevo tipo de evento
+        setFormData((prev) => ({
+            ...prev,
+            event_type_id: newTipoEvento.id,
+        }));
+
+        // Limpiar error si existía
+        if (errors.event_type_id) {
+            setErrors((prev) => ({ ...prev, event_type_id: '' }));
+        }
+
+        toast.success(`Tipo de evento "${newTipoEvento.nombre}" creado y seleccionado`);
+    }, [errors.event_type_id]);
 
     const loadEventTypes = async () => {
         try {
@@ -370,12 +396,21 @@ export function ContactEventFormModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, initialData, isEditMode]);
 
+    // Helper para formatear fecha como YYYY-MM-DD sin zona horaria
+    const formatDateForServer = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     useEffect(() => {
         if (selectedDates.length > 0) {
             const dateStrings = selectedDates.map((d) => {
                 const date = new Date(d);
                 date.setHours(0, 0, 0, 0);
-                return date.toISOString();
+                // Enviar solo YYYY-MM-DD para evitar problemas de zona horaria
+                return formatDateForServer(date);
             });
             setFormData((prev) => ({
                 ...prev,
@@ -619,9 +654,12 @@ export function ContactEventFormModal({
             if (context === 'event' && eventId && isEditMode && initialData?.id) {
                 // Verificar si solo se cambió la fecha (comparar selectedDates con initialData.interested_dates)
                 const initialDates = initialData.interested_dates
-                    ? initialData.interested_dates.map(d => new Date(d).toISOString().split('T')[0]).sort()
+                    ? initialData.interested_dates.map(d => {
+                        const date = new Date(d);
+                        return formatDateForServer(date);
+                    }).sort()
                     : [];
-                const newDates = selectedDates.map(d => d.toISOString().split('T')[0]).sort();
+                const newDates = selectedDates.map(d => formatDateForServer(d)).sort();
                 const datesChanged = JSON.stringify(initialDates) !== JSON.stringify(newDates);
 
                 // Verificar si otros campos cambiaron
@@ -641,9 +679,12 @@ export function ContactEventFormModal({
                 // Si solo cambió la fecha y hay una fecha seleccionada, usar actualizarFechaEvento
                 if (datesChanged && !otherFieldsChanged && selectedDates.length === 1) {
                     const nuevaFecha = selectedDates[0];
+                    // Normalizar la fecha antes de enviarla
+                    const fechaNormalizada = new Date(nuevaFecha);
+                    fechaNormalizada.setHours(0, 0, 0, 0);
                     result = await actualizarFechaEvento(studioSlug, {
                         event_id: eventId,
-                        event_date: nuevaFecha,
+                        event_date: fechaNormalizada,
                     });
 
                     if (result.success) {
@@ -855,9 +896,22 @@ export function ContactEventFormModal({
                                 Tipo de Evento <span className="text-red-500">*</span>
                             </label>
                             <select
+                                ref={eventTypeSelectRef}
                                 value={formData.event_type_id || 'none'}
                                 onChange={(e) => {
-                                    const newEventTypeId = e.target.value === 'none' ? '' : e.target.value;
+                                    const selectedValue = e.target.value;
+
+                                    // Si se selecciona "create_new", abrir el modal y resetear el select
+                                    if (selectedValue === 'create_new') {
+                                        setShowTipoEventoModal(true);
+                                        // Resetear el select al valor anterior usando el ref
+                                        if (eventTypeSelectRef.current) {
+                                            eventTypeSelectRef.current.value = formData.event_type_id || 'none';
+                                        }
+                                        return;
+                                    }
+
+                                    const newEventTypeId = selectedValue === 'none' ? '' : selectedValue;
                                     setFormData((prev) => ({
                                         ...prev,
                                         event_type_id: newEventTypeId,
@@ -884,6 +938,9 @@ export function ContactEventFormModal({
                                         {et.name}
                                     </option>
                                 ))}
+                                <option value="create_new" className="text-emerald-400 font-medium">
+                                    + Crear evento
+                                </option>
                             </select>
                             {errors.event_type_id && (
                                 <p className="mt-1 text-xs text-red-500">{errors.event_type_id}</p>
@@ -1535,6 +1592,15 @@ export function ContactEventFormModal({
                     </div>
                 </div>
             </ZenDialog>
+
+            {/* Modal para agregar nuevo tipo de evento */}
+            <TipoEventoQuickAddModal
+                isOpen={showTipoEventoModal}
+                onClose={() => setShowTipoEventoModal(false)}
+                onSuccess={handleTipoEventoCreated}
+                studioSlug={studioSlug}
+                zIndex={zIndex + 10}
+            />
         </ZenDialog>
     );
 }

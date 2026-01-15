@@ -12,6 +12,7 @@ interface TipoEventoQuickAddModalProps {
   onSuccess: (newTipoEvento: TipoEventoData) => void;
   studioSlug: string;
   tipoEvento?: TipoEventoData; // Para edición
+  zIndex?: number; // Z-index para modales anidados
 }
 
 export function TipoEventoQuickAddModal({
@@ -20,6 +21,7 @@ export function TipoEventoQuickAddModal({
   onSuccess,
   studioSlug,
   tipoEvento,
+  zIndex = 50,
 }: TipoEventoQuickAddModalProps) {
   const [loading, setLoading] = useState(false);
   const [nombre, setNombre] = useState(tipoEvento?.nombre || "");
@@ -76,7 +78,7 @@ export function TipoEventoQuickAddModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/50" style={{ zIndex }}>
       <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl max-w-md w-full p-6">
         <h2 className="text-lg font-semibold text-white mb-4">
           {isEditMode ? 'Editar' : 'Agregar'} Tipo de Evento

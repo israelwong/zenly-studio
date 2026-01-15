@@ -622,13 +622,19 @@ export async function createPromise(
     let eventDate: Date | null = null;
     if (validatedData.interested_dates && validatedData.interested_dates.length === 1) {
       const dateString = validatedData.interested_dates[0];
-      // Si es formato YYYY-MM-DD o ISO, parsear como fecha local
+      // Extraer solo YYYY-MM-DD (ignorar hora y zona horaria si viene en formato ISO)
       const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (dateMatch) {
         const [, year, month, day] = dateMatch;
+        // Crear fecha en zona horaria local sin hora (00:00:00)
         eventDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        // Normalizar a medianoche local para evitar problemas de zona horaria
+        eventDate.setHours(0, 0, 0, 0);
       } else {
-        eventDate = new Date(dateString);
+        // Fallback: parsear y normalizar
+        const parsed = new Date(dateString);
+        eventDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+        eventDate.setHours(0, 0, 0, 0);
       }
     }
 
@@ -1019,12 +1025,19 @@ export async function updatePromise(
       let eventDateCreate: Date | null = null;
       if (validatedData.interested_dates && validatedData.interested_dates.length === 1) {
         const dateString = validatedData.interested_dates[0];
+        // Extraer solo YYYY-MM-DD (ignorar hora y zona horaria si viene en formato ISO)
         const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (dateMatch) {
           const [, year, month, day] = dateMatch;
+          // Crear fecha en zona horaria local sin hora (00:00:00)
           eventDateCreate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+          // Normalizar a medianoche local para evitar problemas de zona horaria
+          eventDateCreate.setHours(0, 0, 0, 0);
         } else {
-          eventDateCreate = new Date(dateString);
+          // Fallback: parsear y normalizar
+          const parsed = new Date(dateString);
+          eventDateCreate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+          eventDateCreate.setHours(0, 0, 0, 0);
         }
       }
 

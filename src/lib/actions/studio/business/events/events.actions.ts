@@ -1768,8 +1768,14 @@ export async function actualizarFechaEvento(
     const validatedData = updateEventDateSchema.parse(data);
     const { event_id, event_date } = validatedData;
 
-    // Normalizar fecha (solo fecha, sin hora)
-    const nuevaFecha = new Date(event_date);
+    // Normalizar fecha (solo fecha, sin hora ni zona horaria)
+    // Extraer año, mes y día para crear fecha local sin problemas de zona horaria
+    const fechaDate = event_date instanceof Date ? event_date : new Date(event_date);
+    const nuevaFecha = new Date(
+      fechaDate.getFullYear(),
+      fechaDate.getMonth(),
+      fechaDate.getDate()
+    );
     nuevaFecha.setHours(0, 0, 0, 0);
 
     // Obtener studio
