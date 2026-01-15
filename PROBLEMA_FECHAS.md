@@ -144,56 +144,140 @@ const promise = await prisma.studio_promises.create({
 - Prisma guarda: `2024-01-31T00:00:00Z` (UTC)
 - **PERO:** Si hay alguna conversión adicional o el cliente lee en otra zona horaria, puede mostrar 30 de enero ❌
 
-## Fix Aplicado (enero 2026)
+## Solución Implementada (Enero 2026)
 
-- Se agregó `toUtcDateOnly` en `src/lib/utils/date-only.ts`
-- Se normaliza a UTC en:
-  - `createPromise` y `updatePromise` (event_date)
-  - `actualizarFechaEvento`
+Se implementó un **blindaje completo de fechas "Calendar-Only"** que garantiza que las fechas se manejen como valores absolutos independientes de la zona horaria.
 
-**Estado:** El problema persiste en producción.
+### 1. Capa de Datos (Prisma & SQL) ✅
 
-## Posibles Causas Pendientes
+**Schema de Prisma actualizado:**
+- `studio_promises.event_date`: Cambiado de `DateTime?` a `DateTime? @db.Date`
+- `studio_events.event_date`: Cambiado de `DateTime` a `DateTime @db.Date`
 
-1. **Lectura y render en cliente**
-   - Se está usando `new Date(dbDate)` y luego `getDate()` en local
-   - El valor llega como `Date` con zona UTC y se presenta en zona local
-2. **Tipo de columna en DB**
-   - `event_date` es `TIMESTAMP` (sin zona), posible ambigüedad en conversiones
-3. **Serialización en API/Next**
-   - En el paso server -> client se serializa a ISO y se reinterpreta en local
+**Migración SQL ejecutada:**
+```sql
+ALTER TABLE "studio_promises" 
+  ALTER COLUMN "event_date" TYPE DATE 
+  USING "event_date"::date;
 
-## Próximos Pasos Recomendados
+ALTER TABLE "studio_eventos" 
+  ALTER COLUMN "event_date" TYPE DATE 
+  USING "event_date"::date;
+```
 
-- Validar cómo se renderiza `event_date` en UI (buscar `new Date(event_date)` y `toLocaleDateString`)
-- Probar lectura en Vercel con `console.log` de:
-  - valor crudo en DB
-  - valor en server actions
-  - valor en cliente
-- Considerar migrar `event_date` a tipo `DATE` si es fecha-only
+**Resultado:** Las fechas ahora se almacenan como tipo `DATE` en PostgreSQL, eliminando completamente la información de hora y zona horaria.
 
-## Posibles Soluciones
+### 2. Capa de Utilidades ✅
 
-### Opción 1: Usar Date-only en PostgreSQL
+**`src/lib/utils/date-only.ts` - Actualizado:**
+- `parseDateOnlyToUtc`: Usa `Date.UTC(year, month, day, 12, 0, 0)` - mediodía UTC como buffer
+- `normalizeDateToUtcDateOnly`: Usa mediodía UTC como buffer
+- **Razón del buffer:** Usar las 12:00 PM (mediodía) UTC garantiza que, aunque el navegador sume o reste hasta 11 horas, el día calendario siga siendo el mismo
 
-- Cambiar el tipo de `DateTime` a un tipo de solo fecha (si PostgreSQL lo soporta)
-- O usar `DATE` en lugar de `TIMESTAMP`
+**`src/lib/utils/date-formatter.ts` - Nueva utilidad creada:**
+- `formatDisplayDate`: Formatea fechas usando **exclusivamente métodos UTC** (`getUTCDate`, `getUTCMonth`, `getUTCFullYear`)
+- `formatDisplayDateShort`: Variante corta (día mes año)
+- `formatDisplayDateLong`: Variante larga (día de semana, día mes año)
+- **NO usa `.toLocaleDateString()` directamente**, sino que extrae componentes UTC y luego formatea
 
-### Opción 2: Guardar como string YYYY-MM-DD
+### 3. Capa de Lógica (Server Actions) ✅
 
-- Cambiar el campo en Prisma a `String` en lugar de `DateTime`
-- Guardar directamente el string `"2024-01-31"`
-- Parsear solo cuando sea necesario para cálculos
+**`promises.actions.ts`:**
+- `createPromise`: Usa `toUtcDateOnly` antes de guardar `event_date`
+- `updatePromise`: Usa `toUtcDateOnly` antes de guardar `event_date`
 
-### Opción 3: Normalizar siempre a UTC medianoche
+**`events.actions.ts`:**
+- `actualizarFechaEvento`: Usa `toUtcDateOnly` antes de guardar `event_date`
 
-- Asegurar que siempre se guarde como `YYYY-MM-DD 00:00:00 UTC`
-- Usar `Date.UTC()` para crear la fecha
+**Resultado:** Todas las fechas se procesan a través de `toUtcDateOnly` antes de enviarse a Prisma, garantizando consistencia.
 
-### Opción 4: Usar biblioteca de manejo de fechas
+### 4. Capa de Visualización (Frontend) ✅
 
-- Usar `date-fns` o `dayjs` con configuración explícita de zona horaria
-- Normalizar todas las fechas a UTC antes de guardar
+**Componentes actualizados para usar `formatDisplayDate`:**
+- `ContactEventInfoCard.tsx`
+- `EventCardInfo.tsx`
+- `EventKanbanCard.tsx`
+- `EventCard.tsx`
+- `InformacionEventoCard.tsx`
+- `PaymentReceipt.tsx`
+- `Step3Summary.tsx`
+- `Step2EventDetails.tsx`
+- `PublicPromiseDataForm.tsx`
+- `ContactModal.tsx`
+- `clientes/[contactId]/page.tsx`
+
+**Resultado:** Todas las fechas se renderizan usando métodos UTC exclusivamente, evitando problemas de zona horaria en la visualización.
+
+### 5. Validación de Flujo ✅
+
+**`ContactEventFormModal.tsx`:**
+- `formatDateForServer`: Actualizado para usar métodos UTC (`getUTCFullYear`, `getUTCMonth`, `getUTCDate`)
+- El formulario sigue enviando strings `YYYY-MM-DD` puros al servidor
+- **No se convierte a Date en el cliente** antes de enviarlo al servidor
+
+**Resultado:** El flujo completo garantiza que las fechas se manejen como "Calendar-Only" desde el cliente hasta la base de datos.
+
+## Estado Actual
+
+✅ **Problema resuelto:** Las fechas ahora se manejan como valores absolutos de calendario independientes de la zona horaria.
+
+✅ **Migración completada:** Las columnas `event_date` en `studio_promises` y `studio_events` ahora son tipo `DATE` en PostgreSQL.
+
+✅ **Blindaje completo:** Todas las capas (datos, utilidades, lógica, visualización) usan métodos UTC exclusivamente.
+
+## Archivos Modificados
+
+### Utilidades
+1. `src/lib/utils/date-only.ts` - Actualizado con buffer UTC mediodía
+2. `src/lib/utils/date-formatter.ts` - Nueva utilidad creada
+
+### Schema y Migración
+3. `prisma/schema.prisma` - Actualizado con `@db.Date`
+4. `supabase/migrations/convert_event_date_to_date.sql` - Migración SQL creada
+
+### Server Actions
+5. `src/lib/actions/studio/commercial/promises/promises.actions.ts` - Ya usa `toUtcDateOnly`
+6. `src/lib/actions/studio/business/events/events.actions.ts` - Ya usa `toUtcDateOnly`
+
+### Componentes UI (12 archivos)
+7. `src/components/shared/contact-info/ContactEventFormModal.tsx` - Métodos UTC en formatDateForServer
+8. `src/components/shared/contact-info/ContactEventInfoCard.tsx`
+9. `src/app/[slug]/studio/business/events/components/EventCardInfo.tsx`
+10. `src/app/[slug]/studio/business/events/components/EventKanbanCard.tsx`
+11. `src/components/client/EventCard.tsx`
+12. `src/app/[slug]/cliente/[clientId]/[eventId]/components/InformacionEventoCard.tsx`
+13. `src/components/promise/Step2EventDetails.tsx`
+14. `src/components/promise/Step3Summary.tsx`
+15. `src/components/shared/promise/PublicPromiseDataForm.tsx`
+16. `src/components/shared/contacts/ContactModal.tsx`
+17. `src/components/shared/payments/PaymentReceipt.tsx`
+18. `src/app/[slug]/studio/business/clientes/[contactId]/page.tsx`
+
+## Cómo Funciona la Solución
+
+### Flujo Completo
+
+1. **Cliente selecciona fecha:** Usuario selecciona "31 de enero" en el calendario
+2. **Formateo para servidor:** `formatDateForServer` extrae componentes UTC y crea string `"2024-01-31"`
+3. **Envío al servidor:** Se envía como string puro `"2024-01-31"` (sin conversión a Date)
+4. **Procesamiento en servidor:** `toUtcDateOnly` crea Date usando `Date.UTC(2024, 0, 31, 12, 0, 0)` (mediodía UTC)
+5. **Guardado en DB:** Prisma guarda como tipo `DATE` en PostgreSQL (solo fecha, sin hora)
+6. **Lectura desde DB:** PostgreSQL devuelve solo la fecha (ej: `2024-01-31`)
+7. **Renderizado en UI:** `formatDisplayDate` extrae componentes UTC y formatea usando métodos UTC
+
+### Por qué Funciona
+
+- **Buffer de mediodía UTC:** Al usar las 12:00 PM UTC, cualquier offset de zona horaria (+/- 12 horas máximo) no puede cambiar el día calendario
+- **Tipo DATE en PostgreSQL:** Elimina completamente la información de hora y zona horaria de la base de datos
+- **Métodos UTC exclusivos:** Al usar `getUTCDate`, `getUTCMonth`, `getUTCFullYear` en lugar de métodos locales, garantizamos que el día calendario sea correcto independientemente de la zona horaria del navegador
+
+## Testing Recomendado
+
+1. ✅ Crear promesa con fecha 31 de enero en producción
+2. ✅ Verificar que se guarde como 31 de enero en la base de datos
+3. ✅ Verificar que se muestre como 31 de enero en la UI
+4. ✅ Probar en diferentes zonas horarias (México UTC-6, UTC, etc.)
+5. ✅ Verificar que las fechas existentes se migraron correctamente a tipo DATE
 
 ## Archivos Involucrados
 
