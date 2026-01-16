@@ -59,8 +59,9 @@ export function PromisePendienteSkeleton() {
           </ZenCard>
         </div>
 
-        {/* Columna 2: Cotizaciones */}
-        <div className="lg:col-span-1 flex flex-col h-full">
+        {/* Columna 2: Cotizaciones + Etiquetas */}
+        <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+          {/* Cotizaciones */}
           <ZenCard className="h-full flex flex-col">
             <ZenCardHeader className="border-b border-zinc-800 py-2 px-3">
               <div className="flex items-center justify-between">
@@ -95,28 +96,6 @@ export function PromisePendienteSkeleton() {
               </div>
             </ZenCardContent>
           </ZenCard>
-        </div>
-
-        {/* Columna 3: Agendamiento + Etiquetas */}
-        <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-          {/* Agendamiento */}
-          <ZenCard>
-            <ZenCardHeader className="border-b border-zinc-800 py-2 px-3">
-              <ZenCardTitle className="text-sm font-medium">
-                <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
-              </ZenCardTitle>
-            </ZenCardHeader>
-            <ZenCardContent className="p-4 space-y-3">
-              <div className="space-y-2">
-                <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />
-                <div className="h-10 bg-zinc-800 rounded animate-pulse" />
-              </div>
-              <div className="space-y-2">
-                <div className="h-3 w-20 bg-zinc-800 rounded animate-pulse" />
-                <div className="h-10 bg-zinc-800 rounded animate-pulse" />
-              </div>
-            </ZenCardContent>
-          </ZenCard>
 
           {/* Etiquetas */}
           <ZenCard>
@@ -133,6 +112,61 @@ export function PromisePendienteSkeleton() {
                     className="h-6 w-20 bg-zinc-800 rounded-full animate-pulse"
                   />
                 ))}
+              </div>
+            </ZenCardContent>
+          </ZenCard>
+        </div>
+
+        {/* Columna 3: Agendamiento + Estadísticas */}
+        <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+          {/* Agendamiento */}
+          <ZenCard>
+            <ZenCardHeader className="border-b border-zinc-800 py-2 px-3">
+              <div className="flex items-center justify-between">
+                <ZenCardTitle className="text-sm font-medium">
+                  <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+                </ZenCardTitle>
+                <div className="h-6 w-6 bg-zinc-800 rounded animate-pulse" />
+              </div>
+            </ZenCardHeader>
+            <ZenCardContent className="p-4 space-y-3">
+              <div className="space-y-2">
+                <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />
+                <div className="h-10 bg-zinc-800 rounded animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-3 w-20 bg-zinc-800 rounded animate-pulse" />
+                <div className="h-10 bg-zinc-800 rounded animate-pulse" />
+              </div>
+            </ZenCardContent>
+          </ZenCard>
+
+          {/* Estadísticas */}
+          <ZenCard>
+            <ZenCardHeader className="border-b border-zinc-800 py-2 px-3">
+              <div className="flex items-center justify-between">
+                <ZenCardTitle className="text-sm font-medium">
+                  <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
+                </ZenCardTitle>
+                <div className="h-6 w-6 bg-zinc-800 rounded animate-pulse" />
+              </div>
+            </ZenCardHeader>
+            <ZenCardContent className="p-4">
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="bg-zinc-800/30 rounded-md p-2">
+                    <div className="h-2.5 w-16 bg-zinc-800/50 rounded animate-pulse mb-1" />
+                    <div className="h-5 w-8 bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                  <div className="bg-zinc-800/30 rounded-md p-2">
+                    <div className="h-2.5 w-20 bg-zinc-800/50 rounded animate-pulse mb-1" />
+                    <div className="h-5 w-8 bg-zinc-800 rounded animate-pulse" />
+                  </div>
+                </div>
+                <div className="bg-zinc-800/30 rounded-md p-2">
+                  <div className="h-2.5 w-20 bg-zinc-800/50 rounded animate-pulse mb-1" />
+                  <div className="h-3 w-32 bg-zinc-800 rounded animate-pulse" />
+                </div>
               </div>
             </ZenCardContent>
           </ZenCard>
