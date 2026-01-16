@@ -692,6 +692,7 @@ function PromisesKanban({
                 studioSlug={studioSlug}
                 isFlexible={false}
                 onPromiseArchived={handlePromiseArchived}
+                onPromiseDeleted={handlePromiseDeleted}
                 onPromiseUpdated={onPromiseUpdated}
               />
             ))
@@ -707,6 +708,7 @@ function PromisesKanban({
                   studioSlug={studioSlug}
                   isFlexible={true}
                   onPromiseArchived={handlePromiseArchived}
+                  onPromiseDeleted={handlePromiseDeleted}
                   onPromiseUpdated={onPromiseUpdated}
                 />
               ))}
@@ -771,6 +773,7 @@ function KanbanColumn({
   studioSlug,
   isFlexible = false,
   onPromiseArchived,
+  onPromiseDeleted,
   onPromiseUpdated,
 }: {
   stage: PipelineStage;
@@ -779,6 +782,7 @@ function KanbanColumn({
   studioSlug: string;
   isFlexible?: boolean;
   onPromiseArchived?: (promiseId: string) => void;
+  onPromiseDeleted?: (promiseId: string) => void;
   onPromiseUpdated?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -835,7 +839,7 @@ function KanbanColumn({
               onClick={onPromiseClick}
               studioSlug={studioSlug}
               onArchived={() => promise.promise_id && onPromiseArchived?.(promise.promise_id)}
-              onDeleted={() => promise.promise_id && handlePromiseDeleted(promise.promise_id)}
+              onDeleted={() => promise.promise_id && onPromiseDeleted?.(promise.promise_id)}
               onTagsUpdated={onPromiseUpdated}
             />
           ))}
