@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 
 interface PromiseHeroSectionProps {
   contactName: string;
   eventTypeName: string | null;
-  eventDate: Date | null;
+  eventDate: Date | string | null;
   studioName: string;
   studioLogoUrl: string | null;
 }
@@ -17,22 +18,40 @@ export function PromiseHeroSection({
   studioName,
   studioLogoUrl,
 }: PromiseHeroSectionProps) {
-  // Formatear fecha con día de la semana
-  const formattedDate = eventDate
-    ? new Date(eventDate).toLocaleDateString('es-MX', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-    : null;
+  // Parsear fecha usando métodos UTC
+  const parseDate = (date: Date | string | null): Date | null => {
+    if (!date) return null;
+    if (typeof date === 'string') {
+      const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) {
+        const [, year, month, day] = dateMatch;
+        return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+      }
+      return new Date(date);
+    }
+    return date;
+  };
 
-  // Calcular días restantes
-  const daysRemaining = eventDate
-    ? Math.ceil(
-      (new Date(eventDate).getTime() - new Date().getTime()) /
-      (1000 * 60 * 60 * 24)
-    )
+  const dateObj = parseDate(eventDate);
+  const formattedDate = dateObj ? formatDisplayDateLong(dateObj) : null;
+
+  // Calcular días restantes usando métodos UTC
+  const daysRemaining = dateObj
+    ? (() => {
+      const today = new Date();
+      const todayUtc = new Date(Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate()
+      ));
+      const eventUtc = new Date(Date.UTC(
+        dateObj.getUTCFullYear(),
+        dateObj.getUTCMonth(),
+        dateObj.getUTCDate()
+      ));
+      const diffTime = eventUtc.getTime() - todayUtc.getTime();
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    })()
     : null;
 
   return (

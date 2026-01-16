@@ -633,10 +633,22 @@ export async function createPromise(
       : null;
 
     // Parsear fecha en UTC (sin cambios por zona horaria)
-    // Si hay una sola fecha en interested_dates, guardarla también como event_date
+    // VALIDACIÓN ESTRICTA: Solo aceptar una fecha y guardarla en event_date
+    // El schema ya normaliza a array de máximo 1 elemento
     let eventDate: Date | null = null;
-    if (validatedData.interested_dates && validatedData.interested_dates.length === 1) {
-      const dateString = validatedData.interested_dates[0];
+    const interestedDatesArray = Array.isArray(validatedData.interested_dates) 
+      ? validatedData.interested_dates 
+      : validatedData.interested_dates 
+        ? [validatedData.interested_dates] 
+        : [];
+    
+    // Validar que solo haya una fecha (el schema ya lo garantiza, pero doble validación)
+    if (interestedDatesArray.length > 1) {
+      console.warn('[createPromise] Múltiples fechas detectadas, usando solo la primera');
+    }
+    
+    if (interestedDatesArray.length >= 1) {
+      const dateString = interestedDatesArray[0];
       eventDate = toUtcDateOnly(dateString);
     }
 
@@ -650,10 +662,8 @@ export async function createPromise(
         duration_hours: durationHours,
         pipeline_stage_id: stageId,
         status: 'pending',
-        event_date: eventDate, // ✅ Guardar como event_date si hay una sola fecha
-        tentative_dates: validatedData.interested_dates
-          ? (validatedData.interested_dates as unknown)
-          : null,
+        event_date: eventDate, // ✅ Guardar directamente en event_date (solo una fecha permitida)
+        tentative_dates: null, // ✅ Ya no usar tentative_dates, solo event_date
       },
       include: {
         event_type: {

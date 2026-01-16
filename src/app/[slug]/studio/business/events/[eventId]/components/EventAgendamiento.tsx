@@ -18,7 +18,7 @@ import {
 import { AgendaFormModal } from '@/components/shared/agenda';
 import { obtenerAgendamientosPorEvento, eliminarAgendamiento } from '@/lib/actions/shared/agenda-unified.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
-import { formatDate } from '@/lib/actions/utils/formatting';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { toast } from 'sonner';
 
 interface EventAgendamientoProps {
@@ -212,7 +212,7 @@ export function EventAgendamiento({
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-zinc-400 mb-0.5">Fecha y Hora</p>
               <p className="text-sm font-semibold text-zinc-200">
-                {formatDate(agendamiento.date)}
+                {formatDisplayDate(agendamiento.date)}
               </p>
               {agendamiento.time && (
                 <div className="flex items-center gap-1.5 mt-1.5">
@@ -332,10 +332,22 @@ export function EventAgendamiento({
     </div>
   );
 
-  // Verificar si hay un agendamiento con la fecha principal
-  const mainDateAgendamiento = agendamientos.find(
-    (a) => a.date && new Date(a.date).toDateString() === eventDate.toDateString()
-  );
+  // Verificar si hay un agendamiento con la fecha principal usando métodos UTC
+  const mainDateAgendamiento = agendamientos.find((a) => {
+    if (!a.date) return false;
+    // Comparar solo fechas (sin hora) usando métodos UTC
+    const agendaDateOnly = new Date(Date.UTC(
+      new Date(a.date).getUTCFullYear(),
+      new Date(a.date).getUTCMonth(),
+      new Date(a.date).getUTCDate()
+    ));
+    const eventDateOnly = new Date(Date.UTC(
+      eventDate.getUTCFullYear(),
+      eventDate.getUTCMonth(),
+      eventDate.getUTCDate()
+    ));
+    return agendaDateOnly.getTime() === eventDateOnly.getTime();
+  });
 
   // Agendamientos adicionales (excluyendo el principal si existe)
   const additionalAgendamientos = agendamientos.filter(
@@ -382,7 +394,7 @@ export function EventAgendamiento({
                     <Calendar className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-emerald-200">
-                        {formatDate(eventDate)}
+                        {formatDisplayDate(eventDate)}
                       </p>
                     </div>
                   </div>

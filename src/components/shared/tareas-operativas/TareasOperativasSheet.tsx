@@ -20,6 +20,7 @@ import { obtenerOCrearCalendarioSecundario } from '@/lib/integrations/google/cli
 import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients/calendar/helpers';
 import { obtenerEstadoConexion } from '@/lib/integrations/google';
 import { AlertTriangle, Trash2, Settings } from 'lucide-react';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 
 interface TareasOperativasSheetProps {
   open: boolean;
@@ -479,9 +480,7 @@ export function TareasOperativasSheet({
                                 <div className="flex items-center gap-1">
                                   <CalendarIcon className="h-3 w-3" />
                                   <span>
-                                    {new Date(tarea.start_date).toDateString() === new Date(tarea.end_date).toDateString()
-                                      ? formatDateTime(new Date(tarea.start_date))
-                                      : formatDateRange(new Date(tarea.start_date), new Date(tarea.end_date))}
+                                    {formatDateRange(new Date(tarea.start_date), new Date(tarea.end_date))}
                                   </span>
                                 </div>
                               </div>

@@ -42,16 +42,20 @@ export function getWidthFromDuration(startDate: Date, endDate: Date): number {
 }
 
 /**
- * Normaliza una fecha a las 00:00:00
+ * Normaliza una fecha usando métodos UTC con mediodía como buffer
+ * Evita problemas de zona horaria al comparar fechas
  */
 export function normalizeDate(date: Date): Date {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    12, 0, 0
+  ));
 }
 
 /**
- * Valida que una fecha esté dentro del rango permitido
+ * Valida que una fecha esté dentro del rango permitido usando métodos UTC
  */
 export function isDateInRange(date: Date, dateRange: DateRange): boolean {
   if (!dateRange?.from || !dateRange?.to) return false;
@@ -60,7 +64,7 @@ export function isDateInRange(date: Date, dateRange: DateRange): boolean {
   const from = normalizeDate(dateRange.from);
   const to = normalizeDate(dateRange.to);
   
-  return normalizedDate >= from && normalizedDate <= to;
+  return normalizedDate.getTime() >= from.getTime() && normalizedDate.getTime() <= to.getTime();
 }
 
 /**
@@ -86,6 +90,7 @@ export function getTotalGridWidth(dateRange: DateRange): number {
 export function getTodayPosition(dateRange: DateRange): number | null {
   if (!dateRange?.from || !dateRange?.to) return null;
   
+  // Usar fecha actual normalizada con UTC
   const today = normalizeDate(new Date());
   
   // Verificar si hoy está dentro del rango

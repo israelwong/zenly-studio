@@ -36,7 +36,7 @@ interface ContactEventFormModalProps {
         event_name?: string; // Nombre del evento (opcional)
         duration_hours?: number | null;
         event_date?: Date | string | null; // Fecha única del evento (puede venir como Date o string YYYY-MM-DD desde server)
-        interested_dates?: string[];
+        interested_dates?: string; // Fecha de interés (solo string único, no array)
         acquisition_channel_id?: string;
         social_network_id?: string;
         referrer_contact_id?: string;
@@ -63,7 +63,62 @@ export function ContactEventFormModal({
     const [isInitialLoading, setIsInitialLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const eventTypeSelectRef = useRef<HTMLSelectElement>(null);
-    const [formData, setFormData] = useState<CreatePromiseData>({
+
+    // Helper para formatear fecha como YYYY-MM-DD sin zona horaria
+    const formatDateForServer = (date: Date): string => {
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    // Helper para parsear fecha de forma segura usando métodos UTC
+    const parseDateSafe = (date: Date | string | null): Date => {
+        if (!date) {
+            return new Date();
+        }
+        if (typeof date === "string") {
+            const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (dateMatch) {
+                const [, year, month, day] = dateMatch;
+                return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
+            }
+            const isoDate = new Date(date);
+            if (!Number.isNaN(isoDate.getTime())) {
+                return new Date(Date.UTC(
+                    isoDate.getUTCFullYear(),
+                    isoDate.getUTCMonth(),
+                    isoDate.getUTCDate(),
+                    12, 0, 0
+                ));
+            }
+            return new Date(date);
+        }
+        return new Date(Date.UTC(
+            date.getUTCFullYear(),
+            date.getUTCMonth(),
+            date.getUTCDate(),
+            12, 0, 0
+        ));
+    };
+
+    // Estado interno para event_date (string único) - más simple que interested_dates
+    const [eventDate, setEventDate] = useState<string | undefined>(() => {
+        // Priorizar event_date si existe, luego interested_dates (solo primera fecha)
+        if (initialData?.event_date) {
+            return typeof initialData.event_date === 'string'
+                ? initialData.event_date
+                : formatDateForServer(parseDateSafe(initialData.event_date));
+        }
+        if (initialData?.interested_dates) {
+            return typeof initialData.interested_dates === 'string'
+                ? initialData.interested_dates
+                : initialData.interested_dates[0];
+        }
+        return undefined;
+    });
+
+    const [formData, setFormData] = useState<Omit<CreatePromiseData, 'interested_dates'>>({
         name: initialData?.name || '',
         phone: initialData?.phone || '',
         email: initialData?.email || '',
@@ -72,7 +127,6 @@ export function ContactEventFormModal({
         event_location: initialData?.event_location || '',
         event_name: initialData?.event_name || '',
         duration_hours: initialData?.duration_hours ?? undefined,
-        interested_dates: initialData?.interested_dates,
         acquisition_channel_id: initialData?.acquisition_channel_id ?? '',
         social_network_id: initialData?.social_network_id,
         referrer_contact_id: initialData?.referrer_contact_id,
@@ -85,48 +139,12 @@ export function ContactEventFormModal({
     const [showContactSuggestions, setShowContactSuggestions] = useState(false);
     const [filteredContactSuggestions, setFilteredContactSuggestions] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
     const [allContacts, setAllContacts] = useState<Array<{ id: string; name: string; phone: string; email: string | null; status?: string; type?: 'contact' | 'crew' }>>([]);
-    // Helper para parsear fecha de forma segura usando métodos UTC
-    // Evita problemas de zona horaria al crear Date objects desde strings YYYY-MM-DD
-    const parseDateSafe = (date: Date | string | null): Date => {
-        if (!date) {
-            return new Date();
-        }
-        if (typeof date === "string") {
-            // Si es formato YYYY-MM-DD, parsear usando UTC con mediodía como buffer
-            const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
-            if (dateMatch) {
-                const [, year, month, day] = dateMatch;
-                // Usar Date.UTC con mediodía (12 PM) como buffer para evitar cambios de día
-                return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
-            }
-            // Si es string ISO, extraer componentes UTC si es posible
-            const isoDate = new Date(date);
-            if (!Number.isNaN(isoDate.getTime())) {
-                return new Date(Date.UTC(
-                    isoDate.getUTCFullYear(),
-                    isoDate.getUTCMonth(),
-                    isoDate.getUTCDate(),
-                    12, 0, 0
-                ));
-            }
-            return new Date(date);
-        }
-        // Si es Date object, crear nueva fecha usando componentes UTC
-        return new Date(Date.UTC(
-            date.getUTCFullYear(),
-            date.getUTCMonth(),
-            date.getUTCDate(),
-            12, 0, 0
-        ));
-    };
 
+    // Estado para fecha única (solo una fecha permitida)
     const [selectedDates, setSelectedDates] = useState<Date[]>(() => {
-        // Priorizar event_date si existe, luego interested_dates
-        if (initialData?.event_date) {
-            return [parseDateSafe(initialData.event_date)];
-        }
-        if (initialData?.interested_dates) {
-            return initialData.interested_dates.map(d => parseDateSafe(d));
+        // Usar eventDate interno para inicializar
+        if (eventDate) {
+            return [parseDateSafe(eventDate)];
         }
         return [];
     });
@@ -134,8 +152,8 @@ export function ContactEventFormModal({
         if (initialData?.event_date) {
             return parseDateSafe(initialData.event_date);
         }
-        if (initialData?.interested_dates && initialData.interested_dates.length > 0) {
-            return parseDateSafe(initialData.interested_dates[0]);
+        if (initialData?.interested_dates) {
+            return parseDateSafe(initialData.interested_dates);
         }
         return undefined;
     });
@@ -342,7 +360,6 @@ export function ContactEventFormModal({
                     event_location: initialData.event_location || '',
                     event_name: initialData.event_name || '',
                     duration_hours: initialData.duration_hours ?? undefined,
-                    interested_dates: initialData.interested_dates,
                     acquisition_channel_id: initialData.acquisition_channel_id ?? '',
                     social_network_id: initialData.social_network_id,
                     referrer_contact_id: initialData.referrer_contact_id,
@@ -350,13 +367,23 @@ export function ContactEventFormModal({
                 });
                 setNameInput(initialData.name || '');
 
-                // Priorizar event_date si existe (usar parseo seguro)
-                if (initialData.event_date) {
-                    setSelectedDates([parseDateSafe(initialData.event_date)]);
-                    setMonth(parseDateSafe(initialData.event_date));
-                } else if (initialData.interested_dates && initialData.interested_dates.length > 0) {
-                    setSelectedDates(initialData.interested_dates.map(d => parseDateSafe(d)));
-                    setMonth(parseDateSafe(initialData.interested_dates[0]));
+                // Actualizar eventDate interno
+                const newEventDate = initialData.event_date
+                    ? (typeof initialData.event_date === 'string'
+                        ? initialData.event_date
+                        : formatDateForServer(parseDateSafe(initialData.event_date)))
+                    : initialData.interested_dates
+                        ? (typeof initialData.interested_dates === 'string'
+                            ? initialData.interested_dates
+                            : initialData.interested_dates[0])
+                        : undefined;
+
+                setEventDate(newEventDate);
+
+                // Actualizar selectedDates basado en eventDate
+                if (newEventDate) {
+                    setSelectedDates([parseDateSafe(newEventDate)]);
+                    setMonth(parseDateSafe(newEventDate));
                 } else {
                     setSelectedDates([]);
                     setMonth(undefined);
@@ -401,7 +428,6 @@ export function ContactEventFormModal({
                     event_type_id: '',
                     event_location: '',
                     event_name: '',
-                    interested_dates: undefined,
                     acquisition_channel_id: '',
                     social_network_id: undefined,
                     referrer_contact_id: undefined,
@@ -409,6 +435,7 @@ export function ContactEventFormModal({
                 });
                 setNameInput('');
                 setSelectedDates([]);
+                setEventDate(undefined);
                 setReferrerInputValue('');
             }
             setErrors({});
@@ -417,32 +444,39 @@ export function ContactEventFormModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, initialData, isEditMode]);
 
-    // Helper para formatear fecha como YYYY-MM-DD sin zona horaria
-    // Usa métodos UTC para garantizar que el día calendario sea correcto
-    const formatDateForServer = (date: Date): string => {
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
+    // VALIDACIÓN ESTRICTA: Asegurar que solo haya UNA fecha seleccionada (nunca múltiples)
+    useEffect(() => {
+        // SIEMPRE limitar a máximo una fecha - FORZAR solo una fecha
+        if (selectedDates.length > 1) {
+            // Si hay más de una fecha, mantener solo la primera
+            console.warn('[ContactEventFormModal] Múltiples fechas detectadas, limitando a una sola fecha');
+            setSelectedDates((prev) => [prev[0]]);
+            return;
+        }
+        // Validar que si hay fecha, sea válida
+        if (selectedDates.length === 1) {
+            const date = selectedDates[0];
+            if (isNaN(date.getTime())) {
+                console.warn('[ContactEventFormModal] Fecha inválida detectada, limpiando selección');
+                setSelectedDates([]);
+                setEventDate(undefined);
+            }
+        }
+        // Si no hay fechas, asegurar que eventDate también esté undefined
+        if (selectedDates.length === 0 && eventDate !== undefined) {
+            setEventDate(undefined);
+        }
+    }, [selectedDates, eventDate]);
 
     useEffect(() => {
         if (selectedDates.length > 0) {
-            const dateStrings = selectedDates.map((d) => {
-                const date = new Date(d);
-                date.setHours(0, 0, 0, 0);
-                // Enviar solo YYYY-MM-DD para evitar problemas de zona horaria
-                return formatDateForServer(date);
-            });
-            setFormData((prev) => ({
-                ...prev,
-                interested_dates: dateStrings,
-            }));
+            const date = selectedDates[0];
+            date.setHours(0, 0, 0, 0);
+            // Guardar como string único en eventDate
+            const dateString = formatDateForServer(date);
+            setEventDate(dateString);
         } else {
-            setFormData((prev) => ({
-                ...prev,
-                interested_dates: undefined,
-            }));
+            setEventDate(undefined);
         }
     }, [selectedDates]);
 
@@ -457,22 +491,22 @@ export function ContactEventFormModal({
             const nuevosConflictos = new Map<string, AgendaItem[]>();
 
             try {
-                await Promise.all(
-                    selectedDates.map(async (date) => {
-                        const dateKey = date.toISOString().split('T')[0];
-                        const result = await verificarDisponibilidadFecha(
-                            studioSlug,
-                            date,
-                            undefined,
-                            initialData?.id || undefined,
-                            undefined
-                        );
+                // Solo verificar disponibilidad de la primera fecha (única fecha permitida)
+                if (selectedDates.length > 0) {
+                    const date = selectedDates[0];
+                    const dateKey = date.toISOString().split('T')[0];
+                    const result = await verificarDisponibilidadFecha(
+                        studioSlug,
+                        date,
+                        undefined,
+                        initialData?.id || undefined,
+                        undefined
+                    );
 
-                        if (result.success && result.data && result.data.length > 0) {
-                            nuevosConflictos.set(dateKey, result.data);
-                        }
-                    })
-                );
+                    if (result.success && result.data && result.data.length > 0) {
+                        nuevosConflictos.set(dateKey, result.data);
+                    }
+                }
 
                 setConflictosPorFecha(nuevosConflictos);
             } catch (error) {
@@ -663,26 +697,30 @@ export function ContactEventFormModal({
                 : undefined;
 
             // Normalizar teléfono antes de enviar
-            const formDataToSubmit = {
+            // Convertir eventDate (string) a interested_dates (array) para el schema
+            const formDataToSubmit: CreatePromiseData = {
                 ...formData,
                 phone: normalizedPhone,
                 event_location: eventLocation,
                 duration_hours: durationHours,
+                interested_dates: eventDate ? [eventDate] : undefined,
             };
 
             let result;
 
             // Si el contexto es 'event' y hay eventId, y solo se cambió la fecha, usar actualizarFechaEvento
             if (context === 'event' && eventId && isEditMode && initialData?.id) {
-                // Verificar si solo se cambió la fecha (comparar selectedDates con initialData.interested_dates)
-                const initialDates = initialData.interested_dates
-                    ? initialData.interested_dates.map(d => {
-                        const date = new Date(d);
-                        return formatDateForServer(date);
-                    }).sort()
-                    : [];
-                const newDates = selectedDates.map(d => formatDateForServer(d)).sort();
-                const datesChanged = JSON.stringify(initialDates) !== JSON.stringify(newDates);
+                // Verificar si solo se cambió la fecha (comparar eventDate con initialData)
+                const initialDate = initialData.event_date
+                    ? (typeof initialData.event_date === 'string'
+                        ? initialData.event_date
+                        : formatDateForServer(parseDateSafe(initialData.event_date)))
+                    : initialData.interested_dates
+                        ? (typeof initialData.interested_dates === 'string'
+                            ? initialData.interested_dates
+                            : initialData.interested_dates[0])
+                        : null;
+                const datesChanged = initialDate !== eventDate;
 
                 // Verificar si otros campos cambiaron
                 const otherFieldsChanged =
@@ -791,13 +829,10 @@ export function ContactEventFormModal({
 
     const formatDatesDisplay = () => {
         if (selectedDates.length === 0) {
-            return context === 'event' ? 'Seleccionar fecha' : 'Seleccionar fechas';
+            return 'Seleccionar fecha';
         }
-        if (selectedDates.length === 1) {
-            // Usar formatDisplayDate que usa métodos UTC exclusivamente
-            return formatDisplayDate(selectedDates[0]);
-        }
-        return `${selectedDates.length} fechas seleccionadas`;
+        // Usar formatDisplayDate que usa métodos UTC exclusivamente
+        return formatDisplayDate(selectedDates[0]);
     };
 
     return (
@@ -1318,7 +1353,7 @@ export function ContactEventFormModal({
                     {/* Fecha de Interés / Fecha del Evento */}
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-zinc-300 block mb-2">
-                            {context === 'event' ? 'Fecha del Evento' : 'Fecha(s) de Interés'}
+                            {context === 'event' ? 'Fecha del Evento' : 'Fecha de Interés'}
                         </label>
                         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                             <PopoverTrigger asChild>
@@ -1338,68 +1373,43 @@ export function ContactEventFormModal({
                                 </button>
                             </PopoverTrigger>
                             <PopoverContent
-                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-[9999] overflow-visible"
+                                className="w-auto p-0 bg-zinc-900 border-zinc-700 z-9999 overflow-visible"
                                 align="start"
                                 sideOffset={4}
                                 onOpenAutoFocus={(e) => e.preventDefault()}
                             >
                                 <div className="p-3">
-                                    {context === 'event' ? (
-                                        <Calendar
-                                            mode="single"
-                                            selected={selectedDates.length > 0 ? selectedDates[0] : undefined}
-                                            onSelect={(date: Date | undefined) => {
-                                                if (date) {
-                                                    setSelectedDates([date]);
-                                                    setMonth(date);
-                                                    // NO cerrar popover automáticamente - esperar botón Confirmar
-                                                } else {
-                                                    setSelectedDates([]);
-                                                    setMonth(undefined);
-                                                }
-                                            }}
-                                            month={month}
-                                            onMonthChange={setMonth}
-                                            numberOfMonths={1}
-                                            locale={es}
-                                            buttonVariant="ghost"
-                                            className="border border-zinc-700 rounded-lg"
-                                        />
-                                    ) : (
-                                        <Calendar
-                                            mode="multiple"
-                                            selected={selectedDates}
-                                            onSelect={(dates) => {
-                                                const dateArray = dates as Date[] | undefined;
-                                                if (dateArray) {
-                                                    // Eliminar duplicados basándose en la fecha (sin hora)
-                                                    const uniqueDates = Array.from(
-                                                        new Map(
-                                                            dateArray.map((date) => {
-                                                                const dateKey = date.toISOString().split('T')[0];
-                                                                return [dateKey, date];
-                                                            })
-                                                        ).values()
-                                                    );
-                                                    setSelectedDates(uniqueDates);
-                                                    if (uniqueDates.length > 0) {
-                                                        setMonth(uniqueDates[0]);
-                                                    }
-                                                    // NO cerrar popover automáticamente - esperar botón Confirmar
-                                                } else {
-                                                    setSelectedDates([]);
-                                                    setMonth(undefined);
-                                                }
-                                            }}
-                                            month={month}
-                                            onMonthChange={setMonth}
-                                            numberOfMonths={1}
-                                            locale={es}
-                                            buttonVariant="ghost"
-                                            className="border border-zinc-700 rounded-lg"
-                                            required={false}
-                                        />
-                                    )}
+                                    <Calendar
+                                        mode="single"
+                                        required
+                                        selected={selectedDates.length > 0 ? selectedDates[0] : undefined}
+                                        onSelect={(date: Date | undefined) => {
+                                            // VALIDACIÓN ESTRICTA: Solo permitir UNA fecha única
+                                            // Si date es undefined (usuario intenta deseleccionar), ignorar
+                                            if (!date) {
+                                                return;
+                                            }
+
+                                            // Normalizar fecha a mediodía UTC para evitar problemas de zona horaria
+                                            const normalizedDate = new Date(Date.UTC(
+                                                date.getUTCFullYear(),
+                                                date.getUTCMonth(),
+                                                date.getUTCDate(),
+                                                12, 0, 0
+                                            ));
+
+                                            // SIEMPRE reemplazar con un array de un solo elemento (nunca agregar)
+                                            setSelectedDates([normalizedDate]);
+                                            setEventDate(formatDateForServer(normalizedDate));
+                                            setMonth(normalizedDate);
+                                        }}
+                                        month={month}
+                                        onMonthChange={setMonth}
+                                        numberOfMonths={1}
+                                        locale={es}
+                                        buttonVariant="ghost"
+                                        className="border border-zinc-700 rounded-lg"
+                                    />
                                     <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-700 mt-3 shrink-0">
                                         <button
                                             type="button"
@@ -1426,93 +1436,44 @@ export function ContactEventFormModal({
                         <p className="text-xs text-zinc-400 mt-1">
                             {context === 'event'
                                 ? 'Puedes cambiar la fecha del evento siempre y cuando esté disponible'
-                                : 'Puedes elegir una o más fechas de interés asociadas a una sola promesa'
+                                : 'Selecciona una fecha de interés para la promesa'
                             }
                         </p>
-                        {selectedDates.some(date => {
+                        {selectedDates.length > 0 && (() => {
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);
-                            const selectedDate = new Date(date);
+                            const selectedDate = new Date(selectedDates[0]);
                             selectedDate.setHours(0, 0, 0, 0);
                             return selectedDate < today;
-                        }) && (
+                        })() && (
                                 <ZenCard variant="outlined" className="bg-orange-900/20 border-orange-700/50 mt-2">
                                     <ZenCardContent className="p-3">
                                         <div className="flex items-start gap-2">
-                                            <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                                            <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
                                             <div className="space-y-1.5 flex-1">
                                                 <p className="text-xs font-medium text-orange-300">
                                                     Has seleccionado una fecha que ya ha pasado:
                                                 </p>
-                                                <div className="space-y-1">
-                                                    {selectedDates
-                                                        .filter(date => {
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            const selectedDate = new Date(date);
-                                                            selectedDate.setHours(0, 0, 0, 0);
-                                                            return selectedDate < today;
-                                                        })
-                                                        .map((date) => (
-                                                            <p key={date.toISOString()} className="text-xs text-orange-200/80">
-                                                                • {formatDisplayDate(date)}
-                                                            </p>
-                                                        ))}
-                                                </div>
+                                                <p className="text-xs text-orange-200/80">
+                                                    • {formatDisplayDate(selectedDates[0])}
+                                                </p>
                                             </div>
                                         </div>
                                     </ZenCardContent>
                                 </ZenCard>
                             )}
-                        {selectedDates.length > 1 && (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                {Array.from(
-                                    new Map(
-                                        selectedDates
-                                            .sort((a, b) => a.getTime() - b.getTime())
-                                            .map((date) => {
-                                                const dateKey = date.toISOString().split('T')[0];
-                                                return [dateKey, date];
-                                            })
-                                    ).values()
-                                ).map((date, index) => {
-                                    const dateKey = date.toISOString().split('T')[0];
-                                    const hasConflict = conflictosPorFecha.has(dateKey);
-                                    return (
-                                        <div
-                                            key={`${dateKey}-${index}`}
-                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border ${hasConflict
-                                                ? 'bg-amber-900/20 text-amber-300 border-amber-700/50'
-                                                : 'bg-emerald-900/20 text-emerald-300 border-emerald-700/50'
-                                                }`}
-                                        >
-                                            <span>{formatDisplayDate(date)}</span>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    setSelectedDates(selectedDates.filter(d => d.toISOString().split('T')[0] !== dateKey));
-                                                }}
-                                                className="hover:bg-zinc-800/50 rounded p-0.5 transition-colors"
-                                                title="Eliminar fecha"
-                                            >
-                                                <X className="h-3 w-3" />
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                        {Array.from(conflictosPorFecha.entries()).map(([dateKey, conflictos]) => {
-                            const fecha = selectedDates.find(d => d.toISOString().split('T')[0] === dateKey);
-                            if (!fecha) return null;
+                        {/* Removed: Multiple dates display - now only single date allowed */}
+                        {selectedDates.length > 0 && (() => {
+                            const fecha = selectedDates[0];
+                            const dateKey = fecha.toISOString().split('T')[0];
+                            const conflictos = conflictosPorFecha.get(dateKey);
+                            if (!conflictos || conflictos.length === 0) return null;
 
                             return (
                                 <ZenCard key={dateKey} variant="outlined" className="bg-amber-900/20 border-amber-700/50 mt-2">
                                     <ZenCardContent className="p-3">
                                         <div className="flex items-start gap-2">
-                                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                            <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                                             <div className="space-y-1.5 flex-1">
                                                 <p className="text-xs font-medium text-amber-300">
                                                     {formatDisplayDate(fecha)} ya está programada:
@@ -1551,7 +1512,7 @@ export function ContactEventFormModal({
                                     </ZenCardContent>
                                 </ZenCard>
                             );
-                        })}
+                        })()}
                     </div>
                 </form>
             )}

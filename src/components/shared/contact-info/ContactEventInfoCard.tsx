@@ -73,7 +73,7 @@ interface ContactEventInfoCardProps {
     event_name?: string | null; // Nombre del evento
     duration_hours?: number | null; // Duración del evento en horas
     event_date?: Date | null; // Para eventos confirmados
-    interested_dates?: string[] | null; // Para promesas
+    interested_dates?: string | null; // Para promesas (solo una fecha única)
     address?: string | null; // Para eventos confirmados
     sede?: string | null; // Para eventos confirmados
   };
@@ -101,7 +101,7 @@ interface ContactEventInfoCardProps {
     event_location: string | null;
     event_name?: string | null; // Nombre del evento (opcional)
     duration_hours?: number | null; // Duración del evento en horas
-    interested_dates: string[] | null;
+    interested_dates: string | null;
     acquisition_channel_id: string | null;
     social_network_id: string | null;
     referrer_contact_id: string | null;
@@ -598,7 +598,13 @@ export function ContactEventInfoCard({
                 event_location: promiseNew.event_location !== undefined ? promiseNew.event_location : prev.event_location,
                 duration_hours: promiseNew.duration_hours !== undefined ? promiseNew.duration_hours : prev.duration_hours,
                 event_date: promiseNew.event_date !== undefined ? (promiseNew.event_date ? new Date(promiseNew.event_date) : null) : prev.event_date,
-                interested_dates: promiseNew.tentative_dates !== undefined ? (promiseNew.tentative_dates as string[] | null) : prev.interested_dates,
+                interested_dates: promiseNew.tentative_dates !== undefined 
+                  ? (Array.isArray(promiseNew.tentative_dates) && promiseNew.tentative_dates.length > 0
+                      ? promiseNew.tentative_dates[0] // Solo tomar la primera fecha si es array
+                      : typeof promiseNew.tentative_dates === 'string'
+                        ? promiseNew.tentative_dates // Si es string, usarlo directamente
+                        : null) as string | null
+                  : prev.interested_dates,
               }));
             }
           });
@@ -742,27 +748,27 @@ export function ContactEventInfoCard({
                   );
                 })()}
               </div>
-            ) : eventData.interested_dates && eventData.interested_dates.length > 0 ? (
+            ) : eventData.interested_dates ? (
               <div>
                 <label className="text-xs font-medium text-zinc-400 block mb-2">
-                  Fecha(s) de Interés
+                  Fecha de Interés
                 </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {eventData.interested_dates.map((date, idx) => {
-                    const dateObj = new Date(date);
-                    const colors = getDateBadgeColor(dateObj);
-                    return (
-                      <ZenBadge
-                        key={idx}
-                        variant="outline"
-                        className={`${colors.bgColor} ${colors.textColor} ${colors.borderColor} font-medium px-2 py-0.5 text-xs`}
-                      >
-                        <Calendar className="h-2.5 w-2.5 mr-1" />
-                        {formatDisplayDate(dateObj)}
-                      </ZenBadge>
-                    );
-                  })}
-                </div>
+                {(() => {
+                  const dateObj = typeof eventData.interested_dates === 'string'
+                    ? new Date(eventData.interested_dates)
+                    : null;
+                  if (!dateObj || isNaN(dateObj.getTime())) return null;
+                  const colors = getDateBadgeColor(dateObj);
+                  return (
+                    <ZenBadge
+                      variant="outline"
+                      className={`${colors.bgColor} ${colors.textColor} ${colors.borderColor} font-medium px-2 py-0.5 text-xs`}
+                    >
+                      <Calendar className="h-3 w-3 mr-1" />
+                      {formatDisplayDate(dateObj)}
+                    </ZenBadge>
+                  );
+                })()}
               </div>
             ) : (
               <div>
@@ -946,7 +952,7 @@ export function ContactEventInfoCard({
                   const year = date.getUTCFullYear();
                   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
                   const day = String(date.getUTCDate()).padStart(2, '0');
-                  return [`${year}-${month}-${day}`];
+                  return `${year}-${month}-${day}`; // Solo una fecha string
                 })()
                 : promiseData.interested_dates || undefined,
               acquisition_channel_id: acquisitionDataLocal?.acquisition_channel_id || promiseData.acquisition_channel_id || undefined,

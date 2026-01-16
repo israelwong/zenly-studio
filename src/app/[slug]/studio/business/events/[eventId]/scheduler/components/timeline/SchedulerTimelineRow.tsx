@@ -57,9 +57,14 @@ export function SchedulerTimelineRow({
     return (
         <div className="flex h-full min-h-[60px] relative">
             {days.map((day, index) => {
-                const dayDate = new Date(day);
-                dayDate.setHours(0, 0, 0, 0);
-                const isToday = dayDate.getTime() === today.getTime();
+                // Comparar fechas usando métodos UTC
+                const dayDateUtc = new Date(Date.UTC(
+                  day.getUTCFullYear(),
+                  day.getUTCMonth(),
+                  day.getUTCDate(),
+                  12, 0, 0
+                ));
+                const isToday = dayDateUtc.getTime() === todayDateOnly.getTime();
 
                 return (
                     <DayCell
