@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, Clock, Plus, Video, Link as LinkIcon, Edit, Copy, Check } from 'lucide-react';
+import { Calendar, MapPin, Clock, Plus, Video, Link as LinkIcon, Edit, Copy, Check, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
 import { AgendaFormModal } from '@/components/shared/agenda';
 import { obtenerAgendamientoPorPromise, eliminarAgendamiento } from '@/lib/actions/shared/agenda-unified.actions';
@@ -124,17 +124,30 @@ export function PromiseAgendamiento({
                 <Plus className="h-3.5 w-3.5" />
               </ZenButton>
             ) : (
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsModalOpen(true)}
-                disabled={!!eventoId}
-                className="h-6 w-6 p-0 text-zinc-400 hover:text-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={eventoId ? "No se pueden editar citas cuando el evento ya está creado" : "Editar agendamiento"}
-                aria-label="Editar agendamiento"
-              >
-                <Edit className="h-3.5 w-3.5" />
-              </ZenButton>
+              <div className="flex items-center gap-1">
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsModalOpen(true)}
+                  disabled={!!eventoId}
+                  className="h-6 w-6 p-0 text-zinc-400 hover:text-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={eventoId ? "No se pueden editar citas cuando el evento ya está creado" : "Editar agendamiento"}
+                  aria-label="Editar agendamiento"
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                </ZenButton>
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  disabled={!!eventoId || isDeleting}
+                  className="h-6 w-6 p-0 text-zinc-400 hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={eventoId ? "No se pueden eliminar citas cuando el evento ya está creado" : "Eliminar agendamiento"}
+                  aria-label="Eliminar agendamiento"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </ZenButton>
+              </div>
             )}
           </div>
         </ZenCardHeader>

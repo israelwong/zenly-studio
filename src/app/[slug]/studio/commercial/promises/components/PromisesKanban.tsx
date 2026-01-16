@@ -537,9 +537,9 @@ function PromisesKanban({
   // Manejar eliminar promesa con actualización local
   const handlePromiseDeleted = async (promiseId: string) => {
     // Remover la promesa del estado local inmediatamente
+    // No llamar a onPromiseUpdated() para evitar recargar toda la página
+    // El realtime ya maneja la sincronización y la actualización local es suficiente
     setLocalPromises((prev) => prev.filter((p) => p.promise_id !== promiseId));
-    // Refrescar desde el servidor
-    onPromiseUpdated();
   };
 
   // Manejar archivar promesa con actualización local

@@ -67,7 +67,7 @@ interface ResumenCotizacionProps {
  * cotizaciones asociadas a la misma promesa para mantener solo una cotización activa.
  */
 
-export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar, isRevision = false, condicionesComerciales, hideSubtotals = false }: ResumenCotizacionProps) {
+export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, promiseId: propPromiseId, onEditar: propOnEditar, isRevision = false, condicionesComerciales, hideSubtotals = false, negociacionPrecioOriginal, negociacionPrecioPersonalizado }: ResumenCotizacionProps) {
   const params = useParams();
   const router = useRouter();
   const studioSlug = propStudioSlug || (params.slug as string);

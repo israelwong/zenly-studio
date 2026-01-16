@@ -3,7 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, Edit2 } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
+import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from '@/components/ui/zen';
 import { CondicionesSection } from './CondicionesSection';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -54,30 +54,40 @@ export function CotizacionCard({
 
   return (
     <ZenCard className="h-auto">
-      <ZenCardHeader className="border-b border-zinc-800 py-3 px-4">
-        <ZenCardTitle className="text-sm">Cotización</ZenCardTitle>
-      </ZenCardHeader>
-      <ZenCardContent className="p-4 space-y-4">
-        {/* Fila 1: Nombre cotización con botones Editar y Preview */}
-        <div className="flex items-center justify-between gap-3">
-          <h4 className="text-base font-semibold text-white flex-1">{cotizacion.name}</h4>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 transition-colors text-xs text-zinc-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
+            Cotización
+          </ZenCardTitle>
+          <div className="flex items-center gap-1">
+            <ZenButton
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}?from=cierre`)}
+              className="h-6 w-6 p-0 text-zinc-400 hover:text-emerald-400"
+              title="Editar cotización"
+              aria-label="Editar cotización"
             >
-              <Edit2 className="h-3 w-3" />
-              Editar
-            </button>
-            <button
+              <Edit2 className="h-3.5 w-3.5" />
+            </ZenButton>
+            <ZenButton
+              variant="ghost"
+              size="sm"
               onClick={onPreviewClick}
               disabled={loadingCotizacion}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 transition-colors text-xs text-zinc-300 hover:text-white shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="h-6 w-6 p-0 text-zinc-400 hover:text-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Vista previa de cotización"
+              aria-label="Vista previa de cotización"
             >
-              <Eye className="h-3 w-3" />
-              {loadingCotizacion ? 'Cargando...' : 'Preview'}
-            </button>
+              <Eye className="h-3.5 w-3.5" />
+            </ZenButton>
           </div>
+        </div>
+      </ZenCardHeader>
+      <ZenCardContent className="p-4 space-y-4">
+        {/* Nombre cotización */}
+        <div>
+          <h4 className="text-base font-semibold text-white">{cotizacion.name}</h4>
         </div>
 
         {/* Fila 2: Descripción */}

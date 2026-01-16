@@ -26,6 +26,7 @@ interface CotizacionFormProps {
   hideActionButtons?: boolean;
   onAfterSave?: () => void;
   customActionButtons?: React.ReactNode;
+  hideVisibilityToggle?: boolean;
   condicionComercialPreAutorizada?: {
     id: string;
     name: string;
@@ -53,6 +54,7 @@ export function CotizacionForm({
   hideActionButtons = false,
   onAfterSave,
   customActionButtons,
+  hideVisibilityToggle = false,
   condicionComercialPreAutorizada,
   isPreAutorizada = false,
   onAutorizar,
@@ -1046,15 +1048,17 @@ export function CotizacionForm({
           </div>
 
           {/* Switch de visibilidad */}
-          <div className="mt-4 p-4 border border-zinc-700 rounded-lg bg-zinc-800/30">
-            <ZenSwitch
-              checked={visibleToClient}
-              onCheckedChange={setVisibleToClient}
-              label="Visible para el cliente"
-              description="Si está activado, el prospecto podrá ver esta cotización en el portal público"
-              variant="green"
-            />
-          </div>
+          {!hideVisibilityToggle && (
+            <div className="mt-4 p-4 border border-zinc-700 rounded-lg bg-zinc-800/30">
+              <ZenSwitch
+                checked={visibleToClient}
+                onCheckedChange={setVisibleToClient}
+                label="Visible para el cliente"
+                description="Si está activado, el prospecto podrá ver esta cotización en el portal público"
+                variant="green"
+              />
+            </div>
+          )}
 
           {/* Ficha de Condición Comercial Pre-Autorizada */}
           {isPreAutorizada && condicionComercialPreAutorizada && (

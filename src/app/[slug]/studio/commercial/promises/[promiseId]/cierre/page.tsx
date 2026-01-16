@@ -22,6 +22,7 @@ import { PagoInicialCard } from './components/PagoInicialCard';
 import { RegistroPagoModal } from './components/RegistroPagoModal';
 import { CierreActionButtons } from './components/CierreActionButtons';
 import { ZenConfirmModal } from '@/components/ui/zen';
+import { PromiseAgendamiento } from '../pendiente/components/eventos/PromiseAgendamiento';
 
 export default function PromiseCierrePage() {
   const params = useParams();
@@ -230,9 +231,18 @@ export default function PromiseCierrePage() {
             />
           </div>
 
-          {/* Columna 2: Cotización */}
+          {/* Columna 2: Agendamiento + Cotización */}
           {cotizacionEnCierre && (
-            <div className="lg:col-span-1 flex flex-col h-full">
+            <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+              {/* Agendamiento */}
+              <PromiseAgendamiento
+                studioSlug={studioSlug}
+                promiseId={promiseId}
+                isSaved={true}
+                eventoId={null} // Aún no hay evento creado en proceso de cierre
+              />
+
+              {/* Cotización */}
               <CotizacionCard
                 cotizacion={cotizacionEnCierre}
                 studioSlug={studioSlug}

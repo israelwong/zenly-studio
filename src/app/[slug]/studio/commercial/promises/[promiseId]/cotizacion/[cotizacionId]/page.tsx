@@ -20,6 +20,7 @@ export default function EditarCotizacionPage() {
   const promiseId = params.promiseId as string;
   const cotizacionId = params.cotizacionId as string;
   const contactId = searchParams.get('contactId');
+  const fromCierre = searchParams.get('from') === 'cierre';
 
   const [isMounted, setIsMounted] = useState(false);
 
@@ -215,12 +216,14 @@ export default function EditarCotizacionPage() {
             cotizacionId={cotizacionId}
             promiseId={promiseId}
             contactId={contactId || null}
-            redirectOnSuccess={`/${studioSlug}/studio/commercial/promises/${promiseId}`}
+            redirectOnSuccess={fromCierre ? undefined : `/${studioSlug}/studio/commercial/promises/${promiseId}`}
+            onAfterSave={fromCierre ? () => router.back() : undefined}
             onLoadingChange={setIsFormLoading}
             condicionComercialPreAutorizada={condicionComercial}
             isPreAutorizada={selectedByProspect}
             isAlreadyAuthorized={isAlreadyAuthorized}
             isDisabled={isPassingToCierre}
+            hideVisibilityToggle={fromCierre}
           />
         </ZenCardContent>
       </ZenCard>
@@ -235,7 +238,11 @@ export default function EditarCotizacionPage() {
             if (result.success) {
               toast.success('Cotización archivada exitosamente');
               setShowArchiveModal(false);
-              router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+              if (fromCierre) {
+                router.back();
+              } else {
+                router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+              }
             } else {
               toast.error(result.error || 'Error al archivar cotización');
             }
@@ -262,8 +269,12 @@ export default function EditarCotizacionPage() {
             const result = await deleteCotizacion(cotizacionId, studioSlug);
             if (result.success) {
               toast.success('Cotización eliminada exitosamente');
-              setShowArchiveModal(false);
-              router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+              setShowDeleteModal(false);
+              if (fromCierre) {
+                router.back();
+              } else {
+                router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+              }
             } else {
               toast.error(result.error || 'Error al eliminar cotización');
             }

@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
-import { notifyPromiseCreated } from '@/lib/notifications/studio';
 import {
   createPromiseSchema,
   updatePromiseSchema,
@@ -749,26 +748,6 @@ export async function createPromise(
       // No fallar la creación de la promesa si falla el log
     }
 
-    // Crear notificación
-    try {
-      // Usar la primera fecha de tentative_dates si está disponible, o defined_date si existe
-      const eventDate = promise.defined_date?.toISOString() ||
-        (promise.tentative_dates && Array.isArray(promise.tentative_dates) && promise.tentative_dates.length > 0
-          ? promise.tentative_dates[0]
-          : null);
-
-      await notifyPromiseCreated(
-        studio.id,
-        promise.id,
-        contact.name,
-        promise.event_type?.name || null,
-        eventDate
-      );
-      console.log('[PROMISES] ✅ Notificación creada exitosamente para promesa:', promise.id);
-    } catch (notificationError) {
-      console.error('[PROMISES] ❌ Error creando notificación:', notificationError);
-      // No fallar la creación de la promesa si falla la notificación
-    }
 
     return {
       success: true,
