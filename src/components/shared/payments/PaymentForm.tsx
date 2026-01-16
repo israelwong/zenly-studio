@@ -8,6 +8,7 @@ import { obtenerMetodosPagoManuales } from '@/lib/actions/studio/config/metodos-
 import { PaymentMethodRadio } from './PaymentMethodRadio';
 import { PaymentMethodsModal } from './PaymentMethodsModal';
 import { es } from 'date-fns/locale';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 
 // Tipo específico para ZenCalendar con mode="single"
 type ZenCalendarSingleProps = Omit<ZenCalendarProps, 'mode' | 'selected' | 'onSelect'> & {
@@ -54,9 +55,15 @@ export function PaymentForm({
   const [description, setDescription] = useState<string>(initialData?.description || '');
   const [paymentDate, setPaymentDate] = useState<Date | undefined>(() => {
     if (initialData?.payment_date) {
-      return new Date(initialData.payment_date);
+      // Normalizar fecha inicial usando métodos UTC para evitar problemas de zona horaria
+      const date = initialData.payment_date instanceof Date 
+        ? initialData.payment_date 
+        : new Date(initialData.payment_date);
+      return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0));
     }
-    return new Date();
+    // Usar fecha actual en UTC con mediodía como buffer
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0));
   });
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [metodosPago, setMetodosPago] = useState<Array<{ id: string; payment_method_name: string; payment_method: string | null }>>([]);
@@ -285,7 +292,14 @@ export function PaymentForm({
                 selected: paymentDate,
                 onSelect: (selectedDate: Date | undefined) => {
                   if (selectedDate) {
-                    setPaymentDate(selectedDate);
+                    // Normalizar fecha seleccionada usando métodos UTC con mediodía como buffer
+                    const normalizedDate = new Date(Date.UTC(
+                      selectedDate.getUTCFullYear(),
+                      selectedDate.getUTCMonth(),
+                      selectedDate.getUTCDate(),
+                      12, 0, 0
+                    ));
+                    setPaymentDate(normalizedDate);
                     setCalendarOpen(false);
                     if (errors.paymentDate) setErrors(prev => ({ ...prev, paymentDate: '' }));
                   }

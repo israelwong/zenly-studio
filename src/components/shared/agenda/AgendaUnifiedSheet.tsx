@@ -14,6 +14,7 @@ import { AgendaCalendar } from './AgendaCalendar';
 import { GoogleCalendarIntegration } from './GoogleCalendarIntegration';
 import { obtenerAgendaUnificada } from '@/lib/actions/shared/agenda-unified.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
+import { limpiarDuplicadosAgenda } from '@/lib/actions/shared/agenda-cleanup.actions';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { ZenButton } from '@/components/ui/zen';
@@ -34,12 +35,22 @@ export function AgendaUnifiedSheet({
   const [agendamientos, setAgendamientos] = useState<AgendaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'agenda'>('month');
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [currentDate, setCurrentDate] = useState<Date>(() => {
+    // Inicializar fecha actual usando UTC con mediodía como buffer
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0));
+  });
   const [hasCalendarEnabled, setHasCalendarEnabled] = useState(false);
 
   const loadAgendamientos = useCallback(async () => {
     setLoading(true);
     try {
+      // NOTA: Desactivado limpieza automática - las agendas se crearán al editar fechas de eventos
+      // const cleanupResult = await limpiarDuplicadosAgenda(studioSlug);
+      // if (cleanupResult.success && (cleanupResult.eliminados > 0 || cleanupResult.actualizados > 0)) {
+      //   console.log(`[Agenda] Limpieza: ${cleanupResult.eliminados} eliminados, ${cleanupResult.actualizados} actualizados`);
+      // }
+
       const result = await obtenerAgendaUnificada(studioSlug, {
         filtro: 'all',
       });
@@ -102,33 +113,78 @@ export function AgendaUnifiedSheet({
   };
 
   const handleNavigate = (action: 'PREV' | 'NEXT' | 'TODAY' | Date) => {
-    const newDate = new Date(currentDate);
+    // Normalizar fecha actual usando métodos UTC para evitar problemas de zona horaria
+    const currentDateUtc = new Date(Date.UTC(
+      currentDate.getUTCFullYear(),
+      currentDate.getUTCMonth(),
+      currentDate.getUTCDate(),
+      12, 0, 0
+    ));
 
     if (action === 'PREV') {
       if (calendarView === 'month') {
-        newDate.setMonth(newDate.getMonth() - 1);
+        // Navegar mes anterior usando UTC
+        const newMonth = currentDateUtc.getUTCMonth() - 1;
+        const newYear = currentDateUtc.getUTCFullYear();
+        setCurrentDate(new Date(Date.UTC(newYear, newMonth, currentDateUtc.getUTCDate(), 12, 0, 0)));
       } else if (calendarView === 'week') {
-        newDate.setDate(newDate.getDate() - 7);
+        // Navegar 7 días atrás usando UTC
+        const newDate = new Date(Date.UTC(
+          currentDateUtc.getUTCFullYear(),
+          currentDateUtc.getUTCMonth(),
+          currentDateUtc.getUTCDate() - 7,
+          12, 0, 0
+        ));
+        setCurrentDate(newDate);
       } else if (calendarView === 'day') {
-        newDate.setDate(newDate.getDate() - 1);
+        // Navegar 1 día atrás usando UTC
+        const newDate = new Date(Date.UTC(
+          currentDateUtc.getUTCFullYear(),
+          currentDateUtc.getUTCMonth(),
+          currentDateUtc.getUTCDate() - 1,
+          12, 0, 0
+        ));
+        setCurrentDate(newDate);
       }
     } else if (action === 'NEXT') {
       if (calendarView === 'month') {
-        newDate.setMonth(newDate.getMonth() + 1);
+        // Navegar mes siguiente usando UTC
+        const newMonth = currentDateUtc.getUTCMonth() + 1;
+        const newYear = currentDateUtc.getUTCFullYear();
+        setCurrentDate(new Date(Date.UTC(newYear, newMonth, currentDateUtc.getUTCDate(), 12, 0, 0)));
       } else if (calendarView === 'week') {
-        newDate.setDate(newDate.getDate() + 7);
+        // Navegar 7 días adelante usando UTC
+        const newDate = new Date(Date.UTC(
+          currentDateUtc.getUTCFullYear(),
+          currentDateUtc.getUTCMonth(),
+          currentDateUtc.getUTCDate() + 7,
+          12, 0, 0
+        ));
+        setCurrentDate(newDate);
       } else if (calendarView === 'day') {
-        newDate.setDate(newDate.getDate() + 1);
+        // Navegar 1 día adelante usando UTC
+        const newDate = new Date(Date.UTC(
+          currentDateUtc.getUTCFullYear(),
+          currentDateUtc.getUTCMonth(),
+          currentDateUtc.getUTCDate() + 1,
+          12, 0, 0
+        ));
+        setCurrentDate(newDate);
       }
     } else if (action === 'TODAY') {
-      setCurrentDate(new Date());
-      return;
+      // Usar fecha actual en UTC con mediodía como buffer
+      const now = new Date();
+      setCurrentDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0)));
     } else if (action instanceof Date) {
-      setCurrentDate(action);
-      return;
+      // Normalizar fecha recibida usando UTC
+      const normalizedDate = new Date(Date.UTC(
+        action.getUTCFullYear(),
+        action.getUTCMonth(),
+        action.getUTCDate(),
+        12, 0, 0
+      ));
+      setCurrentDate(normalizedDate);
     }
-
-    setCurrentDate(newDate);
   };
 
   return (

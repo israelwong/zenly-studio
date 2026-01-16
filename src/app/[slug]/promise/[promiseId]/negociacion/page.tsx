@@ -5,6 +5,7 @@ import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
+import { PromiseRedirectOnAuthorized } from '@/components/promise/PromiseRedirectOnAuthorized';
 import { NegociacionView } from './NegociacionView';
 
 interface NegociacionPageProps {
@@ -61,6 +62,7 @@ export default async function NegociacionPage({ params }: NegociacionPageProps) 
 
   return (
     <PromisePageProvider>
+      <PromiseRedirectOnAuthorized studioSlug={slug} promiseId={promiseId} />
       <Suspense fallback={<PromisePageSkeleton />}>
         <NegociacionView
           promise={promise}

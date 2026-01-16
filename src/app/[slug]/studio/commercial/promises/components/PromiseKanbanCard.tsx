@@ -5,7 +5,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, FlaskRound, Tag, Percent, HandCoins, GripVertical, ChevronRight } from 'lucide-react';
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
-import { formatRelativeTime, formatInitials, formatDate } from '@/lib/actions/utils/formatting';
+import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
+import { formatDisplayDateShort, formatDisplayDate } from '@/lib/utils/date-formatter';
 import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge, ZenDialog, ZenButton } from '@/components/ui/zen';
 import { getPromiseTagsByPromiseId, getPromiseTags, addTagToPromise, removeTagFromPromise, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
@@ -46,30 +47,70 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     };
 
     // Obtener fecha de evento (event_date tiene prioridad, luego defined_date, luego interested_dates)
+    // Retorna Date object para cálculos, pero siempre usa componentes UTC
+    // IMPORTANTE: Cuando Prisma devuelve un campo DATE, se serializa como string ISO al cliente
+    // Necesitamos extraer directamente los componentes YYYY-MM-DD sin crear Date intermedio
     const getEventDate = (): Date | null => {
         if (promise.event_date) {
-            return new Date(promise.event_date);
+            // Si es string ISO (viene serializado desde el servidor), extraer componentes directamente
+            if (typeof promise.event_date === 'string') {
+                const dateMatch = promise.event_date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (dateMatch) {
+                    const [, year, month, day] = dateMatch;
+                    // Crear fecha usando UTC con mediodía como buffer
+                    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
+                }
+            }
+            // Si es Date object, extraer componentes UTC
+            const date = promise.event_date instanceof Date ? promise.event_date : new Date(promise.event_date);
+            return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0));
         }
         if (promise.defined_date) {
-            return new Date(promise.defined_date);
+            // Mismo tratamiento para defined_date
+            if (typeof promise.defined_date === 'string') {
+                const dateMatch = promise.defined_date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (dateMatch) {
+                    const [, year, month, day] = dateMatch;
+                    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
+                }
+            }
+            const date = promise.defined_date instanceof Date ? promise.defined_date : new Date(promise.defined_date);
+            return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0));
         }
         if (promise.interested_dates && promise.interested_dates.length > 0) {
-            // Tomar la primera fecha de interés
-            return new Date(promise.interested_dates[0]);
+            // Tomar la primera fecha de interés y parsear usando componentes UTC
+            const dateStr = promise.interested_dates[0];
+            const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (dateMatch) {
+                const [, year, month, day] = dateMatch;
+                return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
+            }
+            const date = new Date(dateStr);
+            return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0));
         }
         return null;
     };
 
     const eventDate = getEventDate();
 
-    // Calcular días restantes
+    // Calcular días restantes usando métodos UTC exclusivamente
     const getDaysRemaining = (): number | null => {
         if (!eventDate) return null;
+        
+        // Obtener fecha actual usando componentes UTC
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const event = new Date(eventDate);
-        event.setHours(0, 0, 0, 0);
-        const diffTime = event.getTime() - today.getTime();
+        const todayYear = today.getUTCFullYear();
+        const todayMonth = today.getUTCMonth();
+        const todayDay = today.getUTCDate();
+        const todayUtc = new Date(Date.UTC(todayYear, todayMonth, todayDay));
+        
+        // Extraer componentes UTC de la fecha del evento
+        const eventYear = eventDate.getUTCFullYear();
+        const eventMonth = eventDate.getUTCMonth();
+        const eventDay = eventDate.getUTCDate();
+        const eventUtc = new Date(Date.UTC(eventYear, eventMonth, eventDay));
+        
+        const diffTime = eventUtc.getTime() - todayUtc.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         return diffDays;
     };
@@ -234,11 +275,10 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
             !cot.archived
     ).length;
 
-    // Formatear fecha y hora del agendamiento
+    // Formatear fecha y hora del agendamiento usando métodos UTC
     const formatAgendamientoDate = (agenda: AgendaItem): string => {
         if (!agenda.date) return '';
-        const date = new Date(agenda.date);
-        const dateStr = formatDate(date);
+        const dateStr = formatDisplayDate(agenda.date);
         const timeStr = agenda.time || '';
         return timeStr ? `${dateStr} ${timeStr}` : dateStr;
     };
@@ -432,11 +472,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                         <div className={`flex items-center gap-1.5 text-xs ${getDateColor()}`}>
                             <Calendar className="h-3 w-3 shrink-0" />
                             <span className="font-medium">
-                                {new Intl.DateTimeFormat("es-MX", {
-                                    day: "numeric",
-                                    month: "short",
-                                    year: "numeric"
-                                }).format(eventDate)}
+                                {formatDisplayDateShort(eventDate)}
                                 {daysRemaining !== null && (
                                     <span className="ml-1.5 font-normal opacity-80">
                                         {isExpired

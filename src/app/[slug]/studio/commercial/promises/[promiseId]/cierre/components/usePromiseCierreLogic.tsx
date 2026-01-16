@@ -372,7 +372,7 @@ export function usePromiseCierreLogic({
 
         if (result.success && result.data) {
           toast.success('¡Cotización autorizada y evento creado!');
-          router.refresh();
+          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
         } else {
           toast.error(result.error || 'Error al autorizar cotización');
         }

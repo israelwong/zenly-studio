@@ -28,10 +28,19 @@ export async function actualizarSchedulerTaskFechas(
       };
     }
 
-    const startDate = new Date(data.start_date);
-    const endDate = new Date(data.end_date);
+    // Normalizar fechas usando métodos UTC para evitar problemas de zona horaria
+    const startDate = data.start_date instanceof Date 
+        ? new Date(Date.UTC(data.start_date.getUTCFullYear(), data.start_date.getUTCMonth(), data.start_date.getUTCDate(), 12, 0, 0))
+        : new Date(Date.UTC(new Date(data.start_date).getUTCFullYear(), new Date(data.start_date).getUTCMonth(), new Date(data.start_date).getUTCDate(), 12, 0, 0));
+    const endDate = data.end_date instanceof Date 
+        ? new Date(Date.UTC(data.end_date.getUTCFullYear(), data.end_date.getUTCMonth(), data.end_date.getUTCDate(), 12, 0, 0))
+        : new Date(Date.UTC(new Date(data.end_date).getUTCFullYear(), new Date(data.end_date).getUTCMonth(), new Date(data.end_date).getUTCDate(), 12, 0, 0));
 
-    if (startDate > endDate) {
+    // Comparar solo fechas (sin hora) usando UTC
+    const startDateOnly = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+    const endDateOnly = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
+
+    if (startDateOnly > endDateOnly) {
       return {
         success: false,
         error: 'La fecha de inicio no puede ser posterior a la fecha de fin',
@@ -55,10 +64,20 @@ export async function actualizarSchedulerTaskFechas(
       };
     }
 
-    // Verificar si las fechas realmente cambiaron
+    // Verificar si las fechas realmente cambiaron comparando solo fechas (sin hora) usando UTC
+    const currentStartDateOnly = new Date(Date.UTC(
+      currentTask.start_date.getUTCFullYear(),
+      currentTask.start_date.getUTCMonth(),
+      currentTask.start_date.getUTCDate()
+    ));
+    const currentEndDateOnly = new Date(Date.UTC(
+      currentTask.end_date.getUTCFullYear(),
+      currentTask.end_date.getUTCMonth(),
+      currentTask.end_date.getUTCDate()
+    ));
     const datesChanged =
-      currentTask.start_date.getTime() !== startDate.getTime() ||
-      currentTask.end_date.getTime() !== endDate.getTime();
+      currentStartDateOnly.getTime() !== startDateOnly.getTime() ||
+      currentEndDateOnly.getTime() !== endDateOnly.getTime();
 
     // Si las fechas cambiaron y la tarea estaba sincronizada, marcar como DRAFT
     const updateData: {

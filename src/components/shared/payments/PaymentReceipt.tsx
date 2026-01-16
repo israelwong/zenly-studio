@@ -5,7 +5,8 @@ import { User, DollarSign, FileText, Download, Calendar, X } from 'lucide-react'
 import { ZenDialog, ZenButton, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Skeleton } from '@/components/ui/shadcn/Skeleton';
 import { obtenerDatosComprobante, type ReceiptData } from '@/lib/actions/studio/business/events/payments-receipt.actions';
-import { formatDate, formatDateTime, formatNumber } from '@/lib/actions/utils/formatting';
+import { formatDateTime, formatNumber } from '@/lib/actions/utils/formatting';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { toast } from 'sonner';
 
 
@@ -290,7 +291,7 @@ export function PaymentReceipt({
                         {data.event.event_date && (
                           <div>
                             <p className="text-xs text-zinc-400 mb-1">Fecha del Evento</p>
-                            <p className="text-sm font-medium text-zinc-100">{formatDate(data.event.event_date)}</p>
+                            <p className="text-sm font-medium text-zinc-100">{formatDisplayDate(data.event.event_date)}</p>
                           </div>
                         )}
                       </div>
@@ -507,7 +508,7 @@ export function PaymentReceipt({
                   fontSize: '14px',
                   color: '#4b5563',
                   margin: '0 0 4px 0'
-                }}>Fecha: {formatDate(data.payment.payment_date)}</p>
+                }}>Fecha: {formatDisplayDate(data.payment.payment_date)}</p>
                 <p style={{
                   fontSize: '14px',
                   color: '#4b5563',
@@ -611,7 +612,7 @@ export function PaymentReceipt({
                   {data.event.event_date && (
                     <div>
                       <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Fecha del Evento</p>
-                      <p style={{ fontSize: '14px', fontWeight: '500', color: '#111827', margin: 0 }}>{formatDate(data.event.event_date)}</p>
+                      <p style={{ fontSize: '14px', fontWeight: '500', color: '#111827', margin: 0 }}>{formatDisplayDate(data.event.event_date)}</p>
                     </div>
                   )}
                 </div>

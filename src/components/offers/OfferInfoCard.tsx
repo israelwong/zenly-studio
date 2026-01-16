@@ -1,5 +1,6 @@
 import { ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { Percent, Calendar, Coins } from 'lucide-react';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 
 interface OfferInfoCardProps {
   discountPercentage: number | null;
@@ -36,14 +37,15 @@ export function OfferInfoCard({
     ? 100 - advancePercentage
     : null;
 
-  // Formatear fechas
+  // Formatear fechas usando métodos UTC para evitar problemas de zona horaria
   const formatDate = (date: Date | null) => {
     if (!date) return null;
-    return new Intl.DateTimeFormat('es-MX', {
+    // Usar formatDisplayDate que usa métodos UTC exclusivamente
+    return formatDisplayDate(date, {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
-    }).format(new Date(date));
+    });
   };
 
   // Determinar texto de vigencia

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { ZenButton, ZenCard } from '@/components/ui/zen';
 import { prisma } from '@/lib/prisma';
+import type { PublicCotizacion } from '@/types/public-promise';
 
 interface PromisePageProps {
   params: Promise<{
@@ -96,10 +97,10 @@ export default async function PromisePage({ params }: PromisePageProps) {
   // 1. Negociación (prioridad más alta)
   // 2. Cierre (si tiene selected_by_prospect: true)
   // 3. Pendientes (default)
-  
+
   // 1. Prioridad: Cotización en negociación (NO debe tener selected_by_prospect: true)
   const cotizacionNegociacion = cotizaciones.find(
-    (cot) => cot.status === 'negociacion' && cot.selected_by_prospect !== true
+    (cot: PublicCotizacion) => cot.status === 'negociacion' && cot.selected_by_prospect !== true
   );
   if (cotizacionNegociacion) {
     redirect(`/${slug}/promise/${promiseId}/negociacion`);
@@ -107,7 +108,7 @@ export default async function PromisePage({ params }: PromisePageProps) {
 
   // 2. Prioridad: Cotización en cierre (debe tener selected_by_prospect: true)
   const cotizacionEnCierre = cotizaciones.find(
-    (cot) => cot.selected_by_prospect === true && cot.status === 'en_cierre'
+    (cot: PublicCotizacion) => cot.selected_by_prospect === true && cot.status === 'en_cierre'
   );
   if (cotizacionEnCierre) {
     redirect(`/${slug}/promise/${promiseId}/cierre`);
@@ -139,8 +140,8 @@ export async function generateMetadata({
     const eventType = promise.event_type_name || 'Evento';
     const eventName = promise.event_name || '';
     const studioName = studio.studio_name;
-    
-    const title = eventName 
+
+    const title = eventName
       ? `${eventType} ${eventName} | ${studioName}`
       : `${eventType} | ${studioName}`;
     const description = `Informaci?n de tu ${promise.event_type_name || 'evento'} con ${studio.studio_name}`;

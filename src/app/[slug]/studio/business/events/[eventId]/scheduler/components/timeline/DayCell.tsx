@@ -34,11 +34,19 @@ interface DayCellHeaderProps {
 }
 
 function DayCellHeader({ date, showMonth = false }: DayCellHeaderProps) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const cellDate = new Date(date);
-    cellDate.setHours(0, 0, 0, 0);
-    const isTodayCell = cellDate.getTime() === today.getTime();
+    // Comparar fechas usando métodos UTC para evitar problemas de zona horaria
+    const todayUtc = new Date();
+    const todayDateOnly = new Date(Date.UTC(
+      todayUtc.getUTCFullYear(),
+      todayUtc.getUTCMonth(),
+      todayUtc.getUTCDate()
+    ));
+    const cellDateOnly = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate()
+    ));
+    const isTodayCell = cellDateOnly.getTime() === todayDateOnly.getTime();
 
     return (
         <div className="w-[60px] flex-shrink-0 h-full flex flex-col items-center justify-center border-r border-zinc-800/50 bg-zinc-900/50 relative">
@@ -98,28 +106,38 @@ export function DayCell({
         }
     };
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const cellDate = new Date(date);
-    cellDate.setHours(0, 0, 0, 0);
-    const isTodayCell = cellDate.getTime() === today.getTime();
+    // Comparar fechas usando métodos UTC para evitar problemas de zona horaria
+    const todayUtc = new Date();
+    const todayDateOnly = new Date(Date.UTC(
+        todayUtc.getUTCFullYear(),
+        todayUtc.getUTCMonth(),
+        todayUtc.getUTCDate(),
+        12, 0, 0
+    ));
+    const cellDateUtc = new Date(Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        12, 0, 0
+    ));
+    const isTodayCell = cellDateUtc.getTime() === todayDateOnly.getTime();
 
     const tasksThisDay = tasks.filter(task => {
-        const taskStart = new Date(task.start_date);
-        const taskEnd = new Date(task.end_date);
-        const dayDate = new Date(date);
-
+        // Normalizar fechas usando métodos UTC
         const normalizeDate = (d: Date) => {
-            const normalized = new Date(d);
-            normalized.setHours(0, 0, 0, 0);
-            return normalized;
+            return new Date(Date.UTC(
+                d.getUTCFullYear(),
+                d.getUTCMonth(),
+                d.getUTCDate(),
+                12, 0, 0
+            ));
         };
 
-        const normalizedDay = normalizeDate(dayDate);
-        const normalizedStart = normalizeDate(taskStart);
-        const normalizedEnd = normalizeDate(taskEnd);
+        const normalizedDay = normalizeDate(date);
+        const normalizedStart = normalizeDate(task.start_date);
+        const normalizedEnd = normalizeDate(task.end_date);
 
-        return normalizedDay >= normalizedStart && normalizedDay <= normalizedEnd;
+        return normalizedDay.getTime() >= normalizedStart.getTime() && normalizedDay.getTime() <= normalizedEnd.getTime();
     });
 
 

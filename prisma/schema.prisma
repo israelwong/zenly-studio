@@ -1316,7 +1316,7 @@ model studio_promises {
   event_location                  String?
   name                            String?
   address                         String?
-  event_date                      DateTime?
+  event_date                      DateTime? @db.Date
   duration_hours                  Int?
   pipeline_stage_id               String?
   status                          String                          @default("pending")
@@ -1453,7 +1453,7 @@ model studio_events {
   contract_id            String? // Referencia al contrato firmado
   event_type_id          String?
   stage_id               String?
-  event_date             DateTime
+  event_date             DateTime @db.Date
   status                 EventStatus                       @default(ACTIVE)
   user_id                String?
   created_at             DateTime                          @default(now())

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { logPromiseAction } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 // =============================================================================
 // SCHEMAS
@@ -102,11 +103,137 @@ export interface AgendaResponse {
 }
 
 // =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Construye metadata según el tipo de agenda
+ */
+function construirMetadataAgenda(params: {
+  contexto: 'promise' | 'evento';
+  type_scheduling?: 'presencial' | 'virtual' | null;
+  isMainEventDate?: boolean;
+  scheduler_task_id?: string;
+}): Record<string, unknown> {
+  const { contexto, type_scheduling, isMainEventDate, scheduler_task_id } = params;
+
+  // 1. PROMESA FECHA EVENTO (NO Google Calendar)
+  if (contexto === 'promise' && !type_scheduling) {
+    return {
+      agenda_type: 'event_date',
+      sync_google: false,
+    };
+  }
+
+  // 2. PROMESA CITA PRESENCIAL/VIRTUAL (SÍ Google Calendar - Principal)
+  if (contexto === 'promise' && type_scheduling) {
+    return {
+      agenda_type: 'commercial_appointment',
+      sync_google: true,
+      google_calendar_type: 'primary',
+    };
+  }
+
+  // 3. EVENTO ASIGNADO (SÍ Google Calendar - Principal)
+  if (contexto === 'evento' && !type_scheduling && isMainEventDate) {
+    return {
+      agenda_type: 'main_event_date',
+      sync_google: true,
+      google_calendar_type: 'primary',
+      is_main_event_date: true,
+    };
+  }
+
+  // 4. EVENTO CITA PRESENCIAL/VIRTUAL (SÍ Google Calendar - Principal)
+  if (contexto === 'evento' && type_scheduling) {
+    return {
+      agenda_type: 'event_appointment',
+      sync_google: true,
+      google_calendar_type: 'primary',
+    };
+  }
+
+  // 5. EVENTO TAREA PERSONAL (SÍ Google Calendar - Secundario)
+  if (contexto === 'evento' && scheduler_task_id) {
+    return {
+      agenda_type: 'scheduler_task',
+      sync_google: true,
+      google_calendar_type: 'secondary',
+      scheduler_task_id,
+    };
+  }
+
+  // Default: evento sin tipo específico
+  if (contexto === 'evento') {
+    return {
+      agenda_type: 'main_event_date',
+      sync_google: true,
+      google_calendar_type: 'primary',
+      is_main_event_date: isMainEventDate || false,
+    };
+  }
+
+  // Fallback
+  return {
+    agenda_type: 'event_date',
+    sync_google: false,
+  };
+}
+
+/**
+ * Obtiene metadata de agenda, calculándolo si no existe (backward compatibility)
+ */
+function obtenerMetadataAgenda(agenda: {
+  contexto: string | null;
+  type_scheduling: string | null;
+  evento_id: string | null;
+  promise_id: string | null;
+  date: Date | null;
+  metadata: unknown;
+  eventos?: {
+    promise?: {
+      event_date: Date | null;
+    } | null;
+  } | null;
+}): Record<string, unknown> {
+  // Si ya tiene metadata, retornarlo
+  if (agenda.metadata && typeof agenda.metadata === 'object') {
+    return agenda.metadata as Record<string, unknown>;
+  }
+
+  // Calcular metadata dinámicamente
+  const contexto = (agenda.contexto as 'promise' | 'evento') || 'promise';
+  const typeScheduling = (agenda.type_scheduling as 'presencial' | 'virtual' | null) || null;
+  
+  // Determinar si es fecha principal del evento
+  let isMainEventDate = false;
+  if (contexto === 'evento' && agenda.eventos?.promise?.event_date && agenda.date) {
+    const eventMainDateOnly = new Date(Date.UTC(
+      new Date(agenda.eventos.promise.event_date).getUTCFullYear(),
+      new Date(agenda.eventos.promise.event_date).getUTCMonth(),
+      new Date(agenda.eventos.promise.event_date).getUTCDate()
+    ));
+    const agendaDateOnly = new Date(Date.UTC(
+      new Date(agenda.date).getUTCFullYear(),
+      new Date(agenda.date).getUTCMonth(),
+      new Date(agenda.date).getUTCDate()
+    ));
+    isMainEventDate = eventMainDateOnly.getTime() === agendaDateOnly.getTime();
+  }
+
+  return construirMetadataAgenda({
+    contexto,
+    type_scheduling: typeScheduling,
+    isMainEventDate,
+  });
+}
+
+// =============================================================================
 // SERVER ACTIONS
 // =============================================================================
 
 /**
- * Obtener agenda unificada (promises + eventos)
+ * Obtener agenda unificada (SOLO studio_agenda como fuente única)
  */
 export async function obtenerAgendaUnificada(
     studioSlug: string,
@@ -198,17 +325,79 @@ export async function obtenerAgendaUnificada(
             },
         });
 
-        const items: AgendaItem[] = agendas.map((agenda) => {
-            // Determinar si es fecha principal del evento comparando con event_date de la promesa
+        // Filtrar duplicados: si hay múltiples agendas para el mismo evento_id con la misma fecha (solo fecha, sin hora),
+        // mantener solo la más reciente
+        const agendasUnicas = agendas.reduce((acc, agenda) => {
+            if (agenda.evento_id && agenda.date) {
+                // Normalizar fecha para comparación usando UTC
+                const fechaNormalizada = new Date(Date.UTC(
+                    new Date(agenda.date).getUTCFullYear(),
+                    new Date(agenda.date).getUTCMonth(),
+                    new Date(agenda.date).getUTCDate()
+                ));
+                
+                const key = `${agenda.evento_id}-${fechaNormalizada.getTime()}`;
+                const existente = acc.get(key);
+                
+                if (!existente || (agenda.created_at && existente.created_at && agenda.created_at > existente.created_at)) {
+                    acc.set(key, agenda);
+                }
+            } else {
+                // Si no tiene evento_id o fecha, agregar directamente
+                acc.set(agenda.id, agenda);
+            }
+            return acc;
+        }, new Map());
+
+        const items: AgendaItem[] = Array.from(agendasUnicas.values()).map((agenda) => {
+            // Determinar si es fecha principal del evento comparando con event_date de la promesa usando métodos UTC
             const eventMainDate = agenda.eventos?.promise?.event_date;
             const agendaDate = agenda.date ? new Date(agenda.date) : null;
-            const isMainEventDate = eventMainDate && agendaDate && 
-                new Date(eventMainDate).toDateString() === agendaDate.toDateString() &&
-                agenda.contexto === 'evento';
+            
+            let isMainEventDate = false;
+            if (eventMainDate && agendaDate && agenda.contexto === 'evento') {
+                // Comparar solo fechas (sin hora) usando métodos UTC
+                const eventMainDateOnly = new Date(Date.UTC(
+                    new Date(eventMainDate).getUTCFullYear(),
+                    new Date(eventMainDate).getUTCMonth(),
+                    new Date(eventMainDate).getUTCDate()
+                ));
+                const agendaDateOnly = new Date(Date.UTC(
+                    agendaDate.getUTCFullYear(),
+                    agendaDate.getUTCMonth(),
+                    agendaDate.getUTCDate()
+                ));
+                isMainEventDate = eventMainDateOnly.getTime() === agendaDateOnly.getTime();
+            }
+
+            // BACKWARD COMPATIBILITY: Si no tiene metadata, calcularlo dinámicamente
+            const metadata = obtenerMetadataAgenda({
+                contexto: agenda.contexto,
+                type_scheduling: agenda.type_scheduling,
+                evento_id: agenda.evento_id,
+                promise_id: agenda.promise_id,
+                date: agenda.date,
+                metadata: agenda.metadata,
+                eventos: agenda.eventos,
+            });
+
+            // Normalizar fecha usando UTC antes de retornar para evitar problemas de zona horaria
+            let fechaNormalizada: Date;
+            if (agenda.date) {
+                const fecha = agenda.date instanceof Date ? agenda.date : new Date(agenda.date);
+                fechaNormalizada = new Date(Date.UTC(
+                    fecha.getUTCFullYear(),
+                    fecha.getUTCMonth(),
+                    fecha.getUTCDate(),
+                    12, 0, 0
+                ));
+            } else {
+                fechaNormalizada = new Date();
+            }
 
             return {
                 id: agenda.id,
-                date: agenda.date || new Date(),
+                date: fechaNormalizada,
                 time: agenda.time,
                 address: agenda.address,
                 concept: agenda.concept,
@@ -238,10 +427,13 @@ export async function obtenerAgendaUnificada(
         });
 
         // Obtener todas las promesas con fechas de interés (solo las que NO están en etapa "approved")
+        // IMPORTANTE: Solo mostrar tentative_dates si NO tienen event_date definido
+        // Si tienen event_date, ya no son "tentativas", son confirmadas
         const allPromisesWithDates = await prisma.studio_promises.findMany({
             where: {
                 studio_id: studio.id,
                 tentative_dates: { not: null },
+                event_date: null, // Solo mostrar tentative_dates si NO hay event_date
                 OR: [
                     { pipeline_stage_id: null },
                     {
@@ -285,11 +477,15 @@ export async function obtenerAgendaUnificada(
             },
         });
 
-        // Crear un mapa de fechas de agendamiento por promesa (normalizar a fecha sin hora)
+        // Crear un mapa de fechas de agendamiento por promesa (normalizar a fecha sin hora usando UTC)
         const agendaDatesByPromise = new Map<string, Set<string>>();
+        const promisesWithAgendaIds = new Set<string>(); // IDs de promesas que tienen agendamientos
         for (const agenda of agendasByPromise) {
             if (agenda.promise_id && agenda.date) {
-                const dateKey = new Date(agenda.date).toISOString().split('T')[0]; // Solo fecha, sin hora
+                promisesWithAgendaIds.add(agenda.promise_id);
+                const date = new Date(agenda.date);
+                // Normalizar usando UTC para evitar problemas de zona horaria
+                const dateKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
                 if (!agendaDatesByPromise.has(agenda.promise_id)) {
                     agendaDatesByPromise.set(agenda.promise_id, new Set());
                 }
@@ -305,75 +501,95 @@ export async function obtenerAgendaUnificada(
                 const dates = promise.tentative_dates as string[];
                 const agendaDates = agendaDatesByPromise.get(promise.id) || new Set();
                 
+                // Eliminar duplicados normalizando fechas a YYYY-MM-DD
+                const uniqueDates = new Set<string>();
+                const normalizedDates: Array<{ original: string; normalized: string; date: Date }> = [];
+                
                 for (const dateStr of dates) {
                     try {
                         const date = new Date(dateStr);
                         if (!isNaN(date.getTime())) {
-                            // Normalizar fecha de interés a solo fecha (sin hora)
-                            const dateKey = date.toISOString().split('T')[0];
+                            // Normalizar fecha usando UTC para evitar problemas de zona horaria
+                            const dateKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
                             
-                            // Solo mostrar si NO coincide con una fecha de agendamiento
-                            if (!agendaDates.has(dateKey)) {
-                                // Verificar si la fecha está caducada (pasada)
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                const eventDate = new Date(date);
-                                eventDate.setHours(0, 0, 0, 0);
-                                const isExpired = eventDate < today;
-
-                                pendingDateItems.push({
-                                    id: `pending-${promise.id}-${dateStr}`,
-                                    date,
-                                    time: null,
-                                    address: null,
-                                    concept: promise.contact?.name || 'Fecha de interés',
-                                    description: null,
-                                    link_meeting_url: null,
-                                    type_scheduling: null,
-                                    status: 'pending',
-                                    contexto: 'promise',
-                                    promise_id: promise.id,
-                                    evento_id: null,
-                                    metadata: null,
-                                    created_at: promise.created_at || null,
-                                    updated_at: promise.updated_at || null,
-                                    contact_name: promise.contact?.name || null,
-                                    contact_phone: promise.contact?.phone || null,
-                                    contact_email: promise.contact?.email || null,
-                                    contact_avatar_url: promise.contact?.avatar_url || null,
-                                    event_name: null,
-                                    event_type_name: promise.event_type?.name || null,
-                                    promise_status: 'pending',
-                                    evento_status: null,
-                                    is_pending_date: true,
-                                    is_expired: isExpired,
-                                });
+                            // Solo agregar si no está duplicada
+                            if (!uniqueDates.has(dateKey)) {
+                                uniqueDates.add(dateKey);
+                                normalizedDates.push({ original: dateStr, normalized: dateKey, date });
                             }
                         }
                     } catch (error) {
                         console.error('[AGENDA_UNIFIED] Error parsing date:', dateStr, error);
                     }
                 }
+                
+                // Procesar solo fechas únicas
+                for (const { original: dateStr, normalized: dateKey, date } of normalizedDates) {
+                    // Solo mostrar si NO coincide con una fecha de agendamiento
+                    if (!agendaDates.has(dateKey)) {
+                        // Verificar si la fecha está caducada (pasada) usando UTC
+                        const today = new Date();
+                        const todayKey = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
+                        const isExpired = dateKey < todayKey;
+
+                        pendingDateItems.push({
+                            id: `pending-${promise.id}-${dateKey}`,
+                            date,
+                            time: null,
+                            address: null,
+                            concept: promise.contact?.name || 'Fecha de interés',
+                            description: null,
+                            link_meeting_url: null,
+                            type_scheduling: null,
+                            status: 'pending',
+                            contexto: 'promise',
+                            promise_id: promise.id,
+                            evento_id: null,
+                            metadata: null,
+                            created_at: promise.created_at || null,
+                            updated_at: promise.updated_at || null,
+                            contact_name: promise.contact?.name || null,
+                            contact_phone: promise.contact?.phone || null,
+                            contact_email: promise.contact?.email || null,
+                            contact_avatar_url: promise.contact?.avatar_url || null,
+                            event_name: null,
+                            event_type_name: promise.event_type?.name || null,
+                            promise_status: 'pending',
+                            evento_status: null,
+                            is_pending_date: true,
+                            is_expired: isExpired,
+                        });
+                    }
+                }
             }
         }
 
-        // Obtener promesas con fecha de evento confirmada (defined_date) que no tengan agendamiento
+        // Obtener promesas con fecha de evento confirmada (event_date o defined_date) que no tengan agendamiento
         // Solo las que NO están en etapa "approved"
+        // Mostrar event_date si existe, sino mostrar defined_date
         const promisesWithDefinedDate = await prisma.studio_promises.findMany({
             where: {
                 studio_id: studio.id,
-                defined_date: { not: null },
                 OR: [
-                    { pipeline_stage_id: null },
+                    { event_date: { not: null } },
+                    { defined_date: { not: null } },
+                ],
+                AND: [
                     {
-                        pipeline_stage: {
-                            slug: { not: 'approved' },
-                        },
+                        OR: [
+                            { pipeline_stage_id: null },
+                            {
+                                pipeline_stage: {
+                                    slug: { not: 'approved' },
+                                },
+                            },
+                        ],
                     },
                 ],
             },
             select: {
                 id: true,
+                event_date: true,
                 defined_date: true,
                 created_at: true,
                 updated_at: true,
@@ -393,20 +609,31 @@ export async function obtenerAgendaUnificada(
             },
         });
 
-        // Filtrar promesas con defined_date que no tienen agendamiento confirmado
+        // Filtrar promesas con event_date o defined_date que no tienen agendamiento confirmado
         const confirmedEventDateItems: AgendaItem[] = [];
         for (const promise of promisesWithDefinedDate) {
-            if (promise.defined_date && !promisesWithAgendaIds.has(promise.id)) {
-                // Verificar si la fecha está caducada (pasada)
+            // Usar event_date si existe, sino usar defined_date
+            const fechaConfirmada = promise.event_date || promise.defined_date;
+            
+            if (fechaConfirmada && !promisesWithAgendaIds.has(promise.id)) {
+                // Normalizar fecha usando UTC
+                const eventDate = new Date(fechaConfirmada);
                 const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const eventDate = new Date(promise.defined_date);
-                eventDate.setHours(0, 0, 0, 0);
-                const isExpired = eventDate < today;
+                const todayKey = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
+                const eventDateKey = `${eventDate.getUTCFullYear()}-${String(eventDate.getUTCMonth() + 1).padStart(2, '0')}-${String(eventDate.getUTCDate()).padStart(2, '0')}`;
+                const isExpired = eventDateKey < todayKey;
+
+                // Normalizar fecha a mediodía UTC para evitar problemas de zona horaria
+                const fechaNormalizada = new Date(Date.UTC(
+                    eventDate.getUTCFullYear(),
+                    eventDate.getUTCMonth(),
+                    eventDate.getUTCDate(),
+                    12, 0, 0
+                ));
 
                 confirmedEventDateItems.push({
-                    id: `confirmed-${promise.id}-${promise.defined_date.toISOString()}`,
-                    date: promise.defined_date,
+                    id: `confirmed-${promise.id}-${eventDateKey}`,
+                    date: fechaNormalizada,
                     time: null,
                     address: null,
                     concept: promise.contact?.name || 'Fecha de evento',
@@ -438,9 +665,40 @@ export async function obtenerAgendaUnificada(
         // Combinar agendamientos confirmados con fechas pendientes y fechas de evento confirmadas
         const allItems = [...items, ...pendingDateItems, ...confirmedEventDateItems];
 
+        // Eliminar duplicados finales: mismo promise_id/evento_id + misma fecha normalizada
+        const itemsUnicos = new Map<string, AgendaItem>();
+        for (const item of allItems) {
+            // Crear clave única basada en contexto, ID y fecha normalizada usando UTC
+            const fechaNormalizada = item.date instanceof Date ? item.date : new Date(item.date);
+            const fechaKey = `${fechaNormalizada.getUTCFullYear()}-${String(fechaNormalizada.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaNormalizada.getUTCDate()).padStart(2, '0')}`;
+            
+            let key: string;
+            if (item.evento_id) {
+                // Para eventos: evento_id + fecha
+                key = `evento-${item.evento_id}-${fechaKey}`;
+            } else if (item.promise_id) {
+                // Para promesas: promise_id + fecha + tipo (para diferenciar pending_date de confirmed_date)
+                const tipo = item.is_pending_date ? 'pending' : item.is_confirmed_event_date ? 'confirmed' : 'agenda';
+                key = `promise-${item.promise_id}-${fechaKey}-${tipo}`;
+            } else {
+                // Si no tiene ID, usar el ID del item
+                key = `item-${item.id}-${fechaKey}`;
+            }
+            
+            // Solo agregar si no existe o si este es más reciente
+            const existente = itemsUnicos.get(key);
+            if (!existente || (item.created_at && existente.created_at && item.created_at > existente.created_at)) {
+                itemsUnicos.set(key, item);
+            }
+        }
+
         return {
             success: true,
-            data: allItems,
+            data: Array.from(itemsUnicos.values()).sort((a, b) => {
+                const dateA = a.date instanceof Date ? a.date.getTime() : new Date(a.date).getTime();
+                const dateB = b.date instanceof Date ? b.date.getTime() : new Date(b.date).getTime();
+                return dateA - dateB;
+            }),
         };
     } catch (error) {
         console.error('[AGENDA_UNIFIED] Error obteniendo agenda:', error);
@@ -978,21 +1236,25 @@ export async function crearAgendamiento(
             // No fallar la creación del agendamiento si falla la notificación
         }
 
-        // Sincronizar con Google Calendar si es fecha principal del evento y el evento existe
-        if (isMainEventDate && agenda.evento_id) {
-            try {
-                const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
-                    await import('@/lib/integrations/google/clients/calendar/helpers');
-                
-                if (await tieneGoogleCalendarHabilitado(studioSlug)) {
-                    sincronizarEventoPrincipalEnBackground(agenda.evento_id, studioSlug);
+        // Sincronizar con Google Calendar según metadata
+        const agendaMetadata = agenda.metadata as Record<string, unknown> | null;
+        if (agendaMetadata?.sync_google === true && agendaMetadata?.google_calendar_type === 'primary') {
+            if (agenda.evento_id && isMainEventDate) {
+                try {
+                    const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
+                        await import('@/lib/integrations/google/clients/calendar/helpers');
+                    
+                    if (await tieneGoogleCalendarHabilitado(studioSlug)) {
+                        sincronizarEventoPrincipalEnBackground(agenda.evento_id, studioSlug);
+                    }
+                } catch (error) {
+                    console.error(
+                        '[Google Calendar] Error sincronizando evento en crearAgendamiento (no crítico):',
+                        error
+                    );
                 }
-            } catch (error) {
-                console.error(
-                    '[Google Calendar] Error sincronizando evento en crearAgendamiento (no crítico):',
-                    error
-                );
             }
+            // TODO: Implementar sincronización para citas comerciales (promise + type_scheduling)
         }
 
         return {
@@ -1066,7 +1328,10 @@ export async function actualizarAgendamiento(
 
         const updatePayload: Prisma.studio_agendaUpdateInput = {};
 
-        if (updateData.date) updatePayload.date = updateData.date;
+        // Normalizar fecha usando UTC si se está actualizando
+        if (updateData.date) {
+            updatePayload.date = toUtcDateOnly(updateData.date) || updateData.date;
+        }
         if (updateData.time !== undefined) updatePayload.time = updateData.time || null;
         if (updateData.address !== undefined) updatePayload.address = updateData.address || null;
         if (updateData.concept !== undefined) updatePayload.concept = updateData.concept || null;
@@ -1075,13 +1340,66 @@ export async function actualizarAgendamiento(
         if (updateData.type_scheduling !== undefined) updatePayload.type_scheduling = updateData.type_scheduling || null;
         if (updateData.agenda_tipo !== undefined) updatePayload.agenda_tipo = updateData.agenda_tipo || null;
         if (updateData.user_id !== undefined) updatePayload.user_id = updateData.user_id || null;
-        if (updateData.metadata !== undefined) {
-            updatePayload.metadata = updateData.metadata ? (updateData.metadata as Prisma.InputJsonValue) : null;
-        }
         if (updateData.contexto) updatePayload.contexto = updateData.contexto;
         if (updateData.promise_id !== undefined) updatePayload.promise_id = updateData.promise_id || null;
         if (updateData.evento_id !== undefined) updatePayload.evento_id = updateData.evento_id || null;
         if (updateData.status !== undefined) updatePayload.status = updateData.status;
+
+        // Recalcular metadata si cambian campos relevantes o si no se proporciona metadata explícitamente
+        const contextoFinal = updateData.contexto || existing.contexto;
+        const typeSchedulingFinal = updateData.type_scheduling !== undefined ? updateData.type_scheduling : existing.type_scheduling;
+        const eventoIdFinal = updateData.evento_id !== undefined ? updateData.evento_id : existing.evento_id;
+        const fechaFinal = updateData.date || existing.date;
+
+        // Si se proporciona metadata explícitamente, usarla
+        if (updateData.metadata !== undefined) {
+            updatePayload.metadata = updateData.metadata ? (updateData.metadata as Prisma.InputJsonValue) : null;
+        } else {
+            // Recalcular metadata si cambian campos que afectan el tipo de agenda
+            const necesitaRecalcular = 
+                updateData.contexto !== undefined ||
+                updateData.type_scheduling !== undefined ||
+                updateData.evento_id !== undefined ||
+                updateData.date !== undefined;
+
+            if (necesitaRecalcular) {
+                // Determinar si es fecha principal del evento
+                let isMainEventDate = false;
+                if (eventoIdFinal && fechaFinal && contextoFinal === 'evento') {
+                    const evento = await prisma.studio_events.findUnique({
+                        where: { id: eventoIdFinal },
+                        select: {
+                            promise: {
+                                select: {
+                                    event_date: true,
+                                },
+                            },
+                        },
+                    });
+                    
+                    if (evento?.promise?.event_date) {
+                        const eventMainDateOnly = new Date(Date.UTC(
+                            new Date(evento.promise.event_date).getUTCFullYear(),
+                            new Date(evento.promise.event_date).getUTCMonth(),
+                            new Date(evento.promise.event_date).getUTCDate()
+                        ));
+                        const agendaDateOnly = new Date(Date.UTC(
+                            new Date(fechaFinal).getUTCFullYear(),
+                            new Date(fechaFinal).getUTCMonth(),
+                            new Date(fechaFinal).getUTCDate()
+                        ));
+                        isMainEventDate = eventMainDateOnly.getTime() === agendaDateOnly.getTime();
+                    }
+                }
+
+                const nuevoMetadata = construirMetadataAgenda({
+                    contexto: contextoFinal as 'promise' | 'evento',
+                    type_scheduling: typeSchedulingFinal as 'presencial' | 'virtual' | null,
+                    isMainEventDate,
+                });
+                updatePayload.metadata = nuevoMetadata as Prisma.InputJsonValue;
+            }
+        }
 
         const agenda = await prisma.studio_agenda.update({
             where: { id },

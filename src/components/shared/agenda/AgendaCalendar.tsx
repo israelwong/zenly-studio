@@ -38,20 +38,44 @@ function getFirstName(fullName: string | null | undefined): string {
 
 // Convertir AgendaItem a formato de react-big-calendar
 function agendaItemToEvent(item: AgendaItem) {
-  const start = new Date(item.date);
-  const end = new Date(item.date);
+  // Normalizar fecha usando métodos UTC para evitar problemas de zona horaria
+  const itemDate = item.date instanceof Date ? item.date : new Date(item.date);
+  
+  // Extraer componentes de fecha usando métodos UTC
+  const year = itemDate.getUTCFullYear();
+  const month = itemDate.getUTCMonth();
+  const day = itemDate.getUTCDate();
+  
+  // Crear fechas usando UTC
+  let start: Date;
+  let end: Date;
+  let allDay = false;
 
-  // Si hay hora, agregarla
+  // Si hay hora, agregarla usando UTC
   if (item.time) {
     const [hours, minutes] = item.time.split(':').map(Number);
-    start.setHours(hours || 0, minutes || 0, 0);
-    end.setHours(hours || 0, minutes || 0, 0);
-    // Duración por defecto: 1 hora
-    end.setHours(end.getHours() + 1);
+    start = new Date(Date.UTC(year, month, day, hours || 0, minutes || 0, 0));
+    end = new Date(Date.UTC(year, month, day, hours || 0, minutes || 0, 0));
+    // Duración por defecto: 1 hora, agregar usando UTC
+    end = new Date(Date.UTC(
+      end.getUTCFullYear(),
+      end.getUTCMonth(),
+      end.getUTCDate(),
+      end.getUTCHours() + 1,
+      end.getUTCMinutes(),
+      end.getUTCSeconds()
+    ));
   } else {
     // Si no hay hora, usar todo el día
-    start.setHours(0, 0, 0);
-    end.setHours(23, 59, 59);
+    // IMPORTANTE: Para eventos de todo el día con allDay: true, usar mediodía UTC para ambos
+    // start y end del mismo día. react-big-calendar con allDay: true mostrará el evento
+    // solo en el día correcto basándose en los componentes de fecha, no en las horas.
+    const fechaMediodia = new Date(Date.UTC(year, month, day, 12, 0, 0));
+    start = fechaMediodia;
+    // End debe ser diferente de start para react-big-calendar, pero con allDay: true
+    // solo importa el día calendario. Usar el mismo día pero con hora ligeramente diferente.
+    end = new Date(Date.UTC(year, month, day, 12, 0, 1));
+    allDay = true;
   }
 
   // Generar título según el tipo de agendamiento
@@ -83,6 +107,7 @@ function agendaItemToEvent(item: AgendaItem) {
     start,
     end,
     resource: item,
+    allDay: allDay,
   };
 }
 
@@ -318,11 +343,13 @@ export function AgendaCalendar({
     ).length;
     // Total de citas
     const citas = citasVirtuales + citasPresenciales;
-    // Fechas de interés: fechas pendientes de promesas
+    // Fechas de interés: fechas tentativas de promesas (tentative_dates sin event_date)
     const fechasInteres = events.filter((item) => item.is_pending_date === true).length;
-    // Fechas principales de eventos: fechas principales confirmadas
-    const fechasEvento = events.filter((item) => item.is_main_event_date === true || item.is_confirmed_event_date === true).length;
-    return { citas, citasVirtuales, citasPresenciales, fechasInteres, fechasEvento };
+    // Fechas confirmadas de promesas: event_date o defined_date de promesas (NO eventos)
+    const fechasConfirmadasPromesas = events.filter((item) => item.is_confirmed_event_date === true && item.contexto === 'promise').length;
+    // Fechas principales de eventos: creadas al crear el evento (is_main_event_date)
+    const fechasEventos = events.filter((item) => item.is_main_event_date === true).length;
+    return { citas, citasVirtuales, citasPresenciales, fechasInteres, fechasConfirmadasPromesas, fechasEventos };
   }, [events]);
 
   // Configurar inicio de semana (lunes) y formatos en español
@@ -776,7 +803,7 @@ export function AgendaCalendar({
               </span>
             </div>
           )}
-          {/* Fechas de interés */}
+          {/* Fechas de interés (tentativas de promesas) */}
           {stats.fechasInteres > 0 && (
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-zinc-500"></div>
@@ -785,12 +812,21 @@ export function AgendaCalendar({
               </span>
             </div>
           )}
-          {/* Fechas principales de eventos */}
-          {stats.fechasEvento > 0 && (
+          {/* Fechas confirmadas de promesas (event_date/defined_date) */}
+          {stats.fechasConfirmadasPromesas > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+              <span className="text-zinc-300">
+                <span className="font-semibold text-white">{stats.fechasConfirmadasPromesas}</span> fecha{stats.fechasConfirmadasPromesas !== 1 ? 's' : ''} confirmada{stats.fechasConfirmadasPromesas !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+          {/* Fechas principales de eventos (creadas al crear evento) */}
+          {stats.fechasEventos > 0 && (
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
               <span className="text-zinc-300">
-                <span className="font-semibold text-white">{stats.fechasEvento}</span> fecha{stats.fechasEvento !== 1 ? 's' : ''} de evento
+                <span className="font-semibold text-white">{stats.fechasEventos}</span> evento{stats.fechasEventos !== 1 ? 's' : ''}
               </span>
             </div>
           )}

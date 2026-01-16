@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { CondicionesFinancierasResumen } from '@/components/shared/cotizaciones';
+import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 import type { ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type {
   CondicionComercial,
@@ -51,7 +51,7 @@ export function CalculoConCondiciones({
     ? precioOriginalNegociacion
     : (calculoConCondicion?.precioFinal ?? (cotizacionOriginal.precioOriginal ?? cotizacionOriginal.price));
 
-  // Convertir condición comercial a formato compatible con CondicionesFinancierasResumen
+  // Convertir condición comercial a formato compatible con CondicionesComercialesDesglose
   const condicionParaResumen = condicionComercial ? {
     id: condicionComercial.id || '',
     name: condicionComercial.name,
@@ -69,7 +69,7 @@ export function CalculoConCondiciones({
   return (
     <div className="space-y-4">
       {/* Resumen de Pago con condiciones comerciales aplicadas */}
-      <CondicionesFinancierasResumen
+      <CondicionesComercialesDesglose
         precioBase={precioBaseParaDesglose}
         condicion={condicionParaResumen}
         negociacionPrecioOriginal={tienePrecioNegociado ? precioOriginalNegociacion : null}

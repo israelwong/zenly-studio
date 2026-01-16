@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Calendar, MapPin, Tag, ChevronRight } from 'lucide-react';
 import { ZenCard, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { useClientAuth } from '@/hooks/useClientAuth';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import type { ClientEvent } from '@/types/client';
 
 interface EventCardProps {
@@ -17,20 +18,12 @@ export function EventCard({ evento }: EventCardProps) {
   const slug = params?.slug as string;
   const clientId = params?.clientId as string || cliente?.id;
 
-  const formatFecha = (fecha: string) => {
-    try {
-      const fechaSolo = fecha.split('T')[0];
-      const fechaObj = new Date(fechaSolo + 'T00:00:00');
-
-      return fechaObj.toLocaleDateString('es-MX', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
-    } catch (error) {
-      return 'Fecha no disponible';
-    }
-  };
+  // Usar formatDisplayDate que usa métodos UTC exclusivamente
+  const formatFecha = (fecha: string) => formatDisplayDate(fecha, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-MX', {

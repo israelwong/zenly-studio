@@ -586,11 +586,34 @@ export async function sincronizarEventoPrincipal(
 
     const description = descriptionParts.join('\n').trim();
 
-    // Preparar datos del evento
+    // Preparar datos del evento usando métodos UTC para evitar problemas de zona horaria
     const eventDate = event.promise?.event_date || event.event_date;
-    const startDateTime = new Date(eventDate);
-    const endDateTime = new Date(eventDate);
-    endDateTime.setHours(endDateTime.getHours() + 1); // Duración por defecto: 1 hora
+    // Normalizar fecha usando UTC con mediodía como buffer
+    const eventDateNormalized = eventDate instanceof Date 
+      ? new Date(Date.UTC(
+          eventDate.getUTCFullYear(),
+          eventDate.getUTCMonth(),
+          eventDate.getUTCDate(),
+          12, 0, 0
+        ))
+      : new Date(Date.UTC(
+          new Date(eventDate).getUTCFullYear(),
+          new Date(eventDate).getUTCMonth(),
+          new Date(eventDate).getUTCDate(),
+          12, 0, 0
+        ));
+    
+    // Crear fecha de inicio y fin usando UTC
+    const startDateTime = new Date(eventDateNormalized);
+    // Duración por defecto: 1 hora, agregar usando UTC
+    const endDateTime = new Date(Date.UTC(
+      startDateTime.getUTCFullYear(),
+      startDateTime.getUTCMonth(),
+      startDateTime.getUTCDate(),
+      startDateTime.getUTCHours() + 1,
+      startDateTime.getUTCMinutes(),
+      startDateTime.getUTCSeconds()
+    ));
 
     const eventData: any = {
       summary: summary,

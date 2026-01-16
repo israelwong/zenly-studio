@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { EventWithContact } from '@/lib/actions/schemas/events-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
+import { formatDisplayDateShort } from '@/lib/utils/date-formatter';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 
 interface EventKanbanCardProps {
@@ -46,21 +47,24 @@ export function EventKanbanCard({ event, onClick, studioSlug }: EventKanbanCardP
     }
   };
 
-  const formatDate = (date: Date): string => {
-    return date.toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
+  // Usar formatDisplayDateShort que usa métodos UTC exclusivamente
+  const formatDate = formatDisplayDateShort;
 
-  // Calcular días restantes hasta el evento
+  // Calcular días restantes hasta el evento usando métodos UTC
   const getDaysRemaining = (): number | null => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayYear = today.getUTCFullYear();
+    const todayMonth = today.getUTCMonth();
+    const todayDay = today.getUTCDate();
+    const todayUtc = new Date(Date.UTC(todayYear, todayMonth, todayDay));
+    
     const eventDate = new Date(event.event_date);
-    eventDate.setHours(0, 0, 0, 0);
-    const diffTime = eventDate.getTime() - today.getTime();
+    const eventYear = eventDate.getUTCFullYear();
+    const eventMonth = eventDate.getUTCMonth();
+    const eventDay = eventDate.getUTCDate();
+    const eventUtc = new Date(Date.UTC(eventYear, eventMonth, eventDay));
+    
+    const diffTime = eventUtc.getTime() - todayUtc.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };

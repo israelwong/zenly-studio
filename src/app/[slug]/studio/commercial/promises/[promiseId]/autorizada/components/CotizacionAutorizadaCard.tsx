@@ -13,7 +13,7 @@ import {
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { getCondicionesComerciales, getContrato } from '@/lib/actions/studio/commercial/promises/cotizaciones-helpers';
 import { ContractPreviewForPromiseModal } from '../../cierre/components/contratos/ContractPreviewForPromiseModal';
-import { PaymentReceipt } from '@/components/shared/payments/PaymentReceipt';
+import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { formatNumber } from '@/lib/actions/utils/formatting';
 
@@ -34,8 +34,6 @@ export function CotizacionAutorizadaCard({
   const [resumen, setResumen] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showContractPreview, setShowContractPreview] = useState(false);
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
   // Cargar resumen del evento creado
   useEffect(() => {
@@ -64,12 +62,18 @@ export function CotizacionAutorizadaCard({
     ? getContrato(resumen.cotizacion)
     : getContrato(cotizacionData);
 
-  // Calcular totales
-  const subtotal = cotizacionData.price;
-  const descuento = condiciones?.discount_percentage
-    ? subtotal * (condiciones.discount_percentage / 100)
-    : (cotizacionData.discount || 0);
-  const total = subtotal - descuento;
+  // Obtener datos de negociación desde resumen (prioridad) o cotizacion prop
+  const negociacionPrecioOriginal = resumen?.cotizacion?.negociacion_precio_original ??
+    cotizacion.negociacion_precio_original ?? null;
+  const negociacionPrecioPersonalizado = resumen?.cotizacion?.negociacion_precio_personalizado ??
+    cotizacion.negociacion_precio_personalizado ?? null;
+
+  // Calcular precio base para condiciones comerciales
+  // Si hay precio negociado y existe precio original de negociación, usar ese como base
+  // Si no, usar el precio de la cotización (que puede tener descuento de cotización aplicado)
+  const precioBaseParaCondiciones = negociacionPrecioPersonalizado !== null && negociacionPrecioPersonalizado !== undefined && negociacionPrecioPersonalizado > 0 && negociacionPrecioOriginal !== null && negociacionPrecioOriginal !== undefined
+    ? negociacionPrecioOriginal
+    : cotizacionData.price;
 
   // Información del pago inicial
   const pagoInicial = resumen?.montoInicial || null;
@@ -164,10 +168,6 @@ export function CotizacionAutorizadaCard({
                     </div>
                   </div>
                 </div>
-                {/* Botón de ver comprobante skeleton */}
-                <div className="pt-3 border-t border-zinc-700/50">
-                  <div className="h-8 w-full bg-zinc-800 rounded animate-pulse" />
-                </div>
               </div>
             </div>
 
@@ -243,76 +243,50 @@ export function CotizacionAutorizadaCard({
             </div>
 
             {/* Desglose de Cotización */}
-            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
-              <h3 className="text-sm font-semibold text-zinc-300 mb-4">
-                Desglose de Cotización
-              </h3>
-              <dl className="space-y-3 text-sm">
-                <div className="flex justify-between items-center">
-                  <dt className="text-zinc-400">Subtotal:</dt>
-                  <dd className="text-zinc-200 font-medium">
-                    ${formatNumber(subtotal, 2)} MXN
-                  </dd>
-                </div>
-
-                {/* Condiciones comerciales */}
-                {condiciones && (
-                  <>
-                    {condiciones.name && (
-                      <div className="flex justify-between items-start pt-3 border-t border-zinc-700/50">
-                        <dt className="text-zinc-400">Condiciones comerciales:</dt>
-                        <dd className="text-zinc-300 text-right max-w-[60%]">{condiciones.name}</dd>
-                      </div>
-                    )}
-                    {condiciones.description && (
-                      <div className="text-xs text-zinc-500 mt-1.5 pl-0">
-                        {condiciones.description}
-                      </div>
-                    )}
-                    {condiciones.advance_percentage && (
-                      <div className="flex justify-between items-center">
-                        <dt className="text-zinc-400">Anticipo:</dt>
-                        <dd className="text-blue-400 font-medium">
-                          {condiciones.advance_percentage}%
-                          {condiciones.advance_amount && (
-                            <span className="text-zinc-500 ml-1.5 font-normal">
-                              (${formatNumber(condiciones.advance_amount, 2)})
-                            </span>
-                          )}
-                        </dd>
-                      </div>
-                    )}
-                    {condiciones.discount_percentage && (
-                      <div className="flex justify-between items-center">
-                        <dt className="text-zinc-400">Descuento:</dt>
-                        <dd className="text-emerald-400 font-medium">
-                          {condiciones.discount_percentage}%
-                          <span className="text-zinc-500 ml-1.5 font-normal">
-                            (-${formatNumber(descuento, 2)})
-                          </span>
-                        </dd>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {descuento > 0 && !condiciones?.discount_percentage && (
+            {condiciones ? (
+              <CondicionesComercialesDesglose
+                precioBase={precioBaseParaCondiciones}
+                condicion={{
+                  id: cotizacionData.condiciones_comerciales_id || '',
+                  name: condiciones.name || '',
+                  description: condiciones.description ?? null,
+                  discount_percentage: condiciones.discount_percentage ?? null,
+                  advance_type: condiciones.advance_type || 'percentage',
+                  advance_percentage: condiciones.advance_percentage ?? null,
+                  advance_amount: condiciones.advance_amount ?? null,
+                }}
+                negociacionPrecioOriginal={negociacionPrecioOriginal}
+                negociacionPrecioPersonalizado={negociacionPrecioPersonalizado}
+              />
+            ) : (
+              <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
+                <h3 className="text-sm font-semibold text-zinc-300 mb-4">
+                  Desglose de Cotización
+                </h3>
+                <dl className="space-y-3 text-sm">
                   <div className="flex justify-between items-center">
-                    <dt className="text-zinc-400">Descuento:</dt>
-                    <dd className="text-emerald-400 font-medium">
-                      -${formatNumber(descuento, 2)}
+                    <dt className="text-zinc-400">Subtotal:</dt>
+                    <dd className="text-zinc-200 font-medium">
+                      ${formatNumber(cotizacionData.price, 2)} MXN
                     </dd>
                   </div>
-                )}
-
-                <div className="flex justify-between items-center pt-3 border-t border-zinc-700/50 font-semibold">
-                  <dt className="text-zinc-200">Total:</dt>
-                  <dd className="text-white text-lg">
-                    ${formatNumber(total, 2)} MXN
-                  </dd>
-                </div>
-              </dl>
-            </div>
+                  {cotizacionData.discount && cotizacionData.discount > 0 && (
+                    <div className="flex justify-between items-center">
+                      <dt className="text-zinc-400">Descuento:</dt>
+                      <dd className="text-emerald-400 font-medium">
+                        -${formatNumber(cotizacionData.discount, 2)} MXN
+                      </dd>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-3 border-t border-zinc-700/50 font-semibold">
+                    <dt className="text-zinc-200">Total:</dt>
+                    <dd className="text-white text-lg">
+                      ${formatNumber(cotizacionData.price - (cotizacionData.discount || 0), 2)} MXN
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
 
             {/* Pago Inicial */}
             <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
@@ -373,23 +347,6 @@ export function CotizacionAutorizadaCard({
                     )}
                   </div>
 
-                  {/* Botón de ver comprobante */}
-                  {primerPago.id && (
-                    <div className="pt-3 border-t border-zinc-700/50">
-                      <ZenButton
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setReceiptPaymentId(primerPago.id);
-                          setIsReceiptModalOpen(true);
-                        }}
-                        className="w-full gap-2"
-                      >
-                        <Receipt className="w-4 h-4" />
-                        Ver Comprobante
-                      </ZenButton>
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="text-center py-4">
@@ -566,7 +523,7 @@ export function CotizacionAutorizadaCard({
           }}
           customContent={contrato?.content || resumen?.cotizacion?.contract_content_snapshot || null}
           condicionesComerciales={condiciones ? {
-            id: '',
+            id: cotizacionData?.condiciones_comerciales_id || resumen?.cotizacion?.condiciones_comerciales_id || '',
             name: condiciones.name || '',
             description: condiciones.description || null,
             discount_percentage: condiciones.discount_percentage || null,
@@ -578,18 +535,6 @@ export function CotizacionAutorizadaCard({
         />
       )}
 
-      {/* Modal de comprobante de pago */}
-      {isReceiptModalOpen && receiptPaymentId && (
-        <PaymentReceipt
-          isOpen={isReceiptModalOpen}
-          onClose={() => {
-            setIsReceiptModalOpen(false);
-            setReceiptPaymentId(null);
-          }}
-          studioSlug={studioSlug}
-          paymentId={receiptPaymentId}
-        />
-      )}
     </>
   );
 }

@@ -2,20 +2,11 @@
 
 import { Calendar, Tag } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent } from '@/components/ui/zen';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import { useEvento } from '../context/EventoContext';
 
-function formatFecha(fecha: string): string {
-  try {
-    return new Date(fecha.split('T')[0] + 'T00:00:00').toLocaleDateString('es-MX', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  } catch {
-    return 'Fecha no disponible';
-  }
-}
+// Usar formatDisplayDateLong que usa métodos UTC exclusivamente
+const formatFecha = formatDisplayDateLong;
 
 export function InformacionEventoCard() {
   const { evento } = useEvento();

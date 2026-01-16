@@ -104,9 +104,30 @@ export const TaskBar = React.memo(({
         return;
       }
 
-      // Calcular nueva fecha de fin manteniendo la duración
-      const durationMs = localEndDate.getTime() - localStartDate.getTime();
-      const newEndDate = new Date(newStartDate.getTime() + durationMs);
+      // Calcular nueva fecha de fin manteniendo la duración usando métodos UTC
+      const startDateOnly = new Date(Date.UTC(
+        localStartDate.getUTCFullYear(),
+        localStartDate.getUTCMonth(),
+        localStartDate.getUTCDate()
+      ));
+      const endDateOnly = new Date(Date.UTC(
+        localEndDate.getUTCFullYear(),
+        localEndDate.getUTCMonth(),
+        localEndDate.getUTCDate()
+      ));
+      const durationMs = endDateOnly.getTime() - startDateOnly.getTime();
+      const newStartDateOnly = new Date(Date.UTC(
+        newStartDate.getUTCFullYear(),
+        newStartDate.getUTCMonth(),
+        newStartDate.getUTCDate()
+      ));
+      const newEndDate = new Date(Date.UTC(
+        newStartDateOnly.getUTCFullYear(),
+        newStartDateOnly.getUTCMonth(),
+        newStartDateOnly.getUTCDate(),
+        12, 0, 0
+      ));
+      newEndDate.setUTCDate(newEndDate.getUTCDate() + Math.round(durationMs / (1000 * 60 * 60 * 24)));
 
       // Validar que la fecha de fin no salga del rango
       if (!isDateInRange(newEndDate, dateRange)) {
@@ -154,10 +175,20 @@ export const TaskBar = React.memo(({
 
       const newStartDate = getDateFromPosition(position.x, dateRange);
 
-      // Convertir ancho a duración en días (mínimo 1 día)
+      // Convertir ancho a duración en días (mínimo 1 día) usando métodos UTC
       const newDurationDays = Math.max(1, snappedWidth / 60);
-      const newEndDate = new Date(newStartDate);
-      newEndDate.setDate(newEndDate.getDate() + newDurationDays - 1);
+      const newStartDateUtc = new Date(Date.UTC(
+        newStartDate.getUTCFullYear(),
+        newStartDate.getUTCMonth(),
+        newStartDate.getUTCDate(),
+        12, 0, 0
+      ));
+      const newEndDate = new Date(Date.UTC(
+        newStartDateUtc.getUTCFullYear(),
+        newStartDateUtc.getUTCMonth(),
+        newStartDateUtc.getUTCDate() + (newDurationDays - 1),
+        12, 0, 0
+      ));
 
       // Validar que las fechas estén dentro del rango
       if (!isDateInRange(newStartDate, dateRange) || !isDateInRange(newEndDate, dateRange)) {

@@ -2,7 +2,7 @@
 
 import React, { memo } from 'react';
 import { CheckCircle2, AlertCircle, Loader2, MoreVertical } from 'lucide-react';
-import { CondicionesFinancierasResumen } from '@/components/shared/cotizaciones';
+import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 import { ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 
 interface CondicionComercial {
@@ -42,7 +42,7 @@ export const CondicionesSection = memo(function CondicionesSection({
 }: CondicionesSectionProps) {
   if (condicionesData?.condiciones_comerciales_definidas && condicionesData?.condiciones_comerciales) {
     return (
-      <CondicionesFinancierasResumen
+      <CondicionesComercialesDesglose
         precioBase={precioBase}
         condicion={condicionesData.condiciones_comerciales as any}
         negociacionPrecioOriginal={negociacionPrecioOriginal}

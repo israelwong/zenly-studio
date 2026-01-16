@@ -15,12 +15,15 @@ export interface EventoResumenData {
     description: string | null;
     price: number;
     discount: number | null;
+    condiciones_comerciales_id: string | null;
     condiciones_comerciales_name_snapshot: string | null;
     condiciones_comerciales_description_snapshot: string | null;
     condiciones_comerciales_advance_percentage_snapshot: number | null;
     condiciones_comerciales_advance_type_snapshot: string | null;
     condiciones_comerciales_advance_amount_snapshot: any | null;
     condiciones_comerciales_discount_percentage_snapshot: number | null;
+    negociacion_precio_original: number | null;
+    negociacion_precio_personalizado: number | null;
     contract_template_id_snapshot: string | null;
     contract_template_name_snapshot: string | null;
     contract_content_snapshot: string | null;
@@ -81,12 +84,15 @@ export async function obtenerResumenEventoCreado(
             description: true,
             price: true,
             discount: true,
+            condiciones_comerciales_id: true,
             condiciones_comerciales_name_snapshot: true,
             condiciones_comerciales_description_snapshot: true,
             condiciones_comerciales_advance_percentage_snapshot: true,
             condiciones_comerciales_advance_type_snapshot: true,
             condiciones_comerciales_advance_amount_snapshot: true,
             condiciones_comerciales_discount_percentage_snapshot: true,
+            negociacion_precio_original: true,
+            negociacion_precio_personalizado: true,
             contract_template_id_snapshot: true,
             contract_template_name_snapshot: true,
             contract_content_snapshot: true,
@@ -143,6 +149,12 @@ export async function obtenerResumenEventoCreado(
           discount: evento.cotizacion.discount ? Number(evento.cotizacion.discount) : null,
           condiciones_comerciales_advance_amount_snapshot: evento.cotizacion.condiciones_comerciales_advance_amount_snapshot != null
             ? Number(evento.cotizacion.condiciones_comerciales_advance_amount_snapshot)
+            : null,
+          negociacion_precio_original: evento.cotizacion.negociacion_precio_original !== null && evento.cotizacion.negociacion_precio_original !== undefined
+            ? Number(evento.cotizacion.negociacion_precio_original)
+            : null,
+          negociacion_precio_personalizado: evento.cotizacion.negociacion_precio_personalizado !== null && evento.cotizacion.negociacion_precio_personalizado !== undefined
+            ? Number(evento.cotizacion.negociacion_precio_personalizado)
             : null,
         },
         pagos,

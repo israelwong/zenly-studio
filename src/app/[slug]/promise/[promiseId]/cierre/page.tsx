@@ -5,6 +5,7 @@ import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { PublicQuoteAuthorizedView } from '@/components/promise/PublicQuoteAuthorizedView';
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
+import { PromiseRedirectOnAuthorized } from '@/components/promise/PromiseRedirectOnAuthorized';
 
 interface CierrePageProps {
   params: Promise<{
@@ -50,15 +51,21 @@ export default async function CierrePage({ params }: CierrePageProps) {
   }
 
   return (
-    <Suspense fallback={<PromisePageSkeleton />}>
-      <CierrePageClient
-        promise={promise}
-        studio={studioData}
-        cotizacion={cotizacionEnCierre}
-        studioSlug={slug}
-        promiseId={promiseId}
-      />
-    </Suspense>
+    <>
+      <PromiseRedirectOnAuthorized studioSlug={slug} promiseId={promiseId} />
+      <Suspense fallback={<PromisePageSkeleton />}>
+        <CierrePageClient
+          promise={promise}
+          studio={studioData}
+          cotizacion={{
+            ...cotizacionEnCierre,
+            status: cotizacionEnCierre.status || 'en_cierre',
+          }}
+          studioSlug={slug}
+          promiseId={promiseId}
+        />
+      </Suspense>
+    </>
   );
 }
 
@@ -172,14 +179,14 @@ export async function generateMetadata({
 
     const icons = studio.logo_url
       ? {
-          icon: [
-            { url: studio.logo_url, type: 'image/png' },
-            { url: studio.logo_url, sizes: '32x32', type: 'image/png' },
-            { url: studio.logo_url, sizes: '16x16', type: 'image/png' },
-          ],
-          apple: [{ url: studio.logo_url, sizes: '180x180', type: 'image/png' }],
-          shortcut: studio.logo_url,
-        }
+        icon: [
+          { url: studio.logo_url, type: 'image/png' },
+          { url: studio.logo_url, sizes: '32x32', type: 'image/png' },
+          { url: studio.logo_url, sizes: '16x16', type: 'image/png' },
+        ],
+        apple: [{ url: studio.logo_url, sizes: '180x180', type: 'image/png' }],
+        shortcut: studio.logo_url,
+      }
       : undefined;
 
     return {

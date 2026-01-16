@@ -349,17 +349,12 @@ export async function submitOfferLeadform(
       });
 
       // Crear promise asociada
-      // Parsear fecha de forma segura (sin cambios por zona horaria)
+      // Parsear fecha usando métodos UTC para evitar problemas de zona horaria
       let eventDate: Date | null = null;
       if (validatedData.interest_date) {
-        // Si es formato YYYY-MM-DD, parsear como fecha local
-        const dateMatch = validatedData.interest_date.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (dateMatch) {
-          const [, year, month, day] = dateMatch;
-          eventDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        } else {
-          eventDate = new Date(validatedData.interest_date);
-        }
+        // Usar toUtcDateOnly que parsea strings YYYY-MM-DD usando UTC con mediodía como buffer
+        const { toUtcDateOnly } = await import('@/lib/utils/date-only');
+        eventDate = toUtcDateOnly(validatedData.interest_date);
       }
 
       const promise = await prisma.studio_promises.create({

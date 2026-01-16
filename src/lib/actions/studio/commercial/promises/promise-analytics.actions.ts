@@ -87,11 +87,11 @@ export async function trackPaqueteClick(
 
 /**
  * Obtener estadísticas de visitas a una promesa
- * Optimizado: Usa agregaciones SQL en lugar de traer todos los registros
+ * Optimizado: Usa agregaciones SQL y limita resultados
  */
 export async function getPromiseViewStats(promiseId: string) {
   try {
-    // Optimizado: Limitar a últimos 1000 registros para evitar queries lentas
+    // Optimizado: Limitar a últimos 500 registros para evitar queries lentas
     const allViews = await prisma.studio_content_analytics.findMany({
       where: {
         content_type: 'PROMISE',
@@ -101,7 +101,7 @@ export async function getPromiseViewStats(promiseId: string) {
       orderBy: {
         created_at: 'desc',
       },
-      take: 1000, // Limitar a últimos 1000 registros
+      take: 500, // Reducido de 1000 a 500 para mejor performance
       select: {
         created_at: true,
         ip_address: true,
@@ -154,15 +154,21 @@ export async function getPromiseViewStats(promiseId: string) {
 
 /**
  * Obtener estadísticas de clicks en cotizaciones de una promesa
+ * Optimizado: Limita resultados y ordena por fecha
  */
 export async function getCotizacionClickStats(promiseId: string) {
   try {
+    // Optimizado: Limitar a últimos 2000 clicks para evitar queries lentas
     const clicks = await prisma.studio_content_analytics.findMany({
       where: {
         content_type: 'PROMISE',
         content_id: promiseId,
         event_type: 'COTIZACION_CLICK',
       },
+      orderBy: {
+        created_at: 'desc',
+      },
+      take: 2000, // Limitar a últimos 2000 clicks
       select: {
         metadata: true,
         created_at: true,
@@ -208,17 +214,21 @@ export async function getCotizacionClickStats(promiseId: string) {
 
 /**
  * Obtener estadísticas de clicks en paquetes de una promesa
+ * Optimizado: Limita resultados y ordena por fecha
  */
 export async function getPaqueteClickStats(promiseId: string) {
   try {
-    // Optimizado: Limitar a últimos 5000 clicks para evitar queries lentas
+    // Optimizado: Limitar a últimos 2000 clicks para evitar queries lentas
     const clicks = await prisma.studio_content_analytics.findMany({
       where: {
         content_type: 'PROMISE',
         content_id: promiseId,
         event_type: 'PAQUETE_CLICK',
       },
-      take: 5000, // Limitar a últimos 5000 clicks
+      orderBy: {
+        created_at: 'desc',
+      },
+      take: 2000, // Reducido de 5000 a 2000 para mejor performance
       select: {
         metadata: true,
         created_at: true,

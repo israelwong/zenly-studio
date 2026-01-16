@@ -347,7 +347,7 @@ export function CondicionesComercialesManager({
       loadConfiguracion();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, studioSlug]);
+  }, [isOpen]);
 
   // Recargar configuración cuando se muestra el formulario
   // Para asegurar que siempre tenga el valor más reciente
@@ -422,7 +422,7 @@ export function CondicionesComercialesManager({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, studioSlug]);
+  }, [isOpen]);
 
   const loadConfiguracion = async () => {
     try {

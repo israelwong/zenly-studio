@@ -46,6 +46,8 @@ export interface CotizacionListItem {
     advance_type: string | null;
     advance_amount: number | null;
   } | null;
+  negociacion_precio_original?: number | null;
+  negociacion_precio_personalizado?: number | null;
 }
 
 export interface CotizacionesListResponse {
@@ -343,6 +345,12 @@ export async function getCotizacionAutorizadaByPromiseId(
         evento_id: cotizacion.evento_id,
         condiciones_comerciales_id: cotizacion.condiciones_comerciales_id,
         condiciones_comerciales: cotizacion.condiciones_comerciales,
+        negociacion_precio_original: cotizacion.negociacion_precio_original !== null && cotizacion.negociacion_precio_original !== undefined
+          ? Number(cotizacion.negociacion_precio_original)
+          : null,
+        negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado !== null && cotizacion.negociacion_precio_personalizado !== undefined
+          ? Number(cotizacion.negociacion_precio_personalizado)
+          : null,
       },
     };
   } catch (error) {

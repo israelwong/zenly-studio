@@ -5,7 +5,7 @@ import { CalendarIcon, Clock, FileText, Link as LinkIcon, AlertCircle, Video, Ma
 import { ZenInput, ZenButton, ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { ZenCalendar } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { formatDate } from '@/lib/actions/utils/formatting';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { es } from 'date-fns/locale';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 
@@ -43,9 +43,16 @@ export function AgendaForm({
     onDelete,
     loading = false,
 }: AgendaFormProps) {
-    const [date, setDate] = useState<Date | undefined>(
-        initialData?.date ? new Date(initialData.date) : undefined
-    );
+    const [date, setDate] = useState<Date | undefined>(() => {
+        if (initialData?.date) {
+            // Normalizar fecha inicial usando métodos UTC para evitar problemas de zona horaria
+            const dateObj = initialData.date instanceof Date 
+                ? initialData.date 
+                : new Date(initialData.date);
+            return new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 12, 0, 0));
+        }
+        return undefined;
+    });
     const [time, setTime] = useState(initialData?.time || '');
     const [address, setAddress] = useState(initialData?.address || '');
     const [description, setDescription] = useState(initialData?.description || '');
@@ -78,7 +85,15 @@ export function AgendaForm({
         // Si cambió el id, es un agendamiento diferente - siempre sincronizar
         if (currentId !== initialDataId) {
             setInitialDataId(currentId);
-            setDate(initialData?.date ? new Date(initialData.date) : undefined);
+            if (initialData?.date) {
+                // Normalizar fecha usando métodos UTC
+                const dateObj = initialData.date instanceof Date 
+                    ? initialData.date 
+                    : new Date(initialData.date);
+                setDate(new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 12, 0, 0)));
+            } else {
+                setDate(undefined);
+            }
             setTime(initialData?.time || '');
             setAddress(initialData?.address || '');
             setDescription(initialData?.description || '');
@@ -216,7 +231,14 @@ export function AgendaForm({
                                 selected={date}
                                 onSelect={(selectedDate: Date | undefined) => {
                                     if (selectedDate) {
-                                        setDate(selectedDate);
+                                        // Normalizar fecha seleccionada usando métodos UTC con mediodía como buffer
+                                        const normalizedDate = new Date(Date.UTC(
+                                            selectedDate.getUTCFullYear(),
+                                            selectedDate.getUTCMonth(),
+                                            selectedDate.getUTCDate(),
+                                            12, 0, 0
+                                        ));
+                                        setDate(normalizedDate);
                                         setCalendarOpen(false);
                                         setHasUserModified(true);
                                     }
@@ -263,7 +285,7 @@ export function AgendaForm({
                                 <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" />
                                 <div className="flex-1">
                                     <p className="text-xs font-medium text-orange-300">
-                                        Has seleccionado una fecha que ya ha pasado: {formatDate(date)}
+                                        Has seleccionado una fecha que ya ha pasado: {formatDisplayDate(date)}
                                     </p>
                                 </div>
                             </div>

@@ -20,11 +20,15 @@ export function TaskCard({ task, day, onClick }: TaskCardProps) {
     const taskEnd = new Date(task.end_date);
     const dayDate = new Date(day);
 
-    // Normalizar fechas para comparación (solo día, sin hora)
+    // Normalizar fechas para comparación usando métodos UTC (solo día, sin hora)
     const normalizeDate = (date: Date) => {
-        const d = new Date(date);
-        d.setHours(0, 0, 0, 0);
-        return d;
+        // Crear fecha usando UTC con mediodía como buffer para evitar problemas de zona horaria
+        return new Date(Date.UTC(
+            date.getUTCFullYear(),
+            date.getUTCMonth(),
+            date.getUTCDate(),
+            12, 0, 0
+        ));
     };
 
     const normalizedDay = normalizeDate(dayDate);

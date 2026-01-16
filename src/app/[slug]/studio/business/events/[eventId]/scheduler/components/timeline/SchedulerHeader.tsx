@@ -38,11 +38,19 @@ export const SchedulerHeader = React.memo(({ dateRange }: SchedulerHeaderProps) 
       style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px` }}
     >
       {days.map((day, index) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const cellDate = new Date(day);
-        cellDate.setHours(0, 0, 0, 0);
-        const isToday = cellDate.getTime() === today.getTime();
+        // Comparar fechas usando métodos UTC para evitar problemas de zona horaria
+        const todayUtc = new Date();
+        const todayDateOnly = new Date(Date.UTC(
+          todayUtc.getUTCFullYear(),
+          todayUtc.getUTCMonth(),
+          todayUtc.getUTCDate()
+        ));
+        const cellDateOnly = new Date(Date.UTC(
+          day.getUTCFullYear(),
+          day.getUTCMonth(),
+          day.getUTCDate()
+        ));
+        const isToday = cellDateOnly.getTime() === todayDateOnly.getTime();
 
         return (
           <div

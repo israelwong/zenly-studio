@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardContent, ZenBadge } from '@/components/ui/zen';
-import { CondicionesFinancierasResumen } from '@/components/shared/cotizaciones';
+import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 
 interface PublicQuoteFinancialCardProps {
   cotizacionName: string;
@@ -32,15 +32,24 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
   negociacionPrecioOriginal,
   negociacionPrecioPersonalizado,
 }: PublicQuoteFinancialCardProps) {
+  // Verificar si hay precio negociado
+  const tienePrecioNegociado = negociacionPrecioPersonalizado !== null &&
+    negociacionPrecioPersonalizado !== undefined &&
+    negociacionPrecioPersonalizado > 0;
+
   // Calcular descuento de cotización (si existe)
   const descuentoCotizacionMonto = cotizacionDiscount && cotizacionDiscount > 0
     ? (cotizacionPrice * cotizacionDiscount) / 100
     : 0;
-  
+
   // Precio base para condiciones comerciales
-  const precioBaseParaCondiciones = descuentoCotizacionMonto > 0
-    ? cotizacionPrice - descuentoCotizacionMonto
-    : cotizacionPrice;
+  // Si hay precio negociado, usar el precio original de negociación como base (si existe)
+  // Si no hay precio negociado o no existe precio original de negociación, usar el precio después del descuento de cotización
+  const precioBaseParaCondiciones = tienePrecioNegociado && negociacionPrecioOriginal !== null && negociacionPrecioOriginal !== undefined
+    ? negociacionPrecioOriginal
+    : (descuentoCotizacionMonto > 0
+      ? cotizacionPrice - descuentoCotizacionMonto
+      : cotizacionPrice);
 
   return (
     <ZenCard>
@@ -63,7 +72,8 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
       <ZenCardContent>
         <div className="space-y-4">
           {/* Mostrar descuento de cotización si existe ANTES de las condiciones comerciales */}
-          {descuentoCotizacionMonto > 0 && (
+          {/* Solo mostrar si NO hay precio negociado (cuando hay precio negociado, CondicionesFinancierasResumen muestra el desglose completo) */}
+          {descuentoCotizacionMonto > 0 && !tienePrecioNegociado && (
             <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3 space-y-2">
               <div className="flex justify-between items-center text-sm">
                 <span className="text-zinc-400">Precio original:</span>
@@ -89,7 +99,7 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
           )}
           {/* Condiciones Comerciales */}
           {condicionesComerciales ? (
-            <CondicionesFinancierasResumen
+            <CondicionesComercialesDesglose
               condicion={condicionesComerciales}
               precioBase={precioBaseParaCondiciones}
               negociacionPrecioOriginal={negociacionPrecioOriginal}
@@ -98,7 +108,7 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
           ) : (
             <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 text-center">
               <p className="text-sm text-zinc-400">
-                {descuentoCotizacionMonto > 0 
+                {descuentoCotizacionMonto > 0
                   ? `Total: ${precioBaseParaCondiciones.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : `Total: ${cotizacionPrice.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 }

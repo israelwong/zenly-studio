@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { getCondicionesComerciales } from '@/lib/actions/studio/commercial/promises/cotizaciones-helpers';
+import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 
 interface CondicionesComercialesProps {
@@ -42,55 +42,46 @@ export function CondicionesComerciales({ studioSlug, eventId, eventData }: Condi
       ? getCondicionesComerciales(cotizacionData)
       : null;
 
-  if (!condiciones) {
+  // Obtener datos de negociación desde resumen (prioridad) o eventData
+  const negociacionPrecioOriginal = resumen?.cotizacion?.negociacion_precio_original ?? 
+    (eventData.cotizacion as any)?.negociacion_precio_original ?? null;
+  const negociacionPrecioPersonalizado = resumen?.cotizacion?.negociacion_precio_personalizado ?? 
+    (eventData.cotizacion as any)?.negociacion_precio_personalizado ?? null;
+
+  // Calcular precio base para condiciones comerciales
+  // Si hay precio negociado y existe precio original de negociación, usar ese como base
+  // Si no, usar el precio de la cotización
+  const precioBaseParaCondiciones = negociacionPrecioPersonalizado !== null && negociacionPrecioPersonalizado !== undefined && negociacionPrecioPersonalizado > 0 && negociacionPrecioOriginal !== null && negociacionPrecioOriginal !== undefined
+    ? negociacionPrecioOriginal
+    : (cotizacionData?.price || 0);
+
+  if (!condiciones || loadingResumen) {
+    if (loadingResumen) {
+      return (
+        <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-5 space-y-3">
+          <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
+          <div className="h-4 w-48 bg-zinc-800 rounded animate-pulse" />
+        </div>
+      );
+    }
     return null;
   }
 
   return (
-    <ZenCard>
-      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
-        <ZenCardTitle className="text-sm font-medium flex items-center pt-1">
-          Condiciones comerciales
-        </ZenCardTitle>
-      </ZenCardHeader>
-      <ZenCardContent className="p-4">
-        {loadingResumen ? (
-          <div className="space-y-2">
-            <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse" />
-            <div className="h-4 w-48 bg-zinc-800 rounded animate-pulse" />
-          </div>
-        ) : (
-          <div className="space-y-2 text-xs">
-            {condiciones.name && (
-              <div>
-                <p className="text-zinc-300 font-medium">{condiciones.name}</p>
-              </div>
-            )}
-            {condiciones.description && (
-              <div>
-                <p className="text-zinc-400 leading-relaxed">{condiciones.description}</p>
-              </div>
-            )}
-            {condiciones.advance_percentage && (
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-zinc-400">Anticipo:</span>
-                <span className="text-blue-400 font-medium">
-                  {condiciones.advance_percentage}%
-                </span>
-              </div>
-            )}
-            {condiciones.discount_percentage && (
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-zinc-400">Descuento:</span>
-                <span className="text-emerald-400 font-medium">
-                  {condiciones.discount_percentage}%
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </ZenCardContent>
-    </ZenCard>
+    <CondicionesComercialesDesglose
+      precioBase={precioBaseParaCondiciones}
+      condicion={{
+        id: cotizacionData?.condiciones_comerciales_id || '',
+        name: condiciones.name || '',
+        description: condiciones.description ?? null,
+        discount_percentage: condiciones.discount_percentage ?? null,
+        advance_type: condiciones.advance_type || 'percentage',
+        advance_percentage: condiciones.advance_percentage ?? null,
+        advance_amount: condiciones.advance_amount ?? null,
+      }}
+      negociacionPrecioOriginal={negociacionPrecioOriginal}
+      negociacionPrecioPersonalizado={negociacionPrecioPersonalizado}
+    />
   );
 }
 

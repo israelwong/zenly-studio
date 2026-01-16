@@ -11,6 +11,7 @@ import { PortafoliosCard } from '@/components/promise/PortafoliosCard';
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
 import { PendientesPageClient } from './PendientesPageClient';
+import { PromiseRedirectOnAuthorized } from '@/components/promise/PromiseRedirectOnAuthorized';
 import type { PublicCotizacion } from '@/types/public-promise';
 
 interface PendientesPageProps {
@@ -76,6 +77,7 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
 
   return (
     <PromisePageProvider>
+      <PromiseRedirectOnAuthorized studioSlug={slug} promiseId={promiseId} />
       <Suspense fallback={<PromisePageSkeleton />}>
         <PendientesPageClient
           promise={promise}

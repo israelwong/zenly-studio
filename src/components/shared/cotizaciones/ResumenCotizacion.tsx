@@ -6,7 +6,7 @@ import { Pencil, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { useParams, useRouter } from 'next/navigation';
 import { construirEstructuraJerarquicaCotizacion } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
-import { CondicionesFinancierasResumen } from './CondicionesFinancierasResumen';
+import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 
 interface ResumenCotizacionProps {
   cotizacion: {
@@ -310,7 +310,7 @@ export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, prom
         {/* Resumen Financiero con Condiciones Comerciales */}
         {condicionesComerciales && (
           <div className="pt-4 border-t border-zinc-700">
-            <CondicionesFinancierasResumen
+            <CondicionesComercialesDesglose
               precioBase={cotizacion.price}
               condicion={{
                 id: condicionesComerciales.id,

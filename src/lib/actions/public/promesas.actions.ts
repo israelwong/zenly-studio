@@ -6,7 +6,7 @@ import { obtenerCatalogo } from "@/lib/actions/studio/config/catalogo.actions";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/config/configuracion-precios.actions";
 import { calcularPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
 import { DEFAULT_AVISO_PRIVACIDAD_TITLE, DEFAULT_AVISO_PRIVACIDAD_VERSION, DEFAULT_AVISO_PRIVACIDAD_CONTENT } from "@/lib/constants/aviso-privacidad-default";
-import type { PublicSeccionData, PublicCategoriaData, PublicServicioData } from "@/types/public-promise";
+import type { PublicSeccionData, PublicCategoriaData, PublicServicioData, PublicCotizacion } from "@/types/public-promise";
 import type { SeccionData } from "@/lib/actions/schemas/catalogo-schemas";
 import { construirEstructuraJerarquicaCotizacion } from "@/lib/actions/studio/commercial/promises/cotizacion-structure.utils";
 
@@ -334,23 +334,7 @@ export async function obtenerAvisoPrivacidadPublico(
   }
 }
 
-// Tipos para cotizaciones públicas
-interface PublicCotizacion {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  discount: number | null;
-  servicios: PublicSeccionData[];
-  condiciones_comerciales: {
-    metodo_pago: string | null;
-    condiciones: string | null;
-  } | null;
-  paquete_origen: {
-    id: string;
-    name: string;
-  } | null;
-}
+// Usar el tipo exportado de public-promise.ts en lugar de duplicar la interfaz
 
 // Tipos para paquetes públicos
 interface PublicPaquete {

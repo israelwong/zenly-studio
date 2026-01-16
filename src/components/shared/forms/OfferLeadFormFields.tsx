@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/shadcn/
 import { checkDateAvailability } from "@/lib/actions/studio/offers/offer-availability.actions";
 import { validatePhoneBeforeSubmit, validateEmailBeforeSubmit } from "@/lib/actions/studio/offers/offer-submissions.actions";
 import { LeadFormFieldsConfig, LeadFormField } from "@/lib/actions/schemas/offer-schemas";
-import { formatDate } from "@/lib/actions/utils/formatting";
+import { formatDisplayDate } from "@/lib/utils/date-formatter";
 import { Loader2, CalendarIcon, AlertTriangle, Info } from "lucide-react";
 import { toast } from "sonner";
 
@@ -396,7 +396,7 @@ export function OfferLeadFormFields({
                     Solicitud duplicada
                   </h4>
                   <p className="text-sm text-zinc-300">
-                    Ya has solicitado información para esta fecha{phoneConflict.existingDate && ` (${formatDate(phoneConflict.existingDate)})`}.
+                    Ya has solicitado información para esta fecha{phoneConflict.existingDate && ` (${formatDisplayDate(phoneConflict.existingDate)})`}.
                   </p>
                   <p className="text-sm text-zinc-400 mt-2">
                     Te contactaremos lo antes posible. Si necesitas información para otra fecha, selecciona una diferente.
@@ -464,10 +464,11 @@ export function OfferLeadFormFields({
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {formData[field.id]
                       ? (() => {
-                        // Parsear fecha en zona horaria local
+                        // Parsear fecha usando UTC para evitar problemas de zona horaria
                         const [year, month, day] = formData[field.id].split('-');
-                        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                        return format(localDate, "PPP", { locale: es });
+                        // Crear fecha usando UTC con mediodía como buffer
+                        const utcDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
+                        return format(utcDate, "PPP", { locale: es });
                       })()
                       : field.placeholder || "Selecciona una fecha"}
                   </ZenButton>
@@ -476,27 +477,44 @@ export function OfferLeadFormFields({
                   <ZenCalendar
                     mode="single"
                     selected={formData[field.id] ? (() => {
-                      // Parsear fecha en zona horaria local
+                      // Parsear fecha usando UTC para evitar problemas de zona horaria
                       const [year, month, day] = formData[field.id].split('-');
-                      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                      // Crear fecha usando UTC con mediodía como buffer
+                      return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
                     })() : undefined}
                     onSelect={(date: Date | undefined) => {
                       if (date) {
-                        // Verificar si es fecha pasada
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const selectedDate = new Date(date);
-                        selectedDate.setHours(0, 0, 0, 0);
+                        // Verificar si es fecha pasada usando UTC
+                        const todayUtc = new Date();
+                        todayUtc.setUTCHours(12, 0, 0, 0);
+                        const selectedDateUtc = new Date(Date.UTC(
+                          date.getUTCFullYear(),
+                          date.getUTCMonth(),
+                          date.getUTCDate(),
+                          12, 0, 0
+                        ));
 
-                        if (selectedDate < today) {
+                        // Comparar solo fechas (sin hora) usando UTC
+                        const todayDateOnly = new Date(Date.UTC(
+                          todayUtc.getUTCFullYear(),
+                          todayUtc.getUTCMonth(),
+                          todayUtc.getUTCDate()
+                        ));
+                        const selectedDateOnly = new Date(Date.UTC(
+                          selectedDateUtc.getUTCFullYear(),
+                          selectedDateUtc.getUTCMonth(),
+                          selectedDateUtc.getUTCDate()
+                        ));
+
+                        if (selectedDateOnly < todayDateOnly) {
                           setPastDateAlert(true);
                           return;
                         }
 
-                        // Formatear fecha en zona horaria local para evitar offset
-                        const year = date.getFullYear();
-                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                        const day = String(date.getDate()).padStart(2, '0');
+                        // Formatear fecha usando métodos UTC para evitar offset
+                        const year = date.getUTCFullYear();
+                        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                        const day = String(date.getUTCDate()).padStart(2, '0');
                         const dateString = `${year}-${month}-${day}`;
 
                         handleInputChange(field.id, dateString);

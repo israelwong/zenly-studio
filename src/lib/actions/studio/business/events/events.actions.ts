@@ -15,6 +15,7 @@ import {
   type EventWithContact,
 } from '@/lib/actions/schemas/events-schemas';
 import type { z } from 'zod';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 export interface EventoBasico {
   id: string;
@@ -1768,9 +1769,11 @@ export async function actualizarFechaEvento(
     const validatedData = updateEventDateSchema.parse(data);
     const { event_id, event_date } = validatedData;
 
-    // Normalizar fecha (solo fecha, sin hora)
-    const nuevaFecha = new Date(event_date);
-    nuevaFecha.setHours(0, 0, 0, 0);
+    // Normalizar fecha a UTC (solo fecha, sin hora ni zona horaria)
+    const nuevaFecha = toUtcDateOnly(event_date);
+    if (!nuevaFecha) {
+      return { success: false, error: 'Fecha inválida' };
+    }
 
     // Obtener studio
     const studio = await prisma.studios.findUnique({
@@ -1807,10 +1810,38 @@ export async function actualizarFechaEvento(
           select: {
             id: true,
             date: true,
+            studio_id: true,
+            promise_id: true,
+            concept: true,
+            address: true,
+            contexto: true,
+            status: true,
+            time: true,
+            description: true,
+            link_meeting_url: true,
+            type_scheduling: true,
           },
           take: 1,
           orderBy: {
             date: 'asc',
+          },
+        },
+        studio_id: true,
+        promise_id: true,
+        promise: {
+          select: {
+            name: true,
+            event_location: true,
+            contact: {
+              select: {
+                address: true,
+              },
+            },
+          },
+        },
+        event_type: {
+          select: {
+            name: true,
           },
         },
       },
@@ -1849,30 +1880,82 @@ export async function actualizarFechaEvento(
 
       const tasks = schedulerInstance.tasks;
       if (tasks.length > 0) {
-        // Calcular rango basado en fechas de tareas existentes
-        const taskDates = tasks.map(t => ({
-          start: new Date(t.start_date),
-          end: new Date(t.start_date.getTime() + (t.duration_days - 1) * 24 * 60 * 60 * 1000),
-        }));
+        // Calcular rango basado en fechas de tareas existentes usando métodos UTC
+        const taskDates = tasks.map(t => {
+          const startUtc = new Date(t.start_date);
+          // Calcular end_date usando UTC para evitar problemas de zona horaria
+          const endUtc = new Date(Date.UTC(
+            startUtc.getUTCFullYear(),
+            startUtc.getUTCMonth(),
+            startUtc.getUTCDate() + (t.duration_days - 1),
+            12, 0, 0
+          ));
+          return {
+            start: new Date(Date.UTC(startUtc.getUTCFullYear(), startUtc.getUTCMonth(), startUtc.getUTCDate(), 12, 0, 0)),
+            end: endUtc,
+          };
+        });
 
         const minStart = new Date(Math.min(...taskDates.map(d => d.start.getTime())));
         const maxEnd = new Date(Math.max(...taskDates.map(d => d.end.getTime())));
 
-        // Calcular offset desde la fecha original del evento
-        const fechaOriginal = evento.event_date;
-        const offsetStart = (minStart.getTime() - fechaOriginal.getTime()) / (1000 * 60 * 60 * 24);
-        const offsetEnd = (maxEnd.getTime() - fechaOriginal.getTime()) / (1000 * 60 * 60 * 24);
+        // Calcular offset desde la fecha original del evento usando solo fechas (sin hora)
+        const fechaOriginalUtc = new Date(Date.UTC(
+          evento.event_date.getUTCFullYear(),
+          evento.event_date.getUTCMonth(),
+          evento.event_date.getUTCDate()
+        ));
+        const minStartDateOnly = new Date(Date.UTC(
+          minStart.getUTCFullYear(),
+          minStart.getUTCMonth(),
+          minStart.getUTCDate()
+        ));
+        const maxEndDateOnly = new Date(Date.UTC(
+          maxEnd.getUTCFullYear(),
+          maxEnd.getUTCMonth(),
+          maxEnd.getUTCDate()
+        ));
+        
+        const offsetStart = Math.round((minStartDateOnly.getTime() - fechaOriginalUtc.getTime()) / (1000 * 60 * 60 * 24));
+        const offsetEnd = Math.round((maxEndDateOnly.getTime() - fechaOriginalUtc.getTime()) / (1000 * 60 * 60 * 24));
 
-        newStartDate = new Date(nuevaFecha);
-        newStartDate.setDate(newStartDate.getDate() + offsetStart);
-        newEndDate = new Date(nuevaFecha);
-        newEndDate.setDate(newEndDate.getDate() + offsetEnd);
+        // Calcular nuevas fechas usando UTC
+        const nuevaFechaUtc = new Date(Date.UTC(
+          nuevaFecha.getUTCFullYear(),
+          nuevaFecha.getUTCMonth(),
+          nuevaFecha.getUTCDate()
+        ));
+        newStartDate = new Date(Date.UTC(
+          nuevaFechaUtc.getUTCFullYear(),
+          nuevaFechaUtc.getUTCMonth(),
+          nuevaFechaUtc.getUTCDate() + offsetStart,
+          12, 0, 0
+        ));
+        newEndDate = new Date(Date.UTC(
+          nuevaFechaUtc.getUTCFullYear(),
+          nuevaFechaUtc.getUTCMonth(),
+          nuevaFechaUtc.getUTCDate() + offsetEnd,
+          12, 0, 0
+        ));
       } else {
-        // Sin tareas, usar fechas por defecto
-        newStartDate = new Date(nuevaFecha);
-        newStartDate.setDate(newStartDate.getDate() - 7); // 7 días antes por defecto
-        newEndDate = new Date(nuevaFecha);
-        newEndDate.setDate(newEndDate.getDate() + 1); // 1 día después por defecto
+        // Sin tareas, usar fechas por defecto usando UTC
+        const nuevaFechaUtc = new Date(Date.UTC(
+          nuevaFecha.getUTCFullYear(),
+          nuevaFecha.getUTCMonth(),
+          nuevaFecha.getUTCDate()
+        ));
+        newStartDate = new Date(Date.UTC(
+          nuevaFechaUtc.getUTCFullYear(),
+          nuevaFechaUtc.getUTCMonth(),
+          nuevaFechaUtc.getUTCDate() - 7, // 7 días antes por defecto
+          12, 0, 0
+        ));
+        newEndDate = new Date(Date.UTC(
+          nuevaFechaUtc.getUTCFullYear(),
+          nuevaFechaUtc.getUTCMonth(),
+          nuevaFechaUtc.getUTCDate() + 1, // 1 día después por defecto
+          12, 0, 0
+        ));
       }
 
       // Actualizar scheduler_instance
@@ -1920,14 +2003,83 @@ export async function actualizarFechaEvento(
       }
     }
 
-    // Actualizar agenda si existe
-    if (evento.agenda && evento.agenda.length > 0) {
-      const agendaItem = evento.agenda[0];
-      await prisma.studio_agenda.update({
-        where: { id: agendaItem.id },
-        data: { date: nuevaFecha },
-      });
+    // Actualizar agenda - eliminar todas las agendas del evento y crear una nueva con la fecha correcta
+    // Esto evita duplicados cuando se actualiza la fecha del evento
+    // Normalizar nueva fecha usando UTC para evitar problemas de zona horaria
+    const nuevaFechaNormalizada = nuevaFecha instanceof Date 
+      ? new Date(Date.UTC(
+          nuevaFecha.getUTCFullYear(),
+          nuevaFecha.getUTCMonth(),
+          nuevaFecha.getUTCDate(),
+          12, 0, 0
+        ))
+      : new Date(Date.UTC(
+          new Date(nuevaFecha).getUTCFullYear(),
+          new Date(nuevaFecha).getUTCMonth(),
+          new Date(nuevaFecha).getUTCDate(),
+          12, 0, 0
+        ));
+
+    // Eliminar todas las agendas existentes para este evento para evitar duplicados
+    await prisma.studio_agenda.deleteMany({
+      where: {
+        evento_id: event_id,
+        contexto: 'evento',
+      },
+    });
+
+    // Construir concepto: "Nombre Evento (Tipo Evento)" o solo "Nombre Evento" o "Tipo Evento"
+    const eventTypeName = evento.event_type?.name;
+    const eventName = evento.promise?.name;
+    let concept = 'Evento';
+    
+    if (eventName && eventTypeName) {
+      concept = `${eventName} (${eventTypeName})`;
+    } else if (eventName) {
+      concept = eventName;
+    } else if (eventTypeName) {
+      concept = eventTypeName;
     }
+
+    // Obtener dirección desde promise o contact
+    const address = evento.promise?.event_location || evento.promise?.contact?.address || null;
+
+    // Obtener datos de agenda existente si hay, sino usar valores por defecto
+    const agendaItem = evento.agenda && evento.agenda.length > 0 ? evento.agenda[0] : null;
+
+    // Determinar si es fecha principal del evento
+    const isMainEventDate = evento.promise?.event_date && nuevaFechaNormalizada
+      ? new Date(evento.promise.event_date).toDateString() === nuevaFechaNormalizada.toDateString()
+      : false;
+
+    // Construir metadata según tipo
+    const metadata = agendaItem?.metadata 
+      ? (agendaItem.metadata as Record<string, unknown>)
+      : {
+          agenda_type: isMainEventDate ? 'main_event_date' : 'event_appointment',
+          sync_google: true,
+          google_calendar_type: 'primary',
+          is_main_event_date: isMainEventDate,
+        };
+
+    // Crear nueva agenda con la fecha normalizada
+    await prisma.studio_agenda.create({
+      data: {
+        studio_id: evento.studio_id,
+        evento_id: event_id,
+        promise_id: evento.promise_id,
+        date: nuevaFechaNormalizada,
+        concept: agendaItem?.concept || concept,
+        address: agendaItem?.address || address,
+        contexto: 'evento',
+        status: agendaItem?.status || 'pendiente',
+        time: agendaItem?.time || null,
+        description: agendaItem?.description || null,
+        link_meeting_url: agendaItem?.link_meeting_url || null,
+        type_scheduling: agendaItem?.type_scheduling || null,
+        metadata: metadata,
+      },
+    });
 
     // Revalidar paths
     revalidatePath(`/${studioSlug}/studio/business/events`);
@@ -2004,7 +2156,7 @@ export async function actualizarFechaEvento(
       event_date: Date | null;
       event_location: string | null;
     } | null;
-    const eventName = promise?.name || null;
+    const updatedEventName = promise?.name || null;
     const eventAddress = promise?.address || null;
     const eventDate = promise?.event_date || eventoActualizado.event_date;
 
@@ -2016,7 +2168,7 @@ export async function actualizarFechaEvento(
       cotizacion_id: eventoActualizado.cotizacion_id,
       event_type_id: eventoActualizado.event_type_id,
       stage_id: eventoActualizado.stage_id,
-      name: eventName,
+      name: updatedEventName,
       event_date: eventDate,
       address: eventAddress,
       sede: promise?.event_location || null,
