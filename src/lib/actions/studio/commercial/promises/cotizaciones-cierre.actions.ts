@@ -7,29 +7,7 @@ import { notifyEventCreated } from '@/lib/notifications/studio/helpers/event-not
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { getPromiseContractData } from '@/lib/actions/studio/business/contracts/renderer.actions';
 import { renderContractContent } from '@/lib/actions/studio/business/contracts/renderer.actions';
-
-/**
- * Normaliza una fecha de pago a fecha local sin hora para evitar problemas de zona horaria
- */
-function normalizePaymentDate(date: Date | string | undefined | null): Date {
-    if (!date) {
-        return new Date();
-    }
-    
-    if (typeof date === 'string') {
-        const dateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (dateMatch) {
-            const [, year, month, day] = dateMatch;
-            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        }
-        return new Date(date);
-    }
-    
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
-    return new Date(year, month, day);
-}
+import { normalizePaymentDate } from '@/lib/actions/utils/payment-date';
 
 interface CierreResponse {
   success: boolean;
@@ -1484,6 +1462,32 @@ export async function autorizarYCrearEvento(
         : null;
 
       // 7.4. Crear o actualizar evento
+      // Normalizar fecha del evento usando UTC para evitar problemas de zona horaria
+      // Usar la fecha de la promesa si existe, sino usar la fecha de autorización (fecha actual)
+      let eventDateNormalized: Date;
+      if (cotizacion.promise.event_date) {
+        // Si hay fecha de evento en la promesa, normalizarla usando UTC con mediodía como buffer
+        const eventDate = cotizacion.promise.event_date instanceof Date 
+          ? cotizacion.promise.event_date 
+          : new Date(cotizacion.promise.event_date);
+        eventDateNormalized = new Date(Date.UTC(
+          eventDate.getUTCFullYear(),
+          eventDate.getUTCMonth(),
+          eventDate.getUTCDate(),
+          12, 0, 0
+        ));
+      } else {
+        // Si no hay fecha de evento, usar la fecha de autorización (fecha actual) normalizada con UTC
+        // Esto asegura que el evento tenga una fecha válida basada en cuándo se autorizó
+        const fechaAutorizacion = new Date();
+        eventDateNormalized = new Date(Date.UTC(
+          fechaAutorizacion.getUTCFullYear(),
+          fechaAutorizacion.getUTCMonth(),
+          fechaAutorizacion.getUTCDate(),
+          12, 0, 0
+        ));
+      }
+
       let evento;
       if (eventoExistente) {
         // Actualizar evento existente (puede estar cancelado o activo)
@@ -1493,7 +1497,7 @@ export async function autorizarYCrearEvento(
             cotizacion_id: cotizacionId,
             event_type_id: cotizacion.promise.event_type_id || null,
             stage_id: primeraEtapa.id,
-            event_date: cotizacion.promise.event_date || new Date(),
+            event_date: eventDateNormalized,
             status: 'ACTIVE',
             updated_at: new Date(),
           },
@@ -1508,7 +1512,7 @@ export async function autorizarYCrearEvento(
             cotizacion_id: cotizacionId,
             event_type_id: cotizacion.promise.event_type_id || null,
             stage_id: primeraEtapa.id,
-            event_date: cotizacion.promise.event_date || new Date(),
+            event_date: eventDateNormalized,
             status: 'ACTIVE',
           },
         });
@@ -1640,7 +1644,8 @@ export async function autorizarYCrearEvento(
       });
 
       // 8.9. Eliminar citas comerciales asociadas a la promesa y crear agenda del evento
-      if (cotizacion.promise.event_date) {
+      // Usar la fecha normalizada del evento que ya creamos arriba
+      if (eventDateNormalized) {
         // Eliminar todas las citas comerciales (contexto: 'promise') asociadas a esta promesa
         await tx.studio_agenda.deleteMany({
           where: {
@@ -1650,41 +1655,51 @@ export async function autorizarYCrearEvento(
           },
         });
 
-        // Crear entrada en agenda para el evento
-        const agendaExistente = await tx.studio_agenda.findFirst({
+        // IMPORTANTE: Eliminar cualquier agenda existente para este evento_id
+        // Esto evita duplicados cuando se actualiza la fecha del evento
+        await tx.studio_agenda.deleteMany({
           where: {
             evento_id: evento.id,
-            date: cotizacion.promise.event_date,
+            contexto: 'evento',
+            studio_id: studio.id,
           },
         });
 
-        if (!agendaExistente) {
-          // Construir concepto: "Nombre Evento (Tipo Evento)" o solo "Nombre Evento"
-          const eventTypeName = cotizacion.promise.event_type?.name;
-          const eventName = cotizacion.promise.event_name;
-          let concept = 'Evento';
-          
-          if (eventName && eventTypeName) {
-            concept = `${eventName} (${eventTypeName})`;
-          } else if (eventName) {
-            concept = eventName;
-          } else if (eventTypeName) {
-            concept = eventTypeName;
-          }
-          
-          await tx.studio_agenda.create({
-            data: {
-              studio_id: studio.id,
-              evento_id: evento.id,
-              promise_id: promiseId,
-              date: cotizacion.promise.event_date,
-              concept: concept,
-              address: cotizacion.promise.event_location || cotizacion.promise.contact?.address || null,
-              contexto: 'evento',
-              status: 'pendiente',
-            },
-          });
+        // Construir concepto: "Nombre Evento (Tipo Evento)" o solo "Nombre Evento"
+        const eventTypeName = cotizacion.promise.event_type?.name;
+        const eventName = cotizacion.promise.event_name;
+        let concept = 'Evento';
+        
+        if (eventName && eventTypeName) {
+          concept = `${eventName} (${eventTypeName})`;
+        } else if (eventName) {
+          concept = eventName;
+        } else if (eventTypeName) {
+          concept = eventTypeName;
         }
+        
+        // Construir metadata para evento principal
+        const metadata = {
+          agenda_type: 'main_event_date',
+          sync_google: true,
+          google_calendar_type: 'primary',
+          is_main_event_date: true,
+        };
+
+        // Crear nueva entrada en agenda para el evento usando la fecha normalizada
+        await tx.studio_agenda.create({
+          data: {
+            studio_id: studio.id,
+            evento_id: evento.id,
+            promise_id: promiseId,
+            date: eventDateNormalized, // Usar fecha normalizada con UTC
+            concept: concept,
+            address: cotizacion.promise.event_location || cotizacion.promise.contact?.address || null,
+            contexto: 'evento',
+            status: 'pendiente',
+            metadata: metadata,
+          },
+        });
       } else {
         // Si no hay fecha de evento, igual eliminar las citas comerciales
         await tx.studio_agenda.deleteMany({
@@ -1734,7 +1749,7 @@ export async function autorizarYCrearEvento(
             cotizacion_nombre: cotizacion.name,
             evento_id: evento.id,
             evento_nombre: eventoNombre,
-            evento_fecha: cotizacion.promise.event_date?.toISOString() || null,
+            evento_fecha: eventDateNormalized.toISOString(),
             contract_signed: !!registroCierre.contract_signed_at,
             pago_registrado: pagoRegistrado,
             pago_monto: pagoRegistrado && options?.montoInicial ? options.montoInicial : null,
@@ -1756,6 +1771,20 @@ export async function autorizarYCrearEvento(
     } catch (notificationError) {
       // No fallar la operaci?n principal si falla la notificaci?n
       console.error('[autorizarYCrearEvento] Error al crear notificaci?n:', notificationError);
+    }
+
+    // 10. Sincronizar con Google Calendar si está habilitado (fuera de la transacci?n)
+    try {
+      const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
+        await import('@/lib/integrations/google/clients/calendar/helpers');
+      
+      if (await tieneGoogleCalendarHabilitado(studioSlug)) {
+        // Sincronizar en background para no bloquear la respuesta
+        sincronizarEventoPrincipalEnBackground(result.evento_id, studioSlug);
+      }
+    } catch (googleError) {
+      // No fallar la operaci?n principal si falla la sincronizaci?n con Google Calendar
+      console.error('[autorizarYCrearEvento] Error sincronizando con Google Calendar (no crítico):', googleError);
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
