@@ -8,6 +8,7 @@ import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas'
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
 import { formatDisplayDateShort, formatDisplayDate } from '@/lib/utils/date-formatter';
 import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge, ZenDialog, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { PromiseDeleteModal } from '@/components/shared/promises';
 import { getPromiseTagsByPromiseId, getPromiseTags, addTagToPromise, removeTagFromPromise, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { deletePromise } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
@@ -313,6 +314,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
             onArchived?.();
         }, 0);
     };
+
 
     // Confirmar eliminar promesa
     const handleConfirmDelete = async () => {
@@ -658,17 +660,17 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
             />
 
             {/* Modal de confirmación eliminar - fuera del contenedor clickeable */}
-            <ZenConfirmModal
-                isOpen={showDeleteModal}
-                onClose={() => !isDeleting && setShowDeleteModal(false)}
-                onConfirm={handleConfirmDelete}
-                title="Eliminar promesa"
-                description={`¿Estás seguro de que deseas eliminar la promesa de "${promise.name}"? Esta acción no se puede deshacer y eliminará todos los datos asociados.`}
-                confirmText={isDeleting ? 'Eliminando...' : 'Eliminar'}
-                cancelText="Cancelar"
-                variant="destructive"
-                disabled={isDeleting}
-            />
+            {promise.promise_id && studioSlug && (
+                <PromiseDeleteModal
+                    isOpen={showDeleteModal}
+                    onClose={() => setShowDeleteModal(false)}
+                    onConfirm={handleConfirmDelete}
+                    studioSlug={studioSlug}
+                    promiseId={promise.promise_id}
+                    promiseName={promise.name}
+                    isDeleting={isDeleting}
+                />
+            )}
 
             {/* Modal de etiquetas */}
             <ZenDialog

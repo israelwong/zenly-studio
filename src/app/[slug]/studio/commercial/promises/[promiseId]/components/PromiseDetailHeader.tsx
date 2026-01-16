@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, ChevronDown, Check, Zap, FileText } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 
 interface PromiseDetailHeaderProps {
@@ -55,12 +56,24 @@ export function PromiseDetailHeader({
 }: PromiseDetailHeaderProps) {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
 
     useEffect(() => {
         setMounted(true);
     }, []);
 
+    const handleDeleteClick = () => {
+        if (!promiseId) return;
+        setShowDeleteModal(true);
+    };
+
+    const handleConfirmDelete = () => {
+        setShowDeleteModal(false);
+        onDelete();
+    };
+
     return (
+        <>
         <ZenCardHeader className="border-b border-zinc-800">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -285,7 +298,7 @@ export function PromiseDetailHeader({
                                     )}
                                     <ZenDropdownMenuSeparator />
                                     <ZenDropdownMenuItem
-                                        onClick={onDelete}
+                                        onClick={handleDeleteClick}
                                         disabled={isDeleting}
                                         className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
                                     >
@@ -299,6 +312,19 @@ export function PromiseDetailHeader({
                 </div>
             </div>
         </ZenCardHeader>
+
+        {/* Modal de confirmación de eliminación */}
+        {promiseId && (
+            <PromiseDeleteModal
+                isOpen={showDeleteModal}
+                onClose={() => setShowDeleteModal(false)}
+                onConfirm={handleConfirmDelete}
+                studioSlug={studioSlug}
+                promiseId={promiseId}
+                isDeleting={isDeleting}
+            />
+        )}
+        </>
     );
 }
 

@@ -53,6 +53,7 @@ export function PromiseDetailToolbar({
   }>>([]);
   const [loadingStats, setLoadingStats] = useState(false);
   const loadingStatsRef = useRef(false);
+  const [mounted, setMounted] = useState(false);
 
   // Función para cargar estadísticas (reutilizable) con timeout
   const loadStats = React.useCallback(async () => {
@@ -132,6 +133,10 @@ export function PromiseDetailToolbar({
 
   // Cargar estadísticas completas cuando se abre el popover
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (statsPopoverOpen && promiseId && !loadingStatsRef.current) {
       loadStats();
     }
@@ -162,22 +167,23 @@ export function PromiseDetailToolbar({
       <div className="flex items-center gap-3">
         {/* Estadísticas de visitas */}
         {promiseId && (
-          <Popover open={statsPopoverOpen} onOpenChange={setStatsPopoverOpen}>
-            <PopoverTrigger asChild>
-              <button
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-800 transition-colors"
-                onClick={() => setStatsPopoverOpen(true)}
-              >
-                <Eye className="h-3.5 w-3.5 text-zinc-400" />
-                <span className="text-xs text-zinc-400">Visitas</span>
-                {viewStats && viewStats.totalViews > 0 && (
-                  <ZenBadge variant="secondary" className="text-[10px] px-1 py-0 h-4 min-w-[16px]">
-                    {viewStats.totalViews}
-                  </ZenBadge>
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 bg-zinc-950 border-zinc-700/50 p-3 shadow-xl" align="start">
+          mounted ? (
+            <Popover open={statsPopoverOpen} onOpenChange={setStatsPopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-800 transition-colors"
+                  onClick={() => setStatsPopoverOpen(true)}
+                >
+                  <Eye className="h-3.5 w-3.5 text-zinc-400" />
+                  <span className="text-xs text-zinc-400">Visitas</span>
+                  {viewStats && viewStats.totalViews > 0 && (
+                    <ZenBadge variant="secondary" className="text-[10px] px-1 py-0 h-4 min-w-[16px]">
+                      {viewStats.totalViews}
+                    </ZenBadge>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 bg-zinc-950 border-zinc-700/50 p-3 shadow-xl" align="start">
               <div className="space-y-3">
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -292,8 +298,22 @@ export function PromiseDetailToolbar({
                   </>
                 )}
               </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <button
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-800 transition-colors"
+              disabled
+            >
+              <Eye className="h-3.5 w-3.5 text-zinc-400" />
+              <span className="text-xs text-zinc-400">Visitas</span>
+              {viewStats && viewStats.totalViews > 0 && (
+                <ZenBadge variant="secondary" className="text-[10px] px-1 py-0 h-4 min-w-[16px]">
+                  {viewStats.totalViews}
+                </ZenBadge>
+              )}
+            </button>
+          )
         )}
         {/* Grupo: Compartir */}
         <div className="flex items-center gap-1.5">

@@ -1619,7 +1619,83 @@ export async function unarchivePromise(
 }
 
 /**
+ * Obtener información sobre qué se eliminará al borrar una promesa
+ */
+export async function getPromiseDeletionInfo(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    hasEvent: boolean;
+    cotizacionesCount: number;
+    agendamientosCount: number;
+  };
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      select: {
+        studio_id: true,
+        event: {
+          select: {
+            id: true,
+          },
+        },
+        _count: {
+          select: {
+            quotes: true,
+            agenda: true,
+          },
+        },
+      },
+    });
+
+    if (!promise || promise.studio_id !== studio.id) {
+      return { success: false, error: 'Promesa no encontrada' };
+    }
+
+    // Contar agendamientos del evento también si existe
+    let eventoAgendamientosCount = 0;
+    if (promise.event?.id) {
+      eventoAgendamientosCount = await prisma.studio_agenda.count({
+        where: {
+          evento_id: promise.event.id,
+          studio_id: studio.id,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      data: {
+        hasEvent: !!promise.event,
+        cotizacionesCount: promise._count.quotes,
+        agendamientosCount: promise._count.agenda + eventoAgendamientosCount,
+      },
+    };
+  } catch (error) {
+    console.error('[PROMISES] Error obteniendo información de eliminación:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener información',
+    };
+  }
+}
+
+/**
  * Eliminar promesa (hard delete con cascade)
+ * Elimina: promesa, evento (si existe), cotizaciones, agendamientos
  */
 export async function deletePromise(
   studioSlug: string,
@@ -1637,28 +1713,57 @@ export async function deletePromise(
 
     const promise = await prisma.studio_promises.findUnique({
       where: { id: promiseId },
-      select: { studio_id: true },
+      select: { 
+        studio_id: true,
+        event: {
+          select: {
+            id: true,
+          },
+        },
+      },
     });
 
     if (!promise || promise.studio_id !== studio.id) {
       return { success: false, error: 'Promesa no encontrada' };
     }
 
-    // Eliminar agendamientos asociados (fechas de interés y citas)
-    await prisma.studio_agenda.deleteMany({
-      where: {
-        promise_id: promiseId,
-        studio_id: studio.id,
-      },
-    });
+    // Usar transacción para garantizar atomicidad
+    await prisma.$transaction(async (tx) => {
+      const eventoId = promise.event?.id;
 
-    // Hard delete (cascade eliminará otras relaciones automáticamente)
-    await prisma.studio_promises.delete({
-      where: { id: promiseId },
+      // 1. Eliminar agendamientos de la promesa
+      await tx.studio_agenda.deleteMany({
+        where: {
+          promise_id: promiseId,
+          studio_id: studio.id,
+        },
+      });
+
+      // 2. Si hay evento, eliminar agendamientos del evento también
+      if (eventoId) {
+        await tx.studio_agenda.deleteMany({
+          where: {
+            evento_id: eventoId,
+            studio_id: studio.id,
+          },
+        });
+      }
+
+      // 3. Eliminar cotizaciones asociadas a la promesa
+      await tx.studio_cotizaciones.deleteMany({
+        where: {
+          promise_id: promiseId,
+          studio_id: studio.id,
+        },
+      });
+
+      // 4. Eliminar promesa (esto eliminará el evento en cascade por onDelete: Cascade)
+      await tx.studio_promises.delete({
+        where: { id: promiseId },
+      });
     });
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-      // Agenda ahora es un sheet, no necesita revalidación de ruta
     return { success: true };
   } catch (error) {
     console.error('[PROMISES] Error eliminando promise:', error);

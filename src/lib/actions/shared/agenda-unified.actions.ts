@@ -1200,7 +1200,7 @@ export async function crearAgendamiento(
 
         revalidatePath(`/${studioSlug}/studio/commercial/promises`);
 
-        // Log si está asociado a una promesa
+        // Log si está asociado a una promesa (solo log, sin notificación)
         if (agenda.promise_id) {
             await logPromiseAction(
                 studioSlug,
@@ -1217,23 +1217,6 @@ export async function crearAgendamiento(
             ).catch((error) => {
                 console.error('[AGENDA_UNIFIED] Error creando log:', error);
             });
-        }
-
-        // Crear notificación
-        try {
-            const { notifyAgendaCreated } = await import('@/lib/notifications/studio');
-            await notifyAgendaCreated(
-                studio.id,
-                agenda.id,
-                agenda.promise_id,
-                agenda.evento_id,
-                agenda.date,
-                agenda.concept
-            );
-        } catch (notificationError) {
-            console.error('[AGENDA_UNIFIED] ❌ Error creando notificación:', notificationError);
-            console.error('[AGENDA_UNIFIED] Stack trace:', notificationError instanceof Error ? notificationError.stack : 'N/A');
-            // No fallar la creación del agendamiento si falla la notificación
         }
 
         // Sincronizar con Google Calendar según metadata

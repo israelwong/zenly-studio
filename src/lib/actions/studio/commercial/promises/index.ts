@@ -7,6 +7,7 @@ export {
   archivePromise,
   unarchivePromise,
   deletePromise,
+  getPromiseDeletionInfo,
 } from './promises.actions';
 
 export {

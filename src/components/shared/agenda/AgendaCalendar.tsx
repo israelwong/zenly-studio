@@ -92,11 +92,20 @@ function agendaItemToEvent(item: AgendaItem) {
     const citaNombre = item.description || item.concept || 'Cita';
     title = `${citaNombre} - ${item.event_name}`;
   }
-  // Cita de promesa: "primer nombre (tipo evento)"
-  else if (item.contact_name && item.event_type_name) {
-    title = `${getFirstName(item.contact_name)} (${item.event_type_name})`;
-  } else if (item.contact_name) {
-    title = getFirstName(item.contact_name);
+  // Cita de promesa: formato optimizado para espacio limitado
+  else if (item.contexto === 'promise' && item.type_scheduling) {
+    // Si hay type_scheduling: "Cita [presencial/virtual] Nombre prospecto"
+    const tipoCita = item.type_scheduling === 'virtual' ? 'virtual' : 'presencial';
+    const nombreProspecto = item.contact_name ? getFirstName(item.contact_name) : 'Prospecto';
+    title = `Cita ${tipoCita} ${nombreProspecto}`;
+  }
+  else if (item.contexto === 'promise' && item.event_type_name) {
+    // Si no hay type_scheduling pero hay event_type_name: "Cita Nombre evento"
+    title = `Cita ${item.event_type_name}`;
+  }
+  else if (item.contexto === 'promise' && item.contact_name) {
+    // Fallback: "Cita Nombre prospecto"
+    title = `Cita ${getFirstName(item.contact_name)}`;
   } else {
     title = item.concept || item.event_name || item.description || 'Agendamiento';
   }
