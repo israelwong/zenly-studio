@@ -3,12 +3,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { EventInfoCard } from '@/components/shared/promises';
-import { PromiseQuotesPanel } from '../components/cotizaciones/PromiseQuotesPanel';
-import { PromiseAgendamiento } from '../components/eventos/PromiseAgendamiento';
-import { PromiseTags } from '../components/PromiseTags';
+import { PromiseQuotesPanel } from './components/cotizaciones/PromiseQuotesPanel';
+import { PromiseAgendamiento } from './components/eventos/PromiseAgendamiento';
+import { PromiseTags } from './components/PromiseTags';
 import { EventFormModal } from '@/components/shared/promises';
-import { AuthorizeCotizacionModal } from '../components/cotizaciones/AuthorizeCotizacionModal';
-import { PromisePendienteSkeleton } from '../components/PromisePendienteSkeleton';
+import { AuthorizeCotizacionModal } from './components/cotizaciones/AuthorizeCotizacionModal';
+import { PromisePendienteSkeleton } from './components/PromisePendienteSkeleton';
 import { usePromiseContext } from '../context/PromiseContext';
 
 export default function PromisePendientePage() {

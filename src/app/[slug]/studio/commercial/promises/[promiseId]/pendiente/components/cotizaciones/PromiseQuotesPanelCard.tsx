@@ -34,7 +34,7 @@ import {
   pasarACierre,
   type CotizacionListItem,
 } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
-import { ClosingProcessInfoModal } from '../ClosingProcessInfoModal';
+import { ClosingProcessInfoModal } from '../../../components/ClosingProcessInfoModal';
 import { getCotizacionClicks } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 
 interface PromiseQuotesPanelCardProps {

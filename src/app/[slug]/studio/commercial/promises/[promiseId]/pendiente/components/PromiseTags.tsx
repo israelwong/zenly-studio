@@ -12,7 +12,7 @@ import {
   addTagToPromise as addTagToPromiseAction,
 } from '@/lib/actions/studio/commercial/promises';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
-import { PromiseTagsManageModal } from '../../components/PromiseTagsManageModal';
+import { PromiseTagsManageModal } from '../../../components/PromiseTagsManageModal';
 
 interface PromiseTagsProps {
   studioSlug: string;
