@@ -297,19 +297,23 @@ export function PromiseQuotesPanelCard({
     isProcessingRef.current = true;
     setLoading(true);
     try {
+      // Marcar cambio local ANTES de hacer la llamada al servidor
+      // para evitar que realtime recargue el componente
+      onArchive?.(cotizacion.id);
+      
       const result = await archiveCotizacion(cotizacion.id, studioSlug);
       if (result.success) {
         toast.success('Cotización archivada exitosamente');
         setShowArchiveModal(false);
-        // Actualización local: actualizar estado archived (después de cerrar modal)
-        onArchive?.(cotizacion.id);
       } else {
         toast.error(result.error || 'Error al archivar cotización');
         setShowArchiveModal(false);
+        // El componente padre manejará la recarga si es necesario
       }
     } catch {
       toast.error('Error al archivar cotización');
       setShowArchiveModal(false);
+      // El componente padre manejará la recarga si es necesario
     } finally {
       setLoading(false);
       isProcessingRef.current = false;
@@ -320,19 +324,24 @@ export function PromiseQuotesPanelCard({
     isProcessingRef.current = true;
     setLoading(true);
     try {
+      // Marcar cambio local ANTES de hacer la llamada al servidor
+      // para evitar que realtime recargue el componente
+      onUnarchive?.(cotizacion.id);
+      
       const result = await unarchiveCotizacion(cotizacion.id, studioSlug);
       if (result.success) {
         toast.success('Cotización desarchivada exitosamente');
         setShowUnarchiveModal(false);
-        // Actualización local: actualizar estado archived (después de cerrar modal)
-        onUnarchive?.(cotizacion.id);
       } else {
         toast.error(result.error || 'Error al desarchivar cotización');
         setShowUnarchiveModal(false);
+        // Revertir cambio local si falló
+        // El componente padre manejará la recarga si es necesario
       }
     } catch {
       toast.error('Error al desarchivar cotización');
       setShowUnarchiveModal(false);
+      // El componente padre manejará la recarga si es necesario
     } finally {
       setLoading(false);
       isProcessingRef.current = false;
@@ -725,8 +734,8 @@ export function PromiseQuotesPanelCard({
             {/* Ocultar botones en modo selección */}
             {!selectionMode && (
               <>
-                {/* Icono de visibilidad */}
-                {!(isArchivada && hasApprovedQuote) && (
+                {/* Icono de visibilidad - ocultar si está archivada */}
+                {!isArchivada && (
                   <ZenButton
                     variant="ghost"
                     size="sm"
@@ -906,13 +915,7 @@ export function PromiseQuotesPanelCard({
                         </>
                       ) : isArchivada ? (
                         <>
-                          {/* Archivada: duplicar, desarchivar, eliminar */}
-                          {!isRevision && (
-                            <ZenDropdownMenuItem onClick={handleDuplicate} disabled={loading || isDuplicating}>
-                              <Copy className="h-4 w-4 mr-2" />
-                              Duplicar
-                            </ZenDropdownMenuItem>
-                          )}
+                          {/* Archivada: solo desarchivar y eliminar */}
                           <ZenDropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();

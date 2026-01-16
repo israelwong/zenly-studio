@@ -195,10 +195,10 @@ export function PromiseQuotesPanel({
     onCotizacionUpdated: (cotizacionId: string, payload?: unknown) => {
       // Si este cambio fue iniciado localmente, ignorar para evitar recarga innecesaria
       if (localChangesRef.current.has(cotizacionId)) {
-        // Limpiar después de un breve delay para permitir que el cambio se propague
+        // Limpiar después de un delay más largo para permitir que el cambio se propague completamente
         setTimeout(() => {
           localChangesRef.current.delete(cotizacionId);
-        }, 1000);
+        }, 2000);
         return;
       }
 
@@ -211,6 +211,13 @@ export function PromiseQuotesPanel({
       if (changeInfo?.statusChanged) {
         const oldStatus = changeInfo.oldStatus;
         const newStatus = p?.newRecord?.status || p?.new?.status;
+        
+        // Ignorar cambios de archivada <-> pendiente (se manejan localmente)
+        if ((oldStatus === 'archivada' && newStatus === 'pendiente') ||
+            (oldStatus === 'pendiente' && newStatus === 'archivada')) {
+          // Estos cambios se manejan localmente, no recargar
+          return;
+        }
         
         // Recargar si cambió a estados críticos
         const estadosCriticos = ['aprobada', 'autorizada', 'approved', 'en_cierre'];
@@ -682,12 +689,19 @@ export function PromiseQuotesPanel({
         );
       }}
       onUnarchive={(id) => {
-        // Marcar como cambio local para evitar recarga desde realtime
+        // Marcar como cambio local ANTES de actualizar para evitar recarga desde realtime
         localChangesRef.current.add(id);
-        // Actualización local: cambiar status a pendiente
-        setCotizaciones((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, status: 'pendiente' as const, archived: false } : c))
-        );
+        // Actualización local: cambiar status a pendiente y mover a la lista de pendientes
+        setCotizaciones((prev) => {
+          const updated = prev.map((c) => 
+            c.id === id ? { ...c, status: 'pendiente' as const, archived: false } : c
+          );
+          // Reordenar: pendientes primero, luego archivadas
+          const pendientes = updated.filter((c) => c.status === 'pendiente' || c.status === 'negociacion');
+          const archivadas = updated.filter((c) => c.status === 'archivada');
+          const canceladas = updated.filter((c) => c.status === 'cancelada');
+          return [...pendientes, ...archivadas, ...canceladas];
+        });
       }}
       onNameUpdate={(id, newName) => {
         // Marcar como cambio local para evitar recarga desde realtime
