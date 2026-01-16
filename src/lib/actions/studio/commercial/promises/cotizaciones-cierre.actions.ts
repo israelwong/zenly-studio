@@ -1621,11 +1621,12 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 8.7. Cambiar etapa de promesa a "aprobado"
+      // 8.7. Cambiar etapa de promesa a "aprobado" y estado a "aprobada"
       await tx.studio_promises.update({
         where: { id: promiseId },
         data: {
           pipeline_stage_id: etapaAprobado.id,
+          status: 'aprobada',
           updated_at: new Date(),
         },
       });

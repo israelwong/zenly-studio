@@ -15,12 +15,13 @@ export default async function PromisePage({ params }: PromisePageProps) {
 
   if (!stateResult.success || !stateResult.data) {
     // Si hay error, el cliente manejará la redirección
-    return <PromiseRedirectClient studioSlug={studioSlug} promiseId={promiseId} state={null} />;
+    return <PromiseRedirectClient studioSlug={studioSlug} promiseId={promiseId} state={null} promiseStatus={null} />;
   }
 
   const state = stateResult.data.state;
+  const promiseStatus = stateResult.data.promiseData.status;
 
-  // Pasar el estado al cliente para que haga la redirección
+  // Pasar el estado determinado (que ya considera el status de la promesa) al cliente
   // Esto permite mostrar el skeleton mientras se procesa
-  return <PromiseRedirectClient studioSlug={studioSlug} promiseId={promiseId} state={state} />;
+  return <PromiseRedirectClient studioSlug={studioSlug} promiseId={promiseId} state={state} promiseStatus={promiseStatus} />;
 }

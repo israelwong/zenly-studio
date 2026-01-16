@@ -8,12 +8,14 @@ interface PromiseRedirectClientProps {
   studioSlug: string;
   promiseId: string;
   state: 'pendiente' | 'cierre' | 'autorizada' | null;
+  promiseStatus: string | null; // Status de la promesa (pending, aprobada, etc.)
 }
 
 export function PromiseRedirectClient({
   studioSlug,
   promiseId,
   state,
+  promiseStatus,
 }: PromiseRedirectClientProps) {
   const router = useRouter();
 
@@ -24,7 +26,8 @@ export function PromiseRedirectClient({
       return;
     }
 
-    // Redirigir según el estado
+    // Redirigir según el estado determinado por las cotizaciones y el status de la promesa
+    // El estado ya considera el status de la promesa en determinePromiseState
     let targetPath = '';
     if (state === 'autorizada') {
       targetPath = `/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`;

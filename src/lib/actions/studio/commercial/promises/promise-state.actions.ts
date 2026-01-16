@@ -31,6 +31,7 @@ export interface PromiseStateData {
     referrer_contact_email: string | null;
     pipeline_stage_slug: string | null;
     pipeline_stage_id: string | null;
+    status: string; // Status de la promesa (pending, aprobada, etc.)
     has_event: boolean;
     evento_id: string | null;
   };
@@ -111,43 +112,80 @@ export async function determinePromiseState(
       return { success: false, error: 'Promesa no encontrada' };
     }
 
-    // Determinar estado según cotizaciones
-    // Prioridad 1: Cotización autorizada con evento
-    const cotizacionAutorizada = promise.quotes.find((q) => {
-      if (q.archived || q.status === 'cancelada' || q.status === 'archivada') {
-        return false;
-      }
-      const isAuthorizedStatus =
-        q.status === 'aprobada' ||
-        q.status === 'autorizada' ||
-        q.status === 'approved' ||
-        q.status === 'contract_generated' ||
-        q.status === 'contract_signed';
-      return isAuthorizedStatus && !!q.evento_id;
-    });
-
+    // Determinar estado según el status de la promesa y cotizaciones
+    // Prioridad 1: Si la promesa tiene status 'aprobada', siempre es autorizada
     let state: PromiseState = 'pendiente';
     let cotizacionEnCierreId: string | null = null;
     let cotizacionAutorizadaId: string | null = null;
+    let cotizacionAutorizada: { id: string; evento_id: string | null } | undefined = undefined;
 
-    if (cotizacionAutorizada) {
-      state = 'autorizada';
-      cotizacionAutorizadaId = cotizacionAutorizada.id;
+    if (promise.status === 'aprobada' || promise.status === 'approved' || promise.status === 'autorizada') {
+      // Si la promesa está aprobada, buscar cotización autorizada con evento
+      cotizacionAutorizada = promise.quotes.find((q) => {
+        if (q.archived || q.status === 'cancelada' || q.status === 'archivada') {
+          return false;
+        }
+        const isAuthorizedStatus =
+          q.status === 'aprobada' ||
+          q.status === 'autorizada' ||
+          q.status === 'approved' ||
+          q.status === 'contract_generated' ||
+          q.status === 'contract_signed';
+        return isAuthorizedStatus && !!q.evento_id;
+      });
+
+      if (cotizacionAutorizada) {
+        state = 'autorizada';
+        cotizacionAutorizadaId = cotizacionAutorizada.id;
+      } else {
+        // Si está aprobada pero no hay cotización autorizada con evento, buscar cualquier cotización autorizada
+        const anyAuthorized = promise.quotes.find((q) => {
+          if (q.archived || q.status === 'cancelada' || q.status === 'archivada') {
+            return false;
+          }
+          return q.status === 'aprobada' || q.status === 'autorizada' || q.status === 'approved';
+        });
+        if (anyAuthorized) {
+          state = 'autorizada';
+          cotizacionAutorizadaId = anyAuthorized.id;
+          cotizacionAutorizada = anyAuthorized;
+        }
+      }
     } else {
-      // Prioridad 2: Cotización en cierre o aprobada sin evento
-      const cotizacionEnCierre = promise.quotes.find(
-        (q) => q.status === 'en_cierre' && !q.archived
-      );
-      const cotizacionAprobada = promise.quotes.find(
-        (q) =>
-          (q.status === 'aprobada' || q.status === 'approved') &&
-          !q.evento_id &&
-          !q.archived
-      );
+      // Si la promesa está pendiente, determinar según cotizaciones
+      // Prioridad 1: Cotización autorizada con evento
+      cotizacionAutorizada = promise.quotes.find((q) => {
+        if (q.archived || q.status === 'cancelada' || q.status === 'archivada') {
+          return false;
+        }
+        const isAuthorizedStatus =
+          q.status === 'aprobada' ||
+          q.status === 'autorizada' ||
+          q.status === 'approved' ||
+          q.status === 'contract_generated' ||
+          q.status === 'contract_signed';
+        return isAuthorizedStatus && !!q.evento_id;
+      });
 
-      if (cotizacionEnCierre || cotizacionAprobada) {
-        state = 'cierre';
-        cotizacionEnCierreId = cotizacionEnCierre?.id || cotizacionAprobada?.id || null;
+      if (cotizacionAutorizada) {
+        state = 'autorizada';
+        cotizacionAutorizadaId = cotizacionAutorizada.id;
+      } else {
+        // Prioridad 2: Cotización en cierre o aprobada sin evento
+        const cotizacionEnCierre = promise.quotes.find(
+          (q) => q.status === 'en_cierre' && !q.archived
+        );
+        const cotizacionAprobada = promise.quotes.find(
+          (q) =>
+            (q.status === 'aprobada' || q.status === 'approved') &&
+            !q.evento_id &&
+            !q.archived
+        );
+
+        if (cotizacionEnCierre || cotizacionAprobada) {
+          state = 'cierre';
+          cotizacionEnCierreId = cotizacionEnCierre?.id || cotizacionAprobada?.id || null;
+        }
       }
     }
 
@@ -184,6 +222,7 @@ export async function determinePromiseState(
           referrer_contact_email: promise.contact.referrer_contact?.email || null,
           pipeline_stage_slug: promise.pipeline_stage?.slug || null,
           pipeline_stage_id: promise.pipeline_stage_id || null,
+          status: promise.status,
           has_event: !!promise.event,
           evento_id: eventoIdFinal,
         },
