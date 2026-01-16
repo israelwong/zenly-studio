@@ -9,7 +9,6 @@
 
 import { createBrowserClient, type SupabaseClient } from '@supabase/ssr'
 import { createRememberMeStorage } from './storage-adapter'
-import { getSupabaseEnv } from './env'
 
 let client: SupabaseClient | undefined
 let clientForOAuth: SupabaseClient | undefined // Cliente separado para OAuth sin storage personalizado
@@ -92,12 +91,10 @@ export function createOAuthClient() {
   // Configurar sincronización automática de PKCE
   setupPkceSync()
 
-  const { url, anonKey } = getSupabaseEnv()
-
   // Cliente sin storage adapter - Supabase maneja PKCE directamente
   clientForOAuth = createBrowserClient(
-    url,
-    anonKey,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
         persistSession: true,
@@ -117,15 +114,13 @@ export function createClient() {
     return client
   }
 
-  const { url, anonKey } = getSupabaseEnv()
-
   // Crear storage adapter que respeta preferencia rememberMe
   const storage = createRememberMeStorage()
 
   // Crear nuevo cliente con persistencia habilitada y storage personalizado
   client = createBrowserClient(
-    url,
-    anonKey,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
         persistSession: true,
