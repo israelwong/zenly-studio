@@ -2180,10 +2180,11 @@ export async function cancelarCierre(
     });
 
     // Sincronizar pipeline stage de la promesa
+    // Esto actualizará el pipeline a "pending" o "negotiation" según el estado de las cotizaciones
     if (cotizacion.promise_id) {
       const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
       await syncPromisePipelineStageFromQuotes(cotizacion.promise_id, studio.id, null).catch((error) => {
-        console.error('[COTIZACIONES] Error sincronizando pipeline:', error);
+        console.error('[COTIZACIONES] Error sincronizando pipeline al cancelar cierre:', error);
       });
     }
 

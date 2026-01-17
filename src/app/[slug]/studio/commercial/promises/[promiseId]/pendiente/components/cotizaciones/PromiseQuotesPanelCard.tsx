@@ -522,10 +522,9 @@ export function PromiseQuotesPanelCard({
         } else {
           onUpdate?.(cotizacion.id);
         }
-        // NO cerrar el modal ni resetear loading - se mantendrá abierto durante la redirección
-        // Usar window.location.href para mantener el modal visible hasta que la nueva página cargue
-        window.location.href = `/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`;
-        return; // Salir antes del finally para mantener loading=true y modal abierto
+        // Cerrar modal y navegar usando router de Next.js
+        setShowClosingProcessInfoModal(false);
+        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
       } else {
         toast.error(result.error || 'Error al pasar cotización a cierre');
         setShowClosingProcessInfoModal(false);

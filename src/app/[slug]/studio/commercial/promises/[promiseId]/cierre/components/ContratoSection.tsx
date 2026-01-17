@@ -225,13 +225,8 @@ export const ContratoSection = memo(function ContratoSection({
               </button>
             )}
           </div>
-          {!contractData?.contrato_definido && (
-            <span className="text-sm text-zinc-300">
-              No definido
-            </span>
-          )}
           {contratoEstado && (
-            <div className={`text-xs ${!contractData?.contrato_definido ? 'mt-1' : ''} ${contratoColor}`}>
+            <div className={`text-xs ${contratoColor}`}>
               <p>{contratoEstado}</p>
               {contractData?.contrato_definido && contractData?.contract_version && (
                 <p className="text-zinc-500 mt-0.5">

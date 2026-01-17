@@ -39,7 +39,7 @@ export async function syncPromisePipelineStageFromQuotes(
       (q) => q.status === "negociacion" && !q.selected_by_prospect
     );
     const hasClosing = promise.quotes.some(
-      (q) => q.status === "en_cierre" && q.selected_by_prospect === true
+      (q) => q.status === "en_cierre"
     );
     const allCanceled =
       promise.quotes.length > 0 &&

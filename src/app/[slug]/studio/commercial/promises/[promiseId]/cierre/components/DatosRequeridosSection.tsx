@@ -70,57 +70,57 @@ export const DatosRequeridosSection = memo(function DatosRequeridosSection({
             {clientCompletion.name ? (
               <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
             ) : (
-              <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+              <XCircle className="h-3 w-3 text-red-500 shrink-0" />
             )}
-            <span className={clientCompletion.name ? 'text-zinc-400' : 'text-zinc-500'}>Nombre</span>
+            <span className={clientCompletion.name ? 'text-zinc-400' : 'text-red-400'}>Nombre</span>
           </div>
           <div className="flex items-center gap-1">
             {clientCompletion.phone ? (
               <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
             ) : (
-              <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+              <XCircle className="h-3 w-3 text-red-500 shrink-0" />
             )}
-            <span className={clientCompletion.phone ? 'text-zinc-400' : 'text-zinc-500'}>Teléfono</span>
+            <span className={clientCompletion.phone ? 'text-zinc-400' : 'text-red-400'}>Teléfono</span>
           </div>
           <div className="flex items-center gap-1">
             {clientCompletion.email ? (
               <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
             ) : (
-              <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+              <XCircle className="h-3 w-3 text-red-500 shrink-0" />
             )}
-            <span className={clientCompletion.email ? 'text-zinc-400' : 'text-zinc-500'}>Correo</span>
+            <span className={clientCompletion.email ? 'text-zinc-400' : 'text-red-400'}>Correo</span>
           </div>
           <div className="flex items-center gap-1">
             {clientCompletion.address ? (
               <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
             ) : (
-              <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+              <XCircle className="h-3 w-3 text-red-500 shrink-0" />
             )}
-            <span className={clientCompletion.address ? 'text-zinc-400' : 'text-zinc-500'}>Dirección</span>
+            <span className={clientCompletion.address ? 'text-zinc-400' : 'text-red-400'}>Dirección</span>
           </div>
           <div className="flex items-center gap-1">
             {clientCompletion.event_name ? (
               <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
             ) : (
-              <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+              <XCircle className="h-3 w-3 text-red-500 shrink-0" />
             )}
-            <span className={clientCompletion.event_name ? 'text-zinc-400' : 'text-zinc-500'}>Evento</span>
+            <span className={clientCompletion.event_name ? 'text-zinc-400' : 'text-red-400'}>Evento</span>
           </div>
           <div className="flex items-center gap-1">
             {clientCompletion.event_location ? (
               <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
             ) : (
-              <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+              <XCircle className="h-3 w-3 text-red-500 shrink-0" />
             )}
-            <span className={clientCompletion.event_location ? 'text-zinc-400' : 'text-zinc-500'}>Locación</span>
+            <span className={clientCompletion.event_location ? 'text-zinc-400' : 'text-red-400'}>Locación</span>
           </div>
           <div className="flex items-center gap-1">
             {clientCompletion.event_date ? (
               <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
             ) : (
-              <XCircle className="h-3 w-3 text-zinc-600 shrink-0" />
+              <XCircle className="h-3 w-3 text-red-500 shrink-0" />
             )}
-            <span className={clientCompletion.event_date ? 'text-zinc-400' : 'text-zinc-500'}>Fecha</span>
+            <span className={clientCompletion.event_date ? 'text-zinc-400' : 'text-red-400'}>Fecha</span>
           </div>
         </div>
       </div>
