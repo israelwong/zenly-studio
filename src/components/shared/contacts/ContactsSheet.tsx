@@ -365,22 +365,36 @@ export function ContactsSheet({
 
   return (
     <>
+      {/* Overlay custom del Sheet - solo visible cuando el modal NO está abierto */}
+      {open && !isModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[49] animate-in fade-in-0"
+          onClick={() => {
+            if (!isModalOpenRef.current) {
+              onOpenChange(false);
+            }
+          }}
+        />
+      )}
+
       <Sheet
         open={open}
         onOpenChange={handleSheetOpenChange}
+        modal={false}
       >
         <SheetContent
           side="right"
           className="w-full sm:max-w-3xl bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
+          showOverlay={false}
           onInteractOutside={(e) => {
-            // Prevenir que el Sheet se cierre cuando se interactúa con el modal
-            if (isModalOpen) {
-              e.preventDefault();
+            // Cuando el modal está abierto, no prevenir eventos para que los inputs funcionen
+            if (isModalOpen || isModalOpenRef.current) {
+              return;
             }
           }}
           onEscapeKeyDown={(e) => {
             // Prevenir que el Sheet se cierre con Escape cuando el modal está abierto
-            if (isModalOpen) {
+            if (isModalOpen || isModalOpenRef.current) {
               e.preventDefault();
             }
           }}

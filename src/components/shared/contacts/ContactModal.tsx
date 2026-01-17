@@ -159,8 +159,17 @@ function ContactModalComponent({
                     referrer_name: result.data.referrer_name ? result.data.referrer_name : '',
                     notes: result.data.notes ? result.data.notes : ''
                 });
-                if (result.data.referrer_contact_id && result.data.referrer_contact) {
-                    setReferrerInputValue(`@${result.data.referrer_contact.name}`);
+                if (result.data.referrer_contact_id) {
+                    // Si hay referrer_contact_id, siempre mostrar con arroba
+                    if (result.data.referrer_contact) {
+                        setReferrerInputValue(`@${result.data.referrer_contact.name}`);
+                    } else if (result.data.referrer_name) {
+                        // Si el contacto referido no está disponible pero hay nombre, mostrar con arroba
+                        setReferrerInputValue(`@${result.data.referrer_name}`);
+                    } else {
+                        // Caso edge: hay ID pero no hay nombre disponible
+                        setReferrerInputValue('@');
+                    }
                 } else if (result.data.referrer_name) {
                     setReferrerInputValue(result.data.referrer_name);
                 } else {
@@ -247,8 +256,17 @@ function ContactModalComponent({
                         referrer_name: result.data.referrer_name ? result.data.referrer_name : '',
                         notes: result.data.notes ? result.data.notes : ''
                     });
-                    if (result.data.referrer_contact_id && result.data.referrer_contact) {
-                        setReferrerInputValue(`@${result.data.referrer_contact.name}`);
+                    if (result.data.referrer_contact_id) {
+                        // Si hay referrer_contact_id, siempre mostrar con arroba
+                        if (result.data.referrer_contact) {
+                            setReferrerInputValue(`@${result.data.referrer_contact.name}`);
+                        } else if (result.data.referrer_name) {
+                            // Si el contacto referido no está disponible pero hay nombre, mostrar con arroba
+                            setReferrerInputValue(`@${result.data.referrer_name}`);
+                        } else {
+                            // Caso edge: hay ID pero no hay nombre disponible
+                            setReferrerInputValue('@');
+                        }
                     } else if (result.data.referrer_name) {
                         setReferrerInputValue(result.data.referrer_name);
                     } else {
@@ -499,9 +517,18 @@ function ContactModalComponent({
         try {
             let result;
             if (contactId) {
-                result = await updateContact(studioSlug, { ...formData, id: contactId });
+                // Asegurar que el status siempre se incluya en la actualización
+                result = await updateContact(studioSlug, { 
+                    ...formData, 
+                    id: contactId,
+                    status: formData.status || 'prospecto' // Asegurar que siempre haya un status
+                });
             } else {
-                result = await createContact(studioSlug, formData);
+                // Asegurar que el status siempre se incluya en la creación
+                result = await createContact(studioSlug, {
+                    ...formData,
+                    status: formData.status || 'prospecto' // Asegurar que siempre haya un status
+                });
             }
 
             if (result.success && result.data) {
@@ -727,7 +754,7 @@ function ContactModalComponent({
                                             }
                                         }}
                                         disabled={loading || acquisitionChannels.length === 0}
-                                        className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
+                                        className={`w-full h-10 px-3 py-2 bg-zinc-900 border rounded-lg text-base text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.acquisition_channel_id
                                             ? 'border-red-500 focus:ring-red-500'
                                             : 'border-zinc-700 hover:border-zinc-600'
                                             }`}
@@ -754,7 +781,7 @@ function ContactModalComponent({
                                             value={formData.social_network_id || 'none'}
                                             onChange={(e) => handleInputChange('social_network_id', e.target.value === 'none' ? undefined : e.target.value)}
                                             disabled={loading || socialNetworks.length === 0}
-                                            className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.social_network_id
+                                            className={`w-full h-10 px-3 py-2 bg-zinc-900 border rounded-lg text-base text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.social_network_id
                                                 ? 'border-red-500 focus:ring-red-500'
                                                 : 'border-zinc-700 hover:border-zinc-600'
                                                 }`}
@@ -802,6 +829,28 @@ function ContactModalComponent({
                                 )}
                             </div>
 
+                            {/* Status */}
+                            <div className="mb-4">
+                                <label className="text-sm font-medium text-zinc-300 block mb-2">
+                                    Estado
+                                </label>
+                                <select
+                                    value={formData.status}
+                                    onChange={(e) => handleInputChange('status', e.target.value as 'prospecto' | 'cliente')}
+                                    disabled={loading}
+                                    className={`w-full h-10 px-3 py-2 bg-zinc-900 border rounded-lg text-base text-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${errors.status
+                                        ? 'border-red-500 focus:ring-red-500'
+                                        : 'border-zinc-700 hover:border-zinc-600'
+                                        }`}
+                                >
+                                    <option value="prospecto">Prospecto</option>
+                                    <option value="cliente">Cliente</option>
+                                </select>
+                                {errors.status && (
+                                    <p className="mt-1 text-xs text-red-500">{errors.status}</p>
+                                )}
+                            </div>
+
                             {/* Notas */}
                             <div className="mb-4">
                                 <ZenTextarea
@@ -814,139 +863,98 @@ function ContactModalComponent({
                                 />
                             </div>
 
-                            {/* Sección 4: Promesas Asociadas */}
-                            {contactId && !promises.some(p => p.has_approved_quote) && (
-                                <div className="space-y-3 pt-2 border-t border-zinc-700">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-medium text-zinc-300">
-                                            Promesas Asociadas
-                                        </h3>
-                                        {!loadingPromises && (
-                                            <span className="text-xs text-zinc-400">
-                                                {promises.length} {promises.length === 1 ? 'promesa' : 'promesas'}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {loadingPromises ? (
-                                        <div className="space-y-2">
-                                            {[...Array(2)].map((_, i) => (
-                                                <Skeleton key={i} className="h-12 w-full bg-zinc-700" />
-                                            ))}
-                                        </div>
-                                    ) : promises.length === 0 ? (
-                                        <div className="text-center py-4 text-zinc-500 text-sm">
-                                            No hay promesas asociadas
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {promises.map((promise) => (
-                                                <button
-                                                    key={promise.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        router.push(`/${studioSlug}/studio/commercial/promises/${promise.id}`);
-                                                        onClose();
-                                                    }}
-                                                    className="w-full text-left p-3 rounded-lg border border-zinc-700 hover:border-purple-500/50 hover:bg-zinc-800/50 transition-colors group"
-                                                >
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <div className="flex-1 min-w-0 flex items-center gap-2">
-                                                            <Package className="h-4 w-4 text-purple-400 flex-shrink-0" />
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="font-medium text-white group-hover:text-purple-400 transition-colors truncate">
-                                                                    {promise.event_type_name || 'Sin tipo de evento'}
-                                                                </div>
-                                                                {promise.pipeline_stage_name && (
-                                                                    <div className="text-xs text-zinc-400 mt-0.5">
-                                                                        {promise.pipeline_stage_name}
+                            {/* Sección 4 y 5: Promesas y Eventos Asociados */}
+                            {contactId && ((!loadingPromises && promises.length > 0) || (!loadingEvents && events.length > 0)) && (
+                                <div className={`pt-2 border-t border-zinc-700 ${(!loadingPromises && promises.length > 0) && (!loadingEvents && events.length > 0) ? 'grid grid-cols-2 gap-4' : ''}`}>
+                                    {/* Promesas Asociadas */}
+                                    {!loadingPromises && promises.length > 0 && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="text-sm font-medium text-zinc-300">
+                                                    Promesas Asociadas
+                                                </h3>
+                                                <span className="text-xs text-zinc-400">
+                                                    {promises.length} {promises.length === 1 ? 'promesa' : 'promesas'}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {promises.map((promise) => (
+                                                    <button
+                                                        key={promise.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            router.push(`/${studioSlug}/studio/commercial/promises/${promise.id}`);
+                                                            onClose();
+                                                        }}
+                                                        className="w-full text-left p-3 rounded-lg border border-zinc-700 hover:border-purple-500/50 hover:bg-zinc-800/50 transition-colors group"
+                                                    >
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                                <Package className="h-4 w-4 text-purple-400 shrink-0" />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="font-medium text-white group-hover:text-purple-400 transition-colors truncate">
+                                                                        {promise.event_type_name || 'Sin tipo de evento'}
                                                                     </div>
-                                                                )}
+                                                                    {promise.pipeline_stage_name && (
+                                                                        <div className="text-xs text-zinc-400 mt-0.5">
+                                                                            {promise.pipeline_stage_name}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
+                                                            <ArrowRight className="h-4 w-4 text-zinc-500 group-hover:text-purple-400 transition-colors shrink-0" />
                                                         </div>
-                                                        <ArrowRight className="h-4 w-4 text-zinc-500 group-hover:text-purple-400 transition-colors flex-shrink-0" />
-                                                    </div>
-                                                </button>
-                                            ))}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
-                                </div>
-                            )}
 
-                            {/* Sección 5: Eventos Asociados */}
-                            {contactId && (
-                                <div className="space-y-3 pt-2 border-t border-zinc-700">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-medium text-zinc-300">
-                                            Eventos Asociados
-                                        </h3>
-                                        {!loadingEvents && (
-                                            <span className="text-xs text-zinc-400">
-                                                {events.length} {events.length === 1 ? 'evento' : 'eventos'}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {loadingEvents ? (
-                                        <div className="space-y-2">
-                                            {[...Array(2)].map((_, i) => (
-                                                <Skeleton key={i} className="h-16 w-full bg-zinc-700" />
-                                            ))}
-                                        </div>
-                                    ) : events.length === 0 ? (
-                                        <div className="text-center py-4 text-zinc-500 text-sm">
-                                            No hay eventos asociados
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {events.map((event) => (
-                                                <button
-                                                    key={event.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        router.push(`/${studioSlug}/studio/business/events/${event.id}`);
-                                                        onClose();
-                                                    }}
-                                                    className="w-full text-left p-3 rounded-lg border border-zinc-700 bg-zinc-800/30 hover:border-blue-500/50 hover:bg-zinc-800/50 transition-colors group"
-                                                >
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <Calendar className="h-4 w-4 text-zinc-400 group-hover:text-blue-400 flex-shrink-0 transition-colors" />
-                                                                <span className="font-medium text-white group-hover:text-blue-400 truncate transition-colors">
-                                                                    {event.name}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center gap-3 text-xs text-zinc-400">
-                                                                <span>{formatDisplayDateShort(event.event_date)}</span>
-                                                                {event.event_type && (
-                                                                    <>
-                                                                        <span>•</span>
-                                                                        <span>{event.event_type}</span>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                            {event.cotizacion && (
-                                                                <div className="mt-2">
-                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${event.cotizacion.status === 'pendiente' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                                        event.cotizacion.status === 'aceptada' ? 'bg-green-500/20 text-green-400' :
-                                                                            event.cotizacion.status === 'rechazada' ? 'bg-red-500/20 text-red-400' :
-                                                                                'bg-zinc-700 text-zinc-300'
-                                                                        }`}>
-                                                                        {event.cotizacion.name}
+                                    {/* Eventos Asociados */}
+                                    {!loadingEvents && events.length > 0 && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="text-sm font-medium text-zinc-300">
+                                                    Eventos Asociados
+                                                </h3>
+                                                <span className="text-xs text-zinc-400">
+                                                    {events.length} {events.length === 1 ? 'evento' : 'eventos'}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {events.map((event) => (
+                                                    <button
+                                                        key={event.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            router.push(`/${studioSlug}/studio/business/events/${event.id}`);
+                                                            onClose();
+                                                        }}
+                                                        className="w-full text-left p-3 rounded-lg border border-zinc-700 bg-zinc-800/30 hover:border-blue-500/50 hover:bg-zinc-800/50 transition-colors group"
+                                                    >
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <Calendar className="h-4 w-4 text-zinc-400 group-hover:text-blue-400 shrink-0 transition-colors" />
+                                                                    <span className="font-medium text-white group-hover:text-blue-400 truncate transition-colors">
+                                                                        {event.name}
                                                                     </span>
                                                                 </div>
-                                                            )}
+                                                                <div className="flex items-center gap-3 text-xs text-zinc-400">
+                                                                    <span>{formatDisplayDateShort(event.event_date)}</span>
+                                                                    {event.event_type && (
+                                                                        <>
+                                                                            <span>•</span>
+                                                                            <span>{event.event_type}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <ArrowRight className="h-4 w-4 text-zinc-500 group-hover:text-blue-400 transition-colors shrink-0" />
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs text-zinc-500 px-2 py-1 bg-zinc-700/50 rounded">
-                                                                {event.status}
-                                                            </span>
-                                                            <ArrowRight className="h-4 w-4 text-zinc-500 group-hover:text-blue-400 transition-colors flex-shrink-0" />
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            ))}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
