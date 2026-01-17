@@ -2,8 +2,10 @@ import React, { Suspense } from 'react';
 import { Metadata } from 'next';
 import { getStudioProfileBySlug } from '@/lib/actions/public/profile.actions';
 import { getConversionMetrics } from '@/lib/actions/studio/analytics/analytics-dashboard.actions';
+import { getPromiseStats } from '@/lib/actions/studio/analytics/promise-stats.actions';
 import { AnalyticsSkeleton } from '../components';
 import { ConversionMetricsClient } from './components/ConversionMetricsClient';
+import { PromiseStatsClient } from './components/PromiseStatsClient';
 import { Target } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -34,8 +36,11 @@ async function MarketingAnalyticsContent({ studioSlug }: { studioSlug: string })
 
     const studio = result.data.studio;
 
-    // Obtener datos iniciales de conversión (mes actual)
-    const conversionResult = await getConversionMetrics(studio.id);
+    // Obtener datos iniciales (mes actual)
+    const [conversionResult, promiseStatsResult] = await Promise.all([
+        getConversionMetrics(studio.id),
+        getPromiseStats(studio.id),
+    ]);
 
     if (!conversionResult.success) {
         return (
@@ -62,6 +67,16 @@ async function MarketingAnalyticsContent({ studioSlug }: { studioSlug: string })
                     initialData={conversionResult.data} 
                 />
             </div>
+
+            {/* Promise Stats */}
+            {promiseStatsResult.success && promiseStatsResult.data && (
+                <div>
+                    <PromiseStatsClient 
+                        studioId={studio.id} 
+                        initialData={promiseStatsResult.data} 
+                    />
+                </div>
+            )}
         </div>
     );
 }

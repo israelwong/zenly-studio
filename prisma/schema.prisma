@@ -1342,6 +1342,7 @@ model studio_promises {
   notifications                   studio_notifications[]
   pagos                           studio_pagos[]
   logs                            studio_promise_logs[]
+  status_history                  studio_promise_status_history[] @relation("PromiseStatusHistory")
   condiciones_comerciales_negociacion studio_condiciones_comerciales_negociacion[]
   contact                         studio_contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
   event_type                      studio_event_types?             @relation(fields: [event_type_id], references: [id])
@@ -1391,6 +1392,26 @@ model studio_promise_logs {
   user       studio_users?   @relation(fields: [user_id], references: [id])
 
   @@index([promise_id, created_at])
+  @@index([user_id])
+}
+
+model studio_promise_status_history {
+  id              String   @id @default(cuid())
+  promise_id      String
+  from_stage_id   String?
+  to_stage_id     String
+  from_stage_slug String?
+  to_stage_slug   String
+  user_id         String?
+  reason          String?
+  metadata        Json?
+  created_at      DateTime @default(now())
+
+  promise         studio_promises @relation("PromiseStatusHistory", fields: [promise_id], references: [id], onDelete: Cascade)
+  user            studio_users?   @relation("PromiseStatusHistoryUser", fields: [user_id], references: [id])
+
+  @@index([promise_id, created_at])
+  @@index([to_stage_id, created_at])
   @@index([user_id])
 }
 
@@ -2870,6 +2891,7 @@ model studio_users {
   nominas_nominas_userIdTostudio_users         studio_nominas[]            @relation("nominas_userIdTostudio_users")
   pagos                                        studio_pagos[]
   promise_logs                                 studio_promise_logs[]
+  promise_status_history                       studio_promise_status_history[] @relation("PromiseStatusHistoryUser")
   platform_user_profiles                       platform_user_profiles?     @relation(fields: [platform_user_id], references: [id])
   studio                                       studios                     @relation(fields: [studio_id], references: [id])
 

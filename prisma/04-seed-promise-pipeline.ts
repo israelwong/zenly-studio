@@ -3,7 +3,7 @@
  * SEED PROMISE PIPELINE
  * 
  * Pobla el pipeline inicial de promises para un studio
- * Crea las 4 etapas por defecto: Pendiente, En Negociación, Aprobado, Archivado
+ * Crea las 6 etapas por defecto: Pendiente, En Negociación, Aprobado, En Cierre, Archivado, Cancelada
  * 
  * Uso: 
  *   npm run db:seed-promise-pipeline demo-studio
@@ -38,7 +38,7 @@ const prisma = new PrismaClient({
 });
 
 async function seedPromisePipeline(studioId: string, studioName: string) {
-    // Etapas iniciales del pipeline
+    // Etapas del pipeline (6 estados)
     const promiseStages = [
         {
             slug: 'pending',
@@ -55,17 +55,31 @@ async function seedPromisePipeline(studioId: string, studioName: string) {
             is_system: false
         },
         {
-            slug: 'approved',
-            name: 'Aprobado',
-            color: '#10B981',
+            slug: 'closing',
+            name: 'En Cierre',
+            color: '#F59E0B',
             order: 2,
             is_system: true
         },
         {
-            slug: 'archived',
-            name: 'Archivado',
-            color: '#6B7280',
+            slug: 'approved',
+            name: 'Aprobada',
+            color: '#10B981',
             order: 3,
+            is_system: true
+        },
+        {
+            slug: 'archived',
+            name: 'Archivada',
+            color: '#6B7280',
+            order: 4,
+            is_system: true
+        },
+        {
+            slug: 'canceled',
+            name: 'Cancelada',
+            color: '#EF4444',
+            order: 5,
             is_system: true
         },
     ];

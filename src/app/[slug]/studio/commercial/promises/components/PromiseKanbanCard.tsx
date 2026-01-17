@@ -299,6 +299,9 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     // Verificar si la etapa es aprobado
     const isApprovedStage = promise.promise_pipeline_stage?.slug === 'approved' || promise.promise_pipeline_stage?.slug === 'aprobado';
 
+    // Verificar si está en cierre (no mostrar menú ni archivar)
+    const isClosing = promise.promise_pipeline_stage?.slug === 'closing';
+
     // Abrir modal de confirmación
     const handleArchiveClick = (e: React.MouseEvent) => {
         e.stopPropagation(); // Prevenir que active el onClick de la tarjeta
@@ -433,7 +436,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 {/* Botones de Acciones - Esquina superior derecha */}
                 {promise.promise_id && studioSlug && (
                     <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
-                        {!isArchived && (
+                        {!isArchived && !isClosing && (
                             <>
                                 {/* Si es etapa aprobado, mostrar solo botón archivar */}
                                 {isApprovedStage ? (

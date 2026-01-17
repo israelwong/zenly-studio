@@ -1788,6 +1788,12 @@ export async function autorizarYCrearEvento(
       console.error('[autorizarYCrearEvento] Error sincronizando con Google Calendar (no crítico):', googleError);
     }
 
+    // Sincronizar pipeline stage de la promesa (ya está en "approved" pero por si acaso)
+    const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
+    await syncPromisePipelineStageFromQuotes(promiseId, studio.id, null).catch((error) => {
+      console.error('[CIERRE] Error sincronizando pipeline:', error);
+    });
+
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/business/events/${result.evento_id}`);
 

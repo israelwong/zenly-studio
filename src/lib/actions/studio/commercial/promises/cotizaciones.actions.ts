@@ -1639,7 +1639,18 @@ export async function autorizarCotizacion(
         console.log(`[AUTORIZACION] ${otrasCotizaciones.length} cotizaciones archivadas automรกticamente.`);
       }
 
-      // 3. Mover promesa a etapa "approved"
+      // 3. Obtener etapa anterior antes de actualizar
+      const promesaAnterior = await tx.studio_promises.findUnique({
+        where: { id: validatedData.promise_id },
+        select: {
+          pipeline_stage_id: true,
+          pipeline_stage: {
+            select: { slug: true },
+          },
+        },
+      });
+
+      // 3.1. Mover promesa a etapa "approved"
       await tx.studio_promises.update({
         where: { id: validatedData.promise_id },
         data: {
@@ -1647,6 +1658,27 @@ export async function autorizarCotizacion(
           updated_at: new Date(),
         },
       });
+
+      // 3.2. Registrar cambio en historial
+      if (promesaAnterior && promesaAnterior.pipeline_stage_id !== etapaAprobado.id) {
+        const { logPromiseStatusChange } = await import('./promise-status-history.actions');
+        await logPromiseStatusChange({
+          promiseId: validatedData.promise_id,
+          fromStageId: promesaAnterior.pipeline_stage_id,
+          toStageId: etapaAprobado.id,
+          fromStageSlug: promesaAnterior.pipeline_stage?.slug || null,
+          toStageSlug: 'approved',
+          userId: null, // TODO: Obtener userId del contexto
+          reason: "Autorización de cotización",
+          metadata: {
+            trigger: "quote_authorized",
+            cotizacion_id: validatedData.cotizacion_id,
+            monto: validatedData.monto,
+          },
+        }).catch((error) => {
+          console.error('[AUTORIZACION] Error registrando historial:', error);
+        });
+      }
 
       // 4. Eliminar etiqueta "Cancelada" si existe
       const tagCancelada = await tx.studio_promise_tags.findUnique({
@@ -1775,6 +1807,14 @@ export async function cancelarCotizacion(
         updated_at: new Date(),
       },
     });
+
+    // Sincronizar pipeline stage de la promesa
+    if (cotizacion.promise_id) {
+      const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
+      await syncPromisePipelineStageFromQuotes(cotizacion.promise_id, studio.id, null).catch((error) => {
+        console.error('[COTIZACIONES] Error sincronizando pipeline:', error);
+      });
+    }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     if (cotizacion.promise_id) {
@@ -2029,6 +2069,14 @@ export async function pasarACierre(
       });
     });
 
+    // Sincronizar pipeline stage de la promesa
+    if (cotizacion.promise_id) {
+      const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
+      await syncPromisePipelineStageFromQuotes(cotizacion.promise_id, studio.id, null).catch((error) => {
+        console.error('[COTIZACIONES] Error sincronizando pipeline:', error);
+      });
+    }
+
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
@@ -2130,6 +2178,14 @@ export async function cancelarCierre(
         });
       }
     });
+
+    // Sincronizar pipeline stage de la promesa
+    if (cotizacion.promise_id) {
+      const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
+      await syncPromisePipelineStageFromQuotes(cotizacion.promise_id, studio.id, null).catch((error) => {
+        console.error('[COTIZACIONES] Error sincronizando pipeline:', error);
+      });
+    }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     if (cotizacion.promise_id) {

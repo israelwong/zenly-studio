@@ -345,6 +345,14 @@ export async function crearVersionNegociada(
       });
     }
 
+    // Sincronizar pipeline stage de la promesa
+    if (cotizacionOriginal.promise_id) {
+      const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
+      await syncPromisePipelineStageFromQuotes(cotizacionOriginal.promise_id, studio.id, null).catch((error) => {
+        console.error('[NEGOCIACION] Error sincronizando pipeline:', error);
+      });
+    }
+
     // Revalidar paths
     revalidatePath(
       `/${validatedData.studio_slug}/studio/commercial/promises/${cotizacionOriginal.promise_id}`
@@ -521,6 +529,14 @@ export async function aplicarCambiosNegociacion(
         });
       }
     });
+
+    // Sincronizar pipeline stage de la promesa
+    if (cotizacion.promise_id) {
+      const { syncPromisePipelineStageFromQuotes } = await import('./promise-pipeline-sync.actions');
+      await syncPromisePipelineStageFromQuotes(cotizacion.promise_id, studio.id, null).catch((error) => {
+        console.error('[NEGOCIACION] Error sincronizando pipeline:', error);
+      });
+    }
 
     // Recalcular precios despu?s de aplicar cambios
     await calcularYGuardarPreciosCotizacion(

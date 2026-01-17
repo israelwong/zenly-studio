@@ -1190,7 +1190,9 @@ export async function movePromise(
       return { success: false, error: 'Promise no encontrada' };
     }
 
-    // Guardar nombre de etapa anterior para el log
+    // Guardar etapa anterior para el historial
+    const oldStageId = promise.pipeline_stage_id;
+    const oldStageSlug = promise.pipeline_stage?.slug || null;
     const oldStageName = promise.pipeline_stage?.name || 'desconocida';
 
     // Obtener nueva etapa con slug
@@ -1271,20 +1273,39 @@ export async function movePromise(
       return { success: false, error: 'Contacto no encontrado' };
     }
 
-    // Registrar cambio de etapa en el log
+    // Registrar cambio de etapa en el historial
+    const { logPromiseStatusChange } = await import('./promise-status-history.actions');
+    await logPromiseStatusChange({
+      promiseId: promise.id,
+      fromStageId: oldStageId,
+      toStageId: validatedData.new_stage_id,
+      fromStageSlug: oldStageSlug,
+      toStageSlug: newStageSlug,
+      userId: null, // TODO: Obtener userId del contexto
+      reason: "Cambio manual en kanban",
+      metadata: {
+        trigger: "manual_move",
+        from_stage_name: oldStageName,
+        to_stage_name: newStageName,
+      },
+    }).catch((error) => {
+      // No fallar si el log falla, solo registrar error
+      console.error('[PROMISES] Error registrando historial de cambio de etapa:', error);
+    });
+
+    // También mantener el log genérico para compatibilidad
     const { logPromiseAction } = await import('./promise-logs.actions');
     await logPromiseAction(
       studioSlug,
       promise.id,
       'stage_change',
-      'user', // Asumimos que es acción de usuario
-      null, // TODO: Obtener userId del contexto
+      'user',
+      null,
       {
         from: oldStageName,
         to: newStageName,
       }
     ).catch((error) => {
-      // No fallar si el log falla, solo registrar error
       console.error('[PROMISES] Error registrando log de cambio de etapa:', error);
     });
 

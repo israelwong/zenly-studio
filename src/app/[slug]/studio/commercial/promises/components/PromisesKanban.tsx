@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Settings, Archive, X } from 'lucide-react';
+import { Search, Archive, X, TableColumnsSplit, Columns2 } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -26,7 +26,6 @@ import {
 } from '@dnd-kit/sortable';
 import { ZenInput, ZenButton } from '@/components/ui/zen';
 import { PromiseKanbanCard } from './PromiseKanbanCard';
-import { PipelineConfigModal } from './PipelineConfigModal';
 import { EventFormModal } from '@/components/shared/promises';
 import { PromiseTagsManageModal } from './PromiseTagsManageModal';
 import { movePromise } from '@/lib/actions/studio/commercial/promises';
@@ -62,7 +61,6 @@ function PromisesKanban({
   setIsPromiseFormModalOpen: externalSetIsOpen,
 }: PromisesKanbanProps) {
   const router = useRouter();
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isPromiseFormModalOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
@@ -73,6 +71,7 @@ function PromisesKanban({
   const prevPromisesRef = useRef<PromiseWithContact[]>(promises);
   const isDraggingRef = useRef(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showCanceled, setShowCanceled] = useState(false);
   const [localSearch, setLocalSearch] = useState(externalSearch || '');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -327,20 +326,32 @@ function PromisesKanban({
     });
   }, [filteredPromises]);
 
-  // Filtrar stages según toggle de archivados
+  // Filtrar stages según toggles de vista
   const visibleStages = useMemo(() => {
-    if (showArchived) {
-      return pipelineStages;
-    }
-    return pipelineStages.filter((stage) => stage.slug !== 'archived');
-  }, [pipelineStages, showArchived]);
+    const filtered = pipelineStages.filter((stage) => {
+      // Ocultar archived si showArchived es false
+      if (stage.slug === 'archived') {
+        return showArchived;
+      }
+      // Ocultar canceled si showCanceled es false
+      if (stage.slug === 'canceled') {
+        return showCanceled;
+      }
+      // Mostrar siempre los demás stages
+      return true;
+    });
+    return filtered;
+  }, [pipelineStages, showArchived, showCanceled]);
+
+  // Determinar si estamos en "vista completa" (ambos activos) o "vista compacta"
+  const isFullView = showArchived && showCanceled;
 
   // Agrupar promises por stage (ya ordenadas)
-  // Si una promesa no tiene stage_id, se asigna a la primera etapa disponible (no archivada)
+  // Si una promesa no tiene stage_id, se asigna a la primera etapa disponible (no archivada ni cancelada)
   const promisesByStage = useMemo(() => {
-    // Obtener la primera etapa no archivada para promesas sin stage
+    // Obtener la primera etapa activa (no archivada ni cancelada) para promesas sin stage
     const defaultStage = visibleStages
-      .filter((s) => s.slug !== 'archived')
+      .filter((s) => s.slug !== 'archived' && s.slug !== 'canceled')
       .sort((a, b) => a.order - b.order)[0];
 
     return visibleStages.reduce((acc: Record<string, PromiseWithContact[]>, stage: PipelineStage) => {
@@ -380,10 +391,37 @@ function PromisesKanban({
       return;
     }
 
-    // Restricción: Si la promesa está en "approved" y tiene evento asociado,
+    const currentStageSlug = promise.promise_pipeline_stage?.slug;
+    const targetStageSlug = stage.slug;
+
+    // Validación 1: Desde pending o negotiation NO puede ir a closing o approved
+    // Estas transiciones requieren acciones específicas en las cotizaciones
+    if (
+      (currentStageSlug === 'pending' || currentStageSlug === 'negotiation') &&
+      (targetStageSlug === 'closing' || targetStageSlug === 'approved')
+    ) {
+      toast.error(
+        targetStageSlug === 'closing'
+          ? 'No se puede mover directamente a "En Cierre". Debes pasar una cotización a cierre desde su vista detallada.'
+          : 'No se puede mover directamente a "Aprobada". Debes autorizar una cotización desde la vista de cierre.'
+      );
+      return;
+    }
+
+    // Validación 2: Desde closing NO puede ir a pending, negotiation o approved
+    // Solo puede ir a archived o canceled
+    if (
+      currentStageSlug === 'closing' &&
+      (targetStageSlug === 'pending' || targetStageSlug === 'negotiation' || targetStageSlug === 'approved')
+    ) {
+      toast.error(
+        'No se puede mover desde "En Cierre" a esta etapa. Si necesitas cambiar el estado, cancela el cierre de la cotización o archiva la promesa.'
+      );
+      return;
+    }
+
+    // Validación 3: Si la promesa está en "approved" y tiene evento asociado,
     // solo se puede mover a "archived"
-    // Un evento solo existe cuando se autoriza una cotización, antes de eso no hay evento
-    // Verificar que realmente tenga un evento con ID válido (no null, no undefined, no string vacío)
     const eventId = promise.event?.id;
     const hasEvent = Boolean(
       eventId && 
@@ -391,11 +429,10 @@ function PromisesKanban({
       eventId.trim() !== ''
     );
     
-    // Solo bloquear si está en approved, tiene evento válido, y NO va a archived
     if (
-      promise.promise_pipeline_stage?.slug === 'approved' &&
+      currentStageSlug === 'approved' &&
       hasEvent &&
-      stage.slug !== 'archived'
+      targetStageSlug !== 'archived'
     ) {
       toast.error('Esta promesa tiene un evento asociado. Solo puede archivarse.');
       return;
@@ -636,7 +673,7 @@ function PromisesKanban({
               onChange={(e) => handleSearchChange(e.target.value)}
               icon={Search}
               iconClassName="h-4 w-4"
-              className={localSearch ? 'pr-10' : ''}
+              className={`h-10 ${localSearch ? 'pr-10' : ''}`}
             />
             {localSearch && (
               <button
@@ -653,22 +690,19 @@ function PromisesKanban({
 
         <div className="flex gap-2 w-full sm:w-auto">
           <ZenButton
-            variant={showArchived ? "secondary" : "outline"}
+            variant={isFullView ? "secondary" : "outline"}
             size="md"
-            onClick={() => setShowArchived(!showArchived)}
-            className="gap-1.5"
+            onClick={() => {
+              // Toggle vista completa: activa/desactiva ambos
+              const newState = !isFullView;
+              setShowArchived(newState);
+              setShowCanceled(newState);
+            }}
+            className="gap-1.5 h-10"
+            title={isFullView ? "Ocultar promesas archivadas y canceladas" : "Mostrar todas las promesas (incluyendo archivadas y canceladas)"}
           >
-            <Archive className="h-4 w-4" />
-            {showArchived ? 'Ocultar' : 'Mostrar'} Archivados
-          </ZenButton>
-          <ZenButton
-            variant="outline"
-            size="md"
-            onClick={() => setIsConfigModalOpen(true)}
-            className="gap-1.5"
-          >
-            <Settings className="h-4 w-4" />
-            Pipeline
+            {isFullView ? <Columns2 className="h-4 w-4" /> : <TableColumnsSplit className="h-4 w-4" />}
+            <span>{isFullView ? 'Pipeline Compacto' : 'Pipeline Completo'}</span>
           </ZenButton>
         </div>
       </div>
@@ -680,7 +714,7 @@ function PromisesKanban({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto overflow-y-hidden flex-1 min-h-0 pb-4">
+        <div className="flex gap-3 overflow-x-auto overflow-y-hidden flex-1 min-h-0 h-full pb-4 items-stretch">
           {/* Si hay más de 3 etapas, todas tienen ancho fijo con scroll */}
           {visibleStages.length > 3 ? (
             visibleStages.map((stage: PipelineStage) => (
@@ -698,7 +732,7 @@ function PromisesKanban({
             ))
           ) : (
             /* Si hay 3 o menos, las primeras 3 ocupan el ancho disponible */
-            <div className="flex gap-4 flex-1 min-w-0 w-full">
+            <div className="flex gap-3 flex-1 min-w-0 w-full h-full items-stretch">
               {visibleStages.map((stage: PipelineStage) => (
                 <KanbanColumn
                   key={stage.id}
@@ -738,13 +772,6 @@ function PromisesKanban({
       </DndContext>
 
       {/* Modales */}
-      <PipelineConfigModal
-        isOpen={isConfigModalOpen}
-        onClose={() => setIsConfigModalOpen(false)}
-        studioSlug={studioSlug}
-        pipelineStages={pipelineStages}
-        onSuccess={onPipelineStagesUpdated}
-      />
       <PromiseTagsManageModal
         isOpen={isTagsModalOpen}
         onClose={() => setIsTagsModalOpen(false)}
@@ -795,9 +822,9 @@ function KanbanColumn({
       className={`${isFlexible
         ? 'flex-1 min-w-[280px]'
         : 'w-[280px] min-w-[280px] max-w-[280px] shrink-0'
-        } flex flex-col rounded-lg border-2 p-4 h-full overflow-hidden transition-all duration-300 ease-in-out ${isOver
-          ? 'bg-zinc-800/80'
-          : 'bg-zinc-900/50 border-zinc-700'
+        } flex flex-col rounded-lg border p-4 h-full overflow-hidden transition-all duration-300 ease-in-out ${isOver
+          ? 'bg-zinc-900/90'
+          : 'bg-zinc-950/60 border-zinc-800'
         }`}
       style={{
         borderColor: isOver ? stage.color : undefined,
@@ -823,10 +850,7 @@ function KanbanColumn({
 
       {/* Lista de promises - Área droppable expandida */}
       <div
-        className="space-y-3 flex-1 overflow-y-auto min-h-0 -mx-2 px-2"
-        style={{
-          minHeight: promises.length === 0 ? '200px' : 'auto',
-        }}
+        className="space-y-3 flex-1 overflow-y-auto min-h-0 -mx-2 px-2 h-full"
       >
         <SortableContext
           items={promises.map((p) => p.promise_id || p.id)} // ✅ FIX: Usar promise_id como ID único
@@ -846,7 +870,7 @@ function KanbanColumn({
         </SortableContext>
 
         {promises.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+          <div className="flex flex-col items-center justify-center h-full min-h-[200px] px-4 text-center">
             <p className="text-sm text-zinc-500 font-medium mb-1">
               Sin promesas
             </p>
