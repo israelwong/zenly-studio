@@ -163,10 +163,10 @@ const zenEventStyleGetter = (event: { resource?: AgendaItem }) => {
     };
   }
 
-  // 2. Fecha de evento confirmada - Amarillo/Dorado (normal) o Rojo (caducada)
+  // 2. Fecha con promesa - Zinc oscuro (normal) o Rojo (caducada)
   if (isConfirmedEvent) {
     if (isExpired) {
-      // Fecha de evento caducada - Rojo
+      // Fecha caducada - Rojo
       return {
         style: {
           backgroundColor: '#DC2626', // red-600
@@ -181,14 +181,14 @@ const zenEventStyleGetter = (event: { resource?: AgendaItem }) => {
         },
       };
     }
-    // Fecha de evento normal - Amarillo/Dorado
+    // Fecha con promesa - Zinc oscuro
     return {
       style: {
-        backgroundColor: '#EAB308', // yellow-500
-        borderColor: '#CA8A04', // yellow-600
+        backgroundColor: '#3F3F46', // zinc-700
+        borderColor: '#52525B', // zinc-600
         borderWidth: '2px',
         borderRadius: '6px',
-        color: '#1C1917', // stone-900 (texto oscuro para contraste)
+        color: '#E4E4E7', // zinc-200 (texto claro para contraste)
         fontSize: '0.875rem',
         fontWeight: 600,
         padding: '4px 8px',
@@ -821,12 +821,12 @@ export function AgendaCalendar({
               </span>
             </div>
           )}
-          {/* Fechas confirmadas de promesas (event_date/defined_date) */}
+          {/* Fechas con promesa (event_date/defined_date) */}
           {stats.fechasConfirmadasPromesas > 0 && (
             <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+              <div className="h-2 w-2 rounded-full bg-zinc-700"></div>
               <span className="text-zinc-300">
-                <span className="font-semibold text-white">{stats.fechasConfirmadasPromesas}</span> fecha{stats.fechasConfirmadasPromesas !== 1 ? 's' : ''} confirmada{stats.fechasConfirmadasPromesas !== 1 ? 's' : ''}
+                <span className="font-semibold text-white">{stats.fechasConfirmadasPromesas}</span> fecha{stats.fechasConfirmadasPromesas !== 1 ? 's' : ''} con promesa
               </span>
             </div>
           )}

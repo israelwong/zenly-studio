@@ -250,6 +250,14 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showTagsModal, studioSlug]);
 
+    // Validar si un agendamiento tiene una cita válida (con date y type_scheduling)
+    const hasValidCita = (agenda: AgendaItem | null): boolean => {
+        if (!agenda) return false;
+        if (!agenda.date) return false;
+        if (!agenda.type_scheduling || (agenda.type_scheduling !== 'presencial' && agenda.type_scheduling !== 'virtual')) return false;
+        return true;
+    };
+
     // Usar datos de la promesa o fallback
     const finalTags = promise.tags || fallbackTags;
     const finalAgendamiento: AgendaItem | null = promise.agenda && promise.agenda.date ? {
@@ -614,16 +622,16 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                 </div>
                             )}
 
-                            {/* Cita agendada */}
-                            {finalAgendamiento && (
-                                <div className={`flex items-center gap-1.5 text-xs ${finalAgendamiento.type_scheduling === 'virtual' ? 'text-blue-400' : 'text-zinc-400'}`}>
-                                    {finalAgendamiento.type_scheduling === 'virtual' ? (
+                            {/* Cita agendada - Solo mostrar si tiene cita válida */}
+                            {hasValidCita(finalAgendamiento) && (
+                                <div className={`flex items-center gap-1.5 text-xs ${finalAgendamiento!.type_scheduling === 'virtual' ? 'text-blue-400' : 'text-zinc-400'}`}>
+                                    {finalAgendamiento!.type_scheduling === 'virtual' ? (
                                         <Video className="h-3 w-3 shrink-0" />
                                     ) : (
                                         <MapPin className="h-3 w-3 shrink-0" />
                                     )}
                                     <span>
-                                        Cita {getTipoCita(finalAgendamiento)} - {formatAgendamientoDate(finalAgendamiento)}
+                                        Cita {getTipoCita(finalAgendamiento!)} - {formatAgendamientoDate(finalAgendamiento!)}
                                     </span>
                                 </div>
                             )}
