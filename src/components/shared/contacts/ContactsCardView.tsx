@@ -74,19 +74,15 @@ export function ContactsCardView({
 
   if (loading && contacts.length === 0) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-3">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="bg-zinc-800/50 rounded-lg p-4 animate-pulse">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 bg-zinc-700 rounded-full" />
+          <div key={i} className="bg-zinc-800/50 rounded-lg p-3 animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-zinc-700 rounded-full" />
               <div className="flex-1">
-                <div className="h-4 bg-zinc-700 rounded w-3/4 mb-2" />
+                <div className="h-4 bg-zinc-700 rounded w-3/4 mb-1" />
                 <div className="h-3 bg-zinc-700 rounded w-1/2" />
               </div>
-            </div>
-            <div className="space-y-2">
-              <div className="h-3 bg-zinc-700 rounded w-full" />
-              <div className="h-3 bg-zinc-700 rounded w-2/3" />
             </div>
           </div>
         ))}
@@ -104,7 +100,7 @@ export function ContactsCardView({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-3">
       {contacts.map((contact) => {
         const initials = contact.name
           .split(' ')
@@ -116,27 +112,36 @@ export function ContactsCardView({
         return (
           <div
             key={contact.id}
-            className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 hover:border-zinc-600 transition-all cursor-pointer group"
+            className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 hover:border-zinc-600 transition-all cursor-pointer group"
             onClick={() => onContactClick(contact.id)}
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <Avatar className="w-12 h-12 flex-shrink-0">
-                  <AvatarImage src={contact.avatar_url || undefined} alt={contact.name} />
-                  <AvatarFallback className="bg-blue-600/20 text-blue-400 text-sm">
-                    {initials || <ContactRound className="h-5 w-5" />}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-medium text-white truncate group-hover:text-blue-400 transition-colors">
-                      {contact.name}
-                    </h3>
-                    {getStatusBadge(contact.status)}
-                  </div>
-                  <div className="mt-1 text-sm text-zinc-400 truncate">
-                    {contact.phone}
-                  </div>
+            <div className="flex items-center gap-3">
+              <Avatar className="w-10 h-10 flex-shrink-0">
+                <AvatarImage src={contact.avatar_url || undefined} alt={contact.name} />
+                <AvatarFallback className="bg-blue-600/20 text-blue-400 text-xs">
+                  {initials || <ContactRound className="h-4 w-4" />}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-medium text-white truncate group-hover:text-blue-400 transition-colors text-sm">
+                    {contact.name}
+                  </h3>
+                  {getStatusBadge(contact.status)}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-zinc-400">
+                  {contact.phone && (
+                    <span className="truncate">{contact.phone}</span>
+                  )}
+                  {contact.email && (
+                    <>
+                      <span>•</span>
+                      <span className="truncate">{contact.email}</span>
+                    </>
+                  )}
+                </div>
+                <div className="text-xs text-zinc-500 mt-1 truncate">
+                  Canal: {getCanalDisplay(contact)}
                 </div>
               </div>
               <div className="flex-shrink-0">
@@ -148,10 +153,10 @@ export function ContactsCardView({
                     <ZenButton
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <MoreVertical className="h-4 w-4" />
+                      <MoreVertical className="h-3.5 w-3.5" />
                     </ZenButton>
                   </ZenDropdownMenuTrigger>
                   <ZenDropdownMenuContent align="end">
@@ -208,23 +213,6 @@ export function ContactsCardView({
                     </ZenDropdownMenuItem>
                   </ZenDropdownMenuContent>
                 </ZenDropdownMenu>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-sm">
-              {contact.email && (
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <Mail className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{contact.email}</span>
-                </div>
-              )}
-              <div className="text-xs text-zinc-500 mt-3 pt-3 border-t border-zinc-700/50">
-                <div className="truncate">Canal: {getCanalDisplay(contact)}</div>
-                {contact.updated_at && (
-                  <div className="mt-1">
-                    {formatDateTime(contact.updated_at)}
-                  </div>
-                )}
               </div>
             </div>
           </div>

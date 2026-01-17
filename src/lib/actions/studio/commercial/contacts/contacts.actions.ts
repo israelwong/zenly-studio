@@ -117,23 +117,8 @@ export async function getContacts(
       take: limit
     });
 
-    // Mapear datos y determinar status dinámicamente
+    // Mapear datos usando el status real del contacto
     const mappedContacts: Contact[] = contacts.map(contact => {
-      // Determinar status basado en eventos y promesas
-      const hasEvents = contact.cotizaciones.length > 0;
-      const hasPromisesNoAprobadas = contact.promises.length > 0 &&
-        contact.promises.some(p => p.quotes.length === 0);
-
-      // Si tiene eventos asociados → cliente
-      // Si solo tiene promesas no aprobadas → prospecto
-      // Si no tiene ni eventos ni promesas → usar status del contacto
-      let dynamicStatus = contact.status;
-      if (hasEvents) {
-        dynamicStatus = 'cliente';
-      } else if (hasPromisesNoAprobadas) {
-        dynamicStatus = 'prospecto';
-      }
-
       return {
         id: contact.id,
         studio_id: contact.studio_id,
@@ -142,7 +127,7 @@ export async function getContacts(
         email: contact.email,
         address: contact.address,
         avatar_url: contact.avatar_url,
-        status: dynamicStatus,
+        status: contact.status || 'prospecto', // Usar el status real del contacto
         acquisition_channel_id: contact.acquisition_channel_id,
         referrer_contact_id: contact.referrer_contact_id,
         referrer_name: contact.referrer_name,

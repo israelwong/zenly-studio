@@ -384,7 +384,7 @@ export function ContactsSheet({
       >
         <SheetContent
           side="right"
-          className="w-full sm:max-w-3xl bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
+          className="w-full sm:max-w-lg bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
           showOverlay={false}
           onInteractOutside={(e) => {
             // Cuando el modal está abierto, no prevenir eventos para que los inputs funcionen
