@@ -11,7 +11,7 @@ import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import { getPromiseTagsByPromiseId, getPromiseTags, addTagToPromise, removeTagFromPromise, type PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { deletePromise } from '@/lib/actions/studio/commercial/promises';
-import { getReminderByPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { getReminderByPromise, type Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { toast } from 'sonner';
 import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
 import { getCotizacionesByPromiseId, type CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -35,7 +35,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     const [isLoadingTags, setIsLoadingTags] = useState(false);
     const [isAddingTag, setIsAddingTag] = useState<string | null>(null);
     const [isRemovingTag, setIsRemovingTag] = useState<string | null>(null);
-    const [reminderDate, setReminderDate] = useState<Date | null>(null);
+    const [reminder, setReminder] = useState<Reminder | null>(null);
     const {
         attributes,
         listeners,
@@ -201,7 +201,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 try {
                     const reminderResult = await getReminderByPromise(studioSlug, promiseId);
                     if (reminderResult.success && reminderResult.data && !reminderResult.data.is_completed) {
-                        setReminderDate(reminderResult.data.reminder_date);
+                        setReminder(reminderResult.data);
                     }
                 } catch (error) {
                     console.error('Error loading reminder:', error);
@@ -216,7 +216,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     useEffect(() => {
         const promiseId = promise.promise_id;
         if (!promiseId || !studioSlug) {
-            setReminderDate(null);
+            setReminder(null);
             return;
         }
 
@@ -224,13 +224,13 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
             try {
                 const reminderResult = await getReminderByPromise(studioSlug, promiseId);
                 if (reminderResult.success && reminderResult.data && !reminderResult.data.is_completed) {
-                    setReminderDate(reminderResult.data.reminder_date);
+                    setReminder(reminderResult.data);
                 } else {
-                    setReminderDate(null);
+                    setReminder(null);
                 }
             } catch (error) {
                 console.error('Error loading reminder:', error);
-                setReminderDate(null);
+                setReminder(null);
             }
         };
 
@@ -460,6 +460,55 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         return words.slice(0, 2).join(' ');
     };
 
+    // Formatear fecha relativa para recordatorios futuros
+    const formatReminderRelativeDate = (date: Date | string): string => {
+        const reminderDate = typeof date === 'string' ? new Date(date) : date;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const reminder = new Date(reminderDate);
+        reminder.setHours(0, 0, 0, 0);
+        
+        // Si es vencido
+        if (reminder < today) {
+            const diffDays = Math.floor((today.getTime() - reminder.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) return 'Vencido hoy';
+            return `Vencido hace ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`;
+        }
+        
+        // Si es hoy
+        if (reminder.getTime() === today.getTime()) {
+            return 'Hoy';
+        }
+        
+        // Calcular diferencia en días
+        const diffTime = reminder.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        // Si es mañana
+        if (diffDays === 1) {
+            return 'Mañana';
+        }
+        
+        // Si es en 2-6 días
+        if (diffDays >= 2 && diffDays <= 6) {
+            return `En ${diffDays} días`;
+        }
+        
+        // Si es la próxima semana (7-13 días)
+        if (diffDays >= 7 && diffDays <= 13) {
+            return 'La próxima semana';
+        }
+        
+        // Si es en 2 semanas (14-20 días)
+        if (diffDays >= 14 && diffDays <= 20) {
+            return 'En 2 semanas';
+        }
+        
+        // Si es en más de 2 semanas, mostrar fecha corta
+        return formatDisplayDateShort(reminderDate);
+    };
+
     return (
         <>
             <div
@@ -573,29 +622,6 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                             {promise.event_type && (
                                 <div className="text-xs text-zinc-400">
                                     <span className="truncate">{promise.event_type.name}</span>
-                                </div>
-                            )}
-
-                            {/* Badge de recordatorio */}
-                            {reminderDate && (
-                                <div className="mt-1">
-                                    <ZenBadge
-                                        variant={
-                                            new Date(reminderDate) < new Date()
-                                                ? 'destructive'
-                                                : new Date(reminderDate).toDateString() === new Date().toDateString()
-                                                ? 'warning'
-                                                : 'default'
-                                        }
-                                        className="text-[10px] px-1.5 py-0.5 gap-1"
-                                    >
-                                        <Clock className="h-2.5 w-2.5" />
-                                        {new Date(reminderDate) < new Date()
-                                            ? 'Vencido'
-                                            : new Date(reminderDate).toDateString() === new Date().toDateString()
-                                            ? 'Hoy'
-                                            : formatDisplayDateShort(reminderDate)}
-                                    </ZenBadge>
                                 </div>
                             )}
                         </div>
@@ -713,6 +739,28 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                 <div className="flex items-start gap-1.5 text-xs text-zinc-500">
                                     <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
                                     <p className="line-clamp-2 flex-1">{promise.last_log.content}</p>
+                                </div>
+                            )}
+
+                            {/* Badge de recordatorio */}
+                            {reminder && (
+                                <div className="mt-1">
+                                    <ZenBadge
+                                        variant={
+                                            new Date(reminder.reminder_date) < new Date()
+                                                ? 'destructive'
+                                                : 'warning'
+                                        }
+                                        className="text-[10px] px-1.5 py-0.5 gap-1"
+                                    >
+                                        <Clock className="h-2.5 w-2.5" />
+                                        <span className="truncate max-w-[120px]" title={reminder.subject_text}>
+                                            {reminder.subject_text}
+                                        </span>
+                                        <span className="text-zinc-400">
+                                            {formatReminderRelativeDate(reminder.reminder_date)}
+                                        </span>
+                                    </ZenBadge>
                                 </div>
                             )}
                         </div>

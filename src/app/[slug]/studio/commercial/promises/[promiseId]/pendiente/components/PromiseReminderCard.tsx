@@ -5,7 +5,7 @@ import { Plus, CheckCircle2, Edit2, Trash2, Clock } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
 import { getReminderByPromise, type Reminder, completeReminder, deleteReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { getPromiseByIdAsPromiseWithContact } from '@/lib/actions/studio/commercial/promises/promises.actions';
-import { ReminderModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/components/ReminderModal';
+import { ReminderFormModal } from '@/components/shared/reminders';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
@@ -231,7 +231,7 @@ export function PromiseReminderCard({
       </ZenCard>
 
       {/* Modal para crear/editar seguimiento */}
-      <ReminderModal
+      <ReminderFormModal
         isOpen={showModal}
         onClose={() => {
           setShowModal(false);

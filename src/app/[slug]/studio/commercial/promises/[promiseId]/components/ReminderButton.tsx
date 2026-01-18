@@ -7,7 +7,7 @@ import {
   getReminderByPromise,
   type Reminder 
 } from '@/lib/actions/studio/commercial/promises/reminders.actions';
-import { ReminderModal } from './ReminderModal';
+import { ReminderFormModal } from '@/components/shared/reminders';
 
 interface ReminderButtonProps {
   studioSlug: string;
@@ -105,7 +105,7 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
         )}
       </ZenButton>
 
-      <ReminderModal
+      <ReminderFormModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         studioSlug={studioSlug}

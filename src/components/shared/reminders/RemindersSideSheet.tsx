@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -9,16 +9,17 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/shadcn/sheet';
-import { ZenBadge } from '@/components/ui/zen';
-import { 
+import {
   getRemindersDue,
   completeReminder,
-  type ReminderWithPromise 
+  type ReminderWithPromise
 } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { logWhatsAppSent } from '@/lib/actions/studio/commercial/promises';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { ReminderCard } from './ReminderCard';
+import { ReminderSideSheetSection } from './ReminderSideSheetSection';
+import { ZenCard, ZenCardContent } from '@/components/ui/zen';
+import { cn } from '@/lib/utils';
 
 interface RemindersSideSheetProps {
   open: boolean;
@@ -65,46 +66,66 @@ export function RemindersSideSheet({
     }
   }, [open, loadReminders]);
 
-  // Separar en vencidos y del día
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  useEffect(() => {
+    const handleReminderUpdate = () => {
+      if (open) {
+        loadReminders();
+      }
+    };
+
+    window.addEventListener('reminder-updated', handleReminderUpdate);
+    return () => {
+      window.removeEventListener('reminder-updated', handleReminderUpdate);
+    };
+  }, [open, loadReminders]);
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(todayStart);
   todayEnd.setDate(todayEnd.getDate() + 1);
 
-  const overdueReminders = reminders.filter(r => {
-    const date = new Date(r.reminder_date);
-    return date < todayStart;
-  });
+  const categorizeReminders = (reminders: ReminderWithPromise[]) => {
+    const today: ReminderWithPromise[] = [];
+    const upcoming: ReminderWithPromise[] = [];
 
-  const todayReminders = reminders.filter(r => {
-    const date = new Date(r.reminder_date);
-    return date >= todayStart && date < todayEnd;
-  });
+    reminders.forEach(r => {
+      const date = new Date(r.reminder_date);
+      date.setHours(0, 0, 0, 0);
+      if (date < todayEnd) {
+        // Incluye vencidos y de hoy
+        today.push(r);
+      } else {
+        upcoming.push(r);
+      }
+    });
+
+    return { today, upcoming };
+  };
+
+  const { today: todayReminders, upcoming: upcomingReminders } =
+    categorizeReminders(reminders);
+
+  const totalReminders = reminders.length;
 
   const handleComplete = async (reminderId: string) => {
-    // Optimistic update
     setReminders(prev => prev.filter(r => r.id !== reminderId));
     setCompletingIds(prev => new Set(prev).add(reminderId));
 
     try {
       const result = await completeReminder(studioSlug, reminderId);
-      
+
       if (result.success) {
-        toast.success('Seguimiento completado');
-        // Disparar evento para actualizar contador
+        toast.success('Recordatorio completado');
         window.dispatchEvent(new CustomEvent('reminder-updated'));
-        // Recargar para asegurar sincronización
         loadReminders();
       } else {
-        // Revertir optimistic update
         loadReminders();
-        toast.error(result.error || 'Error al completar seguimiento');
+        toast.error(result.error || 'Error al completar recordatorio');
       }
     } catch (error) {
-      // Revertir optimistic update
       loadReminders();
-      console.error('Error completando seguimiento:', error);
-      toast.error('Error al completar seguimiento');
+      console.error('Error completando recordatorio:', error);
+      toast.error('Error al completar recordatorio');
     } finally {
       setCompletingIds(prev => {
         const next = new Set(prev);
@@ -124,7 +145,6 @@ export function RemindersSideSheet({
     const message = encodeURIComponent(`Hola ${reminder.promise.contact.name}`);
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
 
-    // Registrar log
     logWhatsAppSent(
       studioSlug,
       reminder.promise_id,
@@ -142,158 +162,113 @@ export function RemindersSideSheet({
     onOpenChange(false);
   };
 
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(new Date(date));
-  };
-
-  const ReminderCard = ({ reminder }: { reminder: ReminderWithPromise }) => (
-    <ZenCard className="border-zinc-800">
-      <ZenCardContent className="p-4">
-        <div className="space-y-3">
-          {/* Header: Asunto y Fecha */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-medium text-zinc-200 truncate">
-                {reminder.subject_text}
-              </h3>
-              <p className="text-xs text-zinc-400 mt-1">
-                {reminder.promise.contact.name}
-              </p>
-            </div>
-            <ZenBadge
-              variant={new Date(reminder.reminder_date) < todayStart ? 'destructive' : 'warning'}
-              size="sm"
-            >
-              {formatDate(reminder.reminder_date)}
-            </ZenBadge>
-          </div>
-
-          {/* Acciones */}
-          <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => handleView(reminder.promise_id)}
-              className="flex-1 text-xs"
-            >
-              <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-              Ver
-            </ZenButton>
-            
-            {reminder.promise.contact.phone && (
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => handleWhatsApp(reminder)}
-                className="text-xs hover:bg-emerald-500/10 hover:text-emerald-400"
-              >
-                <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
-              </ZenButton>
-            )}
-
-            <ZenButton
-              variant="primary"
-              size="sm"
-              onClick={() => handleComplete(reminder.id)}
-              disabled={completingIds.has(reminder.id)}
-              loading={completingIds.has(reminder.id)}
-              className="text-xs"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-              Completar
-            </ZenButton>
-          </div>
-        </div>
-      </ZenCardContent>
-    </ZenCard>
-  );
-
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={true}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-lg bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0"
-        showOverlay={false}
+        className="w-full sm:max-w-lg bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-0 flex flex-col"
+        showOverlay={true}
       >
-        <SheetHeader className="border-b border-zinc-800 pb-4 px-6 pt-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-600/20 rounded-lg">
+        <SheetHeader className="border-b border-zinc-800/50 pb-5 px-6 pt-6 shrink-0">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-blue-600/20 rounded-xl border border-blue-500/20">
               <Clock className="h-5 w-5 text-blue-400" />
             </div>
-            <div className="flex-1">
-              <SheetTitle className="text-xl font-semibold text-white">
-                Seguimientos
-              </SheetTitle>
-              <SheetDescription className="text-zinc-400">
-                Gestiona tus seguimientos pendientes
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <SheetTitle className="text-xl font-semibold text-white">
+                  Recordatorios
+                </SheetTitle>
+                {!loading && totalReminders > 0 && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">
+                    {totalReminders}
+                  </span>
+                )}
+              </div>
+              <SheetDescription className="text-sm text-zinc-400">
+                Gestiona tus recordatorios pendientes
               </SheetDescription>
             </div>
           </div>
         </SheetHeader>
 
-        <div className="p-6 space-y-6">
-          {loading ? (
-            <div className="text-center py-8 text-zinc-400">
-              Cargando seguimientos...
-            </div>
-          ) : reminders.length === 0 ? (
-            <div className="text-center py-8 text-zinc-400">
-              <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No hay seguimientos pendientes</p>
-            </div>
-          ) : (
-            <>
-              {/* Sección: Vencidos */}
-              {overdueReminders.length > 0 && (
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-6 space-y-6">
+            {loading ? (
+              <>
+                {/* Skeleton Hoy */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ZenBadge variant="destructive" size="sm">
-                      Vencidos
-                    </ZenBadge>
-                    <span className="text-xs text-zinc-400">
-                      {overdueReminders.length}
-                    </span>
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="h-5 w-12 bg-zinc-800/50 animate-pulse rounded" />
+                    <div className="h-4 w-6 bg-zinc-800/50 animate-pulse rounded" />
                   </div>
                   <div className="space-y-2">
-                    {overdueReminders.map(reminder => (
-                      <ReminderCard
-                        key={reminder.id}
-                        reminder={reminder}
-                        studioSlug={studioSlug}
-                        onView={handleView}
-                        onComplete={handleComplete}
-                        onWhatsApp={handleWhatsApp}
-                        isCompleting={completingIds.has(reminder.id)}
-                      />
+                    {[1, 2].map((i) => (
+                      <ZenCard key={i} className="border-zinc-800">
+                        <ZenCardContent className="p-3">
+                          <div className="space-y-2">
+                            <div className="h-4 w-48 bg-zinc-800/50 animate-pulse rounded" />
+                            <div className="h-3 w-32 bg-zinc-800/50 animate-pulse rounded" />
+                          </div>
+                        </ZenCardContent>
+                      </ZenCard>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {/* Sección: Para Hoy */}
-              {todayReminders.length > 0 && (
+                {/* Skeleton Próximos */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ZenBadge variant="warning" size="sm">
-                      Para Hoy
-                    </ZenBadge>
-                    <span className="text-xs text-zinc-400">
-                      {todayReminders.length}
-                    </span>
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="h-5 w-20 bg-zinc-800/50 animate-pulse rounded" />
+                    <div className="h-4 w-6 bg-zinc-800/50 animate-pulse rounded" />
                   </div>
                   <div className="space-y-2">
-                    {todayReminders.map(reminder => (
-                      <ReminderCard key={reminder.id} reminder={reminder} />
+                    {[1, 2, 3].map((i) => (
+                      <ZenCard key={i} className="border-zinc-800">
+                        <ZenCardContent className="p-3">
+                          <div className="space-y-2">
+                            <div className="h-4 w-48 bg-zinc-800/50 animate-pulse rounded" />
+                            <div className="h-3 w-32 bg-zinc-800/50 animate-pulse rounded" />
+                          </div>
+                        </ZenCardContent>
+                      </ZenCard>
                     ))}
                   </div>
                 </div>
-              )}
-            </>
-          )}
+              </>
+            ) : totalReminders === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
+                <div className="p-4 bg-zinc-800/50 rounded-2xl mb-4">
+                  <Clock className="h-10 w-10 opacity-50" />
+                </div>
+                <p className="text-sm font-medium mb-1">No hay recordatorios pendientes</p>
+                <p className="text-xs text-zinc-500">Todos tus recordatorios están al día</p>
+              </div>
+            ) : (
+              <>
+                <ReminderSideSheetSection
+                  title="Hoy"
+                  variant="warning"
+                  reminders={todayReminders}
+                  studioSlug={studioSlug}
+                  completingIds={completingIds}
+                  onView={handleView}
+                  onComplete={handleComplete}
+                  onWhatsApp={handleWhatsApp}
+                />
+                <ReminderSideSheetSection
+                  title="Próximos"
+                  variant="default"
+                  reminders={upcomingReminders}
+                  studioSlug={studioSlug}
+                  completingIds={completingIds}
+                  onView={handleView}
+                  onComplete={handleComplete}
+                  onWhatsApp={handleWhatsApp}
+                />
+              </>
+            )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

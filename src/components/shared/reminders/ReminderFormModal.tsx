@@ -22,7 +22,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-interface ReminderModalProps {
+interface ReminderFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   studioSlug: string;
@@ -32,7 +32,7 @@ interface ReminderModalProps {
   zIndex?: number;
 }
 
-export function ReminderModal({
+export function ReminderFormModal({
   isOpen,
   onClose,
   studioSlug,
@@ -40,7 +40,7 @@ export function ReminderModal({
   existingReminder,
   onSuccess,
   zIndex = 10050,
-}: ReminderModalProps) {
+}: ReminderFormModalProps) {
   const [loading, setLoading] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -290,6 +290,8 @@ export function ReminderModal({
 
       if (result.success && result.data) {
         toast.success(existingReminder ? 'Seguimiento actualizado' : 'Seguimiento creado');
+        // Disparar evento para actualizar contador y side sheet
+        window.dispatchEvent(new CustomEvent('reminder-updated'));
         onSuccess?.(result.data);
         onClose();
       } else {

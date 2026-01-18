@@ -191,11 +191,13 @@ export async function upsertReminder(
         promise_id: validatedData.promiseId,
         subject_id: validatedData.subjectId || null,
         subject_text: validatedData.subjectText,
+        description: validatedData.description || null,
         reminder_date: validatedData.reminderDate,
       },
       update: {
         subject_id: validatedData.subjectId || null,
         subject_text: validatedData.subjectText,
+        description: validatedData.description || null,
         reminder_date: validatedData.reminderDate,
         is_completed: false, // Resetear si se actualiza
         completed_at: null,
@@ -534,11 +536,11 @@ export async function getRemindersDue(
       return { success: false, error: 'Studio no encontrado' };
     }
 
-    // Calcular fechas
+    // Calcular fechas (usar UTC para evitar problemas de zona horaria)
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
     const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
+    todayEnd.setUTCDate(todayEnd.getUTCDate() + 1);
 
     // Construir where clause según dateRange
     const where: any = {
@@ -562,9 +564,8 @@ export async function getRemindersDue(
         };
         break;
       case 'all':
-        where.reminder_date = {
-          lte: now,
-        };
+        // Para 'all', traer todos los recordatorios no completados (sin filtro de fecha)
+        // El filtrado por fecha se hace en el frontend
         break;
     }
 

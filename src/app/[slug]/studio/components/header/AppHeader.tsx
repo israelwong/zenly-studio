@@ -12,7 +12,7 @@ import { SubscriptionPopover } from '../ui/SubscriptionPopover';
 import { SubscriptionBadge } from '@/components/shared/subscription/SubscriptionBadge';
 import { GoogleStatusPopover } from '@/components/shared/integrations/GoogleStatusPopover';
 import { useCommercialNameShort } from '@/hooks/usePlatformConfig';
-import { Calendar, CalendarCheck, ContactRound, Settings, BellRing } from 'lucide-react';
+import { Calendar, CalendarCheck, ContactRound, Settings, AlarmClockCheck } from 'lucide-react';
 import { useAgendaCount } from '@/hooks/useAgendaCount';
 import { useRemindersCount } from '@/hooks/useRemindersCount';
 import { obtenerEstadoConexion } from '@/lib/integrations/google';
@@ -42,8 +42,8 @@ export function AppHeader({
     const { toggleSidebar } = useZenSidebar();
     const { identidadData } = useStudioData({ studioSlug });
     const commercialNameShort = useCommercialNameShort();
-    const { count: agendaCount } = useAgendaCount({ studioSlug });
-    const { count: remindersCount } = useRemindersCount({ studioSlug });
+    const { count: agendaCount } = useAgendaCount({ studioSlug, enabled: isMounted });
+    const { count: remindersCount } = useRemindersCount({ studioSlug, enabled: isMounted });
 
     useEffect(() => {
         setIsMounted(true);
@@ -249,16 +249,16 @@ export function AppHeader({
                     </ZenButton>
                 )}
 
-                {/* Seguimientos */}
+                {/* Recordatorios */}
                 {onRemindersClick && (
                     <ZenButton
                         variant="ghost"
                         size="icon"
                         className="relative rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
                         onClick={onRemindersClick}
-                        title="Seguimientos"
+                        title="Recordatorios"
                     >
-                        <BellRing className="h-5 w-5" />
+                        <AlarmClockCheck className="h-5 w-5" />
                         {remindersCount > 0 && (
                             <ZenBadge
                                 variant="destructive"
@@ -268,7 +268,7 @@ export function AppHeader({
                                 {remindersCount > 9 ? '9+' : remindersCount}
                             </ZenBadge>
                         )}
-                        <span className="sr-only">Seguimientos</span>
+                        <span className="sr-only">Recordatorios</span>
                     </ZenButton>
                 )}
 
