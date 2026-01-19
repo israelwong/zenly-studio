@@ -2,18 +2,20 @@
 
 import React, { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
-import { X, ChevronDown, ChevronRight, AlertTriangle, ImageIcon, Eye, EyeOff, Save, Globe, FileText } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, AlertTriangle, ImageIcon, Eye, EyeOff, Save, Globe, FileText, Plus, Edit2 } from 'lucide-react';
 import { ZenButton, ZenInput, ZenTextarea, ZenBadge, ZenDialog } from '@/components/ui/zen';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/shadcn/dialog';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
+import { ItemEditorModal, type ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { crearPaquete, actualizarPaquete } from '@/lib/actions/studio/paquetes/paquetes.actions';
+import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
-import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
+import type { SeccionData, ServicioData } from '@/lib/actions/schemas/catalogo-schemas';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
 import { useStorageRefresh } from '@/hooks/useStorageRefresh';
 import { PaqueteCoverDropzone } from './PaqueteCoverDropzone';
@@ -87,6 +89,11 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [showPublishDialog, setShowPublishDialog] = useState(false);
     const summaryRef = useRef<HTMLDivElement>(null);
+
+    // Estados para edición/creación de ítems
+    const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+    const [itemToEdit, setItemToEdit] = useState<ItemFormData | null>(null);
+    const [selectedCategoriaForItem, setSelectedCategoriaForItem] = useState<string | null>(null);
 
 
     // Cargar catálogo, configuración y datos del paquete en un solo useEffect
@@ -523,7 +530,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
         }>);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [items, precioPersonalizado, baseHours, configKey]); // servicioMap depende de configKey, evitar dependencias anidadas
+    }, [items, precioPersonalizado, baseHours, configKey, catalogo, selectedServices]); // Incluir catalogo y selectedServices para recalcular cuando cambien
 
     // Handlers para toggles (accordion behavior)
     const toggleSeccion = (seccionId: string) => {
@@ -556,6 +563,173 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
             }
             return newSet;
         });
+    };
+
+    // Handlers para edición/creación de ítems
+    const handleCreateItem = () => {
+        // Si hay filtro activo, usar la primera categoría de los resultados
+        // Si no, usar la primera categoría disponible
+        let categoriaId: string | null = null;
+        
+        if (catalogoFiltrado.length > 0) {
+            const primeraSeccion = catalogoFiltrado[0];
+            if (primeraSeccion.categorias.length > 0) {
+                categoriaId = primeraSeccion.categorias[0].id;
+            }
+        } else if (catalogo.length > 0) {
+            const primeraSeccion = catalogo[0];
+            if (primeraSeccion.categorias.length > 0) {
+                categoriaId = primeraSeccion.categorias[0].id;
+            }
+        }
+
+        if (!categoriaId) {
+            toast.error('No hay categorías disponibles. Crea una categoría primero en el catálogo.');
+            return;
+        }
+
+        setSelectedCategoriaForItem(categoriaId);
+        setItemToEdit(null);
+        setIsItemModalOpen(true);
+    };
+
+    const handleEditItem = (servicioId: string) => {
+        // Buscar el servicio en el catálogo
+        let servicioEncontrado: ServicioData | null = null;
+        let categoriaId: string | null = null;
+
+        for (const seccion of catalogo) {
+            for (const categoria of seccion.categorias) {
+                const servicio = categoria.servicios.find(s => s.id === servicioId);
+                if (servicio) {
+                    servicioEncontrado = servicio;
+                    categoriaId = categoria.id;
+                    break;
+                }
+            }
+            if (servicioEncontrado) break;
+        }
+
+        if (!servicioEncontrado || !categoriaId) {
+            toast.error('Servicio no encontrado');
+            return;
+        }
+
+        // Convertir ServicioData a ItemFormData
+        const tipoUtilidad = servicioEncontrado.tipo_utilidad === 'service' ? 'servicio' : 'producto';
+        const itemData: ItemFormData = {
+            id: servicioEncontrado.id,
+            name: servicioEncontrado.nombre,
+            cost: servicioEncontrado.costo,
+            description: servicioEncontrado.descripcion || '',
+            categoriaeId: categoriaId,
+            tipoUtilidad,
+            billing_type: (servicioEncontrado.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+            gastos: servicioEncontrado.gastos?.map(g => ({ nombre: g.nombre, costo: g.costo })) || [],
+            status: servicioEncontrado.status || 'active',
+        };
+
+        setItemToEdit(itemData);
+        setSelectedCategoriaForItem(categoriaId);
+        setIsItemModalOpen(true);
+    };
+
+    const handleSaveItem = async (data: ItemFormData) => {
+        try {
+            if (data.id) {
+                // Editar ítem existente
+                const response = await actualizarItem(data);
+                if (!response.success) {
+                    toast.error(response.error || 'Error al actualizar el item');
+                    return;
+                }
+
+                // Actualizar catálogo local
+                setCatalogo(prev => prev.map(seccion => ({
+                    ...seccion,
+                    categorias: seccion.categorias.map(categoria => ({
+                        ...categoria,
+                        servicios: categoria.servicios.map(servicio => {
+                            if (servicio.id === data.id) {
+                                return {
+                                    ...servicio,
+                                    nombre: data.name,
+                                    costo: data.cost,
+                                    tipo_utilidad: data.tipoUtilidad === 'servicio' ? 'service' : 'product',
+                                    billing_type: data.billing_type || 'SERVICE',
+                                    gasto: data.gastos?.reduce((acc, g) => acc + g.costo, 0) || 0,
+                                    gastos: data.gastos?.map(g => ({ nombre: g.nombre, costo: g.costo })) || [],
+                                    status: data.status || 'active',
+                                };
+                            }
+                            return servicio;
+                        })
+                    }))
+                })));
+
+                // El recálculo de precios se disparará automáticamente por el useEffect
+                // que depende de catalogo, items, selectedServices, etc.
+                toast.success('Item actualizado. Precios recalculados automáticamente.');
+            } else {
+                // Crear nuevo ítem
+                const response = await crearItem({
+                    ...data,
+                    categoriaeId: selectedCategoriaForItem!,
+                    studioSlug: studioSlug,
+                });
+                if (!response.success) {
+                    toast.error(response.error || 'Error al crear el item');
+                    return;
+                }
+
+                if (response.data) {
+                    // Agregar nuevo ítem al catálogo local
+                    const nuevoServicio: ServicioData = {
+                        id: response.data.id,
+                        studioId: response.data.studioId || '',
+                        servicioCategoriaId: selectedCategoriaForItem!,
+                        nombre: response.data.name,
+                        costo: response.data.cost,
+                        gasto: response.data.gastos?.reduce((acc, g) => acc + g.costo, 0) || 0,
+                        tipo_utilidad: response.data.tipoUtilidad === 'servicio' ? 'service' : 'product',
+                        billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                        orden: response.data.order || 0,
+                        status: response.data.status || 'active',
+                        descripcion: response.data.description || null,
+                        gastos: response.data.gastos?.map(g => ({ nombre: g.nombre, costo: g.costo })) || [],
+                    };
+
+                    setCatalogo(prev => prev.map(seccion => ({
+                        ...seccion,
+                        categorias: seccion.categorias.map(categoria => {
+                            if (categoria.id === selectedCategoriaForItem) {
+                                return {
+                                    ...categoria,
+                                    servicios: [...categoria.servicios, nuevoServicio]
+                                };
+                            }
+                            return categoria;
+                        })
+                    })));
+
+                    // Seleccionar automáticamente el nuevo ítem
+                    setSelectedServices(prev => new Set([...prev, nuevoServicio.id]));
+                    setItems(prev => ({ ...prev, [nuevoServicio.id]: 1 }));
+
+                    toast.success('Item creado y agregado al paquete');
+                }
+            }
+
+            setIsItemModalOpen(false);
+            setItemToEdit(null);
+            setSelectedCategoriaForItem(null);
+
+            // El recálculo de precios se disparará automáticamente por el useEffect
+            // que depende de items, catalogo y configuracionPrecios
+        } catch (error) {
+            console.error('Error guardando item:', error);
+            toast.error('Error al guardar el item');
+        }
     };
 
     // Handlers
@@ -961,6 +1135,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     onToggleCategoria={toggleCategoria}
                     onToggleSelection={toggleServiceSelection}
                     onUpdateQuantity={updateQuantity}
+                    onEditItem={handleEditItem}
                     serviciosSeleccionados={serviciosSeleccionados}
                     configuracionPrecios={configuracionPrecios}
                     baseHours={baseHours !== '' && baseHours !== null ? Number(baseHours) : null}
@@ -1299,6 +1474,24 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     </div>
                 </div>
             </ZenDialog>
+
+            {/* Modal de edición/creación de ítem */}
+            {selectedCategoriaForItem && (
+                <ItemEditorModal
+                    isOpen={isItemModalOpen}
+                    onClose={() => {
+                        setIsItemModalOpen(false);
+                        setItemToEdit(null);
+                        setSelectedCategoriaForItem(null);
+                    }}
+                    onSave={handleSaveItem}
+                    item={itemToEdit || undefined}
+                    studioSlug={studioSlug}
+                    categoriaId={selectedCategoriaForItem}
+                    preciosConfig={configuracionPrecios}
+                    showOverlay={true}
+                />
+            )}
         </div>
     );
 });

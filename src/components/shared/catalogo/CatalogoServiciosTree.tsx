@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { ChevronDown, ChevronRight, Clock, Hash, DollarSign } from 'lucide-react';
-import { ZenBadge } from '@/components/ui/zen';
+import { ChevronDown, ChevronRight, Clock, Hash, DollarSign, Edit2 } from 'lucide-react';
+import { ZenBadge, ZenButton } from '@/components/ui/zen';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import { cn } from '@/lib/utils';
@@ -32,6 +32,7 @@ interface CatalogoServiciosTreeProps {
     onToggleCategoria: (categoriaId: string) => void;
     onToggleSelection: (servicioId: string) => void;
     onUpdateQuantity: (servicioId: string, cantidad: number) => void;
+    onEditItem?: (servicioId: string) => void;
 
     // Datos calculados
     serviciosSeleccionados: ServiciosSeleccionados;
@@ -54,6 +55,7 @@ export function CatalogoServiciosTree({
     onToggleCategoria,
     onToggleSelection,
     onUpdateQuantity,
+    onEditItem,
     serviciosSeleccionados,
     configuracionPrecios,
     baseHours,
@@ -175,7 +177,7 @@ export function CatalogoServiciosTree({
                                                                                 key={servicio.id}
                                                                                 onClick={() => onToggleSelection(servicio.id)}
                                                                                 className={cn(
-                                                                                    'flex items-center justify-between py-3 px-2 pl-6 hover:bg-zinc-700/20 transition-colors cursor-pointer',
+                                                                                    'group flex items-center justify-between py-3 px-2 pl-6 hover:bg-zinc-700/20 transition-colors cursor-pointer',
                                                                                     'border-t border-b border-zinc-700/30',
                                                                                     servicioIndex === 0 && 'border-t-0',
                                                                                     isSelected
@@ -186,7 +188,7 @@ export function CatalogoServiciosTree({
                                                                                 {/* Nivel 3: Servicio */}
                                                                                 <div className="flex-1 min-w-0">
                                                                                     <div className="text-sm text-zinc-300 leading-tight font-light">
-                                                                                        <span className="break-words">{servicio.nombre}</span>
+                                                                                        <span className="wrap-break-word">{servicio.nombre}</span>
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 mt-1">
                                                                                         {/* Badge de tipo (Servicio/Producto) */}
@@ -290,6 +292,39 @@ export function CatalogoServiciosTree({
                                                                                                 {formatearMoneda(subtotal)}
                                                                                             </div>
                                                                                         </div>
+                                                                                        {onEditItem && (
+                                                                                            <ZenButton
+                                                                                                type="button"
+                                                                                                variant="ghost"
+                                                                                                size="sm"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    onEditItem(servicio.id);
+                                                                                                }}
+                                                                                                className="w-7 h-7 p-0 opacity-60 hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-200 ml-1"
+                                                                                                title="Editar ítem"
+                                                                                            >
+                                                                                                <Edit2 className="w-3.5 h-3.5" />
+                                                                                            </ZenButton>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                                {/* Botón de editar cuando NO está seleccionado */}
+                                                                                {!isSelected && onEditItem && (
+                                                                                    <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                                                                                        <ZenButton
+                                                                                            type="button"
+                                                                                            variant="ghost"
+                                                                                            size="sm"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                onEditItem(servicio.id);
+                                                                                            }}
+                                                                                            className="w-7 h-7 p-0 opacity-60 hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-200"
+                                                                                            title="Editar ítem"
+                                                                                        >
+                                                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                                                        </ZenButton>
                                                                                     </div>
                                                                                 )}
                                                                             </div>
