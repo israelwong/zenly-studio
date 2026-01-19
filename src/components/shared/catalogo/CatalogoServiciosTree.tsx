@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Hash, DollarSign } from 'lucide-react';
 import { ZenBadge } from '@/components/ui/zen';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -189,6 +189,49 @@ export function CatalogoServiciosTree({
                                                                                         <span className="break-words">{servicio.nombre}</span>
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 mt-1">
+                                                                                        {/* Badge de tipo (Servicio/Producto) */}
+                                                                                        <ZenBadge
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            className={`px-1 py-0 text-[10px] font-light rounded-sm ${
+                                                                                                tipoUtilidad === 'servicio'
+                                                                                                    ? 'border-blue-600 text-blue-400'
+                                                                                                    : 'border-purple-600 text-purple-400'
+                                                                                            }`}
+                                                                                        >
+                                                                                            {tipoUtilidad === 'servicio' ? 'Servicio' : 'Producto'}
+                                                                                        </ZenBadge>
+                                                                                        {/* Badge de tipo de facturación (solo para servicios) */}
+                                                                                        {billingType && tipoUtilidad === 'servicio' && (
+                                                                                            <ZenBadge
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                className={`px-1 py-0 text-[10px] font-light rounded-sm flex items-center gap-0.5 ${
+                                                                                                    billingType === 'HOUR'
+                                                                                                        ? 'border-amber-600 text-amber-400'
+                                                                                                        : billingType === 'UNIT'
+                                                                                                            ? 'border-purple-600 text-purple-400'
+                                                                                                            : 'border-emerald-600 text-emerald-400'
+                                                                                                }`}
+                                                                                            >
+                                                                                                {billingType === 'HOUR' ? (
+                                                                                                    <>
+                                                                                                        <Clock className="w-2.5 h-2.5" />
+                                                                                                        Por Hora
+                                                                                                    </>
+                                                                                                ) : billingType === 'UNIT' ? (
+                                                                                                    <>
+                                                                                                        <Hash className="w-2.5 h-2.5" />
+                                                                                                        Por Unidad
+                                                                                                    </>
+                                                                                                ) : (
+                                                                                                    <>
+                                                                                                        <DollarSign className="w-2.5 h-2.5" />
+                                                                                                        Fijo
+                                                                                                    </>
+                                                                                                )}
+                                                                                            </ZenBadge>
+                                                                                        )}
                                                                                         <span className="text-xs text-green-400">
                                                                                             {billingType === 'HOUR' 
                                                                                                 ? formatearMoneda(precios.precio_final) + '/h'
