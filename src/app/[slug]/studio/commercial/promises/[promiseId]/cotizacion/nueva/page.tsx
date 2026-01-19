@@ -1,65 +1,29 @@
-'use client';
+import { NuevaCotizacionClient } from './components/NuevaCotizacionClient';
 
-import React, { useEffect } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton } from '@/components/ui/zen';
-import { CotizacionForm } from '../../../components/CotizacionForm';
+interface NuevaCotizacionPageProps {
+  params: Promise<{
+    slug: string;
+    promiseId: string;
+  }>;
+  searchParams: Promise<{
+    paqueteId?: string;
+    contactId?: string;
+  }>;
+}
 
-export default function NuevaCotizacionPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  
-  const studioSlug = params?.slug as string;
-  const promiseId = params?.promiseId as string;
-  const packageId = searchParams?.get('paqueteId') || null;
-  const contactId = searchParams?.get('contactId') || null;
-
-  useEffect(() => {
-    document.title = 'Zenly Studio - Nueva Cotización';
-  }, []);
-
-  if (!studioSlug || !promiseId) {
-    return (
-      <div className="w-full max-w-7xl mx-auto p-6">
-        <p className="text-zinc-400">Cargando...</p>
-      </div>
-    );
-  }
+export default async function NuevaCotizacionPage({ params, searchParams }: NuevaCotizacionPageProps) {
+  const { slug: studioSlug, promiseId } = await params;
+  const search = await searchParams;
+  const packageId = search.paqueteId || null;
+  const contactId = search.contactId || null;
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
-      <ZenCard variant="default" padding="none">
-        <ZenCardHeader className="border-b border-zinc-800">
-          <div className="flex items-center gap-3">
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={() => router.back()}
-              className="p-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </ZenButton>
-            <div>
-              <ZenCardTitle>Nueva Cotización</ZenCardTitle>
-              <ZenCardDescription>
-                {packageId ? 'Crear cotización desde paquete' : 'Crear cotización personalizada'}
-              </ZenCardDescription>
-            </div>
-          </div>
-        </ZenCardHeader>
-        <ZenCardContent className="p-6">
-          <CotizacionForm
-            studioSlug={studioSlug}
-            promiseId={promiseId}
-            packageId={packageId}
-            contactId={contactId}
-            redirectOnSuccess={`/${studioSlug}/studio/commercial/promises/${promiseId}`}
-          />
-        </ZenCardContent>
-      </ZenCard>
-    </div>
+    <NuevaCotizacionClient
+      studioSlug={studioSlug}
+      promiseId={promiseId}
+      packageId={packageId}
+      contactId={contactId}
+    />
   );
 }
 

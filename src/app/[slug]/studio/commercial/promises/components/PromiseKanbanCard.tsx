@@ -518,6 +518,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 onClick={handleViewDetails}
                 data-id={promise.promise_id || promise.id}
                 className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700 hover:border-zinc-600 transition-all duration-200 hover:shadow-lg relative cursor-pointer"
+                suppressHydrationWarning
             >
                 {/* Drag Handle - Esquina superior izquierda */}
                 <div
@@ -728,7 +729,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                             {promise.updated_at && (
                                 <div className="flex items-center gap-1.5 text-xs text-zinc-500">
                                     <Calendar className="h-3 w-3 shrink-0" />
-                                    <span>
+                                    <span suppressHydrationWarning>
                                         Últ. interacción: {formatRelativeTime(promise.updated_at)}
                                     </span>
                                 </div>

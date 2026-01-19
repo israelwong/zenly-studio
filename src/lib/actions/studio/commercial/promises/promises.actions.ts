@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import {
   createPromiseSchema,
   updatePromiseSchema,
@@ -733,6 +733,7 @@ export async function createPromise(
     // Revalidar tanto la lista como la página individual de la promesa
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promise.id}`);
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
 
     // Crear log automático de creación de promesa
     try {
@@ -1131,6 +1132,7 @@ export async function updatePromise(
     };
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
 
     return {
       success: true,
@@ -1403,6 +1405,7 @@ export async function movePromise(
     };
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidateTag(`promises-list-${studioSlug}`, 'max'); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
 
     return {
       success: true,

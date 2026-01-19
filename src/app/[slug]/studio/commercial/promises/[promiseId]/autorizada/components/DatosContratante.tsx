@@ -79,4 +79,3 @@ export function DatosContratante({ promise }: DatosContratanteProps) {
     </ZenCard>
   );
 }
-

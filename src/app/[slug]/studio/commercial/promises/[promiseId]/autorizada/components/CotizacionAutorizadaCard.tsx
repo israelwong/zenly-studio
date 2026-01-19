@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { startTransition } from 'react';
 import { CheckCircle2, ArrowRight, FileText, Calendar, DollarSign, Loader2, Eye, CreditCard, Tag, Clock, Receipt, CheckCircle } from 'lucide-react';
 import {
   ZenCard,
@@ -484,7 +485,12 @@ export function CotizacionAutorizadaCard({
             <div className="pt-2">
               <ZenButton
                 variant="primary"
-                onClick={() => router.push(`/${studioSlug}/studio/business/events/${eventoId}`)}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('close-overlays'));
+                  startTransition(() => {
+                    router.push(`/${studioSlug}/studio/business/events/${eventoId}`);
+                  });
+                }}
                 className="w-full"
               >
                 <ArrowRight className="w-4 h-4 mr-2" />

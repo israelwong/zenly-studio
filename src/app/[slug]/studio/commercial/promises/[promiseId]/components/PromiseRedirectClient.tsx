@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { startTransition } from 'react';
 import { PromiseContentSkeleton } from './PromiseLayoutSkeleton';
 
 interface PromiseRedirectClientProps {
@@ -22,7 +23,9 @@ export function PromiseRedirectClient({
   useEffect(() => {
     if (!state) {
       // Si no hay estado, redirigir a la lista de promesas
-      router.replace(`/${studioSlug}/studio/commercial/promises`);
+      startTransition(() => {
+        router.replace(`/${studioSlug}/studio/commercial/promises`);
+      });
       return;
     }
 
@@ -38,9 +41,14 @@ export function PromiseRedirectClient({
       targetPath = `/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`;
     }
 
+    // Cerrar overlays antes de navegar
+    window.dispatchEvent(new CustomEvent('close-overlays'));
+
     // Pequeño delay para asegurar que el skeleton se muestre
     const timer = setTimeout(() => {
-      router.replace(targetPath);
+      startTransition(() => {
+        router.replace(targetPath);
+      });
     }, 100);
 
     return () => clearTimeout(timer);

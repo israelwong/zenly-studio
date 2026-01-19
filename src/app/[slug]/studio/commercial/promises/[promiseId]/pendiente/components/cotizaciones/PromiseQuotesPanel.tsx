@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Package, Sparkles, Loader2, CheckSquare, Square, Archive, ArchiveRestore, Trash2, Eye, EyeOff, X, MoreVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import {
@@ -260,7 +260,7 @@ export function PromiseQuotesPanel({
       toast.error('Se requiere una promesa para crear una cotización');
       return;
     }
-    // Navegar a la ruta de nueva cotización con el paqueteId como parámetro
+    window.dispatchEvent(new CustomEvent('close-overlays'));
     const basePath = `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/nueva`;
     const params = new URLSearchParams();
     if (packageId) {
@@ -270,21 +270,25 @@ export function PromiseQuotesPanel({
       params.set('contactId', contactId);
     }
     const queryString = params.toString();
-    router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
+    startTransition(() => {
+      router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
+    });
   };
 
   const handleCreateCustom = () => {
     if (!promiseId) {
       return;
     }
-    // Navegar a la ruta de nueva cotización sin paqueteId (personalizada)
+    window.dispatchEvent(new CustomEvent('close-overlays'));
     const basePath = `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/nueva`;
     const params = new URLSearchParams();
     if (contactId) {
       params.set('contactId', contactId);
     }
     const queryString = params.toString();
-    router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
+    startTransition(() => {
+      router.push(`${basePath}${queryString ? `?${queryString}` : ''}`);
+    });
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {

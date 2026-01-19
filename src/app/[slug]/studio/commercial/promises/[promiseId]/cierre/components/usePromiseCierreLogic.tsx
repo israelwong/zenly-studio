@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { startTransition } from 'react';
 import { cancelarCierre, autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
 import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosCondicionesCierre, obtenerDatosPagoCierre, autorizarYCrearEvento } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
@@ -339,7 +340,12 @@ export function usePromiseCierreLogic({
         toast.success('Proceso de cierre cancelado. Cotizaciones desarchivadas.');
         setShowCancelModal(false);
         onCierreCancelado?.(cotizacion.id);
-        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+        // Navegar a pendiente usando metodología ZEN
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        router.refresh();
+        startTransition(() => {
+          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`);
+        });
       } else {
         toast.error(result.error || 'Error al cancelar cierre');
       }
@@ -372,8 +378,12 @@ export function usePromiseCierreLogic({
 
         if (result.success && result.data) {
           toast.success('¡Cotización autorizada y evento creado!');
-          // Redirigir a la página del evento creado
-          router.push(`/${studioSlug}/studio/business/events/${result.data.evento_id}`);
+          // Redirigir a la página del evento creado usando metodología ZEN
+          window.dispatchEvent(new CustomEvent('close-overlays'));
+          router.refresh();
+          startTransition(() => {
+            router.push(`/${studioSlug}/studio/business/events/${result.data.evento_id}`);
+          });
         } else {
           toast.error(result.error || 'Error al autorizar cotización');
         }

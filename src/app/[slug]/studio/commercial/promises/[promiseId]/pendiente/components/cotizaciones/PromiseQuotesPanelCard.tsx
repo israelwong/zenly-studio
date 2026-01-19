@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { MoreVertical, Copy, Archive, Trash2, Loader2, GripVertical, Edit2, CheckCircle, ArchiveRestore, XCircle, Eye, EyeOff, CheckSquare, Square, Handshake, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
@@ -234,11 +234,16 @@ export function PromiseQuotesPanelCard({
       return;
     }
 
+    // Cerrar overlays antes de navegar
+    window.dispatchEvent(new CustomEvent('close-overlays'));
+
     // Si la cotización tiene evento_id asociado, redirigir al evento
     // Esto aplica para estados: aprobada/autorizada/approved, en_cierre, contract_signed
     const estadosConEvento = ['aprobada', 'autorizada', 'approved', 'en_cierre', 'contract_signed'];
     if (estadosConEvento.includes(cotizacion.status) && cotizacion.evento_id) {
-      router.push(`/${studioSlug}/studio/business/events/${cotizacion.evento_id}`);
+      startTransition(() => {
+        router.push(`/${studioSlug}/studio/business/events/${cotizacion.evento_id}`);
+      });
       return;
     }
 
@@ -247,15 +252,25 @@ export function PromiseQuotesPanelCard({
       return;
     }
 
-    // Si es revisión pendiente, redirigir a página de edición de revisión
+    // Si es revisión pendiente, redirigir a página de edición normal (flujo legacy eliminado)
+    // Las revisiones ahora se manejan como cotizaciones normales
     if (cotizacion.revision_of_id && cotizacion.revision_status === 'pending_revision') {
-      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/revision`);
+      const params = new URLSearchParams();
+      if (contactId) {
+        params.set('contactId', contactId);
+      }
+      const queryString = params.toString();
+      startTransition(() => {
+        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+      });
       return;
     }
 
     // Si está en negociación, redirigir a la página de negociación para editar
     if (cotizacion.status === 'negociacion') {
-      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
+      startTransition(() => {
+        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/negociacion`);
+      });
       return;
     }
 
@@ -264,7 +279,9 @@ export function PromiseQuotesPanelCard({
       params.set('contactId', contactId);
     }
     const queryString = params.toString();
-    router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+    startTransition(() => {
+      router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}${queryString ? `?${queryString}` : ''}`);
+    });
   };
 
   const handleDuplicate = async (e: React.MouseEvent) => {
@@ -522,9 +539,14 @@ export function PromiseQuotesPanelCard({
         } else {
           onUpdate?.(cotizacion.id);
         }
-        // Cerrar modal y navegar usando router de Next.js
+        // Cerrar modal y navegar usando metodología ZEN
         setShowClosingProcessInfoModal(false);
-        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        // Forzar refresh del router para asegurar que determinePromiseState obtenga datos actualizados
+        router.refresh();
+        startTransition(() => {
+          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
+        });
       } else {
         toast.error(result.error || 'Error al pasar cotización a cierre');
         setShowClosingProcessInfoModal(false);

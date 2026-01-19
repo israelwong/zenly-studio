@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import {
   createCotizacionSchema,
   updateCotizacionSchema,
@@ -1060,6 +1060,7 @@ export async function updateCotizacionName(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidateTag(`quote-detail-${cotizacionId}`, 'max');
 
     return {
       success: true,
@@ -1442,12 +1443,10 @@ export async function updateCotizacion(
     }
 
     revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises`);
+    revalidateTag(`quote-detail-${validatedData.cotizacion_id}`);
     if (cotizacion.promise_id) {
       revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises/${cotizacion.promise_id}`);
-      // Revalidar ruta de revisiรณn si es una revisiรณn
-      if (cotizacion.revision_of_id) {
-        revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises/${cotizacion.promise_id}/cotizacion/${validatedData.cotizacion_id}/revision`);
-      }
+      // Las revisiones ahora se manejan como cotizaciones normales (flujo legacy eliminado)
     }
 
     return {
@@ -2080,6 +2079,8 @@ export async function pasarACierre(
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+      // Invalidar tag específico para forzar revalidación del estado de la promesa
+      revalidateTag(`promise-state-${cotizacion.promise_id}`, 'max');
     }
 
     return {

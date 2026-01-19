@@ -12,7 +12,7 @@ import {
   ZenCardContent,
 } from '@/components/ui/zen';
 import { autorizarRevisionCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones-revision.actions';
-import { CondicionesComercialesSelector } from '@/app/[slug]/studio/commercial/promises/[promiseId]/cotizacion/[cotizacionId]/autorizar/components/CondicionesComercialesSelector';
+import { CondicionesComercialesSelector } from '@/components/shared/promises';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { EventoDetalle } from '@/lib/actions/studio/business/events';
 

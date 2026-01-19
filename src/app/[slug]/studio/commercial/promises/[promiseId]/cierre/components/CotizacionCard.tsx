@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, Edit2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from '@/components/ui/zen';
@@ -63,7 +63,12 @@ export function CotizacionCard({
             <ZenButton
               variant="ghost"
               size="sm"
-              onClick={() => router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}?from=cierre`)}
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('close-overlays'));
+                startTransition(() => {
+                  router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}?from=cierre`);
+                });
+              }}
               className="h-6 w-6 p-0 text-zinc-400 hover:text-emerald-400"
               title="Editar cotización"
               aria-label="Editar cotización"

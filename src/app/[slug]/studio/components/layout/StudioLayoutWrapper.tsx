@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { StudioSidebar } from '../sidebar/StudioSidebar';
 import { AppHeader } from '../header/AppHeader';
 import { ZenMagicChatWrapper } from '../ZenMagic';
@@ -32,6 +33,7 @@ function StudioLayoutContent({
   studioSlug,
   children,
 }: StudioLayoutWrapperProps) {
+  const pathname = usePathname();
   const { toggleChat } = useZenMagicChat();
   const { isOpen: contactsOpen, openContactsSheet, closeContactsSheet, initialContactId } = useContactsSheet();
   const promisesConfig = usePromisesConfig();
@@ -110,6 +112,40 @@ function StudioLayoutContent({
   const handleRemindersClick = () => {
     setRemindersSheetOpen(true);
   };
+
+  // Función para cerrar todos los overlays
+  const closeAllOverlays = useCallback(() => {
+    setRemindersSheetOpen(false);
+    setAgendaOpen(false);
+    setCrewSheetOpen(false);
+    setTareasOperativasOpen(false);
+    closeContactsSheet(); // Cierra ContactsSheet (usa contexto, no estado local)
+  }, [closeContactsSheet]);
+
+  // Escuchar evento para cerrar overlays al navegar
+  useEffect(() => {
+    const handleCloseOverlays = () => {
+      closeAllOverlays();
+    };
+
+    window.addEventListener('close-overlays', handleCloseOverlays);
+    return () => {
+      window.removeEventListener('close-overlays', handleCloseOverlays);
+    };
+  }, [closeAllOverlays]);
+
+  // Seguro adicional: Cerrar overlays cuando cambia la ruta
+  // Si por alguna razón el evento 'close-overlays' no se dispara,
+  // el cambio de pathname lo detectará automáticamente
+  // Usamos useRef para evitar cerrar en el montaje inicial
+  const prevPathnameRef = useRef(pathname);
+  useEffect(() => {
+    // Solo cerrar si la ruta realmente cambió (no en el montaje inicial)
+    if (prevPathnameRef.current !== pathname) {
+      closeAllOverlays();
+      prevPathnameRef.current = pathname;
+    }
+  }, [pathname, closeAllOverlays]);
 
   // Configuraciones disponibles para el catálogo
   const configurationSections: ConfigurationSection[] = [

@@ -33,9 +33,9 @@ export function InfoCrearRevisionModal({
     }
 
     setIsRedirecting(true);
-    // Redirigir a página de revisión con query param indicando que es nueva
-    // Usamos un ID temporal "new" que la página detectará para crear la revisión al guardar
-    const redirectUrl = `/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/cotizacion/new/revision?originalId=${cotizacion.id}`;
+    // Redirigir a página de nueva cotización (flujo legacy de revisión eliminado)
+    // Si se necesita crear una revisión, se debe hacer desde el flujo normal de cotizaciones
+    const redirectUrl = `/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}/cotizacion/nueva`;
     router.push(redirectUrl);
   };
 

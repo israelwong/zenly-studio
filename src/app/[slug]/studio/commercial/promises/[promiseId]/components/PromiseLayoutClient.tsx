@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PromiseDetailHeader } from './PromiseDetailHeader';
 import { PromiseDetailToolbar } from './PromiseDetailToolbar';
@@ -62,6 +62,11 @@ export function PromiseLayoutClient({
   }, [router]);
 
   useContactUpdateListener(stateData.promiseData.contact_id, handleContactUpdate);
+
+  // Cerrar overlays al montar el componente de detalle
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('close-overlays'));
+  }, []);
 
   const handlePipelineStageChange = async (newStageId: string) => {
     if (!promiseId || newStageId === stateData.promiseData.pipeline_stage_id) return;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, ChevronDown, Check, Zap, FileText } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
@@ -80,7 +80,13 @@ export function PromiseDetailHeader({
                     <ZenButton
                         variant="ghost"
                         size="sm"
-                        onClick={() => router.push(`/${studioSlug}/studio/commercial/promises`)}
+                        onClick={() => {
+                            // Cerrar overlays al regresar
+                            window.dispatchEvent(new CustomEvent('close-overlays'));
+                            startTransition(() => {
+                                router.push(`/${studioSlug}/studio/commercial/promises`);
+                            });
+                        }}
                         className="p-2"
                     >
                         <ArrowLeft className="h-4 w-4" />

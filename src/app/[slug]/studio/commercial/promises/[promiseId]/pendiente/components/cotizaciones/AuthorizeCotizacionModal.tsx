@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { startTransition } from 'react';
 import { ZenDialog, ZenButton, ZenInput, ZenCard, ZenCardContent, ZenSwitch, SeparadorZen, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenBadge } from '@/components/ui/zen';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
@@ -405,7 +406,11 @@ export function AuthorizeCotizacionModal({
         if (result.success && result.data?.eventId) {
           toast.success('Evento creado exitosamente');
           onClose();
-          router.push(`/${studioSlug}/studio/business/events/${result.data.eventId}`);
+          window.dispatchEvent(new CustomEvent('close-overlays'));
+          router.refresh();
+          startTransition(() => {
+            router.push(`/${studioSlug}/studio/business/events/${result.data.eventId}`);
+          });
         } else {
           toast.error(result.error || 'Error al autorizar cotización');
         }

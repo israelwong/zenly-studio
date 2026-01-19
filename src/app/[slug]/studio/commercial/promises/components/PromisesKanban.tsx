@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Archive, X, TableColumnsSplit, Columns2 } from 'lucide-react';
 import {
@@ -45,6 +45,8 @@ interface PromisesKanbanProps {
   onPipelineStagesUpdated: () => void;
   isPromiseFormModalOpen?: boolean;
   setIsPromiseFormModalOpen?: (open: boolean) => void;
+  isNavigating?: string | null;
+  setIsNavigating?: (promiseId: string | null) => void;
 }
 
 function PromisesKanban({
@@ -59,6 +61,8 @@ function PromisesKanban({
   onPipelineStagesUpdated,
   isPromiseFormModalOpen: externalIsOpen,
   setIsPromiseFormModalOpen: externalSetIsOpen,
+  isNavigating,
+  setIsNavigating,
 }: PromisesKanbanProps) {
   const router = useRouter();
   const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
@@ -76,10 +80,16 @@ function PromisesKanban({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Sincronizar estado local cuando cambian las promesas desde el padre
-  // Evitar sincronización durante drag and drop para prevenir parpadeos
+  // Evitar sincronización durante drag and drop o navegación para prevenir parpadeos
   useEffect(() => {
     // Si estamos arrastrando, no sincronizar
     if (isDraggingRef.current) {
+      prevPromisesRef.current = promises;
+      return;
+    }
+
+    // Si estamos navegando, no sincronizar (previene race condition)
+    if (isNavigating) {
       prevPromisesRef.current = promises;
       return;
     }
@@ -101,7 +111,7 @@ function PromisesKanban({
 
     prevPromisesRef.current = promises;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promises]);
+  }, [promises, isNavigating]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -562,7 +572,27 @@ function PromisesKanban({
   const handlePromiseClick = (promise: PromiseWithContact) => {
     // Usar promiseId si está disponible, de lo contrario usar contactId como fallback
     const routeId = promise.promise_id || promise.id;
-    router.push(`/${studioSlug}/studio/commercial/promises/${routeId}`);
+    
+    // Cerrar overlays globales (RemindersSideSheet, etc.) antes de navegar
+    window.dispatchEvent(new CustomEvent('close-overlays'));
+    
+    // Activar flag de navegación para prevenir revalidaciones
+    if (setIsNavigating) {
+      setIsNavigating(routeId);
+    }
+
+    // Usar startTransition para dar prioridad a la navegación sobre actualizaciones de fondo
+    startTransition(() => {
+      router.push(`/${studioSlug}/studio/commercial/promises/${routeId}`);
+      
+      // Limpiar flag después de un delay para permitir que la navegación se complete
+      // Next.js manejará la transición, pero mantenemos el flag por seguridad
+      setTimeout(() => {
+        if (setIsNavigating) {
+          setIsNavigating(null);
+        }
+      }, 1000);
+    });
   };
 
   // Manejar eliminar promesa con actualización local

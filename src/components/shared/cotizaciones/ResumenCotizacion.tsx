@@ -112,10 +112,8 @@ export function ResumenCotizacion({ cotizacion, studioSlug: propStudioSlug, prom
     if (propOnEditar) {
       propOnEditar();
     } else {
-      // Redirigir según contexto: revisión → /revision, normal → edición normal
-      const editPath = isRevision
-        ? `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}/revision`
-        : `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`;
+      // Redirigir a edición normal (flujo legacy de revisión eliminado)
+      const editPath = `/${studioSlug}/studio/commercial/promises/${promiseId}/cotizacion/${cotizacion.id}`;
       router.push(editPath);
     }
   };
