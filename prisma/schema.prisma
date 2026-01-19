@@ -1073,6 +1073,7 @@ model studio_items {
   cost                Float                     @default(0)
   expense             Float                     @default(0)
   utility_type        String                    @default("service")
+  billing_type        BillingType               @default(SERVICE)
   order               Int                       @default(0)
   status              String                    @default("active")
   created_at          DateTime                  @default(now())
@@ -1085,6 +1086,7 @@ model studio_items {
   package_items       studio_paquete_items[]
 
   @@index([studio_id, status])
+  @@index([studio_id, billing_type])
 }
 
 model studio_service_categories {
@@ -1218,6 +1220,7 @@ model studio_paquetes {
   cover_url           String?
   cover_storage_bytes BigInt?
   is_featured         Boolean                @default(false)
+  base_hours          Int?
   cotizaciones        studio_cotizaciones[]
   notifications       studio_notifications[]
   paquete_items       studio_paquete_items[]
@@ -1324,7 +1327,7 @@ model studio_promises {
   // ⚠️ REMOVED: Campo status eliminado - usar pipeline_stage_id en su lugar
   // ⚠️ REMOVED: Campo order eliminado - el Kanban ordena por fecha, no por orden manual
   defined_date                    DateTime?
-  tentative_dates                 Json?
+  tentative_dates                 Json? //descontinuar
   created_at                      DateTime                        @default(now())
   updated_at                      DateTime                        @updatedAt
   is_test                         Boolean                         @default(false)
@@ -2153,6 +2156,7 @@ model studio_cotizaciones {
   revision_number                        Int                                          @default(1)
   revision_of_id                         String?
   revision_status                        String?
+  event_duration                         Int?
 
   // Campos de negociación
   negociacion_precio_original            Decimal?                                     @db.Decimal(10, 2)
@@ -3414,6 +3418,12 @@ enum PersonalType {
 enum ItemType {
   PRODUCTO
   SERVICIO
+}
+
+enum BillingType {
+  HOUR
+  SERVICE
+  UNIT
 }
 
 enum UserRole {

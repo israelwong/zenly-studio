@@ -76,12 +76,19 @@ export async function createCotizacion(
     // El evento solo se crea cuando se autoriza la cotizaciรณn
     let eventTypeId: string;
     let contactId: string | null = validatedData.contact_id || null;
+    let durationHours: number | null = null;
 
     if (validatedData.promise_id) {
       // Si hay promise_id, obtener el promise
       const promise = await prisma.studio_promises.findUnique({
         where: { id: validatedData.promise_id },
         include: {
+          contact: true,
+        },
+        select: {
+          contact_id: true,
+          event_type_id: true,
+          duration_hours: true,
           contact: true,
         },
       });
@@ -92,6 +99,7 @@ export async function createCotizacion(
 
       contactId = promise.contact_id || validatedData.contact_id || null;
       eventTypeId = promise.event_type_id || '';
+      durationHours = promise.duration_hours;
 
       if (!eventTypeId) {
         return { success: false, error: 'El promise no tiene tipo de evento asociado' };
@@ -118,6 +126,7 @@ export async function createCotizacion(
         price: validatedData.precio,
         status: 'pendiente',
         visible_to_client: validatedData.visible_to_client ?? false,
+        event_duration: durationHours, // Snapshot de la duración del evento
       },
     });
 

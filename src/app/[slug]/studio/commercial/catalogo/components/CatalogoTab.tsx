@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, HardDrive } from 'lucide-react';
-import Image from 'next/image';
+import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, Package, DollarSign, Hash } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton, ZenDialog, ZenBadge } from '@/components/ui/zen';
 import {
     ZenDropdownMenu,
@@ -31,7 +30,6 @@ import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utili
 import { useConfiguracionPreciosUpdateListener } from '@/hooks/useConfiguracionPreciosRefresh';
 import { reordenarItems, moverItemACategoria, toggleItemPublish, reordenarCategorias, reordenarSecciones } from '@/lib/actions/studio/catalogo';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
-import { obtenerMediaItemsMap, obtenerMediaItem } from '@/lib/actions/studio/catalogo/media-items.actions';
 import { obtenerSeccionesConStats } from '@/lib/actions/studio/catalogo';
 import { toast } from 'sonner';
 import {
@@ -63,7 +61,6 @@ interface Seccion {
     createdAt: Date;
     categories?: Array<{ id: string; name: string }>;
     items?: number;
-    mediaSize?: number;
 }
 
 interface Categoria {
@@ -72,7 +69,6 @@ interface Categoria {
     description?: string;
     order?: number;
     items?: number;
-    mediaSize?: number;
 }
 
 interface Item {
@@ -81,15 +77,11 @@ interface Item {
     cost: number;
     description?: string;
     tipoUtilidad?: 'servicio' | 'producto';
+    billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
     order?: number;
     isNew?: boolean;
     isFeatured?: boolean;
-    mediaSize?: number;
     categoriaId?: string;
-    hasPhotos?: boolean;
-    hasVideos?: boolean;
-    thumbnailUrl?: string;
-    totalMediaSize?: number;
     status?: string;
     gastos?: Array<{
         nombre: string;
@@ -185,20 +177,11 @@ export default function CatalogoTab() {
             console.log('📦 loadData iniciado para studioSlug:', studioSlug);
             setIsInitialLoading(true);
 
-            const [catalogoResponse, mediaResponse] = await Promise.all([
-                obtenerCatalogo(studioSlug, false),
-                obtenerMediaItemsMap(studioSlug),
-            ]);
-
-            console.log('📦 Respuestas recibidas:', {
-                catalogo: catalogoResponse.success,
-                media: mediaResponse.success
-            });
+            const catalogoResponse = await obtenerCatalogo(studioSlug, false);
 
             if (catalogoResponse.success && catalogoResponse.data) {
                 const newCategoriasData: Record<string, Categoria[]> = {};
                 const newItemsData: Record<string, Item[]> = {};
-                const mediaMap = mediaResponse.success && mediaResponse.data ? mediaResponse.data : {};
 
                 catalogoResponse.data.forEach((seccion) => {
                     newCategoriasData[seccion.id] = seccion.categorias.map(cat => ({
@@ -207,16 +190,10 @@ export default function CatalogoTab() {
                         description: undefined,
                         order: cat.orden,
                         items: cat.servicios.length,
-                        mediaSize: 0,
                     }));
 
                     seccion.categorias.forEach(cat => {
                         newItemsData[cat.id] = cat.servicios.map(servicio => {
-                            const itemMedia = mediaMap[servicio.id] || {
-                                hasPhotos: false,
-                                hasVideos: false,
-                                thumbnailUrl: undefined,
-                            };
                             const tipoUtilidad: 'servicio' | 'producto' =
                                 servicio.tipo_utilidad === 'service' ? 'servicio'
                                     : servicio.tipo_utilidad === 'product' ? 'producto'
@@ -226,16 +203,12 @@ export default function CatalogoTab() {
                                 name: servicio.nombre,
                                 cost: servicio.costo,
                                 tipoUtilidad,
+                                billing_type: (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                                 order: servicio.orden,
                                 status: servicio.status || "active",
                                 isNew: false,
                                 isFeatured: false,
-                                mediaSize: 0,
                                 categoriaId: cat.id,
-                                hasPhotos: itemMedia.hasPhotos,
-                                hasVideos: itemMedia.hasVideos,
-                                thumbnailUrl: itemMedia.thumbnailUrl,
-                                totalMediaSize: itemMedia.totalSize && itemMedia.totalSize > 0 ? itemMedia.totalSize : undefined,
                                 gastos: servicio.gastos?.map(g => ({
                                     nombre: g.nombre,
                                     costo: g.costo,
@@ -275,7 +248,6 @@ export default function CatalogoTab() {
                         createdAt: Date;
                         totalCategorias?: number;
                         totalItems?: number;
-                        mediaSize?: number;
                     }) => ({
                         id: seccion.id,
                         name: seccion.name,
@@ -283,7 +255,6 @@ export default function CatalogoTab() {
                         createdAt: seccion.createdAt,
                         categories: seccion.totalCategorias ? Array(seccion.totalCategorias).fill(null) : [],
                         items: seccion.totalItems ?? 0,
-                        mediaSize: seccion.mediaSize ?? 0,
                     }));
                     setSecciones(seccionesTransformadas);
                     // Inicializar secciones expandidas después de cargar
@@ -988,23 +959,7 @@ export default function CatalogoTab() {
         );
     };
 
-    // Función para formatear bytes
-    const formatBytes = (bytes: number): string => {
-        if (bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-    };
 
-    // Función para detectar si es video
-    const isVideoUrl = (url: string): boolean => {
-        if (!url) return false;
-        const urlLower = url.toLowerCase();
-        const urlPath = urlLower.split('?')[0].split('#')[0];
-        const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.mkv'];
-        return videoExtensions.some(ext => urlPath.endsWith(ext));
-    };
 
     const SortableItem = ({
         item,
@@ -1036,9 +991,6 @@ export default function CatalogoTab() {
         ) : { precio_final: 0 };
 
         const isInactive = item.status !== "active";
-        const hasThumbnail = !!item.thumbnailUrl;
-        const thumbnailUrl = item.thumbnailUrl;
-        const isVideo = thumbnailUrl ? isVideoUrl(thumbnailUrl) : false;
 
         return (
             <div
@@ -1061,53 +1013,12 @@ export default function CatalogoTab() {
                         <GripVertical className={`h-4 w-4 ${isInactive ? 'text-zinc-500' : 'text-zinc-500'}`} />
                     </button>
 
-                    {/* Thumbnail */}
-                    <div className={`relative w-12 h-12 rounded overflow-hidden flex-shrink-0 ${hasThumbnail ? 'bg-zinc-800/50' : 'bg-zinc-800/30 border border-dashed border-zinc-600'}`}>
-                        {hasThumbnail && thumbnailUrl ? (
-                            isVideo ? (
-                                <video
-                                    src={thumbnailUrl}
-                                    className="w-full h-full object-cover"
-                                    muted
-                                    playsInline
-                                    onLoadedData={(e) => {
-                                        const video = e.currentTarget;
-                                        video.pause();
-                                        if (video.readyState >= 2) {
-                                            video.currentTime = 1;
-                                        }
-                                    }}
-                                />
-                            ) : (
-                                <Image
-                                    src={thumbnailUrl as string}
-                                    alt={item.name}
-                                    fill
-                                    className="object-cover"
-                                    sizes="48px"
-                                    unoptimized
-                                />
-                            )
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                                <div className="w-6 h-6 bg-zinc-700/50 rounded" />
-                            </div>
-                        )}
-                    </div>
-
                     <div className="flex-1 min-w-0">
                         <div className={`text-sm font-light leading-tight ${isInactive ? 'text-zinc-500' : 'text-zinc-300'}`}>
                             <span className="break-words">{item.name}</span>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                            {item.totalMediaSize && item.totalMediaSize > 0 && (
-                                <div className="flex items-center gap-1">
-                                    <HardDrive className={`h-3 w-3 ${isInactive ? 'text-zinc-500' : 'text-zinc-400'}`} />
-                                    <span className={`text-xs ${isInactive ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                        {formatBytes(item.totalMediaSize)}
-                                    </span>
-                                </div>
-                            )}
+                            {/* Badge de tipo (Servicio/Producto) */}
                             <ZenBadge
                                 variant="outline"
                                 size="sm"
@@ -1120,6 +1031,38 @@ export default function CatalogoTab() {
                             >
                                 {(item.tipoUtilidad || 'servicio') === 'servicio' ? 'Servicio' : 'Producto'}
                             </ZenBadge>
+                            {/* Badge de tipo de facturación (solo para servicios, productos siempre son UNIT) */}
+                            {item.billing_type && (item.tipoUtilidad || 'servicio') === 'servicio' && (
+                                <ZenBadge
+                                    variant="outline"
+                                    size="sm"
+                                    className={`px-1 py-0 text-[10px] font-light rounded-sm flex items-center gap-0.5 ${isInactive
+                                        ? 'border-zinc-500 text-zinc-500'
+                                        : item.billing_type === 'HOUR'
+                                            ? 'border-amber-600 text-amber-400'
+                                            : item.billing_type === 'UNIT'
+                                                ? 'border-purple-600 text-purple-400'
+                                                : 'border-emerald-600 text-emerald-400'
+                                        }`}
+                                >
+                                    {item.billing_type === 'HOUR' ? (
+                                        <>
+                                            <Clock className="w-2.5 h-2.5" />
+                                            Por Hora
+                                        </>
+                                    ) : item.billing_type === 'UNIT' ? (
+                                        <>
+                                            <Hash className="w-2.5 h-2.5" />
+                                            Por Unidad
+                                        </>
+                                    ) : (
+                                        <>
+                                            <DollarSign className="w-2.5 h-2.5" />
+                                            Fijo
+                                        </>
+                                    )}
+                                </ZenBadge>
+                            )}
                             <span className={`text-xs ${isInactive ? 'text-zinc-500' : 'text-green-400'}`}>
                                 ${precios.precio_final.toLocaleString()}
                             </span>
@@ -1306,7 +1249,6 @@ export default function CatalogoTab() {
                         description: undefined, // CategoriaData no incluye description
                         order: response.data.order,
                         items: 0,
-                        mediaSize: response.data.mediaSize,
                     };
 
                     setCategoriasData(prev => ({
@@ -1390,6 +1332,7 @@ export default function CatalogoTab() {
                 cost: item.cost,
                 description: item.description,
                 categoriaeId: item.categoriaId || '',
+                billing_type: item.billing_type || 'SERVICE',
                 gastos: item.gastos || [],
                 studioSlug: studioSlug,
             };
@@ -1398,19 +1341,17 @@ export default function CatalogoTab() {
 
             if (response.success && response.data) {
                 // Actualizar el estado local
-                const newItem = {
+                const newItem: Item = {
                     id: response.data.id,
                     name: response.data.name,
                     cost: response.data.cost,
                     tipoUtilidad: response.data.tipoUtilidad,
+                    billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                     order: response.data.order,
                     status: response.data.status,
                     isNew: false,
                     isFeatured: false,
-                    mediaSize: response.data.mediaSize,
                     categoriaId: item.categoriaId,
-                    hasPhotos: false,
-                    hasVideos: false,
                     gastos: response.data.gastos,
                 };
 
@@ -1490,17 +1431,7 @@ export default function CatalogoTab() {
                 const response = await actualizarItem(data);
                 if (!response.success) throw new Error(response.error);
 
-                // Obtener información de media del item actualizado
-                const mediaResponse = await obtenerMediaItem(data.id);
-                let hasPhotos = false;
-                let hasVideos = false;
-
-                if (mediaResponse.success && mediaResponse.data) {
-                    hasPhotos = mediaResponse.data.some(m => m.file_type === 'IMAGE');
-                    hasVideos = mediaResponse.data.some(m => m.file_type === 'VIDEO');
-                }
-
-                // Actualizar en el estado local con información de media y tipo de utilidad
+                // Actualizar en el estado local
                 setItemsData(prev => {
                     const newData = { ...prev };
                     Object.keys(newData).forEach(categoriaId => {
@@ -1510,9 +1441,8 @@ export default function CatalogoTab() {
                                 name: data.name,
                                 cost: data.cost,
                                 tipoUtilidad: data.tipoUtilidad || item.tipoUtilidad || 'servicio',
+                                billing_type: data.billing_type || item.billing_type || 'SERVICE',
                                 status: (data as unknown as { status?: string }).status || item.status || 'active',
-                                hasPhotos,
-                                hasVideos,
                                 gastos: data.gastos || [], // Incluir gastos actualizados
                             } : item
                         );
@@ -1526,6 +1456,7 @@ export default function CatalogoTab() {
                     name: data.name,
                     cost: data.cost,
                     tipoUtilidad: data.tipoUtilidad || prev.tipoUtilidad || 'servicio',
+                    billing_type: data.billing_type || prev.billing_type || 'SERVICE',
                     status: (data as unknown as { status?: string }).status || prev.status || 'active',
                     gastos: data.gastos || [], // Incluir gastos actualizados
                 } : null);
@@ -1539,19 +1470,17 @@ export default function CatalogoTab() {
                 if (!response.success) throw new Error(response.error);
 
                 if (response.data) {
-                    const newItem = {
+                    const newItem: Item = {
                         id: response.data.id,
                         name: response.data.name,
                         cost: response.data.cost,
                         tipoUtilidad: response.data.tipoUtilidad as 'servicio' | 'producto',
+                        billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                         order: response.data.order,
                         status: response.data.status || 'active',
                         isNew: false,
                         isFeatured: false,
-                        mediaSize: response.data.mediaSize,
                         categoriaId: selectedCategoriaForItem!,
-                        hasPhotos: false,
-                        hasVideos: false,
                         gastos: response.data.gastos,
                     };
 
@@ -1744,66 +1673,6 @@ export default function CatalogoTab() {
                         setSelectedCategoriaForItem(null);
                     }}
                     onSave={handleSaveItem}
-                    onMediaChange={async (itemId, hasPhotos, hasVideos) => {
-                        // Recargar información completa de media para este item
-                        try {
-                            const mediaResponse = await obtenerMediaItemsMap(studioSlug);
-                            if (mediaResponse.success && mediaResponse.data) {
-                                const itemMedia = mediaResponse.data[itemId];
-                                // Actualizar estado local con información completa de media
-                                setItemsData(prev => {
-                                    const newData = { ...prev };
-                                    Object.keys(newData).forEach(categoriaId => {
-                                        newData[categoriaId] = newData[categoriaId].map(item =>
-                                            item.id === itemId ? {
-                                                ...item,
-                                                hasPhotos: itemMedia?.hasPhotos || false,
-                                                hasVideos: itemMedia?.hasVideos || false,
-                                                thumbnailUrl: itemMedia?.thumbnailUrl,
-                                                totalMediaSize: itemMedia?.totalSize && itemMedia.totalSize > 0 ? itemMedia.totalSize : undefined,
-                                            } : item
-                                        );
-                                    });
-                                    return newData;
-                                });
-                            } else {
-                                // Fallback: solo actualizar hasPhotos y hasVideos si falla la recarga
-                                setItemsData(prev => {
-                                    const newData = { ...prev };
-                                    Object.keys(newData).forEach(categoriaId => {
-                                        newData[categoriaId] = newData[categoriaId].map(item =>
-                                            item.id === itemId ? {
-                                                ...item,
-                                                hasPhotos,
-                                                hasVideos,
-                                                thumbnailUrl: undefined,
-                                                totalMediaSize: undefined,
-                                            } : item
-                                        );
-                                    });
-                                    return newData;
-                                });
-                            }
-                        } catch (error) {
-                            console.error("Error recargando media:", error);
-                            // Fallback: solo actualizar hasPhotos y hasVideos
-                            setItemsData(prev => {
-                                const newData = { ...prev };
-                                Object.keys(newData).forEach(categoriaId => {
-                                    newData[categoriaId] = newData[categoriaId].map(item =>
-                                        item.id === itemId ? {
-                                            ...item,
-                                            hasPhotos,
-                                            hasVideos,
-                                            thumbnailUrl: undefined,
-                                            totalMediaSize: undefined,
-                                        } : item
-                                    );
-                                });
-                                return newData;
-                            });
-                        }
-                    }}
                     onStatusChange={(itemId: string, status: string) => {
                         // Actualizar status en el estado local
                         setItemsData(prev => {
@@ -1830,6 +1699,7 @@ export default function CatalogoTab() {
                         name: itemToEdit.name,
                         cost: itemToEdit.cost,
                         tipoUtilidad: itemToEdit.tipoUtilidad || 'servicio',
+                        billing_type: itemToEdit.billing_type || 'SERVICE',
                         description: '',
                         gastos: itemToEdit.gastos || [],
                         status: itemToEdit.status || 'active'

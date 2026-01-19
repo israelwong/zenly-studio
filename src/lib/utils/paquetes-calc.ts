@@ -7,6 +7,7 @@ import type {
     ServicioConCantidad,
     CalculoPaquete,
 } from '@/lib/actions/schemas/paquete-schemas';
+import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 
 /**
  * Calcular precio de un servicio individual
@@ -31,12 +32,18 @@ export function calcularPrecioServicio(
 
 /**
  * Calcular precio sistema del paquete
- * Suma de todos los servicios × cantidad
+ * Suma de todos los servicios × cantidad (con soporte para cálculo dinámico por horas)
+ * 
+ * @param servicios - Array de servicios con cantidad
+ * @param porcentajeUtilidadServicio - Porcentaje de utilidad para servicios (default: 0.30)
+ * @param porcentajeUtilidadProducto - Porcentaje de utilidad para productos (default: 0.20)
+ * @param durationHours - Duración del evento en horas (opcional). Si se proporciona, los items de tipo HOUR se multiplican por esta duración
  */
 export function calcularPrecioPaquete(
     servicios: ServicioConCantidad[],
     porcentajeUtilidadServicio: number = 0.30,
-    porcentajeUtilidadProducto: number = 0.20
+    porcentajeUtilidadProducto: number = 0.20,
+    durationHours: number | null = null
 ): CalculoPaquete {
     let totalCosto = 0;
     let totalGasto = 0;
@@ -44,14 +51,25 @@ export function calcularPrecioPaquete(
     let precioSistema = 0;
 
     servicios.forEach((servicio) => {
-        const costoTotal = servicio.costo * servicio.cantidad;
-        const gastoTotal = servicio.gasto * servicio.cantidad;
+        // Obtener billing_type del servicio (default: SERVICE para compatibilidad)
+        const billingType = (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+        
+        // Calcular cantidad efectiva según billing_type
+        // Si durationHours es null o 0, usar cantidad base (comportamiento legacy)
+        const cantidadEfectiva = calcularCantidadEfectiva(
+            billingType,
+            servicio.cantidad,
+            durationHours
+        );
+
+        const costoTotal = servicio.costo * cantidadEfectiva;
+        const gastoTotal = servicio.gasto * cantidadEfectiva;
         const precioUnitario = calcularPrecioServicio(
             servicio,
             porcentajeUtilidadServicio,
             porcentajeUtilidadProducto
         );
-        const precioTotal = precioUnitario * servicio.cantidad;
+        const precioTotal = precioUnitario * cantidadEfectiva;
         const utilidadTotal = precioTotal - costoTotal - gastoTotal;
 
         totalCosto += costoTotal;

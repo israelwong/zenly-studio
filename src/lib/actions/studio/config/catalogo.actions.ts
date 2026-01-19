@@ -103,6 +103,7 @@ export async function obtenerCatalogo(
                     gasto: s.expense,
                     tipo_utilidad: s.utility_type,
                     type: s.type, // Agregar campo type del enum
+                    billing_type: s.billing_type, // Tipo de facturación dinámica
                     orden: s.order,
                     status: s.status,
                     createdAt: s.created_at,

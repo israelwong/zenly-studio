@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { calcularPrecio, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
+import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 
 /**
  * ⚡ GUARDA PRECIOS DE COTIZACIÓN AL AUTORIZAR
@@ -41,6 +42,7 @@ export async function guardarEstructuraCotizacionAutorizada(
       tipoUtilidad: string;
       seccion: string;
       categoria: string;
+      billingType: 'HOUR' | 'SERVICE' | 'UNIT';
     }
     const catalogoMap = new Map<string, DatosCatalogo>();
     catalogoResult.data.forEach(seccion => {
@@ -53,19 +55,35 @@ export async function guardarEstructuraCotizacionAutorizada(
             tipoUtilidad: servicio.tipo_utilidad,
             seccion: seccion.nombre,
             categoria: categoria.nombre,
+            billingType: (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
           });
         });
       });
     });
 
-    // 2️⃣ Obtener items de la cotización
+    // 2️⃣ Obtener cotización con promise para obtener duration_hours
+    const cotizacion = await tx.studio_cotizaciones.findUnique({
+      where: { id: cotizacionId },
+      include: {
+        promise: {
+          select: {
+            duration_hours: true,
+          },
+        },
+      },
+    });
+
+    // Obtener duration_hours: prioridad: cotizacion.event_duration > promise.duration_hours
+    const durationHours = cotizacion?.event_duration ?? cotizacion?.promise?.duration_hours ?? null;
+
+    // 3️⃣ Obtener items de la cotización
     const items = await tx.studio_cotizacion_items.findMany({
       where: { cotizacion_id: cotizacionId },
     });
 
     if (items.length === 0) return;
 
-    // 3️⃣ Para cada item de la cotización, guardar datos del catálogo
+    // 4️⃣ Para cada item de la cotización, guardar datos del catálogo
     for (const item of items) {
       if (!item.item_id) continue;
 
@@ -95,6 +113,13 @@ export async function guardarEstructuraCotizacionAutorizada(
         configPrecios
       );
 
+      // Calcular cantidad efectiva según billing_type
+      const cantidadEfectiva = calcularCantidadEfectiva(
+        datosCatalogo.billingType,
+        item.quantity,
+        durationHours
+      );
+
       await tx.studio_cotizacion_items.update({
         where: { id: item.id },
         data: {
@@ -105,7 +130,7 @@ export async function guardarEstructuraCotizacionAutorizada(
           cost: datosCatalogo.costo || 0,
           expense: datosCatalogo.gasto || 0,
           unit_price: precios.precio_final,
-          subtotal: precios.precio_final * item.quantity,
+          subtotal: precios.precio_final * cantidadEfectiva, // Usar cantidad efectiva
           profit: precios.utilidad_base,
           public_price: precios.precio_final,
           profit_type: tipoUtilidadFinal,
@@ -170,6 +195,7 @@ export async function calcularYGuardarPreciosCotizacion(
       tipoUtilidad: string;
       seccion: string;
       categoria: string;
+      billingType: 'HOUR' | 'SERVICE' | 'UNIT';
     }
     const catalogoMap = new Map<string, DatosCatalogo>();
     catalogoResult.data.forEach(seccion => {
@@ -183,19 +209,35 @@ export async function calcularYGuardarPreciosCotizacion(
             tipoUtilidad: servicio.tipo_utilidad,
             seccion: seccion.nombre,
             categoria: categoria.nombre,
+            billingType: (servicio.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
           });
         });
       });
     });
 
-    // 3️⃣ Obtener items de la cotización
+    // 3️⃣ Obtener cotización con promise para obtener duration_hours
+    const cotizacion = await prisma.studio_cotizaciones.findUnique({
+      where: { id: cotizacionId },
+      include: {
+        promise: {
+          select: {
+            duration_hours: true,
+          },
+        },
+      },
+    });
+
+    // Obtener duration_hours: prioridad: cotizacion.event_duration > promise.duration_hours
+    const durationHours = cotizacion?.event_duration ?? cotizacion?.promise?.duration_hours ?? null;
+
+    // 4️⃣ Obtener items de la cotización
     const items = await prisma.studio_cotizacion_items.findMany({
       where: { cotizacion_id: cotizacionId },
     });
 
     if (items.length === 0) return;
 
-    // 4️⃣ Calcular y guardar precios para cada item
+    // 5️⃣ Calcular y guardar precios para cada item
     for (const item of items) {
       if (!item.item_id) continue;
 
@@ -219,6 +261,13 @@ export async function calcularYGuardarPreciosCotizacion(
         configPrecios
       );
 
+      // Calcular cantidad efectiva según billing_type
+      const cantidadEfectiva = calcularCantidadEfectiva(
+        datosCatalogo.billingType,
+        item.quantity,
+        durationHours
+      );
+
       // Guardar campos operacionales Y snapshots (estructura completa desde creación)
       await prisma.studio_cotizacion_items.update({
         where: { id: item.id },
@@ -231,7 +280,7 @@ export async function calcularYGuardarPreciosCotizacion(
           cost: datosCatalogo.costo || 0,
           expense: datosCatalogo.gasto || 0,
           unit_price: precios.precio_final,
-          subtotal: precios.precio_final * item.quantity,
+          subtotal: precios.precio_final * cantidadEfectiva, // Usar cantidad efectiva
           profit: precios.utilidad_base,
           public_price: precios.precio_final,
           profit_type: tipoUtilidadFinal,

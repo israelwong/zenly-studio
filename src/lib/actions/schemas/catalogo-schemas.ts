@@ -166,6 +166,7 @@ export interface ServicioData {
     precio_publico?: number; // Se calcula dinámicamente
     tipo_utilidad: string;
     type: string; // Agregar campo type del enum
+    billing_type?: 'HOUR' | 'SERVICE' | 'UNIT'; // Tipo de facturación dinámica
     orden: number;
     status: string;
     createdAt: Date;

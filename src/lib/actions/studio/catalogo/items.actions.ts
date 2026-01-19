@@ -11,6 +11,7 @@ export interface ItemData {
     cost: number;
     description?: string | null;
     tipoUtilidad?: 'servicio' | 'producto';
+    billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
     order: number;
     status: string;
     createdAt: Date;
@@ -43,6 +44,7 @@ const CreateItemSchema = z.object({
     studioSlug: z.string(),
     gastos: z.array(GastoSchema).optional().default([]),
     status: z.enum(['active', 'inactive']).optional().default('active'),
+    billing_type: z.enum(['HOUR', 'SERVICE', 'UNIT']).optional().default('SERVICE'),
 });
 
 const UpdateItemSchema = z.object({
@@ -51,6 +53,7 @@ const UpdateItemSchema = z.object({
     cost: z.number().min(0, "El costo no puede ser negativo"),
     description: z.string().optional(),
     tipoUtilidad: z.enum(['servicio', 'producto']).optional(),
+    billing_type: z.enum(['HOUR', 'SERVICE', 'UNIT']).optional(),
     gastos: z.array(GastoSchema).optional(),
     status: z.enum(['active', 'inactive']).optional(),
 });
@@ -75,6 +78,7 @@ export async function obtenerItemsConStats(
                 name: true,
                 cost: true,
                 utility_type: true,
+                billing_type: true,
                 order: true,
                 status: true,
                 created_at: true,
@@ -109,6 +113,7 @@ export async function obtenerItemsConStats(
                 cost: item.cost,
                 description: null,
                 tipoUtilidad: item.utility_type === 'service' ? 'servicio' : 'producto',
+                billing_type: item.billing_type || 'SERVICE',
                 order: item.order,
                 status: item.status,
                 createdAt: item.created_at,
@@ -191,6 +196,7 @@ export async function crearItem(
                 order: itemCount,
                 status: validated.status || "active",
                 studio_id: studio.id,
+                billing_type: validated.billing_type || 'SERVICE',
                 item_expenses: {
                     create: validated.gastos?.map(gasto => ({
                         name: gasto.nombre,
@@ -225,6 +231,7 @@ export async function crearItem(
             name: item.name,
             cost: item.cost,
             description: null,
+            billing_type: item.billing_type || 'SERVICE',
             order: item.order,
             status: item.status,
             createdAt: item.created_at,
@@ -305,6 +312,10 @@ export async function actualizarItem(
                 ...(validated.tipoUtilidad !== undefined && {
                     utility_type: validated.tipoUtilidad === 'servicio' ? 'service' : 'product'
                 }),
+                // Actualizar billing_type si se proporciona
+                ...(validated.billing_type !== undefined && {
+                    billing_type: validated.billing_type
+                }),
                 // Actualizar status si se proporciona
                 ...(validated.status !== undefined && {
                     status: validated.status
@@ -354,6 +365,7 @@ export async function actualizarItem(
             cost: item.cost,
             description: null,
             tipoUtilidad,
+            billing_type: item.billing_type || 'SERVICE',
             order: item.order,
             status: item.status,
             createdAt: item.created_at,
@@ -682,6 +694,7 @@ export async function toggleItemPublish(
             cost: updatedItem.cost,
             description: null,
             tipoUtilidad,
+            billing_type: updatedItem.billing_type || 'SERVICE',
             order: updatedItem.order,
             status: updatedItem.status,
             createdAt: updatedItem.created_at,

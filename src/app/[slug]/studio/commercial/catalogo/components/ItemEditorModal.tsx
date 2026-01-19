@@ -1,33 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSwitch } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/shadcn/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/shadcn/tabs";
 import { toast } from "sonner";
-import { Loader2, Save, X, Calculator } from "lucide-react";
+import { Loader2, Save, X, Calculator, Clock, Package, DollarSign, Hash } from "lucide-react";
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/catalogo/utilidad.actions";
-import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { useStorageTracking } from "@/hooks/useStorageTracking";
-import { useStorageRefresh } from "@/hooks/useStorageRefresh";
 import { useConfiguracionPreciosUpdateListener } from "@/hooks/useConfiguracionPreciosRefresh";
 import {
     crearItem,
     actualizarItem,
 } from "@/lib/actions/studio/catalogo";
 import { toggleItemPublish } from "@/lib/actions/studio/catalogo/items.actions";
-import {
-    obtenerMediaItem,
-    crearMediaItem,
-    eliminarMediaItem,
-    reordenarMediaItem
-} from "@/lib/actions/studio/catalogo/media-items.actions";
-import { deleteFileStorage } from "@/lib/actions/shared/media.actions";
-import { ImageGrid } from "@/components/shared/media/ImageGrid";
 import { PrecioDesglose } from "@/components/shared/precio";
-import { MediaItem } from "@/types/content-blocks";
 
 interface Gasto {
     nombre: string;
@@ -41,6 +28,7 @@ export interface ItemFormData {
     description?: string;
     categoriaeId?: string;
     tipoUtilidad?: 'servicio' | 'producto';
+    billing_type?: 'HOUR' | 'SERVICE' | 'UNIT';
     gastos?: Gasto[];
     status?: string;
 }
@@ -59,8 +47,7 @@ interface ItemEditorModalProps {
 }
 
 /**
- * Modal para crear/editar items con gestión completa de multimedia
- * Incluye tabs para datos y multimedia con drag & drop
+ * Modal para crear/editar items del catálogo
  */
 export function ItemEditorModal({
     isOpen,
@@ -81,6 +68,7 @@ export function ItemEditorModal({
         description: "",
         categoriaeId: categoriaId,
         tipoUtilidad: "servicio",
+        billing_type: "SERVICE",
         gastos: [],
     });
 
@@ -96,27 +84,10 @@ export function ItemEditorModal({
     const [showConfirmClose, setShowConfirmClose] = useState(false);
     const [localIsOpen, setLocalIsOpen] = useState(isOpen);
 
-    // Estados de multimedia unificado
-    const [media, setMedia] = useState<MediaItem[]>([]);
-    const [isLoadingMedia, setIsLoadingMedia] = useState(false);
-    const loadedItemIdRef = useRef<string | null>(null);
-
-    // File input ref
-    const mediaInputRef = useRef<HTMLInputElement>(null);
-
     // Estados de UI
     const [isSaving, setIsSaving] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const [isDeleteMediaModalOpen, setIsDeleteMediaModalOpen] = useState(false);
-    const [mediaToDelete, setMediaToDelete] = useState<string | null>(null);
-    const [isDeletingMedia, setIsDeletingMedia] = useState(false);
 
-    // Hooks
-    const { uploadFiles } = useMediaUpload();
-    const { refreshStorageUsage } = useStorageTracking(studioSlug);
-    const { triggerRefresh } = useStorageRefresh(studioSlug);
-
-    // Cargar configuración de precios del estudio
+    // Cargar configuraci?n de precios del estudio
     useEffect(() => {
         const cargarConfiguracion = async () => {
             if (!configuracion && !preciosConfig) {
@@ -136,7 +107,7 @@ export function ItemEditorModal({
                             sobreprecio: parseValue(config.sobreprecio, 0.05),
                         });
                     } else {
-                        // Configuración por defecto si no existe
+                        // Configuraci?n por defecto si no existe
                         setConfiguracion({
                             utilidad_servicio: 0.30,
                             utilidad_producto: 0.40,
@@ -145,8 +116,8 @@ export function ItemEditorModal({
                         });
                     }
                 } catch (error) {
-                    console.error("Error cargando configuración de precios:", error);
-                    // Usar configuración por defecto en caso de error
+                    console.error("Error cargando configuraci?n de precios:", error);
+                    // Usar configuraci?n por defecto en caso de error
                     setConfiguracion({
                         utilidad_servicio: 0.30,
                         utilidad_producto: 0.40,
@@ -160,14 +131,14 @@ export function ItemEditorModal({
         cargarConfiguracion();
     }, [studioSlug, preciosConfig, configuracion]);
 
-    // Función helper para parsear valores de configuración
+    // Funci?n helper para parsear valores de configuraci?n
     const parseConfigValue = (val: string | undefined, def: number): number => {
         if (val === undefined || val === '') return def;
         const parsed = parseFloat(val);
         return isNaN(parsed) ? def : parsed;
     };
 
-    // Función helper para convertir configuración de string a número
+    // Funci?n helper para convertir configuraci?n de string a n?mero
     const convertirConfiguracion = (config: {
         utilidad_servicio?: string;
         utilidad_producto?: string;
@@ -182,17 +153,17 @@ export function ItemEditorModal({
         };
     };
 
-    // Actualizar configuración cuando cambia la prop preciosConfig
+    // Actualizar configuraci?n cuando cambia la prop preciosConfig
     useEffect(() => {
         if (preciosConfig) {
             setConfiguracion(preciosConfig);
         }
     }, [preciosConfig]);
 
-    // Escuchar actualizaciones de configuración de precios desde otros componentes
+    // Escuchar actualizaciones de configuraci?n de precios desde otros componentes
     useConfiguracionPreciosUpdateListener(studioSlug, useCallback(async (eventDetail) => {
         if (eventDetail) {
-            // Si viene la configuración completa en el evento, usarla directamente
+            // Si viene la configuraci?n completa en el evento, usarla directamente
             if (eventDetail.utilidad_servicio !== undefined || eventDetail.utilidad_producto !== undefined) {
                 setConfiguracion(prev => ({
                     utilidad_servicio: eventDetail.utilidad_servicio ?? prev?.utilidad_servicio ?? 0.30,
@@ -208,13 +179,13 @@ export function ItemEditorModal({
                         setConfiguracion(convertirConfiguracion(config));
                     }
                 } catch (error) {
-                    console.error("Error recargando configuración de precios:", error);
+                    console.error("Error recargando configuraci?n de precios:", error);
                 }
             }
         }
     }, [studioSlug]));
 
-    // Cálculo dinámico de precios
+    // C?lculo din?mico de precios
     const resultadoPrecio: ResultadoPrecio = useMemo(() => {
         if (!configuracion) {
             return {
@@ -246,33 +217,6 @@ export function ItemEditorModal({
         );
     }, [formData.cost, formData.tipoUtilidad, gastos, configuracion]);
 
-    // Cargar media existente desde BD
-    const cargarMediaExistente = async (itemId: string) => {
-        setIsLoadingMedia(true);
-        try {
-            const result = await obtenerMediaItem(itemId);
-            if (result.success && result.data) {
-                const mediaItems: MediaItem[] = result.data.map((m) => ({
-                    id: m.id,
-                    file_url: m.file_url,
-                    file_type: m.file_type === 'IMAGE' ? 'image' : 'video',
-                    filename: m.filename,
-                    storage_path: '', // No disponible en BD actual
-                    storage_bytes: Number(m.storage_bytes),
-                    display_order: m.display_order,
-                }));
-
-                setMedia(mediaItems);
-            } else {
-                setMedia([]);
-            }
-        } catch (error) {
-            console.error("Error cargando media existente:", error);
-            setMedia([]);
-        } finally {
-            setIsLoadingMedia(false);
-        }
-    };
 
     // Sincronizar estado local con prop isOpen
     useEffect(() => {
@@ -298,6 +242,7 @@ export function ItemEditorModal({
                     description: item.description || "",
                     categoriaeId: categoriaId,
                     tipoUtilidad: (item.tipoUtilidad || "servicio") as 'servicio' | 'producto',
+                    billing_type: (item.billing_type || "SERVICE") as 'HOUR' | 'SERVICE' | 'UNIT',
                     gastos: gastosDelItem,
                     status: item.status || "active",
                 };
@@ -307,12 +252,6 @@ export function ItemEditorModal({
                 setGastos(initialGastosData);
                 setInitialFormData(initialData);
                 setInitialGastos(initialGastosData);
-
-                // Cargar media existente solo si el item.id cambió o es diferente al cargado
-                if (item.id && item.id !== loadedItemIdRef.current) {
-                    loadedItemIdRef.current = item.id;
-                    cargarMediaExistente(item.id);
-                }
             } else {
                 const initialData = {
                     name: "",
@@ -320,6 +259,7 @@ export function ItemEditorModal({
                     description: "",
                     categoriaeId: categoriaId,
                     tipoUtilidad: "servicio" as const,
+                    billing_type: "SERVICE" as const,
                     gastos: [] as Gasto[],
                     status: "active",
                 } satisfies ItemFormData;
@@ -328,18 +268,28 @@ export function ItemEditorModal({
                 setGastos([]);
                 setInitialFormData(initialData);
                 setInitialGastos([]);
-                setMedia([]);
-                setIsLoadingMedia(false);
-                loadedItemIdRef.current = null;
             }
         }
     }, [isOpen, item, categoriaId]);
 
     const handleInputChange = (field: keyof ItemFormData, value: string | number) => {
-        setFormData(prev => ({
-            ...prev,
-            [field]: value
-        }));
+        setFormData(prev => {
+            const newData = {
+                ...prev,
+                [field]: value
+            };
+            
+            // Si cambia a producto, establecer billing_type a UNIT automáticamente
+            if (field === 'tipoUtilidad' && value === 'producto') {
+                newData.billing_type = 'UNIT';
+            }
+            // Si cambia a servicio y no tiene billing_type, establecer SERVICE por defecto
+            if (field === 'tipoUtilidad' && value === 'servicio' && !prev.billing_type) {
+                newData.billing_type = 'SERVICE';
+            }
+            
+            return newData;
+        });
     };
 
     // Funciones para manejar gastos
@@ -350,7 +300,7 @@ export function ItemEditorModal({
         if (input.includes(',')) {
             const partes = input.split(',').map(p => p.trim()).filter(p => p);
             for (const parte of partes) {
-                // Buscar el último número en la parte
+                // Buscar el ?ltimo n?mero en la parte
                 const match = parte.match(/^(.+?)\s+(\d+(?:\.\d+)?)$/);
                 if (match) {
                     gastosParseados.push({
@@ -419,14 +369,14 @@ export function ItemEditorModal({
         try {
             setIsSaving(true);
 
-            // Asegurar que los gastos estén sincronizados con el estado actual
+            // Asegurar que los gastos est?n sincronizados con el estado actual
             const formDataConGastos = {
                 ...formData,
                 gastos: gastos.length > 0 ? gastos : (formData.gastos || [])
             };
 
             if (onSave) {
-                // Usar callback del padre para mantener sincronización
+                // Usar callback del padre para mantener sincronizaci?n
                 await onSave(formDataConGastos);
             } else {
                 // Fallback: llamar directamente a las acciones (comportamiento anterior)
@@ -436,6 +386,7 @@ export function ItemEditorModal({
                         name: formDataConGastos.name,
                         cost: formDataConGastos.cost,
                         tipoUtilidad: formDataConGastos.tipoUtilidad,
+                        billing_type: formDataConGastos.billing_type,
                         gastos: formDataConGastos.gastos || [],
                         status: formDataConGastos.status,
                     });
@@ -451,6 +402,8 @@ export function ItemEditorModal({
                         categoriaeId: categoriaId,
                         name: formDataConGastos.name,
                         cost: formDataConGastos.cost,
+                        tipoUtilidad: formDataConGastos.tipoUtilidad,
+                        billing_type: formDataConGastos.billing_type || (formDataConGastos.tipoUtilidad === 'producto' ? 'UNIT' : 'SERVICE'),
                         gastos: formDataConGastos.gastos || [],
                         status: formDataConGastos.status || 'active',
                     });
@@ -465,7 +418,7 @@ export function ItemEditorModal({
                 }
             }
 
-            // Actualizar estado inicial después de guardar
+            // Actualizar estado inicial despu?s de guardar
             setInitialFormData({ ...formDataConGastos });
             setInitialGastos([...gastos]);
 
@@ -488,7 +441,8 @@ export function ItemEditorModal({
             formData.name !== initialFormData.name ||
             formData.cost !== initialFormData.cost ||
             formData.description !== (initialFormData.description || "") ||
-            formData.tipoUtilidad !== initialFormData.tipoUtilidad;
+            formData.tipoUtilidad !== initialFormData.tipoUtilidad ||
+            formData.billing_type !== initialFormData.billing_type;
 
         // Comparar gastos
         const gastosChanged =
@@ -561,175 +515,6 @@ export function ItemEditorModal({
         }
     };
 
-    // Helper para notificar cambios de media al padre
-    const notifyMediaChange = (newMedia?: MediaItem[]) => {
-        if (onMediaChange && formData.id) {
-            const currentMedia = newMedia !== undefined ? newMedia : media;
-            const hasPhotos = currentMedia.some(m => m.file_type === 'image');
-            const hasVideos = currentMedia.some(m => m.file_type === 'video');
-            onMediaChange(formData.id, hasPhotos, hasVideos);
-        }
-    };
-
-    // File upload handler unificado
-    const handleMediaUpload = async (files: File[]) => {
-        if (!files.length) return;
-        if (!formData.id) {
-            toast.error("Guarda el item primero antes de subir archivos");
-            return;
-        }
-
-        setIsUploading(true);
-        try {
-            const uploadedFiles = await uploadFiles(files, studioSlug, `items/${formData.id}/multimedia`);
-
-            // Persistir en BD
-            for (const file of uploadedFiles) {
-                const fileType = file.fileName.match(/\.(mp4|mov|avi|webm)$/i) ? 'video' : 'image';
-                const result = await crearMediaItem({
-                    itemId: formData.id,
-                    url: file.url,
-                    fileName: file.fileName,
-                    fileType,
-                    size: file.size,
-                    order: media.length,
-                    studioId: studioSlug,
-                });
-
-                if (!result.success) {
-                    toast.error(`Error guardando ${file.fileName}: ${result.error}`);
-                }
-            }
-
-            const newMediaItems: MediaItem[] = uploadedFiles.map(file => {
-                const fileType = file.fileName.match(/\.(mp4|mov|avi|webm)$/i) ? 'video' : 'image';
-                return {
-                    id: file.id,
-                    file_url: file.url,
-                    file_type: fileType,
-                    filename: file.fileName,
-                    storage_path: '', // No disponible en uploadFiles
-                    storage_bytes: file.size,
-                    display_order: media.length,
-                };
-            });
-
-            const updatedMedia = [...media, ...newMediaItems];
-            setMedia(updatedMedia);
-            toast.success(`${uploadedFiles.length} archivo(s) subido(s)`);
-
-            // Actualizar storage tracking
-            await refreshStorageUsage();
-            triggerRefresh();
-
-            // Notificar cambio de media al padre
-            notifyMediaChange(updatedMedia);
-        } catch (error) {
-            console.error("Error uploading media:", error);
-            toast.error("Error al subir los archivos");
-        } finally {
-            setIsUploading(false);
-        }
-    };
-
-    // Drag & Drop handler unificado
-    const handleMediaDrop = (files: File[]) => {
-        if (files.length > 0) {
-            handleMediaUpload(files);
-        }
-    };
-
-    // Delete handler unificado
-    const handleDeleteMedia = (id: string) => {
-        setMediaToDelete(id);
-        setIsDeleteMediaModalOpen(true);
-    };
-
-    const handleConfirmDeleteMedia = async () => {
-        if (!mediaToDelete || !formData.id) {
-            setIsDeleteMediaModalOpen(false);
-            setMediaToDelete(null);
-            return;
-        }
-
-        const mediaItem = media.find(m => m.id === mediaToDelete);
-        if (!mediaItem) {
-            setIsDeleteMediaModalOpen(false);
-            setMediaToDelete(null);
-            return;
-        }
-
-        try {
-            setIsDeletingMedia(true);
-
-            // Eliminar de Supabase
-            const success = await deleteFileStorage({
-                publicUrl: mediaItem.file_url,
-                studioSlug: studioSlug,
-            });
-
-            if (success.success) {
-                // Eliminar de BD
-                const dbResult = await eliminarMediaItem({
-                    id: mediaItem.id,
-                    itemId: formData.id,
-                });
-
-                if (dbResult.success) {
-                    const updatedMedia = media.filter(m => m.id !== mediaToDelete);
-                    setMedia(updatedMedia);
-
-                    toast.success("Archivo eliminado");
-
-                    // Actualizar storage tracking
-                    await refreshStorageUsage();
-                    triggerRefresh();
-
-                    // Notificar cambio de media al padre
-                    notifyMediaChange(updatedMedia);
-
-                    setIsDeleteMediaModalOpen(false);
-                    setMediaToDelete(null);
-                } else {
-                    toast.error(`Error eliminando archivo: ${dbResult.error}`);
-                    setIsDeleteMediaModalOpen(false);
-                    setMediaToDelete(null);
-                }
-            } else {
-                toast.error("Error eliminando archivo de almacenamiento");
-                setIsDeleteMediaModalOpen(false);
-                setMediaToDelete(null);
-            }
-        } catch (error) {
-            console.error("Error eliminando archivo:", error);
-            toast.error("Error al eliminar el archivo");
-            setIsDeleteMediaModalOpen(false);
-            setMediaToDelete(null);
-        } finally {
-            setIsDeletingMedia(false);
-        }
-    };
-
-    // Reorder handler unificado
-    const handleReorderMedia = async (reorderedMedia: MediaItem[]) => {
-        // Actualizar estado local primero (optimistic update)
-        setMedia(reorderedMedia);
-
-        // Persistir nuevo orden en BD
-        if (formData.id) {
-            const mediaIds = reorderedMedia.map(m => m.id);
-            const result = await reordenarMediaItem(formData.id, mediaIds);
-
-            if (!result.success) {
-                toast.error(`Error reordenando archivos: ${result.error}`);
-                // Revertir cambios locales solo si hay error
-                await cargarMediaExistente(formData.id);
-            } else {
-                toast.success('Archivos reordenados correctamente');
-                // No recargar, el estado local ya está actualizado
-            }
-        }
-    };
 
 
     return (
@@ -762,26 +547,8 @@ export function ItemEditorModal({
                         </SheetTitle>
                     </SheetHeader>
 
-                    <Tabs defaultValue="datos" className="w-full px-6">
-                        {/* Tab Navigation */}
-                        <TabsList className="grid w-full grid-cols-2 bg-zinc-800/50">
-                            <TabsTrigger
-                                value="datos"
-                                className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"
-                            >
-                                Datos
-                            </TabsTrigger>
-                            <TabsTrigger
-                                value="multimedia"
-                                className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400"
-                            >
-                                Multimedia
-                            </TabsTrigger>
-                        </TabsList>
-
-                        {/* Tab 1: Datos del Item */}
-                        <TabsContent value="datos" className="space-y-6 mt-6 pb-6">
-                            <form className="space-y-6">
+                    <div className="px-6 pb-6">
+                        <form className="space-y-6 mt-6">
                                 {/* Nombre del Item */}
                                 <div>
                                     <label className="block text-sm font-medium text-zinc-200 mb-2">
@@ -791,7 +558,7 @@ export function ItemEditorModal({
                                         label=""
                                         value={formData.name}
                                         onChange={(e) => handleInputChange("name", e.target.value)}
-                                        placeholder="Ej: Sesión de fotos de 1 hora"
+                                        placeholder="Ej: Sesi?n de fotos de 1 hora"
                                         disabled={isSaving}
                                         rows={2}
                                         maxLength={100}
@@ -857,6 +624,58 @@ export function ItemEditorModal({
                                     </div>
                                 </div>
 
+                                {/* Tipo de Facturación (solo para servicios) */}
+                                {formData.tipoUtilidad === 'servicio' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-200 mb-2">
+                                            Tipo de Facturación
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <ZenButton
+                                                type="button"
+                                                variant={formData.billing_type === 'SERVICE' ? 'primary' : 'outline'}
+                                                size="md"
+                                                onClick={() => handleInputChange("billing_type", "SERVICE")}
+                                                disabled={isSaving}
+                                                className="flex-1"
+                                                title="Precio único por el trabajo total"
+                                            >
+                                                Fijo
+                                            </ZenButton>
+                                            <ZenButton
+                                                type="button"
+                                                variant={formData.billing_type === 'HOUR' ? 'primary' : 'outline'}
+                                                size="md"
+                                                onClick={() => handleInputChange("billing_type", "HOUR")}
+                                                disabled={isSaving}
+                                                className="flex-1"
+                                                title="Multiplicado por las horas del evento"
+                                            >
+                                                Hora
+                                            </ZenButton>
+                                            <ZenButton
+                                                type="button"
+                                                variant={formData.billing_type === 'UNIT' ? 'primary' : 'outline'}
+                                                size="md"
+                                                onClick={() => handleInputChange("billing_type", "UNIT")}
+                                                disabled={isSaving}
+                                                className="flex-1"
+                                                title="Multiplicado por la cantidad definida (ej. fotos, km, impresiones)"
+                                            >
+                                                Unidad
+                                            </ZenButton>
+                                        </div>
+                                        <p className="text-xs text-zinc-400 mt-2">
+                                            {formData.billing_type === 'HOUR' 
+                                                ? "Se multiplica automáticamente por la duración del evento"
+                                                : formData.billing_type === 'UNIT'
+                                                ? "Multiplicado por la cantidad definida (ej. fotos, km, impresiones)"
+                                                : "Precio único por el trabajo total"
+                                            }
+                                        </p>
+                                    </div>
+                                )}
+
                                 {/* Gastos Asociados */}
                                 <ZenCard className="p-4 bg-zinc-800/30 border-zinc-700">
                                     <label className="block text-sm font-medium text-zinc-200 mb-3">
@@ -902,7 +721,7 @@ export function ItemEditorModal({
                                         </div>
                                     )}
 
-                                    {/* Input único para agregar gastos */}
+                                    {/* Input ?nico para agregar gastos */}
                                     <ZenInput
                                         placeholder="Ej: comida 300 (Enter) o comida 500, agua 200 (Enter)"
                                         value={nuevoGasto}
@@ -955,7 +774,7 @@ export function ItemEditorModal({
                                 )}
 
 
-                                {/* Botones de acción */}
+                                {/* Botones de acci?n */}
                                 <div className="space-y-4 pt-4 border-t border-zinc-800">
                                     {/* Switch Activo */}
                                     {formData.id && (
@@ -963,7 +782,7 @@ export function ItemEditorModal({
                                             <ZenSwitch
                                                 checked={formData.status === "active"}
                                                 onCheckedChange={() => handleTogglePublish()}
-                                                disabled={isSaving || isUploading}
+                                                disabled={isSaving}
                                                 label="Activo"
                                             />
                                         </div>
@@ -975,7 +794,7 @@ export function ItemEditorModal({
                                                 type="button"
                                                 variant="secondary"
                                                 onClick={handleClose}
-                                                disabled={isSaving || isUploading}
+                                                disabled={isSaving}
                                                 className="flex-1"
                                             >
                                                 Cerrar
@@ -983,7 +802,7 @@ export function ItemEditorModal({
                                         </SheetClose>
                                         <ZenButton
                                             onClick={handleSave}
-                                            disabled={isSaving || isUploading || !formData.name.trim()}
+                                            disabled={isSaving || !formData.name.trim()}
                                             className="gap-2 flex-1"
                                         >
                                             {isSaving ? (
@@ -996,113 +815,20 @@ export function ItemEditorModal({
                                     </div>
                                 </div>
                             </form>
-                        </TabsContent>
-
-                        {/* Tab 2: Multimedia */}
-                        <TabsContent value="multimedia" className="space-y-6 mt-6 pb-6">
-                            <div className="space-y-4">
-                                {/* Galería Multimedia */}
-                                <div>
-                                    <label className="block text-sm font-medium text-zinc-200 mb-3">
-                                        Galería Multimedia
-                                    </label>
-                                    {isLoadingMedia ? (
-                                        <div className="grid grid-cols-3 gap-4 p-4 rounded-lg border-2 border-dashed border-zinc-700 bg-zinc-800/30">
-                                            <div className="aspect-square bg-zinc-800 rounded-lg flex items-center justify-center">
-                                                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <ImageGrid
-                                            media={media}
-                                            onDelete={handleDeleteMedia}
-                                            onReorder={handleReorderMedia}
-                                            showDeleteButtons={true}
-                                            isEditable={true}
-                                            lightbox={false}
-                                            columns={3}
-                                            gap={4}
-                                            aspectRatio="square"
-                                            onDrop={handleMediaDrop}
-                                            onUploadClick={() => mediaInputRef.current?.click()}
-                                            isUploading={isUploading}
-                                        />
-                                    )}
-                                </div>
-
-                                {/* Info */}
-                                <ZenCard className="p-3 bg-emerald-500/10 border-emerald-500/30 space-y-2">
-                                    <p className="text-xs text-emerald-300">
-                                        📸🎬 Soportados: JPG, PNG, GIF, MP4, MOV, AVI
-                                    </p>
-                                    <div className="pt-2 border-t border-emerald-500/20">
-                                        <p className="text-xs text-emerald-300 mb-2">
-                                            Los archivos multimedia se mostrarán en el nombre del item con iconos interactivos. El prospecto podrá ver una galería con lightbox al hacer click.
-                                        </p>
-                                        <p className="text-xs text-emerald-300/80 mb-2">
-                                            ⚠️ Cada archivo asociado ocupará espacio en tu cuota de almacenamiento.
-                                        </p>
-                                    </div>
-                                </ZenCard>
-
-                                {/* Botones de acción */}
-                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-                                    <SheetClose asChild>
-                                        <ZenButton
-                                            type="button"
-                                            variant="secondary"
-                                            onClick={handleClose}
-                                            disabled={isSaving || isUploading}
-                                        >
-                                            Cerrar
-                                        </ZenButton>
-                                    </SheetClose>
-                                </div>
-                            </div>
-                        </TabsContent>
-                    </Tabs>
+                    </div>
                 </SheetContent>
             </Sheet>
 
-            {/* Modal de confirmación para eliminar media */}
-            <ZenConfirmModal
-                isOpen={isDeleteMediaModalOpen}
-                onClose={() => {
-                    if (!isDeletingMedia) {
-                        setIsDeleteMediaModalOpen(false);
-                        setMediaToDelete(null);
-                    }
-                }}
-                onConfirm={handleConfirmDeleteMedia}
-                title="Eliminar archivo"
-                description="¿Estás seguro de que deseas eliminar este archivo? Esta acción no se puede deshacer."
-                confirmText="Eliminar"
-                cancelText="Cancelar"
-                variant="destructive"
-                loading={isDeletingMedia}
-                disabled={isDeletingMedia}
-            />
-
-            {/* Modal de confirmación para cambios sin guardar */}
+            {/* Modal de confirmaci?n para cambios sin guardar */}
             <ZenConfirmModal
                 isOpen={showConfirmClose}
                 onClose={handleCancelClose}
                 onConfirm={handleConfirmClose}
-                title="¿Descartar cambios?"
-                description="Tienes cambios sin guardar. ¿Estás seguro de que deseas cerrar y descartar los cambios?"
+                title="?Descartar cambios?"
+                description="Tienes cambios sin guardar. ?Est?s seguro de que deseas cerrar y descartar los cambios?"
                 confirmText="Descartar"
                 cancelText="Cancelar"
                 variant="destructive"
-            />
-
-            {/* Input oculto para file upload */}
-            <input
-                ref={mediaInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime"
-                multiple
-                onChange={(e) => e.target.files && handleMediaUpload(Array.from(e.target.files))}
-                className="hidden"
             />
         </>
     );

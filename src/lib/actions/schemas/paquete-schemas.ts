@@ -151,6 +151,7 @@ export interface ServicioConCantidad {
     gasto: number;
     tipo_utilidad: string;
     cantidad: number;
+    billing_type?: 'HOUR' | 'SERVICE' | 'UNIT'; // Tipo de facturación dinámica (opcional para compatibilidad)
 }
 
 export interface CalculoPaquete {
