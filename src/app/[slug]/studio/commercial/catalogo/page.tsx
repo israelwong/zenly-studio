@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { ShoppingBag, Percent } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenDialog } from '@/components/ui/zen';
-import { CatalogoTab } from './components';
+import { Catalogo } from './components';
 import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
 
 export default function CatalogoPage() {
@@ -49,7 +49,7 @@ export default function CatalogoPage() {
                 </ZenCardHeader>
 
                 <ZenCardContent className="p-6">
-                    <CatalogoTab />
+                    <Catalogo />
                 </ZenCardContent>
             </ZenCard>
 

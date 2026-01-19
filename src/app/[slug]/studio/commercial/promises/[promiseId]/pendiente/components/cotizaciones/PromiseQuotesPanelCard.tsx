@@ -95,6 +95,13 @@ export function PromiseQuotesPanelCard({
   const inputRef = useRef<HTMLInputElement>(null);
   const isProcessingRef = useRef(false);
   const [clickCount, setClickCount] = useState<number | null>(null);
+  const [reminder, setReminder] = useState<{
+    id: string;
+    subject_text: string;
+    reminder_date: Date;
+    description?: string | null;
+  } | null>(null);
+  const [loadingReminder, setLoadingReminder] = useState(false);
 
   // Sincronizar editingName cuando cambie cotizacion.name (solo si el modal no está abierto)
   useEffect(() => {

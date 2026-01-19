@@ -1,6 +1,6 @@
 // Components (todos los modales y componentes)
 export {
-    CatalogoTabSkeleton,
+    CatalogoSkeleton,
     SeccionEditorModal,
     CategoriaCard,
     CategoriaEditorModal,

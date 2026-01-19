@@ -12,7 +12,7 @@ import {
     ZenDropdownMenuSeparator,
 } from '@/components/ui/zen';
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
-import { SeccionEditorModal, SeccionFormData, CategoriaEditorModal, CategoriaFormData, CatalogoTabSkeleton } from './';
+import { SeccionEditorModal, SeccionFormData, CategoriaEditorModal, CategoriaFormData, CatalogoSkeleton } from './';
 import { ItemEditorModal, ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
 import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
 import { ConfiguracionPrecios, calcularPrecio as calcularPrecioSistema } from '@/lib/actions/studio/catalogo/calcular-precio';
@@ -90,7 +90,7 @@ interface Item {
     }>;
 }
 
-export default function CatalogoTab() {
+export default function Catalogo() {
     const params = useParams();
     const studioSlug = params.slug as string;
 
@@ -147,7 +147,7 @@ export default function CatalogoTab() {
     // Función para cargar configuración de precios
     const loadConfiguracionPrecios = useCallback(async () => {
         try {
-            console.log('[CatalogoTab] 🔄 Recargando configuración de precios...');
+            console.log('[Catalogo] 🔄 Recargando configuración de precios...');
             const response = await obtenerConfiguracionPrecios(studioSlug);
             if (response) {
                 const parseValue = (val: string | undefined, defaultValue: number): number => {
@@ -161,7 +161,7 @@ export default function CatalogoTab() {
                     sobreprecio: parseValue(response.sobreprecio, 0.05),
                 };
 
-                console.log('[CatalogoTab] ✅ Configuración actualizada:', newConfig);
+                console.log('[Catalogo] ✅ Configuración actualizada:', newConfig);
                 setPreciosConfig(newConfig);
             }
         } catch (error) {
@@ -273,7 +273,7 @@ export default function CatalogoTab() {
 
     // Carga inicial al montar y cuando cambia studioSlug
     useEffect(() => {
-        console.log('🔵 CatalogoTab useEffect ejecutado, loadedRef.current:', loadedRef.current, 'studioSlug:', studioSlug);
+        console.log('🔵 Catalogo useEffect ejecutado, loadedRef.current:', loadedRef.current, 'studioSlug:', studioSlug);
         if (!studioSlug) return;
 
         if (!loadedRef.current) {
@@ -1066,6 +1066,9 @@ export default function CatalogoTab() {
                             )}
                             <span className={`text-xs ${isInactive ? 'text-zinc-500' : 'text-green-400'}`}>
                                 ${precios.precio_final.toLocaleString()}
+                                {item.billing_type === 'HOUR' && (
+                                    <span className="ml-0.5">/h</span>
+                                )}
                             </span>
                             {isInactive && (
                                 <ZenBadge
@@ -1564,7 +1567,7 @@ export default function CatalogoTab() {
     };
 
     if (isInitialLoading) {
-        return <CatalogoTabSkeleton />;
+        return <CatalogoSkeleton />;
     }
 
     return (

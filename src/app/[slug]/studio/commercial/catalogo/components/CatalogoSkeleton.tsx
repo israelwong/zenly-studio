@@ -1,8 +1,8 @@
 /**
- * Skeleton para el tab del catálogo
+ * Skeleton para el catálogo
  * Debe coincidir exactamente con el contenido real
  */
-export function CatalogoTabSkeleton() {
+export function CatalogoSkeleton() {
     return (
         <div className="space-y-4">
             {/* Header con botón de crear sección */}

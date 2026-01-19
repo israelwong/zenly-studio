@@ -1,4 +1,4 @@
-export { CatalogoTabSkeleton } from "./CatalogoTabSkeleton";
+export { CatalogoSkeleton } from "./CatalogoSkeleton";
 
 // Secciones
 export { SeccionEditorModal } from "./SeccionEditorModal";
@@ -14,5 +14,5 @@ export { ItemCard } from "./ItemCard";
 export { ItemEditorModal } from "@/components/shared/catalogo/ItemEditorModal";
 export type { ItemFormData } from "@/components/shared/catalogo/ItemEditorModal";
 
-// Tabs
-export { default as CatalogoTab } from "./CatalogoTab";
+// Catálogo
+export { default as Catalogo } from "./Catalogo";

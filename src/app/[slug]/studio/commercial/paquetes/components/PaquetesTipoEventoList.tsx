@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List, Star, CheckCircle, XCircle, Eye, EyeOff, HardDrive } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, List, Star, CheckCircle, XCircle, Eye, EyeOff, HardDrive, Clock } from "lucide-react";
 import {
     DndContext,
     closestCenter,
@@ -1447,6 +1447,14 @@ export function PaquetesTipoEventoList({
                                     ? paquete.description
                                     : 'Pendiente de descripción'}
                             </div>
+                            {paquete.base_hours && paquete.base_hours > 0 && (
+                                <div className="flex items-center gap-1 mt-1">
+                                    <Clock className="h-3 w-3 text-zinc-400" />
+                                    <span className="text-xs text-zinc-400">
+                                        {paquete.base_hours} {paquete.base_hours === 1 ? 'hora' : 'horas'} base
+                                    </span>
+                                </div>
+                            )}
                             {fileSize !== null && (
                                 <div className="flex items-center gap-1 mt-1">
                                     <HardDrive className="h-3 w-3 text-zinc-400" />

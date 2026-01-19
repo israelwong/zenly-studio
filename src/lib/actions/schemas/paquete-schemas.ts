@@ -62,6 +62,7 @@ export type PaqueteFromDB = {
     event_type_id: string;
     name: string;
     description?: string | null;
+    base_hours?: number | null;
     cover_url?: string | null;
     cover_storage_bytes?: bigint | null;
     is_featured?: boolean;

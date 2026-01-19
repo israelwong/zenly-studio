@@ -1,6 +1,6 @@
 /**
  * Skeleton para la página de Paquetes
- * Consistente con CatalogoTabSkeleton
+ * Consistente con CatalogoSkeleton
  */
 export function PaquetesSkeleton() {
     return (
