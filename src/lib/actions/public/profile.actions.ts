@@ -277,12 +277,11 @@ export async function getStudioProfileBasicData(
                     };
                 });
             },
-                },
-                ['studio-profile-basic', slug, userId || 'anonymous'],
-                {
-                    tags: [`studio-profile-basic-${slug}`],
-                    revalidate: 3600, // 1 hora para datos básicos
-                }
+            ['studio-profile-basic', slug, userId || 'anonymous'],
+            {
+                tags: [`studio-profile-basic-${slug}`],
+                revalidate: 3600, // 1 hora para datos básicos
+            }
         );
 
         return await getCachedBasicData();
