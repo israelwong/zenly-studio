@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -214,7 +214,7 @@ export function ProfilePageInteractive({ profileData, studioSlug, offers = [] }:
         return `/${studioSlug}${queryString ? `?${queryString}` : ''}`;
     };
 
-    // Handler para cambio de tab
+    // Handler para cambio de tab con startTransition
     const handleTabChange = (tab: string) => {
         // ⚠️ HIGIENE UI: Cerrar overlays al cambiar tabs
         setSelectedPostSlug(null);
@@ -223,8 +223,11 @@ export function ProfilePageInteractive({ profileData, studioSlug, offers = [] }:
         setIsPostEditorOpen(false);
         setEditingPostId(undefined);
         
-        setActiveTab(tab);
-        router.push(buildUrl({ tab }), { scroll: false });
+        // Usar startTransition para no bloquear UI durante cambio de tab
+        startTransition(() => {
+            setActiveTab(tab);
+            router.push(buildUrl({ tab }), { scroll: false });
+        });
     };
 
     // Handlers para modal

@@ -45,6 +45,7 @@ interface OfferLeadFormProps {
   successRedirectUrl?: string | null;
   fieldsConfig: LeadFormFieldsConfig;
   eventTypeId?: string | null; // ID del tipo de evento asociado (pre-seleccionado)
+  eventTypeName?: string | null; // Nombre del tipo de evento (para evitar llamada adicional)
   enableInterestDate?: boolean;
   validateWithCalendar?: boolean;
   emailRequired?: boolean;
@@ -75,6 +76,7 @@ export function OfferLeadForm({
   successRedirectUrl,
   fieldsConfig,
   eventTypeId = null,
+  eventTypeName = null,
   enableInterestDate,
   validateWithCalendar = false,
   emailRequired = false,
@@ -177,8 +179,15 @@ export function OfferLeadForm({
     trackVisit();
   }, [offerId, offerSlug, isSuccess]);
 
-  // Cargar nombre del tipo de evento
+  // Cargar nombre del tipo de evento (solo si no viene en props)
   useEffect(() => {
+    // Si ya viene en props, usar ese valor directamente
+    if (eventTypeName) {
+      setEventTypeName(eventTypeName);
+      return;
+    }
+
+    // Si no viene en props pero hay eventTypeId, cargar desde API
     const loadEventTypeName = async () => {
       if (!eventTypeId) {
         setEventTypeName(null);
@@ -198,7 +207,7 @@ export function OfferLeadForm({
     };
 
     loadEventTypeName();
-  }, [eventTypeId, studioSlug]);
+  }, [eventTypeId, eventTypeName, studioSlug]);
 
   // Handler para submit del formulario compartido
   const handleFormSubmit = async (data: {

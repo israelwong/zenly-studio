@@ -1,4 +1,9 @@
+'use client';
+
+'use client';
+
 import React, { useState, useMemo } from 'react';
+import { VList } from 'virtua';
 import { PublicPortfolio } from '@/types/public-profile';
 import { PortfolioFeedCard } from './PortfolioFeedCard';
 import { Image as ImageIcon } from 'lucide-react';
@@ -199,21 +204,15 @@ export function PortfolioSection({ portfolios, onPortfolioClick, studioId, owner
                 </div>
             )}
 
-            {/* Portfolios Compactos */}
-            <div className="px-4 pb-4 space-y-3">
-                {filteredPortfolios.map((portfolio, index) => (
-                    <PortfolioFeedCard
-                        key={portfolio.id}
-                        portfolio={portfolio}
-                        onPortfolioClick={onPortfolioClick}
-                        isOwner={isOwner}
-                        onMoveUp={isOwner ? () => handleMoveUp(index) : undefined}
-                        onMoveDown={isOwner ? () => handleMoveDown(index) : undefined}
-                        canMoveUp={index > 0 && !isReordering}
-                        canMoveDown={index < filteredPortfolios.length - 1 && !isReordering}
-                    />
-                ))}
-            </div>
+            {/* Portfolios Compactos - Virtual Scrolling */}
+            <PortfolioVirtualList
+                portfolios={filteredPortfolios}
+                onPortfolioClick={onPortfolioClick}
+                isOwner={isOwner}
+                isReordering={isReordering}
+                onMoveUp={handleMoveUp}
+                onMoveDown={handleMoveDown}
+            />
 
             {/* Mensaje si no hay resultados filtrados */}
             {filteredPortfolios.length === 0 && selectedEventType && (
@@ -223,6 +222,49 @@ export function PortfolioSection({ portfolios, onPortfolioClick, studioId, owner
                     </p>
                 </div>
             )}
+        </div>
+    );
+}
+
+/**
+ * PortfolioVirtualList - Lista virtualizada de portfolios con virtua
+ */
+function PortfolioVirtualList({
+    portfolios,
+    onPortfolioClick,
+    isOwner,
+    isReordering,
+    onMoveUp,
+    onMoveDown,
+}: {
+    portfolios: PublicPortfolio[];
+    onPortfolioClick?: (portfolioSlug: string) => void;
+    isOwner: boolean;
+    isReordering: boolean;
+    onMoveUp: (index: number) => void;
+    onMoveDown: (index: number) => void;
+}) {
+    return (
+        <div className="px-4 pb-4">
+            <VList
+                data={portfolios}
+                overscan={3}
+                itemSize={120}
+            >
+                {(portfolio, index) => (
+                    <div className="mb-3" key={portfolio.id}>
+                        <PortfolioFeedCard
+                            portfolio={portfolio}
+                            onPortfolioClick={onPortfolioClick}
+                            isOwner={isOwner}
+                            onMoveUp={isOwner ? () => onMoveUp(index) : undefined}
+                            onMoveDown={isOwner ? () => onMoveDown(index) : undefined}
+                            canMoveUp={index > 0 && !isReordering}
+                            canMoveDown={index < portfolios.length - 1 && !isReordering}
+                        />
+                    </div>
+                )}
+            </VList>
         </div>
     );
 }

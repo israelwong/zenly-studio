@@ -1,5 +1,5 @@
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
 
-export default function NegociacionPageLoading() {
+export default function NegociacionLoading() {
   return <PromisePageSkeleton />;
 }

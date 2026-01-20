@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getPublicOffer } from "@/lib/actions/studio/offers/offers.actions";
+import { getPublicOfferBasicData } from "@/lib/actions/studio/offers/offers.actions";
 import { OfferLeadForm } from "@/components/offers/OfferLeadForm";
 import { TrackingScripts } from "@/components/offers/TrackingScripts";
 import { OfferHeader } from "@/components/offers/OfferHeader";
 import { OfferInfoCard } from "@/components/offers/OfferInfoCard";
 import { PublicPageFooter } from "@/components/shared/PublicPageFooter";
-import { prisma } from "@/lib/prisma";
 import { Metadata } from "next";
 
 interface PublicOfferLeadFormPageProps {
@@ -26,9 +25,8 @@ export default async function PublicOfferLeadFormPage({
   const isPreview = preview === "true";
 
   try {
-    // Obtener oferta pública (usar offerId como slug temporalmente)
-    // TODO: Cambiar a usar slug de oferta en URL si se prefiere
-    const offerResult = await getPublicOffer(offerId, slug);
+    // ⚠️ STREAMING: Usar BasicData para carga instantánea (incluye event_type_name)
+    const offerResult = await getPublicOfferBasicData(offerId, slug);
 
     if (!offerResult.success || !offerResult.data) {
       console.error(
@@ -38,19 +36,7 @@ export default async function PublicOfferLeadFormPage({
       notFound();
     }
 
-    const offer = offerResult.data;
-
-    // Obtener datos del estudio para tracking y header
-    const studio = await prisma.studios.findUnique({
-      where: { slug },
-      select: {
-        gtm_id: true,
-        facebook_pixel_id: true,
-        studio_name: true,
-        slogan: true,
-        logo_url: true,
-      },
-    });
+    const { offer, studio: studioData } = offerResult.data;
 
     // Verificar que tenga leadform
     if (!offer.leadform) {
@@ -62,8 +48,8 @@ export default async function PublicOfferLeadFormPage({
       <>
         {/* Scripts de tracking */}
         <TrackingScripts
-          gtmId={studio?.gtm_id || undefined}
-          facebookPixelId={studio?.facebook_pixel_id || undefined}
+          gtmId={studioData?.gtm_id || undefined}
+          facebookPixelId={studioData?.facebook_pixel_id || undefined}
           customEvents={[
             {
               eventName: "offer_leadform_view",
@@ -88,9 +74,9 @@ export default async function PublicOfferLeadFormPage({
           {/* Header sticky fixed en top */}
           <OfferHeader
             studioSlug={slug}
-            studioName={studio?.studio_name}
-            studioSlogan={studio?.slogan}
-            logoUrl={studio?.logo_url}
+            studioName={studioData?.studio_name}
+            studioSlogan={studioData?.slogan}
+            logoUrl={studioData?.logo_url}
           />
 
           {/* Container mobile centrado con padding-top para header */}
@@ -123,6 +109,7 @@ export default async function PublicOfferLeadFormPage({
               successRedirectUrl={offer.leadform.success_redirect_url || undefined}
               fieldsConfig={offer.leadform.fields_config}
               eventTypeId={offer.leadform.event_type_id || null}
+              eventTypeName={offer.leadform.event_type_name || null}
               enableInterestDate={offer.leadform.enable_interest_date}
               validateWithCalendar={offer.leadform.validate_with_calendar}
               emailRequired={offer.leadform.email_required}
@@ -158,7 +145,7 @@ export async function generateMetadata({
   const { slug, offerId } = await params;
 
   try {
-    const offerResult = await getPublicOffer(offerId, slug);
+    const offerResult = await getPublicOfferBasicData(offerId, slug);
 
     if (!offerResult.success || !offerResult.data) {
       return {
@@ -167,35 +154,29 @@ export async function generateMetadata({
       };
     }
 
-    const offer = offerResult.data;
-    
-    // Obtener información completa del estudio
-    const studio = await prisma.studios.findUnique({
-      where: { slug },
-      select: { studio_name: true, logo_url: true },
-    });
+    const { offer, studio: studioData } = offerResult.data;
 
     const baseTitle = offer.leadform?.title || `Solicita información - ${offer.name}`;
-    const title = studio?.studio_name 
-      ? `${baseTitle} - ${studio.studio_name}`
+    const title = studioData?.studio_name 
+      ? `${baseTitle} - ${studioData.studio_name}`
       : baseTitle;
     const description =
       offer.leadform?.description ||
-      (studio?.studio_name
-        ? `Completa el formulario para obtener más información sobre ${offer.name} de ${studio.studio_name}`
+      (studioData?.studio_name
+        ? `Completa el formulario para obtener más información sobre ${offer.name} de ${studioData.studio_name}`
         : `Completa el formulario para obtener más información sobre ${offer.name}`);
 
     // Configurar favicon dinámico usando el logo del studio
-    const icons = studio?.logo_url ? {
+    const icons = studioData?.logo_url ? {
       icon: [
-        { url: studio.logo_url, type: 'image/png' },
-        { url: studio.logo_url, sizes: '32x32', type: 'image/png' },
-        { url: studio.logo_url, sizes: '16x16', type: 'image/png' },
+        { url: studioData.logo_url, type: 'image/png' },
+        { url: studioData.logo_url, sizes: '32x32', type: 'image/png' },
+        { url: studioData.logo_url, sizes: '16x16', type: 'image/png' },
       ],
       apple: [
-        { url: studio.logo_url, sizes: '180x180', type: 'image/png' },
+        { url: studioData.logo_url, sizes: '180x180', type: 'image/png' },
       ],
-      shortcut: studio.logo_url,
+      shortcut: studioData.logo_url,
     } : undefined;
 
     return {

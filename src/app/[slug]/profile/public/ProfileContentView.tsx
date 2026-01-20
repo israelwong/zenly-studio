@@ -1,10 +1,22 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { PublicProfileData } from '@/types/public-profile';
 import { ProfileContent } from '@/components/profile';
 import { ArchivedContent } from '@/components/profile/sections/ArchivedContent';
-// PostGridView, ShopView, and InfoView are now handled by ProfileContent component
+
+// Lazy load de componentes pesados (solo se cargan cuando se necesitan)
+const LazyPortfolioContent = lazy(() => 
+    import('@/components/profile').then(module => ({ default: () => (
+        <ProfileContent variant="portfolio" data={{ portfolios: [] }} />
+    )}))
+);
+
+const LazyPaquetesContent = lazy(() => 
+    import('@/components/profile').then(module => ({ default: () => (
+        <ProfileContent variant="paquetes" data={{ paquetes: [] }} />
+    )}))
+);
 
 interface ProfileContentViewProps {
     activeTab: string;

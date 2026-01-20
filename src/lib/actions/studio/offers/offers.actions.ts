@@ -758,9 +758,15 @@ export async function getPublicOfferBasicData(
           }>;
         };
         event_type_id: string | null;
+        event_type_name: string | null; // Nombre del tipo de evento (para evitar llamada adicional)
         enable_interest_date: boolean;
         validate_with_calendar: boolean;
         email_required: boolean | null;
+        enable_event_name: boolean;
+        event_name_required: boolean;
+        enable_event_duration: boolean;
+        event_duration_required: boolean;
+        show_packages_after_submit: boolean;
       } | null;
       business_term: {
         id: string;
@@ -779,6 +785,10 @@ export async function getPublicOfferBasicData(
       logo_url: string | null;
       gtm_id: string | null;
       facebook_pixel_id: string | null;
+      representative_name: string | null;
+      phone: string | null;
+      email: string | null;
+      address: string | null;
     };
   };
   error?: string;
@@ -794,6 +804,10 @@ export async function getPublicOfferBasicData(
           logo_url: true,
           gtm_id: true,
           facebook_pixel_id: true,
+          representative_name: true,
+          phone: true,
+          email: true,
+          address: true,
         },
       });
 
@@ -837,6 +851,17 @@ export async function getPublicOfferBasicData(
               enable_interest_date: true,
               validate_with_calendar: true,
               email_required: true,
+              enable_event_name: true,
+              event_name_required: true,
+              enable_event_duration: true,
+              event_duration_required: true,
+              show_packages_after_submit: true,
+              event_type: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
           business_term: {
@@ -890,6 +915,11 @@ export async function getPublicOfferBasicData(
                 enable_interest_date: true,
                 validate_with_calendar: true,
                 email_required: true,
+                enable_event_name: true,
+                event_name_required: true,
+                enable_event_duration: true,
+                event_duration_required: true,
+                show_packages_after_submit: true,
               },
             },
             business_term: {
@@ -954,9 +984,15 @@ export async function getPublicOfferBasicData(
                 }>;
               },
               event_type_id: offer.leadform.event_type_id,
+              event_type_name: (offer.leadform as any).event_type?.name || null,
               enable_interest_date: offer.leadform.enable_interest_date,
               validate_with_calendar: offer.leadform.validate_with_calendar,
               email_required: offer.leadform.email_required,
+              enable_event_name: (offer.leadform as any).enable_event_name || false,
+              event_name_required: (offer.leadform as any).event_name_required || false,
+              enable_event_duration: (offer.leadform as any).enable_event_duration || false,
+              event_duration_required: (offer.leadform as any).event_duration_required || false,
+              show_packages_after_submit: (offer.leadform as any).show_packages_after_submit || false,
             } : null,
             business_term: offer.business_term ? {
               id: offer.business_term.id,

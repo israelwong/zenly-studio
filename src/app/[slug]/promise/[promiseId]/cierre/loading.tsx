@@ -1,5 +1,5 @@
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
 
-export default function CierrePageLoading() {
+export default function CierreLoading() {
   return <PromisePageSkeleton />;
 }
