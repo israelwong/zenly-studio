@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from 'react';
 import { prisma } from "@/lib/prisma";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { withRetry } from "@/lib/database/retry-helper";
@@ -888,7 +889,7 @@ export async function getPublicPromisePendientes(
       };
     }
 
-    // 4. ⚠️ OPTIMIZACIÓN: Extraer item_ids ANTES de cargar catálogo completo
+    // 4. ⚠️ OPTIMIZACIÓN: Extraer item_ids de cotizaciones ANTES de cargar catálogo
     const itemIdsFromQuotes = new Set<string>();
     promise.quotes.forEach((cot) => {
       cot.cotizacion_items.forEach((item) => {
@@ -896,7 +897,7 @@ export async function getPublicPromisePendientes(
       });
     });
 
-    // 5. ⚠️ OPTIMIZACIÓN: Paralelizar paquetes y portafolios (independientes)
+    // 5. ⚠️ OPTIMIZACIÓN: Paralelizar todas las queries independientes
     const paquetesPortafoliosStart = Date.now();
     const [paquetesResult, portafoliosResult, configForm] = await Promise.all([
       // Paquetes (solo si show_packages habilitado)
@@ -988,13 +989,42 @@ export async function getPublicPromisePendientes(
 
     // Combinar todos los item_ids
     const allItemIds = Array.from(new Set([...itemIdsFromQuotes, ...itemIdsFromPaquetes]));
+    const itemIdsFromQuotesArray = Array.from(itemIdsFromQuotes);
 
-    // ⚠️ OPTIMIZACIÓN: Obtener solo items necesarios (en lugar de catálogo completo)
-    const catalogoStart = Date.now();
-    const catalogo = await obtenerItemsPorIds(studio.id, allItemIds);
+    // ⚠️ TAREA 3: Paralelizar items, multimedia, condiciones y términos
+    const paralelizacionStart = Date.now();
+    const [catalogo, itemsMediaData, condicionesSettled, terminosSettled] = await Promise.all([
+      // Items filtrados (solo los de la cotización y paquetes)
+      obtenerItemsPorIds(studio.id, allItemIds),
+      // Multimedia solo de items de cotizaciones (NO de paquetes)
+      itemIdsFromQuotesArray.length > 0
+        ? prisma.studio_item_media.findMany({
+          where: {
+            item_id: { in: itemIdsFromQuotesArray },
+            studio_id: studio.id,
+          },
+          select: {
+            id: true,
+            item_id: true,
+            file_url: true,
+            file_type: true,
+            display_order: true,
+            // ⚠️ NO incluir: description, metadata, file_size, etc.
+          },
+          orderBy: { display_order: 'asc' },
+        })
+        : Promise.resolve([]),
+      // Condiciones comerciales
+      obtenerCondicionesComercialesPublicas(studioSlug).catch(() => ({ success: false, error: 'Error al obtener condiciones' })),
+      // Términos y condiciones
+      obtenerTerminosCondicionesPublicos(studioSlug).catch(() => ({ success: false, error: 'Error al obtener términos' })),
+    ]);
+
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromisePendientes:catalogo-optimizado: ${Date.now() - catalogoStart}ms (${allItemIds.length} items)`);
+      console.log(`[${uniqueId}] getPublicPromisePendientes:paralelizacion: ${Date.now() - paralelizacionStart}ms`);
+      console.log(`[${uniqueId}] getPublicPromisePendientes:catalogo-optimizado: ${allItemIds.length} items`);
     }
+
     const configPrecios = configForm ? {
       utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30') / 100,
       utilidad_producto: parseFloat(configForm.utilidad_producto || '0.20') / 100,
@@ -1002,45 +1032,23 @@ export async function getPublicPromisePendientes(
       sobreprecio: parseFloat(configForm.sobreprecio || '0.05') / 100,
     } : null;
 
-    // 6. ⚠️ OPTIMIZACIÓN: Obtener multimedia solo de items necesarios (payload reducido)
-    const multimediaStart = Date.now();
+    // Mapear multimedia
     const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
-
-    // ⚠️ CRÍTICO: Solo items de cotizaciones, NO de paquetes
-    const itemIdsFromQuotesArray = Array.from(itemIdsFromQuotes);
-    if (itemIdsFromQuotesArray.length > 0) {
-      const fetchMediaStart = Date.now();
-      // ⚠️ OPTIMIZACIÓN: Solo campos esenciales (url, type, item_id) - sin metadatos pesados
-      const itemsMediaData = await prisma.studio_item_media.findMany({
-        where: {
-          item_id: { in: itemIdsFromQuotesArray },
-          studio_id: studio.id,
-        },
-        select: {
-          id: true,
-          item_id: true,
-          file_url: true,
-          file_type: true,
-          display_order: true,
-          // ⚠️ NO incluir: description, metadata, file_size, etc.
-        },
-        orderBy: { display_order: 'asc' },
+    itemsMediaData.forEach((media) => {
+      if (!itemsMediaMap.has(media.item_id)) {
+        itemsMediaMap.set(media.item_id, []);
+      }
+      itemsMediaMap.get(media.item_id)!.push({
+        id: media.id,
+        file_url: media.file_url,
+        file_type: media.file_type as 'IMAGE' | 'VIDEO',
+        thumbnail_url: undefined,
       });
-      console.log(`[${uniqueId}] DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
+    });
 
-      itemsMediaData.forEach((media) => {
-        if (!itemsMediaMap.has(media.item_id)) {
-          itemsMediaMap.set(media.item_id, []);
-        }
-        itemsMediaMap.get(media.item_id)!.push({
-          id: media.id,
-          file_url: media.file_url,
-          file_type: media.file_type as 'IMAGE' | 'VIDEO',
-          thumbnail_url: undefined,
-        });
-      });
-    }
-    console.log(`[${uniqueId}] getPublicPromisePendientes:multimedia: ${Date.now() - multimediaStart}ms`);
+    // Procesar condiciones y términos (ya tienen el formato correcto del catch)
+    const condicionesResult = condicionesSettled;
+    const terminosResult = terminosSettled;
 
     // 7. Mapear cotizaciones pendientes
     const mapearStart = Date.now();
@@ -1248,24 +1256,10 @@ export async function getPublicPromisePendientes(
       } : null,
     }));
 
-    // 10. Obtener condiciones comerciales y términos (con Promise.allSettled)
-    const condicionesStart = Date.now();
-    const [condicionesSettled, terminosSettled] = await Promise.allSettled([
-      obtenerCondicionesComercialesPublicas(studioSlug),
-      obtenerTerminosCondicionesPublicos(studioSlug),
-    ]);
-    console.log(`[${uniqueId}] getPublicPromisePendientes:condiciones: ${Date.now() - condicionesStart}ms`);
-
-    const condicionesResult = condicionesSettled.status === 'fulfilled'
-      ? condicionesSettled.value
-      : { success: false, error: 'Error al obtener condiciones comerciales' };
-    const terminosResult = terminosSettled.status === 'fulfilled'
-      ? terminosSettled.value
-      : { success: false, error: 'Error al obtener términos y condiciones' };
-
-    let condicionesFiltradas = condicionesResult.success && condicionesResult.data ? condicionesResult.data : [];
+    // Filtrar condiciones según settings
+    let condicionesFiltradas = (condicionesResult.success && 'data' in condicionesResult && condicionesResult.data) ? condicionesResult.data : [];
     if (condicionesFiltradas.length > 0) {
-      condicionesFiltradas = condicionesFiltradas.filter((condicion) => {
+      condicionesFiltradas = condicionesFiltradas.filter((condicion: { type?: string }) => {
         const tipo = condicion.type || 'standard';
         if (tipo === 'standard') {
           return shareSettings.show_standard_conditions;
@@ -1296,7 +1290,7 @@ export async function getPublicPromisePendientes(
         cotizaciones: mappedCotizaciones,
         paquetes: mappedPaquetes,
         condiciones_comerciales: condicionesFiltradas.length > 0 ? condicionesFiltradas : undefined,
-        terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
+        terminos_condiciones: (terminosResult.success && 'data' in terminosResult && terminosResult.data) ? terminosResult.data : undefined,
         share_settings: shareSettings,
         portafolios: portafolios.length > 0 ? portafolios : undefined,
       },
@@ -1316,8 +1310,79 @@ export async function getPublicPromisePendientes(
 }
 
 /**
- * Obtener datos para ruta /negociacion
+ * ⚠️ STREAMING: Obtener solo precio total para Basic (instantáneo)
+ * Usado en NegociacionPageBasic para mostrar precio sin esperar datos pesados
+ */
+export async function getPublicPromiseNegociacionBasic(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    totalPrice: number;
+  };
+  error?: string;
+}> {
+  try {
+    const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
+    if (!basicData.success || !basicData.data) {
+      return {
+        success: false,
+        error: basicData.error || "Error al obtener datos básicos",
+      };
+    }
+
+    const { studio } = basicData.data;
+
+    // Obtener solo precio de la cotización en negociación
+    const promise = await prisma.studio_promises.findFirst({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      select: {
+        quotes: {
+          where: {
+            visible_to_client: true,
+            status: 'negociacion',
+            selected_by_prospect: { not: true },
+          },
+          select: {
+            price: true,
+            discount: true,
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!promise || promise.quotes.length === 0) {
+      return {
+        success: false,
+        error: "Cotización en negociación no encontrada",
+      };
+    }
+
+    const cotizacion = promise.quotes[0];
+    const totalPrice = Number(cotizacion.price) - (Number(cotizacion.discount) || 0);
+
+    return {
+      success: true,
+      data: { totalPrice },
+    };
+  } catch (error) {
+    console.error("[getPublicPromiseNegociacionBasic] Error:", error);
+    return {
+      success: false,
+      error: "Error al obtener precio de cotización",
+    };
+  }
+}
+
+/**
+ * Obtener datos para ruta /negociacion (deferred - datos pesados)
  * Solo carga la cotización con status: 'negociacion' y selected_by_prospect !== true
+ * ⚠️ OPTIMIZADO: NO carga catálogo completo, solo items de la cotización
  */
 export async function getPublicPromiseNegociacion(
   studioSlug: string,
@@ -1520,23 +1585,9 @@ export async function getPublicPromiseNegociacion(
 
     const cotizacion = promise.quotes[0];
 
-    // 4. Obtener catálogo y configuración de precios (necesarios para mapear items)
-    const catalogoStart = Date.now();
-    const [catalogoResult, configForm] = await Promise.all([
-      obtenerCatalogo(studioSlug, false),
-      obtenerConfiguracionPrecios(studioSlug),
-    ]);
-    console.log(`[${uniqueId}] getPublicPromiseNegociacion:catalogo: ${Date.now() - catalogoStart}ms`);
-
-    if (!catalogoResult.success || !catalogoResult.data) {
-      console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms (no catalogo)`);
-      return {
-        success: false,
-        error: "Error al obtener catálogo",
-      };
-    }
-
-    const catalogo = catalogoResult.data;
+    // 4. ⚠️ OPTIMIZADO: NO cargar catálogo completo
+    // Usar solo snapshots de cotizacion_items para construir estructura jerárquica
+    // Esto reduce significativamente el tiempo de carga y transferencia de datos
 
     // 5. Obtener multimedia solo de items de esta cotización
     const multimediaStart = Date.now();
@@ -1613,6 +1664,8 @@ export async function getPublicPromiseNegociacion(
 
     const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
 
+    // ⚠️ OPTIMIZADO: Construir estructura jerárquica usando solo snapshots
+    // No necesitamos el catálogo completo, los snapshots tienen toda la información necesaria
     const estructura = construirEstructuraJerarquicaCotizacion(
       itemsFiltrados.map((item: CotizacionItem) => ({
         item_id: item.item_id!,
@@ -1620,14 +1673,16 @@ export async function getPublicPromiseNegociacion(
         unit_price: item.unit_price,
         subtotal: item.subtotal,
         order: item.order,
-        name_snapshot: item.name_snapshot,
-        description_snapshot: item.description_snapshot,
-        category_name_snapshot: item.category_name_snapshot,
-        seccion_name_snapshot: item.seccion_name_snapshot,
-        name: item.name,
-        description: item.description,
-        category_name: item.category_name,
-        seccion_name: item.seccion_name,
+        // Priorizar snapshots (inmutables) sobre datos del catálogo
+        name_snapshot: item.name_snapshot || item.name,
+        description_snapshot: item.description_snapshot || item.description,
+        category_name_snapshot: item.category_name_snapshot || item.category_name,
+        seccion_name_snapshot: item.seccion_name_snapshot || item.seccion_name,
+        // Fallback a datos del catálogo si no hay snapshots
+        name: item.name_snapshot || item.name,
+        description: item.description_snapshot || item.description,
+        category_name: item.category_name_snapshot || item.category_name,
+        seccion_name: item.seccion_name_snapshot || item.seccion_name,
         id: item.id,
       })),
       {
@@ -1747,7 +1802,7 @@ export async function getPublicPromiseNegociacion(
         studio,
         cotizaciones: [mappedCotizacion],
         condiciones_comerciales: condicionesFiltradas.length > 0 ? condicionesFiltradas : undefined,
-        terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
+        terminos_condiciones: (terminosResult.success && 'data' in terminosResult && terminosResult.data) ? terminosResult.data : undefined,
         share_settings: shareSettings,
       },
     };
@@ -1764,8 +1819,78 @@ export async function getPublicPromiseNegociacion(
 }
 
 /**
- * Obtener datos para ruta /cierre
+ * ⚠️ STREAMING: Obtener solo precio total para Basic (instantáneo)
+ * Usado en CierrePageBasic para mostrar precio sin esperar datos pesados
+ */
+export async function getPublicPromiseCierreBasic(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    totalPrice: number;
+  };
+  error?: string;
+}> {
+  try {
+    const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
+    if (!basicData.success || !basicData.data) {
+      return {
+        success: false,
+        error: basicData.error || "Error al obtener datos básicos",
+      };
+    }
+
+    const { studio } = basicData.data;
+
+    // Obtener solo precio de la cotización en cierre
+    const promise = await prisma.studio_promises.findFirst({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      select: {
+        quotes: {
+          where: {
+            visible_to_client: true,
+            status: { in: ['en_cierre', 'cierre'] },
+          },
+          select: {
+            price: true,
+            discount: true,
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!promise || promise.quotes.length === 0) {
+      return {
+        success: false,
+        error: "Cotización en cierre no encontrada",
+      };
+    }
+
+    const cotizacion = promise.quotes[0];
+    const totalPrice = Number(cotizacion.price) - (Number(cotizacion.discount) || 0);
+
+    return {
+      success: true,
+      data: { totalPrice },
+    };
+  } catch (error) {
+    console.error("[getPublicPromiseCierreBasic] Error:", error);
+    return {
+      success: false,
+      error: "Error al obtener precio de cotización",
+    };
+  }
+}
+
+/**
+ * Obtener datos para ruta /cierre (deferred - datos pesados)
  * Solo carga la cotización con status: 'en_cierre' + contrato + condiciones del cierre
+ * ⚠️ OPTIMIZADO: NO carga catálogo completo, solo items de la cotización
  */
 export async function getPublicPromiseCierre(
   studioSlug: string,
@@ -1918,19 +2043,9 @@ export async function getPublicPromiseCierre(
 
     const cotizacion = promise.quotes[0];
 
-    // 3. Obtener catálogo (necesario para mapear items)
-    const catalogoStart = Date.now();
-    const catalogoResult = await obtenerCatalogo(studioSlug, false);
-    console.log(`[${uniqueId}] getPublicPromiseCierre:catalogo: ${Date.now() - catalogoStart}ms`);
-    if (!catalogoResult.success || !catalogoResult.data) {
-      console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms (no catalogo)`);
-      return {
-        success: false,
-        error: "Error al obtener catálogo",
-      };
-    }
-
-    const catalogo = catalogoResult.data;
+    // 3. ⚠️ OPTIMIZADO: NO cargar catálogo completo
+    // Usar solo snapshots de cotizacion_items para construir estructura jerárquica
+    // Esto reduce significativamente el tiempo de carga y transferencia de datos
 
     // 4. Obtener multimedia solo de items de esta cotización
     const multimediaStart = Date.now();
@@ -1973,7 +2088,7 @@ export async function getPublicPromiseCierre(
     }
     console.log(`[${uniqueId}] getPublicPromiseCierre:multimedia: ${Date.now() - multimediaStart}ms`);
 
-    // 5. Mapear cotización en cierre
+    // 4. Mapear cotización en cierre
     const mapearStart = Date.now();
     type CotizacionItem = {
       id: string;
@@ -2007,6 +2122,8 @@ export async function getPublicPromiseCierre(
 
     const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
 
+    // ⚠️ OPTIMIZADO: Construir estructura jerárquica usando solo snapshots
+    // No necesitamos el catálogo completo, los snapshots tienen toda la información necesaria
     const estructura = construirEstructuraJerarquicaCotizacion(
       itemsFiltrados.map((item: CotizacionItem) => ({
         item_id: item.item_id!,
@@ -2014,14 +2131,16 @@ export async function getPublicPromiseCierre(
         unit_price: item.unit_price,
         subtotal: item.subtotal,
         order: item.order,
-        name_snapshot: item.name_snapshot,
-        description_snapshot: item.description_snapshot,
-        category_name_snapshot: item.category_name_snapshot,
-        seccion_name_snapshot: item.seccion_name_snapshot,
-        name: item.name,
-        description: item.description,
-        category_name: item.category_name,
-        seccion_name: item.seccion_name,
+        // Priorizar snapshots (inmutables) sobre datos del catálogo
+        name_snapshot: item.name_snapshot || item.name,
+        description_snapshot: item.description_snapshot || item.description,
+        category_name_snapshot: item.category_name_snapshot || item.category_name,
+        seccion_name_snapshot: item.seccion_name_snapshot || item.seccion_name,
+        // Fallback a datos del catálogo si no hay snapshots
+        name: item.name_snapshot || item.name,
+        description: item.description_snapshot || item.description,
+        category_name: item.category_name_snapshot || item.category_name,
+        seccion_name: item.seccion_name_snapshot || item.seccion_name,
         id: item.id,
       })),
       {
@@ -2143,7 +2262,7 @@ export async function getPublicPromiseCierre(
           address: studio.address,
         },
         cotizaciones: [mappedCotizacion],
-        terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
+        terminos_condiciones: (terminosResult.success && 'data' in terminosResult && terminosResult.data) ? terminosResult.data : undefined,
       },
     };
 
@@ -2943,7 +3062,7 @@ export async function getPublicPromiseData(
         cotizaciones: mappedCotizaciones,
         paquetes: mappedPaquetes,
         condiciones_comerciales: condicionesFiltradas.length > 0 ? condicionesFiltradas : undefined,
-        terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
+        terminos_condiciones: (terminosResult.success && 'data' in terminosResult && terminosResult.data) ? terminosResult.data : undefined,
         share_settings: shareSettingsObj,
         portafolios: portafolios.length > 0 ? portafolios : undefined,
       },
@@ -3427,11 +3546,21 @@ export async function getPublicPromiseMetadata(
 }
 
 /**
- * Obtener solo estados de cotizaciones para determinar routing (consulta ligera)
- * Usado en page.tsx para enrutamiento inicial sin cargar todos los datos
- * Similar a determinePromiseState pero para rutas públicas
+ * ⚠️ INTERNA: Función sin caché para obtener Studio
+ * Usada con cache de React para cachear por request
  */
-export async function getPublicPromiseRouteState(
+const getStudioById = cache(async (studioSlug: string) => {
+  return await prisma.studios.findUnique({
+    where: { slug: studioSlug },
+    select: { id: true },
+  });
+});
+
+/**
+ * ⚠️ INTERNA: Función sin caché para obtener estados de cotizaciones
+ * Usada por getPublicPromiseRouteState con caché
+ */
+async function _getPublicPromiseRouteStateInternal(
   studioSlug: string,
   promiseId: string
 ): Promise<{
@@ -3444,11 +3573,8 @@ export async function getPublicPromiseRouteState(
   error?: string;
 }> {
   try {
-    // 1. Validar que el studio existe
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
+    // 1. Validar que el studio existe (usando cache de React)
+    const studio = await getStudioById(studioSlug);
 
     if (!studio) {
       return {
@@ -3512,6 +3638,43 @@ export async function getPublicPromiseRouteState(
       error: "Error al obtener estados de cotizaciones",
     };
   }
+}
+
+/**
+ * Obtener solo estados de cotizaciones para determinar routing (consulta ligera)
+ * Usado en page.tsx para enrutamiento inicial sin cargar todos los datos
+ * Similar a determinePromiseState pero para rutas públicas
+ * 
+ * ✅ CACHÉ: Usa unstable_cache con tags para compartir resultado entre dispatcher y sub-rutas
+ * Tag: public-promise-route-state-${studioSlug}-${promiseId}
+ * Invalidar con: revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`)
+ */
+export async function getPublicPromiseRouteState(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: Array<{
+    id: string;
+    status: string;
+    selected_by_prospect: boolean | null;
+  }>;
+  error?: string;
+}> {
+  // ✅ CACHÉ: Compartir resultado entre dispatcher y sub-rutas
+  // El caché se invalida automáticamente cuando cambian las cotizaciones
+  const getCachedRouteState = unstable_cache(
+    async () => {
+      return _getPublicPromiseRouteStateInternal(studioSlug, promiseId);
+    },
+    ['public-promise-route-state', studioSlug, promiseId],
+    {
+      tags: [`public-promise-route-state-${studioSlug}-${promiseId}`],
+      revalidate: false, // Invalidación manual por tags
+    }
+  );
+
+  return getCachedRouteState();
 }
 
 /**
@@ -3837,6 +4000,34 @@ export async function getPublicPromiseUpdate(
  * Helper compartido: Obtener datos básicos de promise + studio (sin cotizaciones pesadas)
  * Usado por todas las funciones fragmentadas
  */
+/**
+ * ⚠️ INTERNA: Función con cache de React para obtener Studio completo
+ * Cachea por request para evitar queries duplicadas
+ */
+const getStudioBySlug = cache(async (studioSlug: string) => {
+  return await prisma.studios.findUnique({
+    where: { slug: studioSlug },
+    select: {
+      id: true,
+      studio_name: true,
+      slogan: true,
+      logo_url: true,
+      representative_name: true,
+      phone: true,
+      email: true,
+      address: true,
+      promise_share_default_show_packages: true,
+      promise_share_default_show_categories_subtotals: true,
+      promise_share_default_show_items_prices: true,
+      promise_share_default_min_days_to_hire: true,
+      promise_share_default_show_standard_conditions: true,
+      promise_share_default_show_offer_conditions: true,
+      promise_share_default_portafolios: true,
+      promise_share_default_auto_generate_contract: true,
+    },
+  });
+});
+
 export async function getPublicPromiseBasicData(
   studioSlug: string,
   promiseId: string
@@ -3884,29 +4075,12 @@ export async function getPublicPromiseBasicData(
   error?: string;
 }> {
   try {
+    // ⚠️ TAREA 1: Cache de React para Studio (cachea por request)
     const fetchStudioStart = Date.now();
-    const studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: {
-        id: true,
-        studio_name: true,
-        slogan: true,
-        logo_url: true,
-        representative_name: true,
-        phone: true,
-        email: true,
-        address: true,
-        promise_share_default_show_packages: true,
-        promise_share_default_show_categories_subtotals: true,
-        promise_share_default_show_items_prices: true,
-        promise_share_default_min_days_to_hire: true,
-        promise_share_default_show_standard_conditions: true,
-        promise_share_default_show_offer_conditions: true,
-        promise_share_default_portafolios: true,
-        promise_share_default_auto_generate_contract: true,
-      },
-    });
-    console.log(`DB:FetchStudio: ${Date.now() - fetchStudioStart}ms`);
+    const studio = await getStudioBySlug(studioSlug);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`DB:FetchStudio: ${Date.now() - fetchStudioStart}ms`);
+    }
 
     if (!studio) {
       return {
