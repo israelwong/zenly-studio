@@ -72,8 +72,11 @@ export async function getStudioProfileBasicData(
             // Silencioso
         }
 
-        return await retryDatabaseOperation(async () => {
-            const studioCheck = await prisma.studios.findUnique({
+        // ⚠️ CACHE: Cachear datos básicos con tag por studio
+        const getCachedBasicData = unstable_cache(
+            async () => {
+                return await retryDatabaseOperation(async () => {
+                    const studioCheck = await prisma.studios.findUnique({
                 where: { slug, is_active: true },
                 select: {
                     id: true,
@@ -272,16 +275,16 @@ export async function getStudioProfileBasicData(
                     })),
                 }
             };
-                });
-            },
-            ['studio-profile-basic', slug, userId || 'anonymous'],
-            {
-                tags: [`studio-profile-basic-${slug}`],
-                revalidate: 3600, // 1 hora para datos básicos
-            }
-        );
+                    });
+                },
+                ['studio-profile-basic', slug, userId || 'anonymous'],
+                {
+                    tags: [`studio-profile-basic-${slug}`],
+                    revalidate: 3600, // 1 hora para datos básicos
+                }
+            );
 
-        return await getCachedBasicData();
+            return await getCachedBasicData();
     } catch (error) {
         console.error('[getStudioProfileBasicData] ❌ Error:', error);
         return {
