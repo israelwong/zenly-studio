@@ -77,27 +77,27 @@ export async function getStudioProfileBasicData(
             async () => {
                 return await retryDatabaseOperation(async () => {
                     const studioCheck = await prisma.studios.findUnique({
-                where: { slug, is_active: true },
-                select: {
-                    id: true,
-                    user_profiles: {
-                        where: { is_active: true },
-                        select: { supabase_id: true },
-                        take: 1
+                        where: { slug, is_active: true },
+                        select: {
+                            id: true,
+                            user_profiles: {
+                                where: { is_active: true },
+                                select: { supabase_id: true },
+                                take: 1
+                            }
+                        }
+                    });
+
+                    if (!studioCheck) {
+                        return { success: false, error: 'Studio not found' };
                     }
-                }
-            });
 
-            if (!studioCheck) {
-                return { success: false, error: 'Studio not found' };
-            }
+                    const ownerId = studioCheck.user_profiles[0]?.supabase_id || null;
+                    const isOwner = userId === ownerId;
 
-            const ownerId = studioCheck.user_profiles[0]?.supabase_id || null;
-            const isOwner = userId === ownerId;
-
-            // Query ligera: solo identidad básica
-            const studio = await prisma.studios.findUnique({
-                where: { slug, is_active: true },
+                    // Query ligera: solo identidad básica
+                    const studio = await prisma.studios.findUnique({
+                        where: { slug, is_active: true },
                 select: {
                     id: true,
                     studio_name: true,
@@ -181,13 +181,13 @@ export async function getStudioProfileBasicData(
                 }
             });
 
-            if (!studio) {
-                return { success: false, error: 'Studio not found' };
-            }
+                    if (!studio) {
+                        return { success: false, error: 'Studio not found' };
+                    }
 
-            // Paquetes separados (ligero)
-            const paquetes = await prisma.studio_paquetes.findMany({
-                where: { studio_id: studio.id, status: "active" },
+                    // Paquetes separados (ligero)
+                    const paquetes = await prisma.studio_paquetes.findMany({
+                        where: { studio_id: studio.id, status: "active" },
                 select: {
                     id: true,
                     name: true,
@@ -204,87 +204,88 @@ export async function getStudioProfileBasicData(
                 orderBy: [{ is_featured: "desc" }, { order: "asc" }],
             });
 
-            return {
-                success: true,
-                data: {
-                    studio: {
-                        id: studio.id,
-                        owner_id: studio.user_profiles?.[0]?.supabase_id || null,
-                        studio_name: studio.studio_name,
-                        presentation: studio.presentation,
-                        keywords: studio.keywords,
-                        logo_url: studio.logo_url,
-                        slogan: studio.slogan,
-                        website: studio.website,
-                        address: studio.address,
-                        plan_id: studio.plan_id,
-                        plan: studio.plan,
-                        zonas_trabajo: studio.zonas_trabajo,
-                        faq: studio.faq.map(faq => ({
-                            id: faq.id,
-                            pregunta: faq.pregunta,
-                            respuesta: faq.respuesta,
-                            orden: faq.orden,
-                            is_active: faq.is_active,
-                        })),
-                    },
-                    socialNetworks: studio.social_networks.map(network => ({
-                        id: network.id,
-                        url: network.url,
-                        platform: network.platform,
-                        order: network.order,
-                    })),
-                    contactInfo: {
-                        phones: studio.phones.map(phone => ({
-                            id: phone.id,
-                            number: phone.number,
-                            type: phone.type,
-                            label: phone.label,
-                            is_active: phone.is_active,
-                        })),
-                        address: studio.address,
-                        website: studio.website,
-                        email: studio.email,
-                        maps_url: studio.maps_url,
-                        horarios: studio.business_hours?.map(horario => ({
-                            id: horario.id,
-                            dia: horario.day_of_week,
-                            apertura: horario.start_time,
-                            cierre: horario.end_time,
-                            cerrado: !horario.is_active,
-                        })) || [],
-                    },
-                    items: studio.items.map(item => ({
-                        id: item.id,
-                        name: item.name,
-                        type: 'SERVICIO' as const,
-                        cost: item.cost,
-                        order: item.order
-                    })),
-                    paquetes: paquetes.map(paquete => ({
-                        id: paquete.id,
-                        nombre: paquete.name,
-                        descripcion: paquete.description ? paquete.description : undefined,
-                        precio: paquete.precio ?? 0,
-                        tipo_evento: paquete.event_types?.name ? paquete.event_types.name : undefined,
-                        tipo_evento_order: paquete.event_types?.order ?? undefined,
-                        cover_url: paquete.cover_url ? paquete.cover_url : undefined,
-                        is_featured: paquete.is_featured ?? false,
-                        status: paquete.status,
-                        order: paquete.order,
-                    })),
-                }
-            };
-                    });
+                    return {
+                        success: true,
+                        data: {
+                            studio: {
+                                id: studio.id,
+                                owner_id: studio.user_profiles?.[0]?.supabase_id || null,
+                                studio_name: studio.studio_name,
+                                presentation: studio.presentation,
+                                keywords: studio.keywords,
+                                logo_url: studio.logo_url,
+                                slogan: studio.slogan,
+                                website: studio.website,
+                                address: studio.address,
+                                plan_id: studio.plan_id,
+                                plan: studio.plan,
+                                zonas_trabajo: studio.zonas_trabajo,
+                                faq: studio.faq.map(faq => ({
+                                    id: faq.id,
+                                    pregunta: faq.pregunta,
+                                    respuesta: faq.respuesta,
+                                    orden: faq.orden,
+                                    is_active: faq.is_active,
+                                })),
+                            },
+                            socialNetworks: studio.social_networks.map(network => ({
+                                id: network.id,
+                                url: network.url,
+                                platform: network.platform,
+                                order: network.order,
+                            })),
+                            contactInfo: {
+                                phones: studio.phones.map(phone => ({
+                                    id: phone.id,
+                                    number: phone.number,
+                                    type: phone.type,
+                                    label: phone.label,
+                                    is_active: phone.is_active,
+                                })),
+                                address: studio.address,
+                                website: studio.website,
+                                email: studio.email,
+                                maps_url: studio.maps_url,
+                                horarios: studio.business_hours?.map(horario => ({
+                                    id: horario.id,
+                                    dia: horario.day_of_week,
+                                    apertura: horario.start_time,
+                                    cierre: horario.end_time,
+                                    cerrado: !horario.is_active,
+                                })) || [],
+                            },
+                            items: studio.items.map(item => ({
+                                id: item.id,
+                                name: item.name,
+                                type: 'SERVICIO' as const,
+                                cost: item.cost,
+                                order: item.order
+                            })),
+                            paquetes: paquetes.map(paquete => ({
+                                id: paquete.id,
+                                nombre: paquete.name,
+                                descripcion: paquete.description ? paquete.description : undefined,
+                                precio: paquete.precio ?? 0,
+                                tipo_evento: paquete.event_types?.name ? paquete.event_types.name : undefined,
+                                tipo_evento_order: paquete.event_types?.order ?? undefined,
+                                cover_url: paquete.cover_url ? paquete.cover_url : undefined,
+                                is_featured: paquete.is_featured ?? false,
+                                status: paquete.status,
+                                order: paquete.order,
+                            })),
+                        }
+                    };
+                });
+            },
                 },
                 ['studio-profile-basic', slug, userId || 'anonymous'],
                 {
                     tags: [`studio-profile-basic-${slug}`],
                     revalidate: 3600, // 1 hora para datos básicos
                 }
-            );
+        );
 
-            return await getCachedBasicData();
+        return await getCachedBasicData();
     } catch (error) {
         console.error('[getStudioProfileBasicData] ❌ Error:', error);
         return {
