@@ -1,6 +1,8 @@
 import React from 'react';
 import Link from 'next/link';
+import { unstable_cache } from 'next/cache';
 import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
+import { PublicPageFooterServer } from '@/components/shared/PublicPageFooterServer';
 import { prisma } from '@/lib/prisma';
 
 interface PromiseLayoutProps {
@@ -11,21 +13,57 @@ interface PromiseLayoutProps {
   }>;
 }
 
+/**
+ * Obtener platform config con caché (una vez por request)
+ */
+async function getPlatformConfigCached() {
+  const getCachedConfig = unstable_cache(
+    async () => {
+      try {
+        const config = await prisma.platform_config.findFirst({
+          orderBy: { createdAt: 'desc' },
+          select: {
+            company_name: true,
+            company_name_long: true,
+            commercial_name: true,
+            commercial_name_short: true,
+            domain: true,
+          },
+        });
+        return config;
+      } catch (error) {
+        console.error('[getPlatformConfigCached] Error:', error);
+        return null;
+      }
+    },
+    ['platform-config'],
+    {
+      tags: ['platform-config'],
+      revalidate: 3600, // Cachear por 1 hora
+    }
+  );
+
+  return getCachedConfig();
+}
+
 export default async function PromiseLayout({
   children,
   params,
 }: PromiseLayoutProps) {
   const { slug } = await params;
 
-  // Obtener información básica del studio para el header
-  const studio = await prisma.studios.findUnique({
-    where: { slug },
-    select: {
-      studio_name: true,
-      slogan: true,
-      logo_url: true,
-    },
-  });
+  // Obtener información básica del studio para el header y platform config en paralelo
+  const [studio, platformConfig] = await Promise.all([
+    prisma.studios.findUnique({
+      where: { slug },
+      select: {
+        studio_name: true,
+        slogan: true,
+        logo_url: true,
+      },
+    }),
+    getPlatformConfigCached(),
+  ]);
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -67,8 +105,12 @@ export default async function PromiseLayout({
         {children}
       </div>
 
-      {/* Footer by Zen */}
-      <PublicPageFooter />
+      {/* Footer by Zen - Server Component optimizado */}
+      <PublicPageFooterServer
+        companyName={platformConfig?.company_name || 'Zenly México'}
+        commercialName={platformConfig?.commercial_name || platformConfig?.company_name || 'Zenly Studio'}
+        domain={platformConfig?.domain || 'zenly.mx'}
+      />
     </div>
   );
 }

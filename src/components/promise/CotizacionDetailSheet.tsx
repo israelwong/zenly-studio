@@ -233,17 +233,30 @@ export function CotizacionDetailSheet({
     isOpenRef.current = isOpen;
   }, [isOpen]);
 
+  const lastUpdateTimeRef = useRef<number>(0);
+  const isUpdatingRef = useRef(false);
+
   const handleCotizacionUpdated = useCallback(async (cotizacionId: string) => {
     // Solo procesar si el sheet está abierto y es la cotización actual
     if (!isOpenRef.current) {
       return;
     }
 
+    // Protección: evitar actualizaciones muy frecuentes (mínimo 1 segundo)
+    const now = Date.now();
+    if (now - lastUpdateTimeRef.current < 1000 || isUpdatingRef.current) {
+      return;
+    }
+
     if (cotizacionId === currentCotizacionIdRef.current) {
-      // Recargar datos de la cotización
+      isUpdatingRef.current = true;
+      lastUpdateTimeRef.current = now;
+
+      // Recargar datos de la cotización usando función ligera
       try {
-        const { getPublicPromiseData } = await import('@/lib/actions/public/promesas.actions');
-        const result = await getPublicPromiseData(studioSlug, promiseId);
+        // Usar getPublicPromisePendientes si estamos en pendientes, o función específica según la ruta
+        const { getPublicPromisePendientes } = await import('@/lib/actions/public/promesas.actions');
+        const result = await getPublicPromisePendientes(studioSlug, promiseId);
         if (result.success && result.data?.cotizaciones) {
           const updatedCotizacion = result.data.cotizaciones.find(c => c.id === cotizacionId);
           if (updatedCotizacion) {
@@ -252,6 +265,8 @@ export function CotizacionDetailSheet({
         }
       } catch (error) {
         // Error silencioso - no afecta la UX
+      } finally {
+        isUpdatingRef.current = false;
       }
     }
   }, [studioSlug, promiseId]);

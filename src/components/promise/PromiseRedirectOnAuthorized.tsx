@@ -3,7 +3,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
-import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 
 interface PromiseRedirectOnAuthorizedProps {
   studioSlug: string;
@@ -15,6 +14,10 @@ const STATUSES_APROBADOS = ['aprobada', 'autorizada', 'approved'];
 /**
  * Componente que escucha cambios en cotizaciones mediante realtime
  * y redirige a /[slug]/cliente cuando se detecta una cotización aprobada/autorizada
+ * 
+ * ⚠️ OPTIMIZADO: Usa getPublicPromiseRouteState (ultra-ligera) en lugar de getPublicPromiseData
+ * ⚠️ OPTIMIZADO: Eliminado setInterval agresivo, solo verifica una vez al montar
+ * ⚠️ FIX: Dynamic import para evitar problemas de HMR con Server Actions
  */
 export function PromiseRedirectOnAuthorized({
   studioSlug,
@@ -22,17 +25,29 @@ export function PromiseRedirectOnAuthorized({
 }: PromiseRedirectOnAuthorizedProps) {
   const router = useRouter();
   const hasRedirectedRef = useRef(false);
+  const lastCheckRef = useRef<number>(0);
 
   const checkAndRedirect = useCallback(async () => {
     if (hasRedirectedRef.current) return;
 
+    // ⚠️ Protección: evitar checks muy frecuentes (mínimo 10 segundos)
+    const now = Date.now();
+    if (now - lastCheckRef.current < 10000) {
+      return;
+    }
+    lastCheckRef.current = now;
+
     try {
-      const result = await getPublicPromiseData(studioSlug, promiseId);
-      if (result.success && result.data?.cotizaciones) {
-        const cotizacionAprobada = result.data.cotizaciones.find(
+      // ⚠️ FIX: Dynamic import para evitar problemas de HMR con Turbopack
+      const { getPublicPromiseRouteState } = await import('@/lib/actions/public/promesas.actions');
+      // ⚠️ OPTIMIZACIÓN: Usar función ultra-ligera en lugar de getPublicPromiseData
+      const result = await getPublicPromiseRouteState(studioSlug, promiseId);
+      if (result.success && result.data) {
+        // Buscar cotización aprobada en los estados
+        const cotizacionAprobada = result.data.find(
           (cot) => {
-            const status = (cot as any).status || '';
-            return STATUSES_APROBADOS.includes(status.toLowerCase());
+            const status = (cot.status || '').toLowerCase();
+            return STATUSES_APROBADOS.includes(status);
           }
         );
 
@@ -55,14 +70,15 @@ export function PromiseRedirectOnAuthorized({
 
       // Verificar si el cambio es de status a aprobada/autorizada/approved
       if (changeInfo?.statusChanged) {
-        const newStatus = changeInfo.newStatus as string;
+        const newStatus = (changeInfo.newStatus as string).toLowerCase();
 
-        if (STATUSES_APROBADOS.includes(newStatus.toLowerCase())) {
-          await checkAndRedirect();
+        if (STATUSES_APROBADOS.includes(newStatus)) {
+          hasRedirectedRef.current = true;
+          router.push(`/${studioSlug}/cliente`);
         }
       }
     },
-    [checkAndRedirect]
+    [studioSlug, router]
   );
 
   // Escuchar cambios en cotizaciones mediante realtime
@@ -72,15 +88,11 @@ export function PromiseRedirectOnAuthorized({
     onCotizacionUpdated: handleCotizacionUpdated,
   });
 
-  // Verificar periódicamente si hay cotizaciones aprobadas (fallback)
+  // ⚠️ OPTIMIZADO: Solo verificar una vez al montar (no polling agresivo)
+  // Realtime se encargará de detectar cambios
   useEffect(() => {
-    // Verificar inmediatamente
+    // Verificar solo una vez al montar
     checkAndRedirect();
-
-    // Verificar cada 2 segundos como fallback
-    const interval = setInterval(checkAndRedirect, 2000);
-
-    return () => clearInterval(interval);
   }, [checkAndRedirect]);
 
   return null;

@@ -83,14 +83,21 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Pool de conexiones optimizado para serverless
 // CRÍTICO: max=1 para Vercel + pgbouncer (evita MaxClientsInSessionMode)
-const poolMax = isPgbouncer ? 1 : process.env.NODE_ENV === 'production' ? 1 : 5;
+// ⚠️ OPTIMIZACIÓN: Aumentar pool en desarrollo para paralelismo
+const poolMax = isPgbouncer 
+  ? 1 // Serverless: 1 conexión (pgbouncer)
+  : process.env.NODE_ENV === 'production' 
+    ? 1 // Producción: 1 conexión (conservador)
+    : 10; // Desarrollo: 10 conexiones para paralelismo
 
 const pgPool = globalThis.__pgPool || new Pool({
   connectionString,
-  max: poolMax, // 1 conexión para pgbouncer/serverless, 5 para desarrollo directo
+  max: poolMax,
   idleTimeoutMillis: 30000, // 30s para liberar conexiones rápidamente
-  connectionTimeoutMillis: 10000, // 10s timeout
+  connectionTimeoutMillis: 30000, // 30s timeout (aumentado para queries complejas)
   allowExitOnIdle: true, // Permitir que el proceso termine cuando no hay conexiones activas
+  // ⚠️ OPTIMIZACIÓN: Configuración adicional para reducir overhead
+  statement_timeout: 30000, // 30s timeout por statement
 });
 
 if (process.env.NODE_ENV !== 'production') {

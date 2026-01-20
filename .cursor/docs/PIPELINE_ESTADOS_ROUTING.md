@@ -34,9 +34,11 @@ El routing interno usa `determinePromiseState()` que calcula el estado desde cot
 
 **Lógica de `determinePromiseState()`:**
 
-1. **Prioridad 1:** Si `promise.status === 'aprobada'` o hay cotización autorizada con `evento_id` → `autorizada`
+1. **Prioridad 1:** Si `pipeline_stage.slug === 'approved'` o hay cotización autorizada con `evento_id` → `autorizada`
 2. **Prioridad 2:** Si hay cotización `en_cierre` o `aprobada` sin evento → `cierre`
 3. **Default:** → `pendiente`
+
+**Nota:** La función usa `pipeline_stage.slug` (no el campo deprecado `status`).
 
 **Mapeo Pipeline Stage → Ruta:**
 
@@ -402,18 +404,211 @@ model studio_promise_status_history {
 
 ---
 
+## ⚡ Implementación de Metodología de Optimización ZEN
+
+La ruta de promesas (`/[slug]/studio/commercial/promises/[promiseId]`) implementa completamente la **Metodología de Optimización ZEN** (ver `.cursor/metodologia-optimizacion-zen.md`). Esta sección documenta cómo se aplicó cada principio.
+
+### 1. Arquitectura Server-First ✅
+
+**Todos los `page.tsx` son Server Components async que cargan datos directamente:**
+
+- **`layout.tsx`**: Carga `determinePromiseState()` y `getPipelineStages()` en paralelo con `Promise.all()`
+- **`page.tsx`**: Determina estado y pasa datos al cliente sin `useEffect`
+- **`pendiente/page.tsx`**: Carga condiciones comerciales, métodos de pago y cotizaciones en paralelo
+- **`cierre/page.tsx`**: Carga cotizaciones directamente en el servidor
+- **`autorizada/page.tsx`**: Carga cotización autorizada en el servidor
+
+**Beneficios:**
+- ✅ Sin parpadeo de skeletons: datos disponibles en HTML inicial
+- ✅ Mejor SEO y performance
+- ✅ Streaming nativo de Next.js
+
+### 2. Streaming Nativo ✅
+
+**Cada segmento de ruta tiene su `loading.tsx`:**
+
+```
+[promiseId]/
+├── loading.tsx              # Skeleton del layout
+├── pendiente/
+│   └── loading.tsx          # Skeleton de pendiente
+├── cierre/
+│   └── loading.tsx          # Skeleton de cierre
+└── autorizada/
+    └── loading.tsx          # Skeleton de autorizada
+```
+
+**Implementación:**
+- Cada `loading.tsx` renderiza un skeleton específico (`PromiseLayoutSkeleton`, `PromisePendienteSkeleton`, `PromiseCierreSkeleton`)
+- Next.js muestra automáticamente el skeleton durante transiciones
+- Sin race conditions: el router espera a que los datos estén listos
+
+### 3. Navegación Atómica ✅
+
+**Implementado en `PromiseRedirectClient.tsx`:**
+
+```typescript
+// Usa startTransition para priorizar navegación
+startTransition(() => {
+  router.replace(targetPath);
+});
+
+// Dispara evento para cerrar overlays
+window.dispatchEvent(new CustomEvent('close-overlays'));
+```
+
+**Protecciones:**
+- ✅ `startTransition` marca navegación como no-urgente, priorizando UI
+- ✅ Evento `close-overlays` cierra overlays globales antes de navegar
+- ✅ Delay de 100ms para asegurar que el skeleton se muestre
+
+### 4. Gestión de Rutas Anidadas ✅
+
+**Estructura implementada:**
+
+```
+[promiseId]/
+├── layout.tsx              # Server Component (async, fetch directo)
+├── page.tsx                # Redirección según estado (Server Component)
+├── loading.tsx            # Skeleton de detalle
+├── pendiente/
+│   ├── page.tsx           # Server Component con datos iniciales
+│   └── loading.tsx        # Skeleton de pendiente
+├── cierre/
+│   ├── page.tsx           # Server Component con datos iniciales
+│   └── loading.tsx        # Skeleton de cierre
+└── autorizada/
+    ├── page.tsx           # Server Component con datos iniciales
+    └── loading.tsx        # Skeleton de autorizada
+```
+
+**Características:**
+- ✅ Layout anidado carga datos en paralelo (`determinePromiseState` + `getPipelineStages`)
+- ✅ Page base redirige según estado determinado
+- ✅ Sub-rutas validan estado y redirigen si es necesario
+- ✅ Cada nivel tiene su `loading.tsx`
+
+### 5. Higiene de UI Global ✅
+
+**Implementado en `PromiseLayoutClient.tsx`:**
+
+```typescript
+// Cerrar overlays al montar el componente de detalle
+useEffect(() => {
+  window.dispatchEvent(new CustomEvent('close-overlays'));
+}, []);
+```
+
+**También en `PromiseRedirectClient.tsx`:**
+
+```typescript
+// Cerrar overlays antes de navegar
+window.dispatchEvent(new CustomEvent('close-overlays'));
+```
+
+**Resultado:**
+- ✅ Overlays (Side Sheets, Modals) se cierran automáticamente al navegar
+- ✅ Sin "ruido visual" al cambiar de ruta
+- ✅ Mejor UX con transiciones limpias
+
+### 6. Sistema de Caché con Tags ✅
+
+**Implementado en la página principal de promesas:**
+
+```typescript
+// src/app/[slug]/studio/commercial/promises/page.tsx
+const getCachedPromises = unstable_cache(
+  async () => {
+    return getPromises(studioSlug, { page: 1, limit: 1000 });
+  },
+  ['promises-list', studioSlug],
+  {
+    tags: [`promises-list-${studioSlug}`], // ✅ Incluye studioSlug
+    revalidate: false,
+  }
+);
+
+const getCachedPipelineStages = unstable_cache(
+  async () => {
+    return getPipelineStages(studioSlug);
+  },
+  ['pipeline-stages', studioSlug],
+  {
+    tags: [`pipeline-stages-${studioSlug}`], // ✅ Incluye studioSlug
+    revalidate: 3600, // 1 hora
+  }
+);
+```
+
+**Nota sobre páginas de detalle:**
+- Las páginas de detalle (`[promiseId]/page.tsx`, `pendiente/page.tsx`, etc.) **NO usan caché** porque:
+  - Los datos cambian frecuentemente (cotizaciones, estados)
+  - Se requiere siempre la versión más reciente
+  - El streaming nativo ya proporciona buena performance
+
+**Invalidación de caché:**
+- Los server actions invalidan tags con `revalidateTag()` cuando hay mutaciones
+- Tags incluyen `studioSlug` para aislamiento entre tenants
+
+### Resumen de Implementación
+
+| Principio | Estado | Archivos Clave |
+|-----------|--------|----------------|
+| Server-First | ✅ | `layout.tsx`, `page.tsx`, `pendiente/page.tsx`, `cierre/page.tsx`, `autorizada/page.tsx` |
+| Streaming Nativo | ✅ | `loading.tsx` en cada nivel de ruta |
+| Navegación Atómica | ✅ | `PromiseRedirectClient.tsx` |
+| Rutas Anidadas | ✅ | `layout.tsx` + sub-rutas con validación |
+| Higiene UI Global | ✅ | `PromiseLayoutClient.tsx`, `PromiseRedirectClient.tsx` |
+| Caché con Tags | ✅ | `promises/page.tsx` (lista), detalle sin caché (intencional) |
+
+### Referencia
+
+Para más detalles sobre la metodología, ver: `.cursor/metodologia-optimizacion-zen.md`
+
+---
+
 ## 🔗 Archivos Relacionados
+
+### Lógica de Negocio
 
 - `src/lib/actions/studio/commercial/promises/promise-state.actions.ts` - Determina estado para routing (usa `pipeline_stage.slug`)
 - `src/lib/actions/studio/commercial/promises/promise-pipeline-sync.actions.ts` - Sincronización automática
 - `src/lib/actions/studio/commercial/promises/promise-status-history.actions.ts` - Historial de cambios
 - `src/lib/actions/studio/commercial/promises/promises.actions.ts` - `movePromise()`, `createPromise()` (sin `status`)
 - `src/lib/actions/studio/commercial/promises/cotizaciones.actions.ts` - `pasarACierre()`, `cancelarCierre()` (con sincronización)
+
+### Componentes de UI
+
 - `src/app/[slug]/studio/commercial/promises/components/PromisesKanban.tsx` - Validaciones de transición
-- `src/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseRedirectClient.tsx` - Redirección según estado
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseRedirectClient.tsx` - Redirección según estado (navegación atómica)
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseLayoutClient.tsx` - Layout cliente (cierre de overlays)
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/components/PromiseLayoutSkeleton.tsx` - Skeletons para streaming
+
+### Rutas (Server Components)
+
+- `src/app/[slug]/studio/commercial/promises/page.tsx` - Lista de promesas (con caché con tags)
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/layout.tsx` - Layout anidado (Server Component)
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/page.tsx` - Redirección según estado
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/loading.tsx` - Skeleton de detalle
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/pendiente/page.tsx` - Vista pendiente (Server Component)
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/pendiente/loading.tsx` - Skeleton de pendiente
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/cierre/page.tsx` - Vista cierre (Server Component)
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/cierre/loading.tsx` - Skeleton de cierre
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/autorizada/page.tsx` - Vista autorizada (Server Component)
+- `src/app/[slug]/studio/commercial/promises/[promiseId]/autorizada/loading.tsx` - Skeleton de autorizada
+
+### Promise Público
+
 - `src/app/[slug]/promise/[promiseId]/page.tsx` - Router del promise público
+
+### Base de Datos
+
 - `prisma/04-seed-promise-pipeline.ts` - Seed de pipeline stages
 - `prisma/schema.prisma` - Schema de base de datos (campo `status` removido)
 - `supabase/migrations/20260126000002_migrate_promise_status_to_pipeline.sql` - Migración de datos de status a pipeline_stage_id
 - `supabase/migrations/20260126000003_deprecate_promise_status.sql` - Deprecación y eliminación de índice
 - `supabase/migrations/20260126000004_remove_promise_status_field.sql` - Eliminación física del campo `status`
+
+### Documentación
+
+- `.cursor/metodologia-optimizacion-zen.md` - Metodología de optimización implementada

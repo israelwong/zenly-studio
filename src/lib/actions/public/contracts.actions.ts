@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createStudioNotification } from "@/lib/notifications/studio/studio-notification.service";
 import { StudioNotificationScope, StudioNotificationType, NotificationPriority } from "@/lib/notifications/studio/types";
 import { z } from "zod";
@@ -145,6 +145,7 @@ export async function signPublicContract(
 
     revalidatePath(`/${studioSlug}/promise/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidateTag(`public-promise-${studioSlug}-${promiseId}`);
 
     return { success: true };
   } catch (error) {

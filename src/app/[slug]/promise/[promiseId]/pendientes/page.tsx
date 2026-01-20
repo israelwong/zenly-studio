@@ -2,7 +2,9 @@ import React, { Suspense } from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Calendar } from 'lucide-react';
-import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { unstable_cache } from 'next/cache';
+import { getPublicPromisePendientes, getPublicPromiseRouteState, getPublicPromiseMetadata } from '@/lib/actions/public/promesas.actions';
+import { isRouteValid } from '@/lib/utils/public-promise-routing';
 import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { CotizacionesSectionRealtime } from '@/components/promise/CotizacionesSectionRealtime';
 import { PaquetesSection } from '@/components/promise/PaquetesSection';
@@ -24,8 +26,24 @@ interface PendientesPageProps {
 export default async function PendientesPage({ params }: PendientesPageProps) {
   const { slug, promiseId } = await params;
 
-  // Obtener datos completos de la promesa
-  const result = await getPublicPromiseData(slug, promiseId);
+  // ✅ 1. Validación temprana: verificar estado antes de cargar datos pesados
+  const routeState = await getPublicPromiseRouteState(slug, promiseId);
+
+  if (!routeState.success || !routeState.data) {
+    redirect(`/${slug}/promise/${promiseId}`);
+  }
+
+  // ✅ 2. Control de acceso: usar función unificada isRouteValid
+  const currentPath = `/${slug}/promise/${promiseId}/pendientes`;
+  const isValid = isRouteValid(currentPath, routeState.data);
+
+  if (!isValid) {
+    console.log('❌ Validación fallida en /pendientes: Redirigiendo al raíz. Datos:', routeState.data);
+    redirect(`/${slug}/promise/${promiseId}`);
+  }
+
+  // ✅ 3. Solo ahora cargar datos específicos para /pendientes
+  const result = await getPublicPromisePendientes(slug, promiseId);
 
   // Si no hay datos, redirigir a la ruta raíz que manejará el error
   if (!result.success || !result.data) {
@@ -35,45 +53,13 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
   const {
     promise,
     studio: studioData,
-    cotizaciones: cotizacionesRaw,
+    cotizaciones: cotizacionesPendientes,
     paquetes,
     condiciones_comerciales,
     terminos_condiciones,
     share_settings,
     portafolios,
   } = result.data;
-
-  // Type assertion: las cotizaciones incluyen status y selected_by_prospect
-  // (el mapeo en getPublicPromiseData las incluye aunque el tipo local no las defina)
-  type CotizacionConStatus = PublicCotizacion & {
-    status: string;
-    selected_by_prospect?: boolean;
-  };
-  const cotizaciones = cotizacionesRaw as unknown as CotizacionConStatus[];
-
-  // Filtrar solo cotizaciones pendientes
-  const cotizacionesPendientes = cotizaciones.filter(
-    (cot) => cot.status === 'pendiente'
-  );
-
-  // Si no hay cotizaciones pendientes pero hay otras, redirigir según estado
-  if (cotizacionesPendientes.length === 0) {
-    // Prioridad: negociación primero
-    const cotizacionNegociacion = cotizaciones.find(
-      (cot) => cot.status === 'negociacion' && cot.selected_by_prospect !== true
-    );
-    if (cotizacionNegociacion) {
-      redirect(`/${slug}/promise/${promiseId}/negociacion`);
-    }
-
-    // Luego cierre
-    const cotizacionEnCierre = cotizaciones.find(
-      (cot) => cot.selected_by_prospect === true && cot.status === 'en_cierre'
-    );
-    if (cotizacionEnCierre) {
-      redirect(`/${slug}/promise/${promiseId}/cierre`);
-    }
-  }
 
   return (
     <PromisePageProvider>
@@ -102,7 +88,19 @@ export async function generateMetadata({
   const { slug, promiseId } = await params;
 
   try {
-    const result = await getPublicPromiseData(slug, promiseId);
+    // Para metadata, usar función ultra-ligera
+    const getCachedMetadata = unstable_cache(
+      async () => {
+        return getPublicPromiseMetadata(slug, promiseId);
+      },
+      ['public-promise-metadata', slug, promiseId],
+      {
+        tags: [`public-promise-metadata-${slug}-${promiseId}`],
+        revalidate: 3600, // Cachear por 1 hora
+      }
+    );
+
+    const result = await getCachedMetadata();
 
     if (!result.success || !result.data) {
       return {
@@ -111,25 +109,25 @@ export async function generateMetadata({
       };
     }
 
-    const { promise, studio } = result.data;
-    const eventType = promise.event_type_name || 'Evento';
-    const eventName = promise.event_name || '';
-    const studioName = studio.studio_name;
+    const { event_name, event_type_name, studio_name, logo_url } = result.data;
+    const eventType = event_type_name || 'Evento';
+    const eventName = event_name || '';
+    const studioName = studio_name;
 
     const title = eventName
       ? `${eventType} ${eventName} | ${studioName}`
       : `${eventType} | ${studioName}`;
-    const description = `Revisa las cotizaciones para tu ${promise.event_type_name || 'evento'} con ${studio.studio_name}`;
+    const description = `Revisa las cotizaciones para tu ${event_type_name || 'evento'} con ${studio_name}`;
 
-    const icons = studio.logo_url
+    const icons = logo_url
       ? {
         icon: [
-          { url: studio.logo_url, type: 'image/png' },
-          { url: studio.logo_url, sizes: '32x32', type: 'image/png' },
-          { url: studio.logo_url, sizes: '16x16', type: 'image/png' },
+          { url: logo_url, type: 'image/png' },
+          { url: logo_url, sizes: '32x32', type: 'image/png' },
+          { url: logo_url, sizes: '16x16', type: 'image/png' },
         ],
-        apple: [{ url: studio.logo_url, sizes: '180x180', type: 'image/png' }],
-        shortcut: studio.logo_url,
+        apple: [{ url: logo_url, sizes: '180x180', type: 'image/png' }],
+        shortcut: logo_url,
       }
       : undefined;
 

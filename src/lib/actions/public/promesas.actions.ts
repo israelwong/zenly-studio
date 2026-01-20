@@ -1,7 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { withRetry } from "@/lib/database/retry-helper";
 import { obtenerCatalogo } from "@/lib/actions/studio/config/catalogo.actions";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/config/configuracion-precios.actions";
 import { calcularPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
@@ -12,8 +13,9 @@ import { construirEstructuraJerarquicaCotizacion } from "@/lib/actions/studio/co
 
 /**
  * Obtener condiciones comerciales disponibles para promesa pública
+ * Con caché estratégico para evitar timeouts
  */
-export async function obtenerCondicionesComercialesPublicas(
+async function _obtenerCondicionesComercialesPublicasInternal(
   studioSlug: string
 ): Promise<{
   success: boolean;
@@ -47,20 +49,38 @@ export async function obtenerCondicionesComercialesPublicas(
       };
     }
 
+    // Optimizar consulta: usar select en lugar de include para reducir datos transferidos
     const condiciones = await prisma.studio_condiciones_comerciales.findMany({
       where: {
         studio_id: studio.id,
         status: 'active',
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        advance_percentage: true,
+        advance_type: true,
+        advance_amount: true,
+        discount_percentage: true,
+        type: true,
+        order: true,
         condiciones_comerciales_metodo_pago: {
-          include: {
+          where: {
+            status: 'active',
+          },
+          select: {
+            id: true,
+            metodo_pago_id: true,
             metodos_pago: {
               select: {
                 id: true,
                 payment_method_name: true,
               },
             },
+          },
+          orderBy: {
+            orden: 'asc',
           },
         },
       },
@@ -105,11 +125,58 @@ export async function obtenerCondicionesComercialesPublicas(
     };
   } catch (error) {
     console.error("Error al obtener condiciones comerciales públicas:", error);
+
+    // Manejar errores de timeout específicamente
+    if (error instanceof Error) {
+      if (error.message.includes('timeout') || error.message.includes('connect')) {
+        return {
+          success: false,
+          error: "Timeout al conectar con la base de datos. Por favor, intenta de nuevo.",
+        };
+      }
+    }
+
     return {
       success: false,
       error: "Error al obtener condiciones comerciales",
     };
   }
+}
+
+/**
+ * Obtener condiciones comerciales con caché (revalidate: 3600s)
+ */
+export async function obtenerCondicionesComercialesPublicas(
+  studioSlug: string
+): Promise<{
+  success: boolean;
+  data?: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    advance_percentage: number | null;
+    advance_type?: string | null;
+    advance_amount?: number | null;
+    discount_percentage: number | null;
+    type?: string;
+    metodos_pago: Array<{
+      id: string;
+      metodo_pago_id: string;
+      metodo_pago_name: string;
+    }>;
+  }>;
+  error?: string;
+}> {
+  const getCachedCondiciones = unstable_cache(
+    async () => _obtenerCondicionesComercialesPublicasInternal(studioSlug),
+    ['public-condiciones', studioSlug],
+    {
+      tags: [`public-condiciones-${studioSlug}`],
+      revalidate: 3600, // Cachear por 1 hora
+    }
+  );
+
+  return getCachedCondiciones();
 }
 
 /**
@@ -197,9 +264,9 @@ export async function filtrarCondicionesPorPreferencias(
 }
 
 /**
- * Obtener términos y condiciones activos para promesa pública
+ * Obtener términos y condiciones activos para promesa pública (internal)
  */
-export async function obtenerTerminosCondicionesPublicos(
+async function _obtenerTerminosCondicionesPublicosInternal(
   studioSlug: string
 ): Promise<{
   success: boolean;
@@ -249,6 +316,33 @@ export async function obtenerTerminosCondicionesPublicos(
       error: "Error al obtener términos y condiciones",
     };
   }
+}
+
+/**
+ * Obtener términos y condiciones con caché (revalidate: 3600s)
+ */
+export async function obtenerTerminosCondicionesPublicos(
+  studioSlug: string
+): Promise<{
+  success: boolean;
+  data?: Array<{
+    id: string;
+    title: string;
+    content: string;
+    is_required: boolean;
+  }>;
+  error?: string;
+}> {
+  const getCachedTerminos = unstable_cache(
+    async () => _obtenerTerminosCondicionesPublicosInternal(studioSlug),
+    ['public-terminos', studioSlug],
+    {
+      tags: [`public-terminos-${studioSlug}`],
+      revalidate: 3600, // Cachear por 1 hora
+    }
+  );
+
+  return getCachedTerminos();
 }
 
 /**
@@ -349,8 +443,182 @@ interface PublicPaquete {
 }
 
 /**
- * Filtrar catálogo para mostrar solo servicios incluidos en cotización/paquete
- * Igual que ResumenCotizacionAutorizada y CotizacionForm
+ * ⚠️ OPTIMIZACIÓN: Obtener solo items específicos por IDs (en lugar de catálogo completo)
+ * Reduce tiempo de carga de 1.5s a <100ms
+ */
+async function obtenerItemsPorIds(
+  studioId: string,
+  itemIds: string[]
+): Promise<SeccionData[]> {
+  if (itemIds.length === 0) return [];
+
+  try {
+    // Obtener items con sus relaciones necesarias
+    const items = await prisma.studio_items.findMany({
+      where: {
+        id: { in: itemIds },
+        studio_id: studioId,
+      },
+      select: {
+        id: true,
+        name: true,
+        cost: true,
+        expense: true,
+        utility_type: true,
+        type: true,
+        billing_type: true,
+        order: true,
+        status: true,
+        service_category_id: true,
+        service_categories: {
+          select: {
+            id: true,
+            name: true,
+            order: true,
+            section_categories: {
+              select: {
+                section_id: true,
+                service_sections: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    order: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        item_expenses: {
+          select: {
+            id: true,
+            name: true,
+            cost: true,
+          },
+        },
+      },
+    });
+
+    // Agrupar por sección y categoría
+    const seccionesMap = new Map<string, {
+      id: string;
+      nombre: string;
+      descripcion: string | null;
+      orden: number;
+      categorias: Map<string, {
+        id: string;
+        nombre: string;
+        orden: number;
+        servicios: Array<{
+          id: string;
+          nombre: string;
+          costo: number | null;
+          gasto: number | null;
+          tipo_utilidad: string | null;
+          type: string | null;
+          billing_type: string | null;
+          orden: number;
+          status: string;
+          gastos: Array<{ id: string; nombre: string; costo: number | null }>;
+        }>;
+      }>;
+    }>();
+
+    items.forEach((item) => {
+      const seccion = item.service_categories?.section_categories?.service_sections;
+      if (!seccion) return;
+
+      if (!seccionesMap.has(seccion.id)) {
+        seccionesMap.set(seccion.id, {
+          id: seccion.id,
+          nombre: seccion.name,
+          descripcion: seccion.description,
+          orden: seccion.order,
+          categorias: new Map(),
+        });
+      }
+
+      const seccionData = seccionesMap.get(seccion.id)!;
+      const categoria = item.service_categories;
+      if (!categoria) return;
+
+      if (!seccionData.categorias.has(categoria.id)) {
+        seccionData.categorias.set(categoria.id, {
+          id: categoria.id,
+          nombre: categoria.name,
+          orden: categoria.order,
+          servicios: [],
+        });
+      }
+
+      const categoriaData = seccionData.categorias.get(categoria.id)!;
+      categoriaData.servicios.push({
+        id: item.id,
+        nombre: item.name,
+        costo: item.cost ?? 0,
+        gasto: item.expense ?? 0,
+        tipo_utilidad: item.utility_type ?? null,
+        type: item.type ?? null,
+        billing_type: item.billing_type ?? null,
+        orden: item.order,
+        status: item.status,
+        gastos: item.item_expenses.map((g: { id: string; name: string; cost: number | null }) => ({
+          id: g.id,
+          nombre: g.name,
+          costo: g.cost ?? 0,
+        })),
+      });
+    });
+
+    // Convertir Maps a arrays y ordenar
+    return Array.from(seccionesMap.values())
+      .map((seccion) => ({
+        id: seccion.id,
+        nombre: seccion.nombre,
+        descripcion: seccion.descripcion,
+        orden: seccion.orden,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        categorias: Array.from(seccion.categorias.values())
+          .map((categoria) => ({
+            id: categoria.id,
+            nombre: categoria.nombre,
+            orden: categoria.orden,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            seccionId: seccion.id,
+            servicios: categoria.servicios
+              .map((servicio) => ({
+                id: servicio.id,
+                studioId: studioId,
+                servicioCategoriaId: categoria.id,
+                nombre: servicio.nombre,
+                costo: servicio.costo ?? 0,
+                gasto: servicio.gasto ?? 0,
+                tipo_utilidad: servicio.tipo_utilidad ?? '',
+                type: servicio.type ?? '',
+                billing_type: (servicio.billing_type as 'HOUR' | 'SERVICE' | 'UNIT' | undefined) ?? undefined,
+                orden: servicio.orden,
+                status: servicio.status,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                gastos: servicio.gastos,
+              }))
+              .sort((a, b) => a.orden - b.orden),
+          }))
+          .sort((a, b) => a.orden - b.orden),
+      }))
+      .sort((a, b) => a.orden - b.orden);
+  } catch (error) {
+    console.error('[obtenerItemsPorIds] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * ⚠️ OPTIMIZACIÓN: Filtrar catálogo SIN multimedia
+ * Solo datos básicos (id, name, price, quantity) - sin payload pesado
  */
 function filtrarCatalogoPorItems(
   catalogo: SeccionData[],
@@ -363,8 +631,7 @@ function filtrarCatalogoPorItems(
     description_snapshot?: string | null;
     category_name_snapshot?: string | null;
     seccion_name_snapshot?: string | null;
-  }>,
-  itemsMedia?: Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>
+  }>
 ): PublicSeccionData[] {
   return catalogo
     .map((seccion) => ({
@@ -380,7 +647,6 @@ function filtrarCatalogoPorItems(
             .filter((servicio) => itemIds.has(servicio.id))
             .map((servicio) => {
               const itemData = itemsData.get(servicio.id);
-              const media = itemsMedia?.get(servicio.id);
               return {
                 id: servicio.id,
                 // Usar snapshots si están disponibles, sino fallback al catálogo
@@ -400,8 +666,7 @@ function filtrarCatalogoPorItems(
                       quantity: itemData.quantity,
                     }
                     : {}),
-                // Incluir multimedia si existe
-                ...(media && media.length > 0 ? { media } : {}),
+                // ⚠️ NO incluir multimedia - se carga bajo demanda solo para cotizaciones
               };
             }),
         }))
@@ -411,8 +676,1479 @@ function filtrarCatalogoPorItems(
 }
 
 /**
+ * Obtener datos para ruta /pendientes
+ * Solo carga cotizaciones con status: 'pendiente' + paquetes + condiciones + términos + portafolios
+ */
+export async function getPublicPromisePendientes(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    promise: {
+      id: string;
+      contact_name: string;
+      contact_phone: string;
+      contact_email: string | null;
+      contact_address: string | null;
+      event_type_id: string | null;
+      event_type_name: string | null;
+      event_name: string | null;
+      event_date: Date | null;
+      event_location: string | null;
+    };
+    studio: {
+      studio_name: string;
+      slogan: string | null;
+      logo_url: string | null;
+      id: string;
+      representative_name: string | null;
+      phone: string | null;
+      email: string | null;
+      address: string | null;
+      promise_share_default_show_packages: boolean;
+      promise_share_default_show_categories_subtotals: boolean;
+      promise_share_default_show_items_prices: boolean;
+      promise_share_default_min_days_to_hire: number;
+      promise_share_default_show_standard_conditions: boolean;
+      promise_share_default_show_offer_conditions: boolean;
+      promise_share_default_portafolios: boolean;
+      promise_share_default_auto_generate_contract: boolean;
+    };
+    cotizaciones: PublicCotizacion[];
+    paquetes: PublicPaquete[];
+    condiciones_comerciales?: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      advance_percentage: number | null;
+      advance_type?: string | null;
+      advance_amount?: number | null;
+      discount_percentage: number | null;
+      type?: string;
+      metodos_pago: Array<{
+        id: string;
+        metodo_pago_id: string;
+        metodo_pago_name: string;
+      }>;
+    }>;
+    terminos_condiciones?: Array<{
+      id: string;
+      title: string;
+      content: string;
+      is_required: boolean;
+    }>;
+    share_settings: {
+      show_packages: boolean;
+      show_categories_subtotals: boolean;
+      show_items_prices: boolean;
+      min_days_to_hire: number;
+      show_standard_conditions: boolean;
+      show_offer_conditions: boolean;
+      portafolios: boolean;
+      auto_generate_contract: boolean;
+    };
+    portafolios?: Array<{
+      id: string;
+      title: string;
+      slug: string;
+      description: string | null;
+      cover_image_url: string | null;
+      event_type?: {
+        id: string;
+        name: string;
+      } | null;
+    }>;
+  };
+  error?: string;
+}> {
+  const startTime = Date.now();
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  try {
+    // 1. Obtener datos básicos
+    const basicDataStart = Date.now();
+    const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
+    console.log(`[${uniqueId}] getPublicPromisePendientes:basicData: ${Date.now() - basicDataStart}ms`);
+
+    if (!basicData.success || !basicData.data) {
+      console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${Date.now() - startTime}ms (early return)`);
+      return {
+        success: false,
+        error: basicData.error || "Error al obtener datos básicos",
+      };
+    }
+
+    const { promise: promiseBasic, studio } = basicData.data;
+
+    // 2. Obtener share settings
+    const shareSettings = {
+      show_packages: promiseBasic.share_show_packages ?? studio.promise_share_default_show_packages,
+      show_categories_subtotals: promiseBasic.share_show_categories_subtotals ?? studio.promise_share_default_show_categories_subtotals,
+      show_items_prices: promiseBasic.share_show_items_prices ?? studio.promise_share_default_show_items_prices,
+      min_days_to_hire: promiseBasic.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire,
+      show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
+      show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
+      portafolios: studio.promise_share_default_portafolios,
+      auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
+    };
+
+    // 3. Obtener SOLO cotizaciones pendientes
+    // ⚠️ ÍNDICE: Usa [promise_id] en studio_cotizaciones (existe ✅)
+    // ⚠️ OPTIMIZACIÓN: Query fragmentada para evitar timeout
+    const fetchPromiseStart = Date.now();
+    const promise = await withRetry(
+      () => prisma.studio_promises.findFirst({
+        where: {
+          id: promiseId,
+          studio_id: studio.id,
+        },
+        select: {
+          id: true,
+          event_type_id: true,
+          quotes: {
+            where: {
+              visible_to_client: true,
+              status: 'pendiente', // Solo pendientes
+              // ⚠️ ÍNDICE: Usa [studio_id, status] en studio_cotizaciones (existe ✅)
+            },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true,
+              discount: true,
+              status: true,
+              selected_by_prospect: true,
+              order: true,
+              cotizacion_items: {
+                select: {
+                  id: true,
+                  item_id: true,
+                  name_snapshot: true,
+                  description_snapshot: true,
+                  category_name_snapshot: true,
+                  seccion_name_snapshot: true,
+                  name: true,
+                  description: true,
+                  category_name: true,
+                  seccion_name: true,
+                  unit_price: true,
+                  quantity: true,
+                  subtotal: true,
+                  status: true,
+                  order: true,
+                  is_courtesy: true,
+                },
+                orderBy: { order: 'asc' },
+              },
+              condiciones_comerciales_metodo_pago: {
+                select: {
+                  metodos_pago: {
+                    select: {
+                      payment_method_name: true,
+                    },
+                  },
+                },
+              },
+              condiciones_comerciales: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                },
+              },
+              paquete: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+            orderBy: { order: 'asc' },
+          },
+        },
+      }),
+      { maxRetries: 2, baseDelay: 1000, maxDelay: 5000 }
+    );
+    console.log(`[${uniqueId}] DB:FetchPromiseWithQuotes: ${Date.now() - fetchPromiseStart}ms`);
+
+    if (!promise) {
+      console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${Date.now() - startTime}ms (no promise)`);
+      return {
+        success: false,
+        error: "Promesa no encontrada",
+      };
+    }
+
+    // 4. ⚠️ OPTIMIZACIÓN: Extraer item_ids ANTES de cargar catálogo completo
+    const itemIdsFromQuotes = new Set<string>();
+    promise.quotes.forEach((cot) => {
+      cot.cotizacion_items.forEach((item) => {
+        if (item.item_id) itemIdsFromQuotes.add(item.item_id);
+      });
+    });
+
+    // 5. ⚠️ OPTIMIZACIÓN: Paralelizar paquetes y portafolios (independientes)
+    const paquetesPortafoliosStart = Date.now();
+    const [paquetesResult, portafoliosResult, configForm] = await Promise.all([
+      // Paquetes (solo si show_packages habilitado)
+      (shareSettings.show_packages && promise.event_type_id)
+        ? withRetry(
+          () => prisma.studio_paquetes.findMany({
+            where: {
+              studio_id: studio.id,
+              ...(promise.event_type_id ? { event_type_id: promise.event_type_id } : {}),
+              status: 'active',
+            },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              precio: true,
+              cover_url: true,
+              is_featured: true,
+              paquete_items: {
+                select: {
+                  id: true,
+                  item_id: true,
+                  quantity: true,
+                  precio_personalizado: true,
+                  status: true,
+                  visible_to_client: true,
+                  items: {
+                    select: {
+                      id: true,
+                      name: true,
+                      cost: true,
+                      expense: true,
+                      utility_type: true,
+                    },
+                  },
+                },
+                orderBy: { order: 'asc' },
+              },
+            },
+            orderBy: { precio: 'asc' },
+          }),
+          { maxRetries: 2, baseDelay: 1000, maxDelay: 5000 }
+        )
+        : Promise.resolve([]),
+      // Portafolios (solo si habilitado)
+      (shareSettings.portafolios && promise.event_type_id)
+        ? prisma.studio_portfolios.findMany({
+          where: {
+            studio_id: studio.id,
+            event_type_id: promise.event_type_id,
+            is_published: true,
+          },
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            description: true,
+            cover_image_url: true,
+            event_type: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: [
+            { is_featured: 'desc' },
+            { order: 'asc' },
+          ],
+          take: 10,
+        })
+        : Promise.resolve([]),
+      // Configuración de precios
+      obtenerConfiguracionPrecios(studioSlug),
+    ]);
+    const paquetes = paquetesResult;
+    const portafoliosData = portafoliosResult;
+    console.log(`[${uniqueId}] getPublicPromisePendientes:paquetes+portafolios+config: ${Date.now() - paquetesPortafoliosStart}ms`);
+
+    // Extraer item_ids de paquetes
+    const itemIdsFromPaquetes = new Set<string>();
+    paquetes.forEach((paq) => {
+      paq.paquete_items.forEach((item) => {
+        if (item.item_id) itemIdsFromPaquetes.add(item.item_id);
+      });
+    });
+
+    // Combinar todos los item_ids
+    const allItemIds = Array.from(new Set([...itemIdsFromQuotes, ...itemIdsFromPaquetes]));
+
+    // ⚠️ OPTIMIZACIÓN: Obtener solo items necesarios (en lugar de catálogo completo)
+    const catalogoStart = Date.now();
+    const catalogo = await obtenerItemsPorIds(studio.id, allItemIds);
+    console.log(`[${uniqueId}] getPublicPromisePendientes:catalogo-optimizado: ${Date.now() - catalogoStart}ms (${allItemIds.length} items)`);
+    const configPrecios = configForm ? {
+      utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30') / 100,
+      utilidad_producto: parseFloat(configForm.utilidad_producto || '0.20') / 100,
+      comision_venta: parseFloat(configForm.comision_venta || '0.10') / 100,
+      sobreprecio: parseFloat(configForm.sobreprecio || '0.05') / 100,
+    } : null;
+
+    // 6. ⚠️ OPTIMIZACIÓN: Obtener multimedia solo de items necesarios (payload reducido)
+    const multimediaStart = Date.now();
+    const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
+
+    if (allItemIds && allItemIds.length > 0) {
+      const fetchMediaStart = Date.now();
+      // ⚠️ OPTIMIZACIÓN: Solo campos esenciales (url, type, item_id) - sin metadatos pesados
+      // ⚠️ CRÍTICO: Solo items de cotizaciones, NO de paquetes
+      const itemsMediaData = await prisma.studio_item_media.findMany({
+        where: {
+          item_id: { in: Array.from(itemIdsFromQuotes) },
+          studio_id: studio.id,
+        },
+        select: {
+          id: true,
+          item_id: true,
+          file_url: true,
+          file_type: true,
+          display_order: true,
+          // ⚠️ NO incluir: description, metadata, file_size, etc.
+        },
+        orderBy: { display_order: 'asc' },
+      });
+      console.log(`[${uniqueId}] DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
+
+      itemsMediaData.forEach((media) => {
+        if (!itemsMediaMap.has(media.item_id)) {
+          itemsMediaMap.set(media.item_id, []);
+        }
+        itemsMediaMap.get(media.item_id)!.push({
+          id: media.id,
+          file_url: media.file_url,
+          file_type: media.file_type as 'IMAGE' | 'VIDEO',
+          thumbnail_url: undefined,
+        });
+      });
+    }
+    console.log(`[${uniqueId}] getPublicPromisePendientes:multimedia: ${Date.now() - multimediaStart}ms`);
+
+    // 7. Mapear cotizaciones pendientes
+    const mapearStart = Date.now();
+    type CotizacionItem = {
+      id: string;
+      item_id: string | null;
+      name_snapshot: string | null;
+      description_snapshot: string | null;
+      category_name_snapshot: string | null;
+      seccion_name_snapshot: string | null;
+      name: string | null;
+      description: string | null;
+      category_name: string | null;
+      seccion_name: string | null;
+      unit_price: number;
+      quantity: number;
+      subtotal: number;
+      status: string;
+      order: number;
+      is_courtesy: boolean;
+    };
+
+    const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
+      const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
+
+      (cot.cotizacion_items as CotizacionItem[]).forEach((item: CotizacionItem) => {
+        if (item.item_id) {
+          const itemMedia = itemsMediaMap.get(item.item_id);
+          if (itemMedia) {
+            cotizacionMedia.push(...itemMedia);
+          }
+        }
+      });
+
+      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+
+      const estructura = construirEstructuraJerarquicaCotizacion(
+        itemsFiltrados.map((item: CotizacionItem) => ({
+          item_id: item.item_id!,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: item.subtotal,
+          order: item.order,
+          name_snapshot: item.name_snapshot,
+          description_snapshot: item.description_snapshot,
+          category_name_snapshot: item.category_name_snapshot,
+          seccion_name_snapshot: item.seccion_name_snapshot,
+          name: item.name,
+          description: item.description,
+          category_name: item.category_name,
+          seccion_name: item.seccion_name,
+          id: item.id,
+        })),
+        {
+          incluirPrecios: true,
+          incluirDescripciones: true,
+          ordenarPor: 'insercion',
+        }
+      );
+
+      const servicios: PublicSeccionData[] = estructura.secciones.map(seccion => ({
+        id: seccion.nombre,
+        nombre: seccion.nombre,
+        orden: seccion.orden,
+        categorias: seccion.categorias.map(categoria => ({
+          id: categoria.nombre,
+          nombre: categoria.nombre,
+          orden: categoria.orden,
+          servicios: categoria.items.map(item => {
+            const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
+            const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            return {
+              id: item.item_id || item.id || '',
+              name: item.nombre,
+              name_snapshot: item.nombre,
+              description: item.descripcion || null,
+              description_snapshot: item.descripcion || null,
+              price: item.unit_price,
+              quantity: item.cantidad,
+              is_courtesy: originalItem?.is_courtesy || false,
+              ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
+            };
+          }),
+        })),
+      }));
+
+      const condicionesComerciales = (cot as any)['condiciones_comerciales'];
+
+      return {
+        id: cot.id,
+        name: cot.name,
+        description: cot.description,
+        price: cot.price,
+        discount: cot.discount,
+        status: cot.status,
+        order: cot.order ?? 0,
+        servicios: servicios,
+        condiciones_comerciales: condicionesComerciales
+          ? {
+            metodo_pago: cot.condiciones_comerciales_metodo_pago?.[0]?.metodos_pago?.payment_method_name || null,
+            condiciones: condicionesComerciales.description || null,
+          }
+          : null,
+        paquete_origen: cot.paquete
+          ? {
+            id: cot.paquete.id,
+            name: cot.paquete.name,
+          }
+          : null,
+        selected_by_prospect: cot.selected_by_prospect || false,
+        items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+      };
+    });
+    console.log(`[${uniqueId}] getPublicPromisePendientes:mapear: ${Date.now() - mapearStart}ms`);
+
+    // 8. ⚠️ OPTIMIZACIÓN: Mapear paquetes SIN multimedia de items (solo portada)
+    const mapearPaquetesStart = Date.now();
+    const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
+      const itemIds = new Set<string>();
+      const itemsData = new Map<string, { description?: string | null; quantity?: number; price?: number }>();
+
+      if (!paq.paquete_items || paq.paquete_items.length === 0) {
+        return {
+          id: paq.id,
+          name: paq.name,
+          description: paq.description,
+          price: paq.precio || 0,
+          cover_url: paq.cover_url, // ⚠️ Solo portada del paquete
+          recomendado: paq.is_featured || false,
+          servicios: [],
+          tiempo_minimo_contratacion: null,
+        };
+      }
+
+      paq.paquete_items.forEach((item: {
+        item_id: string | null;
+        status: string;
+        visible_to_client: boolean | null;
+        precio_personalizado: number | null;
+        quantity: number;
+        items: {
+          cost: number | null;
+          expense: number | null;
+          utility_type: string | null;
+        } | null;
+      }) => {
+        if (item.item_id && item.status === 'active' && item.visible_to_client !== false) {
+          itemIds.add(item.item_id);
+
+          let precioItem: number | undefined = undefined;
+          if (item.precio_personalizado !== null && item.precio_personalizado !== undefined) {
+            precioItem = item.precio_personalizado;
+          } else if (item.items && configPrecios) {
+            const tipoUtilidad = item.items.utility_type?.toLowerCase() || 'service';
+            const tipoUtilidadFinal = tipoUtilidad.includes('service') || tipoUtilidad.includes('servicio')
+              ? 'servicio'
+              : 'producto';
+
+            const precios = calcularPrecio(
+              item.items.cost || 0,
+              item.items.expense || 0,
+              tipoUtilidadFinal,
+              configPrecios
+            );
+
+            precioItem = precios.precio_final;
+          }
+
+          itemsData.set(item.item_id, {
+            description: null,
+            quantity: item.quantity,
+            price: precioItem,
+          });
+          // ⚠️ NO incluir multimedia de items del paquete
+        }
+      });
+
+      // ⚠️ Catálogo sin multimedia
+      const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
+
+      return {
+        id: paq.id,
+        name: paq.name,
+        description: paq.description,
+        price: paq.precio || 0,
+        cover_url: paq.cover_url, // ⚠️ Solo portada del paquete
+        recomendado: paq.is_featured || false,
+        servicios: serviciosFiltrados,
+        tiempo_minimo_contratacion: null,
+        // ⚠️ NO incluir items_media - multimedia solo en cotizaciones
+      };
+    });
+    console.log(`[${uniqueId}] getPublicPromisePendientes:mapearPaquetes: ${Date.now() - mapearPaquetesStart}ms`);
+
+    // 9. Mapear portafolios (ya obtenidos en paso 5)
+    const portafolios = portafoliosData.map((p) => ({
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      description: p.description,
+      cover_image_url: p.cover_image_url,
+      event_type: p.event_type ? {
+        id: p.event_type.id,
+        name: p.event_type.name,
+      } : null,
+    }));
+
+    // 10. Obtener condiciones comerciales y términos (con Promise.allSettled)
+    const condicionesStart = Date.now();
+    const [condicionesSettled, terminosSettled] = await Promise.allSettled([
+      obtenerCondicionesComercialesPublicas(studioSlug),
+      obtenerTerminosCondicionesPublicos(studioSlug),
+    ]);
+    console.log(`[${uniqueId}] getPublicPromisePendientes:condiciones: ${Date.now() - condicionesStart}ms`);
+
+    const condicionesResult = condicionesSettled.status === 'fulfilled'
+      ? condicionesSettled.value
+      : { success: false, error: 'Error al obtener condiciones comerciales' };
+    const terminosResult = terminosSettled.status === 'fulfilled'
+      ? terminosSettled.value
+      : { success: false, error: 'Error al obtener términos y condiciones' };
+
+    let condicionesFiltradas = condicionesResult.success && condicionesResult.data ? condicionesResult.data : [];
+    if (condicionesFiltradas.length > 0) {
+      condicionesFiltradas = condicionesFiltradas.filter((condicion) => {
+        const tipo = condicion.type || 'standard';
+        if (tipo === 'standard') {
+          return shareSettings.show_standard_conditions;
+        } else if (tipo === 'offer') {
+          return shareSettings.show_offer_conditions;
+        }
+        return false;
+      });
+    }
+
+    console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${Date.now() - startTime}ms`);
+    return {
+      success: true,
+      data: {
+        promise: {
+          id: promiseBasic.id,
+          contact_name: promiseBasic.contact_name,
+          contact_phone: promiseBasic.contact_phone,
+          contact_email: promiseBasic.contact_email,
+          contact_address: promiseBasic.contact_address,
+          event_type_id: promiseBasic.event_type_id,
+          event_type_name: promiseBasic.event_type_name,
+          event_name: promiseBasic.event_name,
+          event_date: promiseBasic.event_date,
+          event_location: promiseBasic.event_location,
+        },
+        studio,
+        cotizaciones: mappedCotizaciones,
+        paquetes: mappedPaquetes,
+        condiciones_comerciales: condicionesFiltradas.length > 0 ? condicionesFiltradas : undefined,
+        terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
+        share_settings: shareSettings,
+        portafolios: portafolios.length > 0 ? portafolios : undefined,
+      },
+    };
+
+    console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${Date.now() - startTime}ms`);
+  } catch (error) {
+    console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${Date.now() - startTime}ms (error)`);
+    console.error("[getPublicPromisePendientes] Error:", error);
+    return {
+      success: false,
+      error: "Error al obtener datos de promesa pendiente",
+    };
+  }
+}
+
+/**
+ * Obtener datos para ruta /negociacion
+ * Solo carga la cotización con status: 'negociacion' y selected_by_prospect !== true
+ */
+export async function getPublicPromiseNegociacion(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    promise: {
+      id: string;
+      contact_name: string;
+      contact_phone: string;
+      contact_email: string | null;
+      contact_address: string | null;
+      event_type_id: string | null;
+      event_type_name: string | null;
+      event_name: string | null;
+      event_date: Date | null;
+      event_location: string | null;
+    };
+    studio: {
+      studio_name: string;
+      slogan: string | null;
+      logo_url: string | null;
+      id: string;
+      representative_name: string | null;
+      phone: string | null;
+      email: string | null;
+      address: string | null;
+      promise_share_default_show_packages: boolean;
+      promise_share_default_show_categories_subtotals: boolean;
+      promise_share_default_show_items_prices: boolean;
+      promise_share_default_min_days_to_hire: number;
+      promise_share_default_show_standard_conditions: boolean;
+      promise_share_default_show_offer_conditions: boolean;
+      promise_share_default_portafolios: boolean;
+      promise_share_default_auto_generate_contract: boolean;
+    };
+    cotizaciones: PublicCotizacion[];
+    condiciones_comerciales?: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      advance_percentage: number | null;
+      advance_type?: string | null;
+      advance_amount?: number | null;
+      discount_percentage: number | null;
+      type?: string;
+      metodos_pago: Array<{
+        id: string;
+        metodo_pago_id: string;
+        metodo_pago_name: string;
+      }>;
+    }>;
+    terminos_condiciones?: Array<{
+      id: string;
+      title: string;
+      content: string;
+      is_required: boolean;
+    }>;
+    share_settings: {
+      show_packages: boolean;
+      show_categories_subtotals: boolean;
+      show_items_prices: boolean;
+      min_days_to_hire: number;
+      show_standard_conditions: boolean;
+      show_offer_conditions: boolean;
+      portafolios: boolean;
+      auto_generate_contract: boolean;
+    };
+  };
+  error?: string;
+}> {
+  const startTime = Date.now();
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  try {
+    // 1. Obtener datos básicos
+    const basicDataStart = Date.now();
+    const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
+    console.log(`[${uniqueId}] getPublicPromiseNegociacion:basicData: ${Date.now() - basicDataStart}ms`);
+
+    if (!basicData.success || !basicData.data) {
+      console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms (early return)`);
+      return {
+        success: false,
+        error: basicData.error || "Error al obtener datos básicos",
+      };
+    }
+
+    const { promise: promiseBasic, studio } = basicData.data;
+
+    // 2. Obtener share settings
+    const shareSettings = {
+      show_packages: promiseBasic.share_show_packages ?? studio.promise_share_default_show_packages,
+      show_categories_subtotals: promiseBasic.share_show_categories_subtotals ?? studio.promise_share_default_show_categories_subtotals,
+      show_items_prices: promiseBasic.share_show_items_prices ?? studio.promise_share_default_show_items_prices,
+      min_days_to_hire: promiseBasic.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire,
+      show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
+      show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
+      portafolios: studio.promise_share_default_portafolios,
+      auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
+    };
+
+    // 3. Obtener SOLO la cotización en negociación (selected_by_prospect !== true)
+    // ⚠️ ÍNDICE: Usa [promise_id] y [promise_id, selected_by_prospect] en studio_cotizaciones (existen ✅)
+    const fetchPromiseStart = Date.now();
+    const promise = await prisma.studio_promises.findFirst({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      select: {
+        id: true,
+        quotes: {
+          where: {
+            visible_to_client: true,
+            status: 'negociacion',
+            selected_by_prospect: { not: true }, // NO debe estar seleccionada por prospecto
+            // ⚠️ ÍNDICE: Usa [studio_id, status] y [promise_id, selected_by_prospect] (existen ✅)
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            discount: true,
+            status: true,
+            selected_by_prospect: true,
+            order: true,
+            negociacion_precio_original: true,
+            negociacion_precio_personalizado: true,
+            cotizacion_items: {
+              select: {
+                id: true,
+                item_id: true,
+                name_snapshot: true,
+                description_snapshot: true,
+                category_name_snapshot: true,
+                seccion_name_snapshot: true,
+                name: true,
+                description: true,
+                category_name: true,
+                seccion_name: true,
+                unit_price: true,
+                quantity: true,
+                subtotal: true,
+                status: true,
+                order: true,
+                is_courtesy: true,
+              },
+              orderBy: { order: 'asc' },
+            },
+            condiciones_comerciales_metodo_pago: {
+              where: {
+                status: 'active',
+              },
+              select: {
+                metodos_pago: {
+                  select: {
+                    payment_method_name: true,
+                  },
+                },
+              },
+              orderBy: {
+                orden: 'asc',
+              },
+            },
+            condiciones_comerciales: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                advance_percentage: true,
+                advance_type: true,
+                advance_amount: true,
+                discount_percentage: true,
+              },
+            },
+            paquete: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: { order: 'asc' },
+          take: 1, // Solo una cotización en negociación
+        },
+      },
+    });
+    console.log(`[${uniqueId}] DB:FetchPromiseWithQuotes: ${Date.now() - fetchPromiseStart}ms`);
+
+    if (!promise || promise.quotes.length === 0) {
+      console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms (no cotizacion)`);
+      return {
+        success: false,
+        error: "Cotización en negociación no encontrada",
+      };
+    }
+
+    const cotizacion = promise.quotes[0];
+
+    // 4. Obtener catálogo y configuración de precios (necesarios para mapear items)
+    const catalogoStart = Date.now();
+    const [catalogoResult, configForm] = await Promise.all([
+      obtenerCatalogo(studioSlug, false),
+      obtenerConfiguracionPrecios(studioSlug),
+    ]);
+    console.log(`[${uniqueId}] getPublicPromiseNegociacion:catalogo: ${Date.now() - catalogoStart}ms`);
+
+    if (!catalogoResult.success || !catalogoResult.data) {
+      console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms (no catalogo)`);
+      return {
+        success: false,
+        error: "Error al obtener catálogo",
+      };
+    }
+
+    const catalogo = catalogoResult.data;
+
+    // 5. Obtener multimedia solo de items de esta cotización
+    const multimediaStart = Date.now();
+    const allItemIds = new Set<string>();
+    cotizacion.cotizacion_items.forEach((item) => {
+      if (item.item_id) allItemIds.add(item.item_id);
+    });
+
+    const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
+
+    if (allItemIds.size > 0) {
+      const fetchMediaStart = Date.now();
+      const itemsMediaData = await prisma.studio_item_media.findMany({
+        where: {
+          item_id: { in: Array.from(allItemIds) },
+          studio_id: studio.id,
+        },
+        select: {
+          id: true,
+          item_id: true,
+          file_url: true,
+          file_type: true,
+          display_order: true,
+        },
+        orderBy: { display_order: 'asc' },
+      });
+      console.log(`[${uniqueId}] DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
+
+      itemsMediaData.forEach((media) => {
+        if (!itemsMediaMap.has(media.item_id)) {
+          itemsMediaMap.set(media.item_id, []);
+        }
+        itemsMediaMap.get(media.item_id)!.push({
+          id: media.id,
+          file_url: media.file_url,
+          file_type: media.file_type as 'IMAGE' | 'VIDEO',
+          thumbnail_url: undefined,
+        });
+      });
+    }
+    console.log(`[${uniqueId}] getPublicPromiseNegociacion:multimedia: ${Date.now() - multimediaStart}ms`);
+
+    // 6. Mapear cotización en negociación
+    const mapearStart = Date.now();
+    type CotizacionItem = {
+      id: string;
+      item_id: string | null;
+      name_snapshot: string | null;
+      description_snapshot: string | null;
+      category_name_snapshot: string | null;
+      seccion_name_snapshot: string | null;
+      name: string | null;
+      description: string | null;
+      category_name: string | null;
+      seccion_name: string | null;
+      unit_price: number;
+      quantity: number;
+      subtotal: number;
+      status: string;
+      order: number;
+      is_courtesy: boolean;
+    };
+
+    const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
+
+    (cotizacion.cotizacion_items as CotizacionItem[]).forEach((item: CotizacionItem) => {
+      if (item.item_id) {
+        const itemMedia = itemsMediaMap.get(item.item_id);
+        if (itemMedia) {
+          cotizacionMedia.push(...itemMedia);
+        }
+      }
+    });
+
+    const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+
+    const estructura = construirEstructuraJerarquicaCotizacion(
+      itemsFiltrados.map((item: CotizacionItem) => ({
+        item_id: item.item_id!,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        subtotal: item.subtotal,
+        order: item.order,
+        name_snapshot: item.name_snapshot,
+        description_snapshot: item.description_snapshot,
+        category_name_snapshot: item.category_name_snapshot,
+        seccion_name_snapshot: item.seccion_name_snapshot,
+        name: item.name,
+        description: item.description,
+        category_name: item.category_name,
+        seccion_name: item.seccion_name,
+        id: item.id,
+      })),
+      {
+        incluirPrecios: true,
+        incluirDescripciones: true,
+        ordenarPor: 'insercion',
+      }
+    );
+
+    const servicios: PublicSeccionData[] = estructura.secciones.map(seccion => ({
+      id: seccion.nombre,
+      nombre: seccion.nombre,
+      orden: seccion.orden,
+      categorias: seccion.categorias.map(categoria => ({
+        id: categoria.nombre,
+        nombre: categoria.nombre,
+        orden: categoria.orden,
+        servicios: categoria.items.map(item => {
+          const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
+          const originalItem = itemsFiltrados.find(i => i.id === item.id);
+          return {
+            id: item.item_id || item.id || '',
+            name: item.nombre,
+            name_snapshot: item.nombre,
+            description: item.descripcion || null,
+            description_snapshot: item.descripcion || null,
+            price: item.unit_price,
+            quantity: item.cantidad,
+            is_courtesy: originalItem?.is_courtesy || false,
+            ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
+          };
+        }),
+      })),
+    }));
+
+    const condicionesComerciales = (cotizacion as any)['condiciones_comerciales'];
+
+    const mappedCotizacion: PublicCotizacion = {
+      id: cotizacion.id,
+      name: cotizacion.name,
+      description: cotizacion.description,
+      price: cotizacion.price,
+      discount: cotizacion.discount,
+      status: cotizacion.status,
+      order: cotizacion.order ?? 0,
+      servicios: servicios,
+      condiciones_comerciales: condicionesComerciales
+        ? {
+          metodo_pago: cotizacion.condiciones_comerciales_metodo_pago?.[0]?.metodos_pago?.payment_method_name || null,
+          condiciones: condicionesComerciales.description || null,
+          // Para cotizaciones en negociación, incluir datos completos
+          id: condicionesComerciales.id,
+          name: condicionesComerciales.name,
+          description: condicionesComerciales.description,
+          advance_percentage: condicionesComerciales.advance_percentage ? Number(condicionesComerciales.advance_percentage) : null,
+          advance_type: condicionesComerciales.advance_type,
+          advance_amount: condicionesComerciales.advance_amount ? Number(condicionesComerciales.advance_amount) : null,
+          discount_percentage: condicionesComerciales.discount_percentage ? Number(condicionesComerciales.discount_percentage) : null,
+        }
+        : null,
+      paquete_origen: cotizacion.paquete
+        ? {
+          id: cotizacion.paquete.id,
+          name: cotizacion.paquete.name,
+        }
+        : null,
+      selected_by_prospect: cotizacion.selected_by_prospect || false,
+      negociacion_precio_original: cotizacion.negociacion_precio_original ? Number(cotizacion.negociacion_precio_original) : null,
+      negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado ? Number(cotizacion.negociacion_precio_personalizado) : null,
+      items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+    };
+    console.log(`[${uniqueId}] getPublicPromiseNegociacion:mapear: ${Date.now() - mapearStart}ms`);
+
+    // 7. Obtener condiciones comerciales disponibles y términos (con Promise.allSettled)
+    const condicionesStart = Date.now();
+    const [condicionesSettled, terminosSettled] = await Promise.allSettled([
+      obtenerCondicionesComercialesPublicas(studioSlug),
+      obtenerTerminosCondicionesPublicos(studioSlug),
+    ]);
+    console.log(`[${uniqueId}] getPublicPromiseNegociacion:condiciones: ${Date.now() - condicionesStart}ms`);
+
+    const condicionesResult = condicionesSettled.status === 'fulfilled'
+      ? condicionesSettled.value
+      : { success: false, error: 'Error al obtener condiciones comerciales' };
+    const terminosResult = terminosSettled.status === 'fulfilled'
+      ? terminosSettled.value
+      : { success: false, error: 'Error al obtener términos y condiciones' };
+
+    let condicionesFiltradas = condicionesResult.success && condicionesResult.data ? condicionesResult.data : [];
+    if (condicionesFiltradas.length > 0) {
+      condicionesFiltradas = condicionesFiltradas.filter((condicion) => {
+        const tipo = condicion.type || 'standard';
+        if (tipo === 'standard') {
+          return shareSettings.show_standard_conditions;
+        } else if (tipo === 'offer') {
+          return shareSettings.show_offer_conditions;
+        }
+        return false;
+      });
+    }
+
+    return {
+      success: true,
+      data: {
+        promise: {
+          id: promiseBasic.id,
+          contact_name: promiseBasic.contact_name,
+          contact_phone: promiseBasic.contact_phone,
+          contact_email: promiseBasic.contact_email,
+          contact_address: promiseBasic.contact_address,
+          event_type_id: promiseBasic.event_type_id,
+          event_type_name: promiseBasic.event_type_name,
+          event_name: promiseBasic.event_name,
+          event_date: promiseBasic.event_date,
+          event_location: promiseBasic.event_location,
+        },
+        studio,
+        cotizaciones: [mappedCotizacion],
+        condiciones_comerciales: condicionesFiltradas.length > 0 ? condicionesFiltradas : undefined,
+        terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
+        share_settings: shareSettings,
+      },
+    };
+
+    console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms`);
+  } catch (error) {
+    console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms (error)`);
+    console.error("[getPublicPromiseNegociacion] Error:", error);
+    return {
+      success: false,
+      error: "Error al obtener datos de promesa en negociación",
+    };
+  }
+}
+
+/**
+ * Obtener datos para ruta /cierre
+ * Solo carga la cotización con status: 'en_cierre' + contrato + condiciones del cierre
+ */
+export async function getPublicPromiseCierre(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    promise: {
+      id: string;
+      contact_name: string;
+      contact_phone: string;
+      contact_email: string | null;
+      contact_address: string | null;
+      event_type_id: string | null;
+      event_type_name: string | null;
+      event_name: string | null;
+      event_date: Date | null;
+      event_location: string | null;
+    };
+    studio: {
+      studio_name: string;
+      slogan: string | null;
+      logo_url: string | null;
+      id: string;
+      representative_name: string | null;
+      phone: string | null;
+      email: string | null;
+      address: string | null;
+    };
+    cotizaciones: PublicCotizacion[];
+    terminos_condiciones?: Array<{
+      id: string;
+      title: string;
+      content: string;
+      is_required: boolean;
+    }>;
+  };
+  error?: string;
+}> {
+  const startTime = Date.now();
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  try {
+    // 1. Obtener datos básicos
+    const basicDataStart = Date.now();
+    const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
+    console.log(`[${uniqueId}] getPublicPromiseCierre:basicData: ${Date.now() - basicDataStart}ms`);
+
+    if (!basicData.success || !basicData.data) {
+      console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms (early return)`);
+      return {
+        success: false,
+        error: basicData.error || "Error al obtener datos básicos",
+      };
+    }
+
+    const { promise: promiseBasic, studio } = basicData.data;
+
+    // 2. Obtener SOLO la cotización en cierre con cotizacion_cierre
+    // ⚠️ ÍNDICE: Usa [promise_id] en studio_cotizaciones (existe ✅)
+    const fetchPromiseStart = Date.now();
+    const promise = await prisma.studio_promises.findFirst({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      select: {
+        id: true,
+        quotes: {
+          where: {
+            visible_to_client: true,
+            status: { in: ['en_cierre', 'cierre'] },
+            // ⚠️ ÍNDICE: Usa [studio_id, status] en studio_cotizaciones (existe ✅)
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            discount: true,
+            status: true,
+            selected_by_prospect: true,
+            order: true,
+            negociacion_precio_original: true,
+            negociacion_precio_personalizado: true,
+            cotizacion_items: {
+              select: {
+                id: true,
+                item_id: true,
+                name_snapshot: true,
+                description_snapshot: true,
+                category_name_snapshot: true,
+                seccion_name_snapshot: true,
+                name: true,
+                description: true,
+                category_name: true,
+                seccion_name: true,
+                unit_price: true,
+                quantity: true,
+                subtotal: true,
+                status: true,
+                order: true,
+                is_courtesy: true,
+              },
+              orderBy: { order: 'asc' },
+            },
+            cotizacion_cierre: {
+              select: {
+                contract_template_id: true,
+                contract_content: true,
+                contract_version: true,
+                contrato_definido: true,
+                contract_signed_at: true,
+                condiciones_comerciales_id: true,
+                condiciones_comerciales_definidas: true,
+                condiciones_comerciales: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    advance_percentage: true,
+                    advance_type: true,
+                    advance_amount: true,
+                    discount_percentage: true,
+                  },
+                },
+              },
+            },
+            paquete: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: { order: 'asc' },
+          take: 1, // Solo una cotización en cierre
+        },
+      },
+    });
+    console.log(`[${uniqueId}] DB:FetchPromiseWithQuotes: ${Date.now() - fetchPromiseStart}ms`);
+
+    if (!promise || promise.quotes.length === 0) {
+      console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms (no cotizacion)`);
+      return {
+        success: false,
+        error: "Cotización en cierre no encontrada",
+      };
+    }
+
+    const cotizacion = promise.quotes[0];
+
+    // 3. Obtener catálogo (necesario para mapear items)
+    const catalogoStart = Date.now();
+    const catalogoResult = await obtenerCatalogo(studioSlug, false);
+    console.log(`[${uniqueId}] getPublicPromiseCierre:catalogo: ${Date.now() - catalogoStart}ms`);
+    if (!catalogoResult.success || !catalogoResult.data) {
+      console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms (no catalogo)`);
+      return {
+        success: false,
+        error: "Error al obtener catálogo",
+      };
+    }
+
+    const catalogo = catalogoResult.data;
+
+    // 4. Obtener multimedia solo de items de esta cotización
+    const multimediaStart = Date.now();
+    const allItemIds = new Set<string>();
+    cotizacion.cotizacion_items.forEach((item) => {
+      if (item.item_id) allItemIds.add(item.item_id);
+    });
+
+    const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
+
+    if (allItemIds.size > 0) {
+      const fetchMediaStart = Date.now();
+      const itemsMediaData = await prisma.studio_item_media.findMany({
+        where: {
+          item_id: { in: Array.from(allItemIds) },
+          studio_id: studio.id,
+        },
+        select: {
+          id: true,
+          item_id: true,
+          file_url: true,
+          file_type: true,
+          display_order: true,
+        },
+        orderBy: { display_order: 'asc' },
+      });
+      console.log(`[${uniqueId}] DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
+
+      itemsMediaData.forEach((media) => {
+        if (!itemsMediaMap.has(media.item_id)) {
+          itemsMediaMap.set(media.item_id, []);
+        }
+        itemsMediaMap.get(media.item_id)!.push({
+          id: media.id,
+          file_url: media.file_url,
+          file_type: media.file_type as 'IMAGE' | 'VIDEO',
+          thumbnail_url: undefined,
+        });
+      });
+    }
+    console.log(`[${uniqueId}] getPublicPromiseCierre:multimedia: ${Date.now() - multimediaStart}ms`);
+
+    // 5. Mapear cotización en cierre
+    const mapearStart = Date.now();
+    type CotizacionItem = {
+      id: string;
+      item_id: string | null;
+      name_snapshot: string | null;
+      description_snapshot: string | null;
+      category_name_snapshot: string | null;
+      seccion_name_snapshot: string | null;
+      name: string | null;
+      description: string | null;
+      category_name: string | null;
+      seccion_name: string | null;
+      unit_price: number;
+      quantity: number;
+      subtotal: number;
+      status: string;
+      order: number;
+      is_courtesy: boolean;
+    };
+
+    const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
+
+    (cotizacion.cotizacion_items as CotizacionItem[]).forEach((item: CotizacionItem) => {
+      if (item.item_id) {
+        const itemMedia = itemsMediaMap.get(item.item_id);
+        if (itemMedia) {
+          cotizacionMedia.push(...itemMedia);
+        }
+      }
+    });
+
+    const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+
+    const estructura = construirEstructuraJerarquicaCotizacion(
+      itemsFiltrados.map((item: CotizacionItem) => ({
+        item_id: item.item_id!,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        subtotal: item.subtotal,
+        order: item.order,
+        name_snapshot: item.name_snapshot,
+        description_snapshot: item.description_snapshot,
+        category_name_snapshot: item.category_name_snapshot,
+        seccion_name_snapshot: item.seccion_name_snapshot,
+        name: item.name,
+        description: item.description,
+        category_name: item.category_name,
+        seccion_name: item.seccion_name,
+        id: item.id,
+      })),
+      {
+        incluirPrecios: true,
+        incluirDescripciones: true,
+        ordenarPor: 'insercion',
+      }
+    );
+
+    const servicios: PublicSeccionData[] = estructura.secciones.map(seccion => ({
+      id: seccion.nombre,
+      nombre: seccion.nombre,
+      orden: seccion.orden,
+      categorias: seccion.categorias.map(categoria => ({
+        id: categoria.nombre,
+        nombre: categoria.nombre,
+        orden: categoria.orden,
+        servicios: categoria.items.map(item => {
+          const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
+          const originalItem = itemsFiltrados.find(i => i.id === item.id);
+          return {
+            id: item.item_id || item.id || '',
+            name: item.nombre,
+            name_snapshot: item.nombre,
+            description: item.descripcion || null,
+            description_snapshot: item.descripcion || null,
+            price: item.unit_price,
+            quantity: item.cantidad,
+            is_courtesy: originalItem?.is_courtesy || false,
+            ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
+          };
+        }),
+      })),
+    }));
+
+    const cierre = cotizacion.cotizacion_cierre as any;
+
+    const mappedCotizacion: PublicCotizacion = {
+      id: cotizacion.id,
+      name: cotizacion.name,
+      description: cotizacion.description,
+      price: cotizacion.price,
+      discount: cotizacion.discount,
+      status: cotizacion.status || 'en_cierre',
+      order: cotizacion.order ?? 0,
+      servicios: servicios,
+      condiciones_comerciales: null, // No se usan condiciones disponibles en cierre
+      paquete_origen: cotizacion.paquete
+        ? {
+          id: cotizacion.paquete.id,
+          name: cotizacion.paquete.name,
+        }
+        : null,
+      selected_by_prospect: cotizacion.selected_by_prospect || false,
+      negociacion_precio_original: cotizacion.negociacion_precio_original ? Number(cotizacion.negociacion_precio_original) : null,
+      negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado ? Number(cotizacion.negociacion_precio_personalizado) : null,
+      items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+      // Información del contrato
+      contract: (() => {
+        const hasContract = (cierre?.contrato_definido && cierre?.contract_template_id) ||
+          (cierre?.condiciones_comerciales && cierre?.condiciones_comerciales_definidas) ||
+          (cierre?.contract_template_id || cierre?.contract_content);
+
+        if (!hasContract) return undefined;
+
+        return {
+          template_id: cierre?.contract_template_id || null,
+          content: cierre?.contract_content || null,
+          version: cierre?.contract_version ?? 1,
+          signed_at: cierre?.contract_signed_at || null,
+          condiciones_comerciales: (cierre?.condiciones_comerciales ? {
+            id: cierre.condiciones_comerciales.id,
+            name: cierre.condiciones_comerciales.name,
+            description: cierre.condiciones_comerciales.description,
+            advance_percentage: cierre.condiciones_comerciales.advance_percentage ? Number(cierre.condiciones_comerciales.advance_percentage) : null,
+            advance_type: cierre.condiciones_comerciales.advance_type,
+            advance_amount: cierre.condiciones_comerciales.advance_amount ? Number(cierre.condiciones_comerciales.advance_amount) : null,
+            discount_percentage: cierre.condiciones_comerciales.discount_percentage ? Number(cierre.condiciones_comerciales.discount_percentage) : null,
+          } : null),
+        };
+      })(),
+    };
+    console.log(`[${uniqueId}] getPublicPromiseCierre:mapear: ${Date.now() - mapearStart}ms`);
+
+    // 6. Obtener términos y condiciones (necesarios para firma)
+    const terminosStart = Date.now();
+    const terminosSettled = await Promise.allSettled([
+      obtenerTerminosCondicionesPublicos(studioSlug),
+    ]);
+    console.log(`[${uniqueId}] getPublicPromiseCierre:terminos: ${Date.now() - terminosStart}ms`);
+
+    const terminosResult = terminosSettled[0].status === 'fulfilled'
+      ? terminosSettled[0].value
+      : { success: false, error: 'Error al obtener términos y condiciones' };
+
+    return {
+      success: true,
+      data: {
+        promise: {
+          id: promiseBasic.id,
+          contact_name: promiseBasic.contact_name,
+          contact_phone: promiseBasic.contact_phone,
+          contact_email: promiseBasic.contact_email,
+          contact_address: promiseBasic.contact_address,
+          event_type_id: promiseBasic.event_type_id,
+          event_type_name: promiseBasic.event_type_name,
+          event_name: promiseBasic.event_name,
+          event_date: promiseBasic.event_date,
+          event_location: promiseBasic.event_location,
+        },
+        studio: {
+          studio_name: studio.studio_name,
+          slogan: studio.slogan,
+          logo_url: studio.logo_url,
+          id: studio.id,
+          representative_name: studio.representative_name,
+          phone: studio.phone,
+          email: studio.email,
+          address: studio.address,
+        },
+        cotizaciones: [mappedCotizacion],
+        terminos_condiciones: terminosResult.success && terminosResult.data ? terminosResult.data : undefined,
+      },
+    };
+
+    console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms`);
+    // Return statement ya está arriba, no duplicar
+  } catch (error) {
+    console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms (error)`);
+    console.error("[getPublicPromiseCierre] Error:", error);
+    return {
+      success: false,
+      error: "Error al obtener datos de promesa en cierre",
+    };
+  }
+}
+
+/**
  * Obtener datos completos de promesa para página pública
- * Incluye cotizaciones y paquetes disponibles según tipo de evento
+ * ⚠️ DEPRECATED: Usar funciones fragmentadas (getPublicPromisePendientes, getPublicPromiseNegociacion, getPublicPromiseCierre)
+ * Mantener para compatibilidad temporal
  */
 export async function getPublicPromiseData(
   studioSlug: string,
@@ -564,7 +2300,7 @@ export async function getPublicPromiseData(
         quotes: {
           where: {
             visible_to_client: true,
-            status: { 
+            status: {
               in: ['pendiente', 'negociacion', 'en_cierre', 'contract_generated', 'contract_signed'],
             },
           },
@@ -692,15 +2428,13 @@ export async function getPublicPromiseData(
       auto_generate_contract: promise.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
     };
 
-    // 3. Obtener catálogo completo (incluir items inactivos para que coincidan con paquetes)
-    const catalogoResult = await obtenerCatalogo(studioSlug, false); // false = incluir todos los items (activos e inactivos)
-    if (!catalogoResult.success || !catalogoResult.data) {
-      return {
-        success: false,
-        error: "Error al obtener catálogo",
-      };
-    }
-    const catalogo = catalogoResult.data;
+    // 3. ⚠️ OPTIMIZACIÓN: Extraer item_ids ANTES de cargar catálogo completo
+    const itemIdsFromQuotesForCatalogo = new Set<string>();
+    promise.quotes.forEach((cot) => {
+      cot.cotizacion_items.forEach((item) => {
+        if (item.item_id) itemIdsFromQuotesForCatalogo.add(item.item_id);
+      });
+    });
 
     // 4. Obtener configuración de precios para calcular precios del catálogo
     const configForm = await obtenerConfiguracionPrecios(studioSlug);
@@ -755,27 +2489,31 @@ export async function getPublicPromiseData(
       })
       : [];
 
-    // 5. Obtener multimedia de todos los items únicos de cotizaciones y paquetes
-    const allItemIds = new Set<string>();
-    promise.quotes.forEach((cot) => {
-      cot.cotizacion_items.forEach((item) => {
-        if (item.item_id) allItemIds.add(item.item_id);
-      });
-    });
+    // Extraer item_ids de paquetes (solo para catálogo, NO para multimedia)
+    const itemIdsFromPaquetesForCatalogo = new Set<string>();
     paquetes.forEach((paq) => {
-      // Incluir TODOS los items del paquete para obtener multimedia, no solo los filtrados
       paq.paquete_items.forEach((item) => {
-        if (item.item_id) allItemIds.add(item.item_id);
+        if (item.item_id) itemIdsFromPaquetesForCatalogo.add(item.item_id);
       });
     });
 
-    // Obtener multimedia de items (solo si hay item_ids)
+    // Combinar todos los item_ids para catálogo
+    const allItemIdsForCatalogo = Array.from(new Set([...itemIdsFromQuotesForCatalogo, ...itemIdsFromPaquetesForCatalogo]));
+
+    // ⚠️ OPTIMIZACIÓN: Obtener solo items necesarios (en lugar de catálogo completo) - SIN multimedia
+    const catalogo = await obtenerItemsPorIds(studio.id, allItemIdsForCatalogo);
+
+    // 6. ⚠️ OPTIMIZACIÓN: Obtener multimedia SOLO de items en cotizaciones (NO de paquetes)
+    const itemIdsFromQuotes = Array.from(itemIdsFromQuotesForCatalogo);
+
+    // Obtener multimedia de items (solo si hay item_ids de cotizaciones)
     const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
 
-    if (allItemIds.size > 0) {
+    if (itemIdsFromQuotes.length > 0) {
+      const fetchMediaStart = Date.now();
       const itemsMediaData = await prisma.studio_item_media.findMany({
         where: {
-          item_id: { in: Array.from(allItemIds) },
+          item_id: { in: Array.from(itemIdsFromQuotes) },
           studio_id: studio.id,
         },
         select: {
@@ -789,6 +2527,7 @@ export async function getPublicPromiseData(
           display_order: 'asc',
         },
       });
+      console.log(`DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
 
       // Crear mapa de multimedia por item_id
       itemsMediaData.forEach((media) => {
@@ -825,6 +2564,7 @@ export async function getPublicPromiseData(
       subtotal: number;
       status: string;
       order: number;
+      is_courtesy?: boolean;
     };
 
     const mappedCotizaciones: PublicCotizacion[] = (quotesOrdenadas as any[]).map((cot: any) => {
@@ -930,11 +2670,11 @@ export async function getPublicPromiseData(
           }
           : null,
         selected_by_prospect: cot.selected_by_prospect || false,
-        negociacion_precio_original: (cot as any).negociacion_precio_original 
-          ? Number((cot as any).negociacion_precio_original) 
+        negociacion_precio_original: (cot as any).negociacion_precio_original
+          ? Number((cot as any).negociacion_precio_original)
           : null,
-        negociacion_precio_personalizado: (cot as any).negociacion_precio_personalizado 
-          ? Number((cot as any).negociacion_precio_personalizado) 
+        negociacion_precio_personalizado: (cot as any).negociacion_precio_personalizado
+          ? Number((cot as any).negociacion_precio_personalizado)
           : null,
         items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
         // Información del contrato si está disponible
@@ -975,7 +2715,6 @@ export async function getPublicPromiseData(
       // Crear Set de item_ids incluidos en el paquete
       const itemIds = new Set<string>();
       const itemsData = new Map<string, { description?: string | null; quantity?: number; price?: number }>();
-      const paqueteMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
 
       // Verificar que paquete_items existe y tiene datos
       if (!paq.paquete_items || paq.paquete_items.length === 0) {
@@ -984,9 +2723,9 @@ export async function getPublicPromiseData(
           name: paq.name,
           description: paq.description,
           price: paq.precio || 0,
-          cover_url: paq.cover_url,
+          cover_url: paq.cover_url, // ⚠️ Solo portada del paquete
           recomendado: paq.is_featured || false,
-          servicios: [], // Retornar array vacío si no hay items
+          servicios: [],
           tiempo_minimo_contratacion: null,
         };
       }
@@ -1023,27 +2762,23 @@ export async function getPublicPromiseData(
             quantity: item.quantity,
             price: precioItem,
           });
-
-          // Agregar multimedia del item a la lista agregada
-          const itemMedia = itemsMediaMap.get(item.item_id);
-          if (itemMedia && itemMedia.length > 0) {
-            paqueteMedia.push(...itemMedia);
-          }
+          // ⚠️ NO incluir multimedia de items del paquete
         }
       });
 
-      const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData, itemsMediaMap);
+      // ⚠️ Catálogo sin multimedia
+      const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
 
       return {
         id: paq.id,
         name: paq.name,
         description: paq.description,
         price: paq.precio || 0,
-        cover_url: paq.cover_url,
+        cover_url: paq.cover_url, // ⚠️ Solo portada del paquete
         recomendado: paq.is_featured || false,
         servicios: serviciosFiltrados,
-        tiempo_minimo_contratacion: null, // Este campo no existe en el schema actual
-        items_media: paqueteMedia.length > 0 ? paqueteMedia : undefined,
+        tiempo_minimo_contratacion: null,
+        // ⚠️ NO incluir items_media - multimedia solo en cotizaciones
       };
     });
 
@@ -1109,10 +2844,19 @@ export async function getPublicPromiseData(
     }
 
     // 10. Obtener condiciones comerciales disponibles y términos y condiciones
-    const [condicionesResult, terminosResult] = await Promise.all([
+    // Usar Promise.allSettled para que si una falla, la otra pueda continuar
+    const [condicionesSettled, terminosSettled] = await Promise.allSettled([
       obtenerCondicionesComercialesPublicas(studioSlug),
       obtenerTerminosCondicionesPublicos(studioSlug),
     ]);
+
+    // Extraer resultados con manejo de errores
+    const condicionesResult = condicionesSettled.status === 'fulfilled'
+      ? condicionesSettled.value
+      : { success: false, error: 'Error al obtener condiciones comerciales' };
+    const terminosResult = terminosSettled.status === 'fulfilled'
+      ? terminosSettled.value
+      : { success: false, error: 'Error al obtener términos y condiciones' };
 
     // Filtrar condiciones comerciales según preferencias
     let condicionesFiltradas = condicionesResult.success && condicionesResult.data ? condicionesResult.data : [];
@@ -1180,6 +2924,7 @@ export async function getPublicPromiseData(
           promise_share_default_show_standard_conditions: studio.promise_share_default_show_standard_conditions,
           promise_share_default_show_offer_conditions: studio.promise_share_default_show_offer_conditions,
           promise_share_default_portafolios: studio.promise_share_default_portafolios,
+          promise_share_default_auto_generate_contract: studio.promise_share_default_auto_generate_contract ?? false,
         },
         cotizaciones: mappedCotizaciones,
         paquetes: mappedPaquetes,
@@ -1588,6 +3333,663 @@ export async function getPublicCotizacionContract(
     return {
       success: false,
       error: "Error al obtener datos del contrato",
+    };
+  }
+}
+
+/**
+ * Obtener datos mínimos para metadata (consulta ultra-ligera)
+ * Solo trae: event_name, event_type_name, studio.studio_name, studio.logo_url
+ * Usado en generateMetadata para evitar cargar datos pesados
+ */
+export async function getPublicPromiseMetadata(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    event_name: string | null;
+    event_type_name: string | null;
+    studio_name: string;
+    logo_url: string | null;
+  };
+  error?: string;
+}> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: {
+        id: true,
+        studio_name: true,
+        logo_url: true,
+      },
+    });
+
+    if (!studio) {
+      return {
+        success: false,
+        error: "Studio no encontrado",
+      };
+    }
+
+    const promise = await prisma.studio_promises.findFirst({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      select: {
+        name: true,
+        event_type: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!promise) {
+      return {
+        success: false,
+        error: "Promesa no encontrada",
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        event_name: promise.name,
+        event_type_name: promise.event_type?.name || null,
+        studio_name: studio.studio_name,
+        logo_url: studio.logo_url,
+      },
+    };
+  } catch (error) {
+    console.error("[getPublicPromiseMetadata] Error:", error);
+    return {
+      success: false,
+      error: "Error al obtener metadata de promesa",
+    };
+  }
+}
+
+/**
+ * Obtener solo estados de cotizaciones para determinar routing (consulta ligera)
+ * Usado en page.tsx para enrutamiento inicial sin cargar todos los datos
+ * Similar a determinePromiseState pero para rutas públicas
+ */
+export async function getPublicPromiseRouteState(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: Array<{
+    id: string;
+    status: string;
+    selected_by_prospect: boolean | null;
+  }>;
+  error?: string;
+}> {
+  try {
+    // 1. Validar que el studio existe
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return {
+        success: false,
+        error: "Studio no encontrado",
+      };
+    }
+
+    // 2. Verificar si hay cotizaciones aprobadas (redirigir a /cliente)
+    const cotizacionAprobada = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise_id: promiseId,
+        studio_id: studio.id,
+        status: { in: ['aprobada', 'autorizada', 'approved'] },
+      },
+      select: { id: true },
+    });
+
+    if (cotizacionAprobada) {
+      return {
+        success: true,
+        data: [{ id: cotizacionAprobada.id, status: 'aprobada', selected_by_prospect: null }],
+      };
+    }
+
+    // 3. Obtener solo estados de cotizaciones visibles
+    const cotizaciones = await prisma.studio_cotizaciones.findMany({
+      where: {
+        promise_id: promiseId,
+        studio_id: studio.id,
+        visible_to_client: true,
+        status: {
+          in: ['pendiente', 'negociacion', 'en_cierre', 'cierre', 'contract_generated', 'contract_signed'],
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        selected_by_prospect: true,
+      },
+    });
+
+    // ✅ NORMALIZACIÓN OBLIGATORIA: Normalizar estados antes de devolver
+    // Esto asegura que 'cierre' siempre se convierta a 'en_cierre' para consistencia
+    return {
+      success: true,
+      data: cotizaciones.map(cot => {
+        // Normalizar status: 'cierre' -> 'en_cierre'
+        const normalizedStatus = cot.status === 'cierre' ? 'en_cierre' : cot.status;
+        return {
+          id: cot.id,
+          status: normalizedStatus,
+          selected_by_prospect: cot.selected_by_prospect ?? false,
+        };
+      }),
+    };
+  } catch (error) {
+    console.error("[getPublicPromiseRouteState] Error:", error);
+    return {
+      success: false,
+      error: "Error al obtener estados de cotizaciones",
+    };
+  }
+}
+
+/**
+ * ⚠️ TAREA 3: Función ligera para refresco quirúrgico
+ * Solo devuelve cotizaciones actualizadas y datos básicos de la promise
+ * NO incluye: paquetes, portafolios, catálogo completo, condiciones comerciales
+ */
+export async function getPublicPromiseUpdate(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    promise: {
+      id: string;
+      contact_name: string;
+      contact_phone: string;
+      contact_email: string | null;
+      contact_address: string | null;
+      event_type_id: string | null;
+      event_type_name: string | null;
+      event_name: string | null;
+      event_date: Date | null;
+      event_location: string | null;
+    };
+    cotizaciones: PublicCotizacion[];
+  };
+  error?: string;
+}> {
+  const startTime = Date.now();
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  try {
+    // 1. Obtener datos básicos de promise y studio
+    const basicDataStart = Date.now();
+    const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
+    console.log(`[${uniqueId}] getPublicPromiseUpdate:basicData: ${Date.now() - basicDataStart}ms`);
+
+    if (!basicData.success || !basicData.data) {
+      return {
+        success: false,
+        error: basicData.error || "Error al obtener datos básicos",
+      };
+    }
+
+    const { promise: promiseBasic, studio } = basicData.data;
+
+    // 2. Obtener SOLO cotizaciones pendientes (sin paquetes, portafolios, etc.)
+    const fetchPromiseStart = Date.now();
+    const promise = await withRetry(
+      () =>
+        prisma.studio_promises.findFirst({
+          where: {
+            id: promiseId,
+            studio_id: studio.id,
+          },
+          select: {
+            id: true,
+            quotes: {
+              where: {
+                visible_to_client: true,
+                status: 'pendiente',
+              },
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                price: true,
+                discount: true,
+                status: true,
+                selected_by_prospect: true,
+                order: true,
+                cotizacion_items: {
+                  select: {
+                    id: true,
+                    item_id: true,
+                    name_snapshot: true,
+                    description_snapshot: true,
+                    category_name_snapshot: true,
+                    seccion_name_snapshot: true,
+                    name: true,
+                    description: true,
+                    category_name: true,
+                    seccion_name: true,
+                    unit_price: true,
+                    quantity: true,
+                    subtotal: true,
+                    status: true,
+                    order: true,
+                    is_courtesy: true,
+                  },
+                  orderBy: { order: 'asc' },
+                },
+                condiciones_comerciales_metodo_pago: {
+                  where: { status: 'active' },
+                  select: {
+                    metodos_pago: {
+                      select: {
+                        payment_method_name: true,
+                      },
+                    },
+                  },
+                  orderBy: { orden: 'asc' },
+                },
+                condiciones_comerciales: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                  },
+                },
+                paquete: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+              orderBy: { order: 'asc' },
+            },
+          },
+        }),
+      { maxRetries: 2, baseDelay: 1000, maxDelay: 5000 }
+    );
+    console.log(`[${uniqueId}] getPublicPromiseUpdate:DB:FetchPromiseWithQuotes: ${Date.now() - fetchPromiseStart}ms`);
+
+    if (!promise) {
+      return {
+        success: false,
+        error: 'Promesa no encontrada',
+      };
+    }
+
+    // 3. Obtener multimedia solo de los items de las cotizaciones
+    const itemIds = new Set<string>();
+    promise.quotes.forEach((cot) => {
+      cot.cotizacion_items.forEach((item) => {
+        if (item.item_id) {
+          itemIds.add(item.item_id);
+        }
+      });
+    });
+
+    const fetchMediaStart = Date.now();
+    const itemsMedia =
+      itemIds.size > 0
+        ? await prisma.studio_item_media.findMany({
+          where: {
+            item_id: { in: Array.from(itemIds) },
+          },
+          select: {
+            id: true,
+            item_id: true,
+            file_url: true,
+            file_type: true,
+            display_order: true,
+          },
+          orderBy: { display_order: 'asc' },
+        })
+        : [];
+    console.log(`[${uniqueId}] getPublicPromiseUpdate:DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
+
+    // 4. Mapear multimedia por item
+    const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
+    itemsMedia.forEach((media) => {
+      if (media.item_id) {
+        const existing = itemsMediaMap.get(media.item_id) || [];
+        existing.push({
+          id: media.id,
+          file_url: media.file_url,
+          file_type: media.file_type as 'IMAGE' | 'VIDEO',
+          thumbnail_url: undefined,
+        });
+        itemsMediaMap.set(media.item_id, existing);
+      }
+    });
+
+    // 5. Mapear cotizaciones a formato público (usando la misma lógica que getPublicPromisePendientes)
+    const mapearStart = Date.now();
+    type CotizacionItem = {
+      id: string;
+      item_id: string | null;
+      name_snapshot: string | null;
+      description_snapshot: string | null;
+      category_name_snapshot: string | null;
+      seccion_name_snapshot: string | null;
+      name: string | null;
+      description: string | null;
+      category_name: string | null;
+      seccion_name: string | null;
+      unit_price: number;
+      quantity: number;
+      subtotal: number;
+      status: string;
+      order: number;
+      is_courtesy: boolean;
+    };
+
+    const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
+      const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
+
+      (cot.cotizacion_items as CotizacionItem[]).forEach((item: CotizacionItem) => {
+        if (item.item_id) {
+          const itemMedia = itemsMediaMap.get(item.item_id);
+          if (itemMedia) {
+            cotizacionMedia.push(...itemMedia);
+          }
+        }
+      });
+
+      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+
+      const estructura = construirEstructuraJerarquicaCotizacion(
+        itemsFiltrados.map((item: CotizacionItem) => ({
+          item_id: item.item_id!,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: item.subtotal,
+          order: item.order,
+          name_snapshot: item.name_snapshot,
+          description_snapshot: item.description_snapshot,
+          category_name_snapshot: item.category_name_snapshot,
+          seccion_name_snapshot: item.seccion_name_snapshot,
+          name: item.name,
+          description: item.description,
+          category_name: item.category_name,
+          seccion_name: item.seccion_name,
+          id: item.id,
+        })),
+        {
+          incluirPrecios: true,
+          incluirDescripciones: true,
+          ordenarPor: 'insercion',
+        }
+      );
+
+      const servicios: PublicSeccionData[] = estructura.secciones.map((seccion) => ({
+        id: seccion.nombre,
+        nombre: seccion.nombre,
+        orden: seccion.orden,
+        categorias: seccion.categorias.map((categoria) => ({
+          id: categoria.nombre,
+          nombre: categoria.nombre,
+          orden: categoria.orden,
+          servicios: categoria.items.map((item: any) => {
+            const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
+            const originalItem = itemsFiltrados.find((i) => i.id === item.id);
+            return {
+              id: item.item_id || item.id || '',
+              name: item.nombre,
+              name_snapshot: item.nombre,
+              description: item.descripcion || null,
+              description_snapshot: item.descripcion || null,
+              price: item.unit_price,
+              quantity: item.cantidad, // construirEstructuraJerarquicaCotizacion devuelve 'cantidad'
+              is_courtesy: originalItem?.is_courtesy || false,
+              ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
+            };
+          }),
+        })),
+      }));
+
+      const condicionesComerciales = (cot as any)['condiciones_comerciales'];
+
+      return {
+        id: cot.id,
+        name: cot.name,
+        description: cot.description,
+        price: cot.price,
+        discount: cot.discount,
+        status: cot.status,
+        order: cot.order ?? 0,
+        servicios: servicios,
+        condiciones_comerciales: condicionesComerciales
+          ? {
+            metodo_pago: cot.condiciones_comerciales_metodo_pago?.[0]?.metodos_pago?.payment_method_name || null,
+            condiciones: condicionesComerciales.description || null,
+          }
+          : null,
+        paquete_origen: cot.paquete
+          ? {
+            id: cot.paquete.id,
+            name: cot.paquete.name,
+          }
+          : null,
+        selected_by_prospect: cot.selected_by_prospect || false,
+        items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+      };
+    });
+    console.log(`[${uniqueId}] getPublicPromiseUpdate:mapear: ${Date.now() - mapearStart}ms`);
+
+    console.log(`[${uniqueId}] getPublicPromiseUpdate:total: ${Date.now() - startTime}ms`);
+
+    return {
+      success: true,
+      data: {
+        promise: {
+          id: promiseBasic.id,
+          contact_name: promiseBasic.contact_name,
+          contact_phone: promiseBasic.contact_phone,
+          contact_email: promiseBasic.contact_email,
+          contact_address: promiseBasic.contact_address,
+          event_type_id: promiseBasic.event_type_id,
+          event_type_name: promiseBasic.event_type_name,
+          event_name: promiseBasic.event_name,
+          event_date: promiseBasic.event_date,
+          event_location: promiseBasic.event_location,
+        },
+        cotizaciones: mappedCotizaciones,
+      },
+    };
+  } catch (error) {
+    console.error('[getPublicPromiseUpdate] Error:', error);
+    return {
+      success: false,
+      error: 'Error al actualizar datos de promesa',
+    };
+  }
+}
+
+/**
+ * Helper compartido: Obtener datos básicos de promise + studio (sin cotizaciones pesadas)
+ * Usado por todas las funciones fragmentadas
+ */
+async function getPublicPromiseBasicData(
+  studioSlug: string,
+  promiseId: string
+): Promise<{
+  success: boolean;
+  data?: {
+    promise: {
+      id: string;
+      contact_name: string;
+      contact_phone: string;
+      contact_email: string | null;
+      contact_address: string | null;
+      event_type_id: string | null;
+      event_type_name: string | null;
+      event_name: string | null;
+      event_date: Date | null;
+      event_location: string | null;
+      share_show_packages: boolean | null;
+      share_show_categories_subtotals: boolean | null;
+      share_show_items_prices: boolean | null;
+      share_min_days_to_hire: number | null;
+      share_show_standard_conditions: boolean | null;
+      share_show_offer_conditions: boolean | null;
+      share_auto_generate_contract: boolean | null;
+    };
+    studio: {
+      studio_name: string;
+      slogan: string | null;
+      logo_url: string | null;
+      id: string;
+      representative_name: string | null;
+      phone: string | null;
+      email: string | null;
+      address: string | null;
+      promise_share_default_show_packages: boolean;
+      promise_share_default_show_categories_subtotals: boolean;
+      promise_share_default_show_items_prices: boolean;
+      promise_share_default_min_days_to_hire: number;
+      promise_share_default_show_standard_conditions: boolean;
+      promise_share_default_show_offer_conditions: boolean;
+      promise_share_default_portafolios: boolean;
+      promise_share_default_auto_generate_contract: boolean;
+    };
+  };
+  error?: string;
+}> {
+  try {
+    const fetchStudioStart = Date.now();
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: {
+        id: true,
+        studio_name: true,
+        slogan: true,
+        logo_url: true,
+        representative_name: true,
+        phone: true,
+        email: true,
+        address: true,
+        promise_share_default_show_packages: true,
+        promise_share_default_show_categories_subtotals: true,
+        promise_share_default_show_items_prices: true,
+        promise_share_default_min_days_to_hire: true,
+        promise_share_default_show_standard_conditions: true,
+        promise_share_default_show_offer_conditions: true,
+        promise_share_default_portafolios: true,
+        promise_share_default_auto_generate_contract: true,
+      },
+    });
+    console.log(`DB:FetchStudio: ${Date.now() - fetchStudioStart}ms`);
+
+    if (!studio) {
+      return {
+        success: false,
+        error: "Studio no encontrado",
+      };
+    }
+
+    const fetchPromiseStart = Date.now();
+    const promise = await prisma.studio_promises.findFirst({
+      where: {
+        id: promiseId,
+        studio_id: studio.id,
+      },
+      select: {
+        id: true,
+        name: true,
+        event_type_id: true,
+        event_date: true,
+        event_location: true,
+        share_show_packages: true,
+        share_show_categories_subtotals: true,
+        share_show_items_prices: true,
+        share_min_days_to_hire: true,
+        share_show_standard_conditions: true,
+        share_show_offer_conditions: true,
+        share_auto_generate_contract: true,
+        contact: {
+          select: {
+            name: true,
+            phone: true,
+            email: true,
+            address: true,
+          },
+        },
+        event_type: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!promise) {
+      return {
+        success: false,
+        error: "Promesa no encontrada",
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        promise: {
+          id: promise.id,
+          contact_name: promise.contact.name,
+          contact_phone: promise.contact.phone,
+          contact_email: promise.contact.email,
+          contact_address: promise.contact.address,
+          event_type_id: promise.event_type?.id || null,
+          event_type_name: promise.event_type?.name || null,
+          event_name: promise.name,
+          event_date: promise.event_date,
+          event_location: promise.event_location,
+          share_show_packages: promise.share_show_packages,
+          share_show_categories_subtotals: promise.share_show_categories_subtotals,
+          share_show_items_prices: promise.share_show_items_prices,
+          share_min_days_to_hire: promise.share_min_days_to_hire,
+          share_show_standard_conditions: promise.share_show_standard_conditions,
+          share_show_offer_conditions: promise.share_show_offer_conditions,
+          share_auto_generate_contract: promise.share_auto_generate_contract,
+        },
+        studio: {
+          studio_name: studio.studio_name,
+          slogan: studio.slogan,
+          logo_url: studio.logo_url,
+          id: studio.id,
+          representative_name: studio.representative_name,
+          phone: studio.phone,
+          email: studio.email,
+          address: studio.address,
+          promise_share_default_show_packages: studio.promise_share_default_show_packages,
+          promise_share_default_show_categories_subtotals: studio.promise_share_default_show_categories_subtotals,
+          promise_share_default_show_items_prices: studio.promise_share_default_show_items_prices,
+          promise_share_default_min_days_to_hire: studio.promise_share_default_min_days_to_hire,
+          promise_share_default_show_standard_conditions: studio.promise_share_default_show_standard_conditions,
+          promise_share_default_show_offer_conditions: studio.promise_share_default_show_offer_conditions,
+          promise_share_default_portafolios: studio.promise_share_default_portafolios,
+          promise_share_default_auto_generate_contract: studio.promise_share_default_auto_generate_contract,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("[getPublicPromiseBasicData] Error:", error);
+    return {
+      success: false,
+      error: "Error al obtener datos básicos de promesa",
     };
   }
 }

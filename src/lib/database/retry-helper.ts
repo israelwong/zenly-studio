@@ -96,6 +96,7 @@ function isRecoverableError(error: unknown): boolean {
     const recoverableMessages = [
         'Can\'t reach database server',
         'Connection timeout',
+        'timeout exceeded when trying to connect',
         'Connection refused',
         'Network error',
         'ECONNREFUSED',

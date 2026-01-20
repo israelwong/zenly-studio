@@ -1360,6 +1360,7 @@ model studio_promises {
   reminder                        studio_reminders?
 
   @@index([studio_id, contact_id])
+  @@index([id, studio_id]) // ⚠️ OPTIMIZACIÓN: Para verificación de seguridad en getPublicPromiseBasicData
   // ⚠️ DEPRECATED: Índice [studio_id, status] removido - usar pipeline_stage_id en su lugar
   @@index([studio_id, is_test])
   @@index([studio_id, offer_id])
@@ -2203,6 +2204,7 @@ model studio_cotizaciones {
   @@index([expires_at])
   @@index([contact_id])
   @@index([promise_id])
+  @@index([promise_id, status]) // ⚠️ OPTIMIZACIÓN: Para queries por promise_id + status
   @@index([promise_id, selected_by_prospect])
   @@index([selected_at])
   @@index([paquete_id])

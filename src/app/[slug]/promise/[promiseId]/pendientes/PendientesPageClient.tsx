@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { startTransition } from 'react';
 import { Calendar } from 'lucide-react';
 import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { CotizacionesSectionRealtime } from '@/components/promise/CotizacionesSectionRealtime';
@@ -9,9 +10,12 @@ import { PaquetesSection } from '@/components/promise/PaquetesSection';
 import { ComparadorButton } from '@/components/promise/ComparadorButton';
 import { PortafoliosCard } from '@/components/promise/PortafoliosCard';
 import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
+import { RealtimeUpdateNotification } from '@/components/promise/RealtimeUpdateNotification';
 import { usePromiseSettingsRealtime } from '@/hooks/usePromiseSettingsRealtime';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
-import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { usePromisesRealtime } from '@/hooks/usePromisesRealtime';
+import { getPublicPromiseRouteState } from '@/lib/actions/public/promesas.actions';
+import { determinePromiseRoute } from '@/lib/utils/public-promise-routing';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
@@ -87,6 +91,9 @@ interface PendientesPageClientProps {
   promiseId: string;
 }
 
+// ⚠️ BLOQUEO GLOBAL: Persiste aunque el componente se re-monte
+const globalReloadLocks = new Map<string, { blockUntil: number; lastReload: number }>();
+
 export function PendientesPageClient({
   promise,
   studio,
@@ -99,6 +106,18 @@ export function PendientesPageClient({
   studioSlug,
   promiseId,
 }: PendientesPageClientProps) {
+  // 🏗️ TAREA 1: Logging de re-montado
+  useEffect(() => {
+    console.log('🏗️ Componente PendientesPageClient montado', {
+      promiseId,
+      timestamp: new Date().toISOString(),
+      stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n'),
+    });
+    return () => {
+      console.log('🏗️ Componente PendientesPageClient desmontado', { promiseId });
+    };
+  }, [promiseId]);
+
   const router = useRouter();
   const {
     showProgressOverlay,
@@ -114,6 +133,18 @@ export function PendientesPageClient({
   const [shareSettings, setShareSettings] = useState<PromiseShareSettings>(initialShareSettings);
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  
+  // ⚠️ TAREA 3: Comparación de datos en el cliente (versiones de cotizaciones)
+  const cotizacionesVersionsRef = useRef<Map<string, string>>(new Map());
+  
+  useEffect(() => {
+    // Inicializar versiones de cotizaciones
+    initialCotizaciones.forEach((cot) => {
+      // Usar updated_at o un hash de los campos críticos como versión
+      const version = `${cot.id}-${cot.status}-${cot.selected_by_prospect}-${cot.price || 0}`;
+      cotizacionesVersionsRef.current.set(cot.id, version);
+    });
+  }, [initialCotizaciones]);
 
   // Generar o recuperar sessionId para tracking
   useEffect(() => {
@@ -164,37 +195,51 @@ export function PendientesPageClient({
 
   // Función para recargar cotizaciones cuando hay cambios en tiempo real
   const reloadCotizaciones = useCallback(async () => {
+    // ⚠️ TAREA 2: Bloqueo global persistente
+    const lockKey = `${studioSlug}-${promiseId}`;
+    const now = Date.now();
+    const lock = globalReloadLocks.get(lockKey);
+
+    if (lock) {
+      if (now < lock.blockUntil) {
+        const remaining = Math.ceil((lock.blockUntil - now) / 1000);
+        console.log(`🔒 [PendientesPageClient] Reload bloqueado globalmente: esperando ${remaining}s más`);
+        return;
+      }
+      if (now - lock.lastReload < 5000) {
+        const remaining = Math.ceil((5000 - (now - lock.lastReload)) / 1000);
+        console.log(`🔒 [PendientesPageClient] Reload bloqueado: esperando ${remaining}s más`);
+        return;
+      }
+    }
+
+    // Actualizar bloqueo global
+    globalReloadLocks.set(lockKey, {
+      blockUntil: now + 5000,
+      lastReload: now,
+    });
+
     try {
-      const result = await getPublicPromiseData(studioSlug, promiseId);
-      if (result.success && result.data?.cotizaciones) {
-        // Type assertion: las cotizaciones del resultado incluyen status y selected_by_prospect
-        // (el mapeo en getPublicPromiseData las incluye aunque el tipo local no las defina)
-        const cotizaciones = result.data.cotizaciones as Array<PublicCotizacion & {
-          status: string;
-          selected_by_prospect?: boolean;
-        }>;
+      // Usar getPublicPromiseRouteState (consulta ligera) en lugar de getPublicPromiseData (consulta pesada)
+      const result = await getPublicPromiseRouteState(studioSlug, promiseId);
+      if (result.success && result.data) {
+        const cotizaciones = result.data;
 
-        const cotizacionesPendientes = cotizaciones.filter(
-          (cot) => cot.status === 'pendiente'
-        );
-        setCotizaciones(cotizacionesPendientes);
-
-        // Verificar si hay cambio de estado y redirigir
-        const cotizacionEnCierre = cotizaciones.find(
-          (cot) => cot.selected_by_prospect === true && cot.status === 'en_cierre'
-        );
-        if (cotizacionEnCierre) {
-          router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
+        // Verificar si hay cambio de estado y redirigir según prioridad
+        // Usar función helper centralizada para consistencia
+        const targetRoute = determinePromiseRoute(cotizaciones, studioSlug, promiseId);
+        
+        // Si la ruta es diferente a pendientes, redirigir
+        if (!targetRoute.includes('/pendientes')) {
+          startTransition(() => {
+            router.push(targetRoute);
+          });
           return;
         }
 
-        const cotizacionNegociacion = cotizaciones.find(
-          (cot) => cot.status === 'negociacion' && cot.selected_by_prospect !== true
-        );
-        if (cotizacionNegociacion) {
-          router.push(`/${studioSlug}/promise/${promiseId}/negociacion`);
-          return;
-        }
+        // Si estamos en pendientes, no necesitamos actualizar el estado
+        // El componente padre ya filtró las cotizaciones pendientes
+        // Solo recargamos si hay un cambio de estado que requiera redirección
       }
     } catch (error) {
       console.error('[PendientesPageClient] Error en reloadCotizaciones:', error);
@@ -220,41 +265,163 @@ export function PendientesPageClient({
   // Handler para actualizaciones de cotizaciones con información de cambios
   const handleCotizacionUpdated = useCallback(
     (cotizacionId: string, payload?: unknown) => {
-      // Si el payload incluye información de cambios de estado, verificar redirección inmediatamente
       const p = payload as any;
-      if (p?.changeInfo?.statusChanged) {
+      const changeInfo = p?.changeInfo;
+      const newRecord = p?.newRecord || p?.new;
+
+      // ⚠️ TAREA 3: Comparación de datos en el cliente antes de llamar al servidor
+      if (newRecord) {
+        const newVersion = `${cotizacionId}-${newRecord.status || ''}-${newRecord.selected_by_prospect || false}-${newRecord.price || 0}`;
+        const existingVersion = cotizacionesVersionsRef.current.get(cotizacionId);
+        
+        if (existingVersion === newVersion) {
+          console.log('🔔 [PendientesPageClient] Ignorando evento: versión idéntica', {
+            cotizacionId,
+            version: newVersion,
+          });
+          return; // Versión idéntica, ignorar
+        }
+
+        // Actualizar versión
+        cotizacionesVersionsRef.current.set(cotizacionId, newVersion);
+      }
+
+      // ⚠️ TAREA 5: Instrumentación detallada en el navegador
+      console.table({
+        event: 'UPDATE',
+        cotizacionId,
+        table: p?.table || 'studio_cotizaciones',
+        change: newRecord ? {
+          status: newRecord.status,
+          selected_by_prospect: newRecord.selected_by_prospect,
+          price: newRecord.price,
+          name: newRecord.name,
+        } : 'N/A',
+        changeInfo: changeInfo ? {
+          statusChanged: changeInfo.statusChanged,
+          camposCambiados: changeInfo.camposCambiados?.join(', ') || 'N/A',
+        } : 'N/A',
+      });
+
+      // ⚠️ TAREA 4: Mantener lógica de ignorar cambios en updated_at
+      // ⚠️ TAREA 1: NO recargar automáticamente, solo notificar para incrementar contador
+      // Los cambios críticos (status) se manejarán con redirección automática si es necesario
+      if (changeInfo?.statusChanged) {
         const oldStatus = p.changeInfo.oldStatus;
         const newStatus = p.changeInfo.newStatus;
 
-        // Si una cotización pasó a 'negociacion' o 'en_cierre', redirigir inmediatamente
+        console.log('🔔 [PendientesPageClient] Cambio de estado detectado', {
+          cotizacionId,
+          oldStatus,
+          newStatus,
+        });
+
+        // Si una cotización pasó a 'negociacion' o 'en_cierre', redirigir inmediatamente (crítico)
         if (newStatus === 'negociacion' || newStatus === 'en_cierre') {
-          reloadCotizaciones();
+          console.log('🔔 [PendientesPageClient] Redirigiendo por cambio de estado crítico');
+          reloadCotizaciones(); // Redirección requiere recarga
           return;
         }
 
-        // Si una cotización salió de 'negociacion' o 'en_cierre', también recargar
+        // Si una cotización salió de 'negociacion' o 'en_cierre', notificar pero no recargar automáticamente
         if (oldStatus === 'negociacion' || oldStatus === 'en_cierre') {
-          reloadCotizaciones();
+          console.log('🔔 [PendientesPageClient] Cambio de estado detectado, notificando');
+          handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
           return;
         }
       }
 
-      // Para otros cambios, también recargar para mantener consistencia
-      reloadCotizaciones();
+      // Para otros cambios, solo notificar (no recargar automáticamente)
+      if (changeInfo?.camposCambiados) {
+        const cambiosCriticos = ['status', 'selected_by_prospect'];
+        const tieneCambioCritico = changeInfo.camposCambiados.some((campo: string) =>
+          cambiosCriticos.includes(campo)
+        );
+
+        if (tieneCambioCritico) {
+          console.log('🔔 [PendientesPageClient] Cambio crítico detectado, notificando', {
+            cotizacionId,
+            campos: changeInfo.camposCambiados,
+          });
+          handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
+          return;
+        }
+      }
+
+      // Si hay cambio válido pero no crítico, notificar
+      if (changeInfo) {
+        handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
+      }
     },
     [reloadCotizaciones]
   );
 
-  // Escuchar cambios en tiempo real de cotizaciones
+  // ⚠️ TAREA 1: Estado de actualización con tipo
+  const [pendingUpdate, setPendingUpdate] = useState<{ count: number; type: 'quote' | 'promise' | 'both' } | null>(null);
+
+  // ⚠️ TAREA 1: Callback para incrementar contador según el tipo de cambio
+  const handleUpdateDetected = useCallback((type: 'quote' | 'promise' = 'quote') => {
+    setPendingUpdate((prev) => {
+      if (!prev) {
+        return { count: 1, type };
+      }
+      // Si el tipo es diferente, combinar en 'both'
+      const newType = prev.type === type ? type : 'both';
+      return { count: prev.count + 1, type: newType };
+    });
+  }, []);
+
+  // ⚠️ TAREA 3: Función de recarga quirúrgica (solo cotizaciones y datos básicos)
+  const handleManualReload = useCallback(async () => {
+    try {
+      const { getPublicPromiseUpdate } = await import('@/lib/actions/public/promesas.actions');
+      const result = await getPublicPromiseUpdate(studioSlug, promiseId);
+
+      if (result.success && result.data) {
+        // ⚠️ TAREA 4: Actualizar solo los campos específicos sin perder scroll
+        startTransition(() => {
+          // Actualizar cotizaciones
+          if (result.data.cotizaciones) {
+            setCotizaciones(result.data.cotizaciones);
+          }
+
+          // Actualizar datos básicos de la promise (si cambiaron)
+          // Nota: Los datos de promise se pasan como props, pero podemos actualizar el estado local si es necesario
+          // Por ahora, solo actualizamos cotizaciones ya que son los cambios más frecuentes
+        });
+
+        // Limpiar estado de actualización pendiente
+        setPendingUpdate(null);
+      }
+    } catch (error) {
+      console.error('[PendientesPageClient] Error en recarga manual:', error);
+    }
+  }, [studioSlug, promiseId]);
+
+  // Escuchar cambios en tiempo real de cotizaciones (sin recarga automática)
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
-    onCotizacionInserted: reloadCotizaciones,
+    onCotizacionInserted: () => {
+      handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
+    },
     onCotizacionUpdated: handleCotizacionUpdated,
     onCotizacionDeleted: (cotizacionId) => {
       setCotizaciones((prev) => prev.filter((c) => c.id !== cotizacionId));
-      // Verificar redirección después de eliminar
-      reloadCotizaciones();
+      // Eliminar no requiere recarga, se actualiza localmente
+    },
+    onUpdateDetected: () => handleUpdateDetected('quote'), // ⚠️ TAREA 1: Notificar cambios de cotizaciones
+  });
+
+  // ⚠️ TAREA 1: Escuchar cambios en studio_promises
+  usePromisesRealtime({
+    studioSlug,
+    onPromiseUpdated: (updatedPromiseId) => {
+      // Solo notificar si es la promise actual
+      if (updatedPromiseId === promiseId) {
+        console.log('🔔 [PendientesPageClient] Cambio detectado en studio_promises', { updatedPromiseId });
+        handleUpdateDetected('promise'); // ⚠️ TAREA 1: Identificar tipo de cambio
+      }
     },
   });
 
@@ -281,7 +448,9 @@ export function PendientesPageClient({
     if (progressStep === 'completed' && showProgressOverlay) {
       // Pequeño delay para asegurar que el proceso esté completamente terminado
       const timer = setTimeout(() => {
-        router.push(redirectPath);
+        startTransition(() => {
+          router.push(redirectPath);
+        });
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -418,6 +587,13 @@ export function PendientesPageClient({
           setProgressStep('validating');
           setShowProgressOverlay(false);
         }}
+      />
+
+      {/* ⚠️ TAREA 2: Componente de notificación flotante Zen */}
+      <RealtimeUpdateNotification
+        pendingUpdate={pendingUpdate}
+        onUpdate={handleManualReload}
+        onDismiss={() => setPendingUpdate(null)}
       />
     </>
   );

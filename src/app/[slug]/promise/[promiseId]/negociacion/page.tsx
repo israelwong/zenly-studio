@@ -1,7 +1,9 @@
 import React, { Suspense } from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { unstable_cache } from 'next/cache';
+import { getPublicPromiseRouteState, getPublicPromiseNegociacion, getPublicPromiseMetadata } from '@/lib/actions/public/promesas.actions';
+import { isRouteValid } from '@/lib/utils/public-promise-routing';
 import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
@@ -18,8 +20,24 @@ interface NegociacionPageProps {
 export default async function NegociacionPage({ params }: NegociacionPageProps) {
   const { slug, promiseId } = await params;
 
-  // Obtener datos completos de la promesa
-  const result = await getPublicPromiseData(slug, promiseId);
+  // ✅ 1. Validación temprana: verificar estado antes de cargar datos pesados
+  const routeState = await getPublicPromiseRouteState(slug, promiseId);
+
+  if (!routeState.success || !routeState.data) {
+    redirect(`/${slug}/promise/${promiseId}`);
+  }
+
+  // ✅ 2. Control de acceso: usar función unificada isRouteValid
+  const currentPath = `/${slug}/promise/${promiseId}/negociacion`;
+  const isValid = isRouteValid(currentPath, routeState.data);
+
+  if (!isValid) {
+    console.log('❌ Validación fallida en /negociacion: Redirigiendo al raíz. Datos:', routeState.data);
+    redirect(`/${slug}/promise/${promiseId}`);
+  }
+
+  // ✅ 3. Solo ahora cargar datos específicos para /negociacion
+  const result = await getPublicPromiseNegociacion(slug, promiseId);
 
   // Si no hay datos, redirigir a la ruta raíz que manejará el error
   if (!result.success || !result.data) {
@@ -35,23 +53,11 @@ export default async function NegociacionPage({ params }: NegociacionPageProps) 
     share_settings,
   } = result.data;
 
-  // Buscar cotización en negociación (NO debe tener selected_by_prospect: true)
-  const cotizacionNegociacion = cotizaciones.find(
-    (cot) => cot.status === 'negociacion' && cot.selected_by_prospect !== true
-  );
+  // Obtener la cotización en negociación (debe ser la única)
+  const cotizacionNegociacion = cotizaciones[0];
 
-  // Si no hay cotización en negociación, redirigir según estado
   if (!cotizacionNegociacion) {
-    // Prioridad: cierre
-    const cotizacionEnCierre = cotizaciones.find(
-      (cot) => cot.selected_by_prospect === true && cot.status === 'en_cierre'
-    );
-    if (cotizacionEnCierre) {
-      redirect(`/${slug}/promise/${promiseId}/cierre`);
-    }
-
-    // Default: pendientes
-    redirect(`/${slug}/promise/${promiseId}/pendientes`);
+    redirect(`/${slug}/promise/${promiseId}`);
   }
 
   // Verificar que tenga condición comercial definida
@@ -85,7 +91,19 @@ export async function generateMetadata({
   const { slug, promiseId } = await params;
 
   try {
-    const result = await getPublicPromiseData(slug, promiseId);
+    // Para metadata, usar función ultra-ligera
+    const getCachedMetadata = unstable_cache(
+      async () => {
+        return getPublicPromiseMetadata(slug, promiseId);
+      },
+      ['public-promise-metadata', slug, promiseId],
+      {
+        tags: [`public-promise-metadata-${slug}-${promiseId}`],
+        revalidate: 3600, // Cachear por 1 hora
+      }
+    );
+
+    const result = await getCachedMetadata();
 
     if (!result.success || !result.data) {
       return {
@@ -94,25 +112,25 @@ export async function generateMetadata({
       };
     }
 
-    const { promise, studio } = result.data;
-    const eventType = promise.event_type_name || 'Evento';
-    const eventName = promise.event_name || '';
-    const studioName = studio.studio_name;
+    const { event_name, event_type_name, studio_name, logo_url } = result.data;
+    const eventType = event_type_name || 'Evento';
+    const eventName = event_name || '';
+    const studioName = studio_name;
 
     const title = eventName
       ? `${eventType} ${eventName} | ${studioName}`
       : `${eventType} | ${studioName}`;
-    const description = `Revisa la propuesta de negociación para tu ${promise.event_type_name || 'evento'} con ${studio.studio_name}`;
+    const description = `Revisa la propuesta de negociación para tu ${event_type_name || 'evento'} con ${studio_name}`;
 
-    const icons = studio.logo_url
+    const icons = logo_url
       ? {
           icon: [
-            { url: studio.logo_url, type: 'image/png' },
-            { url: studio.logo_url, sizes: '32x32', type: 'image/png' },
-            { url: studio.logo_url, sizes: '16x16', type: 'image/png' },
+            { url: logo_url, type: 'image/png' },
+            { url: logo_url, sizes: '32x32', type: 'image/png' },
+            { url: logo_url, sizes: '16x16', type: 'image/png' },
           ],
-          apple: [{ url: studio.logo_url, sizes: '180x180', type: 'image/png' }],
-          shortcut: studio.logo_url,
+          apple: [{ url: logo_url, sizes: '180x180', type: 'image/png' }],
+          shortcut: logo_url,
         }
       : undefined;
 

@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createStudioNotification } from "@/lib/notifications/studio/studio-notification.service";
 import { StudioNotificationScope, StudioNotificationType, NotificationPriority } from "@/lib/notifications/studio/types";
 import { getPromiseShareSettings } from "@/lib/actions/studio/commercial/promises/promise-share-settings.actions";
@@ -244,9 +244,11 @@ export async function autorizarCotizacionPublica(
       }
     }
 
-    // Revalidar paths para refrescar datos en el panel
+    // Revalidar paths y caché para refrescar datos en el panel
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidatePath(`/${studioSlug}/promise/${promiseId}`);
+    revalidateTag(`public-promise-${studioSlug}-${promiseId}`);
 
     // 4. Calcular precio final con descuentos y anticipos
     const formatPrice = (price: number) => {
@@ -563,9 +565,10 @@ export async function regeneratePublicContract(
       });
     }
 
-    // Revalidar paths
+    // Revalidar paths y caché
     revalidatePath(`/${studioSlug}/promise/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidateTag(`public-promise-${studioSlug}-${promiseId}`);
 
     return {
       success: true,

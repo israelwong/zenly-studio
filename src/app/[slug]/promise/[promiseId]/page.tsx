@@ -2,10 +2,10 @@ import React from 'react';
 import Link from 'next/link';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { unstable_cache } from 'next/cache';
+import { getPublicPromiseMetadata, getPublicPromiseRouteState } from '@/lib/actions/public/promesas.actions';
 import { ZenButton, ZenCard } from '@/components/ui/zen';
-import { prisma } from '@/lib/prisma';
-import type { PublicCotizacion } from '@/types/public-promise';
+import { determinePromiseRoute } from '@/lib/utils/public-promise-routing';
 
 interface PromisePageProps {
   params: Promise<{
@@ -20,35 +20,14 @@ interface PromisePageProps {
 export default async function PromisePage({ params }: PromisePageProps) {
   const { slug, promiseId } = await params;
 
-  // Obtener información del studio (para verificación)
-  const studio = await prisma.studios.findUnique({
-    where: { slug },
-    select: {
-      id: true,
-    },
-  });
+  // Medir tiempo de dispatcher
+  const dispatcherStart = Date.now();
 
-  // Verificar si hay cotizaciones aprobadas antes de cargar datos
-  if (studio) {
-    const cotizacionesAprobadas = await prisma.studio_cotizaciones.findFirst({
-      where: {
-        promise_id: promiseId,
-        studio_id: studio.id,
-        status: { in: ['aprobada', 'autorizada', 'approved'] },
-      },
-      select: { id: true },
-    });
+  // 1. Consulta inicial ligera: solo estados de cotizaciones para determinar routing
+  const routeStateResult = await getPublicPromiseRouteState(slug, promiseId);
 
-    if (cotizacionesAprobadas) {
-      redirect(`/${slug}/cliente`);
-    }
-  }
-
-  // Obtener datos completos de la promesa
-  const result = await getPublicPromiseData(slug, promiseId);
-
-  // Si no hay datos, mostrar mensaje de error
-  if (!result.success || !result.data) {
+  // Si hay error o no hay datos, mostrar mensaje de error
+  if (!routeStateResult.success || !routeStateResult.data) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="max-w-md w-full">
@@ -70,13 +49,13 @@ export default async function PromisePage({ params }: PromisePageProps) {
                 </svg>
               </div>
               <h2 className="text-xl font-semibold text-white mb-2">
-                {result.error || 'Información no disponible'}
+                {routeStateResult.error || 'Información no disponible'}
               </h2>
               <p className="text-sm text-zinc-400">
-                {result.error === 'Promesa no encontrada'
-                  ? 'Lo sentimos, la promesa solicitada ya no está disponible.'
-                  : result.error === 'No hay cotizaciones ni paquetes disponibles para mostrar'
-                    ? 'Esta promesa aún no tiene cotizaciones o paquetes disponibles para compartir.'
+                {routeStateResult.error === 'Studio no encontrado'
+                  ? 'Lo sentimos, el estudio solicitado no existe.'
+                  : routeStateResult.error === 'Promesa no encontrada'
+                    ? 'Lo sentimos, la promesa solicitada ya no está disponible.'
                     : 'Esta información ya no se encuentra disponible.'}
               </p>
             </div>
@@ -91,35 +70,76 @@ export default async function PromisePage({ params }: PromisePageProps) {
     );
   }
 
-  const { cotizaciones } = result.data;
+  const cotizaciones = routeStateResult.data;
 
-  // Determinar estado y redirigir según prioridad:
-  // 1. Negociación (prioridad más alta)
-  // 2. Cierre (si tiene selected_by_prospect: true)
-  // 3. Pendientes (default)
-
-  // 1. Prioridad: Cotización en negociación (NO debe tener selected_by_prospect: true)
-  const cotizacionNegociacion = cotizaciones.find(
-    (cot: PublicCotizacion) => cot.status === 'negociacion' && cot.selected_by_prospect !== true
+  // 2. Verificar si hay cotización aprobada (redirigir a /cliente)
+  const cotizacionAprobada = cotizaciones.find(cot =>
+    cot.status === 'aprobada' || cot.status === 'autorizada' || cot.status === 'approved'
   );
-  if (cotizacionNegociacion) {
-    redirect(`/${slug}/promise/${promiseId}/negociacion`);
+
+  if (cotizacionAprobada) {
+    console.log('🚀 Dispatcher: Cotización aprobada, redirigiendo a /cliente');
+    console.timeEnd('dispatcher');
+    redirect(`/${slug}/cliente`);
   }
 
-  // 2. Prioridad: Cotización en cierre (debe tener selected_by_prospect: true)
-  const cotizacionEnCierre = cotizaciones.find(
-    (cot: PublicCotizacion) => cot.selected_by_prospect === true && cot.status === 'en_cierre'
-  );
-  if (cotizacionEnCierre) {
-    redirect(`/${slug}/promise/${promiseId}/cierre`);
-  }
+  // 3. Determinar ruta usando función helper centralizada
+  // Prioridad: Negociación > Cierre > Pendientes
+  const targetRoute = determinePromiseRoute(cotizaciones, slug, promiseId);
 
-  // 3. Default: Cotizaciones pendientes
-  redirect(`/${slug}/promise/${promiseId}/pendientes`);
+  console.log('🚀 Dispatcher: Redirigiendo a ->', targetRoute);
+  console.log('📊 Dispatcher: Cotizaciones disponibles:', cotizaciones.map(c => ({ id: c.id, status: c.status, selected: c.selected_by_prospect })));
+
+  // 4. Si determinePromiseRoute devuelve la ruta raíz, significa que no hay cotizaciones válidas
+  // En ese caso, mostrar error en lugar de redirigir (evitar bucle)
+  if (targetRoute === `/${slug}/promise/${promiseId}`) {
+    console.log('⚠️ Dispatcher: No hay cotizaciones válidas, mostrando error');
+    console.timeEnd('dispatcher');
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md w-full">
+          <ZenCard className="bg-zinc-900/50 border-zinc-800 p-8 text-center">
+            <div className="mb-6">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-800/50 flex items-center justify-center">
+                <svg
+                  className="w-8 h-8 text-zinc-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-white mb-2">
+                No hay cotizaciones disponibles
+              </h2>
+              <p className="text-sm text-zinc-400">
+                No hay cotizaciones pendientes, en negociación o en cierre disponibles en este momento.
+              </p>
+            </div>
+            <Link href={`/${slug}`}>
+              <ZenButton className="w-full">
+                Ver perfil del estudio
+              </ZenButton>
+            </Link>
+          </ZenCard>
+        </div>
+      </div>
+    );
+  }
+  
+  console.log(`⏱️ Dispatcher: ${Date.now() - dispatcherStart}ms`);
+  redirect(targetRoute);
 }
 
 /**
- * Generar metadata para SEO y favicon din?mico
+ * Generar metadata para SEO y favicon dinámico
+ * Optimizado: usa función ligera getPublicPromiseMetadata en lugar de getPublicPromiseData
  */
 export async function generateMetadata({
   params,
@@ -127,36 +147,47 @@ export async function generateMetadata({
   const { slug, promiseId } = await params;
 
   try {
-    const result = await getPublicPromiseData(slug, promiseId);
+    // Cachear datos para metadata (función ultra-ligera)
+    const getCachedMetadata = unstable_cache(
+      async () => {
+        return getPublicPromiseMetadata(slug, promiseId);
+      },
+      ['public-promise-metadata', slug, promiseId],
+      {
+        tags: [`public-promise-metadata-${slug}-${promiseId}`],
+        revalidate: 3600, // Cachear por 1 hora
+      }
+    );
+
+    const result = await getCachedMetadata();
 
     if (!result.success || !result.data) {
       return {
         title: 'Promesa no encontrada',
-        description: 'La informaci?n solicitada no est? disponible',
+        description: 'La información solicitada no está disponible',
       };
     }
 
-    const { promise, studio } = result.data;
-    const eventType = promise.event_type_name || 'Evento';
-    const eventName = promise.event_name || '';
-    const studioName = studio.studio_name;
+    const { event_name, event_type_name, studio_name, logo_url } = result.data;
+    const eventType = event_type_name || 'Evento';
+    const eventName = event_name || '';
 
     const title = eventName
-      ? `${eventType} ${eventName} | ${studioName}`
-      : `${eventType} | ${studioName}`;
-    const description = `Informaci?n de tu ${promise.event_type_name || 'evento'} con ${studio.studio_name}`;
+      ? `${eventType} ${eventName} | ${studio_name}`
+      : `${eventType} | ${studio_name}`;
+    const description = `Información de tu ${event_type_name || 'evento'} con ${studio_name}`;
 
-    // Configurar favicon din?mico usando el logo del studio
-    const icons = studio.logo_url ? {
+    // Configurar favicon dinámico usando el logo del studio
+    const icons = logo_url ? {
       icon: [
-        { url: studio.logo_url, type: 'image/png' },
-        { url: studio.logo_url, sizes: '32x32', type: 'image/png' },
-        { url: studio.logo_url, sizes: '16x16', type: 'image/png' },
+        { url: logo_url, type: 'image/png' },
+        { url: logo_url, sizes: '32x32', type: 'image/png' },
+        { url: logo_url, sizes: '16x16', type: 'image/png' },
       ],
       apple: [
-        { url: studio.logo_url, sizes: '180x180', type: 'image/png' },
+        { url: logo_url, sizes: '180x180', type: 'image/png' },
       ],
-      shortcut: studio.logo_url,
+      shortcut: logo_url,
     } : undefined;
 
     return {
@@ -173,7 +204,7 @@ export async function generateMetadata({
     console.error('[generateMetadata] Error:', error);
     return {
       title: 'Promesa no encontrada',
-      description: 'La informaci?n solicitada no est? disponible',
+      description: 'La información solicitada no está disponible',
     };
   }
 }

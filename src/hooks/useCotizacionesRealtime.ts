@@ -16,6 +16,7 @@ interface UseCotizacionesRealtimeProps {
   onCotizacionUpdated?: (cotizacionId: string, payload?: unknown) => void;
   onCotizacionDeleted?: (cotizacionId: string) => void;
   ignoreCierreEvents?: boolean; // Si es true, ignora eventos de studio_cotizaciones_cierre
+  onUpdateDetected?: () => void; // ⚠️ NUEVO: Callback cuando se detecta un cambio válido (para incrementar contador)
 }
 
 export function useCotizacionesRealtime({
@@ -25,6 +26,7 @@ export function useCotizacionesRealtime({
   onCotizacionUpdated,
   onCotizacionDeleted,
   ignoreCierreEvents = false,
+  onUpdateDetected, // ⚠️ NUEVO: Para notificar cambios válidos
 }: UseCotizacionesRealtimeProps) {
   const supabase = createClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -34,13 +36,15 @@ export function useCotizacionesRealtime({
   const onInsertedRef = useRef(onCotizacionInserted);
   const onUpdatedRef = useRef(onCotizacionUpdated);
   const onDeletedRef = useRef(onCotizacionDeleted);
+  const onUpdateDetectedRef = useRef(onUpdateDetected);
 
   // Actualizar refs cuando cambian los callbacks
   useEffect(() => {
     onInsertedRef.current = onCotizacionInserted;
     onUpdatedRef.current = onCotizacionUpdated;
     onDeletedRef.current = onCotizacionDeleted;
-  }, [onCotizacionInserted, onCotizacionUpdated, onCotizacionDeleted]);
+    onUpdateDetectedRef.current = onUpdateDetected;
+  }, [onCotizacionInserted, onCotizacionUpdated, onCotizacionDeleted, onUpdateDetected]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -171,7 +175,11 @@ export function useCotizacionesRealtime({
       const oldRecord = p.old || p.payload?.old || p.old_record || p.payload?.old_record;
       const newRecord = p.new || p.payload?.new || p.record || p.payload?.record || cotizacion;
       
-      // Detectar cambios importantes
+      // ⚠️ COMPARACIÓN PROFUNDA: Ignorar cambios en campos de sistema
+      const camposSistema = ['updated_at', 'created_at', 'last_accessed_at'];
+      const camposImportantes = ['status', 'name', 'price', 'description', 'archived', 'order', 'evento_id', 'condiciones_comerciales_id', 'selected_by_prospect', 'visible_to_client'];
+      
+      // Detectar cambios importantes (excluyendo campos de sistema)
       let cambioDetectado: {
         statusChanged?: boolean;
         oldStatus?: string;
@@ -180,9 +188,9 @@ export function useCotizacionesRealtime({
       } | null = null;
 
       if (oldRecord && newRecord) {
-        const camposImportantes = ['status', 'name', 'price', 'description', 'archived', 'order', 'evento_id', 'condiciones_comerciales_id', 'selected_by_prospect'];
         const camposCambiados: string[] = [];
         
+        // Verificar solo campos importantes (ignorar campos de sistema)
         camposImportantes.forEach(campo => {
           const oldValue = oldRecord[campo];
           const newValue = newRecord[campo];
@@ -190,13 +198,48 @@ export function useCotizacionesRealtime({
                          oldValue !== newValue;
           if (changed) {
             camposCambiados.push(campo);
+            // 🔔 LOG DE CONTROL
+            console.log(`🔔 Realtime: Cambio detectado en campo [${campo}]`, {
+              cotizacionId,
+              oldValue,
+              newValue,
+            });
           }
         });
+
+        // ⚠️ CRÍTICO: Si solo cambiaron campos de sistema, ignorar completamente
+        const soloCamposSistema = Object.keys(newRecord).every(key => {
+          if (camposSistema.includes(key)) return true;
+          if (camposImportantes.includes(key)) {
+            const oldValue = oldRecord[key];
+            const newValue = newRecord[key];
+            return oldValue === newValue;
+          }
+          return true; // Ignorar campos desconocidos
+        });
+
+        if (soloCamposSistema && camposCambiados.length === 0) {
+          // Solo cambió updated_at u otros campos de sistema, ignorar completamente
+          console.log('🔔 Realtime: Ignorando evento (solo campos de sistema cambiaron)', { cotizacionId });
+          return;
+        }
+
+        // ⚠️ TAREA 1: Si hay cambios válidos, notificar para incrementar contador (NO recargar automáticamente)
+        if (camposCambiados.length > 0 || cambioDetectado) {
+          console.log('🔔 Realtime: Cambio válido detectado, notificando (sin recarga automática)', {
+            cotizacionId,
+            camposCambiados,
+          });
+          if (onUpdateDetectedRef.current) {
+            onUpdateDetectedRef.current();
+          }
+        }
 
         // Si ignoreCierreEvents es true, verificar si solo cambió updated_at
         if (ignoreCierreEvents) {
           if (camposCambiados.length === 0) {
             // Solo cambió updated_at, ignorar el evento
+            console.log('🔔 Realtime: Ignorando evento (ignoreCierreEvents activo, sin cambios importantes)', { cotizacionId });
             return;
           }
         }
@@ -209,6 +252,7 @@ export function useCotizacionesRealtime({
             newStatus: newRecord.status,
             camposCambiados,
           };
+          console.log(`🔔 Realtime: Cambio de estado detectado [${oldRecord.status} → ${newRecord.status}]`, { cotizacionId });
         } else if (camposCambiados.length > 0) {
           cambioDetectado = {
             statusChanged: false,
@@ -225,7 +269,10 @@ export function useCotizacionesRealtime({
         newRecord,
       };
 
+      // ⚠️ TAREA 1: NO llamar automáticamente a onUpdatedRef (que dispara recarga)
+      // Solo notificar que hay un cambio válido para incrementar el contador
       if (cotizacionId && onUpdatedRef.current) {
+        // Mantener el callback para compatibilidad, pero la recarga será manual
         onUpdatedRef.current(cotizacionId, enrichedPayload);
       }
     },
@@ -254,6 +301,12 @@ export function useCotizacionesRealtime({
     [promiseId, extractCotizacion, onCotizacionDeleted]
   );
 
+  // ⚠️ MEMOIZAR CLIENTE DE SUPABASE: Evitar recrear en cada render
+  const supabaseClientRef = useRef(supabase);
+  useEffect(() => {
+    supabaseClientRef.current = supabase;
+  }, [supabase]);
+
   useEffect(() => {
     if (!studioSlug) {
       return;
@@ -266,7 +319,7 @@ export function useCotizacionesRealtime({
 
     // Limpiar canal anterior si existe
     if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
+      supabaseClientRef.current.removeChannel(channelRef.current);
       channelRef.current = null;
     }
 
@@ -274,7 +327,7 @@ export function useCotizacionesRealtime({
     const setupRealtime = async () => {
       try {
         const requiresAuth = false;
-        const authResult = await setupRealtimeAuth(supabase, requiresAuth);
+        const authResult = await setupRealtimeAuth(supabaseClientRef.current, requiresAuth);
 
         if (!authResult.success && requiresAuth) {
           console.error('[useCotizacionesRealtime] Error configurando auth:', authResult.error);
@@ -282,13 +335,19 @@ export function useCotizacionesRealtime({
         }
 
         const channelConfig = RealtimeChannelPresets.cotizaciones(studioSlug, true);
-        const channel = createRealtimeChannel(supabase, channelConfig);
+        const channel = createRealtimeChannel(supabaseClientRef.current, channelConfig);
 
         // Agregar listeners
         channel
           .on('broadcast', { event: '*' }, (payload: unknown) => {
             const p = payload as any;
             const operation = p.operation || p.event;
+            // ⚠️ TAREA 5: Instrumentación detallada
+            console.table({
+              event: operation,
+              table: p?.table || p?.payload?.table || 'unknown',
+              change: p?.new || p?.payload?.new || p?.record || 'N/A',
+            });
             if (operation === 'INSERT') handleInsert(payload);
             else if (operation === 'UPDATE') handleUpdate(payload);
             else if (operation === 'DELETE') handleDelete(payload);
@@ -300,6 +359,8 @@ export function useCotizacionesRealtime({
         await subscribeToChannel(channel, (status, err) => {
           if (err) {
             console.error('[useCotizacionesRealtime] Error en suscripción:', err);
+          } else {
+            console.log('[useCotizacionesRealtime] Canal suscrito correctamente', { status });
           }
         });
 
@@ -311,12 +372,18 @@ export function useCotizacionesRealtime({
 
     setupRealtime();
 
-    // Cleanup al desmontar
+    // ⚠️ TAREA 4: Cleanup correcto del canal
     return () => {
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        console.log('[useCotizacionesRealtime] Limpiando canal de Realtime');
+        // Desuscribirse antes de remover
+        channelRef.current.unsubscribe();
+        supabaseClientRef.current.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, [studioSlug, promiseId, handleInsert, handleUpdate, handleDelete, supabase]);
+    // ⚠️ DEPENDENCIAS ESTABLES: Solo recrear si cambia studioSlug o promiseId
+    // handleInsert, handleUpdate, handleDelete están memoizados con useCallback
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studioSlug, promiseId]);
 }
