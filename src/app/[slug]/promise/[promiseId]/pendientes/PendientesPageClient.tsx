@@ -4,7 +4,6 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { Calendar } from 'lucide-react';
-import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { CotizacionesSectionRealtime } from '@/components/promise/CotizacionesSectionRealtime';
 import { PaquetesSection } from '@/components/promise/PaquetesSection';
 import { ComparadorButton } from '@/components/promise/ComparadorButton';
@@ -475,14 +474,8 @@ export function PendientesPageClient({
 
   return (
     <>
-      {/* Hero Section */}
-      <PromiseHeroSection
-        contactName={promise.contact_name}
-        eventTypeName={promise.event_type_name}
-        eventDate={promise.event_date}
-        studioName={studio.studio_name}
-        studioLogoUrl={studio.logo_url}
-      />
+      {/* ⚠️ Hero Section ya se renderiza en PendientesPageBasic (instantáneo) */}
+      {/* No duplicar aquí para evitar header duplicado */}
 
       {/* Fecha sugerida de contratación */}
       {shareSettings.min_days_to_hire && shareSettings.min_days_to_hire > 0 && promise.event_date && (

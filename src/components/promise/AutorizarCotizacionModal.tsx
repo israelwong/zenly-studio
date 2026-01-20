@@ -325,6 +325,9 @@ export function AutorizarCotizacionModal({
     event_name: string;
     event_location: string;
   }) => {
+    // ⚠️ TAREA 3: Cerrar overlays antes de autorizar
+    window.dispatchEvent(new CustomEvent('close-overlays'));
+    
     setProgressError(null);
     setProgressStep('validating');
     setAutoGenerateContract(autoGenerateContract);

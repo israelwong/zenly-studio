@@ -22,20 +22,28 @@ function isCotizacion(item: ComparableItem): item is PublicCotizacion & { type: 
 
 // Obtener todas las secciones únicas de todos los items
 // Agrupa por NOMBRE (no por ID) porque los paquetes tienen IDs dinámicos y las cotizaciones guardan snapshots
+// ⚠️ HIGIENE DE DATOS: Los paquetes son la base de la agrupación (tienen el orden completo del catálogo)
+// Las cotizaciones se agregan después, respetando el orden establecido por los paquetes
 function getAllUniqueSecciones(items: ComparableItem[]): PublicSeccionData[] {
+  // Separar paquetes y cotizaciones
+  const paquetes = items.filter(item => item.type === 'paquete');
+  const cotizaciones = items.filter(item => item.type === 'cotizacion');
+
   // Usar nombre como clave para agrupar secciones
   const seccionesMap = new Map<string, PublicSeccionData>();
 
-  items.forEach((item) => {
-    item.servicios.forEach((seccionDelItem) => {
-      const seccionKey = seccionDelItem.nombre.toLowerCase().trim();
+  // ⚠️ PASO 1: Procesar PAQUETES primero (base de la agrupación)
+  // Los paquetes tienen el orden completo del catálogo (sección → categoría → item)
+  paquetes.forEach((paquete) => {
+    paquete.servicios.forEach((seccionDelPaquete) => {
+      const seccionKey = seccionDelPaquete.nombre.toLowerCase().trim();
       
-      // Si la sección no existe por nombre, crearla
+      // Si la sección no existe por nombre, crearla desde el paquete
       if (!seccionesMap.has(seccionKey)) {
         seccionesMap.set(seccionKey, {
-          id: seccionDelItem.id, // Usar el primer ID encontrado
-          nombre: seccionDelItem.nombre,
-          orden: seccionDelItem.orden,
+          id: seccionDelPaquete.id,
+          nombre: seccionDelPaquete.nombre,
+          orden: seccionDelPaquete.orden,
           categorias: [],
         });
       }
@@ -47,55 +55,130 @@ function getAllUniqueSecciones(items: ComparableItem[]): PublicSeccionData[] {
         const categoriaKey = c.nombre.toLowerCase().trim();
         categoriasMap.set(categoriaKey, {
           ...c,
-          servicios: [...c.servicios],
+          servicios: [...c.servicios], // Preservar orden original del paquete
         });
       });
 
-      // Procesar cada categoría de esta sección en este item específico
-      seccionDelItem.categorias.forEach((categoriaDelItem) => {
-        const categoriaKey = categoriaDelItem.nombre.toLowerCase().trim();
+      // Procesar cada categoría de esta sección en este paquete
+      // Las categorías ya vienen ordenadas por orden desde la consulta
+      seccionDelPaquete.categorias.forEach((categoriaDelPaquete) => {
+        const categoriaKey = categoriaDelPaquete.nombre.toLowerCase().trim();
         
-        // Si la categoría no existe por nombre, crearla
+        // Si la categoría no existe por nombre, crearla desde el paquete
         if (!categoriasMap.has(categoriaKey)) {
           categoriasMap.set(categoriaKey, {
-            id: categoriaDelItem.id, // Usar el primer ID encontrado
-            nombre: categoriaDelItem.nombre,
-            orden: categoriaDelItem.orden,
+            id: categoriaDelPaquete.id,
+            nombre: categoriaDelPaquete.nombre,
+            orden: categoriaDelPaquete.orden,
             servicios: [],
           });
         }
 
         const categoriaMap = categoriasMap.get(categoriaKey)!;
-        // Crear mapa de servicios existentes agrupados por nombre
-        const serviciosMap = new Map<string, PublicServicioData>();
+        // ⚠️ HIGIENE DE DATOS: Los servicios del paquete ya vienen ordenados (sección → categoría → item)
+        // Usar Set para verificar duplicados y mantener orden de primera aparición (del paquete)
+        const serviciosExistentes = new Set<string>();
         categoriaMap.servicios.forEach(s => {
           const servicioKey = (s.name || '').toLowerCase().trim();
           if (servicioKey) {
-            serviciosMap.set(servicioKey, s);
+            serviciosExistentes.add(servicioKey);
           }
         });
 
-        // Agregar servicios de esta categoría específica en esta sección específica de este item
-        categoriaDelItem.servicios.forEach((servicio) => {
+        // Agregar servicios del paquete manteniendo el orden original del catálogo
+        categoriaDelPaquete.servicios.forEach((servicio) => {
           const servicioKey = (servicio.name || '').toLowerCase().trim();
-          if (servicioKey && !serviciosMap.has(servicioKey)) {
-            serviciosMap.set(servicioKey, servicio);
+          if (servicioKey && !serviciosExistentes.has(servicioKey)) {
+            // Agregar al final (ya vienen ordenados desde el catálogo: sección → categoría → item)
+            categoriaMap.servicios.push(servicio);
+            serviciosExistentes.add(servicioKey);
           }
         });
 
-        // Actualizar servicios de la categoría
-        categoriaMap.servicios = Array.from(serviciosMap.values()).sort((a, b) => {
-          return (a.name || '').localeCompare(b.name || '');
-        });
         categoriasMap.set(categoriaKey, categoriaMap);
       });
 
-      // Actualizar categorías de la sección
+      // Actualizar categorías de la sección (ya están ordenadas por orden desde el catálogo)
       seccionMap.categorias = Array.from(categoriasMap.values()).sort((a, b) => a.orden - b.orden);
       seccionesMap.set(seccionKey, seccionMap);
     });
   });
 
+  // ⚠️ PASO 2: Procesar COTIZACIONES después, respetando el orden establecido por los paquetes
+  cotizaciones.forEach((cotizacion) => {
+    cotizacion.servicios.forEach((seccionDelCotizacion) => {
+      const seccionKey = seccionDelCotizacion.nombre.toLowerCase().trim();
+      
+      // Si la sección no existe (raro, pero posible), crearla desde la cotización
+      if (!seccionesMap.has(seccionKey)) {
+        seccionesMap.set(seccionKey, {
+          id: seccionDelCotizacion.id,
+          nombre: seccionDelCotizacion.nombre,
+          orden: seccionDelCotizacion.orden,
+          categorias: [],
+        });
+      }
+
+      const seccionMap = seccionesMap.get(seccionKey)!;
+      // Crear mapa de categorías existentes (ya establecidas por paquetes)
+      const categoriasMap = new Map<string, PublicCategoriaData>();
+      seccionMap.categorias.forEach(c => {
+        const categoriaKey = c.nombre.toLowerCase().trim();
+        categoriasMap.set(categoriaKey, {
+          ...c,
+          servicios: [...c.servicios], // Preservar orden establecido por paquetes
+        });
+      });
+
+      // Procesar cada categoría de esta sección en esta cotización
+      seccionDelCotizacion.categorias.forEach((categoriaDelCotizacion) => {
+        const categoriaKey = categoriaDelCotizacion.nombre.toLowerCase().trim();
+        
+        // Si la categoría no existe (raro), crearla desde la cotización
+        if (!categoriasMap.has(categoriaKey)) {
+          categoriasMap.set(categoriaKey, {
+            id: categoriaDelCotizacion.id,
+            nombre: categoriaDelCotizacion.nombre,
+            orden: categoriaDelCotizacion.orden,
+            servicios: [],
+          });
+        }
+
+        const categoriaMap = categoriasMap.get(categoriaKey)!;
+        // ⚠️ HIGIENE DE DATOS: Solo agregar servicios de cotización que no existan
+        // Mantener el orden establecido por los paquetes (no agregar al final, solo verificar existencia)
+        const serviciosExistentes = new Set<string>();
+        categoriaMap.servicios.forEach(s => {
+          const servicioKey = (s.name || '').toLowerCase().trim();
+          if (servicioKey) {
+            serviciosExistentes.add(servicioKey);
+          }
+        });
+
+        // Los servicios de cotización que no existen ya están cubiertos por los paquetes
+        // Solo verificamos existencia, no agregamos nuevos (el paquete más alto tiene todo)
+        categoriaDelCotizacion.servicios.forEach((servicio) => {
+          const servicioKey = (servicio.name || '').toLowerCase().trim();
+          // No agregar servicios nuevos de cotizaciones, solo verificar que existan
+          // El orden ya está establecido por los paquetes
+          if (servicioKey && !serviciosExistentes.has(servicioKey)) {
+            // Si un servicio de cotización no existe en paquetes, agregarlo al final
+            // (caso raro: cotización tiene servicios que el paquete no tiene)
+            categoriaMap.servicios.push(servicio);
+            serviciosExistentes.add(servicioKey);
+          }
+        });
+
+        categoriasMap.set(categoriaKey, categoriaMap);
+      });
+
+      // Actualizar categorías de la sección (mantener orden establecido por paquetes)
+      seccionMap.categorias = Array.from(categoriasMap.values()).sort((a, b) => a.orden - b.orden);
+      seccionesMap.set(seccionKey, seccionMap);
+    });
+  });
+
+  // ⚠️ HIGIENE DE DATOS: Ordenar secciones por orden del catálogo (establecido por paquetes)
   return Array.from(seccionesMap.values()).sort((a, b) => a.orden - b.orden);
 }
 
@@ -263,9 +346,8 @@ export function ComparadorSheet({
                   </div>
 
                   <div className="divide-y divide-zinc-800/50">
-                    {seccion.categorias
-                      .sort((a, b) => a.orden - b.orden)
-                      .map((categoria) => (
+                    {/* ⚠️ HIGIENE DE DATOS: Las categorías ya vienen ordenadas desde la consulta */}
+                    {seccion.categorias.map((categoria) => (
                         <div key={`categoria-${categoria.nombre}`} className="bg-zinc-950/30">
                           {/* Categoría Header */}
                           <div className="flex gap-2 border-b border-zinc-800/30">

@@ -1,7 +1,7 @@
 import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { PromiseRedirectWrapper } from '@/components/promise/PromiseRedirectWrapper';
 
-interface PendientesPageBasicProps {
+interface NegociacionPageBasicProps {
   promise: {
     id: string;
     contact_name: string;
@@ -23,29 +23,23 @@ interface PendientesPageBasicProps {
     phone: string | null;
     email: string | null;
     address: string | null;
-    promise_share_default_show_packages: boolean;
-    promise_share_default_show_categories_subtotals: boolean;
-    promise_share_default_show_items_prices: boolean;
-    promise_share_default_min_days_to_hire: number;
-    promise_share_default_show_standard_conditions: boolean;
-    promise_share_default_show_offer_conditions: boolean;
-    promise_share_default_portafolios: boolean;
-    promise_share_default_auto_generate_contract: boolean;
   };
+  totalPrice: number;
   studioSlug: string;
   promiseId: string;
 }
 
 /**
  * ⚠️ STREAMING: Componente básico (instantáneo)
- * Renderiza datos básicos de promise + studio sin esperar datos pesados
+ * Renderiza datos básicos de promise + studio + precio total sin esperar datos pesados
  */
-export function PendientesPageBasic({
+export function NegociacionPageBasic({
   promise,
   studio,
+  totalPrice,
   studioSlug,
   promiseId,
-}: PendientesPageBasicProps) {
+}: NegociacionPageBasicProps) {
   return (
     <>
       <PromiseRedirectWrapper studioSlug={studioSlug} promiseId={promiseId} />
@@ -56,6 +50,20 @@ export function PendientesPageBasic({
         studioName={studio.studio_name}
         studioLogoUrl={studio.logo_url}
       />
+      {/* Mostrar precio total inmediatamente */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 text-center">
+          <p className="text-sm text-zinc-400 mb-2">Precio Total</p>
+          <p className="text-3xl font-bold text-white">
+            {new Intl.NumberFormat('es-MX', {
+              style: 'currency',
+              currency: 'MXN',
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            }).format(totalPrice)}
+          </p>
+        </div>
+      </div>
     </>
   );
 }

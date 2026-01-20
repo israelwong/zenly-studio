@@ -2,9 +2,9 @@ import React, { Suspense } from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { unstable_cache } from 'next/cache';
-import { getPublicPromisePendientes, getPublicPromiseRouteState, getPublicPromiseMetadata, getPublicPromiseBasicData } from '@/lib/actions/public/promesas.actions';
+import { getPublicPromiseActiveQuote, getPublicPromiseAvailablePackages, getPublicPromiseRouteState, getPublicPromiseMetadata, getPublicPromiseBasicData } from '@/lib/actions/public/promesas.actions';
 import { isRouteValid } from '@/lib/utils/public-promise-routing';
-import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
+import { PendientesPageSkeleton } from '@/components/promise/PendientesPageSkeleton';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
 import { PendientesPageBasic } from './PendientesPageBasic';
 import { PendientesPageDeferred } from './PendientesPageDeferred';
@@ -44,8 +44,9 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
 
   const { promise: promiseBasic, studio: studioBasic } = basicData.data;
 
-  // ⚠️ STREAMING: Crear promesa para datos pesados (NO await - deferred)
-  const deferredDataPromise = getPublicPromisePendientes(slug, promiseId);
+  // ⚠️ TAREA 2: Fragmentación - Disparar ambas promesas sin await
+  const activeQuotePromise = getPublicPromiseActiveQuote(slug, promiseId);
+  const availablePackagesPromise = getPublicPromiseAvailablePackages(slug, promiseId);
 
   return (
     <PromisePageProvider>
@@ -57,15 +58,14 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
         promiseId={promiseId}
       />
       
-      {/* ⚠️ STREAMING: Parte B - Deferred (datos pesados con Suspense) */}
-      <Suspense fallback={<PromisePageSkeleton />}>
-        <PendientesPageDeferred
-          dataPromise={deferredDataPromise}
-          basicPromise={{ promise: promiseBasic, studio: studioBasic }}
-          studioSlug={slug}
-          promiseId={promiseId}
-        />
-      </Suspense>
+      {/* ⚠️ TAREA 2: Parte B - Deferred (cotización activa + paquetes con doble Suspense) */}
+      <PendientesPageDeferred
+        activeQuotePromise={activeQuotePromise}
+        availablePackagesPromise={availablePackagesPromise}
+        basicPromise={{ promise: promiseBasic, studio: studioBasic }}
+        studioSlug={slug}
+        promiseId={promiseId}
+      />
     </PromisePageProvider>
   );
 }

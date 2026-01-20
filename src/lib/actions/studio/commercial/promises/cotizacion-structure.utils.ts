@@ -21,6 +21,9 @@ export interface CotizacionItemInput {
   item_id?: string | null;
   id?: string;
   order?: number;
+  // ⚠️ HIGIENE DE DATOS: Orden de sección y categoría desde catálogo
+  seccion_orden?: number;
+  categoria_orden?: number;
   // Campos adicionales opcionales
   cost?: number;
   expense?: number;
@@ -69,9 +72,10 @@ export interface ConstruirEstructuraOptions {
    * Método de ordenamiento:
    * - 'insercion': Mantiene orden de inserción (basado en order del item)
    * - 'incremental': Asigna orden incremental basado en primera aparición
+   * - 'catalogo': Usa orden de sección y categoría desde catálogo (seccion_orden, categoria_orden)
    * @default 'incremental'
    */
-  ordenarPor?: 'insercion' | 'incremental';
+  ordenarPor?: 'insercion' | 'incremental' | 'catalogo';
 }
 
 /**
@@ -229,7 +233,15 @@ export function construirEstructuraJerarquicaCotizacion(
       itemData.order = item.order;
     }
 
+    // ⚠️ HIGIENE DE DATOS: Ordenar items dentro de la categoría por order
     categoriaData.items.push(itemData);
+  });
+
+  // ⚠️ HIGIENE DE DATOS: Ordenar items dentro de cada categoría por order
+  seccionesMap.forEach(seccion => {
+    seccion.categorias.forEach(categoria => {
+      categoria.items.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    });
   });
 
   // Convertir a formato final y ordenar

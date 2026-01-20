@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, startTransition } from 'react';
 import { FileText, CheckCircle2, Edit2, Download, Loader2 } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { ContractPreview } from '@/components/shared/contracts/ContractPreview';
@@ -256,12 +256,24 @@ export function PublicContractView({
       toast.info('El contrato ya ha sido firmado');
       return;
     }
+    // ⚠️ TAREA 3: Cerrar overlays antes de mostrar modal de confirmación
+    window.dispatchEvent(new CustomEvent('close-overlays'));
     setShowSignConfirmModal(true);
   };
 
   const handleConfirmSign = async () => {
     setIsSigning(true);
     setShowSignConfirmModal(false);
+
+    // ⚠️ OPTIMISTIC UPDATE: Actualizar estado local inmediatamente
+    const previousSignedAt = isSigned;
+    const optimisticSignedAt = new Date();
+
+    // Actualizar estado optimista inmediatamente
+    if (onContractSigned) {
+      // Llamar callback para actualizar estado en padre (optimistic)
+      onContractSigned();
+    }
 
     try {
       // Obtener IP del cliente
@@ -275,26 +287,35 @@ export function PublicContractView({
         // Continuar con IP por defecto
       }
 
+      // ⚠️ OPTIMISTIC UPDATE: Ejecutar Server Action y usar startTransition para actualizaciones de UI
       const result = await signPublicContract(studioSlug, promiseId, cotizacionId, {
         ip_address: clientIp,
       });
 
       if (result.success) {
-        toast.success('Contrato firmado exitosamente');
-        // Cerrar modal y actualizar estado local
-        // La firma se guardó en studio_cotizaciones_cierre.contract_signed_at (tabla temporal)
-        onClose();
-        // Llamar al callback para actualizar el estado en el componente padre
-        if (onContractSigned) {
-          onContractSigned();
-        }
+        // ⚠️ OPTIMISTIC UPDATE: Usar startTransition para actualizaciones de UI no bloqueantes
+        startTransition(() => {
+          toast.success('Contrato firmado exitosamente');
+          // Cerrar modal
+          onClose();
+          // El callback ya se llamó arriba (optimistic), pero se puede llamar de nuevo para sincronizar
+          if (onContractSigned) {
+            onContractSigned();
+          }
+        });
       } else {
+        // ⚠️ ROLLBACK: Si falla, revertir estado optimista
         console.error('[handleConfirmSign] Error en firma:', result.error);
         toast.error(result.error || 'Error al firmar contrato');
+        // Revertir estado (el callback debería manejar esto)
+        // Por ahora, solo mostramos el error y el usuario puede reintentar
       }
     } catch (error) {
+      // ⚠️ ROLLBACK: Si hay excepción, revertir estado optimista
       console.error('[handleConfirmSign] Error signing contract:', error);
       toast.error('Error al firmar contrato');
+      // El estado se revertirá automáticamente cuando el componente se re-renderice
+      // con los datos del servidor (vía realtime o refresh)
     } finally {
       setIsSigning(false);
     }

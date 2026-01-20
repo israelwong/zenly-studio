@@ -278,6 +278,9 @@ export function CotizacionDetailSheet({
     onCotizacionUpdated: handleCotizacionUpdated,
   });
 
+  // ⚠️ HIGIENE DE DATOS: Los servicios ya vienen ordenados desde la consulta
+  // No es necesario ordenar en el frontend
+
   // Determinar multimedia disponible de los items
   const mediaInfo = useMemo(() => {
     if (!currentCotizacion.items_media || currentCotizacion.items_media.length === 0) {
@@ -441,7 +444,7 @@ export function CotizacionDetailSheet({
               Servicios Incluidos
             </h3>
             <PublicServiciosTree
-              servicios={cotizacion.servicios}
+              servicios={serviciosOrdenados}
               showPrices={showItemsPrices}
               showSubtotals={showCategoriesSubtotals}
             />

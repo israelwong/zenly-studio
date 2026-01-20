@@ -2,13 +2,12 @@ import React, { Suspense } from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { unstable_cache } from 'next/cache';
-import { getPublicPromiseRouteState, getPublicPromiseNegociacion, getPublicPromiseMetadata } from '@/lib/actions/public/promesas.actions';
+import { getPublicPromiseRouteState, getPublicPromiseNegociacion, getPublicPromiseMetadata, getPublicPromiseBasicData, getPublicPromiseNegociacionBasic } from '@/lib/actions/public/promesas.actions';
 import { isRouteValid } from '@/lib/utils/public-promise-routing';
-import { PromiseHeroSection } from '@/components/promise/PromiseHeroSection';
 import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
 import { PromisePageProvider } from '@/components/promise/PromisePageContext';
-import { PromiseRedirectWrapper } from '@/components/promise/PromiseRedirectWrapper';
-import { NegociacionView } from './NegociacionView';
+import { NegociacionPageBasic } from './NegociacionPageBasic';
+import { NegociacionPageDeferred } from './NegociacionPageDeferred';
 
 interface NegociacionPageProps {
   params: Promise<{
@@ -21,6 +20,7 @@ export default async function NegociacionPage({ params }: NegociacionPageProps) 
   const { slug, promiseId } = await params;
 
   // ✅ 1. Validación temprana: verificar estado antes de cargar datos pesados
+  // ⚠️ OPTIMIZADO: Usa caché compartido con dispatcher
   const routeState = await getPublicPromiseRouteState(slug, promiseId);
 
   if (!routeState.success || !routeState.data) {
@@ -36,47 +36,38 @@ export default async function NegociacionPage({ params }: NegociacionPageProps) 
     redirect(`/${slug}/promise/${promiseId}`);
   }
 
-  // ✅ 3. Solo ahora cargar datos específicos para /negociacion
-  const result = await getPublicPromiseNegociacion(slug, promiseId);
+  // ⚠️ STREAMING: Cargar datos básicos inmediatamente (instantáneo)
+  const [basicData, priceData] = await Promise.all([
+    getPublicPromiseBasicData(slug, promiseId),
+    getPublicPromiseNegociacionBasic(slug, promiseId),
+  ]);
 
-  // Si no hay datos, redirigir a la ruta raíz que manejará el error
-  if (!result.success || !result.data) {
+  if (!basicData.success || !basicData.data || !priceData.success || !priceData.data) {
     redirect(`/${slug}/promise/${promiseId}`);
   }
 
-  const {
-    promise,
-    studio: studioData,
-    cotizaciones,
-    condiciones_comerciales,
-    terminos_condiciones,
-    share_settings,
-  } = result.data;
+  const { promise: promiseBasic, studio: studioBasic } = basicData.data;
+  const { totalPrice } = priceData.data;
 
-  // Obtener la cotización en negociación (debe ser la única)
-  const cotizacionNegociacion = cotizaciones[0];
-
-  if (!cotizacionNegociacion) {
-    redirect(`/${slug}/promise/${promiseId}`);
-  }
-
-  // Verificar que tenga condición comercial definida
-  if (!cotizacionNegociacion.condiciones_comerciales?.id) {
-    // Si no tiene condición comercial, redirigir a pendientes
-    redirect(`/${slug}/promise/${promiseId}/pendientes`);
-  }
+  // ⚠️ STREAMING: Crear promesa para datos pesados (NO await - deferred)
+  const deferredDataPromise = getPublicPromiseNegociacion(slug, promiseId);
 
   return (
     <PromisePageProvider>
-      <PromiseRedirectWrapper studioSlug={slug} promiseId={promiseId} />
+      {/* ⚠️ STREAMING: Parte A - Instantánea (datos básicos + precio total) */}
+      <NegociacionPageBasic
+        promise={promiseBasic}
+        studio={studioBasic}
+        totalPrice={totalPrice}
+        studioSlug={slug}
+        promiseId={promiseId}
+      />
+      
+      {/* ⚠️ STREAMING: Parte B - Deferred (datos pesados con Suspense) */}
       <Suspense fallback={<PromisePageSkeleton />}>
-        <NegociacionView
-          promise={promise}
-          studio={studioData}
-          cotizacion={cotizacionNegociacion}
-          condicionesComerciales={cotizacionNegociacion.condiciones_comerciales}
-          terminosCondiciones={terminos_condiciones}
-          shareSettings={share_settings}
+        <NegociacionPageDeferred
+          dataPromise={deferredDataPromise}
+          basicPromise={{ promise: promiseBasic, studio: studioBasic }}
           studioSlug={slug}
           promiseId={promiseId}
         />

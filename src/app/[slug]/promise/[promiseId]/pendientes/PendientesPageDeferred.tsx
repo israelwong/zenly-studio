@@ -1,12 +1,12 @@
 'use client';
 
-import { use } from 'react';
-import { PendientesPageClient } from './PendientesPageClient';
-import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
-import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
+import { Suspense } from 'react';
+import { ActiveQuoteSection } from './ActiveQuoteSection';
+import { AvailablePackagesSectionWrapper } from './AvailablePackagesSectionWrapper';
+import { PackagesSectionSkeleton } from '@/components/promise/PackagesSectionSkeleton';
 
 interface PendientesPageDeferredProps {
-  dataPromise: Promise<{
+  activeQuotePromise: Promise<{
     success: boolean;
     data?: {
       promise: {
@@ -40,7 +40,6 @@ interface PendientesPageDeferredProps {
         promise_share_default_auto_generate_contract: boolean;
       };
       cotizaciones: PublicCotizacion[];
-      paquetes: PublicPaquete[];
       condiciones_comerciales?: Array<{
         id: string;
         name: string;
@@ -63,17 +62,33 @@ interface PendientesPageDeferredProps {
         is_required: boolean;
       }>;
       share_settings: PromiseShareSettings;
-      portafolios?: Array<{
+    };
+    error?: string;
+  }>;
+  availablePackagesPromise: Promise<{
+    success: boolean;
+    data?: {
+      promise: {
         id: string;
-        title: string;
-        slug: string;
+        event_type_id: string | null;
+      };
+      studio: {
+        id: string;
+        promise_share_default_show_packages: boolean;
+      };
+      paquetes: Array<{
+        id: string;
+        name: string;
         description: string | null;
-        cover_image_url: string | null;
-        event_type?: {
-          id: string;
-          name: string;
-        } | null;
+        price: number;
+        cover_url: string | null;
+        recomendado: boolean;
+        servicios: any[];
+        tiempo_minimo_contratacion: number | null;
       }>;
+      share_settings: {
+        show_packages: boolean;
+      };
     };
     error?: string;
   }>;
@@ -114,68 +129,50 @@ interface PendientesPageDeferredProps {
 }
 
 /**
- * ⚠️ STREAMING: Componente deferred (usa use() de React 19)
- * Resuelve la promesa de datos pesados y renderiza el cliente completo
+ * ⚠️ TAREA 3: Componente con doble Suspense
+ * Muestra inmediatamente la cotización activa (~7 items, <400ms)
+ * Carga paquetes después en un Suspense separado (~35 items)
  */
 export function PendientesPageDeferred({
-  dataPromise,
+  activeQuotePromise,
+  availablePackagesPromise,
   basicPromise,
   studioSlug,
   promiseId,
 }: PendientesPageDeferredProps) {
-  // ⚠️ React 19: use() resuelve la promesa y suspende si no está lista
-  const result = use(dataPromise);
-
-  if (!result.success || !result.data) {
-    // Si falla, usar datos básicos como fallback
-    return (
-      <PendientesPageClient
-        promise={basicPromise.promise}
-        studio={basicPromise.studio}
-        cotizaciones={[]}
-        paquetes={[]}
-        condiciones_comerciales={undefined}
-        terminos_condiciones={undefined}
-        share_settings={{
-          show_packages: basicPromise.studio.promise_share_default_show_packages,
-          show_categories_subtotals: basicPromise.studio.promise_share_default_show_categories_subtotals,
-          show_items_prices: basicPromise.studio.promise_share_default_show_items_prices,
-          min_days_to_hire: basicPromise.studio.promise_share_default_min_days_to_hire,
-          show_standard_conditions: basicPromise.studio.promise_share_default_show_standard_conditions,
-          show_offer_conditions: basicPromise.studio.promise_share_default_show_offer_conditions,
-          portafolios: basicPromise.studio.promise_share_default_portafolios,
-          auto_generate_contract: basicPromise.studio.promise_share_default_auto_generate_contract,
-        }}
-        portafolios={undefined}
-        studioSlug={studioSlug}
-        promiseId={promiseId}
-      />
-    );
-  }
-
-  const {
-    promise,
-    studio,
-    cotizaciones,
-    paquetes,
-    condiciones_comerciales,
-    terminos_condiciones,
-    share_settings,
-    portafolios,
-  } = result.data;
-
   return (
-    <PendientesPageClient
-      promise={promise}
-      studio={studio}
-      cotizaciones={cotizaciones}
-      paquetes={paquetes}
-      condiciones_comerciales={condiciones_comerciales}
-      terminos_condiciones={terminos_condiciones}
-      share_settings={share_settings}
-      portafolios={portafolios}
-      studioSlug={studioSlug}
-      promiseId={promiseId}
-    />
+    <>
+      {/* ⚠️ TAREA 1 & 4: Cotización activa - carga rápida (~7 items) con skeleton simple */}
+      <Suspense fallback={
+        <div className="py-8 px-4">
+          <div className="max-w-4xl mx-auto space-y-4">
+            {/* ⚠️ TAREA 4: Skeleton simple y rápido para cotización */}
+            <div className="h-6 w-48 bg-zinc-800 rounded animate-pulse" />
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-2">
+              <div className="h-5 w-3/4 bg-zinc-800 rounded animate-pulse" />
+              <div className="h-8 w-32 bg-zinc-800 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+      }>
+        <ActiveQuoteSection
+          activeQuotePromise={activeQuotePromise}
+          basicPromise={basicPromise}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+        />
+      </Suspense>
+
+      {/* ⚠️ TAREA 3: Paquetes disponibles - carga diferida (~35 items) */}
+      <Suspense fallback={<PackagesSectionSkeleton />}>
+        <AvailablePackagesSectionWrapper
+          activeQuotePromise={activeQuotePromise}
+          availablePackagesPromise={availablePackagesPromise}
+          basicPromise={basicPromise}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+        />
+      </Suspense>
+    </>
   );
 }

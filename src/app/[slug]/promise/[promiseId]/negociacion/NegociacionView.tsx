@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback, useEffect } from 'react';
+import React, { useMemo, useCallback, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
 import { ZenButton, ZenBadge, SeparadorZen } from '@/components/ui/zen';
@@ -15,6 +15,7 @@ import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promi
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 import { useState } from 'react';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
+import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
 
 interface NegociacionViewProps {
@@ -91,6 +92,9 @@ export function NegociacionView({
     setProgressError,
   } = usePromisePageContext();
   const [showAutorizarModal, setShowAutorizarModal] = useState(false);
+  
+  // ⚠️ TAREA 1: Hook de navegación para prevenir race conditions
+  const { isNavigating, setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -172,6 +176,12 @@ export function NegociacionView({
 
   // Función para verificar cambios de estado y redirigir si es necesario
   const checkAndRedirect = useCallback(async () => {
+    // ⚠️ TAREA 1: Bloquear sincronización durante navegación
+    if (getIsNavigating()) {
+      console.log('[NegociacionView] Ignorando checkAndRedirect durante navegación');
+      return;
+    }
+
     try {
       const result = await getPublicPromiseData(studioSlug, promiseId);
       if (result.success && result.data?.cotizaciones) {
@@ -188,7 +198,14 @@ export function NegociacionView({
           (cot) => cot.selected_by_prospect === true && cot.status === 'en_cierre'
         );
         if (cotizacionEnCierre) {
-          router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
+          // ⚠️ TAREA 1 y 3: Activar flag de navegación y cerrar overlays
+          setNavigating('cierre');
+          window.dispatchEvent(new CustomEvent('close-overlays'));
+          
+          startTransition(() => {
+            router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
+            clearNavigating(1000);
+          });
           return;
         }
 
@@ -201,16 +218,24 @@ export function NegociacionView({
           
           if (!otraCotizacionNegociacion) {
             // No hay cotización en negociación, redirigir a pendientes
-            router.push(`/${studioSlug}/promise/${promiseId}/pendientes`);
+            // ⚠️ TAREA 1 y 3: Activar flag de navegación y cerrar overlays
+            setNavigating('pendientes');
+            window.dispatchEvent(new CustomEvent('close-overlays'));
+            
+            startTransition(() => {
+              router.push(`/${studioSlug}/promise/${promiseId}/pendientes`);
+              clearNavigating(1000);
+            });
           }
         }
       }
     } catch (error) {
       console.error('[NegociacionView] Error verificando estado:', error);
     }
-  }, [studioSlug, promiseId, cotizacion.id, router]);
+  }, [studioSlug, promiseId, cotizacion.id, router, getIsNavigating, setNavigating, clearNavigating]);
 
   // Escuchar cambios en tiempo real de cotizaciones
+  // ⚠️ TAREA 1: Bloquear sincronización durante navegación
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
@@ -231,11 +256,18 @@ export function NegociacionView({
     if (progressStep === 'completed' && !showProgressOverlay) {
       // Pequeño delay para asegurar que el overlay se haya cerrado completamente
       const timer = setTimeout(() => {
-        router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
+        // ⚠️ TAREA 1 y 3: Activar flag de navegación y cerrar overlays
+        setNavigating('cierre');
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        
+        startTransition(() => {
+          router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
+          clearNavigating(1000);
+        });
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [progressStep, showProgressOverlay, router, studioSlug, promiseId]);
+  }, [progressStep, showProgressOverlay, router, studioSlug, promiseId, setNavigating, clearNavigating]);
 
   return (
     <>

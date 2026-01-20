@@ -79,6 +79,9 @@ export function SolicitarPaqueteModal({
     event_name: string;
     event_location: string;
   }) => {
+    // ⚠️ TAREA 3: Cerrar overlays antes de solicitar paquete
+    window.dispatchEvent(new CustomEvent('close-overlays'));
+    
     setIsSubmitting(true);
     setProgressError(null);
     setProgressStep('validating');

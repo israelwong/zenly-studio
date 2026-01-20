@@ -77,6 +77,15 @@ const config = {
         md: "calc(0.625rem - 2px)",
         sm: "calc(0.625rem - 4px)",
       },
+      keyframes: {
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+      },
+      animation: {
+        shimmer: 'shimmer 2s infinite',
+      },
     },
   },
   plugins: [animate],

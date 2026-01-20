@@ -145,7 +145,11 @@ export async function signPublicContract(
 
     revalidatePath(`/${studioSlug}/promise/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    
+    // ⚠️ TAREA 4: Invalidación granular de caché
     revalidateTag(`public-promise-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`);
 
     return { success: true };
   } catch (error) {

@@ -1,1 +1,0 @@
-Optimiza la ruta [Nombre] siguiendo la @METODOLOGIA_ZEN.md. Revisa especialmente la fragmentación de datos y el uso de Suspense para eliminar la latencia de renderizado

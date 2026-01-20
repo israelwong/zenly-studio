@@ -12,6 +12,7 @@ import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContr
 import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
+import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import { toast } from 'sonner';
 import type { PublicCotizacion } from '@/types/public-promise';
 import confetti from 'canvas-confetti';
@@ -282,16 +283,26 @@ export function PublicQuoteAuthorizedView({
     }
   }, [studioSlug, cotizacion.id]);
 
+  // ⚠️ TAREA 1: Hook de navegación para prevenir race conditions
+  const { isNavigating, setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
+
   // Escuchar cambios en tiempo real de cotizaciones_cierre (cuando el estudio edita el contrato)
+  // ⚠️ TAREA 1: Bloquear sincronización durante navegación
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
     onCotizacionUpdated: useCallback((updatedCotizacionId: string) => {
+      // ⚠️ CRÍTICO: Bloquear sincronización si estamos navegando
+      if (getIsNavigating()) {
+        console.log('[PublicQuoteAuthorizedView] Ignorando actualización de realtime durante navegación');
+        return;
+      }
+
       // Si la cotización actualizada es la que estamos mostrando, actualizar solo el contrato localmente
       if (updatedCotizacionId === cotizacion.id) {
         updateContractLocally();
       }
-    }, [cotizacion.id, updateContractLocally]),
+    }, [cotizacion.id, updateContractLocally, getIsNavigating]),
   });
 
   const handleUpdateData = async (data: {
@@ -302,6 +313,9 @@ export function PublicQuoteAuthorizedView({
     event_name: string;
     event_location: string;
   }) => {
+    // ⚠️ TAREA 3: Cerrar overlays antes de actualizar
+    window.dispatchEvent(new CustomEvent('close-overlays'));
+    
     setIsUpdatingData(true);
     try {
       // 1. Actualizar datos de la promesa
@@ -430,8 +444,16 @@ export function PublicQuoteAuthorizedView({
                     isContractSigned={isContractSigned}
                     isRegeneratingContract={isRegeneratingContract}
                     isUpdatingData={isUpdatingData}
-                    onEditData={() => setShowEditDataModal(true)}
-                    onViewContract={() => setShowContractView(true)}
+                    onEditData={() => {
+                      // ⚠️ TAREA 3: Cerrar overlays antes de abrir modal de edición
+                      window.dispatchEvent(new CustomEvent('close-overlays'));
+                      setShowEditDataModal(true);
+                    }}
+                    onViewContract={() => {
+                      // ⚠️ TAREA 3: Cerrar overlays antes de abrir vista de contrato
+                      window.dispatchEvent(new CustomEvent('close-overlays'));
+                      setShowContractView(true);
+                    }}
                   />
                 </div>
               </div>

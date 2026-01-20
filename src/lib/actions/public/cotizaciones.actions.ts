@@ -248,7 +248,12 @@ export async function autorizarCotizacionPublica(
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     revalidatePath(`/${studioSlug}/promise/${promiseId}`);
+    
+    // ⚠️ TAREA 4: Invalidación granular de caché
     revalidateTag(`public-promise-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-negociacion-${studioSlug}-${promiseId}`);
+    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`);
 
     // 4. Calcular precio final con descuentos y anticipos
     const formatPrice = (price: number) => {
