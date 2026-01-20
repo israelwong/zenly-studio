@@ -96,7 +96,7 @@ export function OfferLeadForm({
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreparingPackages, setIsPreparingPackages] = useState(false);
-  const [eventTypeName, setEventTypeName] = useState<string | null>(null);
+  const [loadedEventTypeName, setLoadedEventTypeName] = useState<string | null>(null);
 
   // Verificar si viene de éxito
   const isSuccess = searchParams.get("success") === "true";
@@ -181,16 +181,16 @@ export function OfferLeadForm({
 
   // Cargar nombre del tipo de evento (solo si no viene en props)
   useEffect(() => {
-    // Si ya viene en props, usar ese valor directamente
+    // Si ya viene en props, no necesitamos cargar
     if (eventTypeName) {
-      setEventTypeName(eventTypeName);
+      setLoadedEventTypeName(null);
       return;
     }
 
     // Si no viene en props pero hay eventTypeId, cargar desde API
     const loadEventTypeName = async () => {
       if (!eventTypeId) {
-        setEventTypeName(null);
+        setLoadedEventTypeName(null);
         return;
       }
 
@@ -198,16 +198,19 @@ export function OfferLeadForm({
         const result = await getEventTypes(studioSlug);
         if (result.success && result.data) {
           const eventType = result.data.find((t) => t.id === eventTypeId);
-          setEventTypeName(eventType?.name || null);
+          setLoadedEventTypeName(eventType?.name || null);
         }
       } catch (error) {
         console.error("[OfferLeadForm] Error loading event type name:", error);
-        setEventTypeName(null);
+        setLoadedEventTypeName(null);
       }
     };
 
     loadEventTypeName();
   }, [eventTypeId, eventTypeName, studioSlug]);
+
+  // Usar el prop si viene, sino el valor cargado
+  const effectiveEventTypeName = eventTypeName || loadedEventTypeName;
 
   // Handler para submit del formulario compartido
   const handleFormSubmit = async (data: {
@@ -428,8 +431,8 @@ export function OfferLeadForm({
             {!isModal && (
               <ZenCardHeader>
                 <ZenCardTitle>{title || "Solicita información"}</ZenCardTitle>
-                {eventTypeName && (
-                  <p className="text-xs text-zinc-500 mt-1">{eventTypeName}</p>
+                {effectiveEventTypeName && (
+                  <p className="text-xs text-zinc-500 mt-1">{effectiveEventTypeName}</p>
                 )}
                 {description && (
                   <p className="text-sm text-zinc-400 mt-2">{description}</p>
@@ -447,7 +450,7 @@ export function OfferLeadForm({
                 enableEventDuration={enableEventDuration}
                 eventDurationRequired={eventDurationRequired}
                 eventTypeId={eventTypeId}
-                eventTypeName={eventTypeName}
+                eventTypeName={effectiveEventTypeName}
                 studioId={studioId}
                 studioSlug={studioSlug}
                 isPreview={effectiveIsPreview}

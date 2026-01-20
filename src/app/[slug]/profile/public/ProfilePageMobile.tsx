@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { ProfileNavTabs } from '@/components/profile';
-import { PromoIsland } from '@/components/profile/PromoIsland';
+import { PromoIsland } from '@/components/profile';
 import { PostDetailModal } from '@/components/profile/sections/PostDetailModal';
 import { PortfolioDetailModal } from '@/components/profile/sections/PortfolioDetailModal';
 import { SearchCommandPalette } from '@/components/profile/SearchCommandPalette';

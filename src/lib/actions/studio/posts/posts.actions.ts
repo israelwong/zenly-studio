@@ -232,6 +232,11 @@ export async function createStudioPost(studioId: string, data: PostFormData) {
         revalidatePath(`/${post.studio.slug}/studio/posts`);
         revalidatePath(`/${post.studio.slug}`);
 
+        // ⚠️ CACHE: Invalidar caché del perfil público
+        // import { revalidateTag } from 'next/cache';
+        // revalidateTag(`studio-profile-posts-${post.studio_id}`);
+        // revalidateTag(`studio-profile-basic-${post.studio.slug}`); // Si afecta metadata
+
         return { success: true, data: convertedPost };
     } catch (error) {
         console.error("Error creating post:", error);
@@ -579,6 +584,11 @@ export async function updateStudioPost(
         revalidatePath(`/${post.studio.slug}/studio/posts`);
         revalidatePath(`/${post.studio.slug}`);
 
+        // ⚠️ CACHE: Invalidar caché del perfil público
+        // import { revalidateTag } from 'next/cache';
+        // revalidateTag(`studio-profile-posts-${post.studio_id}`);
+        // revalidateTag(`studio-profile-basic-${post.studio.slug}`); // Si afecta metadata
+
         return { success: true, data: convertedPost };
     } catch (error) {
         console.error("Error updating post:", error);
@@ -607,6 +617,11 @@ export async function deleteStudioPost(postId: string) {
         });
 
         revalidatePath(`/${post.studio.slug}/studio/posts`);
+
+        // ⚠️ CACHE: Invalidar caché del perfil público
+        // import { revalidateTag } from 'next/cache';
+        // const studio = await prisma.studios.findUnique({ where: { id: post.studio_id }, select: { id: true } });
+        // if (studio) revalidateTag(`studio-profile-posts-${studio.id}`);
 
         return { success: true };
     } catch (error) {

@@ -782,6 +782,11 @@ export async function updateStudioPortfolio(
             revalidatePath(`/${portfolio.studio.slug}/portfolios/${portfolio.slug}`);
         }
 
+        // ⚠️ CACHE: Invalidar caché del perfil público
+        // import { revalidateTag } from 'next/cache';
+        // revalidateTag(`studio-profile-portfolios-${portfolio.studio_id}`);
+        // revalidateTag(`studio-profile-basic-${portfolio.studio.slug}`); // Si afecta metadata
+
         return { success: true, data: portfolioWithRelations as unknown as StudioPortfolio };
     } catch (error) {
         console.error("Error updating portfolio:", error);
@@ -826,6 +831,11 @@ export async function deleteStudioPortfolio(portfolioId: string) {
             revalidatePath(`/${studioSlug}/portfolios/${portfolio.slug}`);
         }
 
+        // ⚠️ CACHE: Invalidar caché del perfil público
+        // import { revalidateTag } from 'next/cache';
+        // const studio = await prisma.studios.findUnique({ where: { slug: studioSlug }, select: { id: true } });
+        // if (studio) revalidateTag(`studio-profile-portfolios-${studio.id}`);
+
         return { success: true };
     } catch (error) {
         console.error("Error deleting portfolio:", error);
@@ -859,6 +869,11 @@ export async function toggleStudioPortfolioPublish(portfolioId: string) {
 
         revalidatePath(`/${portfolio.studio.slug}/profile/edit/content/portfolios`);
         revalidatePath(`/${portfolio.studio.slug}/portfolios/${portfolio.slug}`);
+
+        // ⚠️ CACHE: Invalidar caché del perfil público
+        // import { revalidateTag } from 'next/cache';
+        // revalidateTag(`studio-profile-portfolios-${portfolio.studio_id}`);
+        // revalidateTag(`studio-profile-basic-${portfolio.studio.slug}`); // Si afecta metadata
 
         return { success: true, data: updatedPortfolio };
     } catch (error) {

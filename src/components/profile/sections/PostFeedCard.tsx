@@ -133,9 +133,9 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
     };
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3 py-6">
             {/* Encabezado: título, tiempo, estrella y menú contextual */}
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 px-4">
                 <div className="flex items-center gap-2 flex-wrap flex-1">
                     {hasTitle && (
                         <h3 className="text-zinc-300 font-medium text-sm">
@@ -175,7 +175,7 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
                         }
                         handlePostClick();
                     }}
-                    className="block w-full hover:opacity-80 transition-opacity cursor-pointer"
+                    className="block w-full hover:opacity-80 transition-opacity cursor-pointer px-4"
                 >
                     <CaptionWithLinks caption={processedCaption} className="text-zinc-300 text-sm leading-relaxed" />
                 </div>
@@ -195,7 +195,7 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
                         firstMedia && (
                             <>
                                 <div
-                                    className="relative w-full cursor-pointer"
+                                    className="relative w-full cursor-pointer mx-0"
                                     onClick={() => {
                                         setLightboxOpen(true);
                                         if (onMediaClick && firstMedia.id) {
@@ -209,7 +209,7 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
                                             alt={firstMedia.filename || 'Post'}
                                             width={800}
                                             height={800}
-                                            className="w-full h-auto object-contain rounded-md"
+                                            className="w-full h-auto object-contain lg:rounded-md"
                                             sizes="(max-width: 768px) 100vw, 80vw"
                                             unoptimized
                                             style={{ maxHeight: 'none' }}
@@ -218,7 +218,7 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
                                         <video
                                             src={firstMedia.file_url}
                                             controls
-                                            className="w-full h-auto rounded-md cursor-pointer"
+                                            className="w-full h-auto lg:rounded-md cursor-pointer"
                                             autoPlay
                                             muted
                                             playsInline
@@ -274,7 +274,7 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
 
             {/* Palabras clave */}
             {hasTags && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 px-4">
                     {post.tags!.map((tag, index) => (
                         <span
                             key={index}
@@ -288,7 +288,7 @@ export function PostFeedCard({ post, onPostClick, onEditPost, onMediaClick }: Po
 
             {/* Footer con analytics - Solo visible si usuario autenticado */}
             {user && (
-                <div className="flex items-center gap-4 pt-2 border-t border-zinc-800/50">
+                <div className="flex items-center gap-4 pt-2 border-t border-zinc-800/50 px-4">
                     {/* Vistas */}
                     <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
                         <Eye className="w-3.5 h-3.5" />

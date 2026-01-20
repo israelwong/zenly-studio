@@ -40,6 +40,7 @@ export { OffersCard } from './cards/OffersCard';
 
 // Mobile Components (new)
 export { MobilePromotionsSection } from './mobile/MobilePromotionsSection';
+export { PromoIsland } from './PromoIsland';
 
 // Content Components (from sections)
 export {

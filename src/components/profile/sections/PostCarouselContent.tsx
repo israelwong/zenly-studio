@@ -7,6 +7,7 @@ import '@glidejs/glide/dist/css/glide.core.min.css';
 import '@glidejs/glide/dist/css/glide.theme.min.css';
 import Lightbox from "yet-another-react-lightbox";
 import Video from "yet-another-react-lightbox/plugins/video";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
 import { MediaDisplay } from '../MediaDisplay';
 
@@ -28,7 +29,7 @@ interface PostCarouselContentProps {
  * PostCarouselContent - Réplica de ImageCarousel pero con imágenes ajustadas a tamaño fijo
  * Todas las imágenes se ven del mismo tamaño (aspect-square) usando fill y object-cover
  */
-export function PostCarouselContent({ media }: PostCarouselContentProps) {
+export function PostCarouselContent({ media, onMediaClick }: PostCarouselContentProps) {
     const glideRef = useRef<HTMLDivElement>(null);
     const glideInstanceRef = useRef<Glide | null>(null);
     const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -105,7 +106,7 @@ export function PostCarouselContent({ media }: PostCarouselContentProps) {
         setLightboxIndex(index);
         setLightboxOpen(true);
         // Trackear click en media
-        if (onMediaClick && mediaItems[index]?.id) {
+        if (typeof onMediaClick === 'function' && mediaItems[index]?.id) {
             onMediaClick(mediaItems[index].id);
         }
     };
@@ -141,8 +142,8 @@ export function PostCarouselContent({ media }: PostCarouselContentProps) {
                 }
             `}</style>
 
-            {/* Glide Carousel con altura fija - todas las imágenes del mismo tamaño */}
-            <div className="relative w-full aspect-square bg-zinc-900 rounded-md overflow-hidden">
+            {/* Glide Carousel con altura fija - todas las imágenes del mismo tamaño - Full-bleed en móviles */}
+            <div className="relative w-full aspect-square bg-zinc-900 overflow-hidden mx-0 lg:rounded-md">
                 <div ref={glideRef} className="glide post-carousel-glide h-full">
                     <div className="overflow-hidden h-full" data-glide-el="track">
                         <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-Y] [will-change: transform] relative flex w-full overflow-hidden p-0 h-full">
@@ -176,7 +177,7 @@ export function PostCarouselContent({ media }: PostCarouselContentProps) {
                 close={() => setLightboxOpen(false)}
                 index={lightboxIndex}
                 slides={lightboxSlides}
-                plugins={[Video]}
+                plugins={[Video, Zoom]}
                 video={{
                     controls: true,
                     playsInline: true,
@@ -187,6 +188,21 @@ export function PostCarouselContent({ media }: PostCarouselContentProps) {
                 controller={{
                     closeOnPullDown: true,
                     closeOnBackdropClick: true
+                }}
+                styles={{
+                    container: {
+                        backgroundColor: "rgba(0, 0, 0, .98)",
+                        padding: 0
+                    },
+                    slide: {
+                        padding: 0,
+                        margin: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '100vw',
+                        height: '100vh'
+                    }
                 }}
                 on={{
                     view: ({ index }) => {

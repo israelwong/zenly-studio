@@ -179,6 +179,11 @@ export function useProfilePageLogic({ profileData, studioSlug, offers = [] }: Us
 
     // Handlers
     const handleTabChange = (tab: string) => {
+        // ⚠️ UI: Cerrar overlays antes de navegar
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('close-overlays'));
+        }
+
         setSelectedPostSlug(null);
         setSelectedPortfolioSlug(null);
         setIsSearchOpen(false);
@@ -192,14 +197,38 @@ export function useProfilePageLogic({ profileData, studioSlug, offers = [] }: Us
     };
 
     const handlePostClick = (postSlug: string) => {
-        setSelectedPostSlug(postSlug);
-        router.push(buildUrl({ post: postSlug, tab: activeTab }), { scroll: false });
+        // ⚠️ NAVEGACIÓN: Activar flag de navegación
+        setIsNavigating(postSlug);
+        isNavigatingRef.current = true;
+
+        // ⚠️ UI: Cerrar overlays antes de navegar
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('close-overlays'));
+        }
+
+        startTransition(() => {
+            setSelectedPostSlug(postSlug);
+            router.push(buildUrl({ post: postSlug, tab: activeTab }), { scroll: false });
+
+            // Limpiar flag después de un delay
+            setTimeout(() => {
+                setIsNavigating(null);
+                isNavigatingRef.current = false;
+            }, 1000);
+        });
     };
 
     const handleCloseModal = () => {
-        setSelectedPostSlug(null);
-        setSelectedPortfolioSlug(null);
-        router.push(buildUrl({ tab: activeTab }), { scroll: false });
+        // ⚠️ UI: Cerrar overlays antes de navegar
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('close-overlays'));
+        }
+
+        startTransition(() => {
+            setSelectedPostSlug(null);
+            setSelectedPortfolioSlug(null);
+            router.push(buildUrl({ tab: activeTab }), { scroll: false });
+        });
     };
 
     const handleNextPost = () => {
@@ -207,8 +236,26 @@ export function useProfilePageLogic({ profileData, studioSlug, offers = [] }: Us
         const currentIndex = publishedPosts.findIndex(p => p.slug === selectedPostSlug);
         if (currentIndex >= 0 && currentIndex < publishedPosts.length - 1) {
             const nextSlug = publishedPosts[currentIndex + 1].slug;
-            setSelectedPostSlug(nextSlug);
-            router.push(buildUrl({ post: nextSlug, tab: activeTab }), { scroll: false });
+            
+            // ⚠️ NAVEGACIÓN: Activar flag de navegación
+            setIsNavigating(nextSlug);
+            isNavigatingRef.current = true;
+
+            // ⚠️ UI: Cerrar overlays antes de navegar
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('close-overlays'));
+            }
+
+            startTransition(() => {
+                setSelectedPostSlug(nextSlug);
+                router.push(buildUrl({ post: nextSlug, tab: activeTab }), { scroll: false });
+
+                // Limpiar flag después de un delay
+                setTimeout(() => {
+                    setIsNavigating(null);
+                    isNavigatingRef.current = false;
+                }, 1000);
+            });
         }
     };
 
@@ -217,14 +264,49 @@ export function useProfilePageLogic({ profileData, studioSlug, offers = [] }: Us
         const currentIndex = publishedPosts.findIndex(p => p.slug === selectedPostSlug);
         if (currentIndex > 0) {
             const prevSlug = publishedPosts[currentIndex - 1].slug;
-            setSelectedPostSlug(prevSlug);
-            router.push(buildUrl({ post: prevSlug, tab: activeTab }), { scroll: false });
+            
+            // ⚠️ NAVEGACIÓN: Activar flag de navegación
+            setIsNavigating(prevSlug);
+            isNavigatingRef.current = true;
+
+            // ⚠️ UI: Cerrar overlays antes de navegar
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('close-overlays'));
+            }
+
+            startTransition(() => {
+                setSelectedPostSlug(prevSlug);
+                router.push(buildUrl({ post: prevSlug, tab: activeTab }), { scroll: false });
+
+                // Limpiar flag después de un delay
+                setTimeout(() => {
+                    setIsNavigating(null);
+                    isNavigatingRef.current = false;
+                }, 1000);
+            });
         }
     };
 
     const handlePortfolioClick = (portfolioSlug: string) => {
-        setSelectedPortfolioSlug(portfolioSlug);
-        router.push(buildUrl({ portfolio: portfolioSlug, tab: activeTab }), { scroll: false });
+        // ⚠️ NAVEGACIÓN: Activar flag de navegación
+        setIsNavigating(portfolioSlug);
+        isNavigatingRef.current = true;
+
+        // ⚠️ UI: Cerrar overlays antes de navegar
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('close-overlays'));
+        }
+
+        startTransition(() => {
+            setSelectedPortfolioSlug(portfolioSlug);
+            router.push(buildUrl({ portfolio: portfolioSlug, tab: activeTab }), { scroll: false });
+
+            // Limpiar flag después de un delay
+            setTimeout(() => {
+                setIsNavigating(null);
+                isNavigatingRef.current = false;
+            }, 1000);
+        });
     };
 
     const handleNextPortfolio = () => {
@@ -232,8 +314,26 @@ export function useProfilePageLogic({ profileData, studioSlug, offers = [] }: Us
         const currentIndex = portfolios.findIndex(p => p.slug === selectedPortfolioSlug);
         if (currentIndex >= 0 && currentIndex < portfolios.length - 1) {
             const nextSlug = portfolios[currentIndex + 1].slug;
-            setSelectedPortfolioSlug(nextSlug);
-            router.push(buildUrl({ portfolio: nextSlug, tab: activeTab }), { scroll: false });
+            
+            // ⚠️ NAVEGACIÓN: Activar flag de navegación
+            setIsNavigating(nextSlug);
+            isNavigatingRef.current = true;
+
+            // ⚠️ UI: Cerrar overlays antes de navegar
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('close-overlays'));
+            }
+
+            startTransition(() => {
+                setSelectedPortfolioSlug(nextSlug);
+                router.push(buildUrl({ portfolio: nextSlug, tab: activeTab }), { scroll: false });
+
+                // Limpiar flag después de un delay
+                setTimeout(() => {
+                    setIsNavigating(null);
+                    isNavigatingRef.current = false;
+                }, 1000);
+            });
         }
     };
 
@@ -242,8 +342,26 @@ export function useProfilePageLogic({ profileData, studioSlug, offers = [] }: Us
         const currentIndex = portfolios.findIndex(p => p.slug === selectedPortfolioSlug);
         if (currentIndex > 0) {
             const prevSlug = portfolios[currentIndex - 1].slug;
-            setSelectedPortfolioSlug(prevSlug);
-            router.push(buildUrl({ portfolio: prevSlug, tab: activeTab }), { scroll: false });
+            
+            // ⚠️ NAVEGACIÓN: Activar flag de navegación
+            setIsNavigating(prevSlug);
+            isNavigatingRef.current = true;
+
+            // ⚠️ UI: Cerrar overlays antes de navegar
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('close-overlays'));
+            }
+
+            startTransition(() => {
+                setSelectedPortfolioSlug(prevSlug);
+                router.push(buildUrl({ portfolio: prevSlug, tab: activeTab }), { scroll: false });
+
+                // Limpiar flag después de un delay
+                setTimeout(() => {
+                    setIsNavigating(null);
+                    isNavigatingRef.current = false;
+                }, 1000);
+            });
         }
     };
 

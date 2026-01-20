@@ -63,7 +63,7 @@ export function OfferCardPreview({
     <div className="w-full">
       {isCompact ? (
         // Compact variant: Mobile carousel
-        <div className="bg-purple-950/10 rounded-lg border border-purple-900/40 transition-all group">
+        <div className="bg-zinc-900/70 backdrop-blur-xl rounded-lg border border-zinc-700/60 transition-all group">
           <div className="flex items-center gap-3 p-3">
             {/* Cover - Un poco más grande */}
             <div className="relative w-20 h-20 shrink-0 bg-zinc-800 rounded overflow-hidden">

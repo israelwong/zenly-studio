@@ -198,13 +198,13 @@ export function PortfolioDetailModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Overlay */}
             <div
-                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                className="absolute inset-0 bg-black/80 backdrop-blur-md lg:bg-black/80"
                 onClick={handleClose}
             />
 
-            {/* Modal Container */}
-            <div className="relative w-full max-w-md mx-auto p-0 sm:p-4 flex items-center justify-center max-h-screen">
-                <div className="relative w-full h-auto max-h-[95vh] overflow-hidden bg-zinc-900/95 backdrop-blur-xl sm:rounded-lg flex flex-col border border-zinc-800/50 shadow-2xl">
+            {/* Modal Container - Full screen en mobile, centrado en desktop */}
+            <div className="relative w-full h-full lg:w-auto lg:h-auto lg:max-w-md lg:mx-auto lg:p-4 flex items-center justify-center">
+                <div className="relative w-full h-full lg:w-full lg:h-auto lg:max-h-[95vh] overflow-hidden bg-zinc-900/95 backdrop-blur-xl lg:rounded-lg flex flex-col lg:border lg:border-zinc-800/50 lg:shadow-2xl">
                     {/* Header - Fixed con backdrop-blur */}
                     <div className="shrink-0 bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800/50 p-4">
                         <div className="flex items-center justify-between">

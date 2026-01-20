@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { retryDatabaseOperation } from "@/lib/actions/utils/database-retry";
@@ -252,6 +252,11 @@ export async function createOffer(
           }
           : undefined,
       };
+
+      // ⚠️ CACHE: Invalidar caché del perfil público
+      // import { revalidateTag } from 'next/cache';
+      // revalidatePath(`/${studioSlug}`); // Ya existe arriba
+      // revalidateTag(`studio-profile-offers-${studioSlug}`);
 
       return { success: true, data: mappedOffer };
     });
@@ -1559,6 +1564,10 @@ export async function archiveOffer(
       revalidatePath(`/${studioSlug}`);
       revalidatePath(`/${studioSlug}/offer/${offer.slug}`);
 
+      // ⚠️ CACHE: Invalidar caché del perfil público
+      // import { revalidateTag } from 'next/cache';
+      // revalidateTag(`studio-profile-offers-${studioSlug}`);
+
       return { success: true };
     });
   } catch (error) {
@@ -1680,6 +1689,10 @@ export async function deleteOffer(
       revalidatePath(`/${studioSlug}/studio/commercial/ofertas`);
       revalidatePath(`/${studioSlug}`);
       revalidatePath(`/${studioSlug}/offer/${offer.slug}`);
+
+      // ⚠️ CACHE: Invalidar caché del perfil público
+      // import { revalidateTag } from 'next/cache';
+      // revalidateTag(`studio-profile-offers-${studioSlug}`);
 
       return { success: true };
     });
@@ -1944,10 +1957,14 @@ export async function reorderOffers(
 
 /**
  * Obtener ofertas públicas activas de un estudio para mostrar en el perfil público
+ * ⚠️ CACHE: Cacheado con tag por studio para invalidación granular
  */
 export async function getPublicActiveOffers(studioSlug: string) {
   try {
-    return await retryDatabaseOperation(async () => {
+    // ⚠️ CACHE: Cachear ofertas con tag por studio
+    const getCachedOffers = unstable_cache(
+      async () => {
+        return await retryDatabaseOperation(async () => {
       const studio = await prisma.studios.findUnique({
         where: { slug: studioSlug },
         select: { id: true },
@@ -2036,7 +2053,16 @@ export async function getPublicActiveOffers(studioSlug: string) {
             : null,
         })),
       };
-    });
+        });
+      },
+      ['studio-profile-offers', studioSlug],
+      {
+        tags: [`studio-profile-offers-${studioSlug}`],
+        revalidate: 300, // 5 minutos para ofertas (cambian más frecuentemente)
+      }
+    );
+
+    return await getCachedOffers();
   } catch (error) {
     console.error("[getPublicActiveOffers] Error:", error);
     return { success: false, error: "Error al obtener ofertas públicas" };

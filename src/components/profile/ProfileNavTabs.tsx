@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
-import { Home, Folder, Phone, HelpCircle, Search, Archive, Image, Video } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Home, Folder, Phone, HelpCircle, Search, Archive, Image, Video, Plus } from 'lucide-react';
 
 interface ProfileNavTabsProps {
     activeTab: string;
@@ -9,6 +9,7 @@ interface ProfileNavTabsProps {
     onSearchClick?: () => void;
     hasActiveFAQs?: boolean; // Si hay FAQs activas para mostrar
     isOwner?: boolean; // Si el usuario es el dueño del estudio
+    onCreatePost?: () => void; // Callback para crear post (solo en inicio)
 }
 
 /**
@@ -20,9 +21,21 @@ interface ProfileNavTabsProps {
  * - Perfil público (navegación de tabs)
  * - Preview del builder
  */
-export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiveFAQs = false, isOwner = false }: ProfileNavTabsProps) {
+export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiveFAQs = false, isOwner = false, onCreatePost }: ProfileNavTabsProps) {
     const tabsContainerRef = useRef<HTMLDivElement>(null);
     const buttonRefs = useRef<Record<string, HTMLButtonElement>>({});
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Detectar si estamos en mobile
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const baseTabs = [
         { id: 'inicio', label: 'Inicio', icon: Home },
@@ -107,8 +120,8 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                                         flex items-center gap-2 rounded-full text-xs font-medium
                                         transition-all duration-200 shrink-0 whitespace-nowrap
                                         ${isActive
-                                            ? 'bg-zinc-800/80 text-zinc-300 backdrop-blur-lg px-4 py-2.5'
-                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 p-2.5'
+                                            ? `bg-zinc-800/80 text-zinc-300 backdrop-blur-lg px-4 ${isMobile ? 'py-2' : 'py-2.5'}`
+                                            : `text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 ${isMobile ? 'p-2' : 'p-2.5'}`
                                         }
                                     `}
                                 >
@@ -136,6 +149,18 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                         <span className="hidden sm:inline text-[10px] text-zinc-600">
                             <kbd className="px-1.5 py-0.5 bg-zinc-800/50 rounded text-[10px]">⌘K</kbd>
                         </span>
+                    </button>
+                )}
+
+                {/* Create Post Button - Solo si es owner y está en inicio */}
+                {isOwner && onCreatePost && (activeTab === 'inicio' || activeTab === 'inicio-fotos' || activeTab === 'inicio-videos') && (
+                    <button
+                        onClick={onCreatePost}
+                        className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-full text-xs font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-600/30 hover:border-emerald-600/50 transition-all duration-200 shrink-0 relative z-20"
+                        aria-label="Crear post"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Crear</span>
                     </button>
                 )}
             </nav>

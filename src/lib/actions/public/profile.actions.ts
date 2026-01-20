@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { retryDatabaseOperation } from "@/lib/actions/utils/database-retry";
 import {
@@ -271,7 +272,16 @@ export async function getStudioProfileBasicData(
                     })),
                 }
             };
-        });
+                });
+            },
+            ['studio-profile-basic', slug, userId || 'anonymous'],
+            {
+                tags: [`studio-profile-basic-${slug}`],
+                revalidate: 3600, // 1 hora para datos básicos
+            }
+        );
+
+        return await getCachedBasicData();
     } catch (error) {
         console.error('[getStudioProfileBasicData] ❌ Error:', error);
         return {
@@ -284,6 +294,7 @@ export async function getStudioProfileBasicData(
 /**
  * ⚠️ METADATA LIGERA: Solo 5 campos esenciales para SEO
  * Elimina la doble carga en generateMetadata
+ * ⚠️ CACHE: Cacheado con tag para invalidación granular
  */
 export async function getStudioProfileMetadata(
     slug: string
@@ -299,7 +310,10 @@ export async function getStudioProfileMetadata(
     error?: string;
 }> {
     try {
-        return await retryDatabaseOperation(async () => {
+        // ⚠️ CACHE: Cachear metadata con tag por studio
+        const getCachedMetadata = unstable_cache(
+            async () => {
+                return await retryDatabaseOperation(async () => {
             const studio = await prisma.studios.findUnique({
                 where: { slug, is_active: true },
                 select: {
@@ -325,7 +339,16 @@ export async function getStudioProfileMetadata(
                     keywords: studio.keywords,
                 }
             };
-        });
+                });
+            },
+            ['studio-profile-metadata', slug],
+            {
+                tags: [`studio-profile-metadata-${slug}`],
+                revalidate: 3600, // 1 hora para metadata
+            }
+        );
+
+        return await getCachedMetadata();
     } catch (error) {
         console.error('[getStudioProfileMetadata] ❌ Error:', error);
         return {
@@ -338,6 +361,7 @@ export async function getStudioProfileMetadata(
 /**
  * ⚠️ STREAMING: Get deferred posts (pesados)
  * Se carga en segundo plano mientras se muestra el header
+ * ⚠️ CACHE: Cacheado con tag por studio para invalidación granular
  */
 export async function getStudioProfileDeferredPosts(
     studioId: string,
@@ -348,7 +372,10 @@ export async function getStudioProfileDeferredPosts(
     error?: string;
 }> {
     try {
-        return await retryDatabaseOperation(async () => {
+        // ⚠️ CACHE: Cachear posts con tag por studio
+        const getCachedPosts = unstable_cache(
+            async () => {
+                return await retryDatabaseOperation(async () => {
             const posts = await prisma.studio_posts.findMany({
                 where: isOwner ? { studio_id: studioId } : { studio_id: studioId, is_published: true },
                 select: {
@@ -403,7 +430,16 @@ export async function getStudioProfileDeferredPosts(
                     view_count: post.view_count,
                 }))
             };
-        });
+                });
+            },
+            ['studio-profile-posts', studioId, String(isOwner)],
+            {
+                tags: [`studio-profile-posts-${studioId}`],
+                revalidate: 300, // 5 minutos para posts (cambian más frecuentemente)
+            }
+        );
+
+        return await getCachedPosts();
     } catch (error) {
         console.error('[getStudioProfileDeferredPosts] ❌ Error:', error);
         return {
@@ -416,6 +452,7 @@ export async function getStudioProfileDeferredPosts(
 /**
  * ⚠️ STREAMING: Get deferred portfolios (pesados, optimizado)
  * Rompe el JOIN de 4 niveles en queries planas paralelas
+ * ⚠️ CACHE: Cacheado con tag por studio para invalidación granular
  */
 export async function getStudioProfileDeferredPortfolios(
     studioId: string,
@@ -426,7 +463,10 @@ export async function getStudioProfileDeferredPortfolios(
     error?: string;
 }> {
     try {
-        return await retryDatabaseOperation(async () => {
+        // ⚠️ CACHE: Cachear portfolios con tag por studio
+        const getCachedPortfolios = unstable_cache(
+            async () => {
+                return await retryDatabaseOperation(async () => {
             // Query 1: Portfolios básicos (sin content_blocks)
             const portfolios = await prisma.studio_portfolios.findMany({
                 where: isOwner ? { studio_id: studioId } : { studio_id: studioId, is_published: true },
@@ -618,7 +658,16 @@ export async function getStudioProfileDeferredPortfolios(
                     };
                 })
             };
-        });
+                });
+            },
+            ['studio-profile-portfolios', studioId, String(isOwner)],
+            {
+                tags: [`studio-profile-portfolios-${studioId}`],
+                revalidate: 300, // 5 minutos para portfolios (cambian más frecuentemente)
+            }
+        );
+
+        return await getCachedPortfolios();
     } catch (error) {
         console.error('[getStudioProfileDeferredPortfolios] ❌ Error:', error);
         return {

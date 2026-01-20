@@ -68,10 +68,10 @@ export function PortfolioFeedCard({
 
     return (
         <ZenCard
-            className="cursor-pointer hover:border-zinc-700 hover:bg-zinc-900/50 transition-all duration-200 group overflow-visible"
+            className="cursor-pointer hover:border-zinc-700 hover:bg-zinc-900/50 transition-all duration-200 group overflow-visible mx-0 lg:mx-0"
             onClick={handleClick}
         >
-            <div className="flex items-start gap-4 p-4">
+            <div className="flex items-start gap-4 px-4 py-4 pr-2">
                 {/* Portada */}
                 <div className="relative w-28 h-28 shrink-0 bg-zinc-800 rounded-lg overflow-hidden">
                     {portfolio.cover_image_url ? (
