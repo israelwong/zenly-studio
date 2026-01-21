@@ -610,18 +610,46 @@ export default function EventoContratoPage({
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <ZenSidebarTrigger className="lg:hidden" />
             <div className="min-w-0 flex-1">
-              <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
-              <p className="text-zinc-400">
-                {contract ? (
-                  isCancelled
-                    ? 'Contrato cancelado'
-                    : isCancellationRequestedByClient || isCancellationRequestedByStudio
-                      ? 'Cancelación en proceso'
-                      : 'Contrato digital'
-                ) : (
-                  'No hay contrato publicado'
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-bold text-zinc-100 mb-2">Contrato</h1>
+                  <p className="text-zinc-400">
+                    {contract ? (
+                      isCancelled
+                        ? 'Contrato cancelado'
+                        : isCancellationRequestedByClient || isCancellationRequestedByStudio
+                          ? 'Cancelación en proceso'
+                          : 'Contrato digital'
+                    ) : (
+                      'No hay contrato publicado'
+                    )}
+                  </p>
+                </div>
+                {/* Botón de descargar PDF - Desktop: a la altura del título */}
+                {contract && (
+                  <div className="hidden lg:block">
+                    <ZenButton
+                      variant="primary"
+                      size="sm"
+                      onClick={handleExportPDF}
+                      disabled={isExportingPDF}
+                      className="shrink-0"
+                    >
+                      {isExportingPDF ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Descargando...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4 mr-2" />
+                          Descargar PDF
+                        </>
+                      )}
+                    </ZenButton>
+                  </div>
                 )}
-              </p>
+              </div>
             </div>
           </div>
         </div>
@@ -700,24 +728,24 @@ export default function EventoContratoPage({
         </div>
       )}
 
-      {/* Footer sticky con botón de descarga PDF */}
+      {/* Botón de descargar PDF - Mobile: al final del contenido del contrato */}
       {contract && (
-        <div className="sticky bottom-0 z-30 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 py-4 mt-8">
+        <div className="lg:hidden mt-6">
           <ZenButton
             variant="primary"
-            size="sm"
+            size="lg"
             onClick={handleExportPDF}
             disabled={isExportingPDF}
             className="w-full"
           >
             {isExportingPDF ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                 Descargando...
               </>
             ) : (
               <>
-                <Download className="h-4 w-4 mr-2" />
+                <Download className="h-5 w-5 mr-2" />
                 Descargar PDF
               </>
             )}
