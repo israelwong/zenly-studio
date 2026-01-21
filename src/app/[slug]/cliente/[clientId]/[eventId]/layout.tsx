@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { unstable_cache } from 'next/cache';
 import type { Metadata } from 'next';
 import { getClienteSession, obtenerEventoDetalle, obtenerStudioPublicInfo } from '@/lib/actions/cliente';
 import { ZenSidebarProvider } from '@/components/ui/zen';
@@ -63,10 +64,34 @@ export default async function EventoLayout({ children, params }: EventoLayoutPro
     }
   }
 
-  // Cargar datos en paralelo (memoizados con React.cache)
+  // Cachear datos con tags para invalidación granular
+  // ⚠️ CRÍTICO: Tags incluyen eventId/promiseId y clientId para aislamiento
+  const getCachedEventoDetalle = unstable_cache(
+    async () => {
+      return obtenerEventoDetalle(promiseId, cliente.id);
+    },
+    ['cliente-evento', promiseId, cliente.id], // ✅ Incluye promiseId y clientId en keys
+    {
+      tags: [`cliente-evento-${promiseId}-${cliente.id}`], // ✅ Tag granular por evento y cliente
+      revalidate: false, // No cachear por tiempo, solo por tags
+    }
+  );
+
+  const getCachedStudioInfo = unstable_cache(
+    async () => {
+      return obtenerStudioPublicInfo(slug);
+    },
+    ['studio-public-info', slug], // ✅ Incluye slug en keys
+    {
+      tags: [`studio-public-info-${slug}`], // ✅ Tag granular por studio
+      revalidate: 3600, // Cachear por 1 hora (info del studio cambia poco)
+    }
+  );
+
+  // Cargar datos en paralelo (con caché)
   const [eventoResponse, studioInfo] = await Promise.all([
-    obtenerEventoDetalle(promiseId, cliente.id),
-    obtenerStudioPublicInfo(slug),
+    getCachedEventoDetalle(),
+    getCachedStudioInfo(),
   ]);
 
   // Si el studio no existe, redirigir a root
@@ -115,7 +140,7 @@ export async function generateMetadata({ params }: EventoLayoutProps): Promise<M
     }
 
     const baseTitle = studioInfo.studio_name || 'Zenly Studio';
-    const title = `Evento - ${baseTitle}`;
+    const title = `${baseTitle} - Evento`;
     const description = `Gestiona tu evento con ${baseTitle}`;
 
     // Configurar favicon dinámico usando el logo del studio

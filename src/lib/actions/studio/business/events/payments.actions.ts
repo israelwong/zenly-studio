@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { normalizePaymentDate } from '@/lib/actions/utils/payment-date';
 
@@ -209,6 +209,11 @@ export async function crearPago(
                 promise_id: true,
                 price: true,
                 discount: true,
+                promise: {
+                    select: {
+                        contact_id: true,
+                    },
+                },
             },
         });
 
@@ -288,6 +293,12 @@ export async function crearPago(
         revalidatePath(`/${validatedData.studio_slug}/studio/business/events`);
         revalidatePath(`/${validatedData.studio_slug}/studio/business/finanzas`);
 
+        // Invalidar caché del cliente
+        if (cotizacion.promise?.contact_id && cotizacion.promise_id) {
+          const eventIdOrPromiseId = validatedData.promise_id || cotizacion.promise_id;
+          revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${cotizacion.promise.contact_id}`);
+        }
+
         const item: PaymentItem = {
             id: pago.id,
             amount: Number(pago.amount),
@@ -341,7 +352,17 @@ export async function actualizarPago(
                 id: true,
                 amount: true,
                 cotizacion_id: true,
+                promise_id: true,
                 status: true,
+                cotizaciones: {
+                    select: {
+                        promise: {
+                            select: {
+                                contact_id: true,
+                            },
+                        },
+                    },
+                },
             },
         });
 
@@ -438,6 +459,14 @@ export async function actualizarPago(
 
         revalidatePath(`/${validatedData.studio_slug}/studio/business/events`);
         revalidatePath(`/${validatedData.studio_slug}/studio/business/finanzas`);
+
+        // Invalidar caché del cliente
+        if (pagoExistente.cotizaciones?.promise?.contact_id) {
+          const eventIdOrPromiseId = pagoExistente.promise_id || validatedData.promise_id;
+          if (eventIdOrPromiseId) {
+            revalidateTag(`cliente-pagos-${eventIdOrPromiseId}-${pagoExistente.cotizaciones.promise.contact_id}`);
+          }
+        }
 
         const item: PaymentItem = {
             id: pago.id,

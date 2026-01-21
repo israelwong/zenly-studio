@@ -10,7 +10,10 @@ import { ResumenPago } from '../components/ResumenPago';
 
 export default function EventoCotizacionesPage() {
   const { evento, studioInfo } = useEvento();
-  usePageTitle({ sectionName: 'cotizaciones', studioName: studioInfo?.studio_name });
+  const pageTitle = studioInfo?.studio_name 
+    ? `Cotizaciones - ${studioInfo.studio_name}`
+    : 'Cotizaciones';
+  usePageTitle(pageTitle);
   const { toasts, removeToast } = useToast();
 
   const tieneMultiplesCotizaciones = evento.cotizaciones.length > 1;

@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { notifyEventCreated } from '@/lib/notifications/studio/helpers/event-notifications';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { getPromiseContractData } from '@/lib/actions/studio/business/contracts/renderer.actions';
@@ -1819,6 +1819,14 @@ export async function autorizarYCrearEvento(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/business/events/${result.evento_id}`);
+    
+    // Invalidar caché del cliente
+    const contactId = cotizacion.promise.contact_id;
+    if (contactId) {
+      revalidateTag(`cliente-eventos-${contactId}`);
+      revalidateTag(`cliente-evento-${promiseId}-${contactId}`);
+      revalidateTag(`cliente-dashboard-${result.evento_id}-${contactId}`);
+    }
 
     return {
       success: true,

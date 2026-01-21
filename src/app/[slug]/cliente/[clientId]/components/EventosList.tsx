@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { CalendarDays } from 'lucide-react';
 import { ZenCard } from '@/components/ui/zen';
 import { obtenerEventosCliente } from '@/lib/actions/cliente';
@@ -9,7 +10,20 @@ interface EventosListProps {
 }
 
 export async function EventosList({ clientId }: EventosListProps) {
-  const eventosResponse = await obtenerEventosCliente(clientId);
+  // Cachear eventos del cliente con tag para invalidación granular
+  // ⚠️ CRÍTICO: Tag incluye clientId para aislamiento
+  const getCachedEventos = unstable_cache(
+    async () => {
+      return obtenerEventosCliente(clientId);
+    },
+    ['cliente-eventos', clientId], // ✅ Incluye clientId en keys
+    {
+      tags: [`cliente-eventos-${clientId}`], // ✅ Tag granular por cliente
+      revalidate: false, // No cachear por tiempo, solo por tags
+    }
+  );
+
+  const eventosResponse = await getCachedEventos();
 
   // Estado de error
   if (!eventosResponse.success || !eventosResponse.data) {

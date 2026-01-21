@@ -8,7 +8,7 @@ import {
   type ConfirmClientDataInput,
   type SignContractInput
 } from "@/lib/actions/schemas/client-contract-schemas";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { generateEventContract } from "@/lib/actions/studio/business/contracts/contracts.actions";
 import { getDefaultContractTemplate } from "@/lib/actions/studio/business/contracts/templates.actions";
 
@@ -274,6 +274,14 @@ export async function signContract(
     revalidatePath(`/${studioSlug}/cliente/${contactId}`);
     if (contract.event.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${contract.event.promise_id}`);
+    }
+    
+    // Invalidar caché del cliente
+    const eventId = contract.event.id;
+    const promiseId = contract.event.promise_id;
+    if (promiseId) {
+      revalidateTag(`cliente-dashboard-${eventId}-${contactId}`);
+      revalidateTag(`cliente-evento-${promiseId}-${contactId}`);
     }
 
     return { 

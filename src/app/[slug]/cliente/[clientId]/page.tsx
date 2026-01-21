@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: ClienteDashboardProps): Promi
       };
     }
 
-    const title = `Mis Eventos - ${studioInfo.studio_name}`;
+    const title = `${studioInfo.studio_name} - Mis Eventos`;
     const description = `Portal del cliente de ${studioInfo.studio_name}`;
 
     const icons = studioInfo.logo_url ? {

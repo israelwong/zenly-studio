@@ -5,9 +5,9 @@
  * Adaptado de migrate/cliente/_lib/actions/evento.actions.ts
  */
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { prisma } from '@/lib/prisma';
-import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
+import { obtenerCatalogo, getCatalogShell } from '@/lib/actions/studio/config/catalogo.actions';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { ClientEvent, ClientEventDetail, ApiResponse } from '@/types/client';
 import type { PublicSeccionData } from '@/types/public-promise';
@@ -74,12 +74,12 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
       orderBy: { event_date: 'desc' },
     });
 
-    // Obtener catálogos únicos por studio para evitar consultas duplicadas
+    // ⚠️ OPTIMIZACIÓN: Obtener catálogos optimizados (solo para orden) por studio
     const studioSlugs = new Set(promises.map(p => p.studio.slug));
     const catalogosMap = new Map<string, SeccionData[]>();
 
     for (const slug of studioSlugs) {
-      const catalogoResult = await obtenerCatalogo(slug, false);
+      const catalogoResult = await getCatalogShell(slug);
       if (catalogoResult.success && catalogoResult.data) {
         catalogosMap.set(slug, catalogoResult.data);
       }
@@ -101,10 +101,12 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
       const pagado = cotizacion.pagos.reduce((sum, pago) => sum + Number(pago.amount), 0);
       const pendiente = total - pagado;
 
-      // Agrupar servicios usando la estructura de la cotización (como en ResumenCotizacion.tsx)
-      // Los items ya vienen ordenados por order: 'asc' desde la consulta
-      // Usamos los snapshots guardados (seccion_name, category_name) para agrupar
-      const serviciosAgrupados = agruparServiciosPorCotizacion(cotizacion.cotizacion_items);
+      // ⚠️ OPTIMIZACIÓN: Obtener catálogo del studio para ordenamiento correcto
+      const catalogo = promise.studio?.slug ? (catalogosMap.get(promise.studio.slug) || []) : [];
+
+      // Agrupar servicios usando la estructura de la cotización con orden del catálogo
+      // Los items ya vienen ordenados por order: 'asc' desde la consulta, pero se reordenan por catálogo
+      const serviciosAgrupados = agruparServiciosPorCotizacion(cotizacion.cotizacion_items, catalogo);
 
       return {
         id: promise.id,
@@ -259,6 +261,16 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
       };
     }
 
+    // ⚠️ OPTIMIZACIÓN: Obtener catálogo optimizado (solo para orden de sección y categoría)
+    const studioSlug = promise.studio?.slug;
+    let catalogo: SeccionData[] = [];
+    if (studioSlug) {
+      const catalogoResult = await getCatalogShell(studioSlug);
+      if (catalogoResult.success && catalogoResult.data) {
+        catalogo = catalogoResult.data;
+      }
+    }
+
     // Procesar todas las cotizaciones aprobadas
     const cotizaciones = promise.quotes.map((cotizacion) => {
       // Calcular totales por cotización
@@ -269,8 +281,8 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
       const pagado = cotizacion.pagos.reduce((sum, pago) => sum + Number(pago.amount), 0);
       const pendiente = total - pagado;
 
-      // Agrupar servicios usando la estructura de la cotización
-      const serviciosAgrupados = agruparServiciosPorCotizacion(cotizacion.cotizacion_items);
+      // Agrupar servicios usando la estructura de la cotización con orden del catálogo
+      const serviciosAgrupados = agruparServiciosPorCotizacion(cotizacion.cotizacion_items, catalogo);
 
       return {
         id: cotizacion.id,
@@ -333,6 +345,8 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
  * Agrupa items de cotización por sección -> categoría -> items
  * Usa la función centralizada construirEstructuraJerarquicaCotizacion
  * y adapta el formato a PublicSeccionData[]
+ * 
+ * ⚠️ OPTIMIZADO: Usa orden del catálogo (sección → categoría → item) como en CotizacionDetailSheet
  */
 function agruparServiciosPorCotizacion(
   items: Array<{
@@ -351,14 +365,50 @@ function agruparServiciosPorCotizacion(
     category_name_snapshot?: string | null;
     seccion_name_snapshot?: string | null;
     subtotal?: number;
-  }>
+  }>,
+  catalogo: SeccionData[] // Catálogo completo para obtener orden de sección y categoría
 ): PublicSeccionData[] {
-  // Filtrar items sin item_id
+  // Filtrar items sin item_id (solo items incluidos)
   const itemsFiltrados = items.filter(item => item.item_id !== null);
+
+  // ⚠️ HIGIENE DE DATOS: Crear mapa de orden de sección y categoría desde catálogo
+  const seccionOrdenMap = new Map<string, number>();
+  const categoriaOrdenMap = new Map<string, number>();
+  catalogo.forEach(seccion => {
+    seccionOrdenMap.set(seccion.nombre.toLowerCase().trim(), seccion.orden);
+    seccion.categorias.forEach(categoria => {
+      categoriaOrdenMap.set(
+        `${seccion.nombre.toLowerCase().trim()}::${categoria.nombre.toLowerCase().trim()}`,
+        categoria.orden
+      );
+    });
+  });
+
+  // ⚠️ HIGIENE DE DATOS: Ordenar items por sección, categoría e item antes de construir estructura
+  const itemsOrdenados = itemsFiltrados
+    .map(item => {
+      const seccionNombre = (item.seccion_name_snapshot || item.seccion_name || '').toLowerCase().trim();
+      const categoriaNombre = (item.category_name_snapshot || item.category_name || '').toLowerCase().trim();
+      const seccionOrden = seccionOrdenMap.get(seccionNombre) ?? 999;
+      const categoriaOrden = categoriaOrdenMap.get(`${seccionNombre}::${categoriaNombre}`) ?? 999;
+      return {
+        item,
+        seccionOrden,
+        categoriaOrden,
+        itemOrder: item.order ?? 999,
+      };
+    })
+    .sort((a, b) => {
+      // Ordenar por: sección → categoría → item
+      if (a.seccionOrden !== b.seccionOrden) return a.seccionOrden - b.seccionOrden;
+      if (a.categoriaOrden !== b.categoriaOrden) return a.categoriaOrden - b.categoriaOrden;
+      return a.itemOrder - b.itemOrder;
+    })
+    .map(({ item }) => item);
 
   // Usar función centralizada para construir estructura jerárquica
   const estructura = construirEstructuraJerarquicaCotizacion(
-    itemsFiltrados.map(item => ({
+    itemsOrdenados.map(item => ({
       item_id: item.item_id!,
       quantity: item.quantity,
       unit_price: item.unit_price,
@@ -374,11 +424,14 @@ function agruparServiciosPorCotizacion(
       category_name: item.category_name,
       seccion_name: item.seccion_name,
       id: item.id,
+      // ⚠️ HIGIENE DE DATOS: Pasar orden de sección y categoría desde catálogo
+      seccion_orden: seccionOrdenMap.get((item.seccion_name_snapshot || item.seccion_name || '').toLowerCase().trim()) ?? 999,
+      categoria_orden: categoriaOrdenMap.get(`${(item.seccion_name_snapshot || item.seccion_name || '').toLowerCase().trim()}::${(item.category_name_snapshot || item.category_name || '').toLowerCase().trim()}`) ?? 999,
     })),
     {
       incluirPrecios: true,
       incluirDescripciones: true,
-      ordenarPor: 'insercion', // Mantener orden de inserción para cliente
+      ordenarPor: 'catalogo', // ⚠️ HIGIENE DE DATOS: Usar orden del catálogo (sección → categoría → item)
     }
   );
 
@@ -403,7 +456,7 @@ function agruparServiciosPorCotizacion(
 }
 
 /**
- * Actualizar información básica del evento (nombre y sede)
+ * Actualizar informaciรณn bรกsica del evento (nombre y sede)
  * Solo permite actualizar si el cliente tiene acceso al evento
  */
 export async function actualizarEventoInfo(
@@ -444,7 +497,7 @@ export async function actualizarEventoInfo(
       };
     }
 
-    // Guardar valores anteriores (normalizados para comparación)
+    // Guardar valores anteriores (normalizados para comparaciรณn)
     const normalizeValue = (value: string | null | undefined): string | null => {
       if (value === null || value === undefined) return null;
       const trimmed = value.trim();
@@ -477,17 +530,17 @@ export async function actualizarEventoInfo(
       },
     });
 
-    // Normalizar valores actualizados para comparación
+    // Normalizar valores actualizados para comparaciรณn
     const newName = normalizeValue(updatedPromise.name);
     const newLocation = normalizeValue(updatedPromise.event_location);
 
-    // Detectar campos cambiados y enviar notificación
+    // Detectar campos cambiados y enviar notificaciรณn
     // Solo detectar cambios en campos que realmente se intentaron actualizar
     if (promise.event?.id) {
       const fieldsChanged: string[] = [];
       const newValues: Record<string, unknown> = {};
 
-      // Solo verificar name si se intentó actualizar
+      // Solo verificar name si se intentรณ actualizar
       if (data.name !== undefined) {
         if (oldName !== newName) {
           fieldsChanged.push('name');
@@ -495,7 +548,7 @@ export async function actualizarEventoInfo(
         }
       }
 
-      // Solo verificar event_location si se intentó actualizar
+      // Solo verificar event_location si se intentรณ actualizar
       if (data.event_location !== undefined) {
         if (oldLocation !== newLocation) {
           fieldsChanged.push('event_location');
@@ -503,14 +556,14 @@ export async function actualizarEventoInfo(
         }
       }
 
-      // Enviar notificación si hay cambios
+      // Enviar notificaciรณn si hay cambios
       if (fieldsChanged.length > 0) {
         try {
           const { notifyClientEventInfoUpdated } = await import('@/lib/notifications/studio/helpers/client-updates-notifications');
           await notifyClientEventInfoUpdated(promise.event.id, fieldsChanged, oldValues, newValues);
         } catch (error) {
-          console.error('[actualizarEventoInfo] Error enviando notificación:', error);
-          // No fallar la actualización si falla la notificación
+          console.error('[actualizarEventoInfo] Error enviando notificaciรณn:', error);
+          // No fallar la actualizaciรณn si falla la notificaciรณn
         }
       }
 
@@ -519,6 +572,11 @@ export async function actualizarEventoInfo(
         revalidatePath(`/${promise.studio.slug}/cliente/${contactId}/${promise.event.id}`, 'page');
         revalidatePath(`/${promise.studio.slug}/cliente/${contactId}/${promiseId}`, 'page');
       }
+      
+      // Invalidar caché del cliente
+      const eventId = promise.event.id;
+      revalidateTag(`cliente-dashboard-${eventId}-${contactId}`);
+      revalidateTag(`cliente-evento-${promiseId}-${contactId}`);
     }
 
     return {

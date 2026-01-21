@@ -33,7 +33,9 @@ export function ClientLayoutWrapper({
         {/* Main Content - Scroll independiente */}
         <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden bg-zinc-900/40">
           <div className="w-full p-4 md:p-6 lg:p-8">
-            {children}
+            <div className="max-w-7xl mx-auto">
+              {children}
+            </div>
           </div>
         </main>
       </div>

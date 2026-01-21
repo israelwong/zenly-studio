@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
@@ -143,8 +143,35 @@ export async function actualizarPerfilCliente(
     revalidatePath(`/${slug}/cliente/${clienteData.id}`, 'layout');
     // Revalidar todas las páginas del cliente que puedan mostrar datos del contacto (incluyendo contratos)
     revalidatePath(`/${slug}/cliente/${clienteData.id}`, 'page');
-    // Revalidar todas las rutas de eventos del cliente (para contratos)
-    revalidatePath(`/${slug}/cliente/${clienteData.id}`, 'page');
+    // Invalidar caché de eventos del cliente
+    revalidateTag(`cliente-eventos-${clienteData.id}`);
+
+    // Obtener todas las promesas del cliente para invalidar dashboards individuales
+    const promises = await prisma.studio_promises.findMany({
+      where: {
+        contact_id: clienteData.id,
+        quotes: {
+          some: {
+            status: { in: ['aprobada', 'autorizada', 'approved'] },
+          },
+        },
+      },
+      select: {
+        id: true,
+        event: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    // Invalidar caché de cada evento/dashboard del cliente
+    for (const promise of promises) {
+      const eventId = promise.event?.id || promise.id;
+      revalidateTag(`cliente-evento-${promise.id}-${clienteData.id}`);
+      revalidateTag(`cliente-dashboard-${eventId}-${clienteData.id}`);
+    }
 
     return {
       success: true,

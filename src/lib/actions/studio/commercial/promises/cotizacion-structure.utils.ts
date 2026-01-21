@@ -134,6 +134,7 @@ export function construirEstructuraJerarquicaCotizacion(
   // Procesar cada item
   items.forEach((item) => {
     // Usar snapshots primero (más confiables), luego campos operacionales como fallback
+    // ⚠️ HIGIENE DE DATOS: Mantener nombres originales para mostrar (la normalización se hace antes de llamar esta función)
     const seccionNombre = item.seccion_name_snapshot || item.seccion_name || "Sin sección";
     const categoriaNombre = item.category_name_snapshot || item.category_name || "Sin categoría";
     const itemNombre = item.name_snapshot || item.name || "Item sin nombre";
@@ -170,6 +171,30 @@ export function construirEstructuraJerarquicaCotizacion(
         seccionData.categorias.set(categoriaNombre, {
           nombre: categoriaNombre,
           orden: categoriaOrdenMap.get(categoriaKey)!,
+          items: [],
+        });
+      }
+    } else if (ordenarPor === 'catalogo') {
+      // ⚠️ HIGIENE DE DATOS: Usar orden de sección y categoría desde catálogo
+      const seccionOrden = item.seccion_orden ?? 999;
+      const categoriaOrden = item.categoria_orden ?? 999;
+
+      // Obtener o crear sección con orden del catálogo
+      if (!seccionesMap.has(seccionNombre)) {
+        seccionesMap.set(seccionNombre, {
+          nombre: seccionNombre,
+          orden: seccionOrden,
+          categorias: new Map(),
+        });
+      }
+
+      const seccionData = seccionesMap.get(seccionNombre)!;
+
+      // Obtener o crear categoría con orden del catálogo
+      if (!seccionData.categorias.has(categoriaNombre)) {
+        seccionData.categorias.set(categoriaNombre, {
+          nombre: categoriaNombre,
+          orden: categoriaOrden,
           items: [],
         });
       }

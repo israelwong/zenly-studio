@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { DeliverableType } from '@prisma/client';
 import {
@@ -130,7 +131,11 @@ export async function crearEntregable(
         id: data.event_id,
         studio_id: studio.id,
       },
-      select: { id: true },
+      select: { 
+        id: true,
+        contact_id: true,
+        promise_id: true,
+      },
     });
 
     if (!evento) {
@@ -159,6 +164,12 @@ export async function crearEntregable(
     } catch (error) {
       console.error('Error enviando notificación de entregable agregado:', error);
       // No fallar la operación si la notificación falla
+    }
+
+    // Invalidar caché del cliente
+    if (evento.contact_id) {
+      const eventIdOrPromiseId = evento.promise_id || evento.id;
+      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${evento.contact_id}`);
     }
 
     return { success: true, data: entregable };
@@ -198,7 +209,18 @@ export async function actualizarEntregable(
           studio_id: studio.id,
         },
       },
-      select: { id: true, name: true, type: true },
+      select: { 
+        id: true, 
+        name: true, 
+        type: true,
+        event: {
+          select: {
+            id: true,
+            contact_id: true,
+            promise_id: true,
+          },
+        },
+      },
     });
 
     if (!entregable) {
@@ -228,6 +250,12 @@ export async function actualizarEntregable(
     } catch (error) {
       console.error('Error enviando notificación de entregable actualizado:', error);
       // No fallar la operación si la notificación falla
+    }
+
+    // Invalidar caché del cliente
+    if (entregable.event?.contact_id) {
+      const eventIdOrPromiseId = entregable.event.promise_id || entregable.event.id;
+      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${entregable.event.contact_id}`);
     }
 
     return { success: true, data: updated };
@@ -275,6 +303,7 @@ export async function eliminarEntregable(
           select: {
             studio_id: true,
             contact_id: true,
+            promise_id: true,
           },
         },
       },
@@ -300,6 +329,12 @@ export async function eliminarEntregable(
     } catch (error) {
       console.error('Error enviando notificación de entregable eliminado:', error);
       // No fallar la operación si la notificación falla
+    }
+
+    // Invalidar caché del cliente
+    if (contactId) {
+      const eventIdOrPromiseId = entregable.event.promise_id || eventId;
+      revalidateTag(`cliente-entregables-${eventIdOrPromiseId}-${contactId}`);
     }
 
     return { success: true };
