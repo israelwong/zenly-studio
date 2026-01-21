@@ -82,7 +82,13 @@ export function useStudioNotifications({
 
   // Cargar notificaciones iniciales
   const loadNotifications = useCallback(async () => {
-    if (!userId || !enabled) return;
+    if (!userId || !enabled) {
+      // ⚠️ FIX: Asegurar que loading se establezca en false si no hay userId
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+      return;
+    }
 
     try {
       setLoading(true);
@@ -119,8 +125,15 @@ export function useStudioNotifications({
   useEffect(() => {
     if (userId && enabled) {
       loadNotifications();
+    } else if (!userId && enabled) {
+      // ⚠️ FIX: Si no hay userId pero enabled es true, asegurar que loading sea false
+      // (el primer efecto ya maneja el caso de error al obtener userId)
+      if (isMountedRef.current && !error) {
+        // Solo establecer loading en false si no hay error (el error ya estableció loading en false)
+        setLoading(false);
+      }
     }
-  }, [userId, studioSlug, enabled, loadNotifications]);
+  }, [userId, studioSlug, enabled, loadNotifications, error]);
 
   // Configurar Realtime - Escucha eventos automáticos desde el trigger de base de datos
   // IMPORTANTE: Esperar a que userId esté disponible (getCurrentUserId crea el perfil si no existe)

@@ -2601,17 +2601,11 @@ export async function getPublicPromiseCierre(
   };
   error?: string;
 }> {
-  const startTime = Date.now();
-  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
   try {
     // 1. Obtener datos básicos
-    const basicDataStart = Date.now();
     const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
-    console.log(`[${uniqueId}] getPublicPromiseCierre:basicData: ${Date.now() - basicDataStart}ms`);
 
     if (!basicData.success || !basicData.data) {
-      console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms (early return)`);
       return {
         success: false,
         error: basicData.error || "Error al obtener datos básicos",
@@ -2622,7 +2616,6 @@ export async function getPublicPromiseCierre(
 
     // 2. Obtener SOLO la cotización en cierre con cotizacion_cierre
     // ⚠️ ÍNDICE: Usa [promise_id] en studio_cotizaciones (existe ✅)
-    const fetchPromiseStart = Date.now();
     const promise = await prisma.studio_promises.findFirst({
       where: {
         id: promiseId,
@@ -2702,10 +2695,8 @@ export async function getPublicPromiseCierre(
         },
       },
     });
-    console.log(`[${uniqueId}] DB:FetchPromiseWithQuotes: ${Date.now() - fetchPromiseStart}ms`);
 
     if (!promise || promise.quotes.length === 0) {
-      console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms (no cotizacion)`);
       return {
         success: false,
         error: "Cotización en cierre no encontrada",
@@ -2719,7 +2710,6 @@ export async function getPublicPromiseCierre(
     // Esto reduce significativamente el tiempo de carga y transferencia de datos
 
     // 4. Obtener multimedia solo de items de esta cotización
-    const multimediaStart = Date.now();
     const allItemIds = new Set<string>();
     cotizacion.cotizacion_items.forEach((item) => {
       if (item.item_id) allItemIds.add(item.item_id);
@@ -2728,7 +2718,6 @@ export async function getPublicPromiseCierre(
     const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
 
     if (allItemIds.size > 0) {
-      const fetchMediaStart = Date.now();
       const itemsMediaData = await prisma.studio_item_media.findMany({
         where: {
           item_id: { in: Array.from(allItemIds) },
@@ -2743,7 +2732,6 @@ export async function getPublicPromiseCierre(
         },
         orderBy: { display_order: 'asc' },
       });
-      console.log(`[${uniqueId}] DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
 
       itemsMediaData.forEach((media) => {
         if (!itemsMediaMap.has(media.item_id)) {
@@ -2757,10 +2745,8 @@ export async function getPublicPromiseCierre(
         });
       });
     }
-    console.log(`[${uniqueId}] getPublicPromiseCierre:multimedia: ${Date.now() - multimediaStart}ms`);
 
     // 4. Mapear cotización en cierre
-    const mapearStart = Date.now();
     type CotizacionItem = {
       id: string;
       item_id: string | null;
@@ -2894,14 +2880,11 @@ export async function getPublicPromiseCierre(
         };
       })(),
     };
-    console.log(`[${uniqueId}] getPublicPromiseCierre:mapear: ${Date.now() - mapearStart}ms`);
 
     // 6. Obtener términos y condiciones (necesarios para firma)
-    const terminosStart = Date.now();
     const terminosSettled = await Promise.allSettled([
       obtenerTerminosCondicionesPublicos(studioSlug),
     ]);
-    console.log(`[${uniqueId}] getPublicPromiseCierre:terminos: ${Date.now() - terminosStart}ms`);
 
     const terminosResult = terminosSettled[0].status === 'fulfilled'
       ? terminosSettled[0].value
@@ -2936,11 +2919,7 @@ export async function getPublicPromiseCierre(
         terminos_condiciones: (terminosResult.success && 'data' in terminosResult && terminosResult.data) ? terminosResult.data : undefined,
       },
     };
-
-    console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms`);
-    // Return statement ya está arriba, no duplicar
   } catch (error) {
-    console.log(`[${uniqueId}] getPublicPromiseCierre:total: ${Date.now() - startTime}ms (error)`);
     console.error("[getPublicPromiseCierre] Error:", error);
     return {
       success: false,

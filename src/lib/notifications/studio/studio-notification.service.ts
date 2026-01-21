@@ -44,6 +44,7 @@ async function createStudioScopeNotification(
           event_id: input.event_id,
           payment_id: input.payment_id,
           paquete_id: input.paquete_id,
+          quote_id: input.quote_id, // ⚠️ FIX: Agregar quote_id que faltaba
           contact_id: input.contact_id,
           lead_id: input.lead_id,
           agenda_id: input.agenda_id,
@@ -153,6 +154,7 @@ async function createRoleNotification(
           event_id: input.event_id,
           payment_id: input.payment_id,
           paquete_id: input.paquete_id,
+          quote_id: input.quote_id, // ⚠️ FIX: Agregar quote_id que faltaba
           contact_id: input.contact_id,
           lead_id: input.lead_id,
           agenda_id: input.agenda_id,

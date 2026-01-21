@@ -268,19 +268,9 @@ export function PublicContractView({
           descuento_aplicado: descuentoAplicado, // Monto del descuento aplicado
         };
 
-        // ⚠️ DEBUG: Log para verificar condicionesData construido
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[PublicContractView] condicionesData construido:', data);
-        }
-
         return data;
       })()
     : undefined;
-
-  // ⚠️ DEBUG: Log para verificar condicionesComerciales recibidas
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[PublicContractView] condicionesComerciales recibidas:', condicionesComerciales);
-  }
 
   const handleSign = () => {
     if (isSigned) {
