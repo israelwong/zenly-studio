@@ -79,7 +79,19 @@ export function PublicContractView({
   const [templateContent, setTemplateContent] = useState<string | null>(null);
   const [renderedContent, setRenderedContent] = useState<string | null>(contractContent);
   const [eventData, setEventData] = useState<any>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const printableRef = useRef<HTMLDivElement>(null);
+
+  // Detectar si es mobile
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+    };
+
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
 
   // Memoizar funciones de carga para evitar recrearlas en cada render
   const loadPromiseData = useCallback(async () => {
@@ -378,13 +390,67 @@ export function PublicContractView({
         }
         maxWidth="4xl"
         zIndex={10070}
+        fullScreen={isMobile}
       >
         <div className="space-y-4">
           {/* Contenido del contrato */}
-          {/* Mostrar spinner solo si NO hay contenido disponible Y está cargando */}
-          {loadingContract && !templateContent && !renderedContent ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+          {/* ⚠️ Mostrar skeleton mientras se cargan los datos (loadingContract o loadingData) */}
+          {(loadingContract || loadingData) && (!templateContent || !eventData) ? (
+            <div className="bg-zinc-900 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">
+              <div className="space-y-6 animate-pulse">
+                {/* Skeleton para título */}
+                <div className="space-y-2">
+                  <div className="h-8 bg-zinc-800 rounded w-3/4"></div>
+                  <div className="h-4 bg-zinc-800/50 rounded w-1/2"></div>
+                </div>
+                
+                {/* Skeleton para párrafos */}
+                <div className="space-y-3">
+                  <div className="h-4 bg-zinc-800 rounded w-full"></div>
+                  <div className="h-4 bg-zinc-800 rounded w-5/6"></div>
+                  <div className="h-4 bg-zinc-800 rounded w-4/6"></div>
+                  <div className="h-4 bg-zinc-800 rounded w-full"></div>
+                </div>
+                
+                {/* Skeleton para sección */}
+                <div className="space-y-3 pt-4">
+                  <div className="h-6 bg-zinc-800 rounded w-2/5"></div>
+                  <div className="space-y-2 pl-4">
+                    <div className="h-4 bg-zinc-800/70 rounded w-full"></div>
+                    <div className="h-4 bg-zinc-800/70 rounded w-4/5"></div>
+                    <div className="h-4 bg-zinc-800/70 rounded w-3/5"></div>
+                  </div>
+                </div>
+                
+                {/* Skeleton para lista */}
+                <div className="space-y-2 pt-2">
+                  <div className="h-5 bg-zinc-800 rounded w-1/3"></div>
+                  <div className="space-y-2 pl-6">
+                    <div className="h-4 bg-zinc-800/70 rounded w-full"></div>
+                    <div className="h-4 bg-zinc-800/70 rounded w-5/6"></div>
+                    <div className="h-4 bg-zinc-800/70 rounded w-4/6"></div>
+                  </div>
+                </div>
+                
+                {/* Skeleton para tabla/desglose */}
+                <div className="space-y-2 pt-4">
+                  <div className="h-6 bg-zinc-800 rounded w-2/5"></div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <div className="h-4 bg-zinc-800/70 rounded w-1/3"></div>
+                      <div className="h-4 bg-zinc-800/70 rounded w-1/4"></div>
+                    </div>
+                    <div className="flex justify-between">
+                      <div className="h-4 bg-zinc-800/70 rounded w-1/4"></div>
+                      <div className="h-4 bg-zinc-800/70 rounded w-1/5"></div>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-zinc-800">
+                      <div className="h-5 bg-zinc-800 rounded w-1/4"></div>
+                      <div className="h-5 bg-zinc-800 rounded w-1/5"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (templateContent || renderedContent) ? (
             <div className="bg-zinc-900 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">

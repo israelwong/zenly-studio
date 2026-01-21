@@ -11,7 +11,7 @@ import { BankInfoModal } from '@/components/shared/BankInfoModal';
 import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContract } from '@/lib/actions/public/promesas.actions';
 import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
-import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
+import { useCotizacionesRealtime, type CotizacionChangeInfo } from '@/hooks/useCotizacionesRealtime';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import { toast } from 'sonner';
 import type { PublicCotizacion } from '@/types/public-promise';
@@ -365,23 +365,32 @@ export function PublicQuoteAuthorizedView({
     }
   }, []);
 
+  // ⚠️ TAREA 5: Handler mejorado con toasts para cambios de contrato
+  const handleContractUpdated = useCallback((updatedCotizacionId: string, changeInfo?: CotizacionChangeInfo) => {
+    // ⚠️ CRÍTICO: Bloquear sincronización si estamos navegando
+    if (getIsNavigating()) {
+      console.log('[PublicQuoteAuthorizedView] Ignorando actualización de realtime durante navegación');
+      return;
+    }
+
+    // Si la cotización actualizada es la que estamos mostrando, actualizar solo el contrato localmente
+    if (updatedCotizacionId === cotizacion.id) {
+      // ⚠️ TAREA 5: Toast si el contrato fue actualizado por el estudio
+      if (changeInfo?.camposCambiados?.includes('contract_content') || changeInfo?.camposCambiados?.includes('contract_template_id')) {
+        toast.info('El estudio ha actualizado tu contrato', {
+          description: 'Los cambios se han aplicado automáticamente',
+        });
+      }
+      updateContractLocally();
+    }
+  }, [cotizacion.id, updateContractLocally, getIsNavigating]);
+
   // Escuchar cambios en tiempo real de cotizaciones_cierre (cuando el estudio edita el contrato)
   // ⚠️ TAREA 1: Bloquear sincronización durante navegación
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
-    onCotizacionUpdated: useCallback((updatedCotizacionId: string) => {
-      // ⚠️ CRÍTICO: Bloquear sincronización si estamos navegando
-      if (getIsNavigating()) {
-        console.log('[PublicQuoteAuthorizedView] Ignorando actualización de realtime durante navegación');
-        return;
-      }
-
-      // Si la cotización actualizada es la que estamos mostrando, actualizar solo el contrato localmente
-      if (updatedCotizacionId === cotizacion.id) {
-        updateContractLocally();
-      }
-    }, [cotizacion.id, updateContractLocally, getIsNavigating]),
+    onCotizacionUpdated: handleContractUpdated,
   });
 
   const handleUpdateData = async (data: {

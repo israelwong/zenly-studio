@@ -9,11 +9,24 @@ import {
   subscribeToChannel,
 } from '@/lib/realtime/core';
 
+// ⚠️ TAREA 3: Interfaz para información completa de cotización
+export interface CotizacionChangeInfo {
+  cotizacionId: string;
+  status?: string;
+  oldStatus?: string;
+  visible_to_client?: boolean;
+  old_visible_to_client?: boolean;
+  name?: string;
+  price?: number;
+  selected_by_prospect?: boolean;
+  [key: string]: unknown;
+}
+
 interface UseCotizacionesRealtimeProps {
   studioSlug: string;
   promiseId?: string | null;
-  onCotizacionInserted?: () => void;
-  onCotizacionUpdated?: (cotizacionId: string, payload?: unknown) => void;
+  onCotizacionInserted?: (changeInfo?: CotizacionChangeInfo) => void;
+  onCotizacionUpdated?: (cotizacionId: string, changeInfo?: CotizacionChangeInfo) => void;
   onCotizacionDeleted?: (cotizacionId: string) => void;
   ignoreCierreEvents?: boolean; // Si es true, ignora eventos de studio_cotizaciones_cierre
   onUpdateDetected?: () => void; // ⚠️ NUEVO: Callback cuando se detecta un cambio válido (para incrementar contador)
@@ -122,10 +135,20 @@ export function useCotizacionesRealtime({
         return;
       }
 
+      // ⚠️ TAREA 3: Construir información completa de cambio
+      const changeInfo: CotizacionChangeInfo = {
+        cotizacionId,
+        status: cotizacion.status as string,
+        visible_to_client: cotizacion.visible_to_client as boolean,
+        name: cotizacion.name as string,
+        price: cotizacion.price as number,
+        selected_by_prospect: cotizacion.selected_by_prospect as boolean,
+      };
+
       if (cotizacionId && onUpdatedRef.current) {
-        onUpdatedRef.current(cotizacionId);
+        onUpdatedRef.current(cotizacionId, changeInfo);
       } else if (onInsertedRef.current) {
-        onInsertedRef.current();
+        onInsertedRef.current(changeInfo);
       }
     },
     [promiseId, extractCotizacion]
@@ -150,10 +173,14 @@ export function useCotizacionesRealtime({
         const record = p.record || p.new || p.payload?.new || p.payload?.record;
         if (record && record.cotizacion_id) {
           const cotizacionId = record.cotizacion_id as string;
-          // Si se especifica promiseId, necesitamos obtener la cotización para verificar
-          // Por ahora, siempre llamar onUpdated si hay cotizacion_id
+          // ⚠️ TAREA 3: Construir información de cambio para eventos de cierre
+          const changeInfo: CotizacionChangeInfo = {
+            cotizacionId,
+            // Los eventos de cierre no tienen status directo, pero podemos inferirlo
+            status: 'en_cierre',
+          };
           if (cotizacionId && onUpdatedRef.current) {
-            onUpdatedRef.current(cotizacionId, payload);
+            onUpdatedRef.current(cotizacionId, changeInfo);
           }
           return;
         }
@@ -259,21 +286,26 @@ export function useCotizacionesRealtime({
             camposCambiados,
           };
         }
+
+        // ⚠️ TAREA 3: Construir información completa de cambio
+        const changeInfo: CotizacionChangeInfo = {
+          cotizacionId,
+          status: newRecord.status as string,
+          oldStatus: oldRecord.status as string,
+          visible_to_client: newRecord.visible_to_client as boolean,
+          old_visible_to_client: oldRecord.visible_to_client as boolean,
+          name: newRecord.name as string,
+          price: newRecord.price as number,
+          selected_by_prospect: newRecord.selected_by_prospect as boolean,
+          ...Object.fromEntries(
+            camposCambiados.map(campo => [campo, newRecord[campo]])
+          ),
+        };
       }
 
-      // Crear payload enriquecido con información de cambios
-      const enrichedPayload = {
-        ...payload,
-        changeInfo: cambioDetectado,
-        oldRecord,
-        newRecord,
-      };
-
-      // ⚠️ TAREA 1: NO llamar automáticamente a onUpdatedRef (que dispara recarga)
-      // Solo notificar que hay un cambio válido para incrementar el contador
+      // ⚠️ TAREA 3: Pasar información completa de cambio
       if (cotizacionId && onUpdatedRef.current) {
-        // Mantener el callback para compatibilidad, pero la recarga será manual
-        onUpdatedRef.current(cotizacionId, enrichedPayload);
+        onUpdatedRef.current(cotizacionId, changeInfo);
       }
     },
     [promiseId, extractCotizacion, ignoreCierreEvents]

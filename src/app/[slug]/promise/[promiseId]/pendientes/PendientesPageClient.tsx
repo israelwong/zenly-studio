@@ -4,6 +4,8 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { Calendar } from 'lucide-react';
+import { toast } from 'sonner';
+import type { CotizacionChangeInfo } from '@/hooks/useCotizacionesRealtime';
 import { CotizacionesSectionRealtime } from '@/components/promise/CotizacionesSectionRealtime';
 import { PaquetesSection } from '@/components/promise/PaquetesSection';
 import { ComparadorButton } from '@/components/promise/ComparadorButton';
@@ -19,6 +21,7 @@ import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promi
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 import { trackPromisePageView } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
+import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 
 interface PendientesPageClientProps {
   promise: {
@@ -105,6 +108,9 @@ export function PendientesPageClient({
   studioSlug,
   promiseId,
 }: PendientesPageClientProps) {
+  const router = useRouter();
+  const { setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
+
   // 🏗️ TAREA 1: Logging de re-montado
   useEffect(() => {
     console.log('🏗️ Componente PendientesPageClient montado', {
@@ -116,8 +122,6 @@ export function PendientesPageClient({
       console.log('🏗️ Componente PendientesPageClient desmontado', { promiseId });
     };
   }, [promiseId]);
-
-  const router = useRouter();
   const {
     showProgressOverlay,
     progressStep,
@@ -261,40 +265,111 @@ export function PendientesPageClient({
     };
   }, [reloadCotizaciones]);
 
+  // ⚠️ TAREA 2: Auto-redirección inteligente cuando cambia estado
+  const checkAndRedirect = useCallback(async (changeInfo?: CotizacionChangeInfo) => {
+    // ⚠️ TAREA 4: Bloquear durante navegación
+    if (getIsNavigating()) {
+      console.log('[PendientesPageClient] Ignorando checkAndRedirect durante navegación');
+      return;
+    }
+
+    // Si hay cambio de estado, verificar si necesitamos redirigir
+    if (changeInfo?.statusChanged) {
+      const newStatus = changeInfo.status;
+      const oldStatus = changeInfo.oldStatus;
+
+      // ⚠️ TAREA 2: Auto-redirigir si cambia a negociación o cierre
+      if (newStatus === 'negociacion' && changeInfo.visible_to_client) {
+        console.log('[PendientesPageClient] Redirigiendo a negociación');
+        setNavigating('negociacion');
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        startTransition(() => {
+          router.push(`/${studioSlug}/promise/${promiseId}/negociacion`);
+          clearNavigating(1000);
+        });
+        return;
+      }
+
+      if (newStatus === 'en_cierre' || newStatus === 'cierre') {
+        console.log('[PendientesPageClient] Redirigiendo a cierre');
+        setNavigating('cierre');
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        startTransition(() => {
+          router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
+          clearNavigating(1000);
+        });
+        return;
+      }
+    }
+  }, [studioSlug, promiseId, router, getIsNavigating, setNavigating, clearNavigating]);
+
   // Handler para actualizaciones de cotizaciones con información de cambios
   const handleCotizacionUpdated = useCallback(
-    (cotizacionId: string, payload?: unknown) => {
-      const p = payload as any;
-      const changeInfo = p?.changeInfo;
-      const newRecord = p?.newRecord || p?.new;
+    (cotizacionId: string, changeInfo?: CotizacionChangeInfo) => {
+      // ⚠️ TAREA 4: Bloquear durante navegación
+      if (getIsNavigating()) {
+        return;
+      }
 
-      // ⚠️ TAREA 3: Comparación de datos en el cliente antes de llamar al servidor
-      if (newRecord) {
-        const newVersion = `${cotizacionId}-${newRecord.status || ''}-${newRecord.selected_by_prospect || false}-${newRecord.price || 0}`;
-        const existingVersion = cotizacionesVersionsRef.current.get(cotizacionId);
-        
-        if (existingVersion === newVersion) {
-          console.log('🔔 [PendientesPageClient] Ignorando evento: versión idéntica', {
-            cotizacionId,
-            version: newVersion,
+      // ⚠️ TAREA 4: No mostrar toast si ya estamos en la ruta destino
+      const currentPath = window.location.pathname;
+      if (changeInfo?.status === 'negociacion' && currentPath.includes('/negociacion')) {
+        // Pero sí redirigir si cambió a cierre
+        if (changeInfo.status === 'en_cierre' || changeInfo.status === 'cierre') {
+          checkAndRedirect(changeInfo);
+        }
+        return;
+      }
+      if ((changeInfo?.status === 'en_cierre' || changeInfo?.status === 'cierre') && currentPath.includes('/cierre')) {
+        return;
+      }
+
+      // ⚠️ TAREA 1: Toasts específicos según cambio de estado
+      if (changeInfo?.statusChanged) {
+        const newStatus = changeInfo.status;
+        const oldStatus = changeInfo.oldStatus;
+
+        if (newStatus === 'negociacion' && changeInfo.visible_to_client) {
+          toast.success('¡Nueva oferta especial enviada!', {
+            description: 'El estudio ha preparado una propuesta personalizada para ti',
           });
-          return; // Versión idéntica, ignorar
+          checkAndRedirect(changeInfo);
+          return;
         }
 
-        // Actualizar versión
-        cotizacionesVersionsRef.current.set(cotizacionId, newVersion);
+        if (newStatus === 'en_cierre' || newStatus === 'cierre') {
+          toast.success('¡Todo listo! Tu contrato está preparado.', {
+            description: 'Revisa y firma tu contrato digital',
+          });
+          checkAndRedirect(changeInfo);
+          return;
+        }
       }
+
+      // Para otros cambios, verificar versión y notificar
+      const newVersion = `${cotizacionId}-${changeInfo?.status || ''}-${changeInfo?.selected_by_prospect || false}-${changeInfo?.price || 0}`;
+      const existingVersion = cotizacionesVersionsRef.current.get(cotizacionId);
+      
+      if (existingVersion === newVersion) {
+        console.log('🔔 [PendientesPageClient] Ignorando evento: versión idéntica', {
+          cotizacionId,
+          version: newVersion,
+        });
+        return;
+      }
+
+      cotizacionesVersionsRef.current.set(cotizacionId, newVersion);
 
       // ⚠️ TAREA 5: Instrumentación detallada en el navegador
       console.table({
         event: 'UPDATE',
         cotizacionId,
-        table: p?.table || 'studio_cotizaciones',
-        change: newRecord ? {
-          status: newRecord.status,
-          selected_by_prospect: newRecord.selected_by_prospect,
-          price: newRecord.price,
-          name: newRecord.name,
+        table: 'studio_cotizaciones',
+        change: changeInfo ? {
+          status: changeInfo.status,
+          selected_by_prospect: changeInfo.selected_by_prospect,
+          price: changeInfo.price,
+          name: changeInfo.name,
         } : 'N/A',
         changeInfo: changeInfo ? {
           statusChanged: changeInfo.statusChanged,
@@ -302,36 +377,9 @@ export function PendientesPageClient({
         } : 'N/A',
       });
 
-      // ⚠️ TAREA 4: Mantener lógica de ignorar cambios en updated_at
-      // ⚠️ TAREA 1: NO recargar automáticamente, solo notificar para incrementar contador
-      // Los cambios críticos (status) se manejarán con redirección automática si es necesario
-      if (changeInfo?.statusChanged) {
-        const oldStatus = p.changeInfo.oldStatus;
-        const newStatus = p.changeInfo.newStatus;
-
-        console.log('🔔 [PendientesPageClient] Cambio de estado detectado', {
-          cotizacionId,
-          oldStatus,
-          newStatus,
-        });
-
-        // Si una cotización pasó a 'negociacion' o 'en_cierre', redirigir inmediatamente (crítico)
-        if (newStatus === 'negociacion' || newStatus === 'en_cierre') {
-          console.log('🔔 [PendientesPageClient] Redirigiendo por cambio de estado crítico');
-          reloadCotizaciones(); // Redirección requiere recarga
-          return;
-        }
-
-        // Si una cotización salió de 'negociacion' o 'en_cierre', notificar pero no recargar automáticamente
-        if (oldStatus === 'negociacion' || oldStatus === 'en_cierre') {
-          console.log('🔔 [PendientesPageClient] Cambio de estado detectado, notificando');
-          handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
-          return;
-        }
-      }
-
+      // ⚠️ TAREA 1: Toasts y auto-redirección ya manejados arriba, continuar con lógica de notificación
       // Para otros cambios, solo notificar (no recargar automáticamente)
-      if (changeInfo?.camposCambiados) {
+      if (changeInfo?.camposCambiados && !changeInfo.statusChanged) {
         const cambiosCriticos = ['status', 'selected_by_prospect'];
         const tieneCambioCritico = changeInfo.camposCambiados.some((campo: string) =>
           cambiosCriticos.includes(campo)
@@ -342,17 +390,17 @@ export function PendientesPageClient({
             cotizacionId,
             campos: changeInfo.camposCambiados,
           });
-          handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
+          handleUpdateDetected('quote');
           return;
         }
       }
 
       // Si hay cambio válido pero no crítico, notificar
-      if (changeInfo) {
-        handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
+      if (changeInfo && !changeInfo.statusChanged) {
+        handleUpdateDetected('quote');
       }
     },
-    [reloadCotizaciones]
+    [checkAndRedirect, getIsNavigating, handleUpdateDetected]
   );
 
   // ⚠️ TAREA 1: Estado de actualización con tipo
@@ -397,13 +445,77 @@ export function PendientesPageClient({
     }
   }, [studioSlug, promiseId]);
 
+  // ⚠️ TAREA 2: Auto-redirección inteligente cuando cambia estado
+  const checkAndRedirect = useCallback(async (changeInfo?: CotizacionChangeInfo) => {
+    // ⚠️ TAREA 4: Bloquear durante navegación
+    if (getIsNavigating()) {
+      console.log('[PendientesPageClient] Ignorando checkAndRedirect durante navegación');
+      return;
+    }
+
+    // Si hay cambio de estado, verificar si necesitamos redirigir
+    if (changeInfo?.statusChanged) {
+      const newStatus = changeInfo.status;
+      const oldStatus = changeInfo.oldStatus;
+
+      // ⚠️ TAREA 2: Auto-redirigir si cambia a negociación o cierre
+      if (newStatus === 'negociacion' && changeInfo.visible_to_client) {
+        console.log('[PendientesPageClient] Redirigiendo a negociación');
+        setNavigating('negociacion');
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        startTransition(() => {
+          router.push(`/${studioSlug}/promise/${promiseId}/negociacion`);
+          clearNavigating(1000);
+        });
+        return;
+      }
+
+      if (newStatus === 'en_cierre' || newStatus === 'cierre') {
+        console.log('[PendientesPageClient] Redirigiendo a cierre');
+        setNavigating('cierre');
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        startTransition(() => {
+          router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
+          clearNavigating(1000);
+        });
+        return;
+      }
+    }
+  }, [studioSlug, promiseId, router, getIsNavigating, setNavigating, clearNavigating]);
+
+  // ⚠️ TAREA 1: Handler mejorado con toasts específicos
+  const handleCotizacionInserted = useCallback((changeInfo?: CotizacionChangeInfo) => {
+    // ⚠️ TAREA 4: No mostrar toast si ya estamos en la ruta destino
+    const currentPath = window.location.pathname;
+    if (changeInfo?.status === 'negociacion' && currentPath.includes('/negociacion')) {
+      return;
+    }
+    if ((changeInfo?.status === 'en_cierre' || changeInfo?.status === 'cierre') && currentPath.includes('/cierre')) {
+      return;
+    }
+
+    // ⚠️ TAREA 1: Toast específico según tipo
+    if (changeInfo?.visible_to_client) {
+      if (changeInfo.status === 'negociacion') {
+        toast.success('¡Nueva oferta especial enviada!', {
+          description: 'El estudio ha preparado una propuesta personalizada para ti',
+        });
+        // Auto-redirigir a negociación
+        checkAndRedirect(changeInfo);
+      } else {
+        toast.success('¡Nueva cotización disponible!', {
+          description: 'Haz clic para ver los detalles',
+        });
+        handleUpdateDetected('quote');
+      }
+    }
+  }, [checkAndRedirect, handleUpdateDetected]);
+
   // Escuchar cambios en tiempo real de cotizaciones (sin recarga automática)
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
-    onCotizacionInserted: () => {
-      handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
-    },
+    onCotizacionInserted: handleCotizacionInserted,
     onCotizacionUpdated: handleCotizacionUpdated,
     onCotizacionDeleted: (cotizacionId) => {
       setCotizaciones((prev) => prev.filter((c) => c.id !== cotizacionId));

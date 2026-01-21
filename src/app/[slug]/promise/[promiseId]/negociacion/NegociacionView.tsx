@@ -13,9 +13,10 @@ import type { PublicCotizacion } from '@/types/public-promise';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 import { useState } from 'react';
-import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
+import { useCotizacionesRealtime, type CotizacionChangeInfo } from '@/hooks/useCotizacionesRealtime';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { toast } from 'sonner';
 
 interface NegociacionViewProps {
   promise: {
@@ -173,14 +174,51 @@ export function NegociacionView({
     };
   }, [precioBase, precioOriginal, cotizacion.negociacion_precio_personalizado, condicionesComerciales, totalCortesias]);
 
-  // Función para verificar cambios de estado y redirigir si es necesario
-  const checkAndRedirect = useCallback(async () => {
-    // ⚠️ TAREA 1: Bloquear sincronización durante navegación
+  // ⚠️ TAREA 2: Función mejorada para verificar cambios de estado y redirigir con toasts
+  const checkAndRedirect = useCallback(async (changeInfo?: CotizacionChangeInfo) => {
+    // ⚠️ TAREA 4: Bloquear sincronización durante navegación
     if (getIsNavigating()) {
       console.log('[NegociacionView] Ignorando checkAndRedirect durante navegación');
       return;
     }
 
+    // ⚠️ TAREA 2: Si hay changeInfo con cambio de estado, usar esa información directamente
+    if (changeInfo?.statusChanged) {
+      const newStatus = changeInfo.status;
+      const oldStatus = changeInfo.oldStatus;
+
+      // ⚠️ TAREA 4: No mostrar toast si ya estamos en la ruta destino
+      const currentPath = window.location.pathname;
+      if (newStatus === 'en_cierre' || newStatus === 'cierre') {
+        if (!currentPath.includes('/cierre')) {
+          // ⚠️ TAREA 1: Toast específico para cierre
+          toast.success('¡Todo listo! Tu contrato está preparado.', {
+            description: 'Revisa y firma tu contrato digital',
+          });
+        }
+        // ⚠️ TAREA 2: Auto-redirigir a cierre
+        setNavigating('cierre');
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        startTransition(() => {
+          router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
+          clearNavigating(1000);
+        });
+        return;
+      }
+
+      // Si salió de negociación, redirigir a pendientes
+      if (oldStatus === 'negociacion' && newStatus !== 'negociacion') {
+        setNavigating('pendientes');
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        startTransition(() => {
+          router.push(`/${studioSlug}/promise/${promiseId}/pendientes`);
+          clearNavigating(1000);
+        });
+        return;
+      }
+    }
+
+    // Fallback: Verificar estado desde servidor si no hay changeInfo
     try {
       const result = await getPublicPromiseData(studioSlug, promiseId);
       if (result.success && result.data?.cotizaciones) {
@@ -194,13 +232,17 @@ export function NegociacionView({
         
         // Si la cotización pasó a en_cierre con selected_by_prospect: true, redirigir a cierre
         const cotizacionEnCierre = cotizaciones.find(
-          (cot) => cot.selected_by_prospect === true && cot.status === 'en_cierre'
+          (cot) => cot.selected_by_prospect === true && (cot.status === 'en_cierre' || cot.status === 'cierre')
         );
         if (cotizacionEnCierre) {
-          // ⚠️ TAREA 1 y 3: Activar flag de navegación y cerrar overlays
+          const currentPath = window.location.pathname;
+          if (!currentPath.includes('/cierre')) {
+            toast.success('¡Todo listo! Tu contrato está preparado.', {
+              description: 'Revisa y firma tu contrato digital',
+            });
+          }
           setNavigating('cierre');
           window.dispatchEvent(new CustomEvent('close-overlays'));
-          
           startTransition(() => {
             router.push(`/${studioSlug}/promise/${promiseId}/cierre`);
             clearNavigating(1000);
@@ -217,10 +259,8 @@ export function NegociacionView({
           
           if (!otraCotizacionNegociacion) {
             // No hay cotización en negociación, redirigir a pendientes
-            // ⚠️ TAREA 1 y 3: Activar flag de navegación y cerrar overlays
             setNavigating('pendientes');
             window.dispatchEvent(new CustomEvent('close-overlays'));
-            
             startTransition(() => {
               router.push(`/${studioSlug}/promise/${promiseId}/pendientes`);
               clearNavigating(1000);
@@ -233,13 +273,33 @@ export function NegociacionView({
     }
   }, [studioSlug, promiseId, cotizacion.id, router, getIsNavigating, setNavigating, clearNavigating]);
 
+  // ⚠️ TAREA 1: Handler mejorado con toasts
+  const handleCotizacionUpdated = useCallback((cotizacionId: string, changeInfo?: CotizacionChangeInfo) => {
+    // Solo procesar si es la cotización actual
+    if (cotizacionId !== cotizacion.id) {
+      return;
+    }
+    checkAndRedirect(changeInfo);
+  }, [cotizacion.id, checkAndRedirect]);
+
   // Escuchar cambios en tiempo real de cotizaciones
   // ⚠️ TAREA 1: Bloquear sincronización durante navegación
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
-    onCotizacionUpdated: checkAndRedirect,
-    onCotizacionInserted: checkAndRedirect,
+    onCotizacionUpdated: handleCotizacionUpdated,
+    onCotizacionInserted: (changeInfo) => {
+      // Si se inserta una nueva cotización en negociación y es visible, mostrar toast
+      if (changeInfo?.status === 'negociacion' && changeInfo.visible_to_client) {
+        const currentPath = window.location.pathname;
+        if (!currentPath.includes('/negociacion')) {
+          toast.success('¡Nueva oferta especial enviada!', {
+            description: 'El estudio ha preparado una propuesta personalizada para ti',
+          });
+        }
+      }
+      checkAndRedirect(changeInfo);
+    },
   });
 
   const handleSuccess = () => {
