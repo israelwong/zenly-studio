@@ -70,7 +70,7 @@ export function NotificationsDropdown({ studioSlug }: NotificationsDropdownProps
       notification
     );
 
-    // Marcar como clickeada
+    // Marcar como clickeada (pasa route como segundo parámetro)
     await markAsClicked(notification.id, route);
 
     // Navegar si hay ruta

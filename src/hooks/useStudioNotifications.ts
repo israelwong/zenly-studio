@@ -49,6 +49,7 @@ export function useStudioNotifications({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isLoadingUserId, setIsLoadingUserId] = useState(true);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isMountedRef = useRef(true);
@@ -57,36 +58,34 @@ export function useStudioNotifications({
 
   // Obtener userId (studio_user_profiles.id)
   useEffect(() => {
+    if (!enabled) {
+      setIsLoadingUserId(false);
+      setLoading(false);
+      return;
+    }
+
     const fetchUser = async () => {
       try {
-        setLoading(true);
+        setIsLoadingUserId(true);
         const result = await getCurrentUserId(studioSlug);
         if (result.success && result.data) {
           setUserId(result.data);
         } else {
-          // Si no hay userId, dejar de cargar
-          setLoading(false);
           setError(result.error || 'Usuario no encontrado');
         }
       } catch (error) {
-        setLoading(false);
         setError('Error al obtener usuario');
+      } finally {
+        setIsLoadingUserId(false);
       }
     };
-    if (enabled) {
-      fetchUser();
-    } else {
-      setLoading(false);
-    }
+
+    fetchUser();
   }, [studioSlug, enabled]);
 
   // Cargar notificaciones iniciales
   const loadNotifications = useCallback(async () => {
-    if (!userId || !enabled) {
-      // ⚠️ FIX: Asegurar que loading se establezca en false si no hay userId
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
+    if (!userId || !enabled || !isMountedRef.current) {
       return;
     }
 
@@ -121,19 +120,17 @@ export function useStudioNotifications({
     }
   }, [studioSlug, userId, enabled]);
 
-  // Cargar notificaciones cuando cambie userId o studioSlug
+  // Cargar notificaciones cuando cambie userId (solo después de que termine de cargar userId)
   useEffect(() => {
-    if (userId && enabled) {
+    if (!isLoadingUserId && userId && enabled) {
       loadNotifications();
-    } else if (!userId && enabled) {
-      // ⚠️ FIX: Si no hay userId pero enabled es true, asegurar que loading sea false
-      // (el primer efecto ya maneja el caso de error al obtener userId)
-      if (isMountedRef.current && !error) {
-        // Solo establecer loading en false si no hay error (el error ya estableció loading en false)
-        setLoading(false);
-      }
+    } else if (!isLoadingUserId && !userId && enabled) {
+      // Si terminó de cargar userId pero no hay userId, establecer loading en false
+      setLoading(false);
+    } else if (!enabled) {
+      setLoading(false);
     }
-  }, [userId, studioSlug, enabled, loadNotifications, error]);
+  }, [userId, isLoadingUserId, enabled, loadNotifications]);
 
   // Configurar Realtime - Escucha eventos automáticos desde el trigger de base de datos
   // IMPORTANTE: Esperar a que userId esté disponible (getCurrentUserId crea el perfil si no existe)
@@ -243,7 +240,7 @@ export function useStudioNotifications({
   // Marcar como clickeada
   // Actualización optimista + Realtime como backup
   const handleMarkAsClicked = useCallback(
-    async (notificationId: string) => {
+    async (notificationId: string, route?: string | null) => {
       if (!userId) return;
 
       // Actualización optimista inmediata
@@ -312,6 +309,7 @@ export function useStudioNotifications({
 
   // Cleanup
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       if (channelRef.current) {
