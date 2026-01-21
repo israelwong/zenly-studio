@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { unstable_cache } from 'next/cache';
 import { getPublicPromiseRouteState, getPublicPromiseCierre, getPublicPromiseMetadata, getPublicPromiseBasicData, getPublicPromiseCierreBasic } from '@/lib/actions/public/promesas.actions';
 import { isRouteValid } from '@/lib/utils/public-promise-routing';
-import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
+import { CierrePageSkeleton } from './CierrePageSkeleton';
 import { CierrePageBasic } from './CierrePageBasic';
 import { CierrePageDeferred } from './CierrePageDeferred';
 
@@ -63,7 +63,7 @@ export default async function CierrePage({ params }: CierrePageProps) {
       />
       
       {/* ⚠️ STREAMING: Parte B - Deferred (datos pesados con Suspense) */}
-      <Suspense fallback={<PromisePageSkeleton />}>
+      <Suspense fallback={<CierrePageSkeleton />}>
         <CierrePageDeferred
           dataPromise={deferredDataPromise}
           basicPromise={{ promise: promiseBasic, studio: studioBasic }}

@@ -14,6 +14,8 @@ interface PublicContractViewProps {
   isOpen: boolean;
   onClose: () => void;
   onContractSigned?: () => void;
+  onContractSignedOptimistic?: () => void;
+  onContractSignedRollback?: () => void;
   cotizacionId: string;
   promiseId: string;
   studioSlug: string;
@@ -54,6 +56,8 @@ export function PublicContractView({
   isOpen,
   onClose,
   onContractSigned,
+  onContractSignedOptimistic,
+  onContractSignedRollback,
   cotizacionId,
   promiseId,
   studioSlug,
@@ -280,14 +284,9 @@ export function PublicContractView({
     setIsSigning(true);
     setShowSignConfirmModal(false);
 
-    // ⚠️ OPTIMISTIC UPDATE: Actualizar estado local inmediatamente
-    const previousSignedAt = isSigned;
-    const optimisticSignedAt = new Date();
-
-    // Actualizar estado optimista inmediatamente
-    if (onContractSigned) {
-      // Llamar callback para actualizar estado en padre (optimistic)
-      onContractSigned();
+    // ⚠️ TAREA 3: OPTIMISTIC UPDATE - Actualizar estado ANTES de Server Action
+    if (onContractSignedOptimistic) {
+      onContractSignedOptimistic();
     }
 
     try {
@@ -302,35 +301,39 @@ export function PublicContractView({
         // Continuar con IP por defecto
       }
 
-      // ⚠️ OPTIMISTIC UPDATE: Ejecutar Server Action y usar startTransition para actualizaciones de UI
+      // ⚠️ TAREA 3: Ejecutar Server Action
       const result = await signPublicContract(studioSlug, promiseId, cotizacionId, {
         ip_address: clientIp,
       });
 
       if (result.success) {
-        // ⚠️ OPTIMISTIC UPDATE: Usar startTransition para actualizaciones de UI no bloqueantes
+        // ⚠️ TAREA 3: Usar startTransition para actualizaciones de UI no bloqueantes
         startTransition(() => {
           toast.success('Contrato firmado exitosamente');
+          // ⚠️ TAREA 3: Cerrar overlays antes de cerrar modal
+          window.dispatchEvent(new CustomEvent('close-overlays'));
           // Cerrar modal
           onClose();
-          // El callback ya se llamó arriba (optimistic), pero se puede llamar de nuevo para sincronizar
+          // Sincronizar con servidor (actualizar con datos reales)
           if (onContractSigned) {
             onContractSigned();
           }
         });
       } else {
-        // ⚠️ ROLLBACK: Si falla, revertir estado optimista
+        // ⚠️ TAREA 3: ROLLBACK - Si falla, revertir estado optimista
         console.error('[handleConfirmSign] Error en firma:', result.error);
         toast.error(result.error || 'Error al firmar contrato');
-        // Revertir estado (el callback debería manejar esto)
-        // Por ahora, solo mostramos el error y el usuario puede reintentar
+        if (onContractSignedRollback) {
+          onContractSignedRollback();
+        }
       }
     } catch (error) {
-      // ⚠️ ROLLBACK: Si hay excepción, revertir estado optimista
+      // ⚠️ TAREA 3: ROLLBACK - Si hay excepción, revertir estado optimista
       console.error('[handleConfirmSign] Error signing contract:', error);
       toast.error('Error al firmar contrato');
-      // El estado se revertirá automáticamente cuando el componente se re-renderice
-      // con los datos del servidor (vía realtime o refresh)
+      if (onContractSignedRollback) {
+        onContractSignedRollback();
+      }
     } finally {
       setIsSigning(false);
     }

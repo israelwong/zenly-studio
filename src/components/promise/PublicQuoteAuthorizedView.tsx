@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, startTransition, useMemo } from 'react';
 import { Loader2, CheckCircle2, Building2, Copy, Check } from 'lucide-react';
 import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
 import { PublicPromiseDataForm } from './PublicPromiseDataForm';
@@ -62,7 +62,19 @@ export function PublicQuoteAuthorizedView({
   const [bankInfo, setBankInfo] = useState<{ banco?: string | null; titular?: string | null; clabe?: string | null } | null>(null);
   const [loadingBankInfo, setLoadingBankInfo] = useState(false);
   const [copiedClabe, setCopiedClabe] = useState(false);
-  const confettiFiredRef = useRef(false);
+  // ⚠️ Usar sessionStorage para persistir el estado del confetti durante la sesión
+  // Esto evita que se dispare cada vez que se recarga la página
+  const getConfettiFired = useCallback(() => {
+    if (typeof window === 'undefined') return false;
+    const key = `confetti-fired-${promiseId}-${cotizacion.id}`;
+    return sessionStorage.getItem(key) === 'true';
+  }, [promiseId, cotizacion.id]);
+
+  const setConfettiFired = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const key = `confetti-fired-${promiseId}-${cotizacion.id}`;
+    sessionStorage.setItem(key, 'true');
+  }, [promiseId, cotizacion.id]);
 
   // Estado separado para el contrato (se actualiza independientemente)
   const [contractData, setContractData] = useState<{
@@ -97,8 +109,9 @@ export function PublicQuoteAuthorizedView({
   const hasContractTemplate = !!currentContract?.template_id;
   const isContractGenerated = cotizacion.status === 'contract_generated' || cotizacion.status === 'contract_signed';
   // IMPORTANTE: Verificar firma desde la tabla temporal (contract.signed_at)
-  const isContractSigned = !!currentContract?.signed_at;
-  const isEnCierre = cotizacion.status === 'en_cierre';
+  // ⚠️ Usar useMemo para asegurar estabilidad de valores entre renders
+  const isContractSigned = useMemo(() => !!currentContract?.signed_at, [currentContract?.signed_at]);
+  const isEnCierre = useMemo(() => cotizacion.status === 'en_cierre', [cotizacion.status]);
 
   // Obtener condiciones comerciales (priorizar desde contract, sino desde cotizacion directamente)
   // Esto cubre el caso cuando el contrato fue generado manualmente por el estudio
@@ -134,29 +147,58 @@ export function PublicQuoteAuthorizedView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Solo al montar
 
-  // Efecto Confetti: Disparar celebración solo una vez al ingresar a la página
+  // Efecto Confetti: Disparar celebración solo una vez por sesión
   // Solo se dispara cuando la cotización está recién autorizada (en_cierre pero sin contrato firmado)
   useEffect(() => {
-    if (confettiFiredRef.current) return;
+    if (getConfettiFired()) {
+      console.log('[Confetti] Ya se disparó anteriormente en esta sesión, omitiendo');
+      return;
+    }
+
+    console.log('[Confetti] Verificando condiciones:', { isEnCierre, isContractSigned, cotizacionStatus: cotizacion.status });
 
     // Solo disparar confetti si estamos en estado de cierre (recién autorizado)
     // y el contrato aún no está firmado (primera vez que ven esta página)
     if (isEnCierre && !isContractSigned) {
-      confettiFiredRef.current = true;
+      console.log('[Confetti] ✅ Condiciones cumplidas, disparando confetti en 500ms');
+      setConfettiFired();
 
-      // Delay de 1 segundo para que la página cargue completamente y sea más impactante
+      // Delay reducido a 500ms para que sea más inmediato
       const timer = setTimeout(() => {
-        // Disparar confetti desde el centro superior de la pantalla
+        console.log('[Confetti] 🎉 Disparando confetti');
+        // Disparar confetti desde el centro superior de la pantalla con más partículas
         confetti({
-          particleCount: 100,
+          particleCount: 150,
           spread: 70,
-          origin: { y: 0.3 },
+          origin: { y: 0.2 },
+          colors: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'],
         });
-      }, 1000);
+        
+        // Segundo disparo para más impacto
+        setTimeout(() => {
+          confetti({
+            particleCount: 100,
+            spread: 50,
+            origin: { y: 0.2, x: 0.3 },
+            colors: ['#10b981', '#3b82f6', '#8b5cf6'],
+          });
+        }, 200);
+        
+        setTimeout(() => {
+          confetti({
+            particleCount: 100,
+            spread: 50,
+            origin: { y: 0.2, x: 0.7 },
+            colors: ['#10b981', '#3b82f6', '#8b5cf6'],
+          });
+        }, 400);
+      }, 500);
 
       return () => clearTimeout(timer);
+    } else {
+      console.log('[Confetti] ❌ Condiciones no cumplidas:', { isEnCierre, isContractSigned });
     }
-  }, [isEnCierre, isContractSigned]);
+  }, [isEnCierre, isContractSigned, getConfettiFired, setConfettiFired]);
 
   // Cargar información bancaria automáticamente cuando el contrato esté firmado
   useEffect(() => {
@@ -263,28 +305,65 @@ export function PublicQuoteAuthorizedView({
     }
   }, [studioSlug, cotizacion.id]);
 
-  // Callback cuando se firma el contrato
+  // ⚠️ TAREA 1: Hook de navegación para prevenir race conditions (debe ir antes de los callbacks que lo usan)
+  const { isNavigating, setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
+
+  // ⚠️ TAREA 3: Optimistic update - Guardar estado anterior para rollback
+  const previousContractDataRef = useRef<typeof contractData>(null);
+
+  // Callback optimista ANTES de la Server Action
+  const handleContractSignedOptimistic = useCallback(() => {
+    // Guardar estado anterior para rollback
+    previousContractDataRef.current = contractData;
+    
+    // ⚠️ OPTIMISTIC UPDATE: Actualizar estado inmediatamente
+    if (contractData) {
+      setContractData({
+        ...contractData,
+        signed_at: new Date(), // Actualizar inmediatamente
+      });
+    }
+  }, [contractData]);
+
+  // ⚠️ TAREA 4: Callback cuando se firma el contrato (después de Server Action exitosa)
   const handleContractSigned = useCallback(async () => {
     try {
-      // Recargar datos del contrato para obtener contract_signed_at actualizado
+      // ⚠️ TAREA 4: Activar flag de navegación para bloquear Realtime
+      setNavigating('post-sign');
+      
+      // Recargar datos del contrato para obtener contract_signed_at actualizado del servidor
       const result = await getPublicCotizacionContract(studioSlug, cotizacion.id);
       if (result.success && result.data) {
         const contractUpdate = {
           template_id: result.data.template_id,
           content: result.data.content,
           version: result.data.version || 1,
-          signed_at: result.data.signed_at, // Incluir fecha de firma
+          signed_at: result.data.signed_at, // Fecha real del servidor
           condiciones_comerciales: result.data.condiciones_comerciales,
         };
-        setContractData(contractUpdate);
+        
+        // ⚠️ TAREA 4: Actualizar estado con startTransition
+        startTransition(() => {
+          setContractData(contractUpdate);
+          // Limpiar flag de navegación después de un breve delay
+          clearNavigating(500);
+        });
+      } else {
+        clearNavigating(0);
       }
     } catch (error) {
       console.error('[PublicQuoteAuthorizedView] Error updating contract after signing:', error);
+      clearNavigating(0);
     }
-  }, [studioSlug, cotizacion.id]);
+  }, [studioSlug, cotizacion.id, setNavigating, clearNavigating]);
 
-  // ⚠️ TAREA 1: Hook de navegación para prevenir race conditions
-  const { isNavigating, setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
+  // ⚠️ TAREA 3: Rollback si la Server Action falla
+  const handleContractSignedRollback = useCallback(() => {
+    if (previousContractDataRef.current) {
+      setContractData(previousContractDataRef.current);
+      previousContractDataRef.current = null;
+    }
+  }, []);
 
   // Escuchar cambios en tiempo real de cotizaciones_cierre (cuando el estudio edita el contrato)
   // ⚠️ TAREA 1: Bloquear sincronización durante navegación
@@ -573,6 +652,8 @@ export function PublicQuoteAuthorizedView({
           isOpen={showContractView}
           onClose={() => setShowContractView(false)}
           onContractSigned={handleContractSigned}
+          onContractSignedOptimistic={handleContractSignedOptimistic}
+          onContractSignedRollback={handleContractSignedRollback}
           cotizacionId={cotizacion.id}
           promiseId={promiseId}
           studioSlug={studioSlug}
