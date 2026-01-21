@@ -214,8 +214,21 @@ export function useCotizacionesRealtime({
         camposCambiados?: string[];
       } | null = null;
 
+      // ⚠️ TAREA 3: Inicializar changeInfo con valores por defecto
+      let changeInfo: CotizacionChangeInfo = {
+        cotizacionId,
+        status: cotizacion.status as string,
+        visible_to_client: cotizacion.visible_to_client as boolean,
+        name: cotizacion.name as string,
+        price: cotizacion.price as number,
+        selected_by_prospect: cotizacion.selected_by_prospect as boolean,
+      };
+
+      // Inicializar camposCambiados fuera del bloque para que esté disponible en todo el scope
+      let camposCambiados: string[] = [];
+
       if (oldRecord && newRecord) {
-        const camposCambiados: string[] = [];
+        camposCambiados = [];
         
         // Verificar solo campos importantes (ignorar campos de sistema)
         camposImportantes.forEach(campo => {
@@ -288,7 +301,7 @@ export function useCotizacionesRealtime({
         }
 
         // ⚠️ TAREA 3: Construir información completa de cambio
-        const changeInfo: CotizacionChangeInfo = {
+        changeInfo = {
           cotizacionId,
           status: newRecord.status as string,
           oldStatus: oldRecord.status as string,

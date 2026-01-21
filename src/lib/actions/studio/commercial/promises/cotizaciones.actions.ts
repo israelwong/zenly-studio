@@ -2156,6 +2156,7 @@ export async function pasarACierre(
     }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidateTag(`promises-list-${studioSlug}`); // Invalidar caché de lista (con studioSlug para aislamiento entre tenants)
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
       // Invalidar tag específico para forzar revalidación del estado de la promesa
