@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { CalendarIcon } from 'lucide-react';
 import { ZenDialog, ZenInput, ZenCard, ZenCardContent } from '@/components/ui/zen';
+import { ZenCalendar } from '@/components/ui/zen';
+import { ZenSelect } from '@/components/ui/zen/forms/ZenSelect';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { MobilePreviewFull } from '@/components/previews/MobilePreviewFull';
 import { PublicPromisePageHeader } from '@/components/promise/PublicPromisePageHeader';
 import { CoverDropzone } from '@/components/shared/CoverDropzone';
@@ -9,6 +13,8 @@ import { crearTipoEvento, actualizarTipoEvento } from '@/lib/actions/studio/nego
 import { useMediaUpload } from '@/hooks/useMediaUpload';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 import { toast } from 'sonner';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { es } from 'date-fns/locale';
 
 interface TipoEventoEnrichedModalProps {
   isOpen: boolean;
@@ -40,6 +46,17 @@ export function TipoEventoEnrichedModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Variables de ejemplo para preview (no se guardan en BD)
+  const [nombreContacto, setNombreContacto] = useState('María Pérez');
+  const [fechaEvento, setFechaEvento] = useState<Date>(() => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 30);
+    return futureDate;
+  });
+  const [nombreEvento, setNombreEvento] = useState('una persona');
+  const [region, setRegion] = useState('Regina');
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
   // Hook para upload de archivos multimedia
   const { uploadFiles, isUploading } = useMediaUpload();
 
@@ -58,6 +75,15 @@ export function TipoEventoEnrichedModal({
       setCoverMediaType(null);
     }
   }, [tipoEvento, isOpen]);
+
+  // Actualizar región cuando cambia nombreEvento
+  useEffect(() => {
+    if (nombreEvento === 'una persona') {
+      setRegion('Regina');
+    } else {
+      setRegion('Regina y Armando');
+    }
+  }, [nombreEvento]);
 
   // Manejar upload de cover
   const handleCoverUpload = async (files: File[]) => {
@@ -145,17 +171,12 @@ export function TipoEventoEnrichedModal({
     onClose();
   };
 
-  // Preview data para el header - Datos realistas que coinciden con la vista pública
+  // Preview data para el header - Usa variables de ejemplo
   const previewData = {
-    prospectName: 'María González',
-    eventName: 'María y Juan', // Solo el nombre del evento, sin el tipo
+    prospectName: nombreContacto,
+    eventName: region,
     eventTypeName: nombre || 'Boda',
-    eventDate: (() => {
-      // Fecha futura realista (60 días desde hoy)
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 60);
-      return futureDate;
-    })(),
+    eventDate: fechaEvento,
     variant: 'pendientes' as const,
     coverImageUrl,
     coverVideoUrl,
@@ -214,21 +235,121 @@ export function TipoEventoEnrichedModal({
               />
             </div>
           </div>
+
+          {/* Variables de ejemplo para preview */}
+          <div className="space-y-4 pt-4 border-t border-zinc-800">
+            <h3 className="text-sm font-semibold text-zinc-300">Datos de ejemplo</h3>
+            <p className="text-xs text-zinc-500 mb-4">
+              Estas variables son solo para previsualizar cómo se verá la información. No se guardan en la base de datos.
+            </p>
+
+            {/* Nombre del contacto */}
+            <ZenInput
+              label="Nombre de la persona que contacta al studio"
+              value={nombreContacto}
+              onChange={(e) => setNombreContacto(e.target.value)}
+              placeholder="María Pérez"
+              disabled={loading}
+            />
+
+            {/* Fecha de evento */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-300 block">
+                Fecha de evento
+              </label>
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-300 hover:border-zinc-600 transition-colors"
+                  >
+                    <span>{formatDisplayDate(fechaEvento)}</span>
+                    <CalendarIcon className="h-4 w-4 text-zinc-400" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0 bg-zinc-900 border-zinc-700"
+                  align="start"
+                  sideOffset={4}
+                >
+                  <ZenCalendar
+                    mode="single"
+                    selected={fechaEvento}
+                    onSelect={(selectedDate: Date | undefined) => {
+                      if (selectedDate) {
+                        const normalizedDate = new Date(Date.UTC(
+                          selectedDate.getUTCFullYear(),
+                          selectedDate.getUTCMonth(),
+                          selectedDate.getUTCDate(),
+                          12, 0, 0
+                        ));
+                        setFechaEvento(normalizedDate);
+                        setCalendarOpen(false);
+                      }
+                    }}
+                    locale={es}
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                La recomendación de contratación está definida para el ejemplo por 30 días, pero tú puedes modificar esa fecha en tu panel de gestión de promesas.
+              </p>
+            </div>
+
+            {/* Nombre del evento - Botones toggle */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-300 block">
+                Nombre del evento
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNombreEvento('una persona')}
+                  disabled={loading}
+                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    nombreEvento === 'una persona'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  una persona
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNombreEvento('2 personas')}
+                  disabled={loading}
+                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    nombreEvento === '2 personas'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  2 personas
+                </button>
+              </div>
+            </div>
+
+            {/* Input sin label que se actualiza según nombreEvento */}
+            <ZenInput
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              placeholder={nombreEvento === 'una persona' ? 'Regina' : 'Regina y Armando'}
+              disabled={loading}
+            />
+          </div>
         </div>
 
-        {/* Columna Derecha: Preview Mobile - Solo parte superior para enfocar el header */}
+        {/* Columna Derecha: Preview Mobile - Completo */}
         <div className="hidden lg:block self-start">
           <div className="sticky top-6">
-            <div className="relative overflow-hidden rounded-lg" style={{ height: '550px' }}>
-              <div className="absolute inset-0 overflow-y-auto flex justify-center">
+            <div className="relative rounded-lg">
+              <div className="flex justify-center">
                 <MobilePreviewFull hideHeader hideFooter isEditMode>
                   <div className="w-full">
                     <PublicPromisePageHeader {...previewData} />
                   </div>
                 </MobilePreviewFull>
               </div>
-              {/* Degradado del fondo del mobile preview (zinc-950) a transparente - ancho coincide con mobile preview */}
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[375px] h-24 bg-linear-to-t from-zinc-950 via-zinc-950/80 to-transparent pointer-events-none" />
             </div>
           </div>
         </div>
