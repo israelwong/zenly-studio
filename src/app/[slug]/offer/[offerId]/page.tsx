@@ -124,6 +124,10 @@ export default async function PublicOfferPage({
       </>
     );
   } catch (error) {
+    // Re-lanzar redirects de Next.js (no son errores reales)
+    if (error && typeof error === 'object' && 'digest' in error && typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
+      throw error;
+    }
     console.error("[PublicOfferPage] Error:", error);
     notFound();
   }

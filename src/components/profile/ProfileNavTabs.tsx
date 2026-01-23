@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { Home, Folder, Phone, HelpCircle, Search, Archive, Image, Video, Plus } from 'lucide-react';
 
 interface ProfileNavTabsProps {
@@ -24,45 +24,55 @@ interface ProfileNavTabsProps {
 export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiveFAQs = false, isOwner = false, onCreatePost }: ProfileNavTabsProps) {
     const tabsContainerRef = useRef<HTMLDivElement>(null);
     const buttonRefs = useRef<Record<string, HTMLButtonElement>>({});
-    const [isMobile, setIsMobile] = useState(false);
+    
+    // Estado para evitar mismatch de hidratación: inicializar con valores "seguros" (sin tabs condicionales)
+    // y actualizar después de la hidratación
+    const [mounted, setMounted] = useState(false);
+    const [effectiveIsOwner, setEffectiveIsOwner] = useState(false);
+    const [effectiveHasActiveFAQs, setEffectiveHasActiveFAQs] = useState(hasActiveFAQs);
 
-    // Detectar si estamos en mobile
+    // Después de la hidratación, actualizar los valores reales
     useEffect(() => {
-        const checkMobile = () => {
-            setIsMobile(window.innerWidth < 1024);
-        };
-        
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
+        setMounted(true);
+        setEffectiveIsOwner(isOwner);
+        setEffectiveHasActiveFAQs(hasActiveFAQs);
+    }, [isOwner, hasActiveFAQs]);
 
-    const baseTabs = [
-        { id: 'inicio', label: 'Inicio', icon: Home },
-        { id: 'portafolio', label: 'Portafolio', icon: Folder },
-        { id: 'contacto', label: 'Contacto', icon: Phone },
-    ];
-
-    // Agregar tabs de filtro solo cuando estamos en "inicio"
+    // Construir tabs de manera determinística (sin mutaciones)
     const isInicioSection = activeTab === 'inicio' || activeTab === 'inicio-fotos' || activeTab === 'inicio-videos';
-    if (isInicioSection) {
-        baseTabs.splice(1, 0,
-            { id: 'inicio-fotos', label: 'Fotos', icon: Image },
-            { id: 'inicio-videos', label: 'Videos', icon: Video }
+    
+    const tabs = useMemo(() => {
+        const tabsList: Array<{ id: string; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+            { id: 'inicio', label: 'Inicio', icon: Home },
+        ];
+
+        // Agregar tabs de filtro solo cuando estamos en "inicio"
+        if (isInicioSection) {
+            tabsList.push(
+                { id: 'inicio-fotos', label: 'Fotos', icon: Image },
+                { id: 'inicio-videos', label: 'Videos', icon: Video }
+            );
+        }
+
+        tabsList.push(
+            { id: 'portafolio', label: 'Portafolio', icon: Folder },
+            { id: 'contacto', label: 'Contacto', icon: Phone }
         );
-    }
 
-    // Agregar tab FAQ:
-    // - Si es owner: siempre mostrar (puede gestionar FAQs)
-    // - Si es público: solo mostrar si hay FAQs activas
-    if (isOwner || hasActiveFAQs) {
-        baseTabs.push({ id: 'faq', label: 'FAQ', icon: HelpCircle });
-    }
+        // Agregar tab FAQ solo después de la hidratación para evitar mismatch
+        // - Si es owner: siempre mostrar (puede gestionar FAQs)
+        // - Si es público: solo mostrar si hay FAQs activas
+        if (mounted && (effectiveIsOwner || effectiveHasActiveFAQs)) {
+            tabsList.push({ id: 'faq', label: 'FAQ', icon: HelpCircle });
+        }
 
-    // Agregar tab "Archivados" solo si el usuario es el owner
-    const tabs = isOwner
-        ? [...baseTabs, { id: 'archivados', label: 'Archivados', icon: Archive }]
-        : baseTabs;
+        // Agregar tab "Archivados" solo si el usuario es el owner (después de hidratación)
+        if (mounted && effectiveIsOwner) {
+            tabsList.push({ id: 'archivados', label: 'Archivados', icon: Archive });
+        }
+
+        return tabsList;
+    }, [isInicioSection, mounted, effectiveIsOwner, effectiveHasActiveFAQs]);
 
 
     // Centrar botón activo cuando cambia el tab
@@ -102,6 +112,7 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                     <div
                         ref={tabsContainerRef}
                         className="flex gap-1.5 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                        suppressHydrationWarning
                     >
                         {tabs.map((tab) => {
                             const isActive = activeTab === tab.id;
@@ -113,6 +124,8 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                                     ref={(el) => {
                                         if (el) {
                                             buttonRefs.current[tab.id] = el;
+                                        } else {
+                                            delete buttonRefs.current[tab.id];
                                         }
                                     }}
                                     onClick={() => handleTabClick(tab.id)}
@@ -120,13 +133,13 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                                         flex items-center gap-2 rounded-full text-xs font-medium
                                         transition-all duration-200 shrink-0 whitespace-nowrap
                                         ${isActive
-                                            ? `bg-zinc-800/80 text-zinc-300 backdrop-blur-lg px-4 ${isMobile ? 'py-2' : 'py-2.5'}`
-                                            : `text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 ${isMobile ? 'p-2' : 'p-2.5'}`
+                                            ? 'bg-zinc-800/80 text-zinc-300 backdrop-blur-lg px-4 py-2 lg:py-2.5'
+                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 p-2 lg:p-2.5'
                                         }
                                     `}
                                 >
                                     <Icon className="h-4 w-4" />
-                                    {isActive && <span>{tab.label}</span>}
+                                    {isActive ? <span>{tab.label}</span> : null}
                                 </button>
                             );
                         })}
@@ -153,7 +166,7 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                 )}
 
                 {/* Create Post Button - Solo si es owner y está en inicio */}
-                {isOwner && onCreatePost && (activeTab === 'inicio' || activeTab === 'inicio-fotos' || activeTab === 'inicio-videos') && (
+                {mounted && effectiveIsOwner && onCreatePost && (activeTab === 'inicio' || activeTab === 'inicio-fotos' || activeTab === 'inicio-videos') && (
                     <button
                         onClick={onCreatePost}
                         className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-full text-xs font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-600/30 hover:border-emerald-600/50 transition-all duration-200 shrink-0 relative z-20"
