@@ -884,12 +884,12 @@ export async function getPublicOfferBasicData(
               enable_event_duration: true,
               event_duration_required: true,
               show_packages_after_submit: true,
-              event_type: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
+            },
+          },
+          event_type: {
+            select: {
+              id: true,
+              name: true,
             },
           },
           business_term: {
@@ -961,12 +961,31 @@ export async function getPublicOfferBasicData(
                 advance_amount: true,
               },
             },
+            event_type: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         });
       }
 
       if (!offer) {
         return { success: false, error: "Oferta no encontrada" };
+      }
+
+      // Obtener event_type_name del leadform si tiene event_type_id
+      let leadformEventTypeName: string | null = null;
+      if (offer.leadform?.event_type_id) {
+        const eventType = await prisma.studio_event_types.findUnique({
+          where: { id: offer.leadform.event_type_id },
+          select: { name: true },
+        });
+        leadformEventTypeName = eventType?.name || null;
+      } else if (offer.event_type) {
+        // Fallback al event_type de la oferta principal
+        leadformEventTypeName = offer.event_type.name;
       }
 
       return {
@@ -1012,15 +1031,15 @@ export async function getPublicOfferBasicData(
                 }>;
               },
               event_type_id: offer.leadform.event_type_id,
-              event_type_name: (offer.leadform as any).event_type?.name || null,
+              event_type_name: leadformEventTypeName,
               enable_interest_date: offer.leadform.enable_interest_date,
               validate_with_calendar: offer.leadform.validate_with_calendar,
               email_required: offer.leadform.email_required,
-              enable_event_name: (offer.leadform as any).enable_event_name || false,
-              event_name_required: (offer.leadform as any).event_name_required || false,
-              enable_event_duration: (offer.leadform as any).enable_event_duration || false,
-              event_duration_required: (offer.leadform as any).event_duration_required || false,
-              show_packages_after_submit: (offer.leadform as any).show_packages_after_submit || false,
+              enable_event_name: offer.leadform.enable_event_name,
+              event_name_required: offer.leadform.event_name_required,
+              enable_event_duration: offer.leadform.enable_event_duration,
+              event_duration_required: offer.leadform.event_duration_required,
+              show_packages_after_submit: offer.leadform.show_packages_after_submit,
             } : null,
             business_term: offer.business_term ? {
               id: offer.business_term.id,
@@ -1183,18 +1202,18 @@ export async function getPublicOfferDeferredContentBlocks(
       const mediaIds = blockMedia.map(bm => bm.media_id).filter((id): id is string => Boolean(id));
       const mediaFiles = mediaIds.length > 0
         ? await prisma.studio_offer_media.findMany({
-            where: { id: { in: mediaIds } },
-            select: {
-              id: true,
-              file_url: true,
-              file_type: true,
-              filename: true,
-              storage_path: true,
-              storage_bytes: true,
-              thumbnail_url: true,
-              display_order: true,
-            },
-          })
+          where: { id: { in: mediaIds } },
+          select: {
+            id: true,
+            file_url: true,
+            file_type: true,
+            filename: true,
+            storage_path: true,
+            storage_bytes: true,
+            thumbnail_url: true,
+            display_order: true,
+          },
+        })
         : [];
 
       // Mapear media por ID
@@ -1492,14 +1511,14 @@ export async function getOffersShell(
         banner_destination: (offer.banner_destination as "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING") || "LANDING_THEN_LEADFORM",
         business_term: offer.business_term
           ? {
-              id: offer.business_term.id,
-              name: offer.business_term.name,
-              description: null,
-              discount_percentage: offer.business_term.discount_percentage,
-              advance_percentage: null,
-              type: "offer" as const,
-              override_standard: false,
-            }
+            id: offer.business_term.id,
+            name: offer.business_term.name,
+            description: null,
+            discount_percentage: offer.business_term.discount_percentage,
+            advance_percentage: null,
+            type: "offer" as const,
+            override_standard: false,
+          }
           : undefined,
       }));
 
@@ -2093,94 +2112,96 @@ export async function getPublicActiveOffers(studioSlug: string) {
     const getCachedOffers = unstable_cache(
       async () => {
         return await retryDatabaseOperation(async () => {
-      const studio = await prisma.studios.findUnique({
-        where: { slug: studioSlug },
-        select: { id: true },
-      });
+          const studio = await prisma.studios.findUnique({
+            where: { slug: studioSlug },
+            select: { id: true },
+          });
 
-      if (!studio) {
-        return { success: false, error: "Estudio no encontrado" };
-      }
+          if (!studio) {
+            return { success: false, error: "Estudio no encontrado" };
+          }
 
-      const now = new Date();
+          const now = new Date();
 
-      const offers = await prisma.studio_offers.findMany({
-        where: {
-          studio_id: studio.id,
-          is_active: true,
-          OR: [
-            // Ofertas permanentes
-            { is_permanent: true },
-            // Ofertas con rango de fechas válido
-            {
-              has_date_range: true,
-              start_date: { lte: now },
-              end_date: { gte: now },
+          const offers = await prisma.studio_offers.findMany({
+            where: {
+              studio_id: studio.id,
+              is_active: true,
+              OR: [
+                // Ofertas permanentes
+                { is_permanent: true },
+                // Ofertas con rango de fechas válido
+                {
+                  has_date_range: true,
+                  start_date: { lte: now },
+                  end_date: { gte: now },
+                },
+              ],
             },
-          ],
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          slug: true,
-          cover_media_url: true,
-          cover_media_type: true,
-          is_permanent: true,
-          has_date_range: true,
-          start_date: true,
-          end_date: true,
-          business_term: {
             select: {
-              discount_percentage: true,
+              id: true,
+              name: true,
               description: true,
+              slug: true,
+              cover_media_url: true,
+              cover_media_type: true,
+              is_permanent: true,
+              has_date_range: true,
+              start_date: true,
+              end_date: true,
+              banner_destination: true,
+              business_term: {
+                select: {
+                  discount_percentage: true,
+                  description: true,
+                },
+              },
+              leadform: {
+                select: {
+                  event_type_id: true,
+                },
+              },
             },
-          },
-          leadform: {
-            select: {
-              event_type_id: true,
+            orderBy: {
+              created_at: 'desc',
             },
-          },
-        },
-        orderBy: {
-          created_at: 'desc',
-        },
-      });
+          });
 
-      // Obtener event_type_ids únicos
-      const eventTypeIds = offers
-        .map(o => o.leadform?.event_type_id)
-        .filter((id): id is string => Boolean(id));
+          // Obtener event_type_ids únicos
+          const eventTypeIds = offers
+            .map(o => o.leadform?.event_type_id)
+            .filter((id): id is string => Boolean(id));
 
-      // Fetch event types si hay IDs
-      const eventTypesMap = new Map<string, string>();
-      if (eventTypeIds.length > 0) {
-        const eventTypes = await prisma.studio_event_types.findMany({
-          where: { id: { in: eventTypeIds } },
-          select: { id: true, name: true },
-        });
-        eventTypes.forEach(et => eventTypesMap.set(et.id, et.name));
-      }
+          // Fetch event types si hay IDs
+          const eventTypesMap = new Map<string, string>();
+          if (eventTypeIds.length > 0) {
+            const eventTypes = await prisma.studio_event_types.findMany({
+              where: { id: { in: eventTypeIds } },
+              select: { id: true, name: true },
+            });
+            eventTypes.forEach(et => eventTypesMap.set(et.id, et.name));
+          }
 
-      return {
-        success: true,
-        data: offers.map(offer => ({
-          id: offer.id,
-          name: offer.name,
-          description: offer.business_term?.description ?? offer.description,
-          slug: offer.slug,
-          cover_media_url: offer.cover_media_url,
-          cover_media_type: offer.cover_media_type as "image" | "video" | null,
-          discount_percentage: offer.business_term?.discount_percentage ?? null,
-          is_permanent: offer.is_permanent,
-          has_date_range: offer.has_date_range,
-          start_date: offer.start_date,
-          valid_until: offer.end_date,
-          event_type_name: offer.leadform?.event_type_id
-            ? eventTypesMap.get(offer.leadform.event_type_id) ?? null
-            : null,
-        })),
-      };
+          return {
+            success: true,
+            data: offers.map(offer => ({
+              id: offer.id,
+              name: offer.name,
+              description: offer.business_term?.description ?? offer.description,
+              slug: offer.slug,
+              cover_media_url: offer.cover_media_url,
+              cover_media_type: offer.cover_media_type as "image" | "video" | null,
+              discount_percentage: offer.business_term?.discount_percentage ?? null,
+              is_permanent: offer.is_permanent,
+              has_date_range: offer.has_date_range,
+              start_date: offer.start_date,
+              valid_until: offer.end_date,
+              banner_destination: (offer.banner_destination as "LEADFORM_ONLY" | "LANDING_THEN_LEADFORM" | "LEADFORM_WITH_LANDING") || "LANDING_THEN_LEADFORM",
+              event_type_name: offer.leadform?.event_type_id
+                ? eventTypesMap.get(offer.leadform.event_type_id) ?? null
+                : null,
+            })),
+          };
         });
       },
       ['studio-profile-offers', studioSlug],

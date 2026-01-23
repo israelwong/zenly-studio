@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useContentAnalytics } from '@/hooks/useContentAnalytics';
 import { OfferCardMenu } from './OfferCardMenu';
 import { OfferCardPreview } from '@/components/previews/OfferCardPreview';
@@ -53,6 +55,7 @@ export function OfferCard({
     const cardRef = useRef<HTMLDivElement>(null);
     const hasTrackedView = useRef(false);
     const viewTimer = useRef<NodeJS.Timeout | undefined>(undefined);
+    const router = useRouter();
 
     const analytics = useContentAnalytics({
         studioId,
@@ -100,9 +103,34 @@ export function OfferCard({
         };
     }, [analytics]);
 
+    const isDirectToLeadform = offer.banner_destination === "LEADFORM_ONLY" || offer.banner_destination === "LEADFORM_WITH_LANDING";
+    const leadformUrl = `/${studioSlug}/offer/${offer.slug}/leadform`;
+    const landingUrl = `/${studioSlug}/offer/${offer.slug}`;
+
     const handleClick = () => {
         analytics.track('OFFER_CLICK');
+        
+        // Si es directo a leadform, usar navegación programática para evitar cualquier prefetch
+        if (isDirectToLeadform) {
+            router.push(leadformUrl);
+        }
     };
+
+    const cardContent = (
+        <OfferCardPreview
+            name={offer.name}
+            description={offer.description || undefined}
+            coverMediaUrl={offer.cover_media_url}
+            coverMediaType={offer.cover_media_type}
+            discountPercentage={offer.discount_percentage}
+            validUntil={offer.valid_until || null}
+            isPermanent={offer.is_permanent}
+            hasDateRange={offer.has_date_range}
+            startDate={offer.start_date || null}
+            eventTypeName={offer.event_type_name || null}
+            variant={variant}
+        />
+    );
 
     return (
         <div ref={cardRef} className="relative">
@@ -116,27 +144,32 @@ export function OfferCard({
                 </div>
             )}
 
-            <a
-                href={offer.banner_destination === "LEADFORM_ONLY" || offer.banner_destination === "LEADFORM_WITH_LANDING"
-                    ? `/${studioSlug}/offer/${offer.slug}/leadform`
-                    : `/${studioSlug}/offer/${offer.slug}`}
-                onClick={handleClick}
-                className="block"
-            >
-                <OfferCardPreview
-                    name={offer.name}
-                    description={offer.description || undefined}
-                    coverMediaUrl={offer.cover_media_url}
-                    coverMediaType={offer.cover_media_type}
-                    discountPercentage={offer.discount_percentage}
-                    validUntil={offer.valid_until || null}
-                    isPermanent={offer.is_permanent}
-                    hasDateRange={offer.has_date_range}
-                    startDate={offer.start_date || null}
-                    eventTypeName={offer.event_type_name || null}
-                    variant={variant}
-                />
-            </a>
+            {/* Si es directo a leadform, usar div con onClick para evitar cualquier prefetch */}
+            {isDirectToLeadform ? (
+                <div
+                    onClick={handleClick}
+                    className="block cursor-pointer"
+                    role="link"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleClick();
+                        }
+                    }}
+                >
+                    {cardContent}
+                </div>
+            ) : (
+                <Link
+                    href={landingUrl}
+                    onClick={handleClick}
+                    className="block"
+                    prefetch={true}
+                >
+                    {cardContent}
+                </Link>
+            )}
         </div>
     );
 }
