@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { getPromiseFinancials } from '../../../../utils/promise-financials';
 import {
   getEventsSchema,
@@ -650,6 +650,9 @@ export async function moveEvent(
     // Revalidar paths
     revalidatePath(`/${studioSlug}/studio/business/events`);
     revalidatePath(`/${studioSlug}/studio/business/events/${evento.id}`);
+    
+    // Invalidar caché de lista (con studioSlug para aislamiento)
+    revalidateTag(`events-list-${studioSlug}`);
 
     return {
       success: true,
@@ -1589,8 +1592,9 @@ export async function cancelarEvento(
           await tx.studio_promises.update({
             where: { id: evento.promise_id },
             data: {
-              pipeline_stage_id: etapaPendiente.id,
-              status: 'pending',
+              pipeline_stage: {
+                connect: { id: etapaPendiente.id },
+              },
               updated_at: new Date(),
             },
           });
@@ -1711,6 +1715,10 @@ export async function cancelarEvento(
     // Revalidar paths
     revalidatePath(`/${studioSlug}/studio/business/events`);
     revalidatePath(`/${studioSlug}/studio/business/events/${eventoId}`);
+    
+    // Invalidar caché de lista (con studioSlug para aislamiento)
+    revalidateTag(`events-list-${studioSlug}`);
+    
     // Agenda ahora es un sheet, no necesita revalidación de ruta
     if (evento.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${evento.promise_id}`);

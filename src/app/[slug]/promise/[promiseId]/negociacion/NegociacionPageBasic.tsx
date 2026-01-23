@@ -10,6 +10,10 @@ interface NegociacionPageBasicProps {
     contact_address: string | null;
     event_type_id: string | null;
     event_type_name: string | null;
+    event_type_cover_image_url?: string | null;
+    event_type_cover_video_url?: string | null;
+    event_type_cover_media_type?: 'image' | 'video' | null;
+    event_type_cover_design_variant?: 'solid' | 'gradient' | null;
     event_name: string | null;
     event_date: Date | null;
     event_location: string | null;
@@ -49,6 +53,10 @@ export function NegociacionPageBasic({
         eventTypeName={promise.event_type_name}
         eventDate={promise.event_date}
         variant="negociacion"
+        coverImageUrl={promise.event_type_cover_image_url}
+        coverVideoUrl={promise.event_type_cover_video_url}
+        coverMediaType={promise.event_type_cover_media_type}
+        coverDesignVariant={promise.event_type_cover_design_variant}
       />
       {/* ⚠️ HIGIENE UI: No mostrar precio total aquí, NegociacionView lo muestra con lógica completa */}
     </>

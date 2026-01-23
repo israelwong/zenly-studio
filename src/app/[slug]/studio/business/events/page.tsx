@@ -1,86 +1,67 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { Calendar, CreditCard } from 'lucide-react';
-import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenBadge } from '@/components/ui/zen';
-import { EventsWrapper } from './components/EventsWrapper';
-import { PaymentMethodsModal } from '@/components/shared/payments/PaymentMethodsModal';
+import { unstable_cache } from 'next/cache';
+import { getEvents, getEventPipelineStages } from '@/lib/actions/studio/business/events';
+import { EventsPageClient } from './components/EventsPageClient';
 import { verificarMetodosSinConfigurar } from '@/lib/actions/studio/config/metodos-pago.actions';
 
-export default function EventsPage() {
-  const params = useParams();
-  const studioSlug = params.slug as string;
-  const [showMethodsModal, setShowMethodsModal] = useState(false);
-  const [metodosSinConfigurar, setMetodosSinConfigurar] = useState(0);
+interface EventsPageProps {
+  params: Promise<{
+    slug: string;
+  }>;
+}
 
-  useEffect(() => {
-    document.title = 'Zenly Studio - Eventos';
-  }, []);
+export default async function EventsPage({ params }: EventsPageProps) {
+  const { slug: studioSlug } = await params;
 
-  useEffect(() => {
-    const checkMetodos = async () => {
-      const result = await verificarMetodosSinConfigurar(studioSlug);
-      if (result.success && result.count !== undefined) {
-        setMetodosSinConfigurar(result.count);
-      }
-    };
-    checkMetodos();
-  }, [studioSlug]);
+  // Cachear pipeline stages (Basic Data - cambian poco)
+  const getCachedPipelineStages = unstable_cache(
+    async () => {
+      return getEventPipelineStages(studioSlug);
+    },
+    ['event-pipeline-stages', studioSlug],
+    {
+      tags: [`event-pipeline-stages-${studioSlug}`],
+      revalidate: 3600, // 1 hora (stages cambian poco)
+    }
+  );
+
+  // Cachear eventos (Deferred Data - pesado, se pasa como Promise)
+  const getCachedEvents = unstable_cache(
+    async () => {
+      return getEvents(studioSlug, {
+        page: 1,
+        limit: 1000, // Cargar todos para el kanban
+      });
+    },
+    ['events-list', studioSlug],
+    {
+      tags: [`events-list-${studioSlug}`],
+      revalidate: false, // Invalidación manual por tags
+    }
+  );
+
+  // Cargar pipeline stages (bloqueante - datos básicos)
+  const stagesResult = await getCachedPipelineStages();
+
+  // Cargar eventos como Promise (no bloqueante - streaming)
+  const eventsPromise = getCachedEvents();
+
+  // Verificar métodos de pago (ligero, bloqueante)
+  const metodosResult = await verificarMetodosSinConfigurar(studioSlug);
+
+  const pipelineStages = stagesResult.success && stagesResult.data
+    ? stagesResult.data
+    : [];
+
+  const metodosSinConfigurar = metodosResult.success && metodosResult.count !== undefined
+    ? metodosResult.count
+    : 0;
 
   return (
-    <div className="w-full max-w-7xl mx-auto h-full flex flex-col">
-      <ZenCard variant="default" padding="none" className="flex flex-col flex-1 min-h-0">
-        <ZenCardHeader className="border-b border-zinc-800 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-600/20 rounded-lg">
-                <Calendar className="h-5 w-5 text-blue-400" />
-              </div>
-              <div>
-                <ZenCardTitle>Eventos</ZenCardTitle>
-                <ZenCardDescription>
-                  Gestiona tus eventos autorizados y sus procesos operativos
-                </ZenCardDescription>
-              </div>
-            </div>
-            <ZenButton
-              variant="outline"
-              size="sm"
-              onClick={() => setShowMethodsModal(true)}
-              className="relative"
-            >
-              <CreditCard className="h-4 w-4 mr-1" />
-              Métodos de pago
-              {metodosSinConfigurar > 0 && (
-                <ZenBadge
-                  variant="destructive"
-                  size="sm"
-                  className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs"
-                >
-                  {metodosSinConfigurar}
-                </ZenBadge>
-              )}
-            </ZenButton>
-          </div>
-        </ZenCardHeader>
-        <ZenCardContent className="p-6 flex-1 min-h-0 overflow-hidden">
-          <EventsWrapper studioSlug={studioSlug} />
-        </ZenCardContent>
-      </ZenCard>
-
-      {/* Modal de métodos de pago */}
-      <PaymentMethodsModal
-        isOpen={showMethodsModal}
-        onClose={() => setShowMethodsModal(false)}
-        studioSlug={studioSlug}
-        onSuccess={async () => {
-          const result = await verificarMetodosSinConfigurar(studioSlug);
-          if (result.success && result.count !== undefined) {
-            setMetodosSinConfigurar(result.count);
-          }
-        }}
-      />
-    </div>
+    <EventsPageClient
+      studioSlug={studioSlug}
+      initialPipelineStages={pipelineStages}
+      eventsPromise={eventsPromise}
+      metodosSinConfigurar={metodosSinConfigurar}
+    />
   );
 }

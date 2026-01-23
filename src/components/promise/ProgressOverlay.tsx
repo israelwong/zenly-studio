@@ -51,9 +51,6 @@ export function ProgressOverlay({
     return null;
   }
 
-  // 💎 DEBUG: Log para verificar que el componente se está renderizando
-  console.log('💎 ProgressOverlay render - show:', show, 'step:', currentStep, 'error:', error);
-
   return createPortal(
     <div
       className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"

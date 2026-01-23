@@ -100,6 +100,11 @@ const pgPool = globalThis.__pgPool || new Pool({
   statement_timeout: 30000, // 30s timeout por statement
 });
 
+// Aumentar límite de listeners para evitar MaxListenersExceededWarning
+if (pgPool && !globalThis.__pgPool) {
+  pgPool.setMaxListeners(20);
+}
+
 if (process.env.NODE_ENV !== 'production') {
   globalThis.__pgPool = pgPool;
 }

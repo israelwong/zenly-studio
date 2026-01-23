@@ -30,6 +30,10 @@ interface PublicQuoteAuthorizedViewProps {
     contact_email: string | null;
     contact_address: string | null;
     event_type_name: string | null;
+    event_type_cover_image_url?: string | null;
+    event_type_cover_video_url?: string | null;
+    event_type_cover_media_type?: 'image' | 'video' | null;
+    event_type_cover_design_variant?: 'solid' | 'gradient' | null;
     event_date: Date | null;
     event_location: string | null;
     event_name: string | null;
@@ -520,6 +524,10 @@ export function PublicQuoteAuthorizedView({
         eventDate={promise.event_date}
         variant="cierre"
         isContractSigned={isContractSigned}
+        coverImageUrl={promise.event_type_cover_image_url}
+        coverVideoUrl={promise.event_type_cover_video_url}
+        coverMediaType={promise.event_type_cover_media_type}
+        coverDesignVariant={promise.event_type_cover_design_variant}
       />
 
       <div className="max-w-4xl mx-auto px-4 py-8">

@@ -1,23 +1,30 @@
 'use client';
 
 import React from 'react';
+import { ChevronDown } from 'lucide-react';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
-
-type HeaderVariant = 'pendientes' | 'negociacion' | 'cierre';
 
 interface PublicPromisePageHeaderProps {
   prospectName: string;
   eventName: string | null;
   eventTypeName: string | null;
   eventDate: Date | string | null;
-  variant: HeaderVariant;
+  variant?: 'pendientes' | 'negociacion' | 'cierre'; // Mantenido para compatibilidad pero no se usa
   isContractSigned?: boolean;
   minDaysToHire?: number;
+  // Covers multimedia del tipo de evento
+  coverImageUrl?: string | null;
+  coverVideoUrl?: string | null;
+  coverMediaType?: 'image' | 'video' | null;
+  coverDesignVariant?: 'solid' | 'gradient' | null; // Mantenido para compatibilidad pero no se usa
+  // Modo preview para el editor
+  isPreviewMode?: boolean;
 }
 
 /**
- * Header evolutivo que cambia según la etapa de la promesa
- * Utiliza lógica de "Asesoría Profesional" en lugar de urgencia genérica
+ * Header con cover multimedia
+ * Estructura: Cover arriba → Textos abajo (fondo sólido)
+ * Mobile: fullwidth | Desktop: rounded-xl + margin-top
  */
 export function PublicPromisePageHeader({
   prospectName,
@@ -27,6 +34,11 @@ export function PublicPromisePageHeader({
   variant,
   isContractSigned = false,
   minDaysToHire = 30,
+  coverImageUrl,
+  coverVideoUrl,
+  coverMediaType,
+  coverDesignVariant,
+  isPreviewMode = false,
 }: PublicPromisePageHeaderProps) {
   // Parsear fecha
   const parseDate = (date: Date | string | null): Date | null => {
@@ -75,155 +87,109 @@ export function PublicPromisePageHeader({
 
   const formattedRecommendedDate = recommendedDate ? formatDisplayDateLong(recommendedDate) : null;
 
-  // Renderizar contenido según la variante
-  const renderContent = () => {
-    switch (variant) {
-      case 'pendientes':
-        return (
-          <>
-            {/* Badge de tipo de evento */}
-            {eventTypeName && (
-              <div className="flex justify-center mb-4">
-                <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-medium bg-zinc-800/50 text-zinc-300 border border-zinc-700/50">
-                  {eventTypeName}
-                </span>
-              </div>
-            )}
+  // Determinar si hay cover multimedia
+  const hasCover = coverMediaType === 'image' && coverImageUrl || coverMediaType === 'video' && coverVideoUrl;
 
+  // Estilos condicionales: en preview mode (mobile) siempre sin rounded ni margin
+  const sectionClasses = isPreviewMode
+    ? 'relative overflow-hidden'
+    : `relative overflow-hidden ${!hasCover ? 'md:mt-6 md:mx-4 md:rounded-xl' : 'md:max-w-4xl md:mx-auto md:mt-6 md:rounded-xl'}`;
+  
+  const coverClasses = isPreviewMode
+    ? 'relative aspect-[16/10] w-full overflow-hidden'
+    : 'relative aspect-[16/10] w-full overflow-hidden rounded-none md:rounded-t-xl';
+
+  return (
+    <section className={sectionClasses}>
+      {/* Cover multimedia - Arriba */}
+      {hasCover && (
+        <div className={coverClasses}>
+          {coverMediaType === 'video' && coverVideoUrl ? (
+            <video
+              src={coverVideoUrl}
+              className="w-full h-full object-cover"
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          ) : coverMediaType === 'image' && coverImageUrl ? (
+            <div
+              className="w-full h-full bg-cover bg-center"
+              style={{ backgroundImage: `url(${coverImageUrl})` }}
+            />
+          ) : null}
+
+          {/* Badge de tipo de evento - Superpuesto en la parte inferior, centrado con efecto cristal líquido */}
+          {eventTypeName && (
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center z-10">
+              <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-medium bg-white/10 backdrop-blur-[2px] border border-white/20 text-white shadow-lg shadow-black/20">
+                {eventTypeName}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sección de textos - Fondo sólido */}
+      <div className={`relative bg-zinc-950 ${hasCover ? (isPreviewMode ? 'pt-3 pb-2' : 'pt-4 pb-2 md:pt-5 md:pb-8') : (isPreviewMode ? 'py-6' : 'py-8 md:py-10')} ${isPreviewMode ? '' : 'md:rounded-b-xl'}`}>
+        <div className="max-w-4xl mx-auto px-4 mt-6">
+          {/* Badge de tipo de evento (solo si NO hay cover) */}
+          {!hasCover && eventTypeName && (
+            <div className="flex justify-center mb-4">
+              <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-medium bg-zinc-800/50 text-zinc-300 border border-zinc-700/50">
+                {eventTypeName}
+              </span>
+            </div>
+          )}
+
+          {/* Contenido centrado */}
+          <div className="text-center">
             {/* Saludo grande */}
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">
+            <h1 className={`text-3xl md:text-4xl lg:text-5xl font-bold text-white ${isPreviewMode ? 'mb-3' : 'mb-4'}`}>
               ¡Hola, {prospectName}!
             </h1>
 
             {/* Descripción principal */}
-            <p className="text-sm md:text-base text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-4">
-              Te compartimos las opciones para tu evento de{' '}
-              <span className="text-white font-medium">{eventTypeName || 'especial'}</span>
-              {eventName && (
-                <> para <span className="text-white font-medium">{eventName}</span></>
-              )}
+            <p className={`text-sm md:text-base text-zinc-300 max-w-2xl mx-auto leading-relaxed ${isPreviewMode ? 'mb-3' : 'mb-4'}`}>
+              Te compartimos las opciones para el evento de{' '}
+              <span className="text-white font-semibold">{eventName || eventTypeName || 'evento'}</span>
               {dateObj && formattedDate && (
-                <> que se celebrará <span className="text-white font-medium">{formattedDate}</span></>
-              )}.
+                <> que se celebrará <span className="text-white font-semibold">{formattedDate}</span></>
+              )}
+              {!dateObj && '.'}
             </p>
 
-          </>
-        );
+            {/* Mensaje de asesoría secundario */}
+            {dateObj && formattedRecommendedDate && daysUntilEvent !== null && (
+              <p className={`text-xs md:text-sm text-zinc-400 max-w-2xl mx-auto text-center ${isPreviewMode ? '' : 'mb-4'}`}>
+                Te recomendamos formalizar antes del <span className="text-white font-medium">{formattedRecommendedDate}</span>. La confirmación sucede al firmar contrato y realizar el pago de anticipo.
+              </p>
+            )}
 
-      case 'negociacion':
-        return (
-          <>
-            {/* Badge de tipo de evento */}
-            {eventTypeName && (
-              <div className="flex justify-center mb-4">
-                <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-medium bg-zinc-800/50 text-zinc-300 border border-zinc-700/50">
-                  {eventTypeName}
-                </span>
+            {/* Icono animado para invitar a hacer scroll */}
+            <div className={`flex justify-center ${isPreviewMode ? 'mt-5 mb-4' : 'mt-4 mb-1'}`}>
+              <div className="animate-bounce">
+                <ChevronDown className="w-6 h-6 text-zinc-500" />
               </div>
-            )}
-
-            {/* Saludo grande */}
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">
-              {prospectName}
-            </h1>
-
-            {/* Descripción principal */}
-            <p className="text-sm md:text-base text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-4">
-              Hemos diseñado esta propuesta especial para tu evento de{' '}
-              <span className="text-white font-medium">{eventTypeName || 'especial'}</span>
-              {eventName && (
-                <> para <span className="text-white font-medium">{eventName}</span></>
-              )}
-              {dateObj && formattedDate && (
-                <> que se celebrará <span className="text-white font-medium">{formattedDate}</span></>
-              )}{' '}
-              basándonos en lo que platicamos.
-            </p>
-
-            {/* Texto secundario */}
-            {dateObj && formattedDate && (
-              <p className="text-xs md:text-sm text-zinc-500 max-w-2xl mx-auto">
-                Esta propuesta tiene condiciones preferenciales. Recomendamos revisarla pronto.
-              </p>
-            )}
-          </>
-        );
-
-      case 'cierre':
-        return (
-          <>
-            {/* Badge de tipo de evento */}
-            {eventTypeName && (
-              <div className="flex justify-center mb-4">
-                <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-medium bg-zinc-800/50 text-zinc-300 border border-zinc-700/50">
-                  {eventTypeName}
-                </span>
-              </div>
-            )}
-
-            {/* Saludo grande */}
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">
-              {!isContractSigned ? (
-                <>¡Felicidades, {prospectName}!</>
-              ) : (
-                <>¡Paso completado, {prospectName}!</>
-              )}
-            </h1>
-
-            {/* Descripción principal */}
-            {!isContractSigned ? (
-              <p className="text-sm md:text-base text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-4">
-                Estás a un par de pasos de asegurar la cobertura para tu evento de{' '}
-                <span className="text-white font-medium">{eventTypeName || 'especial'}</span>
-                {eventName && (
-                  <> para <span className="text-white font-medium">{eventName}</span></>
-                )}
-                {dateObj && formattedDate && (
-                  <> que se celebrará <span className="text-white font-medium">{formattedDate}</span></>
-                )}. Revisa y firma tu contrato para proceder.
-              </p>
-            ) : (
-              <p className="text-sm md:text-base text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-4">
-                Tu contrato ya está firmado. Para bloquear oficialmente la fecha en nuestra agenda, solo falta el registro de tu anticipo.
-              </p>
-            )}
-
-          </>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <section className="relative overflow-hidden">
-      {/* Fondo degradado */}
-      <div className="absolute inset-0 bg-linear-to-b from-zinc-900/40 via-zinc-950 to-zinc-950" />
-
-      {/* Pattern de fondo - más sutil */}
-      <div className="absolute inset-0 opacity-[0.03]">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
-          backgroundSize: '32px 32px',
-        }} />
-      </div>
-
-      <div className="relative max-w-4xl mx-auto px-4 py-8 md:py-12">
-        {/* Contenido principal */}
-        <div className="text-center">
-          {renderContent()}
-        </div>
-
-        {/* Indicador de scroll (solo mobile) */}
-        <div className="mt-8 flex justify-center md:hidden">
-          <div className="flex flex-col items-center gap-2 text-zinc-500">
-            <p className="text-xs">Desliza para ver más</p>
-            <div className="animate-bounce">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
             </div>
+
+            {/* Skeleton para mobile preview - Cotizaciones */}
+            {isPreviewMode && (
+              <div className="mt-2 space-y-4">
+                <div className="space-y-2">
+                  <div className="h-6 bg-zinc-800 rounded w-48 animate-pulse" />
+                  <div className="h-4 bg-zinc-800/50 rounded w-64 animate-pulse" />
+                </div>
+                {/* Card skeleton */}
+                <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-3 animate-pulse">
+                  <div className="h-4 bg-zinc-800 rounded w-3/4" />
+                  <div className="h-3 bg-zinc-800/50 rounded w-full" />
+                  <div className="h-3 bg-zinc-800/50 rounded w-5/6" />
+                  <div className="h-8 bg-zinc-800 rounded w-24 mt-4" />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

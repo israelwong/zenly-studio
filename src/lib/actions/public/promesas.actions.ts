@@ -774,13 +774,8 @@ export async function getPublicPromisePendientes(
     // 1. Obtener datos básicos
     const basicDataStart = Date.now();
     const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
-    // ⚠️ PRODUCCIÓN: Logs deshabilitados para reducir overhead
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromisePendientes:basicData: ${Date.now() - basicDataStart}ms`);
-    }
 
     if (!basicData.success || !basicData.data) {
-      console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${Date.now() - startTime}ms (early return)`);
       return {
         success: false,
         error: basicData.error || "Error al obtener datos básicos",
@@ -879,10 +874,8 @@ export async function getPublicPromisePendientes(
       }),
       { maxRetries: 2, baseDelay: 1000, maxDelay: 5000 }
     );
-    console.log(`[${uniqueId}] DB:FetchPromiseWithQuotes: ${Date.now() - fetchPromiseStart}ms`);
 
     if (!promise) {
-      console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${Date.now() - startTime}ms (no promise)`);
       return {
         success: false,
         error: "Promesa no encontrada",
@@ -976,9 +969,6 @@ export async function getPublicPromisePendientes(
     ]);
     const paquetes = paquetesResult;
     const portafoliosData = portafoliosResult;
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromisePendientes:paquetes+portafolios+config: ${Date.now() - paquetesPortafoliosStart}ms`);
-    }
 
     // ⚠️ TAREA 1: Extraer item_ids de paquetes (solo visibles y activos)
     // CRÍTICO: Solo items que realmente se mostrarán al cliente
@@ -1251,7 +1241,6 @@ export async function getPublicPromisePendientes(
         // ⚠️ NO incluir items_media - multimedia solo en cotizaciones
       };
     });
-    console.log(`[${uniqueId}] getPublicPromisePendientes:mapearPaquetes: ${Date.now() - mapearPaquetesStart}ms`);
 
     // 9. Mapear portafolios (ya obtenidos en paso 5)
     const portafolios = portafoliosData.map((p) => ({
@@ -1310,9 +1299,6 @@ export async function getPublicPromisePendientes(
       },
     };
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${Date.now() - startTime}ms (error)`);
-    }
     console.error("[getPublicPromisePendientes] Error:", error);
     return {
       success: false,
@@ -1532,11 +1518,6 @@ export async function getPublicPromiseActiveQuote(
     ]);
     // ⚠️ TAREA 1: Multimedia se carga on-demand cuando el usuario expande detalles
 
-    if (process.env.NODE_ENV === 'development') {
-      const paralelizacionTime = Date.now() - paralelizacionStart;
-      console.log(`[${uniqueId}] getPublicPromiseActiveQuote:paralelizacion: ${paralelizacionTime}ms`);
-      console.log(`[${uniqueId}] getPublicPromiseActiveQuote:catalogo-optimizado: ${itemIdsFromQuotesArray.length} items`);
-    }
 
     // ⚠️ TAREA 1: No cargar multimedia en vista previa (se carga on-demand)
     // El código de mapeo de multimedia fue eliminado intencionalmente
@@ -1698,11 +1679,6 @@ export async function getPublicPromiseActiveQuote(
         }
         return false;
       });
-    }
-
-    const totalTime = Date.now() - startTime;
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromiseActiveQuote:total: ${totalTime}ms`);
     }
 
     return {
@@ -1887,9 +1863,6 @@ export async function getPublicPromiseAvailablePackages(
       ? await obtenerItemsPorIds(studio.id, allItemIds)
       : [];
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromiseAvailablePackages:catalogo-optimizado: ${allItemIds.length} items (${Date.now() - catalogoStart}ms)`);
-    }
 
     // 6. Mapear paquetes
     const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
@@ -2016,11 +1989,6 @@ export async function getPublicPromiseAvailablePackages(
           name: p.event_type.name,
         } : null,
       }));
-    }
-
-    const totalTime = Date.now() - startTime;
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromiseAvailablePackages:total: ${totalTime}ms`);
     }
 
     return {
@@ -2312,10 +2280,8 @@ export async function getPublicPromiseNegociacion(
         },
       },
     });
-    console.log(`[${uniqueId}] DB:FetchPromiseWithQuotes: ${Date.now() - fetchPromiseStart}ms`);
 
     if (!promise || promise.quotes.length === 0) {
-      console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms (no cotizacion)`);
       return {
         success: false,
         error: "Cotización en negociación no encontrada",
@@ -2367,7 +2333,6 @@ export async function getPublicPromiseNegociacion(
         });
       });
     }
-    console.log(`[${uniqueId}] getPublicPromiseNegociacion:multimedia: ${Date.now() - multimediaStart}ms`);
 
     // 6. Mapear cotización en negociación
     const mapearStart = Date.now();
@@ -2493,7 +2458,6 @@ export async function getPublicPromiseNegociacion(
       negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado ? Number(cotizacion.negociacion_precio_personalizado) : null,
       items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
     };
-    console.log(`[${uniqueId}] getPublicPromiseNegociacion:mapear: ${Date.now() - mapearStart}ms`);
 
     // 7. Obtener condiciones comerciales disponibles y términos (con Promise.allSettled)
     const condicionesStart = Date.now();
@@ -2545,10 +2509,7 @@ export async function getPublicPromiseNegociacion(
         share_settings: shareSettings,
       },
     };
-
-    console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms`);
   } catch (error) {
-    console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms (error)`);
     console.error("[getPublicPromiseNegociacion] Error:", error);
     return {
       success: false,
@@ -4332,19 +4293,10 @@ async function _getPublicPromiseRouteStateInternal(
         id: true,
         status: true,
         selected_by_prospect: true,
-        visible_to_client: true, // ⚠️ DEBUG: Incluir para verificar
+        visible_to_client: true,
       },
     });
 
-    // ⚠️ DEBUG: Log para verificar cotizaciones encontradas
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[getPublicPromiseRouteState] Cotizaciones encontradas:', cotizaciones.map(c => ({
-        id: c.id,
-        status: c.status,
-        selected_by_prospect: c.selected_by_prospect,
-        visible_to_client: c.visible_to_client,
-      })));
-    }
 
     // ✅ NORMALIZACIÓN OBLIGATORIA: Normalizar estados antes de devolver
     // Esto asegura que 'cierre' siempre se convierta a 'en_cierre' para consistencia
@@ -4358,15 +4310,6 @@ async function _getPublicPromiseRouteStateInternal(
       };
     });
 
-    // ⚠️ DEBUG: Log para verificar datos normalizados
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[getPublicPromiseRouteState] Datos normalizados:', normalizedData);
-      const cotizacionNegociacion = normalizedData.find(cot => {
-        const selectedByProspect = cot.selected_by_prospect ?? false;
-        return cot.status === 'negociacion' && selectedByProspect !== true;
-      });
-      console.log('[getPublicPromiseRouteState] Cotización en negociación encontrada:', cotizacionNegociacion);
-    }
 
     return {
       success: true,
@@ -4452,7 +4395,6 @@ export async function getPublicPromiseUpdate(
     // 1. Obtener datos básicos de promise y studio
     const basicDataStart = Date.now();
     const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
-    console.log(`[${uniqueId}] getPublicPromiseUpdate:basicData: ${Date.now() - basicDataStart}ms`);
 
     if (!basicData.success || !basicData.data) {
       return {
@@ -4540,7 +4482,6 @@ export async function getPublicPromiseUpdate(
         }),
       { maxRetries: 2, baseDelay: 1000, maxDelay: 5000 }
     );
-    console.log(`[${uniqueId}] getPublicPromiseUpdate:DB:FetchPromiseWithQuotes: ${Date.now() - fetchPromiseStart}ms`);
 
     if (!promise) {
       return {
@@ -4576,7 +4517,6 @@ export async function getPublicPromiseUpdate(
           orderBy: { display_order: 'asc' },
         })
         : [];
-    console.log(`[${uniqueId}] getPublicPromiseUpdate:DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
 
     // 4. Mapear multimedia por item
     const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
@@ -4819,9 +4759,6 @@ export async function getPublicPromiseBasicData(
     // ⚠️ TAREA 1: Cache de React para Studio (cachea por request)
     const fetchStudioStart = Date.now();
     const studio = await getStudioBySlug(studioSlug);
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`DB:FetchStudio: ${Date.now() - fetchStudioStart}ms`);
-    }
 
     if (!studio) {
       return {
@@ -4861,6 +4798,10 @@ export async function getPublicPromiseBasicData(
           select: {
             id: true,
             name: true,
+            cover_image_url: true,
+            cover_video_url: true,
+            cover_media_type: true,
+            cover_design_variant: true,
           },
         },
       },
@@ -4884,6 +4825,11 @@ export async function getPublicPromiseBasicData(
           contact_address: promise.contact.address,
           event_type_id: promise.event_type?.id || null,
           event_type_name: promise.event_type?.name || null,
+          event_type_cover_image_url: promise.event_type?.cover_image_url || null,
+          event_type_cover_video_url: promise.event_type?.cover_video_url || null,
+          event_type_cover_media_type: promise.event_type?.cover_media_type as 'image' | 'video' | null || null,
+          event_type_cover_design_variant: promise.event_type?.cover_design_variant as 'solid' | 'gradient' | null || null,
+          event_type_cover_design_variant: promise.event_type?.cover_design_variant as 'solid' | 'gradient' | null || null,
           event_name: promise.name,
           event_date: promise.event_date,
           event_location: promise.event_location,

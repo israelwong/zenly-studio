@@ -322,10 +322,12 @@ export function PendientesPageClient({
     (cotizacionId: string, changeInfo?: CotizacionChangeInfo) => {
       // ⚠️ BLOQUEO CRÍTICO: No procesar actualizaciones durante el proceso de autorización
       // Verificar tanto el estado del contexto como el lock global síncrono
+      // El prospecto no debe recibir avisos de "cambio de estado" porque él mismo es quien provocó el cambio
       if (isAuthorizationInProgress || (window as any).__IS_AUTHORIZING) {
         console.log('[PendientesPageClient] Ignorando actualización durante proceso de autorización', {
           isAuthorizationInProgress,
-          globalLock: (window as any).__IS_AUTHORIZING
+          globalLock: (window as any).__IS_AUTHORIZING,
+          reason: 'Proceso de autorización en curso - cambios son resultado de la acción del usuario'
         });
         return;
       }
@@ -349,7 +351,9 @@ export function PendientesPageClient({
       }
 
       // ⚠️ TAREA 1: Toasts específicos según cambio de estado
-      if (changeInfo?.statusChanged) {
+      // Solo mostrar toasts si NO estamos en proceso de autorización
+      // (las notificaciones solo deben aparecer cuando el estudio hace cambios manuales)
+      if (changeInfo?.statusChanged && !isAuthorizationInProgress && !(window as any).__IS_AUTHORIZING) {
         const newStatus = changeInfo.status;
         const oldStatus = changeInfo.oldStatus;
 
@@ -420,7 +424,8 @@ export function PendientesPageClient({
       }
 
       // Si hay cambio válido pero no crítico, notificar
-      if (changeInfo && !changeInfo.statusChanged) {
+      // Solo si NO estamos en proceso de autorización
+      if (changeInfo && !changeInfo.statusChanged && !isAuthorizationInProgress && !(window as any).__IS_AUTHORIZING) {
         handleUpdateDetected('quote');
       }
     },
@@ -518,8 +523,11 @@ export function PendientesPageClient({
   const handleCotizacionInserted = useCallback((changeInfo?: CotizacionChangeInfo) => {
     // ⚠️ BLOQUEO: No procesar inserciones durante el proceso de autorización
     // Verificar tanto el estado del contexto como el lock global síncrono
+    // El prospecto no debe recibir avisos durante su propio proceso de autorización
     if (isAuthorizationInProgress || (window as any).__IS_AUTHORIZING) {
-      console.log('[PendientesPageClient] Ignorando inserción durante proceso de autorización');
+      console.log('[PendientesPageClient] Ignorando inserción durante proceso de autorización', {
+        reason: 'Proceso de autorización en curso - cambios son resultado de la acción del usuario'
+      });
       return;
     }
 
@@ -533,7 +541,9 @@ export function PendientesPageClient({
     }
 
     // ⚠️ TAREA 1: Toast específico según tipo
-    if (changeInfo?.visible_to_client) {
+    // Solo mostrar toasts si NO estamos en proceso de autorización
+    // (las notificaciones solo deben aparecer cuando el estudio hace cambios manuales)
+    if (changeInfo?.visible_to_client && !isAuthorizationInProgress && !(window as any).__IS_AUTHORIZING) {
       if (changeInfo.status === 'negociacion') {
         toast.success('¡Nueva oferta especial enviada!', {
           description: 'El estudio ha preparado una propuesta personalizada para ti',
@@ -860,11 +870,14 @@ export function PendientesPageClient({
       )}
 
       {/* ⚠️ TAREA 2: Componente de notificación flotante Zen */}
-      <RealtimeUpdateNotification
-        pendingUpdate={pendingUpdate}
-        onUpdate={handleManualReload}
-        onDismiss={() => setPendingUpdate(null)}
-      />
+      {/* Bloquear completamente las notificaciones durante el proceso de autorización */}
+      {!isAuthorizationInProgress && !(window as any).__IS_AUTHORIZING && (
+        <RealtimeUpdateNotification
+          pendingUpdate={pendingUpdate}
+          onUpdate={handleManualReload}
+          onDismiss={() => setPendingUpdate(null)}
+        />
+      )}
     </>
   );
 }

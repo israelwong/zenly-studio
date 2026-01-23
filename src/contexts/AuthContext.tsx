@@ -33,16 +33,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Escuchar cambios
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[AuthContext] Auth event:', event)
       setUser(session?.user ?? null)
       setLoading(false)
       
       // Refrescar router cuando cambie la sesión
-      if (event === 'SIGNED_OUT') {
-        console.log('[AuthContext] Usuario cerró sesión')
-        // No hacemos router.refresh() aquí porque el server action ya redirige
-      } else if (event === 'SIGNED_IN') {
-        console.log('[AuthContext] Usuario inició sesión')
+      if (event === 'SIGNED_IN') {
         router.refresh()
       }
     })

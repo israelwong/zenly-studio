@@ -1169,11 +1169,29 @@ export async function movePromise(
     // Verificar que la etapa existe
     const stage = await prisma.studio_promise_pipeline_stages.findUnique({
       where: { id: validatedData.new_stage_id },
-      select: { studio_id: true },
+      select: { studio_id: true, name: true, slug: true, is_active: true },
     });
 
-    if (!stage || stage.studio_id !== studio.id) {
-      return { success: false, error: 'Etapa no encontrada' };
+    if (!stage) {
+      console.error('[PROMISES] Etapa no encontrada:', validatedData.new_stage_id);
+      return { 
+        success: false, 
+        error: 'La etapa seleccionada no existe o fue eliminada. Por favor, recarga la página y selecciona otra etapa.' 
+      };
+    }
+
+    if (stage.studio_id !== studio.id) {
+      return { 
+        success: false, 
+        error: 'La etapa seleccionada no pertenece a este estudio. Por favor, selecciona una etapa válida.' 
+      };
+    }
+
+    if (!stage.is_active) {
+      return { 
+        success: false, 
+        error: `La etapa "${stage.name}" está desactivada. Por favor, selecciona una etapa activa.` 
+      };
     }
 
     // Obtener promesa con etapa actual y evento asociado
@@ -1413,9 +1431,47 @@ export async function movePromise(
     };
   } catch (error) {
     console.error('[PROMISES] Error moviendo promise:', error);
+    console.error('[PROMISES] Data recibida:', { studioSlug, data });
+    
+    // Manejar errores de validación de Zod
+    if (error && typeof error === 'object' && 'issues' in error) {
+      const zodError = error as { issues: Array<{ path: string[]; message: string; code: string }> };
+      const issue = zodError.issues[0];
+      
+      if (issue?.path.includes('new_stage_id')) {
+        // Log detallado para debugging
+        console.error('[PROMISES] Error de validación de new_stage_id:', {
+          issue,
+          receivedValue: data.new_stage_id,
+          receivedType: typeof data.new_stage_id,
+          receivedLength: data.new_stage_id?.length,
+        });
+        
+        const errorType = issue.code === 'invalid_format' || issue.message?.includes('CUID') || issue.message?.includes('UUID')
+          ? 'El formato del ID de etapa no es válido (debe ser un CUID o UUID). Esto puede ocurrir si la etapa fue eliminada o si hay un problema con los datos.'
+          : 'El ID de etapa proporcionado no es válido';
+        return {
+          success: false,
+          error: `Error de validación: ${errorType}. Por favor, recarga la página y selecciona una etapa válida del menú. Si el problema persiste, contacta al soporte.`,
+        };
+      }
+      if (issue?.path.includes('promise_id')) {
+        return {
+          success: false,
+          error: 'Error de validación: El ID de promesa no es válido.',
+        };
+      }
+      return {
+        success: false,
+        error: `Error de validación: ${issue?.message || 'Datos inválidos'}`,
+      };
+    }
+    
+    // Manejar otros errores
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al mover promise',
+      error: `Error del sistema: ${errorMessage}. Si el problema persiste, contacta al soporte.`,
     };
   }
 }

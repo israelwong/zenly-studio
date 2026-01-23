@@ -2272,6 +2272,9 @@ export async function cancelarCierre(
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
     if (cotizacion.promise_id) {
       revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
+      // ⚠️ CRÍTICO: Invalidar caché de route state público para evitar bucle infinito
+      // Cuando se cancela el cierre, el status cambia a pendiente pero el caché puede seguir mostrando en_cierre
+      revalidateTag(`public-promise-route-state-${studioSlug}-${cotizacion.promise_id}`);
     }
 
     return {

@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getClienteSession, obtenerStudioPublicInfo } from '@/lib/actions/cliente';
 import { ClientHeader } from './components/ClientHeader';
-import { ClientFooter } from './components/ClientFooter';
 import type { StudioPublicInfo } from '@/lib/actions/cliente';
 
 interface ClienteLayoutProps {
@@ -43,7 +42,6 @@ export default async function ClienteLayout({ children, params }: ClienteLayoutP
       <main className="flex-1 min-h-0 overflow-hidden bg-zinc-900/40">
         {children}
       </main>
-      <ClientFooter studioInfo={studioInfo} />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 export { EventsKanban } from './EventsKanban';
 export { EventKanbanCard } from './EventKanbanCard';
-export { EventsWrapper } from './EventsWrapper';
+export { EventsPageClient } from './EventsPageClient';
+export { EventsKanbanClient } from './EventsKanbanClient';
+export { EventsDeferred } from './EventsDeferred';
 export { EventsSkeleton } from './EventsSkeleton';
 export { EventPipelineConfigModal } from './EventPipelineConfigModal';
 export { EventClientInfoCard } from './EventClientInfoCard';

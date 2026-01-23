@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 interface EventAgendamientoProps {
   studioSlug: string;
   eventId: string;
-  eventDate: Date; // Fecha principal del evento (de la promesa)
+  eventDate: Date | string | null | undefined; // Fecha principal del evento (de la promesa)
   onAgendaUpdated?: () => void;
 }
 
@@ -213,9 +213,9 @@ export function EventAgendamiento({
             <Calendar className="h-4 w-4 text-zinc-400 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-zinc-400 mb-0.5">Fecha y Hora</p>
-              <p className="text-sm font-semibold text-zinc-200">
-                {formatDisplayDate(agendamiento.date)}
-              </p>
+                  <p className="text-sm font-semibold text-zinc-200">
+                    {formatDisplayDate(agendamiento.date)}
+                  </p>
               {agendamiento.time && (
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <Clock className="h-3.5 w-3.5 text-zinc-500" />
@@ -337,6 +337,12 @@ export function EventAgendamiento({
   // Verificar si hay un agendamiento con la fecha principal usando métodos UTC
   const mainDateAgendamiento = agendamientos.find((a) => {
     if (!a.date) return false;
+    if (!eventDate) return false;
+    
+    // Asegurar que eventDate sea un objeto Date
+    const eventDateObj = eventDate instanceof Date ? eventDate : new Date(eventDate);
+    if (isNaN(eventDateObj.getTime())) return false;
+    
     // Comparar solo fechas (sin hora) usando métodos UTC
     const agendaDateOnly = new Date(Date.UTC(
       new Date(a.date).getUTCFullYear(),
@@ -344,9 +350,9 @@ export function EventAgendamiento({
       new Date(a.date).getUTCDate()
     ));
     const eventDateOnly = new Date(Date.UTC(
-      eventDate.getUTCFullYear(),
-      eventDate.getUTCMonth(),
-      eventDate.getUTCDate()
+      eventDateObj.getUTCFullYear(),
+      eventDateObj.getUTCMonth(),
+      eventDateObj.getUTCDate()
     ));
     return agendaDateOnly.getTime() === eventDateOnly.getTime();
   });

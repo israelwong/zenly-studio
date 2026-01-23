@@ -238,12 +238,6 @@ export function useCotizacionesRealtime({
                          oldValue !== newValue;
           if (changed) {
             camposCambiados.push(campo);
-            // 🔔 LOG DE CONTROL
-            console.log(`🔔 Realtime: Cambio detectado en campo [${campo}]`, {
-              cotizacionId,
-              oldValue,
-              newValue,
-            });
           }
         });
 
@@ -260,16 +254,11 @@ export function useCotizacionesRealtime({
 
         if (soloCamposSistema && camposCambiados.length === 0) {
           // Solo cambió updated_at u otros campos de sistema, ignorar completamente
-          console.log('🔔 Realtime: Ignorando evento (solo campos de sistema cambiaron)', { cotizacionId });
           return;
         }
 
         // ⚠️ TAREA 1: Si hay cambios válidos, notificar para incrementar contador (NO recargar automáticamente)
         if (camposCambiados.length > 0 || cambioDetectado) {
-          console.log('🔔 Realtime: Cambio válido detectado, notificando (sin recarga automática)', {
-            cotizacionId,
-            camposCambiados,
-          });
           if (onUpdateDetectedRef.current) {
             onUpdateDetectedRef.current();
           }
@@ -279,7 +268,6 @@ export function useCotizacionesRealtime({
         if (ignoreCierreEvents) {
           if (camposCambiados.length === 0) {
             // Solo cambió updated_at, ignorar el evento
-            console.log('🔔 Realtime: Ignorando evento (ignoreCierreEvents activo, sin cambios importantes)', { cotizacionId });
             return;
           }
         }
@@ -292,7 +280,6 @@ export function useCotizacionesRealtime({
             newStatus: newRecord.status,
             camposCambiados,
           };
-          console.log(`🔔 Realtime: Cambio de estado detectado [${oldRecord.status} → ${newRecord.status}]`, { cotizacionId });
         } else if (camposCambiados.length > 0) {
           cambioDetectado = {
             statusChanged: false,
@@ -404,8 +391,6 @@ export function useCotizacionesRealtime({
         await subscribeToChannel(channel, (status, err) => {
           if (err) {
             console.error('[useCotizacionesRealtime] Error en suscripción:', err);
-          } else {
-            console.log('[useCotizacionesRealtime] Canal suscrito correctamente', { status });
           }
         });
 
@@ -420,7 +405,6 @@ export function useCotizacionesRealtime({
     // ⚠️ TAREA 4: Cleanup correcto del canal
     return () => {
       if (channelRef.current) {
-        console.log('[useCotizacionesRealtime] Limpiando canal de Realtime');
         // Desuscribirse antes de remover
         channelRef.current.unsubscribe();
         supabaseClientRef.current.removeChannel(channelRef.current);

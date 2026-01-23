@@ -24,15 +24,7 @@ export function ProgressStepItem({ label, completed, active }: ProgressStepItemP
           <div className="w-6 h-6 rounded-full bg-zinc-800 border-2 border-zinc-700" />
         )}
       </div>
-      <span
-        className={`text-sm ${
-          completed
-            ? 'text-emerald-400 font-medium'
-            : active
-            ? 'text-blue-400 font-medium'
-            : 'text-zinc-500'
-        }`}
-      >
+      <span className="text-sm text-white">
         {label}
       </span>
     </div>

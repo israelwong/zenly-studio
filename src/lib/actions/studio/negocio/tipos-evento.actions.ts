@@ -66,13 +66,19 @@ export async function obtenerTiposEvento(
             id: tipo.id,
             studio_id: tipo.studio_id,
             nombre: tipo.name,
-            descripcion: tipo.descripcion,
+            description: tipo.description,
+            descripcion: tipo.description, // Legacy
             color: tipo.color,
-            icono: tipo.icono,
+            icon: tipo.icon,
+            icono: tipo.icon, // Legacy
+            cover_image_url: tipo.cover_image_url,
+            cover_video_url: tipo.cover_video_url,
+            cover_media_type: tipo.cover_media_type as 'image' | 'video' | null,
+            cover_design_variant: tipo.cover_design_variant as 'solid' | 'gradient' | null,
             status: tipo.status,
             orden: tipo.order,
-            createdAt: tipo.createdAt,
-            updatedAt: tipo.updatedAt,
+            createdAt: tipo.created_at,
+            updatedAt: tipo.updated_at,
             paquetes: [], // Vacío - se cargan por separado en getPaquetesShell
             _count: {
                 eventos: tipo._count.events,
@@ -137,6 +143,13 @@ export async function crearTipoEvento(
                 name: validatedData.nombre,
                 status: validatedData.status,
                 order: nuevaPosicion,
+                description: validatedData.description || null,
+                color: validatedData.color || null,
+                icon: validatedData.icon || null,
+                cover_image_url: validatedData.cover_image_url || null,
+                cover_video_url: validatedData.cover_video_url || null,
+                cover_media_type: validatedData.cover_media_type || null,
+                cover_design_variant: validatedData.cover_design_variant || null,
                 updated_at: new Date(),
             },
         });
@@ -144,8 +157,9 @@ export async function crearTipoEvento(
         revalidateTiposEvento(studioSlug);
         // Invalidar caché de tipos de evento y paquetes
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
-        revalidateTag(`tipos-evento-${studioSlug}`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidatePath(`/${studioSlug}/studio/commercial/tipo-eventos`);
+        revalidateTag(`tipos-evento-${studioSlug}`, 'max');
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,
@@ -153,13 +167,18 @@ export async function crearTipoEvento(
                 id: tipoEvento.id,
                 studio_id: tipoEvento.studio_id,
                 nombre: tipoEvento.name,
-                descripcion: tipoEvento.descripcion,
+                description: tipoEvento.description,
+                descripcion: tipoEvento.description, // Legacy
                 color: tipoEvento.color,
-                icono: tipoEvento.icono,
+                icon: tipoEvento.icon,
+                icono: tipoEvento.icon, // Legacy
+                cover_image_url: tipoEvento.cover_image_url,
+                cover_video_url: tipoEvento.cover_video_url,
+                cover_media_type: tipoEvento.cover_media_type as 'image' | 'video' | null,
                 status: tipoEvento.status,
                 orden: tipoEvento.order,
-                createdAt: tipoEvento.createdAt,
-                updatedAt: tipoEvento.updatedAt,
+                createdAt: tipoEvento.created_at,
+                updatedAt: tipoEvento.updated_at,
                 paquetes: [],
             },
         };
@@ -221,6 +240,14 @@ export async function actualizarTipoEvento(
             data: {
                 name: validatedData.nombre,
                 status: validatedData.status,
+                description: validatedData.description !== undefined ? validatedData.description : undefined,
+                color: validatedData.color !== undefined ? validatedData.color : undefined,
+                icon: validatedData.icon !== undefined ? validatedData.icon : undefined,
+                cover_image_url: validatedData.cover_image_url !== undefined ? validatedData.cover_image_url : undefined,
+                cover_video_url: validatedData.cover_video_url !== undefined ? validatedData.cover_video_url : undefined,
+                cover_media_type: validatedData.cover_media_type !== undefined ? validatedData.cover_media_type : undefined,
+                cover_design_variant: validatedData.cover_design_variant !== undefined ? validatedData.cover_design_variant : undefined,
+                updated_at: new Date(),
             },
         });
 
@@ -234,8 +261,9 @@ export async function actualizarTipoEvento(
             revalidateTiposEvento(studio.slug);
             // Invalidar caché de tipos de evento y paquetes
             revalidatePath(`/${studio.slug}/studio/commercial/paquetes`);
-            revalidateTag(`tipos-evento-${studio.slug}`);
-            revalidateTag(`paquetes-shell-${studio.slug}`);
+            revalidatePath(`/${studio.slug}/studio/commercial/tipo-eventos`);
+            revalidateTag(`tipos-evento-${studio.slug}`, 'max');
+            revalidateTag(`paquetes-shell-${studio.slug}`, 'max');
         }
 
         return {
@@ -244,13 +272,18 @@ export async function actualizarTipoEvento(
                 id: tipoEvento.id,
                 studio_id: tipoEvento.studio_id,
                 nombre: tipoEvento.name,
-                descripcion: tipoEvento.descripcion,
+                description: tipoEvento.description,
+                descripcion: tipoEvento.description, // Legacy
                 color: tipoEvento.color,
-                icono: tipoEvento.icono,
+                icon: tipoEvento.icon,
+                icono: tipoEvento.icon, // Legacy
+                cover_image_url: tipoEvento.cover_image_url,
+                cover_video_url: tipoEvento.cover_video_url,
+                cover_media_type: tipoEvento.cover_media_type as 'image' | 'video' | null,
                 status: tipoEvento.status,
                 orden: tipoEvento.order,
-                createdAt: tipoEvento.createdAt,
-                updatedAt: tipoEvento.updatedAt,
+                createdAt: tipoEvento.created_at,
+                updatedAt: tipoEvento.updated_at,
                 paquetes: [],
             },
         };
@@ -361,8 +394,8 @@ export async function actualizarOrdenTiposEvento(
         revalidateTiposEvento(studioSlug);
         // Invalidar caché de tipos de evento y paquetes
         revalidatePath(`/${studioSlug}/studio/commercial/paquetes`);
-        revalidateTag(`tipos-evento-${studioSlug}`);
-        revalidateTag(`paquetes-shell-${studioSlug}`);
+        revalidateTag(`tipos-evento-${studioSlug}`, 'max');
+        revalidateTag(`paquetes-shell-${studioSlug}`, 'max');
 
         return {
             success: true,
@@ -409,13 +442,18 @@ export async function obtenerTipoEventoPorId(
                 id: tipoEvento.id,
                 studio_id: tipoEvento.studio_id,
                 nombre: tipoEvento.name,
-                descripcion: tipoEvento.descripcion,
+                description: tipoEvento.description,
+                descripcion: tipoEvento.description, // Legacy
                 color: tipoEvento.color,
-                icono: tipoEvento.icono,
+                icon: tipoEvento.icon,
+                icono: tipoEvento.icon, // Legacy
+                cover_image_url: tipoEvento.cover_image_url,
+                cover_video_url: tipoEvento.cover_video_url,
+                cover_media_type: tipoEvento.cover_media_type as 'image' | 'video' | null,
                 status: tipoEvento.status,
                 orden: tipoEvento.order,
-                createdAt: tipoEvento.createdAt,
-                updatedAt: tipoEvento.updatedAt,
+                createdAt: tipoEvento.created_at,
+                updatedAt: tipoEvento.updated_at,
                 paquetes: includePackages && tipoEvento.packages ? tipoEvento.packages.map((p) => ({
                     id: p.id,
                     nombre: p.name,

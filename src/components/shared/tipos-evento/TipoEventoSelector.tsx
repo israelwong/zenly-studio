@@ -170,11 +170,17 @@ export function TipoEventoSelector({
         </div>
       )}
 
-      {/* Quick Add Modal */}
+      {/* Modal Enriquecido */}
       {showQuickAdd && (
-        <TipoEventoQuickAddModal
+        <TipoEventoEnrichedModal
           isOpen={showQuickAdd}
-          onClose={() => setShowQuickAdd(false)}
+          onClose={() => {
+            setShowQuickAdd(false);
+            // Disparar evento para cerrar overlays
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('close-overlays'));
+            }
+          }}
           onSuccess={handleQuickAddSuccess}
           studioSlug={studioSlug}
         />

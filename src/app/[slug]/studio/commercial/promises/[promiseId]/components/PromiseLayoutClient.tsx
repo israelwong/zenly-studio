@@ -54,8 +54,8 @@ export function PromiseLayoutClient({
     referrer_contact_id?: string | null;
     referrer_name?: string | null;
   } | undefined) => {
-    // El contexto se actualizará automáticamente cuando el layout se recargue
-    // Por ahora solo recargamos la página para sincronizar
+    // El contexto se actualizar? autom?ticamente cuando el layout se recargue
+    // Por ahora solo recargamos la p?gina para sincronizar
     if (updatedContact) {
       router.refresh();
     }
@@ -68,26 +68,84 @@ export function PromiseLayoutClient({
     window.dispatchEvent(new CustomEvent('close-overlays'));
   }, []);
 
-  const handlePipelineStageChange = async (newStageId: string) => {
+  const handlePipelineStageChange = async (newStageId: string, stageName?: string) => {
     if (!promiseId || newStageId === stateData.promiseData.pipeline_stage_id) return;
+
+    // Log para debugging
+    console.log('[PromiseLayoutClient] Cambiando etapa:', {
+      promiseId,
+      newStageId,
+      stageName,
+      currentStageId: stateData.promiseData.pipeline_stage_id,
+      newStageIdType: typeof newStageId,
+      newStageIdLength: newStageId?.length,
+    });
+
+    // Validar que newStageId sea un string no vacío
+    // La validación completa de CUID se hace en el servidor
+    if (!newStageId || typeof newStageId !== 'string' || newStageId.trim().length === 0) {
+      console.error('[PromiseLayoutClient] ID de etapa inv?lido:', {
+        newStageId,
+        stageName,
+        type: typeof newStageId,
+        length: newStageId?.length,
+      });
+      const stageInfo = stageName ? ` (${stageName})` : '';
+      toast.error(`Error: El ID de la etapa seleccionada${stageInfo} est? vac?o o no es v?lido. Por favor, recarga la p?gina e intenta nuevamente.`);
+      return;
+    }
 
     setIsChangingStage(true);
     try {
       const { movePromise } = await import('@/lib/actions/studio/commercial/promises');
+      
+      // Asegurar que newStageId sea un string limpio
+      const cleanStageId = String(newStageId).trim();
+      
+      console.log('[PromiseLayoutClient] Llamando a movePromise con:', {
+        studioSlug,
+        promise_id: promiseId,
+        new_stage_id: cleanStageId,
+        stageName,
+      });
+      
       const result = await movePromise(studioSlug, {
         promise_id: promiseId,
-        new_stage_id: newStageId,
+        new_stage_id: cleanStageId,
       });
 
       if (result.success) {
         toast.success('Etapa actualizada correctamente');
         router.refresh();
       } else {
-        toast.error(result.error || 'Error al cambiar etapa');
+        // El error ya viene con un mensaje descriptivo del servidor
+        // Si el mensaje menciona restricciones de negocio, mantenerlo; si es de validaci?n, mejorarlo
+        const errorMessage = result.error || 'Error al cambiar etapa';
+        if (errorMessage.includes('evento asociado') || errorMessage.includes('desactivada') || errorMessage.includes('no pertenece')) {
+          // Es una restricci?n de l?gica de negocio
+          toast.error(errorMessage);
+        } else if (errorMessage.includes('validaci?n') || errorMessage.includes('inv?lido') || errorMessage.includes('no existe')) {
+          // Es un error de validaci?n
+          toast.error(errorMessage);
+        } else {
+          // Error gen?rico
+          toast.error(`Error: ${errorMessage}`);
+        }
       }
     } catch (error) {
-      console.error('Error cambiando etapa:', error);
-      toast.error('Error al cambiar etapa');
+      console.error('[PromiseLayoutClient] Error cambiando etapa:', error);
+      // Si es un error de Zod, mostrar mensaje m?s espec?fico
+      if (error && typeof error === 'object' && 'issues' in error) {
+        const zodError = error as { issues: Array<{ path: string[]; message: string }> };
+        const issue = zodError.issues[0];
+        if (issue?.path.includes('new_stage_id')) {
+          toast.error('Error de validaci?n: La etapa seleccionada no es v?lida. Por favor, selecciona otra etapa.');
+        } else {
+          toast.error(`Error de validaci?n: ${issue?.message || 'Datos inv?lidos'}`);
+        }
+      } else {
+        toast.error('Error del sistema al cambiar etapa. Por favor, intenta nuevamente o contacta al soporte.');
+      }
     } finally {
       setIsChangingStage(false);
     }

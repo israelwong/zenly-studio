@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
+import confetti from 'canvas-confetti';
 import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 import { updatePublicPromiseData, getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
@@ -34,8 +35,6 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
     setAuthorizationData,
   } = usePromisePageContext();
 
-  // 💎 DEBUG: Log de render para verificar estado
-  console.log('💎 ProgressOverlayWrapper render - isAuth:', isAuthorizationInProgress, 'step:', progressStep, 'hasData:', !!authorizationData);
 
   // Procesar autorización cuando se active el estado
   useEffect(() => {
@@ -49,12 +48,10 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
     // Función async para procesar la autorización
     const processAuthorization = async () => {
       if (isProcessing) {
-        console.log('⚠️ [ProgressOverlayWrapper] Proceso ya en ejecución, ignorando');
         return;
       }
 
       isProcessing = true;
-      console.log('🚀 Iniciando llamada al backend con:', authorizationData);
 
       try {
         const { 
@@ -67,17 +64,18 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           autoGenerateContract: shouldGenerateContract 
         } = authorizationData;
 
-        // Paso 1: Recopilando información (~400ms)
+        // Paso 1: Recopilando información (Ritmo ZEN: 600ms)
         setProgressStep('collecting');
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, 600));
 
-        // Paso 2: Encriptando datos (~400ms)
+        // Paso 2: Encriptando datos (Ritmo ZEN: 600ms)
         setProgressStep('validating');
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, 600));
 
-        // Paso 3: Enviando solicitud a estudio (updatePublicPromiseData)
+        // Paso 3: Enviando solicitud a estudio (Ritmo ZEN: 800ms)
         setProgressStep('sending');
-        console.log('📤 [ProgressOverlayWrapper] Actualizando datos de la promesa...');
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
         const updateResult = await updatePublicPromiseData(authStudioSlug, authPromiseId, {
           contact_name: formData.contact_name,
           contact_phone: formData.contact_phone,
@@ -98,9 +96,10 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           return;
         }
 
-        // Paso 4: Registrando solicitud (autorizarCotizacionPublica)
+        // Paso 4: Registrando solicitud (Ritmo ZEN: 800ms antes de la llamada)
         setProgressStep('registering');
-        console.log('📤 [ProgressOverlayWrapper] Autorizando cotización...');
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
         const result = await autorizarCotizacionPublica(
           authPromiseId,
           cotizacionId,
@@ -120,7 +119,41 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           return;
         }
 
-        console.log('✅ [ProgressOverlayWrapper] Cotización autorizada exitosamente');
+        // 🎉 CELEBRACIÓN: Disparar confeti cuando la autorización sea exitosa
+        // Limpiar cualquier localStorage/sessionStorage que pueda bloquear el confeti
+        if (typeof window !== 'undefined') {
+          // Limpiar posibles claves de confeti en sessionStorage
+          const confettiKeys = Object.keys(sessionStorage).filter(key => key.includes('confetti'));
+          confettiKeys.forEach(key => sessionStorage.removeItem(key));
+          
+          // Limpiar posibles claves de confeti en localStorage
+          const localStorageConfettiKeys = Object.keys(localStorage).filter(key => key.includes('confetti'));
+          localStorageConfettiKeys.forEach(key => localStorage.removeItem(key));
+        }
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'],
+        });
+        
+        // Disparar confeti adicional desde los lados
+        setTimeout(() => {
+          confetti({
+            particleCount: 50,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0 },
+            colors: ['#10b981', '#3b82f6', '#8b5cf6'],
+          });
+          confetti({
+            particleCount: 50,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1 },
+            colors: ['#10b981', '#3b82f6', '#8b5cf6'],
+          });
+        }, 250);
 
         // Recopilar datos de cotización en paralelo
         (async () => {
@@ -145,9 +178,8 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           await new Promise(resolve => setTimeout(resolve, 1200));
         }
 
-        // Paso 6: Completado - Listo (~800ms)
+        // Paso 6: Completado - Listo
         setProgressStep('completed');
-        await new Promise(resolve => setTimeout(resolve, 800));
 
         isProcessing = false;
         // El estado isAuthorizationInProgress se reseteará en el useEffect de redirección
@@ -166,17 +198,15 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
   }, [isAuthorizationInProgress, authorizationData, setProgressStep, setProgressError, setIsAuthorizationInProgress, setAuthorizationData]);
 
   // Redirigir a cierre cuando el proceso esté completado
+  // Pausa de Momentum: 3 segundos para disfrutar la celebración
   useEffect(() => {
     if (progressStep === 'completed' && isAuthorizationInProgress) {
       const redirectPath = `/${studioSlug}/promise/${promiseId}/cierre`;
       
-      console.log('🎯 [ProgressOverlayWrapper] Proceso completado, redirigiendo a cierre...');
-      
-      // Delay de 500ms para que el usuario pueda leer el estado "¡Listo!" o "Contrato Generado"
+      // Pausa de Momentum: 3 segundos exactos para disfrutar el confeti y la celebración
       const timer = setTimeout(() => {
-        // Limpiar flag de autorización del contexto y lock global antes de redirigir
-        setIsAuthorizationInProgress(false);
-        (window as any).__IS_AUTHORIZING = false;
+        // NO limpiar isAuthorizationInProgress aquí - se mantiene en true durante la transición
+        // Solo limpiar datos y disparar navegación
         setAuthorizationData(null);
         setNavigating('cierre');
         window.dispatchEvent(new CustomEvent('close-overlays'));
@@ -184,10 +214,18 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
           router.push(redirectPath);
           clearNavigating(1000);
         });
-      }, 500);
+      }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [progressStep, isAuthorizationInProgress, studioSlug, promiseId, router, setNavigating, clearNavigating, setIsAuthorizationInProgress, setAuthorizationData]);
+  }, [progressStep, isAuthorizationInProgress, studioSlug, promiseId, router, setNavigating, clearNavigating, setAuthorizationData]);
+
+  // Limpiar lock global solo cuando el componente se desmonte (navegación completa)
+  useEffect(() => {
+    return () => {
+      // Cleanup: limpiar lock global cuando el componente se desmonte
+      (window as any).__IS_AUTHORIZING = false;
+    };
+  }, []);
 
   if (!isAuthorizationInProgress) {
     return null;
@@ -199,14 +237,15 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
       currentStep={progressStep}
       error={progressError}
       autoGenerateContract={autoGenerateContract}
-      onClose={() => {
+      // No permitir cerrar cuando está en estado completed (redirigiendo)
+      onClose={progressStep === 'completed' ? undefined : () => {
         setIsAuthorizationInProgress(false);
         (window as any).__IS_AUTHORIZING = false;
         setAuthorizationData(null);
         setProgressError(null);
         setProgressStep('validating');
       }}
-      onRetry={() => {
+      onRetry={progressStep === 'completed' ? undefined : () => {
         setProgressError(null);
         setProgressStep('validating');
         setIsAuthorizationInProgress(false);

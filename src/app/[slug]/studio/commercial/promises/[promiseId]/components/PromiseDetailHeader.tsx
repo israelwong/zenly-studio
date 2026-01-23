@@ -23,7 +23,7 @@ interface PromiseDetailHeaderProps {
         contactId: string;
     } | null;
     isArchived: boolean;
-    onPipelineStageChange: (stageId: string) => void;
+    onPipelineStageChange: (stageId: string, stageName?: string) => void;
     onTemplatesClick: () => void;
     onAutomateClick: () => void;
     onArchive: () => void;
@@ -111,6 +111,7 @@ export function PromiseDetailHeader({
                             const isRestricted = isApprovedStage && hasEvent;
 
                             // Filtrar etapas: si está restringido, solo mostrar "archived" además de la actual
+                            // Si no está restringido, mostrar todas las etapas (ya vienen filtradas por is_active del servidor)
                             const availableStages = isRestricted
                                 ? pipelineStages.filter((s) => s.slug === 'archived' || s.id === currentPipelineStageId)
                                 : pipelineStages;
@@ -144,11 +145,14 @@ export function PromiseDetailHeader({
                                             )}
                                         </button>
                                     </ZenDropdownMenuTrigger>
-                                    <ZenDropdownMenuContent align="start">
+                                    <ZenDropdownMenuContent 
+                                        align="start"
+                                        className="max-h-[300px] overflow-y-auto"
+                                    >
                                         {availableStages.map((stage) => (
                                             <ZenDropdownMenuItem
                                                 key={stage.id}
-                                                onClick={() => onPipelineStageChange(stage.id)}
+                                                onClick={() => onPipelineStageChange(stage.id, stage.name)}
                                                 disabled={stage.id === currentPipelineStageId}
                                             >
                                                 <span className="flex-1">{stage.name}</span>

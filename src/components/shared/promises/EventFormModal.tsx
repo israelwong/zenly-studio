@@ -16,7 +16,7 @@ import { obtenerCrewMembers } from '@/lib/actions/studio/crew/crew.actions';
 import { verificarDisponibilidadFecha, type AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas/promises-schemas';
 import { useContactRefresh } from '@/hooks/useContactRefresh';
-import { TipoEventoQuickAddModal } from '@/components/shared/tipos-evento/TipoEventoQuickAddModal';
+import { TipoEventoEnrichedModal } from '@/components/shared/tipos-evento/TipoEventoEnrichedModal';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
 
 interface EventFormModalProps {
@@ -1599,10 +1599,16 @@ export function EventFormModal({
                 </div>
             </ZenDialog>
 
-            {/* Modal para agregar nuevo tipo de evento */}
-            <TipoEventoQuickAddModal
+            {/* Modal enriquecido para agregar/editar tipo de evento */}
+            <TipoEventoEnrichedModal
                 isOpen={showTipoEventoModal}
-                onClose={() => setShowTipoEventoModal(false)}
+                onClose={() => {
+                    setShowTipoEventoModal(false);
+                    // Disparar evento para cerrar overlays
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('close-overlays'));
+                    }
+                }}
                 onSuccess={handleTipoEventoCreated}
                 studioSlug={studioSlug}
                 zIndex={zIndex + 10}

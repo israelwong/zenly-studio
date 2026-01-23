@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Settings, Archive, X } from 'lucide-react';
 import {
@@ -35,6 +35,8 @@ interface EventsKanbanProps {
   onSearchChange: (search: string) => void;
   onEventMoved: () => void;
   onPipelineStagesUpdated: () => void;
+  isNavigating?: string | null;
+  setIsNavigating?: (eventId: string | null) => void;
 }
 
 export function EventsKanban({
@@ -45,6 +47,8 @@ export function EventsKanban({
   onSearchChange,
   onEventMoved,
   onPipelineStagesUpdated,
+  isNavigating,
+  setIsNavigating,
 }: EventsKanbanProps) {
   const router = useRouter();
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
@@ -57,10 +61,16 @@ export function EventsKanban({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Sincronizar estado local cuando cambian los eventos desde el padre
-  // Evitar sincronización durante drag and drop para prevenir parpadeos
+  // Evitar sincronización durante drag and drop o navegación para prevenir parpadeos
   useEffect(() => {
     // Si estamos arrastrando, no sincronizar
     if (isDraggingRef.current) {
+      prevEventsRef.current = events;
+      return;
+    }
+
+    // Si estamos navegando, no sincronizar (previene race condition)
+    if (isNavigating) {
       prevEventsRef.current = events;
       return;
     }
@@ -82,7 +92,7 @@ export function EventsKanban({
 
     prevEventsRef.current = events;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events]);
+  }, [events, isNavigating]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -280,7 +290,27 @@ export function EventsKanban({
   };
 
   const handleEventClick = (event: EventWithContact) => {
-    router.push(`/${studioSlug}/studio/business/events/${event.id}`);
+    const routeId = event.id;
+
+    // Cerrar overlays globales antes de navegar
+    window.dispatchEvent(new CustomEvent('close-overlays'));
+
+    // Activar flag de navegación
+    if (setIsNavigating) {
+      setIsNavigating(routeId);
+    }
+
+    // Usar startTransition para dar prioridad a la navegación
+    startTransition(() => {
+      router.push(`/${studioSlug}/studio/business/events/${routeId}`);
+
+      // Limpiar flag después de un delay
+      setTimeout(() => {
+        if (setIsNavigating) {
+          setIsNavigating(null);
+        }
+      }, 1000);
+    });
   };
 
   const activeEvent = activeId

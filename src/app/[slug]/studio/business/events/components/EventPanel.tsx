@@ -77,7 +77,7 @@ export function EventPanel({
           <EventAgendamiento
             studioSlug={studioSlug}
             eventId={eventId}
-            eventDate={eventData.promise?.event_date || eventData.event_date}
+            eventDate={eventData.promise?.event_date || eventData.event_date || null}
             onAgendaUpdated={onEventUpdated}
           />
 

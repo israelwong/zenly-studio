@@ -16,6 +16,10 @@ interface CierrePageDeferredProps {
         contact_address: string | null;
         event_type_id: string | null;
         event_type_name: string | null;
+        event_type_cover_image_url?: string | null;
+        event_type_cover_video_url?: string | null;
+        event_type_cover_media_type?: 'image' | 'video' | null;
+        event_type_cover_design_variant?: 'solid' | 'gradient' | null;
         event_name: string | null;
         event_date: Date | null;
         event_location: string | null;
@@ -49,6 +53,9 @@ interface CierrePageDeferredProps {
       contact_address: string | null;
       event_type_id: string | null;
       event_type_name: string | null;
+      event_type_cover_image_url?: string | null;
+      event_type_cover_video_url?: string | null;
+      event_type_cover_media_type?: 'image' | 'video' | null;
       event_name: string | null;
       event_date: Date | null;
       event_location: string | null;
@@ -110,6 +117,10 @@ export function CierrePageDeferred({
         contact_email: promise.contact_email,
         contact_address: promise.contact_address,
         event_type_name: promise.event_type_name,
+        event_type_cover_image_url: basicPromise.promise.event_type_cover_image_url,
+        event_type_cover_video_url: basicPromise.promise.event_type_cover_video_url,
+        event_type_cover_media_type: basicPromise.promise.event_type_cover_media_type,
+        event_type_cover_design_variant: basicPromise.promise.event_type_cover_design_variant,
         event_date: promise.event_date,
         event_location: promise.event_location,
         event_name: promise.event_name || null,

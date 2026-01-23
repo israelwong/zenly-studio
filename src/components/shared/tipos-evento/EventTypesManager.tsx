@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ZenButton, ZenBadge } from "@/components/ui/zen";
-import { TipoEventoQuickAddModal } from "./TipoEventoQuickAddModal";
+import { TipoEventoEnrichedModal } from "./TipoEventoEnrichedModal";
 import { TipoEventoManagementModal } from "./TipoEventoManagementModal";
 import { obtenerTiposEvento } from "@/lib/actions/studio/negocio/tipos-evento.actions";
 import type { TipoEventoData } from "@/lib/actions/schemas/tipos-evento-schemas";
@@ -97,9 +97,14 @@ export function EventTypesManager({
         </ZenButton>
 
         {showQuickAdd && (
-          <TipoEventoQuickAddModal
+          <TipoEventoEnrichedModal
             isOpen={showQuickAdd}
-            onClose={() => setShowQuickAdd(false)}
+            onClose={() => {
+              setShowQuickAdd(false);
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('close-overlays'));
+              }
+            }}
             onSuccess={handleQuickAddSuccess}
             studioSlug={studioSlug}
           />
@@ -180,11 +185,16 @@ export function EventTypesManager({
         })}
       </div>
 
-      {/* Quick Add Modal */}
+      {/* Modal Enriquecido */}
       {showQuickAdd && (
-        <TipoEventoQuickAddModal
+        <TipoEventoEnrichedModal
           isOpen={showQuickAdd}
-          onClose={() => setShowQuickAdd(false)}
+          onClose={() => {
+            setShowQuickAdd(false);
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('close-overlays'));
+            }
+          }}
           onSuccess={handleQuickAddSuccess}
           studioSlug={studioSlug}
         />

@@ -62,7 +62,18 @@ export const getPromisesSchema = z.object({
 
 export const movePromiseSchema = z.object({
   promise_id: z.string().cuid(),
-  new_stage_id: z.string().cuid(),
+  // Aceptar tanto CUIDs como UUIDs para new_stage_id
+  // Algunas etapas pueden tener UUIDs si fueron creadas antes de migrar a CUID
+  new_stage_id: z.string().refine(
+    (val) => {
+      // Validar CUID: empieza con 'c' o 'C' y tiene al menos 8 caracteres más
+      const cuidPattern = /^[cC][^\s-]{8,}$/;
+      // Validar UUID v4: formato estándar con guiones
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      return cuidPattern.test(val) || uuidPattern.test(val);
+    },
+    { message: 'El ID de etapa debe ser un CUID o UUID válido' }
+  ),
 });
 
 // ============================================

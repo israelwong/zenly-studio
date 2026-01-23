@@ -10,6 +10,10 @@ interface PendientesPageBasicProps {
     contact_address: string | null;
     event_type_id: string | null;
     event_type_name: string | null;
+    event_type_cover_image_url?: string | null;
+    event_type_cover_video_url?: string | null;
+    event_type_cover_media_type?: 'image' | 'video' | null;
+    event_type_cover_design_variant?: 'solid' | 'gradient' | null;
     event_name: string | null;
     event_date: Date | null;
     event_location: string | null;
@@ -56,6 +60,10 @@ export function PendientesPageBasic({
         eventDate={promise.event_date}
         variant="pendientes"
         minDaysToHire={studio.promise_share_default_min_days_to_hire}
+        coverImageUrl={promise.event_type_cover_image_url}
+        coverVideoUrl={promise.event_type_cover_video_url}
+        coverMediaType={promise.event_type_cover_media_type}
+        coverDesignVariant={promise.event_type_cover_design_variant}
       />
     </>
   );
