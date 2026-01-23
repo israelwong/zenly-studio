@@ -111,7 +111,7 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                     {/* Tabs con scroll horizontal invisible */}
                     <div
                         ref={tabsContainerRef}
-                        className="flex gap-1.5 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                        className="flex gap-2.5 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                         suppressHydrationWarning
                     >
                         {tabs.map((tab) => {
@@ -134,7 +134,7 @@ export function ProfileNavTabs({ activeTab, onTabChange, onSearchClick, hasActiv
                                         transition-all duration-200 shrink-0 whitespace-nowrap
                                         ${isActive
                                             ? 'bg-zinc-800/80 text-zinc-300 backdrop-blur-lg px-4 py-2 lg:py-2.5'
-                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 p-2 lg:p-2.5'
+                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 px-3 py-2 lg:px-3.5 lg:py-2.5'
                                         }
                                     `}
                                 >
