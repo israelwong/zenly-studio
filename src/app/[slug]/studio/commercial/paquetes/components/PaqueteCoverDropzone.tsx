@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, AlertCircle, Upload, ImageIcon, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { APP_CONFIG } from '@/lib/actions/constants/config';
 
 interface MediaItem {
     file_url: string;
@@ -20,7 +21,8 @@ interface PaqueteCoverDropzoneProps {
     isUploading?: boolean;
 }
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB para imágenes y videos
+// Usar el mayor entre imagen y video como límite general
+const MAX_FILE_SIZE = Math.max(APP_CONFIG.MAX_IMAGE_SIZE, APP_CONFIG.MAX_VIDEO_SIZE);
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
 
@@ -85,8 +87,11 @@ export function PaqueteCoverDropzone({
             return `Tipo de archivo no permitido. Solo se permiten imágenes (JPG, PNG, WEBP, GIF) o videos (MP4, WEBM, MOV, AVI).`;
         }
 
-        if (file.size > MAX_FILE_SIZE) {
-            const maxSizeMB = MAX_FILE_SIZE / (1024 * 1024);
+        // Validar según tipo específico
+        const typeSpecificLimit = isImage ? APP_CONFIG.MAX_IMAGE_SIZE : APP_CONFIG.MAX_VIDEO_SIZE;
+        
+        if (file.size > typeSpecificLimit) {
+            const maxSizeMB = typeSpecificLimit / (1024 * 1024);
             return `El archivo es demasiado grande. Máximo: ${maxSizeMB}MB`;
         }
 

@@ -26,10 +26,13 @@ const nextConfig = {
   },
 
   // Aumentar límite de tamaño para Server Actions (subida de archivos)
+  // Necesario para videos de hasta 200MB
   experimental: {
     serverActions: {
-      bodySizeLimit: "150mb",
+      bodySizeLimit: "250mb",
     },
+    // Límite para proxy/middleware (Next.js 16+ usa proxyClientMaxBodySize)
+    proxyClientMaxBodySize: "250mb",
   },
 
   async headers() {

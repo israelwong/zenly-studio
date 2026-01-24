@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { APP_CONFIG } from "@/lib/actions/constants/config";
 import sharp from "sharp";
 
 interface UploadResult {
@@ -146,10 +147,10 @@ export async function uploadPostVideo(
     try {
         const supabase = await createClient();
 
-        // Validar tamaño (max 100MB)
-        const MAX_SIZE = 100 * 1024 * 1024;
-        if (file.size > MAX_SIZE) {
-            return { success: false, error: "El video no debe superar 100MB" };
+        // Validar tamaño
+        if (file.size > APP_CONFIG.MAX_VIDEO_SIZE) {
+            const maxSizeMB = APP_CONFIG.MAX_VIDEO_SIZE / (1024 * 1024);
+            return { success: false, error: `El video no debe superar ${maxSizeMB}MB` };
         }
 
         const timestamp = Date.now();

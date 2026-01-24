@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, AlertCircle, Upload, ImageIcon, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { APP_CONFIG } from '@/lib/actions/constants/config';
 
 interface HeroDropzoneProps {
     media: Array<{ file_url: string; file_type: string; filename: string; thumbnail_url?: string }>;
@@ -39,8 +40,11 @@ export default function HeroDropzone({
             return `Tipo de archivo no permitido. Solo imágenes y videos.`;
         }
 
-        if (file.size > MAX_FILE_SIZE) {
-            const maxSizeMB = MAX_FILE_SIZE / (1024 * 1024);
+        // Validar según tipo específico
+        const typeSpecificLimit = isImage ? APP_CONFIG.MAX_IMAGE_SIZE : APP_CONFIG.MAX_VIDEO_SIZE;
+        
+        if (file.size > typeSpecificLimit) {
+            const maxSizeMB = typeSpecificLimit / (1024 * 1024);
             return `El archivo es demasiado grande. Máximo: ${maxSizeMB}MB`;
         }
 

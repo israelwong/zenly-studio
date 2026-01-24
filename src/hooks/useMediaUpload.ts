@@ -2,7 +2,8 @@ import { useState, useCallback, createElement } from 'react';
 import { createClient as createBrowserClient } from '@/lib/supabase/browser';
 import { optimizeImage, analyzeVideo, validateFileSize, formatBytes } from '@/lib/utils/image-optimizer';
 import { generateVideoThumbnail, optimizeVideoThumbnail } from '@/lib/utils/video-thumbnail';
-import { deleteFileStorage } from '@/lib/actions/shared/media.actions';
+import { deleteFileStorage, uploadFileStorage } from '@/lib/actions/shared/media.actions';
+import { APP_CONFIG } from '@/lib/actions/constants/config';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
@@ -18,6 +19,8 @@ interface UploadedFile {
 }
 
 const BUCKET_NAME = 'Studio';
+// Límite de Supabase para uploads directos desde cliente (50MB)
+const SUPABASE_CLIENT_UPLOAD_LIMIT = 50 * 1024 * 1024;
 
 /**
  * Genera la ruta del archivo en Supabase
@@ -177,60 +180,96 @@ export function useMediaUpload(onMediaSizeChange?: (bytes: number, operation: 'a
             // Generar ruta
             const filePath = generateSupabasePath(studioSlug, category, subcategory, file.name);
 
+            let publicUrl: string;
 
-            // Subir directamente a Supabase desde cliente
-            const { data, error: uploadError } = await supabase.storage
-              .from(BUCKET_NAME)
-              .upload(filePath, fileToUpload, {
-                cacheControl: '3600',
-                upsert: true,
-                contentType: fileToUpload.type,
+            // Para archivos > 50MB, usar Server Action (no tiene límite de Supabase)
+            if (fileToUpload.size > SUPABASE_CLIENT_UPLOAD_LIMIT) {
+              console.log(`[useMediaUpload] Archivo grande (${formatBytes(fileToUpload.size)}), usando Server Action`);
+              
+              // Mapear category a valores válidos del schema
+              const validCategory = category === 'galeria' ? 'galeria' : 
+                                   category === 'identidad' ? 'identidad' :
+                                   category === 'servicios' ? 'servicios' :
+                                   category === 'eventos' ? 'eventos' :
+                                   category === 'clientes' ? 'clientes' :
+                                   category === 'documentos' ? 'documentos' :
+                                   'galeria'; // default
+
+              const uploadResult = await uploadFileStorage({
+                file: fileToUpload,
+                category: validCategory as any,
+                subcategory,
+                studioSlug,
+                customPath: filePath,
               });
 
-            if (uploadError) {
-              const errorMsg = uploadError.message || 'Error desconocido';
-
-              // Detectar errores de tamaño (fallback si la validación previa falló)
-              if (errorMsg.includes('exceeded the maximum allowed size') || errorMsg.includes('maximum allowed size')) {
-                const fileType = file.type.startsWith('video/') ? 'video' : 'imagen';
-                const maxSize = file.type.startsWith('video/') ? '50MB' : '10MB';
-                const fileSizeFormatted = formatBytes(file.size);
-                console.error(`[useMediaUpload] Archivo demasiado grande: ${file.name} (${fileSizeFormatted})`);
-                toast.error(
-                  `No se pudo cargar el ${fileType} "${file.name}". El archivo (${fileSizeFormatted}) excede el tamaño máximo permitido de ${maxSize}. Por favor, comprime el ${fileType} o elige uno más pequeño.`,
-                  { duration: 6000 }
-                );
-              } 
-              // Detectar errores RLS
-              else if (errorMsg.includes('row level security') || errorMsg.includes('policy')) {
-                console.error('[useMediaUpload] Error RLS:', errorMsg);
-                toast.error(`Permiso denegado: No tienes permisos para subir archivos`);
-              } else {
-                console.error(`[useMediaUpload] Error subiendo ${file.name}:`, uploadError);
-                toast.error(`Error subiendo ${file.name}: ${errorMsg}`);
+              if (!uploadResult.success || !uploadResult.publicUrl) {
+                toast.error(uploadResult.error || `Error subiendo ${file.name}`);
+                continue;
               }
-              continue;
-            }
 
-            if (!data?.path) {
-              toast.error(`Error subiendo ${file.name}: No se obtuvo ruta`);
-              continue;
-            }
+              publicUrl = uploadResult.publicUrl;
+            } else {
+              // Subir directamente a Supabase desde cliente (archivos <= 50MB)
+              const { data, error: uploadError } = await supabase.storage
+                .from(BUCKET_NAME)
+                .upload(filePath, fileToUpload, {
+                  cacheControl: '3600',
+                  upsert: true,
+                  contentType: fileToUpload.type,
+                });
 
-            // Obtener URL pública
-            const { data: { publicUrl } } = supabase.storage
-              .from(BUCKET_NAME)
-              .getPublicUrl(data.path);
+              if (uploadError) {
+                const errorMsg = uploadError.message || 'Error desconocido';
 
-            if (!publicUrl) {
-              toast.error(`Error obteniendo URL de ${file.name}`);
-              continue;
+                // Detectar errores de tamaño (fallback si la validación previa falló)
+                if (errorMsg.includes('exceeded the maximum allowed size') || errorMsg.includes('maximum allowed size')) {
+                  const fileType = file.type.startsWith('video/') ? 'video' : 'imagen';
+                  const maxSizeBytes = file.type.startsWith('video/') ? APP_CONFIG.MAX_VIDEO_SIZE : APP_CONFIG.MAX_IMAGE_SIZE;
+                  const maxSize = formatBytes(maxSizeBytes);
+                  const fileSizeFormatted = formatBytes(file.size);
+                  console.error(`[useMediaUpload] Archivo demasiado grande: ${file.name} (${fileSizeFormatted})`);
+                  toast.error(
+                    `No se pudo cargar el ${fileType} "${file.name}". El archivo (${fileSizeFormatted}) excede el tamaño máximo permitido de ${maxSize}. Por favor, comprime el ${fileType} o elige uno más pequeño.`,
+                    { duration: 6000 }
+                  );
+                } 
+                // Detectar errores RLS
+                else if (errorMsg.includes('row level security') || errorMsg.includes('policy')) {
+                  console.error('[useMediaUpload] Error RLS:', errorMsg);
+                  toast.error(`Permiso denegado: No tienes permisos para subir archivos`);
+                } else {
+                  console.error(`[useMediaUpload] Error subiendo ${file.name}:`, uploadError);
+                  toast.error(`Error subiendo ${file.name}: ${errorMsg}`);
+                }
+                continue;
+              }
+
+              if (!data?.path) {
+                toast.error(`Error subiendo ${file.name}: No se obtuvo ruta`);
+                continue;
+              }
+
+              // Obtener URL pública
+              const { data: { publicUrl: url } } = supabase.storage
+                .from(BUCKET_NAME)
+                .getPublicUrl(data.path);
+
+              if (!url) {
+                toast.error(`Error obteniendo URL de ${file.name}`);
+                continue;
+              }
+
+              publicUrl = url;
             }
 
             const finalSize = fileToUpload.size;
+            // Si publicUrl ya tiene timestamp, no agregar otro
+            const finalUrl = publicUrl.includes('?t=') ? publicUrl : `${publicUrl}?t=${Date.now()}`;
+            
             uploadedFiles.push({
               id: `${Date.now()}-${Math.random()}`,
-              url: `${publicUrl}?t=${Date.now()}`,
+              url: finalUrl,
               fileName: file.name,
               size: finalSize,
               originalSize: originalSize !== finalSize ? originalSize : undefined,

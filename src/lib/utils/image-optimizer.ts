@@ -205,31 +205,38 @@ export function formatBytes(bytes: number): string {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
+import { APP_CONFIG } from '@/lib/actions/constants/config';
+
+/**
+ * Obtiene el límite de tamaño según el tipo de archivo
+ */
+export function getFileSizeLimit(fileType: 'image' | 'video'): number {
+  return fileType === 'image' ? APP_CONFIG.MAX_IMAGE_SIZE : APP_CONFIG.MAX_VIDEO_SIZE;
+}
+
 /**
  * Valida tamaño de archivo según tipo
- * Límites basados en Supabase Storage (50MB máximo por archivo)
+ * Usa límites centralizados de APP_CONFIG
  */
 export function validateFileSize(file: File): {
   valid: boolean;
   error?: string;
   maxSize?: string;
 } {
-  // Límites más conservadores para evitar errores de Supabase
-  const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
-  const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB (límite de Supabase Storage)
-
   if (file.type.startsWith('image/')) {
-    if (file.size > MAX_IMAGE_SIZE) {
+    const maxSize = APP_CONFIG.MAX_IMAGE_SIZE;
+    if (file.size > maxSize) {
       return {
         valid: false,
-        error: `Imagen demasiado grande. Máximo: ${formatBytes(MAX_IMAGE_SIZE)}`,
-        maxSize: formatBytes(MAX_IMAGE_SIZE),
+        error: `Imagen demasiado grande. Máximo: ${formatBytes(maxSize)}`,
+        maxSize: formatBytes(maxSize),
       };
     }
   } else if (file.type.startsWith('video/')) {
-    if (file.size > MAX_VIDEO_SIZE) {
+    const maxSize = APP_CONFIG.MAX_VIDEO_SIZE;
+    if (file.size > maxSize) {
       const fileSizeFormatted = formatBytes(file.size);
-      const maxSizeFormatted = formatBytes(MAX_VIDEO_SIZE);
+      const maxSizeFormatted = formatBytes(maxSize);
       return {
         valid: false,
         error: `No se pudo cargar el video. El archivo (${fileSizeFormatted}) excede el tamaño máximo permitido de ${maxSizeFormatted}. Por favor, comprime el video o elige uno más pequeño.`,

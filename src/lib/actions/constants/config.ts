@@ -5,7 +5,9 @@ export const APP_CONFIG = {
     MAX_PAGE_SIZE: 100,
 
     // Límites de archivos
-    MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+    MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB (genérico, usar límites específicos por tipo)
+    MAX_IMAGE_SIZE: 20 * 1024 * 1024, // 20MB para imágenes
+    MAX_VIDEO_SIZE: 200 * 1024 * 1024, // 200MB para videos
     ALLOWED_IMAGE_TYPES: ["image/jpeg", "image/png", "image/webp"],
     ALLOWED_DOCUMENT_TYPES: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
 

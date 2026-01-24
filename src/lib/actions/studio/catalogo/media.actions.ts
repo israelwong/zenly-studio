@@ -25,13 +25,15 @@ type UploadMediaInput = z.infer<typeof UploadMediaSchema>;
 // FILE VALIDATION
 // ============================================
 
+import { APP_CONFIG } from '@/lib/actions/constants/config';
+
 const FILE_LIMITS = {
   IMAGE: {
-    MAX_SIZE: 50 * 1024 * 1024, // 50 MB
+    MAX_SIZE: APP_CONFIG.MAX_IMAGE_SIZE,
     FORMATS: ["image/jpeg", "image/png", "image/webp", "image/gif"],
   },
   VIDEO: {
-    MAX_SIZE: 500 * 1024 * 1024, // 500 MB
+    MAX_SIZE: APP_CONFIG.MAX_VIDEO_SIZE,
     FORMATS: ["video/mp4", "video/webm", "video/quicktime"],
   },
 } as const;
@@ -39,14 +41,16 @@ const FILE_LIMITS = {
 function validateFile(file: File): { type: "IMAGE" | "VIDEO"; isValid: boolean; error?: string } {
   if (FILE_LIMITS.IMAGE.FORMATS.includes(file.type)) {
     if (file.size > FILE_LIMITS.IMAGE.MAX_SIZE) {
-      return { type: "IMAGE", isValid: false, error: `Image size exceeds 50MB limit` };
+      const maxSizeMB = FILE_LIMITS.IMAGE.MAX_SIZE / (1024 * 1024);
+      return { type: "IMAGE", isValid: false, error: `Image size exceeds ${maxSizeMB}MB limit` };
     }
     return { type: "IMAGE", isValid: true };
   }
 
   if (FILE_LIMITS.VIDEO.FORMATS.includes(file.type)) {
     if (file.size > FILE_LIMITS.VIDEO.MAX_SIZE) {
-      return { type: "VIDEO", isValid: false, error: `Video size exceeds 500MB limit` };
+      const maxSizeMB = FILE_LIMITS.VIDEO.MAX_SIZE / (1024 * 1024);
+      return { type: "VIDEO", isValid: false, error: `Video size exceeds ${maxSizeMB}MB limit` };
     }
     return { type: "VIDEO", isValid: true };
   }

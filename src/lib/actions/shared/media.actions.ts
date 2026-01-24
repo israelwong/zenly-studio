@@ -14,6 +14,7 @@ import {
   type FileInfo
 } from '@/lib/actions/schemas/media-schemas';
 import { optimizeAvatarImage } from '@/lib/utils/image-optimizer';
+import { APP_CONFIG } from '@/lib/actions/constants/config';
 
 // Configuración de Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -89,11 +90,21 @@ function validateFileType(file: File, allowedTypes: readonly string[]): boolean 
 
 // --- Helper para obtener tipo de archivo por MIME ---
 function getFileTypeByMime(mimeType: string): string | null {
+  // Primero intentar match exacto
   for (const [type, mimes] of Object.entries(ALLOWED_MIME_TYPES)) {
     if ((mimes as readonly string[]).includes(mimeType)) {
       return type;
     }
   }
+  
+  // Fallback: detectar por prefijo para videos e imágenes
+  if (mimeType.startsWith('video/')) {
+    return 'video';
+  }
+  if (mimeType.startsWith('image/')) {
+    return 'image';
+  }
+  
   return null;
 }
 
@@ -123,16 +134,17 @@ export async function uploadFileStorage(
 
     // Validar tamaño según tipo
     const maxSizes = {
-      image: 5 * 1024 * 1024,    // 5MB para imágenes
-      video: 100 * 1024 * 1024,  // 100MB para videos
+      image: APP_CONFIG.MAX_IMAGE_SIZE,
+      video: APP_CONFIG.MAX_VIDEO_SIZE,
       document: 10 * 1024 * 1024, // 10MB para documentos
-      gallery: 5 * 1024 * 1024   // 5MB para galerías
+      gallery: APP_CONFIG.MAX_IMAGE_SIZE // Usar límite de imagen para galerías
     };
 
     if (file.size > maxSizes[fileType as keyof typeof maxSizes]) {
+      const maxSizeMB = maxSizes[fileType as keyof typeof maxSizes] / (1024 * 1024);
       return {
         success: false,
-        error: `El archivo es demasiado grande. Máximo ${maxSizes[fileType as keyof typeof maxSizes] / (1024 * 1024)}MB permitido para ${fileType}.`
+        error: `El archivo es demasiado grande. Máximo ${maxSizeMB}MB permitido para ${fileType}.`
       };
     }
 

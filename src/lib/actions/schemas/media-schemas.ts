@@ -19,10 +19,10 @@ export const MediaCategorySchema = z.enum([
 
 // MIME types permitidos por categoría
 export const ALLOWED_MIME_TYPES = {
-  image: ["image/png", "image/svg+xml", "image/jpeg", "image/jpg"],
-  video: ["video/mp4"],
+  image: ["image/png", "image/svg+xml", "image/jpeg", "image/jpg", "image/webp", "image/gif"],
+  video: ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo", "video/avi"],
   document: ["application/pdf"],
-  gallery: ["image/jpeg", "image/jpg"]
+  gallery: ["image/jpeg", "image/jpg", "image/png", "image/webp"]
 } as const;
 
 // Schema para subir archivo

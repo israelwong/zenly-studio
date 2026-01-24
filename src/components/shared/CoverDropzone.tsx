@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, AlertCircle, Upload, ImageIcon, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { APP_CONFIG } from '@/lib/actions/constants/config';
 
 interface CoverDropzoneProps {
     // Media actual
@@ -114,8 +115,12 @@ export function CoverDropzone({
             return `Tipo de archivo no permitido. Solo se permiten imágenes (JPG, PNG, WEBP, GIF) o videos (MP4, WEBM, MOV, AVI).`;
         }
 
-        if (file.size > maxFileSize) {
-            const maxSizeMB = maxFileSize / (1024 * 1024);
+        // Validar según tipo específico si no se pasó maxFileSize custom
+        const typeSpecificLimit = isImage ? APP_CONFIG.MAX_IMAGE_SIZE : APP_CONFIG.MAX_VIDEO_SIZE;
+        const actualLimit = maxFileSize !== DEFAULT_MAX_FILE_SIZE ? maxFileSize : typeSpecificLimit;
+        
+        if (file.size > actualLimit) {
+            const maxSizeMB = actualLimit / (1024 * 1024);
             return `El archivo es demasiado grande. Máximo: ${maxSizeMB}MB`;
         }
 
