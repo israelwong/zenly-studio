@@ -5,6 +5,7 @@ import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescriptio
 import { getCatalogShell } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { CatalogoClient } from './components/CatalogoClient';
+import { CatalogoHeaderActions } from './components/CatalogoHeaderActions';
 
 interface CatalogoPageProps {
     params: Promise<{ slug: string }>;
@@ -85,6 +86,7 @@ export default async function CatalogoPage({ params }: CatalogoPageProps) {
                                 </ZenCardDescription>
                             </div>
                         </div>
+                        <CatalogoHeaderActions />
                     </div>
                 </ZenCardHeader>
 

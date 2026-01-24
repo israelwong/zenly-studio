@@ -136,11 +136,27 @@ export function CatalogoClient({
     });
     const [isUtilidadModalOpen, setIsUtilidadModalOpen] = useState(false);
 
-    // Estados de expansión - inicializar todas las secciones expandidas
+    // Exponer función para abrir modal desde el header
+    React.useEffect(() => {
+        (window as any).__catalogoOpenUtilidad = () => setIsUtilidadModalOpen(true);
+        return () => {
+            delete (window as any).__catalogoOpenUtilidad;
+        };
+    }, []);
+
+    // Estados de expansión - inicializar todas las secciones y categorías expandidas
     const [seccionesExpandidas, setSeccionesExpandidas] = useState<Set<string>>(
         new Set(initialCatalogo.map(s => s.id))
     );
-    const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
+    const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(() => {
+        const todasCategorias = new Set<string>();
+        initialCatalogo.forEach(seccion => {
+            seccion.categorias.forEach(cat => {
+                todasCategorias.add(cat.id);
+            });
+        });
+        return todasCategorias;
+    });
 
     // Datos - inicializar desde catálogo completo
     const [categoriasData, setCategoriasData] = useState<Record<string, Categoria[]>>(() => {
