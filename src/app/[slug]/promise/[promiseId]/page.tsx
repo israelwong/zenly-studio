@@ -1,12 +1,8 @@
-import React, { Suspense } from 'react';
-import Link from 'next/link';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { unstable_cache } from 'next/cache';
 import { getPublicPromiseMetadata, getPublicPromiseRouteState } from '@/lib/actions/public/promesas.actions';
-import { ZenButton, ZenCard } from '@/components/ui/zen';
-import { determinePromiseRoute, normalizeStatus } from '@/lib/utils/public-promise-routing';
-import { PromisePageSkeleton } from '@/components/promise/PromisePageSkeleton';
+import { determinePromiseRoute } from '@/lib/utils/public-promise-routing';
 
 interface PromisePageProps {
   params: Promise<{
@@ -21,143 +17,38 @@ interface PromisePageProps {
 export default async function PromisePage({ params }: PromisePageProps) {
   const { slug, promiseId } = await params;
 
-  try {
-    // Medir tiempo de dispatcher
-    const dispatcherStart = Date.now();
+  // ⚠️ FIX: Hacer redirect lo más temprano posible para evitar que el layout se renderice
+  // 1. Consulta inicial ligera: solo estados de cotizaciones para determinar routing
+  const routeStateResult = await getPublicPromiseRouteState(slug, promiseId);
 
-    // ⚠️ FIX: Hacer redirect lo más temprano posible para evitar que el layout se renderice
-    // 1. Consulta inicial ligera: solo estados de cotizaciones para determinar routing
-    const routeStateResult = await getPublicPromiseRouteState(slug, promiseId);
-
-    // Si hay error o no hay datos, mostrar mensaje de error
-    if (!routeStateResult.success || !routeStateResult.data) {
-      return (
-        <div className="min-h-screen flex items-center justify-center px-4">
-          <div className="max-w-md w-full">
-            <ZenCard className="bg-zinc-900/50 border-zinc-800 p-8 text-center">
-              <div className="mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-800/50 flex items-center justify-center">
-                  <svg
-                    className="w-8 h-8 text-zinc-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-semibold text-white mb-2">
-                  {routeStateResult.error || 'Información no disponible'}
-                </h2>
-                <p className="text-sm text-zinc-400">
-                  {routeStateResult.error === 'Studio no encontrado'
-                    ? 'Lo sentimos, el estudio solicitado no existe.'
-                    : routeStateResult.error === 'Promesa no encontrada'
-                      ? 'Lo sentimos, la promesa solicitada ya no está disponible.'
-                      : 'Esta información ya no se encuentra disponible.'}
-                </p>
-              </div>
-              <Link href={`/${slug}`}>
-                <ZenButton className="w-full">
-                  Ver perfil del estudio
-                </ZenButton>
-              </Link>
-            </ZenCard>
-          </div>
-        </div>
-      );
-    }
-
-    const cotizaciones = routeStateResult.data;
-
-    // 2. Verificar si hay cotización aprobada (redirigir a /cliente)
-    const cotizacionAprobada = cotizaciones.find(cot =>
-      cot.status === 'aprobada' || cot.status === 'autorizada' || cot.status === 'approved'
-    );
-
-    if (cotizacionAprobada) {
-      console.log('🚀 Dispatcher: Cotización aprobada, redirigiendo a /cliente');
-      redirect(`/${slug}/cliente`);
-    }
-
-    // 3. Determinar ruta usando función helper centralizada
-    // Prioridad: Negociación > Cierre > Pendientes
-    const targetRoute = determinePromiseRoute(cotizaciones, slug, promiseId);
-
-    console.log('🚀 Dispatcher: Redirigiendo a ->', targetRoute);
-    console.log('📊 Dispatcher: Cotizaciones disponibles:', cotizaciones.map(c => ({ id: c.id, status: c.status, selected: c.selected_by_prospect })));
-    
-    // ⚠️ DEBUG: Verificar lógica de negociación
-    const cotizacionNegociacion = cotizaciones.find((cot) => {
-      const normalizedStatus = normalizeStatus(cot.status);
-      const selectedByProspect = cot.selected_by_prospect ?? false;
-      const isNegociacion = normalizedStatus === 'negociacion' && selectedByProspect !== true;
-      console.log(`[Dispatcher] Cotización ${cot.id}: status=${cot.status}, normalized=${normalizedStatus}, selected=${selectedByProspect}, isNegociacion=${isNegociacion}`);
-      return isNegociacion;
-    });
-    console.log('🔍 Dispatcher: Cotización en negociación encontrada:', cotizacionNegociacion);
-
-    // 4. Si determinePromiseRoute devuelve la ruta raíz, significa que no hay cotizaciones válidas
-    // En ese caso, mostrar error en lugar de redirigir (evitar bucle)
-    if (targetRoute === `/${slug}/promise/${promiseId}`) {
-      console.log('⚠️ Dispatcher: No hay cotizaciones válidas, mostrando error');
-      return (
-        <div className="min-h-screen flex items-center justify-center px-4">
-          <div className="max-w-md w-full">
-            <ZenCard className="bg-zinc-900/50 border-zinc-800 p-8 text-center">
-              <div className="mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-800/50 flex items-center justify-center">
-                  <svg
-                    className="w-8 h-8 text-zinc-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-semibold text-white mb-2">
-                  No hay cotizaciones disponibles
-                </h2>
-                <p className="text-sm text-zinc-400">
-                  No hay cotizaciones pendientes, en negociación o en cierre disponibles en este momento.
-                </p>
-              </div>
-              <Link href={`/${slug}`}>
-                <ZenButton className="w-full">
-                  Ver perfil del estudio
-                </ZenButton>
-              </Link>
-            </ZenCard>
-          </div>
-        </div>
-      );
-    }
-    
-    console.log(`⏱️ Dispatcher: ${Date.now() - dispatcherStart}ms`);
-    // ⚠️ FIX: Redirect debe ser la última línea, sin código después
-    // Next.js redirect() lanza una excepción especial que debe propagarse
-    redirect(targetRoute);
-  } catch (error) {
-    // Capturar errores de redirect (NEXT_REDIRECT es esperado, otros no)
-    if (error && typeof error === 'object' && 'digest' in error && typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
-      // Re-lanzar redirects (son excepciones especiales de Next.js que deben propagarse)
-      throw error;
-    }
-    console.error('[PromisePage] Error inesperado:', error);
-    // En caso de error, redirigir a pendientes como fallback
+  // Si hay error o no hay datos, redirigir a pendientes como fallback
+  if (!routeStateResult.success || !routeStateResult.data) {
     redirect(`/${slug}/promise/${promiseId}/pendientes`);
   }
+
+  const cotizaciones = routeStateResult.data;
+
+  // 2. Verificar si hay cotización aprobada (redirigir a /cliente)
+  const cotizacionAprobada = cotizaciones.find(cot =>
+    cot.status === 'aprobada' || cot.status === 'autorizada' || cot.status === 'approved'
+  );
+
+  if (cotizacionAprobada) {
+    redirect(`/${slug}/cliente`);
+  }
+
+  // 3. Determinar ruta usando función helper centralizada
+  // Prioridad: Negociación > Cierre > Pendientes
+  const targetRoute = determinePromiseRoute(cotizaciones, slug, promiseId);
+
+  // 4. Si determinePromiseRoute devuelve la ruta raíz, redirigir a pendientes como fallback
+  if (targetRoute === `/${slug}/promise/${promiseId}`) {
+    redirect(`/${slug}/promise/${promiseId}/pendientes`);
+  }
+  
+  // ⚠️ FIX: Redirect debe ser la última línea
+  // Next.js redirect() lanza una excepción especial (NEXT_REDIRECT) que debe propagarse
+  redirect(targetRoute);
 }
 
 /**

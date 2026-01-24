@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
 import { PublicPageFooter } from '@/components/shared/PublicPageFooter';

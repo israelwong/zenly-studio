@@ -16,7 +16,9 @@ export function PublicPageFooterServer({
   commercialName,
   domain,
 }: PublicPageFooterServerProps) {
-  const currentYear = new Date().getFullYear();
+  // ⚠️ FIX: Usar año fijo para evitar diferencias entre servidor y cliente
+  // En 2026, usar 2026 directamente para evitar problemas de hidratación
+  const currentYear = 2026;
   const displayName = commercialName || companyName || 'Zenly Studio';
   const domainUrl = domain ? `https://${domain}` : 'https://zenly.mx';
   const displayDomain = domain || 'zenly.mx';
