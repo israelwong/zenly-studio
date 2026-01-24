@@ -66,6 +66,34 @@ export default async function PromiseLayout({
   ]);
 
   return (
+    <Suspense fallback={null}>
+      <PromiseLayoutContent
+        studio={studio}
+        platformConfig={platformConfig}
+        slug={slug}
+      >
+        {children}
+      </PromiseLayoutContent>
+    </Suspense>
+  );
+}
+
+/**
+ * Componente interno para renderizar el contenido del layout
+ * Envuelto en Suspense para evitar renderizar antes del redirect
+ */
+async function PromiseLayoutContent({
+  studio,
+  platformConfig,
+  slug,
+  children,
+}: {
+  studio: { studio_name: string; slogan: string | null; logo_url: string | null } | null;
+  platformConfig: { company_name: string | null; commercial_name: string | null; domain: string | null } | null;
+  slug: string;
+  children: React.ReactNode;
+}) {
+  return (
     <div className="min-h-screen bg-zinc-950">
       {/* Header fijo */}
       {studio && (
