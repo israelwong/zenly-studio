@@ -237,7 +237,7 @@ export function ImageCarousel({
             {/* Glide Carousel - Estilo Threads */}
             <div ref={glideRef} className="glide relative w-full">
                 <div className="overflow-hidden" data-glide-el="track">
-                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-y] [will-change: transform] relative flex w-full overflow-hidden p-0">
+                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-x pan-y] [will-change: transform] relative flex w-full overflow-hidden p-0">
                         {media.map((item, index) => (
                             <li key={item.id} className="glide__slide">
                                 <div

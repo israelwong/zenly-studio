@@ -159,7 +159,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             <div className="relative w-full aspect-square bg-zinc-900 overflow-hidden mx-0 lg:rounded-md">
                 <div ref={glideRef} className="glide post-carousel-glide h-full">
                     <div className="overflow-hidden h-full" data-glide-el="track">
-                        <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-y] [will-change: transform] relative flex w-full overflow-hidden p-0 h-full">
+                        <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-x pan-y] [will-change: transform] relative flex w-full overflow-hidden p-0 h-full">
                             {mediaItems.map((item, index) => (
                                 <li key={item.id} className="glide__slide">
                                     <div
