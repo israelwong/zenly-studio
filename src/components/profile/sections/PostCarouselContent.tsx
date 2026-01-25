@@ -79,8 +79,11 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             perView: 1,
             peek: { before: 0, after: 80 },
             autoplay: false,
-            animationDuration: 300,
+            animationDuration: 200,
             gap: 12,
+            dragThreshold: 80,
+            swipeThreshold: 80,
+            throttle: 16,
             classes: {
                 activeNav: '[&>*]:bg-white',
             },
@@ -122,6 +125,8 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                 .post-carousel-glide .glide__slide {
                     height: 100% !important;
                     flex-shrink: 0;
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
                 }
                 .post-carousel-glide .glide__slide > div {
                     position: relative;
@@ -133,12 +138,20 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                     height: 100% !important;
                     object-fit: cover !important;
                     cursor: pointer;
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
                 }
                 .post-carousel-glide .glide__slide video {
                     width: 100% !important;
                     height: 100% !important;
                     object-fit: cover !important;
                     cursor: pointer;
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
+                }
+                .post-carousel-glide .glide__track {
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
                 }
             `}</style>
 
@@ -146,7 +159,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             <div className="relative w-full aspect-square bg-zinc-900 overflow-hidden mx-0 lg:rounded-md">
                 <div ref={glideRef} className="glide post-carousel-glide h-full">
                     <div className="overflow-hidden h-full" data-glide-el="track">
-                        <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-Y] [will-change: transform] relative flex w-full overflow-hidden p-0 h-full">
+                        <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-y] [will-change: transform] relative flex w-full overflow-hidden p-0 h-full">
                             {mediaItems.map((item, index) => (
                                 <li key={item.id} className="glide__slide">
                                     <div
@@ -184,6 +197,16 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                     autoPlay: true,
                     muted: true,
                     loop: false
+                }}
+                carousel={{
+                    finite: false,
+                    preload: 2,
+                    padding: 0,
+                    spacing: 0
+                }}
+                animation={{
+                    fade: 200,
+                    swipe: 250
                 }}
                 controller={{
                     closeOnPullDown: true,

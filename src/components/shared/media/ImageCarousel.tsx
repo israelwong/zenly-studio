@@ -130,8 +130,11 @@ export function ImageCarousel({
             perView: 1,
             peek: { before: 0, after: 80 },
             autoplay: autoplay > 0 ? autoplay : false,
-            animationDuration: 300,
+            animationDuration: 200,
             gap: 12,
+            dragThreshold: 80,
+            swipeThreshold: 80,
+            throttle: 16,
             classes: {
                 activeNav: '[&>*]:bg-white',
             },
@@ -190,18 +193,28 @@ export function ImageCarousel({
                 .glide__slide {
                     height: auto !important;
                     flex-shrink: 0;
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
                 }
                 .glide__slide img {
                     width: 100% !important;
                     height: auto !important;
                     object-fit: contain !important;
                     cursor: pointer;
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
                 }
                 .glide__slide video {
                     width: 100% !important;
                     height: auto !important;
                     object-fit: contain !important;
                     cursor: pointer;
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
+                }
+                .glide__track {
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
                 }
             `}</style>
 
@@ -224,7 +237,7 @@ export function ImageCarousel({
             {/* Glide Carousel - Estilo Threads */}
             <div ref={glideRef} className="glide relative w-full">
                 <div className="overflow-hidden" data-glide-el="track">
-                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-Y] [will-change: transform] relative flex w-full overflow-hidden p-0">
+                    <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [touch-action: pan-y] [will-change: transform] relative flex w-full overflow-hidden p-0">
                         {media.map((item, index) => (
                             <li key={item.id} className="glide__slide">
                                 <div
@@ -289,8 +302,8 @@ export function ImageCarousel({
                         spacing: 0
                     }}
                     animation={{
-                        fade: 300,
-                        swipe: 500
+                        fade: 200,
+                        swipe: 250
                     }}
                     controller={{
                         closeOnPullDown: true,
