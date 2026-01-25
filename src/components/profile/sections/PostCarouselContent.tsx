@@ -52,27 +52,27 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
     // Preparar slides para lightbox - memoizado
     const lightboxSlides = useMemo(() => {
         return mediaItems.map(item => {
-        if (item.file_type === 'video') {
+            if (item.file_type === 'video') {
+                return {
+                    type: 'video' as const,
+                    sources: [{
+                        src: item.file_url,
+                        type: 'video/mp4'
+                    }],
+                    poster: item.thumbnail_url || item.file_url,
+                    autoPlay: true,
+                    muted: true,
+                    controls: true,
+                    playsInline: true
+                };
+            }
             return {
-                type: 'video' as const,
-                sources: [{
-                    src: item.file_url,
-                    type: 'video/mp4'
-                }],
-                poster: item.thumbnail_url || item.file_url,
-                autoPlay: true,
-                muted: true,
-                controls: true,
-                playsInline: true
+                src: item.file_url,
+                alt: item.filename,
+                width: 1920,
+                height: 1080
             };
-        }
-        return {
-            src: item.file_url,
-            alt: item.filename,
-            width: 1920,
-            height: 1080
-        };
-    });
+        });
     }, [mediaItems]);
 
     useEffect(() => {
@@ -80,15 +80,15 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
 
         // Crear un string único basado en los IDs de media para comparar
         const currentMediaIds = mediaItems.map(m => m.id).join(',');
-        
+
         // Si los mediaItems no han cambiado Y Glide ya está montado, no hacer nada
         if (mediaIdsRef.current === currentMediaIds && glideInstanceRef.current) {
             return;
         }
-        
+
         // Guardar el índice actual antes de destruir (solo si existe instancia)
         const currentIndex = glideInstanceRef.current?.index ?? 0;
-        
+
         // Limpiar instancia anterior si existe
         if (glideInstanceRef.current) {
             // Limpiar event listeners primero
@@ -99,7 +99,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             glideInstanceRef.current.destroy();
             glideInstanceRef.current = null;
         }
-        
+
         // Actualizar referencia de IDs
         mediaIdsRef.current = currentMediaIds;
 
@@ -116,7 +116,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
 
         const handleTouchMove = (e: TouchEvent) => {
             if (!touchStartX || !touchStartY) return;
-            
+
             const touchX = e.touches[0].clientX;
             const touchY = e.touches[0].clientY;
             const deltaX = Math.abs(touchX - touchStartX);
@@ -150,10 +150,10 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             type: 'carousel',
             focusAt: 'center',
             perView: 1,
-            peek: { before: 0, after: 180 },
+            peek: { before: 0, after: 100 },
             autoplay: false,
             animationDuration: 180,
-            gap: 12,
+            gap: 8,
             dragThreshold: 12,
             swipeThreshold: 12,
             throttle: 8,
@@ -164,19 +164,19 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                 activeNav: '[&>*]:bg-white',
             },
             breakpoints: {
-                768: { 
-                    peek: { before: 0, after: 150 }, 
-                    gap: 10, 
-                    dragThreshold: 10, 
+                768: {
+                    peek: { before: 0, after: 190 },
+                    gap: 5,
+                    dragThreshold: 10,
                     swipeThreshold: 10,
                     touchRatio: 1.2,
                     touchAngle: 45,
                     throttle: 8
                 },
-                640: { 
-                    peek: { before: 0, after: 120 }, 
-                    gap: 8, 
-                    dragThreshold: 8, 
+                640: {
+                    peek: { before: 0, after: 150 },
+                    gap: 4,
+                    dragThreshold: 8,
                     swipeThreshold: 8,
                     touchRatio: 1.3,
                     touchAngle: 45,
@@ -187,7 +187,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
 
         glideInstance.mount();
         glideInstanceRef.current = glideInstance;
-        
+
         // Restaurar índice solo si los mediaItems cambiaron pero queremos mantener posición
         // (En este caso, siempre empezamos desde 0 para evitar confusión)
 
