@@ -92,14 +92,15 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             const deltaX = Math.abs(touchX - touchStartX);
             const deltaY = Math.abs(touchY - touchStartY);
 
-            // Si el movimiento horizontal es mayor que el vertical, es un swipe horizontal
-            // Usar ratio 2:1 para mejor detección (movimiento horizontal debe ser al menos 2x el vertical)
-            if (deltaX > deltaY * 2 && deltaX > 15) {
+            // Solo bloquear scroll si el movimiento horizontal es claramente dominante
+            // Ratio 1.5:1 y mínimo 20px de movimiento horizontal para evitar falsos positivos
+            // Si el movimiento vertical es mayor o igual, permitir scroll normal
+            if (deltaX > deltaY * 1.5 && deltaX > 20) {
                 isSwiping = true;
-                // Prevenir scroll vertical y mantener posición
+                // Prevenir scroll vertical solo durante swipe horizontal claro
                 e.preventDefault();
-                e.stopPropagation();
             }
+            // Si no es un swipe horizontal claro, permitir scroll vertical normal
         };
 
         const handleTouchEnd = () => {
@@ -141,7 +142,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                     touchAngle: 30
                 },
                 640: { 
-                    peek: { before: 0, after: 150 }, 
+                    peek: { before: 0, after: 120 }, 
                     gap: 8, 
                     dragThreshold: 15, 
                     swipeThreshold: 15,
@@ -227,28 +228,36 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                 .post-carousel-glide .glide__track {
                     transform: translateZ(0);
                     -webkit-transform: translateZ(0);
-                    touch-action: pan-x !important;
+                    touch-action: pan-x pan-y !important;
                     -webkit-overflow-scrolling: touch;
                     overscroll-behavior-x: contain;
                 }
                 .post-carousel-glide .glide__slides {
-                    touch-action: pan-x !important;
+                    touch-action: pan-x pan-y !important;
                     -webkit-overflow-scrolling: touch;
                     overscroll-behavior-x: contain;
                 }
+                .post-carousel-glide .glide__slide {
+                    will-change: transform;
+                    backface-visibility: hidden;
+                    -webkit-backface-visibility: hidden;
+                }
                 @media (max-width: 640px) {
                     .post-carousel-glide .glide__track {
-                        touch-action: pan-x !important;
+                        touch-action: pan-x pan-y !important;
                         overscroll-behavior-x: contain;
-                        overscroll-behavior-y: contain;
                     }
                     .post-carousel-glide .glide__slides {
-                        touch-action: pan-x !important;
+                        touch-action: pan-x pan-y !important;
                         overscroll-behavior-x: contain;
-                        overscroll-behavior-y: contain;
+                    }
+                    .post-carousel-glide .glide__slide {
+                        will-change: transform;
+                        backface-visibility: hidden;
+                        -webkit-backface-visibility: hidden;
                     }
                     .post-carousel-glide .glide__slide > div {
-                        touch-action: pan-x !important;
+                        touch-action: pan-x pan-y !important;
                     }
                 }
             `}</style>
@@ -259,7 +268,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                     <div className="overflow-hidden h-full" data-glide-el="track">
                         <ul className="whitespace-no-wrap flex-no-wrap [backface-visibility: hidden] [transform-style: preserve-3d] [will-change: transform] relative flex w-full overflow-hidden p-0 h-full">
                             {mediaItems.map((item, index) => (
-                                <li key={item.id} className="glide__slide">
+                                <li key={`${item.id}-${index}`} className="glide__slide">
                                     <div
                                         className="relative w-full h-full cursor-pointer overflow-hidden"
                                         onClick={() => handleImageClick(index)}
