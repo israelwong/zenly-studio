@@ -152,13 +152,13 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             perView: 1,
             peek: { before: 0, after: 0 },
             autoplay: false,
-            animationDuration: 200,
+            animationDuration: 180,
             gap: 0,
-            dragThreshold: 20,
-            swipeThreshold: 20,
-            throttle: 10,
-            touchRatio: 1,
-            touchAngle: 30,
+            dragThreshold: 12,
+            swipeThreshold: 12,
+            throttle: 8,
+            touchRatio: 1.2,
+            touchAngle: 45,
             perTouch: 1,
             classes: {
                 activeNav: '[&>*]:bg-white',
@@ -167,16 +167,20 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
                 768: { 
                     peek: { before: 0, after: 0 }, 
                     gap: 0, 
-                    dragThreshold: 15, 
-                    swipeThreshold: 15,
-                    touchAngle: 30
+                    dragThreshold: 10, 
+                    swipeThreshold: 10,
+                    touchRatio: 1.2,
+                    touchAngle: 45,
+                    throttle: 8
                 },
                 640: { 
                     peek: { before: 0, after: 120 }, 
                     gap: 8, 
-                    dragThreshold: 15, 
-                    swipeThreshold: 15,
-                    touchAngle: 30
+                    dragThreshold: 8, 
+                    swipeThreshold: 8,
+                    touchRatio: 1.3,
+                    touchAngle: 45,
+                    throttle: 6
                 }
             }
         });
