@@ -150,7 +150,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             type: 'carousel',
             focusAt: 'center',
             perView: 1,
-            peek: { before: 0, after: 0 },
+            peek: { before: 0, after: 180 },
             autoplay: false,
             animationDuration: 180,
             gap: 0,
@@ -165,7 +165,7 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             },
             breakpoints: {
                 768: { 
-                    peek: { before: 0, after: 0 }, 
+                    peek: { before: 0, after: 150 }, 
                     gap: 0, 
                     dragThreshold: 10, 
                     swipeThreshold: 10,
