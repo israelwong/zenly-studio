@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { MediaItem } from '@/types/content-blocks';
 import Glide from '@glidejs/glide';
 import '@glidejs/glide/dist/css/glide.core.min.css';
@@ -34,20 +34,24 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
     const glideInstanceRef = useRef<Glide | null>(null);
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
+    const mediaIdsRef = useRef<string>('');
 
-    // Convertir PostMedia a MediaItem
-    const mediaItems: MediaItem[] = media.map(item => ({
-        id: item.id,
-        file_url: item.file_url,
-        file_type: item.file_type,
-        filename: item.filename,
-        thumbnail_url: item.thumbnail_url,
-        storage_path: item.file_url,
-        display_order: item.display_order,
-    }));
+    // Convertir PostMedia a MediaItem - memoizado para evitar re-renders innecesarios
+    const mediaItems: MediaItem[] = useMemo(() => {
+        return media.map(item => ({
+            id: item.id,
+            file_url: item.file_url,
+            file_type: item.file_type,
+            filename: item.filename,
+            thumbnail_url: item.thumbnail_url,
+            storage_path: item.file_url,
+            display_order: item.display_order,
+        }));
+    }, [media]);
 
-    // Preparar slides para lightbox
-    const lightboxSlides = mediaItems.map(item => {
+    // Preparar slides para lightbox - memoizado
+    const lightboxSlides = useMemo(() => {
+        return mediaItems.map(item => {
         if (item.file_type === 'video') {
             return {
                 type: 'video' as const,
@@ -69,9 +73,35 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
             height: 1080
         };
     });
+    }, [mediaItems]);
 
     useEffect(() => {
         if (!glideRef.current || !mediaItems.length) return;
+
+        // Crear un string único basado en los IDs de media para comparar
+        const currentMediaIds = mediaItems.map(m => m.id).join(',');
+        
+        // Si los mediaItems no han cambiado Y Glide ya está montado, no hacer nada
+        if (mediaIdsRef.current === currentMediaIds && glideInstanceRef.current) {
+            return;
+        }
+        
+        // Guardar el índice actual antes de destruir (solo si existe instancia)
+        const currentIndex = glideInstanceRef.current?.index ?? 0;
+        
+        // Limpiar instancia anterior si existe
+        if (glideInstanceRef.current) {
+            // Limpiar event listeners primero
+            const oldTrackElement = glideRef.current.querySelector('[data-glide-el="track"]') as HTMLElement;
+            if (oldTrackElement) {
+                // Los listeners se limpian automáticamente al destruir Glide
+            }
+            glideInstanceRef.current.destroy();
+            glideInstanceRef.current = null;
+        }
+        
+        // Actualizar referencia de IDs
+        mediaIdsRef.current = currentMediaIds;
 
         // Prevenir scroll vertical durante swipe horizontal
         let touchStartX = 0;
@@ -153,13 +183,18 @@ export function PostCarouselContent({ media, onMediaClick }: PostCarouselContent
 
         glideInstance.mount();
         glideInstanceRef.current = glideInstance;
+        
+        // Restaurar índice solo si los mediaItems cambiaron pero queremos mantener posición
+        // (En este caso, siempre empezamos desde 0 para evitar confusión)
 
         return () => {
+            // Limpiar event listeners
             if (trackElement) {
                 trackElement.removeEventListener('touchstart', handleTouchStart);
                 trackElement.removeEventListener('touchmove', handleTouchMove);
                 trackElement.removeEventListener('touchend', handleTouchEnd);
             }
+            // Destruir Glide solo en unmount completo del componente
             if (glideInstanceRef.current) {
                 glideInstanceRef.current.destroy();
                 glideInstanceRef.current = null;
