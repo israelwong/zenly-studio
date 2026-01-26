@@ -456,6 +456,7 @@ export async function getCotizacionById(
       expense: number;
       order: number;
       id: string;
+      billing_type: 'HOUR' | 'SERVICE' | 'UNIT' | null;
       // Campos operacionales (para compatibilidad)
       name: string | null;
       description: string | null;
@@ -539,6 +540,7 @@ export async function getCotizacionById(
         expense: item.expense ?? 0,
         order: item.order ?? 0,
         id: item.id,
+        billing_type: item.billing_type,
         // Campos operacionales (para compatibilidad)
         name: item.name_snapshot || item.name,
         description: item.description_snapshot || item.description,
@@ -1782,6 +1784,9 @@ export async function autorizarCotizacion(
           });
         }
       }
+    }, {
+      maxWait: 10000, // 10 segundos para iniciar la transacción
+      timeout: 15000, // 15 segundos para completar la transacción (aumentado para operaciones complejas)
     });
 
     // Obtener la cotizaciรณn actualizada
@@ -2014,6 +2019,9 @@ export async function cancelarCotizacionYEvento(
           });
         }
       }
+    }, {
+      maxWait: 10000, // 10 segundos para iniciar la transacción
+      timeout: 15000, // 15 segundos para completar la transacción
     });
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
@@ -2258,6 +2266,9 @@ export async function cancelarCierre(
           },
         });
       }
+    }, {
+      maxWait: 10000, // 10 segundos para iniciar la transacción
+      timeout: 15000, // 15 segundos para completar la transacción
     });
 
     // Sincronizar pipeline stage de la promesa

@@ -11,6 +11,7 @@ import { DEFAULT_AVISO_PRIVACIDAD_TITLE, DEFAULT_AVISO_PRIVACIDAD_VERSION, DEFAU
 import type { PublicSeccionData, PublicCategoriaData, PublicServicioData, PublicCotizacion } from "@/types/public-promise";
 import type { SeccionData } from "@/lib/actions/schemas/catalogo-schemas";
 import { construirEstructuraJerarquicaCotizacion } from "@/lib/actions/studio/commercial/promises/cotizacion-structure.utils";
+import { calcularCantidadEfectiva } from "@/lib/utils/dynamic-billing-calc";
 
 /**
  * Obtener condiciones comerciales disponibles para promesa pública
@@ -671,6 +672,8 @@ function filtrarCatalogoPorItems(
                       quantity: itemData.quantity,
                     }
                     : {}),
+                // Incluir billing_type para mostrar "/h" cuando sea por hora
+                billing_type: servicio.billing_type as 'HOUR' | 'SERVICE' | 'UNIT' | undefined,
                 // ⚠️ NO incluir multimedia - se carga bajo demanda solo para cotizaciones
               };
             }),
@@ -809,6 +812,7 @@ export async function getPublicPromisePendientes(
         select: {
           id: true,
           event_type_id: true,
+          duration_hours: true,
           quotes: {
             where: {
               visible_to_client: true,
@@ -842,6 +846,7 @@ export async function getPublicPromisePendientes(
                   status: true,
                   order: true,
                   is_courtesy: true,
+                  billing_type: true,
                 },
                 orderBy: { order: 'asc' },
               },
@@ -908,6 +913,7 @@ export async function getPublicPromisePendientes(
               name: true,
               description: true,
               precio: true,
+              base_hours: true,
               cover_url: true,
               is_featured: true,
               paquete_items: {
@@ -1102,6 +1108,7 @@ export async function getPublicPromisePendientes(
           category_name: item.category_name,
           seccion_name: item.seccion_name,
           id: item.id,
+          billing_type: item.billing_type,
         })),
         {
           incluirPrecios: true,
@@ -1121,6 +1128,12 @@ export async function getPublicPromisePendientes(
           servicios: categoria.items.map(item => {
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            // Usar billing_type guardado en cotizacion_item (no del catálogo)
+            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
+              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
+              : item.cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -1128,8 +1141,9 @@ export async function getPublicPromisePendientes(
               description: item.descripcion || null,
               description_snapshot: item.descripcion || null,
               price: item.unit_price,
-              quantity: item.cantidad,
+              quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente
               is_courtesy: originalItem?.is_courtesy || false,
+              billing_type: billingType,
               ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
             };
           }),
@@ -1166,9 +1180,12 @@ export async function getPublicPromisePendientes(
 
     // 8. ⚠️ OPTIMIZACIÓN: Mapear paquetes SIN multimedia de items (solo portada)
     const mapearPaquetesStart = Date.now();
+    // Obtener duration_hours de la promise
+    const promiseDurationHours = promise.duration_hours ?? null;
     const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
       const itemIds = new Set<string>();
       const itemsData = new Map<string, { description?: string | null; quantity?: number; price?: number }>();
+      let precioTotalRecalculado = 0;
 
       if (!paq.paquete_items || paq.paquete_items.length === 0) {
         return {
@@ -1217,9 +1234,29 @@ export async function getPublicPromisePendientes(
             precioItem = precios.precio_final;
           }
 
+          // Obtener billing_type del catálogo
+          const itemCatalogo = catalogo
+            .flatMap(s => s.categorias.flatMap(c => c.servicios))
+            .find(s => s.id === item.item_id);
+          const billingType = (itemCatalogo?.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+
+          // Calcular cantidad efectiva: usar duration_hours del evento o del paquete
+          const horasParaCalculo = promiseDurationHours ?? (paq.base_hours ?? null);
+          const cantidadEfectiva = calcularCantidadEfectiva(
+            billingType,
+            item.quantity,
+            horasParaCalculo
+          );
+
+          // Calcular subtotal dinámico
+          if (precioItem !== undefined) {
+            const subtotal = precioItem * cantidadEfectiva;
+            precioTotalRecalculado += subtotal;
+          }
+
           itemsData.set(item.item_id, {
             description: null,
-            quantity: item.quantity,
+            quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente en UI
             price: precioItem,
           });
           // ⚠️ NO incluir multimedia de items del paquete
@@ -1229,11 +1266,16 @@ export async function getPublicPromisePendientes(
       // ⚠️ Catálogo sin multimedia
       const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
 
+      // Usar precio recalculado si hay duración del evento, sino usar precio del paquete
+      const precioFinal = promiseDurationHours !== null && precioTotalRecalculado > 0 
+        ? precioTotalRecalculado 
+        : (paq.precio || 0);
+
       return {
         id: paq.id,
         name: paq.name,
         description: paq.description,
-        price: paq.precio || 0,
+        price: precioFinal,
         cover_url: paq.cover_url, // ⚠️ Solo portada del paquete
         recomendado: paq.is_featured || false,
         servicios: serviciosFiltrados,
@@ -1422,6 +1464,7 @@ export async function getPublicPromiseActiveQuote(
         select: {
           id: true,
           event_type_id: true,
+          duration_hours: true,
           quotes: {
             where: {
               visible_to_client: true,
@@ -1454,6 +1497,7 @@ export async function getPublicPromiseActiveQuote(
                   status: true,
                   order: true,
                   is_courtesy: true,
+                  billing_type: true,
                 },
                 orderBy: { order: 'asc' },
               },
@@ -1559,6 +1603,9 @@ export async function getPublicPromiseActiveQuote(
       });
     });
 
+    // Obtener duration_hours de la promise para cálculo dinámico
+    const promiseDurationHours = promise.duration_hours ?? null;
+
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
       // ⚠️ TAREA 1: No cargar multimedia en vista previa (se carga on-demand)
       const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
@@ -1603,6 +1650,7 @@ export async function getPublicPromiseActiveQuote(
           category_name: item.category_name,
           seccion_name: item.seccion_name,
           id: item.id,
+          billing_type: item.billing_type,
           // ⚠️ HIGIENE DE DATOS: Pasar orden de sección y categoría desde catálogo
           seccion_orden: seccionOrdenMap.get((item.seccion_name_snapshot || item.seccion_name || '').toLowerCase().trim()) ?? 999,
           categoria_orden: categoriaOrdenMap.get(`${(item.seccion_name_snapshot || item.seccion_name || '').toLowerCase().trim()}::${(item.category_name_snapshot || item.category_name || '').toLowerCase().trim()}`) ?? 999,
@@ -1625,6 +1673,12 @@ export async function getPublicPromiseActiveQuote(
           servicios: categoria.items.map(item => {
             // ⚠️ TAREA 1: No incluir media en vista previa
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            // Usar billing_type guardado en cotizacion_item (no del catálogo)
+            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
+              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
+              : item.cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -1632,8 +1686,9 @@ export async function getPublicPromiseActiveQuote(
               description: null, // ⚠️ TAREA 1: Descripciones se cargan on-demand
               description_snapshot: null,
               price: item.unit_price,
-              quantity: item.cantidad,
+              quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente
               is_courtesy: originalItem?.is_courtesy || false,
+              billing_type: billingType,
             };
           }),
         })),
@@ -1765,6 +1820,7 @@ export async function getPublicPromiseAvailablePackages(
     }
 
     const { promise: promiseBasic, studio } = basicData.data;
+    const durationHours = promiseBasic.duration_hours ?? null;
 
     // 2. Obtener share settings (show_packages y portafolios)
     const shareSettings = {
@@ -1806,6 +1862,7 @@ export async function getPublicPromiseAvailablePackages(
             name: true,
             description: true,
             precio: true,
+            base_hours: true,
             cover_url: true,
             is_featured: true,
             paquete_items: {
@@ -1864,10 +1921,11 @@ export async function getPublicPromiseAvailablePackages(
       : [];
 
 
-    // 6. Mapear paquetes
+    // 6. Mapear paquetes con cálculo dinámico de precios
     const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
       const itemIds = new Set<string>();
       const itemsData = new Map<string, { description?: string | null; quantity?: number; price?: number }>();
+      let precioTotalRecalculado = 0;
 
       if (!paq.paquete_items || paq.paquete_items.length === 0) {
         return {
@@ -1916,9 +1974,30 @@ export async function getPublicPromiseAvailablePackages(
             precioItem = precios.precio_final;
           }
 
+          // Obtener billing_type del catálogo
+          const itemCatalogo = catalogo
+            .flatMap(s => s.categorias.flatMap(c => c.servicios))
+            .find(s => s.id === item.item_id);
+          const billingType = (itemCatalogo?.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+
+          // Calcular cantidad efectiva usando duración del evento o del paquete
+          // Si hay duration_hours del evento, usarlo; si no, usar las horas del paquete (si existen)
+          const horasParaCalculo = durationHours ?? (paq.base_hours ?? null);
+          const cantidadEfectiva = calcularCantidadEfectiva(
+            billingType,
+            item.quantity,
+            horasParaCalculo
+          );
+
+          // Calcular subtotal dinámico
+          if (precioItem !== undefined) {
+            const subtotal = precioItem * cantidadEfectiva;
+            precioTotalRecalculado += subtotal;
+          }
+
           itemsData.set(item.item_id, {
             description: null,
-            quantity: item.quantity,
+            quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente en UI
             price: precioItem,
           });
         }
@@ -1926,11 +2005,33 @@ export async function getPublicPromiseAvailablePackages(
 
       const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
 
+      // Lógica de precio: si paquete tiene horas y precio personalizado
+      // - Si las horas del evento coinciden con las del paquete → mantener precio personalizado
+      // - Si las horas son diferentes → recalcular precio dinámico
+      // - Si no hay horas en paquete o no hay precio personalizado → usar lógica estándar
+      const tieneHorasYprecio = paq.base_hours !== null && paq.base_hours !== undefined && paq.precio !== null && paq.precio !== undefined && paq.precio > 0;
+      const horasCoinciden = tieneHorasYprecio && durationHours !== null && durationHours === paq.base_hours;
+      
+      let precioFinal: number;
+      if (tieneHorasYprecio && horasCoinciden) {
+        // Mantener precio personalizado si las horas coinciden
+        precioFinal = paq.precio;
+      } else if (tieneHorasYprecio && durationHours !== null && durationHours !== paq.base_hours) {
+        // Recalcular precio dinámico si las horas son diferentes
+        precioFinal = precioTotalRecalculado > 0 ? precioTotalRecalculado : (paq.precio || 0);
+      } else if (durationHours !== null && precioTotalRecalculado > 0) {
+        // Si hay duración del evento y se calculó precio, usarlo
+        precioFinal = precioTotalRecalculado;
+      } else {
+        // Usar precio base del paquete
+        precioFinal = paq.precio || 0;
+      }
+
       return {
         id: paq.id,
         name: paq.name,
         description: paq.description,
-        price: paq.precio || 0,
+        price: precioFinal,
         cover_url: paq.cover_url,
         recomendado: paq.is_featured || false,
         servicios: serviciosFiltrados,
@@ -2203,6 +2304,7 @@ export async function getPublicPromiseNegociacion(
       },
       select: {
         id: true,
+        duration_hours: true,
         quotes: {
           where: {
             visible_to_client: true,
@@ -2239,6 +2341,7 @@ export async function getPublicPromiseNegociacion(
                 status: true,
                 order: true,
                 is_courtesy: true,
+                billing_type: true,
               },
               orderBy: { order: 'asc' },
             },
@@ -2289,6 +2392,9 @@ export async function getPublicPromiseNegociacion(
     }
 
     const cotizacion = promise.quotes[0];
+
+    // Obtener duration_hours de la promise para cálculo dinámico
+    const promiseDurationHours = promise.duration_hours ?? null;
 
     // 4. ⚠️ OPTIMIZADO: NO cargar catálogo completo
     // Usar solo snapshots de cotizacion_items para construir estructura jerárquica
@@ -2404,21 +2510,28 @@ export async function getPublicPromiseNegociacion(
         id: categoria.nombre,
         nombre: categoria.nombre,
         orden: categoria.orden,
-        servicios: categoria.items.map(item => {
-          const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
-          const originalItem = itemsFiltrados.find(i => i.id === item.id);
-          return {
-            id: item.item_id || item.id || '',
-            name: item.nombre,
-            name_snapshot: item.nombre,
-            description: item.descripcion || null,
-            description_snapshot: item.descripcion || null,
-            price: item.unit_price,
-            quantity: item.cantidad,
-            is_courtesy: originalItem?.is_courtesy || false,
-            ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
-          };
-        }),
+          servicios: categoria.items.map(item => {
+            const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
+            const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            // Usar billing_type guardado en cotizacion_item (no del catálogo)
+            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
+              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
+              : item.cantidad;
+            return {
+              id: item.item_id || item.id || '',
+              name: item.nombre,
+              name_snapshot: item.nombre,
+              description: item.descripcion || null,
+              description_snapshot: item.descripcion || null,
+              price: item.unit_price,
+              quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente
+              is_courtesy: originalItem?.is_courtesy || false,
+              billing_type: billingType,
+              ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
+            };
+          }),
       })),
     }));
 
@@ -2652,6 +2765,7 @@ export async function getPublicPromiseCierre(
       },
       select: {
         id: true,
+        duration_hours: true,
         quotes: {
           where: {
             visible_to_client: true,
@@ -2687,6 +2801,7 @@ export async function getPublicPromiseCierre(
                 status: true,
                 order: true,
                 is_courtesy: true,
+                billing_type: true,
               },
               orderBy: { order: 'asc' },
             },
@@ -2734,17 +2849,23 @@ export async function getPublicPromiseCierre(
 
     const cotizacion = promise.quotes[0];
 
+    // Obtener duration_hours de la promise para cálculo dinámico
+    const promiseDurationHours = promise.duration_hours ?? null;
+
     // 3. ⚠️ OPTIMIZADO: NO cargar catálogo completo
     // Usar solo snapshots de cotizacion_items para construir estructura jerárquica
     // Esto reduce significativamente el tiempo de carga y transferencia de datos
 
-    // 4. Obtener multimedia solo de items de esta cotización
+    // 4. Obtener multimedia y catálogo solo de items de esta cotización
     const allItemIds = new Set<string>();
     cotizacion.cotizacion_items.forEach((item) => {
       if (item.item_id) allItemIds.add(item.item_id);
     });
 
     const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
+    const catalogo = allItemIds.size > 0
+      ? await obtenerItemsPorIds(studio.id, Array.from(allItemIds))
+      : [];
 
     if (allItemIds.size > 0) {
       const itemsMediaData = await prisma.studio_item_media.findMany({
@@ -2844,21 +2965,28 @@ export async function getPublicPromiseCierre(
         id: categoria.nombre,
         nombre: categoria.nombre,
         orden: categoria.orden,
-        servicios: categoria.items.map(item => {
-          const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
-          const originalItem = itemsFiltrados.find(i => i.id === item.id);
-          return {
-            id: item.item_id || item.id || '',
-            name: item.nombre,
-            name_snapshot: item.nombre,
-            description: item.descripcion || null,
-            description_snapshot: item.descripcion || null,
-            price: item.unit_price,
-            quantity: item.cantidad,
-            is_courtesy: originalItem?.is_courtesy || false,
-            ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
-          };
-        }),
+          servicios: categoria.items.map(item => {
+            const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
+            const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            // Usar billing_type guardado en cotizacion_item (no del catálogo)
+            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
+              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
+              : item.cantidad;
+            return {
+              id: item.item_id || item.id || '',
+              name: item.nombre,
+              name_snapshot: item.nombre,
+              description: item.descripcion || null,
+              description_snapshot: item.descripcion || null,
+              price: item.unit_price,
+              quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente
+              is_courtesy: originalItem?.is_courtesy || false,
+              billing_type: billingType,
+              ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
+            };
+          }),
       })),
     }));
 
@@ -3088,6 +3216,7 @@ export async function getPublicPromiseData(
         event_type_id: true,
         event_date: true,
         event_location: true,
+        duration_hours: true,
         share_show_packages: true,
         share_show_categories_subtotals: true,
         share_show_items_prices: true,
@@ -3219,6 +3348,9 @@ export async function getPublicPromiseData(
     // Validar que la promesa tenga al menos cotizaciones o paquetes disponibles
     // Esto se verifica después de obtener las cotizaciones y paquetes
 
+    // Obtener duration_hours de la promise para cálculo dinámico de paquetes
+    const promiseDurationHours = promise.duration_hours ?? null;
+
     // Obtener preferencias de compartir (combinar defaults del studio con overrides de la promesa)
     const shareSettings: {
       show_packages: boolean;
@@ -3270,6 +3402,7 @@ export async function getPublicPromiseData(
           name: true,
           description: true,
           precio: true,
+          base_hours: true,
           cover_url: true,
           is_featured: true,
           paquete_items: {
@@ -3433,6 +3566,12 @@ export async function getPublicPromiseData(
           servicios: categoria.items.map(item => {
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
+            // Usar billing_type guardado en cotizacion_item (no del catálogo)
+            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
+              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
+              : item.cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -3440,8 +3579,9 @@ export async function getPublicPromiseData(
               description: item.descripcion || null,
               description_snapshot: item.descripcion || null, // Ya viene del snapshot
               price: item.unit_price,
-              quantity: item.cantidad,
+              quantity: cantidadEfectiva,
               is_courtesy: (item as any).is_courtesy || originalItem?.is_courtesy || false,
+              billing_type: billingType,
               ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
             };
           }),
@@ -3522,11 +3662,12 @@ export async function getPublicPromiseData(
       };
     });
 
-    // 7. Mapear paquetes con estructura jerárquica (igual que ResumenCotizacionAutorizada)
+    // 7. Mapear paquetes con estructura jerárquica y cálculo dinámico de precios
     const mappedPaquetes: PublicPaquete[] = paquetes.map((paq) => {
       // Crear Set de item_ids incluidos en el paquete
       const itemIds = new Set<string>();
       const itemsData = new Map<string, { description?: string | null; quantity?: number; price?: number }>();
+      let precioTotalRecalculado = 0;
 
       // Verificar que paquete_items existe y tiene datos
       if (!paq.paquete_items || paq.paquete_items.length === 0) {
@@ -3569,9 +3710,29 @@ export async function getPublicPromiseData(
             precioItem = precios.precio_final;
           }
 
+          // Obtener billing_type del catálogo
+          const itemCatalogo = catalogo
+            .flatMap(s => s.categorias.flatMap(c => c.servicios))
+            .find(s => s.id === item.item_id);
+          const billingType = (itemCatalogo?.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+
+          // Calcular cantidad efectiva: usar duration_hours del evento o del paquete
+          const horasParaCalculo = promiseDurationHours ?? (paq.base_hours ?? null);
+          const cantidadEfectiva = calcularCantidadEfectiva(
+            billingType,
+            item.quantity,
+            horasParaCalculo
+          );
+
+          // Calcular subtotal dinámico
+          if (precioItem !== undefined) {
+            const subtotal = precioItem * cantidadEfectiva;
+            precioTotalRecalculado += subtotal;
+          }
+
           itemsData.set(item.item_id, {
             description: null,
-            quantity: item.quantity,
+            quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente en UI
             price: precioItem,
           });
           // ⚠️ NO incluir multimedia de items del paquete
@@ -3581,11 +3742,33 @@ export async function getPublicPromiseData(
       // ⚠️ Catálogo sin multimedia
       const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
 
+      // Lógica de precio: si paquete tiene horas y precio personalizado
+      // - Si las horas del evento coinciden con las del paquete → mantener precio personalizado
+      // - Si las horas son diferentes → recalcular precio dinámico
+      // - Si no hay horas en paquete o no hay precio personalizado → usar lógica estándar
+      const tieneHorasYprecio = paq.base_hours !== null && paq.base_hours !== undefined && paq.precio !== null && paq.precio !== undefined && paq.precio > 0;
+      const horasCoinciden = tieneHorasYprecio && promiseDurationHours !== null && promiseDurationHours === paq.base_hours;
+      
+      let precioFinal: number;
+      if (tieneHorasYprecio && horasCoinciden) {
+        // Mantener precio personalizado si las horas coinciden
+        precioFinal = paq.precio;
+      } else if (tieneHorasYprecio && promiseDurationHours !== null && promiseDurationHours !== paq.base_hours) {
+        // Recalcular precio dinámico si las horas son diferentes
+        precioFinal = precioTotalRecalculado > 0 ? precioTotalRecalculado : (paq.precio || 0);
+      } else if (promiseDurationHours !== null && precioTotalRecalculado > 0) {
+        // Si hay duración del evento y se calculó precio, usarlo
+        precioFinal = precioTotalRecalculado;
+      } else {
+        // Usar precio base del paquete
+        precioFinal = paq.precio || 0;
+      }
+
       return {
         id: paq.id,
         name: paq.name,
         description: paq.description,
-        price: paq.precio || 0,
+        price: precioFinal,
         cover_url: paq.cover_url, // ⚠️ Solo portada del paquete
         recomendado: paq.is_featured || false,
         servicios: serviciosFiltrados,
@@ -4416,6 +4599,7 @@ export async function getPublicPromiseUpdate(
           },
           select: {
             id: true,
+            duration_hours: true,
             quotes: {
               where: {
                 visible_to_client: true,
@@ -4490,7 +4674,10 @@ export async function getPublicPromiseUpdate(
       };
     }
 
-    // 3. Obtener multimedia solo de los items de las cotizaciones
+    // Obtener duration_hours de la promise para cálculo dinámico
+    const promiseDurationHours = promise.duration_hours ?? null;
+
+    // 3. Obtener multimedia y catálogo solo de los items de las cotizaciones
     const itemIds = new Set<string>();
     promise.quotes.forEach((cot) => {
       cot.cotizacion_items.forEach((item) => {
@@ -4501,22 +4688,26 @@ export async function getPublicPromiseUpdate(
     });
 
     const fetchMediaStart = Date.now();
-    const itemsMedia =
+    const [itemsMedia, catalogo] = await Promise.all([
       itemIds.size > 0
-        ? await prisma.studio_item_media.findMany({
-          where: {
-            item_id: { in: Array.from(itemIds) },
-          },
-          select: {
-            id: true,
-            item_id: true,
-            file_url: true,
-            file_type: true,
-            display_order: true,
-          },
-          orderBy: { display_order: 'asc' },
-        })
-        : [];
+        ? prisma.studio_item_media.findMany({
+            where: {
+              item_id: { in: Array.from(itemIds) },
+            },
+            select: {
+              id: true,
+              item_id: true,
+              file_url: true,
+              file_type: true,
+              display_order: true,
+            },
+            orderBy: { display_order: 'asc' },
+          })
+        : [],
+      itemIds.size > 0
+        ? obtenerItemsPorIds(studio.id, Array.from(itemIds))
+        : Promise.resolve([]),
+    ]);
 
     // 4. Mapear multimedia por item
     const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
@@ -4584,6 +4775,7 @@ export async function getPublicPromiseUpdate(
           category_name: item.category_name,
           seccion_name: item.seccion_name,
           id: item.id,
+          billing_type: item.billing_type,
         })),
         {
           incluirPrecios: true,
@@ -4603,6 +4795,12 @@ export async function getPublicPromiseUpdate(
           servicios: categoria.items.map((item: any) => {
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find((i) => i.id === item.id);
+            // Usar billing_type guardado en cotizacion_item (no del catálogo)
+            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
+            const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
+              ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
+              : item.cantidad;
             return {
               id: item.item_id || item.id || '',
               name: item.nombre,
@@ -4610,8 +4808,9 @@ export async function getPublicPromiseUpdate(
               description: item.descripcion || null,
               description_snapshot: item.descripcion || null,
               price: item.unit_price,
-              quantity: item.cantidad, // construirEstructuraJerarquicaCotizacion devuelve 'cantidad'
+              quantity: cantidadEfectiva, // Usar cantidad efectiva para mostrar correctamente
               is_courtesy: originalItem?.is_courtesy || false,
+              billing_type: billingType,
               ...(itemMedia && itemMedia.length > 0 ? { media: itemMedia } : {}),
             };
           }),
@@ -4726,6 +4925,7 @@ export async function getPublicPromiseBasicData(
       event_name: string | null;
       event_date: Date | null;
       event_location: string | null;
+      duration_hours: number | null;
       share_show_packages: boolean | null;
       share_show_categories_subtotals: boolean | null;
       share_show_items_prices: boolean | null;
@@ -4833,6 +5033,7 @@ export async function getPublicPromiseBasicData(
           event_name: promise.name,
           event_date: promise.event_date,
           event_location: promise.event_location,
+          duration_hours: promise.duration_hours ?? null,
           share_show_packages: promise.share_show_packages,
           share_show_categories_subtotals: promise.share_show_categories_subtotals,
           share_show_items_prices: promise.share_show_items_prices,

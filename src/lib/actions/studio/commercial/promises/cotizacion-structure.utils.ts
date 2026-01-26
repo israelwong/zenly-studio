@@ -258,6 +258,11 @@ export function construirEstructuraJerarquicaCotizacion(
       itemData.order = item.order;
     }
 
+    // Preservar billing_type si existe
+    if (item.billing_type !== undefined) {
+      itemData.billing_type = item.billing_type;
+    }
+
     // ⚠️ HIGIENE DE DATOS: Ordenar items dentro de la categoría por order
     categoriaData.items.push(itemData);
   });
