@@ -405,7 +405,23 @@ export function PendientesPageClient({
         } : 'N/A',
       });
 
-      // ⚠️ TAREA 1: Toasts y auto-redirección ya manejados arriba, continuar con lógica de notificación
+      // Detectar tipo específico de cambio para notificación más precisa
+      const detectChangeType = (): 'price' | 'description' | 'name' | 'general' => {
+        if (!changeInfo?.camposCambiados || changeInfo.camposCambiados.length === 0) {
+          return 'general';
+        }
+        if (changeInfo.camposCambiados.includes('price')) {
+          return 'price';
+        }
+        if (changeInfo.camposCambiados.includes('description')) {
+          return 'description';
+        }
+        if (changeInfo.camposCambiados.includes('name')) {
+          return 'name';
+        }
+        return 'general';
+      };
+
       // Para otros cambios, solo notificar (no recargar automáticamente)
       if (changeInfo?.camposCambiados && !changeInfo.statusChanged) {
         const cambiosCriticos = ['status', 'selected_by_prospect'];
@@ -418,27 +434,35 @@ export function PendientesPageClient({
             cotizacionId,
             campos: changeInfo.camposCambiados,
           });
-          handleUpdateDetected('quote');
+          handleUpdateDetected('quote', detectChangeType(), true); // Requiere recarga manual
           return;
         }
       }
 
-      // Si hay cambio válido pero no crítico, notificar
+      // Si hay cambio válido pero no crítico, notificar con tipo específico
       // Solo si NO estamos en proceso de autorización
       if (changeInfo && !changeInfo.statusChanged && !isAuthorizationInProgress && !(window as any).__IS_AUTHORIZING) {
-        handleUpdateDetected('quote');
+        handleUpdateDetected('quote', detectChangeType(), true); // Requiere recarga manual
       }
     },
     [checkAndRedirect, getIsNavigating, handleUpdateDetected, isAuthorizationInProgress]
   );
 
-  // ⚠️ TAREA 1: Estado de actualización con tipo
-  const [pendingUpdate, setPendingUpdate] = useState<{ count: number; type: 'quote' | 'promise' | 'both' } | null>(null);
+  // Estado de actualización con tipo y tipo de cambio específico
+  const [pendingUpdate, setPendingUpdate] = useState<{ 
+    count: number; 
+    type: 'quote' | 'promise' | 'both';
+    changeType?: 'price' | 'description' | 'name' | 'inserted' | 'deleted' | 'general';
+    requiresManualUpdate?: boolean; // true si requiere recarga manual, false si ya se actualizó automáticamente
+  } | null>(null);
 
-  // ⚠️ TAREA 1: Callback para incrementar contador según el tipo de cambio
-  const handleUpdateDetected = useCallback((type: 'quote' | 'promise' = 'quote') => {
-    // ⚠️ BLOQUEO: No mostrar notificación durante el proceso de autorización
-    // Verificar tanto el estado del contexto como el lock global síncrono
+  // Callback para incrementar contador según el tipo de cambio
+  const handleUpdateDetected = useCallback((
+    type: 'quote' | 'promise' = 'quote',
+    changeType?: 'price' | 'description' | 'name' | 'inserted' | 'deleted' | 'general',
+    requiresManualUpdate: boolean = true // Por defecto requiere actualización manual
+  ) => {
+    // BLOQUEO: No mostrar notificación durante el proceso de autorización
     if (isAuthorizationInProgress || (window as any).__IS_AUTHORIZING) {
       console.log('[PendientesPageClient] Ignorando notificación de actualización durante proceso de autorización');
       return;
@@ -446,11 +470,18 @@ export function PendientesPageClient({
 
     setPendingUpdate((prev) => {
       if (!prev) {
-        return { count: 1, type };
+        return { count: 1, type, changeType: changeType || 'general', requiresManualUpdate };
       }
       // Si el tipo es diferente, combinar en 'both'
       const newType = prev.type === type ? type : 'both';
-      return { count: prev.count + 1, type: newType };
+      // Priorizar tipos más específicos (price > description > name > general)
+      const priority: Record<string, number> = { price: 4, description: 3, name: 2, inserted: 5, deleted: 5, general: 1 };
+      const newChangeType = (changeType && priority[changeType] > (priority[prev.changeType || 'general'] || 0))
+        ? changeType
+        : (prev.changeType || 'general');
+      // Si alguno requiere actualización manual, mantenerlo como true
+      const newRequiresManualUpdate = requiresManualUpdate || (prev.requiresManualUpdate !== false);
+      return { count: prev.count + 1, type: newType, changeType: newChangeType, requiresManualUpdate: newRequiresManualUpdate };
     });
   }, [isAuthorizationInProgress]);
 
@@ -519,11 +550,9 @@ export function PendientesPageClient({
     }
   }, [studioSlug, promiseId, router, getIsNavigating, setNavigating, clearNavigating]);
 
-  // ⚠️ TAREA 1: Handler mejorado con toasts específicos
+  // Handler mejorado con toasts específicos
   const handleCotizacionInserted = useCallback((changeInfo?: CotizacionChangeInfo) => {
-    // ⚠️ BLOQUEO: No procesar inserciones durante el proceso de autorización
-    // Verificar tanto el estado del contexto como el lock global síncrono
-    // El prospecto no debe recibir avisos durante su propio proceso de autorización
+    // BLOQUEO: No procesar inserciones durante el proceso de autorización
     if (isAuthorizationInProgress || (window as any).__IS_AUTHORIZING) {
       console.log('[PendientesPageClient] Ignorando inserción durante proceso de autorización', {
         reason: 'Proceso de autorización en curso - cambios son resultado de la acción del usuario'
@@ -531,7 +560,7 @@ export function PendientesPageClient({
       return;
     }
 
-    // ⚠️ TAREA 4: No mostrar toast si ya estamos en la ruta destino
+    // No mostrar toast si ya estamos en la ruta destino
     const currentPath = window.location.pathname;
     if (changeInfo?.status === 'negociacion' && currentPath.includes('/negociacion')) {
       return;
@@ -554,7 +583,7 @@ export function PendientesPageClient({
         toast.success('¡Nueva cotización disponible!', {
           description: 'Haz clic para ver los detalles',
         });
-        handleUpdateDetected('quote');
+        handleUpdateDetected('quote', 'inserted', true); // Nueva cotización requiere recarga manual
       }
     }
   }, [checkAndRedirect, handleUpdateDetected, isAuthorizationInProgress]);
@@ -567,9 +596,12 @@ export function PendientesPageClient({
     onCotizacionUpdated: handleCotizacionUpdated,
     onCotizacionDeleted: (cotizacionId) => {
       setCotizaciones((prev) => prev.filter((c) => c.id !== cotizacionId));
-      // Eliminar no requiere recarga, se actualiza localmente
+      // Eliminación ya se actualizó localmente, notificar sin botón
+      if (!isAuthorizationInProgress && !(window as any).__IS_AUTHORIZING) {
+        handleUpdateDetected('quote', 'deleted', false);
+      }
     },
-    onUpdateDetected: () => handleUpdateDetected('quote'), // ⚠️ TAREA 1: Notificar cambios de cotizaciones
+    onUpdateDetected: () => handleUpdateDetected('quote', 'general', true), // Cambios que requieren recarga manual
   });
 
   // ⚠️ TAREA 1: Escuchar cambios en studio_promises
@@ -579,7 +611,7 @@ export function PendientesPageClient({
       // Solo notificar si es la promise actual
       if (updatedPromiseId === promiseId) {
         console.log('🔔 [PendientesPageClient] Cambio detectado en studio_promises', { updatedPromiseId });
-        handleUpdateDetected('promise'); // ⚠️ TAREA 1: Identificar tipo de cambio
+        handleUpdateDetected('promise', 'general', true); // Cambios en promise requieren recarga manual
       }
     },
   });
@@ -782,6 +814,15 @@ export function PendientesPageClient({
       {/* ⚠️ Hero Section ya se renderiza en PendientesPageBasic (instantáneo) */}
       {/* No duplicar aquí para evitar header duplicado */}
 
+      {/* Notificación de cambios - Fixed bottom, persistente al scroll */}
+      {!isAuthorizationInProgress && !(window as any).__IS_AUTHORIZING && (
+        <RealtimeUpdateNotification
+          pendingUpdate={pendingUpdate}
+          onUpdate={handleManualReload}
+          onDismiss={() => setPendingUpdate(null)}
+        />
+      )}
+
       {/* Fecha sugerida de contratación */}
       {shareSettings.min_days_to_hire && shareSettings.min_days_to_hire > 0 && promise.event_date && (
         <section className="py-4 px-4">
@@ -866,16 +907,6 @@ export function PendientesPageClient({
           paquetes={shareSettings.show_packages ? paquetes : []}
           promiseId={promiseId}
           studioSlug={studioSlug}
-        />
-      )}
-
-      {/* ⚠️ TAREA 2: Componente de notificación flotante Zen */}
-      {/* Bloquear completamente las notificaciones durante el proceso de autorización */}
-      {!isAuthorizationInProgress && !(window as any).__IS_AUTHORIZING && (
-        <RealtimeUpdateNotification
-          pendingUpdate={pendingUpdate}
-          onUpdate={handleManualReload}
-          onDismiss={() => setPendingUpdate(null)}
         />
       )}
     </>

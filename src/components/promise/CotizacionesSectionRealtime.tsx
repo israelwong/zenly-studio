@@ -63,7 +63,13 @@ export function CotizacionesSectionRealtime({
 }: CotizacionesSectionRealtimeProps) {
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
   const [isPending, startTransition] = useTransition();
-  const [pendingUpdate, setPendingUpdate] = useState<{ count: number; type: 'quote' | 'promise' | 'both' } | null>(null); // ⚠️ TAREA 1: Estado con tipo
+  const [pendingUpdate, setPendingUpdate] = useState<{ 
+    count: number; 
+    type: 'quote' | 'promise' | 'both';
+    changeType?: 'price' | 'description' | 'name' | 'inserted' | 'deleted' | 'general';
+    requiresManualUpdate?: boolean;
+  } | null>(null);
+  const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const reloadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isReloadingRef = useRef(false);
   const lastReloadTimeRef = useRef<number>(0);
@@ -229,39 +235,81 @@ export function CotizacionesSectionRealtime({
           // Intentar actualizar localmente (ej: name, price, description)
           if (newRecord) {
             const updates: Partial<PublicCotizacion> = {};
-            if (changeInfo.camposCambiados.includes('name') && newRecord.name) {
-              updates.name = newRecord.name;
-            }
+            let changeType: 'price' | 'description' | 'name' | 'general' = 'general';
+            
             if (changeInfo.camposCambiados.includes('price') && newRecord.price !== undefined) {
               updates.price = newRecord.price;
+              changeType = 'price';
             }
             if (changeInfo.camposCambiados.includes('description') && newRecord.description !== undefined) {
               updates.description = newRecord.description;
+              if (changeType === 'general') changeType = 'description';
             }
+            if (changeInfo.camposCambiados.includes('name') && newRecord.name) {
+              updates.name = newRecord.name;
+              if (changeType === 'general') changeType = 'name';
+            }
+            
             if (Object.keys(updates).length > 0) {
               updateCotizacionLocal(cotizacionId, updates);
+              // Mostrar indicador visual sutil de actualización
+              setRecentlyUpdated((prev) => {
+                const next = new Set(prev);
+                next.add(cotizacionId);
+                // Limpiar después de 3 segundos
+                setTimeout(() => {
+                  setRecentlyUpdated((current) => {
+                    const updated = new Set(current);
+                    updated.delete(cotizacionId);
+                    return updated;
+                  });
+                }, 3000);
+                return next;
+              });
+              // Notificar que hubo cambios pero ya se actualizaron automáticamente (sin botón de actualizar)
+              handleUpdateDetected('quote', changeType, false); // requiresManualUpdate: false
               return; // No recargar desde servidor
             }
           }
         }
       }
 
-      // Si no hay información de cambios o no se pudo actualizar localmente, recargar
-      console.log('🔔 [CotizacionesSectionRealtime] Recarga completa por falta de información de cambios');
-      reloadCotizaciones();
+      // Si no hay información de cambios o no se pudo actualizar localmente
+      // Solo notificar si realmente hay un cambio que no podemos manejar localmente
+      if (changeInfo?.camposCambiados && changeInfo.camposCambiados.length > 0) {
+        // Hay cambios pero no pudimos actualizar localmente, notificar para recarga manual
+        console.log('🔔 [CotizacionesSectionRealtime] Cambios detectados que requieren recarga manual');
+        handleUpdateDetected('quote', 'general', true); // requiresManualUpdate: true
+      } else {
+        // Sin información de cambios, verificar si realmente cambió algo antes de recargar
+        console.log('🔔 [CotizacionesSectionRealtime] Sin información de cambios, verificando antes de recargar');
+        // No recargar automáticamente si no hay información clara de cambios
+        // El usuario puede usar la notificación si necesita actualizar
+      }
     },
     [reloadCotizaciones, updateCotizacionLocal, cotizaciones]
   );
 
-  // ⚠️ TAREA 1: Callback para incrementar contador según el tipo de cambio
-  const handleUpdateDetected = useCallback((type: 'quote' | 'promise' = 'quote') => {
+  // Callback para incrementar contador según el tipo de cambio
+  const handleUpdateDetected = useCallback((
+    type: 'quote' | 'promise' = 'quote',
+    changeType?: 'price' | 'description' | 'name' | 'inserted' | 'deleted' | 'general',
+    requiresManualUpdate: boolean = true
+  ) => {
     setPendingUpdate((prev) => {
       if (!prev) {
-        return { count: 1, type };
+        return { count: 1, type, changeType: changeType || 'general', requiresManualUpdate };
       }
       // Si el tipo es diferente, combinar en 'both'
       const newType = prev.type === type ? type : 'both';
-      return { count: prev.count + 1, type: newType };
+      // Priorizar tipos más específicos
+      const priority: Record<string, number> = { price: 4, description: 3, name: 2, inserted: 5, deleted: 5, general: 1 };
+      const newChangeType = (changeType && priority[changeType] > (priority[prev.changeType || 'general'] || 0))
+        ? changeType
+        : (prev.changeType || 'general');
+      // Si alguno requiere actualización manual, mantenerlo como true
+      const newRequiresManualUpdate = requiresManualUpdate || (prev.requiresManualUpdate !== false);
+      return { count: prev.count + 1, type: newType, changeType: newChangeType, requiresManualUpdate: newRequiresManualUpdate };
     });
   }, []);
 
@@ -299,15 +347,16 @@ export function CotizacionesSectionRealtime({
     promiseId,
     onCotizacionInserted: () => {
       console.log('🔔 [CotizacionesSectionRealtime] Nueva cotización insertada');
-      handleUpdateDetected('quote'); // ⚠️ TAREA 1: Identificar tipo de cambio
+      handleUpdateDetected('quote', 'inserted', true); // Nueva cotización requiere recarga manual
     },
     onCotizacionUpdated: handleCotizacionUpdated,
     onCotizacionDeleted: (cotizacionId) => {
       console.log('🔔 [CotizacionesSectionRealtime] Cotización eliminada', { cotizacionId });
       setCotizaciones((prev) => prev.filter((c) => c.id !== cotizacionId));
-      // Eliminar no requiere recarga, se actualiza localmente
+      // Eliminación ya se actualizó localmente, notificar sin botón
+      handleUpdateDetected('quote', 'deleted', false);
     },
-    onUpdateDetected: () => handleUpdateDetected('quote'), // ⚠️ TAREA 1: Notificar cambios de cotizaciones
+    onUpdateDetected: () => handleUpdateDetected('quote', 'general', true),
   });
 
   return (
@@ -327,6 +376,7 @@ export function CotizacionesSectionRealtime({
         showPackages={showPackages}
         paquetes={paquetes.map(p => ({ id: p.id, cover_url: p.cover_url }))}
         autoGenerateContract={autoGenerateContract}
+        recentlyUpdated={recentlyUpdated}
       />
       {/* ⚠️ TAREA 2: Componente de notificación flotante Zen */}
       <RealtimeUpdateNotification

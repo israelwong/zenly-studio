@@ -152,20 +152,6 @@ export function PortafoliosCard({ portafolios, studioSlug, studioId }: Portafoli
                       <ImageIcon className="w-16 h-16 text-zinc-700" />
                     </div>
                   )}
-                  {/* Badge de tipo de evento */}
-                  {portafolio.event_type && (
-                    <div className="absolute top-3 left-3">
-                      <ZenBadge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] px-2 py-0.5">
-                        {portafolio.event_type.name}
-                      </ZenBadge>
-                    </div>
-                  )}
-                  {/* Indicador de hover */}
-                  <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <div className="p-2 rounded-full bg-purple-500/20 backdrop-blur-sm border border-purple-500/30">
-                      <ChevronRight className="w-4 h-4 text-purple-300" />
-                    </div>
-                  </div>
                 </div>
 
                 {/* Contenido del card */}

@@ -42,6 +42,7 @@ interface CotizacionesSectionProps {
   showPackages?: boolean;
   paquetes?: Array<{ id: string; cover_url: string | null }>;
   autoGenerateContract?: boolean;
+  recentlyUpdated?: Set<string>;
 }
 
 export function CotizacionesSection({
@@ -59,6 +60,7 @@ export function CotizacionesSection({
   showPackages = false,
   paquetes = [],
   autoGenerateContract = false,
+  recentlyUpdated = new Set(),
 }: CotizacionesSectionProps) {
   const [selectedCotizacion, setSelectedCotizacion] = useState<PublicCotizacion | null>(null);
 
@@ -149,12 +151,25 @@ export function CotizacionesSection({
 
               const hasDiscount = cotizacion.discount && cotizacion.discount > 0;
 
+              const isRecentlyUpdated = recentlyUpdated.has(cotizacion.id);
+
               return (
                 <ZenCard
                   key={cotizacion.id}
-                  className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-600 transition-all duration-200 cursor-pointer group"
+                  className={`bg-zinc-900/50 border-zinc-800 hover:border-zinc-600 transition-all duration-200 cursor-pointer group relative ${
+                    isRecentlyUpdated ? 'ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-zinc-900' : ''
+                  }`}
+                  style={isRecentlyUpdated ? {
+                    animation: 'pulse-subtle 2s ease-in-out 2',
+                  } : undefined}
                   onClick={() => handleCotizacionClick(cotizacion)}
                 >
+                  {isRecentlyUpdated && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <div className="h-2 w-2 bg-emerald-400 rounded-full animate-ping" />
+                      <div className="absolute top-0 right-0 h-2 w-2 bg-emerald-400 rounded-full" />
+                    </div>
+                  )}
                   <ZenCardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">

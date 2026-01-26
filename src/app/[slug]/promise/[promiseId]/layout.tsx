@@ -104,8 +104,8 @@ export default async function PromiseLayout({
         </header>
       )}
 
-      {/* Contenido principal con padding-top para header */}
-      <div className="pt-[65px]">
+      {/* Contenido principal con padding-top para header y padding-bottom para notificación fija */}
+      <div className="pt-[65px] pb-[10px]">
         {children}
       </div>
 

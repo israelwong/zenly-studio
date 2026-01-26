@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Package, ChevronRight, Clock, Star } from 'lucide-react';
+import { Package, ChevronRight, ChevronLeft, Clock, Star } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import { ImageSkeleton } from '@/components/ui/ImageSkeleton';
 import type { PublicPaquete, PublicCotizacion } from '@/types/public-promise';
@@ -62,11 +62,10 @@ function PaqueteCard({
     const [isImageLoading, setIsImageLoading] = useState(true);
 
     return (
-        <div className="shrink-0 w-[calc(100vw-2rem)] snap-center md:w-auto md:shrink">
-            <ZenCard
-                className="bg-zinc-900/50 border-zinc-800 hover:border-blue-500/50 transition-all duration-200 cursor-pointer group h-full overflow-hidden"
-                onClick={onClick}
-            >
+        <ZenCard
+            className="bg-zinc-900/50 border-zinc-800 hover:border-blue-500/50 transition-all duration-200 cursor-pointer group h-full overflow-hidden w-full"
+            onClick={onClick}
+        >
                 <div className="flex items-stretch gap-4 p-4">
                     {/* Cover cuadrado con skeleton */}
                     <div className="relative w-24 h-24 shrink-0 rounded overflow-hidden">
@@ -123,7 +122,6 @@ function PaqueteCard({
                                     </p>
                                 )}
                             </div>
-                            <ChevronRight className="h-5 w-5 text-zinc-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all shrink-0" />
                         </div>
 
                         {/* Footer */}
@@ -141,7 +139,6 @@ function PaqueteCard({
                     </div>
                 </div>
             </ZenCard>
-        </div>
     );
 }
 
@@ -256,7 +253,10 @@ export function PaquetesSection({
                         <div className="flex items-center gap-2 mb-2">
                             <Package className="h-5 w-5 text-blue-400" />
                             <h2 className="text-xl md:text-3xl font-bold text-white">
-                                {showAsAlternative ? 'Paquetes Prediseñados' : 'Paquetes Disponibles'}
+                                {showAsAlternative 
+                                    ? `${paquetes.length} ${paquetes.length === 1 ? 'Paquete Prediseñado' : 'Paquetes Prediseñados'}`
+                                    : `${paquetes.length} ${paquetes.length === 1 ? 'Paquete Disponible' : 'Paquetes Disponibles'}`
+                                }
                             </h2>
                         </div>
                         <p className="text-zinc-400">
@@ -267,18 +267,88 @@ export function PaquetesSection({
                     </div>
 
                     {/* Carousel de paquetes */}
-                    <div
-                        ref={scrollRef}
-                        onScroll={handleManualScroll}
-                        className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4 md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-visible md:snap-none"
-                    >
-                        {paquetes.map((paquete) => (
-                            <PaqueteCard
-                                key={paquete.id}
-                                paquete={paquete}
-                                onClick={() => handlePaqueteClick(paquete)}
-                            />
-                        ))}
+                    <div className="relative -mx-4 px-4">
+                        <div className="relative">
+                            <div
+                                ref={scrollRef}
+                                onScroll={handleManualScroll}
+                                className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide md:overflow-x-auto md:snap-x md:snap-mandatory"
+                                style={{
+                                    scrollbarWidth: 'none',
+                                    msOverflowStyle: 'none',
+                                }}
+                            >
+                                {paquetes.map((paquete) => (
+                                    <div
+                                        key={paquete.id}
+                                        className="shrink-0 w-[calc(100vw-2rem)] snap-center md:w-[83%] md:min-w-[400px]"
+                                    >
+                                        <PaqueteCard
+                                            paquete={paquete}
+                                            onClick={() => handlePaqueteClick(paquete)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            {/* Botones de navegación - Mismo diseño que PromoIsland */}
+                            {paquetes.length > 1 && (
+                                <div className="absolute right-3 top-[70%] -translate-y-1/2 z-[100] flex flex-col gap-1.5 pointer-events-none">
+                                <button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (activeIndex < paquetes.length - 1) {
+                                            const nextIndex = activeIndex + 1;
+                                            if (scrollRef.current) {
+                                                const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
+                                                scrollRef.current.scrollTo({
+                                                    left: cardWidth * nextIndex,
+                                                    behavior: 'smooth'
+                                                });
+                                            }
+                                            setActiveIndex(nextIndex);
+                                            setAutoplayEnabled(false);
+                                        }
+                                    }}
+                                    disabled={activeIndex >= paquetes.length - 1}
+                                    className="p-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800/95 backdrop-blur-sm transition-all shadow-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                    style={{
+                                        pointerEvents: activeIndex >= paquetes.length - 1 ? 'none' : 'auto',
+                                    }}
+                                    aria-label="Siguiente paquete"
+                                >
+                                    <ChevronRight className="h-3 w-3 text-zinc-300" />
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (activeIndex > 0) {
+                                            const prevIndex = activeIndex - 1;
+                                            if (scrollRef.current) {
+                                                const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
+                                                scrollRef.current.scrollTo({
+                                                    left: cardWidth * prevIndex,
+                                                    behavior: 'smooth'
+                                                });
+                                            }
+                                            setActiveIndex(prevIndex);
+                                            setAutoplayEnabled(false);
+                                        }
+                                    }}
+                                    disabled={activeIndex <= 0}
+                                    className="p-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800/95 backdrop-blur-sm transition-all shadow-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                    style={{
+                                        pointerEvents: activeIndex <= 0 ? 'none' : 'auto',
+                                    }}
+                                    aria-label="Paquete anterior"
+                                >
+                                    <ChevronLeft className="h-3 w-3 text-zinc-300" />
+                                </button>
+                            </div>
+                        )}
+                        </div>
                     </div>
 
                     {/* Indicadores de paginación - Solo mobile */}

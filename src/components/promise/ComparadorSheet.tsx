@@ -259,7 +259,7 @@ export function ComparadorSheet({
                 Comparador de Opciones
               </h2>
               <p className="text-xs sm:text-sm text-zinc-400 mt-0.5 line-clamp-2">
-                Compara las características y servicios de todas las opciones disponibles
+                Compara todas las opciones. Desplázate horizontalmente <span className="inline-block text-emerald-400">↔</span> para ver lo que incluye cada propuesta
               </p>
             </div>
             <button
