@@ -42,6 +42,7 @@ interface ProfilePageStreamingProps {
     portfoliosPromise: Promise<{ success: boolean; data?: PublicPortfolio[]; error?: string }>;
     offersPromise: Promise<{ success: boolean; data?: any[]; error?: string }>;
     studioSlug: string;
+    initialIsDesktop?: boolean;
 }
 
 /**
@@ -54,6 +55,7 @@ export function ProfilePageStreaming({
     portfoliosPromise,
     offersPromise,
     studioSlug,
+    initialIsDesktop = false,
 }: ProfilePageStreamingProps) {
     // ⚠️ React 19: use() resuelve las promesas y suspende si no están listas
     const postsResult = use(postsPromise);
@@ -89,6 +91,7 @@ export function ProfilePageStreaming({
             profileData={profileData}
             studioSlug={studioSlug}
             offers={offers}
+            initialIsDesktop={initialIsDesktop}
         />
     );
 }

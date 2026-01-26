@@ -57,6 +57,7 @@ interface AvailablePackagesSectionProps {
   showPackages?: boolean;
   cotizaciones?: Array<{ id: string; paquete_origen?: { id: string } | null; selected_by_prospect?: boolean }>;
   cotizacionesCompletas?: PublicCotizacion[];
+  durationHours?: number | null;
 }
 
 /**
@@ -79,6 +80,7 @@ export function AvailablePackagesSection({
   showPackages,
   cotizaciones,
   cotizacionesCompletas = [],
+  durationHours,
 }: AvailablePackagesSectionProps) {
   const result = use(availablePackagesPromise);
 
@@ -110,6 +112,7 @@ export function AvailablePackagesSection({
       showPackages={showPackages}
       cotizaciones={cotizaciones}
       cotizacionesCompletas={cotizacionesCompletas}
+      durationHours={durationHours}
     />
   );
 }

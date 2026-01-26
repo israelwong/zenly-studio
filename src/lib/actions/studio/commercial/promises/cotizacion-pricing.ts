@@ -21,14 +21,32 @@ import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
  * - Operacionales: name, cost, unit_price, subtotal (mutable si se re-edita)
  * - Snapshots: *_snapshot (inmutables, para auditoría/histórico)
  */
+/**
+ * ⚡ VERSIÓN CON TRANSACCIÓN (wrapper): Para compatibilidad con código legacy
+ * Internamente llama a la versión sin transacción para evitar timeouts
+ */
 export async function guardarEstructuraCotizacionAutorizada(
-  tx: Prisma.TransactionClient,
+  _tx: Prisma.TransactionClient,
+  cotizacionId: string,
+  configPrecios: ConfiguracionPrecios,
+  studioSlug: string
+): Promise<void> {
+  // Ignorar tx y usar versión sin transacción para evitar timeouts
+  return guardarEstructuraCotizacionAutorizadaSinTx(cotizacionId, configPrecios, studioSlug);
+}
+
+/**
+ * ⚡ VERSIÓN SIN TRANSACCIÓN: Ejecuta updates fuera de tx para evitar timeouts
+ * Los items se actualizan después de la transacción principal
+ */
+export async function guardarEstructuraCotizacionAutorizadaSinTx(
   cotizacionId: string,
   configPrecios: ConfiguracionPrecios,
   studioSlug: string
 ): Promise<void> {
   try {
-    // 1️⃣ Obtener catálogo igual que ResumenCotizacion (para tener costos correctos)
+    // ⚡ OPTIMIZACIÓN: Obtener datos ANTES de la transacción para reducir tiempo dentro
+    // 1️⃣ Obtener catálogo (fuera de transacción - query pesada)
     const catalogoResult = await obtenerCatalogo(studioSlug, false);
     if (!catalogoResult.success || !catalogoResult.data) {
       throw new Error('No se pudo obtener el catálogo');
@@ -61,8 +79,8 @@ export async function guardarEstructuraCotizacionAutorizada(
       });
     });
 
-    // 2️⃣ Obtener cotización con promise para obtener duration_hours
-    const cotizacion = await tx.studio_cotizaciones.findUnique({
+    // 2️⃣ Obtener cotización con promise (fuera de transacción)
+    const cotizacion = await prisma.studio_cotizaciones.findUnique({
       where: { id: cotizacionId },
       include: {
         promise: {
@@ -73,84 +91,112 @@ export async function guardarEstructuraCotizacionAutorizada(
       },
     });
 
-    // Obtener duration_hours: prioridad: cotizacion.event_duration > promise.duration_hours
-    const durationHours = cotizacion?.event_duration ?? cotizacion?.promise?.duration_hours ?? null;
+    if (!cotizacion) {
+      throw new Error('Cotización no encontrada');
+    }
 
-    // 3️⃣ Obtener items de la cotización
-    const items = await tx.studio_cotizacion_items.findMany({
+    // Obtener duration_hours: prioridad: cotizacion.event_duration > promise.duration_hours
+    const durationHours = cotizacion.event_duration ?? cotizacion.promise?.duration_hours ?? null;
+
+    // 3️⃣ Obtener items de la cotización (fuera de transacción)
+    const items = await prisma.studio_cotizacion_items.findMany({
       where: { cotizacion_id: cotizacionId },
     });
 
     if (items.length === 0) return;
 
-    // 4️⃣ Para cada item de la cotización, guardar datos del catálogo
-    for (const item of items) {
-      if (!item.item_id) continue;
+    // ⚡ Preparar todos los updates ANTES de entrar a la transacción
+    const updates = items
+      .filter(item => item.item_id)
+      .map(item => {
+        const datosCatalogo = catalogoMap.get(item.item_id!);
+        if (!datosCatalogo) {
+          console.warn(`[PRICING] Item ${item.item_id} no encontrado en catálogo`);
+          return null;
+        }
 
-      // Obtener datos del catálogo usando el mapa
-      const datosCatalogo = catalogoMap.get(item.item_id);
-      if (!datosCatalogo) {
-        console.warn(`[PRICING] Item ${item.item_id} no encontrado en catálogo`);
-        continue;
-      }
+        // Validar que tipoUtilidad no sea vacío
+        if (!datosCatalogo.tipoUtilidad) {
+          console.warn(`[PRICING] ⚠️ Item ${item.item_id} (${datosCatalogo.nombre}) tiene tipoUtilidad vacío`);
+        }
 
-      // Validar que tipoUtilidad no sea vacío
-      if (!datosCatalogo.tipoUtilidad) {
-        console.warn(`[PRICING] ⚠️ Item ${item.item_id} (${datosCatalogo.nombre}) tiene tipoUtilidad vacío`);
-      }
+        // Normalizar tipoUtilidad
+        const normalizedTipoUtilidad = datosCatalogo.tipoUtilidad?.toLowerCase() || 'service';
+        const tipoUtilidadFinal = normalizedTipoUtilidad.includes('service') || normalizedTipoUtilidad.includes('servicio')
+          ? 'servicio'
+          : 'producto';
 
-      // Normalizar tipoUtilidad: puede venir como 'service', 'servicio', 'product', 'producto', etc.
-      const normalizedTipoUtilidad = datosCatalogo.tipoUtilidad?.toLowerCase() || 'service';
-      const tipoUtilidadFinal = normalizedTipoUtilidad.includes('service') || normalizedTipoUtilidad.includes('servicio')
-        ? 'servicio'
-        : 'producto';
+        // Calcular precios
+        const precios = calcularPrecio(
+          datosCatalogo.costo || 0,
+          datosCatalogo.gasto || 0,
+          tipoUtilidadFinal,
+          configPrecios
+        );
 
-      // Calcular precios con valores del catálogo (igual que ResumenCotizacion)
-      const precios = calcularPrecio(
-        datosCatalogo.costo || 0,
-        datosCatalogo.gasto || 0,
-        tipoUtilidadFinal,
-        configPrecios
+        // Obtener billing_type
+        const billingType = (item.billing_type || datosCatalogo.billingType || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+
+        // Calcular cantidad efectiva
+        const cantidadEfectiva = calcularCantidadEfectiva(
+          billingType,
+          item.quantity,
+          durationHours
+        );
+
+        return {
+          id: item.id,
+          data: {
+            // OPERACIONALES
+            name: datosCatalogo.nombre,
+            category_name: datosCatalogo.categoria,
+            seccion_name: datosCatalogo.seccion,
+            cost: datosCatalogo.costo || 0,
+            expense: datosCatalogo.gasto || 0,
+            unit_price: precios.precio_final,
+            subtotal: precios.precio_final * cantidadEfectiva,
+            profit: precios.utilidad_base,
+            public_price: precios.precio_final,
+            profit_type: tipoUtilidadFinal,
+            billing_type: billingType,
+
+            // SNAPSHOTS
+            name_snapshot: datosCatalogo.nombre,
+            category_name_snapshot: datosCatalogo.categoria,
+            seccion_name_snapshot: datosCatalogo.seccion,
+            cost_snapshot: datosCatalogo.costo || 0,
+            expense_snapshot: datosCatalogo.gasto || 0,
+            unit_price_snapshot: precios.precio_final,
+            profit_snapshot: precios.utilidad_base,
+            public_price_snapshot: precios.precio_final,
+            profit_type_snapshot: tipoUtilidadFinal,
+          },
+        };
+      })
+      .filter((update): update is { id: string; data: any } => update !== null);
+
+    // 4️⃣ Ejecutar updates por bloques secuencialmente (FUERA de transacción)
+    // Dividir en bloques de 10 items para balancear velocidad y estabilidad
+    const BATCH_SIZE = 10;
+    const totalBatches = Math.ceil(updates.length / BATCH_SIZE);
+
+    for (let i = 0; i < totalBatches; i++) {
+      const batch = updates.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
+
+      // Ejecutar bloque en paralelo (fuera de transacción, más seguro)
+      await Promise.all(
+        batch.map(update =>
+          prisma.studio_cotizacion_items.update({
+            where: { id: update.id },
+            data: update.data,
+          })
+        )
       );
 
-      // Obtener billing_type: prioridad: item.billing_type > datosCatalogo.billingType > 'SERVICE'
-      const billingType = (item.billing_type || datosCatalogo.billingType || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-      
-      // Calcular cantidad efectiva según billing_type
-      const cantidadEfectiva = calcularCantidadEfectiva(
-        billingType,
-        item.quantity,
-        durationHours
-      );
-
-      await tx.studio_cotizacion_items.update({
-        where: { id: item.id },
-        data: {
-          // OPERACIONALES (lo que se muestra actualmente - mutable)
-          name: datosCatalogo.nombre,
-          category_name: datosCatalogo.categoria,
-          seccion_name: datosCatalogo.seccion,
-          cost: datosCatalogo.costo || 0,
-          expense: datosCatalogo.gasto || 0,
-          unit_price: precios.precio_final,
-          subtotal: precios.precio_final * cantidadEfectiva, // Usar cantidad efectiva
-          profit: precios.utilidad_base,
-          public_price: precios.precio_final,
-          profit_type: tipoUtilidadFinal,
-          billing_type: billingType, // Persistir billing_type
-
-          // SNAPSHOTS (congelado al momento de autorización - inmutable para auditoría)
-          name_snapshot: datosCatalogo.nombre,
-          category_name_snapshot: datosCatalogo.categoria,
-          seccion_name_snapshot: datosCatalogo.seccion,
-          cost_snapshot: datosCatalogo.costo || 0,
-          expense_snapshot: datosCatalogo.gasto || 0,
-          unit_price_snapshot: precios.precio_final,
-          profit_snapshot: precios.utilidad_base,
-          public_price_snapshot: precios.precio_final,
-          profit_type_snapshot: tipoUtilidadFinal,
-        },
-      });
+      // Pequeña pausa entre bloques para evitar saturación
+      if (i < totalBatches - 1) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
     }
   } catch (error) {
     console.error('[PRICING] Error guardando estructura:', error);
@@ -267,7 +313,7 @@ export async function calcularYGuardarPreciosCotizacion(
 
       // Obtener billing_type: prioridad: item.billing_type > datosCatalogo.billingType > 'SERVICE'
       const billingType = (item.billing_type || datosCatalogo.billingType || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
-      
+
       // Calcular cantidad efectiva según billing_type
       const cantidadEfectiva = calcularCantidadEfectiva(
         billingType,

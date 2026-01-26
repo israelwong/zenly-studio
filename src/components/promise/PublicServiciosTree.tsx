@@ -246,7 +246,7 @@ export function PublicServiciosTree({ servicios, showPrices = false, showSubtota
                                             <h6 className="text-sm text-zinc-300 leading-tight">
                                               {servicio.name_snapshot || servicio.name}
                                               <span className="ml-2 text-xs text-zinc-500">
-                                                x{cantidad}
+                                                x{cantidad}{servicio.billing_type === 'HOUR' ? '/h' : ''}
                                               </span>
                                             </h6>
                                           </div>

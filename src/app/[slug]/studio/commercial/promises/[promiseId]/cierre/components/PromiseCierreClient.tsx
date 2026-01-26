@@ -21,6 +21,7 @@ import { RegistroPagoModal } from './RegistroPagoModal';
 import { CierreActionButtons } from './CierreActionButtons';
 import { ZenConfirmModal } from '@/components/ui/zen';
 import { PromiseAgendamiento } from '../../pendiente/components/eventos/PromiseAgendamiento';
+import { AutorizacionProgressOverlay } from '@/components/promise/AutorizacionProgressOverlay';
 
 interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
@@ -474,6 +475,18 @@ export function PromiseCierreClient({
             }
             confirmText={cierreLogic.isAuthorizing ? 'Autorizando...' : 'Sí, autorizar y crear evento'}
             cancelText="Cancelar"
+          />
+
+          {/* Overlay de progreso de autorización */}
+          <AutorizacionProgressOverlay
+            show={cierreLogic.isAuthorizing}
+            currentTask={cierreLogic.currentTask}
+            completedTasks={cierreLogic.completedTasks}
+            error={cierreLogic.authorizationError}
+            onClose={() => {
+              cierreLogic.setIsAuthorizing(false);
+              cierreLogic.setAuthorizationError(null);
+            }}
           />
         </>
       )}

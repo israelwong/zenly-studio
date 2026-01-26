@@ -75,6 +75,7 @@ export function CotizacionForm({
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const isEditMode = !!cotizacionId;
   const onLoadingChangeRef = useRef(onLoadingChange);
 
@@ -82,6 +83,24 @@ export function CotizacionForm({
   useEffect(() => {
     onLoadingChangeRef.current = onLoadingChange;
   }, [onLoadingChange]);
+
+  // Resetear estado de submit si el componente se desmonta (navegación exitosa)
+  useEffect(() => {
+    return () => {
+      isSubmittingRef.current = false;
+    };
+  }, []);
+
+  // Timeout de seguridad: resetear estado si la navegación no ocurre en 5 segundos
+  useEffect(() => {
+    if (loading && isSubmittingRef.current) {
+      const timeout = setTimeout(() => {
+        isSubmittingRef.current = false;
+        setLoading(false);
+      }, 5000);
+      return () => clearTimeout(timeout);
+    }
+  }, [loading]);
 
   // Estado del formulario
   const [nombre, setNombre] = useState('');
@@ -691,6 +710,11 @@ export function CotizacionForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Prevenir doble submit
+    if (isSubmittingRef.current || loading) {
+      return;
+    }
+
     if (!nombre.trim()) {
       toast.error('El nombre de la cotización es requerido');
       return;
@@ -708,6 +732,7 @@ export function CotizacionForm({
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       // Calcular precio final (usar precio personalizado si existe, sino el calculado)
@@ -731,29 +756,41 @@ export function CotizacionForm({
 
         if (!result.success) {
           toast.error(result.error || 'Error al actualizar cotización');
+          isSubmittingRef.current = false;
           setLoading(false);
           return;
         }
 
         toast.success('Cotización actualizada exitosamente');
-        setLoading(false);
 
         // Ejecutar callback si existe
         if (onAfterSave) {
           onAfterSave();
+          // No resetear loading aquí, el callback puede manejar la navegación
           return;
         }
 
+        // Cerrar overlays antes de navegar
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+
+        // Redirigir usando startTransition para evitar bloqueos
         if (redirectOnSuccess) {
-          router.push(redirectOnSuccess);
-          router.refresh(); // Forzar recarga de datos del servidor
+          startTransition(() => {
+            router.push(redirectOnSuccess);
+            router.refresh();
+          });
         } else if (promiseId) {
-          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-          router.refresh();
+          startTransition(() => {
+            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+            router.refresh();
+          });
         } else {
-          router.back();
-          router.refresh();
+          startTransition(() => {
+            router.back();
+            router.refresh();
+          });
         }
+        // Mantener loading hasta que se complete la navegación
         return;
       }
 
@@ -770,6 +807,8 @@ export function CotizacionForm({
 
         if (!revisionResult.success) {
           toast.error(revisionResult.error || 'Error al crear revisión');
+          isSubmittingRef.current = false;
+          setLoading(false);
           return;
         }
 
@@ -778,17 +817,29 @@ export function CotizacionForm({
         // Si se creó la revisión y hay revisionId, el callback ya manejó la redirección
         // Solo retornar, no hacer nada más aquí
         if (revisionResult.revisionId) {
+          // Mantener loading hasta que se complete la navegación
           return;
         }
 
         // Si no se obtuvo revisionId, redirigir normalmente
+        window.dispatchEvent(new CustomEvent('close-overlays'));
         if (redirectOnSuccess) {
-          router.push(redirectOnSuccess);
+          startTransition(() => {
+            router.push(redirectOnSuccess);
+            router.refresh();
+          });
         } else if (promiseId) {
-          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+          startTransition(() => {
+            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+            router.refresh();
+          });
         } else {
-          router.back();
+          startTransition(() => {
+            router.back();
+            router.refresh();
+          });
         }
+        // Mantener loading hasta que se complete la navegación
         return;
       }
 
@@ -809,6 +860,8 @@ export function CotizacionForm({
 
       if (!result.success) {
         toast.error(result.error || 'Error al crear cotización');
+        isSubmittingRef.current = false;
+        setLoading(false);
         return;
       }
 
@@ -817,10 +870,11 @@ export function CotizacionForm({
       // Cerrar overlays antes de navegar
       window.dispatchEvent(new CustomEvent('close-overlays'));
 
+      // Redirigir usando startTransition - NO resetear loading aquí
       if (redirectOnSuccess) {
         startTransition(() => {
           router.push(redirectOnSuccess);
-          router.refresh(); // Forzar recarga de datos del servidor
+          router.refresh();
         });
       } else if (promiseId) {
         startTransition(() => {
@@ -833,10 +887,12 @@ export function CotizacionForm({
           router.refresh();
         });
       }
+      // Mantener loading hasta que se complete la navegación
+      return;
     } catch (error) {
       console.error('Error saving quote:', error);
       toast.error(`Error al ${isEditMode ? 'actualizar' : 'crear'} cotización`);
-    } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };

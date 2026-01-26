@@ -20,6 +20,7 @@ interface ActiveQuoteSectionProps {
         event_name: string | null;
         event_date: Date | null;
         event_location: string | null;
+        duration_hours: number | null;
       };
       studio: {
         studio_name: string;
@@ -156,6 +157,7 @@ export function ActiveQuoteSection({
           showPackages={share_settings.show_packages}
           paquetes={[]} // Paquetes se cargan después
           autoGenerateContract={share_settings.auto_generate_contract}
+          durationHours={promise.duration_hours ?? null}
         />
       )}
     </>

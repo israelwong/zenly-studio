@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import {
     getStudioProfileBasicData,
     getStudioProfileDeferredPosts,
@@ -11,6 +12,7 @@ import { ProfilePageStreaming } from './profile/public/ProfilePageStreaming';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import { getCurrentUser } from '@/lib/auth/user-utils';
 import { ProfilePageSkeleton } from './profile/public/ProfilePageSkeleton';
+import { detectDeviceType } from '@/lib/utils/analytics-helpers';
 
 interface PublicProfilePageProps {
     params: Promise<{ slug: string }>;
@@ -29,6 +31,12 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     }
 
     try {
+        // Detectar dispositivo desde servidor usando User-Agent
+        const headersList = await headers();
+        const userAgent = headersList.get('user-agent') || null;
+        const deviceType = detectDeviceType(userAgent);
+        const initialIsDesktop = deviceType === 'desktop';
+
         // ⚠️ STREAMING: Cargar datos básicos inmediatamente (instantáneo)
         const basicResult = await getStudioProfileBasicData({ slug });
 
@@ -75,6 +83,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
                         portfoliosPromise={portfoliosPromise}
                         offersPromise={offersPromise}
                         studioSlug={slug}
+                        initialIsDesktop={initialIsDesktop}
                     />
                 </Suspense>
 

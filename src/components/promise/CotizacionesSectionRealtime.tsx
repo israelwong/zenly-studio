@@ -43,6 +43,7 @@ interface CotizacionesSectionRealtimeProps {
   showPackages?: boolean;
   paquetes?: PublicPaquete[];
   autoGenerateContract?: boolean;
+  durationHours?: number | null;
 }
 
 export function CotizacionesSectionRealtime({
@@ -60,6 +61,7 @@ export function CotizacionesSectionRealtime({
   showPackages = false,
   paquetes = [],
   autoGenerateContract = false,
+  durationHours,
 }: CotizacionesSectionRealtimeProps) {
   const [cotizaciones, setCotizaciones] = useState<PublicCotizacion[]>(initialCotizaciones);
   const [isPending, startTransition] = useTransition();
@@ -377,6 +379,7 @@ export function CotizacionesSectionRealtime({
         paquetes={paquetes.map(p => ({ id: p.id, cover_url: p.cover_url }))}
         autoGenerateContract={autoGenerateContract}
         recentlyUpdated={recentlyUpdated}
+        durationHours={durationHours}
       />
       {/* ⚠️ TAREA 2: Componente de notificación flotante Zen */}
       <RealtimeUpdateNotification

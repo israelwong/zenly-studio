@@ -1266,10 +1266,27 @@ export async function getPublicPromisePendientes(
       // ⚠️ Catálogo sin multimedia
       const serviciosFiltrados = filtrarCatalogoPorItems(catalogo, itemIds, itemsData);
 
-      // Usar precio recalculado si hay duración del evento, sino usar precio del paquete
-      const precioFinal = promiseDurationHours !== null && precioTotalRecalculado > 0 
-        ? precioTotalRecalculado 
-        : (paq.precio || 0);
+      // Lógica de precio: si paquete tiene horas y precio personalizado
+      // - Si las horas del evento coinciden con las del paquete → mantener precio personalizado
+      // - Si las horas son diferentes → recalcular precio dinámico
+      // - Si no hay horas en paquete o no hay precio personalizado → usar lógica estándar
+      const tieneHorasYprecio = paq.base_hours !== null && paq.base_hours !== undefined && paq.precio !== null && paq.precio !== undefined && paq.precio > 0;
+      const horasCoinciden = tieneHorasYprecio && promiseDurationHours !== null && promiseDurationHours === paq.base_hours;
+      
+      let precioFinal: number;
+      if (tieneHorasYprecio && horasCoinciden) {
+        // Mantener precio personalizado si las horas coinciden
+        precioFinal = paq.precio;
+      } else if (tieneHorasYprecio && promiseDurationHours !== null && promiseDurationHours !== paq.base_hours) {
+        // Recalcular precio dinámico si las horas son diferentes
+        precioFinal = precioTotalRecalculado > 0 ? precioTotalRecalculado : (paq.precio || 0);
+      } else if (promiseDurationHours !== null && precioTotalRecalculado > 0) {
+        // Si hay duración del evento y se calculó precio, usarlo
+        precioFinal = precioTotalRecalculado;
+      } else {
+        // Usar precio base del paquete
+        precioFinal = paq.precio || 0;
+      }
 
       return {
         id: paq.id,
@@ -1371,6 +1388,7 @@ export async function getPublicPromiseActiveQuote(
       event_name: string | null;
       event_date: Date | null;
       event_location: string | null;
+      duration_hours: number | null;
     };
     studio: {
       studio_name: string;
@@ -1750,6 +1768,7 @@ export async function getPublicPromiseActiveQuote(
           event_name: promiseBasic.event_name,
           event_date: promiseBasic.event_date,
           event_location: promiseBasic.event_location,
+          duration_hours: promiseBasic.duration_hours,
         },
         studio,
         cotizaciones: mappedCotizaciones,
@@ -4979,6 +4998,7 @@ export async function getPublicPromiseBasicData(
         event_type_id: true,
         event_date: true,
         event_location: true,
+        duration_hours: true,
         share_show_packages: true,
         share_show_categories_subtotals: true,
         share_show_items_prices: true,

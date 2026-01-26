@@ -117,10 +117,10 @@ export function usePromiseCierreLogic({
   // Sincronizar promiseData local con prop
   // Usar useRef para comparar valores anteriores y evitar loops infinitos
   const prevPromiseDataRef = useRef(promiseData);
-  
+
   useEffect(() => {
     const prev = prevPromiseDataRef.current;
-    const hasChanged = 
+    const hasChanged =
       prev.name !== promiseData.name ||
       prev.phone !== promiseData.phone ||
       prev.email !== promiseData.email ||
@@ -361,9 +361,37 @@ export function usePromiseCierreLogic({
     setShowConfirmAutorizarModal(true);
   }, []);
 
+  const [currentTask, setCurrentTask] = useState<string>('');
+  const [completedTasks, setCompletedTasks] = useState<string[]>([]);
+  const [authorizationError, setAuthorizationError] = useState<string | null>(null);
+
   const handleConfirmAutorizar = useCallback(async () => {
     setIsAuthorizing(true);
     setShowConfirmAutorizarModal(false);
+    setCurrentTask('Obteniendo catálogo');
+    setCompletedTasks([]);
+    setAuthorizationError(null);
+
+    // Simular progreso de tareas (no podemos obtener progreso real desde server actions)
+    const tasks = [
+      'Obteniendo catálogo',
+      'Calculando precios',
+      'Guardando estructura de cotización',
+      'Creando evento',
+      'Actualizando cotización',
+      'Registrando pago inicial',
+      'Finalizando autorización',
+    ];
+
+    let currentTaskIndex = 0;
+    const progressInterval = setInterval(() => {
+      if (currentTaskIndex < tasks.length - 1) {
+        setCompletedTasks(prev => [...prev, tasks[currentTaskIndex]]);
+        currentTaskIndex++;
+        setCurrentTask(tasks[currentTaskIndex]);
+      }
+    }, 2000); // Actualizar cada 2 segundos
+
     try {
       if (cotizacion.status === 'en_cierre') {
         const result = await autorizarYCrearEvento(
@@ -376,7 +404,14 @@ export function usePromiseCierreLogic({
           }
         );
 
+        clearInterval(progressInterval);
+        setCompletedTasks(tasks);
+        setCurrentTask('');
+
         if (result.success && result.data) {
+          // Pequeña pausa para mostrar que todo se completó
+          await new Promise(resolve => setTimeout(resolve, 500));
+
           toast.success('¡Cotización autorizada y evento creado!');
           // Redirigir a la página del evento creado usando metodología ZEN
           window.dispatchEvent(new CustomEvent('close-overlays'));
@@ -385,16 +420,23 @@ export function usePromiseCierreLogic({
             router.push(`/${studioSlug}/studio/business/events/${result.data.evento_id}`);
           });
         } else {
+          setAuthorizationError(result.error || 'Error al autorizar cotización');
           toast.error(result.error || 'Error al autorizar cotización');
         }
       }
     } catch (error) {
+      clearInterval(progressInterval);
+      const errorMessage = error instanceof Error ? error.message : 'Error al autorizar cotización';
+      setAuthorizationError(errorMessage);
       console.error('[handleConfirmAutorizar] Error:', error);
       toast.error('Error al autorizar cotización');
     } finally {
-      setIsAuthorizing(false);
+      // Solo ocultar si no hay error (si hay error, el usuario puede cerrar manualmente)
+      if (!authorizationError) {
+        setIsAuthorizing(false);
+      }
     }
-  }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, router]);
+  }, [studioSlug, promiseId, cotizacion.id, cotizacion.status, pagoData, router, authorizationError]);
 
   // Validar si se puede autorizar
   const puedeAutorizar = useMemo(() => {
@@ -453,6 +495,11 @@ export function usePromiseCierreLogic({
     contractData,
     pagoData,
     loadingRegistro,
+    // Progreso de autorización
+    currentTask,
+    completedTasks,
+    authorizationError,
+    setAuthorizationError,
     // Handlers
     handleDefinirCondiciones,
     handleQuitarCondiciones,

@@ -33,6 +33,7 @@ interface PromisePageClientProps {
     event_date: Date | null;
     event_location: string | null;
     event_name: string | null;
+    duration_hours?: number | null;
   };
   studio: {
     studio_name: string;
@@ -556,6 +557,7 @@ function PromisePageContent({
                 showPackages={shareSettings.show_packages}
                 paquetes={paquetes}
                 autoGenerateContract={shareSettings.auto_generate_contract}
+                durationHours={promise.duration_hours ?? null}
               />
             )}
 
@@ -578,6 +580,7 @@ function PromisePageContent({
                 showOfferConditions={shareSettings.show_offer_conditions}
                 showPackages={shareSettings.show_packages}
                 cotizaciones={initialCotizaciones}
+                durationHours={promise.duration_hours ?? null}
               />
             )}
 

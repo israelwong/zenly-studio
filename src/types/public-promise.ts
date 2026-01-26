@@ -25,6 +25,7 @@ export interface PublicServicioData {
   price?: number;
   quantity?: number;
   is_courtesy?: boolean; // Si el item es cortesía (no se cobra)
+  billing_type?: 'HOUR' | 'SERVICE' | 'UNIT'; // Tipo de facturación del item
   // Multimedia del item
   media?: Array<{
     id: string;

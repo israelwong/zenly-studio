@@ -104,6 +104,7 @@ interface PendientesPageDeferredProps {
       event_name: string | null;
       event_date: Date | null;
       event_location: string | null;
+      duration_hours?: number | null;
     };
     studio: {
       studio_name: string;

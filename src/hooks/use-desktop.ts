@@ -4,10 +4,14 @@ const DESKTOP_BREAKPOINT = 1024 // lg breakpoint de Tailwind
 
 /**
  * Hook para detectar si estamos en desktop (>= 1024px)
- * Detecta inmediatamente en el cliente para evitar flash de contenido
+ * Acepta valor inicial del servidor para evitar flash de contenido
  */
-export function useIsDesktop() {
+export function useIsDesktop(initialValue?: boolean) {
   const [isDesktop, setIsDesktop] = React.useState<boolean>(() => {
+    // Si hay valor inicial del servidor, usarlo (evita flash)
+    if (initialValue !== undefined) {
+      return initialValue;
+    }
     // Inicializar con el valor correcto si estamos en el cliente
     if (typeof window !== 'undefined') {
       return window.innerWidth >= DESKTOP_BREAKPOINT;
@@ -22,10 +26,10 @@ export function useIsDesktop() {
       setIsDesktop(window.innerWidth >= DESKTOP_BREAKPOINT)
     }
     mql.addEventListener("change", onChange)
-    // Verificar inmediatamente por si acaso
+    // Verificar inmediatamente para corregir si el valor inicial del servidor no coincide con el viewport real
     setIsDesktop(window.innerWidth >= DESKTOP_BREAKPOINT)
     return () => mql.removeEventListener("change", onChange)
-  }, [])
+  }, [initialValue])
 
   return isDesktop
 }

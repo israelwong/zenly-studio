@@ -87,6 +87,7 @@ interface AvailablePackagesSectionWrapperProps {
       event_name: string | null;
       event_date: Date | null;
       event_location: string | null;
+      duration_hours?: number | null;
     };
     studio: {
       studio_name: string;
@@ -157,6 +158,7 @@ export function AvailablePackagesSectionWrapper({
           showPackages={activeQuoteData?.share_settings.show_packages ?? basicPromise.studio.promise_share_default_show_packages}
           cotizaciones={activeQuoteData?.cotizaciones ?? []}
           cotizacionesCompletas={activeQuoteData?.cotizaciones ?? []}
+          durationHours={basicPromise.promise.duration_hours ?? null}
         />
       )}
 

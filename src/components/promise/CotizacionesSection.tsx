@@ -43,6 +43,7 @@ interface CotizacionesSectionProps {
   paquetes?: Array<{ id: string; cover_url: string | null }>;
   autoGenerateContract?: boolean;
   recentlyUpdated?: Set<string>;
+  durationHours?: number | null;
 }
 
 export function CotizacionesSection({
@@ -61,6 +62,7 @@ export function CotizacionesSection({
   paquetes = [],
   autoGenerateContract = false,
   recentlyUpdated = new Set(),
+  durationHours,
 }: CotizacionesSectionProps) {
   const [selectedCotizacion, setSelectedCotizacion] = useState<PublicCotizacion | null>(null);
 
@@ -130,6 +132,9 @@ export function CotizacionesSection({
               <Sparkles className="h-4 w-4 text-zinc-400" />
               <h2 className="text-xl md:text-3xl font-bold text-white">
                 {cotizacionesOrdenadas.length === 1 ? 'Cotización Personalizada' : 'Cotizaciones Personalizadas'}
+                {durationHours !== null && durationHours !== undefined && durationHours > 0 && (
+                  <span className="text-zinc-400 font-normal"> por {durationHours} {durationHours === 1 ? 'hora' : 'horas'}</span>
+                )}
               </h2>
             </div>
             <p className="text-sm text-zinc-400">

@@ -121,10 +121,10 @@ export async function obtenerRegistroCierre(
           created_at: ultimaVersion.created_at,
         } : null,
         negociacion_precio_original: cotizacion.negociacion_precio_original !== null && cotizacion.negociacion_precio_original !== undefined
-          ? Number(cotizacion.negociacion_precio_original) 
+          ? Number(cotizacion.negociacion_precio_original)
           : null,
         negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado !== null && cotizacion.negociacion_precio_personalizado !== undefined
-          ? Number(cotizacion.negociacion_precio_personalizado) 
+          ? Number(cotizacion.negociacion_precio_personalizado)
           : null,
       } as any,
     };
@@ -672,7 +672,7 @@ export async function actualizarContratoCierre(
       templateId &&
       templateId.trim() !== '' &&
       registroActual.contract_template_id !== templateId;
-    
+
     // Detectar si es la primera vez que se asocia una plantilla (sin contrato previo definido)
     const isFirstTimeAssociating = !isClearing &&
       registroActual &&
@@ -1331,9 +1331,9 @@ export async function autorizarYCrearEvento(
     }
 
     // 4. Validaciones seg?n tipo de cliente
-    const isClienteManual = !cotizacion.selected_by_prospect || 
-                            cotizacion.selected_by_prospect === null || 
-                            cotizacion.selected_by_prospect === undefined;
+    const isClienteManual = !cotizacion.selected_by_prospect ||
+      cotizacion.selected_by_prospect === null ||
+      cotizacion.selected_by_prospect === undefined;
 
     if (isClienteManual) {
       // Cliente creado manualmente: condiciones comerciales y contrato son opcionales
@@ -1400,6 +1400,7 @@ export async function autorizarYCrearEvento(
     }
 
     // 7. TRANSACCI?N AT?MICA
+    // Aumentar timeout a 30s para transacciones complejas con múltiples queries y updates por bloques
     const result = await prisma.$transaction(async (tx) => {
       // 7.1. Verificar si ya existe un evento para esta promesa (dentro de la transacci?n para evitar race conditions)
       const eventoExistente = await tx.studio_events.findFirst({
@@ -1407,8 +1408,8 @@ export async function autorizarYCrearEvento(
           promise_id: promiseId,
           studio_id: studio.id,
         },
-        select: { 
-          id: true, 
+        select: {
+          id: true,
           cotizacion_id: true,
           status: true,
         },
@@ -1417,8 +1418,8 @@ export async function autorizarYCrearEvento(
       // Validar solo si hay conflicto con otra cotizaci?n activa
       if (eventoExistente && eventoExistente.status === 'ACTIVE') {
         // Si ya existe un evento activo asociado a otra cotizaci?n, retornar error
-        if (eventoExistente.cotizacion_id && 
-            eventoExistente.cotizacion_id !== cotizacionId) {
+        if (eventoExistente.cotizacion_id &&
+          eventoExistente.cotizacion_id !== cotizacionId) {
           throw new Error('Ya existe un evento activo para esta promesa asociado a otra cotizaci?n');
         }
         // Si existe evento para esta misma cotizaci?n y est? activo, actualizar
@@ -1428,24 +1429,24 @@ export async function autorizarYCrearEvento(
       // Para clientes manuales son opcionales, pero si est?n definidas deben guardarse
       const condicionSnapshot = registroCierre.condiciones_comerciales_definidas && registroCierre.condiciones_comerciales
         ? {
-            name: registroCierre.condiciones_comerciales.name,
-            description: registroCierre.condiciones_comerciales.description,
-            advance_percentage: registroCierre.condiciones_comerciales
-              .advance_percentage
-              ? Number(
-                  registroCierre.condiciones_comerciales.advance_percentage
-                )
-              : null,
-            advance_type: registroCierre.condiciones_comerciales.advance_type,
-            advance_amount:
-              registroCierre.condiciones_comerciales.advance_amount,
-            discount_percentage: registroCierre.condiciones_comerciales
-              .discount_percentage
-              ? Number(
-                  registroCierre.condiciones_comerciales.discount_percentage
-                )
-              : null,
-          }
+          name: registroCierre.condiciones_comerciales.name,
+          description: registroCierre.condiciones_comerciales.description,
+          advance_percentage: registroCierre.condiciones_comerciales
+            .advance_percentage
+            ? Number(
+              registroCierre.condiciones_comerciales.advance_percentage
+            )
+            : null,
+          advance_type: registroCierre.condiciones_comerciales.advance_type,
+          advance_amount:
+            registroCierre.condiciones_comerciales.advance_amount,
+          discount_percentage: registroCierre.condiciones_comerciales
+            .discount_percentage
+            ? Number(
+              registroCierre.condiciones_comerciales.discount_percentage
+            )
+            : null,
+        }
         : null;
 
       // 7.3. Crear snapshots de contrato (si est? definido)
@@ -1453,14 +1454,14 @@ export async function autorizarYCrearEvento(
       // Si hay template_id pero no content personalizado, usar el contenido de la plantilla
       const contratoSnapshot = registroCierre.contrato_definido && registroCierre.contract_template_id
         ? {
-            template_id: registroCierre.contract_template_id,
-            template_name: registroCierre.contract_template?.name || null,
-            // Priorizar contenido personalizado, si no existe usar el de la plantilla
-            content: registroCierre.contract_content || registroCierre.contract_template?.content || null,
-            version: registroCierre.contract_version || 1,
-            signed_at: registroCierre.contract_signed_at, // Puede ser null para clientes manuales
-            signed_ip: null, // TODO: Obtener IP de firma desde tabla de versiones si existe
-          }
+          template_id: registroCierre.contract_template_id,
+          template_name: registroCierre.contract_template?.name || null,
+          // Priorizar contenido personalizado, si no existe usar el de la plantilla
+          content: registroCierre.contract_content || registroCierre.contract_template?.content || null,
+          version: registroCierre.contract_version || 1,
+          signed_at: registroCierre.contract_signed_at, // Puede ser null para clientes manuales
+          signed_ip: null, // TODO: Obtener IP de firma desde tabla de versiones si existe
+        }
         : null;
 
       // 7.4. Crear o actualizar evento
@@ -1469,8 +1470,8 @@ export async function autorizarYCrearEvento(
       let eventDateNormalized: Date;
       if (cotizacion.promise.event_date) {
         // Si hay fecha de evento en la promesa, normalizarla usando UTC con mediodía como buffer
-        const eventDate = cotizacion.promise.event_date instanceof Date 
-          ? cotizacion.promise.event_date 
+        const eventDate = cotizacion.promise.event_date instanceof Date
+          ? cotizacion.promise.event_date
           : new Date(cotizacion.promise.event_date);
         eventDateNormalized = new Date(Date.UTC(
           eventDate.getUTCFullYear(),
@@ -1531,25 +1532,9 @@ export async function autorizarYCrearEvento(
         });
       }
 
-      // 7.4.5. Guardar estructura y snapshots de items antes de autorizar
-      // Esto asegura que los snapshots estén actualizados con datos del catálogo y billing_type correcto
-      const configForm = await obtenerConfiguracionPrecios(studioSlug);
-      if (configForm) {
-        const configPrecios: ConfiguracionPrecios = {
-          utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30'),
-          utilidad_producto: parseFloat(configForm.utilidad_producto || '0.20'),
-          comision_venta: parseFloat(configForm.comision_venta || '0.10'),
-          sobreprecio: parseFloat(configForm.sobreprecio || '0.05'),
-        };
-        
-        const { guardarEstructuraCotizacionAutorizada } = await import('./cotizacion-pricing');
-        await guardarEstructuraCotizacionAutorizada(
-          tx,
-          cotizacionId,
-          configPrecios,
-          studioSlug
-        );
-      }
+      // 7.4.5. NO actualizar items aquí - se hará después de la transacción
+      // Esto evita timeouts en la transacción principal
+      // Los items se actualizarán fuera de la transacción después de que se complete
 
       // 7.5. Actualizar cotizaci?n con snapshots (inmutables) y establecer relaci?n con evento
       // IMPORTANTE: Usar la relaci?n 'eventos' con connect para establecer evento_id
@@ -1574,7 +1559,7 @@ export async function autorizarYCrearEvento(
           condiciones_comerciales_advance_type_snapshot:
             condicionSnapshot?.advance_type || null,
           condiciones_comerciales_advance_amount_snapshot:
-            condicionSnapshot?.advance_amount 
+            condicionSnapshot?.advance_amount
               ? new Prisma.Decimal(condicionSnapshot.advance_amount)
               : null,
           condiciones_comerciales_discount_percentage_snapshot:
@@ -1611,13 +1596,13 @@ export async function autorizarYCrearEvento(
             metodoPagoNombre = metodoPago.payment_method_name;
           }
         }
-        
+
         // Usar la fecha del registro de cierre si est? disponible, sino usar fecha actual
         // Normalizar la fecha para evitar problemas de zona horaria
         const fechaPago = normalizePaymentDate(registroCierre.pago_fecha || new Date());
         const conceptoPago = registroCierre.pago_concepto || 'Pago inicial / Anticipo';
         const contactId = cotizacion.contact_id || cotizacion.promise?.contact_id;
-        
+
         await tx.studio_pagos.create({
           data: {
             cotizacion_id: cotizacionId,
@@ -1643,12 +1628,14 @@ export async function autorizarYCrearEvento(
         },
       });
 
-      // 8.7. Cambiar etapa de promesa a "aprobado" y estado a "aprobada"
+      // 8.7. Cambiar etapa de promesa a "aprobado"
+      // ⚠️ NOTA: El campo 'status' fue removido del schema - solo se usa pipeline_stage_id
       await tx.studio_promises.update({
         where: { id: promiseId },
         data: {
-          pipeline_stage_id: etapaAprobado.id,
-          status: 'aprobada',
+          pipeline_stage: {
+            connect: { id: etapaAprobado.id },
+          },
           updated_at: new Date(),
         },
       });
@@ -1692,7 +1679,7 @@ export async function autorizarYCrearEvento(
         const eventTypeName = cotizacion.promise.event_type?.name;
         const eventName = cotizacion.promise.event_name;
         let concept = 'Evento';
-        
+
         if (eventName && eventTypeName) {
           concept = `${eventName} (${eventTypeName})`;
         } else if (eventName) {
@@ -1700,7 +1687,7 @@ export async function autorizarYCrearEvento(
         } else if (eventTypeName) {
           concept = eventTypeName;
         }
-        
+
         // Construir metadata para evento principal
         const metadata = {
           agenda_type: 'main_event_date',
@@ -1741,14 +1728,14 @@ export async function autorizarYCrearEvento(
 
       // 8.11. Crear log de autorizaci?n y creaci?n de evento
       const eventoNombre = cotizacion.promise.event_name || cotizacion.promise.name || 'Evento';
-      const eventoFecha = cotizacion.promise.event_date 
-        ? new Date(cotizacion.promise.event_date).toLocaleDateString('es-MX', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })
+      const eventoFecha = cotizacion.promise.event_date
+        ? new Date(cotizacion.promise.event_date).toLocaleDateString('es-MX', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
         : null;
-      
+
       let logContent = `Evento creado: ${eventoNombre}`;
       if (eventoFecha) {
         logContent += ` - ${eventoFecha}`;
@@ -1785,7 +1772,35 @@ export async function autorizarYCrearEvento(
         cotizacion_id: cotizacionId,
         pago_registrado: pagoRegistrado,
       };
+    }, {
+      maxWait: 10000, // 10 segundos para iniciar la transacción
+      timeout: 20000, // 20 segundos para completar la transacción (reducido ya que items se actualizan fuera)
     });
+
+    // 8.5. Actualizar items de cotización FUERA de la transacción (evita timeout)
+    // Esto se hace después de que la transacción principal se complete exitosamente
+    try {
+      const configForm = await obtenerConfiguracionPrecios(studioSlug);
+      if (configForm) {
+        const configPrecios: ConfiguracionPrecios = {
+          utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30'),
+          utilidad_producto: parseFloat(configForm.utilidad_producto || '0.20'),
+          comision_venta: parseFloat(configForm.comision_venta || '0.10'),
+          sobreprecio: parseFloat(configForm.sobreprecio || '0.05'),
+        };
+
+        const { guardarEstructuraCotizacionAutorizadaSinTx } = await import('./cotizacion-pricing');
+        await guardarEstructuraCotizacionAutorizadaSinTx(
+          cotizacionId,
+          configPrecios,
+          studioSlug
+        );
+      }
+    } catch (pricingError) {
+      // No fallar la operación principal si falla la actualización de precios
+      // Los items se pueden actualizar después manualmente si es necesario
+      console.error('[autorizarYCrearEvento] Error actualizando precios de items (no crítico):', pricingError);
+    }
 
     // 9. Crear notificaci?n de evento creado (fuera de la transacci?n para no bloquear)
     try {
@@ -1800,7 +1815,7 @@ export async function autorizarYCrearEvento(
     try {
       const { tieneGoogleCalendarHabilitado, sincronizarEventoPrincipalEnBackground } =
         await import('@/lib/integrations/google/clients/calendar/helpers');
-      
+
       if (await tieneGoogleCalendarHabilitado(studioSlug)) {
         // Sincronizar en background para no bloquear la respuesta
         sincronizarEventoPrincipalEnBackground(result.evento_id, studioSlug);
@@ -1819,7 +1834,7 @@ export async function autorizarYCrearEvento(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
     revalidatePath(`/${studioSlug}/studio/business/events/${result.evento_id}`);
-    
+
     // Invalidar caché del cliente
     const contactId = cotizacion.promise.contact_id;
     if (contactId) {

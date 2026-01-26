@@ -47,6 +47,7 @@ interface PaquetesSectionProps {
     showPackages?: boolean;
     cotizaciones?: Array<{ id: string; paquete_origen?: { id: string } | null; selected_by_prospect?: boolean }>;
     cotizacionesCompletas?: PublicCotizacion[];
+    durationHours?: number | null;
 }
 
 /**
@@ -112,7 +113,7 @@ function PaqueteCard({
                                     {paquete.recomendado && (
                                         <div className="flex items-center gap-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full">
                                             <Star className="h-3 w-3 fill-amber-400" />
-                                            <span className="text-[8px] font-bold uppercase tracking-wide">MÁS POPULAR</span>
+                                            <span className="text-[8px] font-bold uppercase tracking-wide">POPULAR</span>
                                         </div>
                                     )}
                                 </div>
@@ -159,6 +160,7 @@ export function PaquetesSection({
     showPackages = false,
     cotizaciones = [],
     cotizacionesCompletas = [],
+    durationHours,
 }: PaquetesSectionProps & { studioId?: string; sessionId?: string }) {
     const [selectedPaquete, setSelectedPaquete] = useState<PublicPaquete | null>(null);
 
@@ -261,130 +263,138 @@ export function PaquetesSection({
                         </div>
                         <p className="text-zinc-400">
                             {showAsAlternative
-                                ? 'Explora otras opciones que podrían interesarte'
-                                : 'Conoce nuestros paquetes predefinidos con excelente relación precio-calidad'}
+                                ? (
+                                    <>
+                                        Explora otros paquetes disponibles
+                                        {durationHours !== null && durationHours !== undefined && durationHours > 0 && (
+                                            <span className="block mt-1 text-xs text-zinc-500">
+                                                Precios calculados para tu evento por <span className="font-semibold text-blue-400">{durationHours} {durationHours === 1 ? 'hora' : 'horas'}</span>. El precio puede variar según las horas configuradas.
+                                            </span>
+                                        )}
+                                    </>
+                                )
+                                : (
+                                    <>
+                                        Conoce nuestros paquetes predefinidos con excelente relación precio-calidad
+                                        {durationHours !== null && durationHours !== undefined && durationHours > 0 && (
+                                            <span className="block mt-1 text-xs text-zinc-500">
+                                                Precios calculados para tu evento por <span className="font-semibold text-blue-400">{durationHours} {durationHours === 1 ? 'hora' : 'horas'}</span>. El precio puede variar según las horas configuradas.
+                                            </span>
+                                        )}
+                                    </>
+                                )}
                         </p>
                     </div>
 
-                    {/* Carousel de paquetes */}
+                    {/* Paquetes - Grid en mobile, carousel solo en desktop si hay más de 3 */}
                     <div className="relative -mx-4 px-4">
                         <div className="relative">
-                            <div
-                                ref={scrollRef}
-                                onScroll={handleManualScroll}
-                                className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide md:overflow-x-auto md:snap-x md:snap-mandatory"
-                                style={{
-                                    scrollbarWidth: 'none',
-                                    msOverflowStyle: 'none',
-                                }}
-                            >
-                                {paquetes.map((paquete) => (
-                                    <div
-                                        key={paquete.id}
-                                        className="shrink-0 w-[calc(100vw-2rem)] snap-center md:w-[83%] md:min-w-[400px]"
-                                    >
+                            {paquetes.length <= 3 ? (
+                                // Grid estático para 3 o menos paquetes (mobile y desktop)
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {paquetes.map((paquete) => (
                                         <PaqueteCard
+                                            key={paquete.id}
                                             paquete={paquete}
                                             onClick={() => handlePaqueteClick(paquete)}
                                         />
+                                    ))}
+                                </div>
+                            ) : (
+                                // Grid en mobile, scroll horizontal solo en desktop para más de 3 paquetes
+                                <>
+                                    <div className="grid grid-cols-1 gap-4 md:hidden">
+                                        {paquetes.map((paquete) => (
+                                            <PaqueteCard
+                                                key={paquete.id}
+                                                paquete={paquete}
+                                                onClick={() => handlePaqueteClick(paquete)}
+                                            />
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                            
-                            {/* Botones de navegación - Mismo diseño que PromoIsland */}
-                            {paquetes.length > 1 && (
-                                <div className="absolute right-3 top-[70%] -translate-y-1/2 z-[100] flex flex-col gap-1.5 pointer-events-none">
-                                <button
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        if (activeIndex < paquetes.length - 1) {
-                                            const nextIndex = activeIndex + 1;
-                                            if (scrollRef.current) {
-                                                const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
-                                                scrollRef.current.scrollTo({
-                                                    left: cardWidth * nextIndex,
-                                                    behavior: 'smooth'
-                                                });
-                                            }
-                                            setActiveIndex(nextIndex);
-                                            setAutoplayEnabled(false);
-                                        }
-                                    }}
-                                    disabled={activeIndex >= paquetes.length - 1}
-                                    className="p-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800/95 backdrop-blur-sm transition-all shadow-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none"
-                                    style={{
-                                        pointerEvents: activeIndex >= paquetes.length - 1 ? 'none' : 'auto',
-                                    }}
-                                    aria-label="Siguiente paquete"
-                                >
-                                    <ChevronRight className="h-3 w-3 text-zinc-300" />
-                                </button>
-                                <button
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        if (activeIndex > 0) {
-                                            const prevIndex = activeIndex - 1;
-                                            if (scrollRef.current) {
-                                                const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
-                                                scrollRef.current.scrollTo({
-                                                    left: cardWidth * prevIndex,
-                                                    behavior: 'smooth'
-                                                });
-                                            }
-                                            setActiveIndex(prevIndex);
-                                            setAutoplayEnabled(false);
-                                        }
-                                    }}
-                                    disabled={activeIndex <= 0}
-                                    className="p-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800/95 backdrop-blur-sm transition-all shadow-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none"
-                                    style={{
-                                        pointerEvents: activeIndex <= 0 ? 'none' : 'auto',
-                                    }}
-                                    aria-label="Paquete anterior"
-                                >
-                                    <ChevronLeft className="h-3 w-3 text-zinc-300" />
-                                </button>
-                            </div>
-                        )}
+                                    <div className="hidden md:block relative">
+                                        <div
+                                            ref={scrollRef}
+                                            onScroll={handleManualScroll}
+                                            className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+                                            style={{
+                                                scrollbarWidth: 'none',
+                                                msOverflowStyle: 'none',
+                                            }}
+                                        >
+                                            {paquetes.map((paquete) => (
+                                                <div
+                                                    key={paquete.id}
+                                                    className="shrink-0 w-[calc(33.333%-0.67rem)] min-w-[calc(33.333%-0.67rem)] snap-center"
+                                                >
+                                                    <PaqueteCard
+                                                        paquete={paquete}
+                                                        onClick={() => handlePaqueteClick(paquete)}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        
+                                        {/* Botones de navegación - Solo desktop para más de 3 paquetes */}
+                                        <div className="absolute right-3 top-[70%] -translate-y-1/2 z-[100] flex flex-col gap-1.5 pointer-events-none">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    if (activeIndex < paquetes.length - 1) {
+                                                        const nextIndex = activeIndex + 1;
+                                                        if (scrollRef.current) {
+                                                            const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
+                                                            scrollRef.current.scrollTo({
+                                                                left: cardWidth * nextIndex,
+                                                                behavior: 'smooth'
+                                                            });
+                                                        }
+                                                        setActiveIndex(nextIndex);
+                                                        setAutoplayEnabled(false);
+                                                    }
+                                                }}
+                                                disabled={activeIndex >= paquetes.length - 1}
+                                                className="p-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800/95 backdrop-blur-sm transition-all shadow-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                                style={{
+                                                    pointerEvents: activeIndex >= paquetes.length - 1 ? 'none' : 'auto',
+                                                }}
+                                                aria-label="Siguiente paquete"
+                                            >
+                                                <ChevronRight className="h-3 w-3 text-zinc-300" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    if (activeIndex > 0) {
+                                                        const prevIndex = activeIndex - 1;
+                                                        if (scrollRef.current) {
+                                                            const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
+                                                            scrollRef.current.scrollTo({
+                                                                left: cardWidth * prevIndex,
+                                                                behavior: 'smooth'
+                                                            });
+                                                        }
+                                                        setActiveIndex(prevIndex);
+                                                        setAutoplayEnabled(false);
+                                                    }
+                                                }}
+                                                disabled={activeIndex <= 0}
+                                                className="p-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800/95 backdrop-blur-sm transition-all shadow-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                                style={{
+                                                    pointerEvents: activeIndex <= 0 ? 'none' : 'auto',
+                                                }}
+                                                aria-label="Paquete anterior"
+                                            >
+                                                <ChevronLeft className="h-3 w-3 text-zinc-300" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
-
-                    {/* Indicadores de paginación - Solo mobile */}
-                    {paquetes.length > 1 && (
-                        <div className="flex justify-center gap-1.5 mt-4 md:hidden">
-                            {paquetes.map((_, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => {
-                                        // Desactivar autoplay permanentemente
-                                        setAutoplayEnabled(false);
-
-                                        if (autoplayTimerRef.current) {
-                                            clearInterval(autoplayTimerRef.current);
-                                        }
-
-                                        if (scrollRef.current) {
-                                            const cardWidth = scrollRef.current.scrollWidth / paquetes.length;
-                                            scrollRef.current.scrollTo({
-                                                left: cardWidth * index,
-                                                behavior: 'smooth'
-                                            });
-                                        }
-                                        setActiveIndex(index);
-                                    }}
-                                    className={cn(
-                                        "h-1.5 rounded-full transition-all",
-                                        index === activeIndex
-                                            ? "w-6 bg-blue-400"
-                                            : "w-1.5 bg-zinc-600 hover:bg-zinc-500"
-                                    )}
-                                    aria-label={`Ir a paquete ${index + 1}`}
-                                />
-                            ))}
-                        </div>
-                    )}
                 </div>
             </section>
 
