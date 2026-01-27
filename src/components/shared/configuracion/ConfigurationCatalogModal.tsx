@@ -68,7 +68,7 @@ export function ConfigurationCatalogModal({
       onClose={onClose}
       title={title}
       description={description}
-      maxWidth="xl"
+      maxWidth="2xl"
       zIndex={10000}
     >
       <div className="space-y-5">

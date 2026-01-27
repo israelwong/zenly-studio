@@ -6,19 +6,14 @@ import { PromiseDetailHeader } from './PromiseDetailHeader';
 import { PromiseDetailToolbar } from './PromiseDetailToolbar';
 import { PromiseShareOptionsModal } from './PromiseShareOptionsModal';
 import { PromiseProvider } from '../context/PromiseContext';
+import { usePromisesConfig } from '../../context/PromisesConfigContext';
 import { BitacoraSheet } from '@/components/shared/bitacora';
 import { ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { toast } from 'sonner';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { useContactUpdateListener } from '@/hooks/useContactRefresh';
-import dynamic from 'next/dynamic';
 import type { PromiseStateData } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
 import { PromiseContentSkeleton } from './PromiseLayoutSkeleton';
-
-const ContractTemplateManagerModal = dynamic(
-  () => import('@/components/shared/contracts/ContractTemplateManagerModal').then(mod => mod.ContractTemplateManagerModal),
-  { ssr: false }
-);
 
 interface PromiseLayoutClientProps {
   studioSlug: string;
@@ -35,8 +30,8 @@ export function PromiseLayoutClient({
   children,
 }: PromiseLayoutClientProps & { children: React.ReactNode }) {
   const router = useRouter();
+  const promisesConfig = usePromisesConfig();
   const [isChangingStage, setIsChangingStage] = useState(false);
-  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
 
@@ -275,8 +270,8 @@ export function PromiseLayoutClient({
             contactData={contactDataForHeader}
             isArchived={isArchived}
             onPipelineStageChange={handlePipelineStageChange}
-            onTemplatesClick={() => setTemplatesModalOpen(true)}
             onAutomateClick={() => setIsShareModalOpen(true)}
+            onConfigClick={promisesConfig?.openConfigCatalog}
             onArchive={handleArchive}
             onUnarchive={handleUnarchive}
             onDelete={handleDelete}
@@ -321,11 +316,6 @@ export function PromiseLayoutClient({
           </>
         )}
 
-        <ContractTemplateManagerModal
-          isOpen={templatesModalOpen}
-          onClose={() => setTemplatesModalOpen(false)}
-          studioSlug={studioSlug}
-        />
       </div>
     </PromiseProvider>
   );

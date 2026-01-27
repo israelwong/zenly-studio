@@ -18,8 +18,8 @@ export function normalizeStatus(status: string): string {
  * Tipo para cotizaciones con estado (acepta tanto formato completo como simplificado)
  */
 type CotizacionConStatus = 
-  | (PublicCotizacion & { status: string; selected_by_prospect?: boolean; visible_to_client?: boolean })
-  | { id: string; status: string; selected_by_prospect?: boolean | null; visible_to_client?: boolean | null };
+  | (PublicCotizacion & { status: string; selected_by_prospect?: boolean; visible_to_client?: boolean; evento_id?: string | null })
+  | { id: string; status: string; selected_by_prospect?: boolean | null; visible_to_client?: boolean | null; evento_id?: string | null };
 
 /**
  * Determina la ruta de redirección basada en el estado de las cotizaciones.
@@ -43,6 +43,7 @@ export function determinePromiseRoute(
     status: q.status,
     visible_to_client: q.visible_to_client,
     selected_by_prospect: q.selected_by_prospect,
+    evento_id: q.evento_id,
   })));
 
   // FILTRO INICIAL: Solo considerar cotizaciones visibles al cliente
@@ -54,6 +55,7 @@ export function determinePromiseRoute(
     status: q.status,
     normalized: normalizeStatus(q.status),
     selected_by_prospect: q.selected_by_prospect,
+    evento_id: q.evento_id,
   })));
 
   // Si no hay cotizaciones visibles, siempre redirigir a /pendientes
@@ -62,14 +64,22 @@ export function determinePromiseRoute(
     return `/${slug}/promise/${promiseId}/pendientes`;
   }
 
-  // PRIORIDAD 1: Buscar cotización aprobada/autorizada (máxima prioridad)
+  // PRIORIDAD 1: Buscar cotización aprobada/autorizada CON evento creado (máxima prioridad)
+  // Solo redirige a /cliente si la cotización tiene evento_id (evento creado después de autorización)
+  // Estados: aprobada, autorizada, approved
   const cotizacionAprobada = visibleQuotes.find((cot) => {
     const status = (cot.status || '').toLowerCase();
-    return status === 'aprobada' || status === 'autorizada' || status === 'approved';
+    const hasEvento = !!cot.evento_id;
+    const isAprobada = status === 'aprobada' || status === 'autorizada' || status === 'approved';
+    return isAprobada && hasEvento;
   });
 
   if (cotizacionAprobada) {
-    console.log('🔍 [determinePromiseRoute] PRIORIDAD 1: Cotización aprobada encontrada');
+    console.log('🔍 [determinePromiseRoute] PRIORIDAD 1: Cotización aprobada con evento encontrada:', {
+      id: cotizacionAprobada.id,
+      status: cotizacionAprobada.status,
+      evento_id: cotizacionAprobada.evento_id,
+    });
     return `/${slug}/cliente`;
   }
 

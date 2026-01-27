@@ -145,6 +145,7 @@ export function useCotizacionesRealtime({
         name: cotizacion.name as string,
         price: cotizacion.price as number,
         selected_by_prospect: cotizacion.selected_by_prospect as boolean,
+        evento_id: cotizacion.evento_id as string | null,
       };
 
       if (cotizacionId && onUpdatedRef.current) {
@@ -228,6 +229,7 @@ export function useCotizacionesRealtime({
         name: cotizacion.name as string,
         price: cotizacion.price as number,
         selected_by_prospect: cotizacion.selected_by_prospect as boolean,
+        evento_id: cotizacion.evento_id as string | null,
       };
 
       // Inicializar camposCambiados fuera del bloque para que esté disponible en todo el scope
@@ -304,6 +306,7 @@ export function useCotizacionesRealtime({
           name: newRecord.name as string,
           price: newRecord.price as number,
           selected_by_prospect: newRecord.selected_by_prospect as boolean,
+          evento_id: newRecord.evento_id as string | null,
           camposCambiados,
           ...Object.fromEntries(
             camposCambiados.map(campo => [campo, newRecord[campo]])

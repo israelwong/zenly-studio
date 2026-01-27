@@ -56,6 +56,20 @@
       opacity: 0.8;
     }
   }
+
+  /* Animación de carga de progreso realista */
+  @keyframes progressLoad {
+    from {
+      width: 0%;
+    }
+    to {
+      width: 100%;
+    }
+  }
+
+  .animate-progress-load {
+    animation: progressLoad 1.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
 }
 
 :root {

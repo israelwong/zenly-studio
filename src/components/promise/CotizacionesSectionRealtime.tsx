@@ -88,20 +88,15 @@ export function CotizacionesSectionRealtime({
 
     // Protección: evitar llamadas si ya hay una en progreso
     if (isReloadingRef.current) {
-      console.log('🔔 [CotizacionesSectionRealtime] Reload bloqueado: ya hay una en progreso');
       return;
     }
 
     // Protección: bloqueo global
     if (lock) {
       if (now < lock.blockUntil) {
-        const remaining = Math.ceil((lock.blockUntil - now) / 1000);
-        console.log(`🔒 [CotizacionesSectionRealtime] Reload bloqueado globalmente: esperando ${remaining}s más`);
         return;
       }
       if (now - lock.lastReload < 5000) {
-        const remaining = Math.ceil((5000 - (now - lock.lastReload)) / 1000);
-        console.log(`🔒 [CotizacionesSectionRealtime] Reload bloqueado: esperando ${remaining}s más`);
         return;
       }
     }
@@ -115,8 +110,6 @@ export function CotizacionesSectionRealtime({
     isReloadingRef.current = true;
     lastReloadTimeRef.current = now;
     blockUntilRef.current = now + 5000; // Bloquear por 5 segundos
-
-    console.log('🔔 [CotizacionesSectionRealtime] Iniciando reload desde servidor');
 
     try {
       // ⚠️ OPTIMIZACIÓN: Usar getPublicPromiseRouteState (ultra-ligera) para verificar cambios
@@ -133,7 +126,6 @@ export function CotizacionesSectionRealtime({
 
         // Solo recargar si hay cambios de estado o nuevas cotizaciones
         if (hasStatusChange || routeState.data.length !== cotizaciones.length) {
-          console.log('🔔 [CotizacionesSectionRealtime] Cambios detectados, recargando datos completos');
           // Usar función específica según la ruta actual (pendientes usa getPublicPromisePendientes)
           const path = window.location.pathname;
           if (path.includes('/pendientes')) {
@@ -154,8 +146,6 @@ export function CotizacionesSectionRealtime({
               });
             }
           }
-        } else {
-          console.log('🔔 [CotizacionesSectionRealtime] Sin cambios significativos, evitando reload');
         }
       }
     } catch (error) {

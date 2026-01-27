@@ -38,22 +38,16 @@ export function PromiseRedirectOnAuthorized({
     lastCheckRef.current = now;
 
     try {
-      // ⚠️ FIX: Dynamic import para evitar problemas de HMR con Turbopack
-      const { getPublicPromiseRouteState } = await import('@/lib/actions/public/promesas.actions');
-      // ⚠️ OPTIMIZACIÓN: Usar función ultra-ligera en lugar de getPublicPromiseData
-      const result = await getPublicPromiseRouteState(studioSlug, promiseId);
-      if (result.success && result.data) {
-        // Buscar cotización aprobada en los estados
-        const cotizacionAprobada = result.data.find(
-          (cot) => {
-            const status = (cot.status || '').toLowerCase();
-            return STATUSES_APROBADOS.includes(status);
-          }
-        );
-
-        if (cotizacionAprobada) {
+      // Usar la API de redirect que incluye verificación de evento_id
+      const response = await fetch(`/api/promise/${studioSlug}/${promiseId}/redirect?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.redirect && data.redirect.includes('/cliente')) {
           hasRedirectedRef.current = true;
-          router.push(`/${studioSlug}/cliente`);
+          router.push(data.redirect);
         }
       }
     } catch (error) {
@@ -68,11 +62,13 @@ export function PromiseRedirectOnAuthorized({
       const p = payload as any;
       const changeInfo = p?.changeInfo;
 
-      // Verificar si el cambio es de status a aprobada/autorizada/approved
+      // Verificar si el cambio es de status a aprobada/autorizada/approved Y tiene evento_id
       if (changeInfo?.statusChanged) {
         const newStatus = (changeInfo.newStatus as string).toLowerCase();
+        const hasEvento = !!changeInfo.evento_id;
 
-        if (STATUSES_APROBADOS.includes(newStatus)) {
+        // Solo redirigir si está aprobada Y tiene evento creado
+        if (STATUSES_APROBADOS.includes(newStatus) && hasEvento) {
           hasRedirectedRef.current = true;
           router.push(`/${studioSlug}/cliente`);
         }

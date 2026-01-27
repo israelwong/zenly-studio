@@ -44,23 +44,13 @@ export function PromiseRedirectHandler({ slug, promiseId }: PromiseRedirectHandl
     promiseId,
     // Cualquier cambio (UPDATE, INSERT, DELETE) dispara sincronización
     // Esto incluye cambios en visible_to_client
-    onCotizacionUpdated: (cotizacionId, changeInfo) => {
-      console.log('🔔 [PromiseRedirectHandler] Cambio detectado en cotización:', {
-        cotizacionId,
-        status: changeInfo?.status,
-        visible_to_client: changeInfo?.visible_to_client,
-        old_visible_to_client: changeInfo?.old_visible_to_client,
-        camposCambiados: changeInfo?.camposCambiados,
-      });
-      // Ejecutar sincronización siempre que haya un cambio
+    onCotizacionUpdated: () => {
       handleSyncRouteRef.current();
     },
     onCotizacionInserted: () => {
-      console.log('🔔 [PromiseRedirectHandler] Cotización insertada. Sincronizando ruta...');
       handleSyncRouteRef.current();
     },
     onCotizacionDeleted: () => {
-      console.log('🔔 [PromiseRedirectHandler] Cotización eliminada. Sincronizando ruta...');
       handleSyncRouteRef.current();
     },
   });

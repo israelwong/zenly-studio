@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, ChevronDown, Check, Zap, FileText } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, ChevronDown, Check, Zap, Settings } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
@@ -24,8 +24,8 @@ interface PromiseDetailHeaderProps {
     } | null;
     isArchived: boolean;
     onPipelineStageChange: (stageId: string, stageName?: string) => void;
-    onTemplatesClick: () => void;
     onAutomateClick: () => void;
+    onConfigClick?: () => void;
     onArchive: () => void;
     onUnarchive: () => void;
     onDelete: () => void;
@@ -45,8 +45,8 @@ export function PromiseDetailHeader({
     contactData,
     isArchived,
     onPipelineStageChange,
-    onTemplatesClick,
     onAutomateClick,
+    onConfigClick,
     onArchive,
     onUnarchive,
     onDelete,
@@ -220,16 +220,6 @@ export function PromiseDetailHeader({
                         // No hay evento: mostrar botones
                         return (
                             <>
-                                {/* Botón de plantillas de contrato */}
-                                <ZenButton
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={onTemplatesClick}
-                                    className="gap-1.5 px-2.5 py-1.5 h-7 text-xs"
-                                >
-                                    <FileText className="h-3.5 w-3.5" />
-                                    <span>Plantillas de contrato</span>
-                                </ZenButton>
                                 {/* Botón Automatizar */}
                                 {promiseId && contactData && (
                                     <ZenButton
@@ -240,6 +230,19 @@ export function PromiseDetailHeader({
                                     >
                                         <Zap className="h-3.5 w-3.5 text-emerald-400/90" style={{ animation: 'pulse 3s ease-in-out infinite' }} />
                                         <span>Automatizar</span>
+                                    </ZenButton>
+                                )}
+                                {/* Botón Configurar */}
+                                {onConfigClick && (
+                                    <ZenButton
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={onConfigClick}
+                                        className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+                                        title="Configurar"
+                                    >
+                                        <Settings className="h-3.5 w-3.5" />
+                                        <span>Configurar</span>
                                     </ZenButton>
                                 )}
                             </>

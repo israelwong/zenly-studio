@@ -150,48 +150,6 @@ function StudioLayoutContent({
   // Configuraciones disponibles para el catálogo
   const configurationSections: ConfigurationSection[] = [
     {
-      id: 'legal',
-      title: 'Documentos Legales',
-      items: [
-        {
-          id: 'terminos',
-          title: 'Términos y Condiciones',
-          description: 'Gestiona los términos y condiciones que aceptan tus clientes',
-          icon: FileText,
-          onClick: () => {
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('open-terminos-modal'));
-            }, 100);
-          },
-          category: 'legal',
-        },
-        {
-          id: 'aviso',
-          title: 'Aviso de Privacidad',
-          description: 'Configura el aviso de privacidad para el cumplimiento legal',
-          icon: Shield,
-          onClick: () => {
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('open-aviso-modal'));
-            }, 100);
-          },
-          category: 'legal',
-        },
-        {
-          id: 'datos-legales',
-          title: 'Datos Legales del Estudio',
-          description: 'Edita la información legal del estudio para contratos y documentos',
-          icon: Building2,
-          onClick: () => {
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('open-studio-data-modal'));
-            }, 100);
-          },
-          category: 'legal',
-        },
-      ],
-    },
-    {
       id: 'comercial',
       title: 'Configuración Comercial',
       items: [
@@ -242,6 +200,48 @@ function StudioLayoutContent({
             }, 100);
           },
           category: 'comercial',
+        },
+      ],
+    },
+    {
+      id: 'legal',
+      title: 'Documentos Legales',
+      items: [
+        {
+          id: 'terminos',
+          title: 'Términos y Condiciones',
+          description: 'Gestiona los términos y condiciones que aceptan tus clientes',
+          icon: FileText,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-terminos-modal'));
+            }, 100);
+          },
+          category: 'legal',
+        },
+        {
+          id: 'aviso',
+          title: 'Aviso de Privacidad',
+          description: 'Configura el aviso de privacidad para el cumplimiento legal',
+          icon: Shield,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-aviso-modal'));
+            }, 100);
+          },
+          category: 'legal',
+        },
+        {
+          id: 'datos-legales',
+          title: 'Datos Legales del Estudio',
+          description: 'Edita la información legal del estudio para contratos y documentos',
+          icon: Building2,
+          onClick: () => {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-studio-data-modal'));
+            }, 100);
+          },
+          category: 'legal',
         },
       ],
     },

@@ -31,6 +31,7 @@ async function getRouteStateDirect(studioSlug: string, promiseId: string) {
       status: true,
       selected_by_prospect: true,
       visible_to_client: true,
+      evento_id: true,
     },
   });
 
@@ -46,6 +47,7 @@ async function getRouteStateDirect(studioSlug: string, promiseId: string) {
       status: normalizeStatus(cot.status), // Normalizar usando la función maestra
       selected_by_prospect: cot.selected_by_prospect,
       visible_to_client: cot.visible_to_client,
+      evento_id: cot.evento_id,
     })),
   };
 }
@@ -73,6 +75,7 @@ export async function GET(
       status: c.status,
       visible_to_client: c.visible_to_client,
       selected_by_prospect: c.selected_by_prospect,
+      evento_id: c.evento_id,
     })));
 
     // Determinar ruta usando la función maestra (evalúa todas las cotizaciones y filtra por visibilidad)

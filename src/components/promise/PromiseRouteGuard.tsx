@@ -49,24 +49,13 @@ export function PromiseRouteGuard({ studioSlug, promiseId }: PromiseRouteGuardPr
     promiseId,
     // Cualquier cambio (UPDATE, INSERT, DELETE) dispara sincronización
     // Esto incluye cambios en visible_to_client
-    onCotizacionUpdated: (cotizacionId, changeInfo) => {
-      console.log('🔔 [PromiseRouteGuard] Cambio detectado en cotización:', {
-        cotizacionId,
-        status: changeInfo?.status,
-        visible_to_client: changeInfo?.visible_to_client,
-        old_visible_to_client: changeInfo?.old_visible_to_client,
-        camposCambiados: changeInfo?.camposCambiados,
-        currentPath: pathname,
-      });
-      // Ejecutar sincronización siempre que haya un cambio
+    onCotizacionUpdated: () => {
       handleSyncRouteRef.current();
     },
     onCotizacionInserted: () => {
-      console.log('🔔 [PromiseRouteGuard] Cotización insertada. Sincronizando ruta...');
       handleSyncRouteRef.current();
     },
     onCotizacionDeleted: () => {
-      console.log('🔔 [PromiseRouteGuard] Cotización eliminada. Sincronizando ruta...');
       handleSyncRouteRef.current();
     },
   });

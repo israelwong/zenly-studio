@@ -243,12 +243,8 @@ export function PendientesPageClient({
   // ⚠️ Escuchar cambios en studio_promises (solo para logging, sin notificaciones)
   usePromisesRealtime({
     studioSlug,
-    onPromiseUpdated: (updatedPromiseId) => {
-      // Solo loggear si es la promise actual
-      if (updatedPromiseId === promiseId) {
-        console.log('🔔 [PendientesPageClient] Cambio detectado en studio_promises', { updatedPromiseId });
-        // ⚠️ Notificaciones deshabilitadas para evitar conflictos
-      }
+    onPromiseUpdated: () => {
+      // Notificaciones deshabilitadas para evitar conflictos
     },
   });
 
