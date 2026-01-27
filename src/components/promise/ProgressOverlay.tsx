@@ -19,7 +19,7 @@ interface ProgressOverlayProps {
 const getStepLabel = (step: ProgressStep): string => {
   switch (step) {
     case 'validating':
-      return 'Encriptando datos';
+      return 'Validando datos encriptados';
     case 'sending':
       return 'Enviando solicitud a estudio';
     case 'registering':

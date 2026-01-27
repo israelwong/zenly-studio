@@ -68,7 +68,7 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
         setProgressStep('collecting');
         await new Promise(resolve => setTimeout(resolve, 600));
 
-        // Paso 2: Encriptando datos (Ritmo ZEN: 600ms)
+        // Paso 2: Validando datos (Ritmo ZEN: 600ms)
         setProgressStep('validating');
         await new Promise(resolve => setTimeout(resolve, 600));
 

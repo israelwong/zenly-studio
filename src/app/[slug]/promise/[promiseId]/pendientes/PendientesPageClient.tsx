@@ -282,7 +282,7 @@ export function PendientesPageClient({
         setProgressStep('collecting');
         await new Promise(resolve => setTimeout(resolve, 400));
 
-        // Paso 2: Encriptando datos (~400ms)
+        // Paso 2: Validando datos (~400ms)
         setProgressStep('validating');
         await new Promise(resolve => setTimeout(resolve, 400));
 
