@@ -106,6 +106,7 @@ interface WizardFooterProps {
   currentStep: WizardStep;
   onBack: () => void;
   onNext: () => void;
+  onCancel: () => void;
   canGoBack: boolean;
   canGoNext: boolean;
   isSubmitting: boolean;
@@ -116,6 +117,7 @@ function WizardFooter({
   currentStep,
   onBack,
   onNext,
+  onCancel,
   canGoBack,
   canGoNext,
   isSubmitting,
@@ -124,21 +126,32 @@ function WizardFooter({
   return (
     <div className="flex items-center justify-between gap-3 pt-6 border-t border-zinc-800">
       <ZenButton
-        variant="outline"
-        onClick={onBack}
-        disabled={!canGoBack || isSubmitting || isLoadingData}
+        variant="ghost"
+        onClick={onCancel}
+        disabled={isSubmitting || isLoadingData}
       >
-        Atrás
+        Cancelar
       </ZenButton>
 
-      <ZenButton
-        onClick={onNext}
-        disabled={!canGoNext || isSubmitting || isLoadingData}
-        loading={(isSubmitting && currentStep === 3) || isLoadingData}
-      >
-        {isLoadingData ? "Cargando..." : currentStep === 3 ? "Confirmar Reserva" : "Siguiente"}
-        {currentStep < 3 && !isLoadingData && <ChevronRight className="h-4 w-4 ml-2" />}
-      </ZenButton>
+      <div className="flex items-center gap-3">
+        {canGoBack && (
+          <ZenButton
+            variant="outline"
+            onClick={onBack}
+            disabled={isSubmitting || isLoadingData}
+          >
+            Atrás
+          </ZenButton>
+        )}
+        <ZenButton
+          onClick={onNext}
+          disabled={!canGoNext || isSubmitting || isLoadingData}
+          loading={(isSubmitting && currentStep === 3) || isLoadingData}
+        >
+          {isLoadingData ? "Cargando..." : currentStep === 3 ? "Confirmar Reserva" : "Siguiente"}
+          {currentStep < 3 && !isLoadingData && <ChevronRight className="h-4 w-4 ml-2" />}
+        </ZenButton>
+      </div>
     </div>
   );
 }
@@ -485,6 +498,7 @@ export function AutorizarCotizacionModal({
           currentStep={currentStep}
           onBack={handleBack}
           onNext={handleNext}
+          onCancel={onClose}
           canGoBack={currentStep > 1}
           canGoNext={true}
           isSubmitting={isSubmitting}
