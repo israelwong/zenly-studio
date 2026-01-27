@@ -24,7 +24,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ZenInput, ZenButton } from '@/components/ui/zen';
+import { ZenInput, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenSwitch } from '@/components/ui/zen';
 import { PromiseKanbanCard } from './PromiseKanbanCard';
 import { EventFormModal } from '@/components/shared/promises';
 import { PromiseTagsManageModal } from './PromiseTagsManageModal';
@@ -34,15 +34,12 @@ import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/pr
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { getSystemStageName } from '@/lib/utils/pipeline-stage-names';
-import { ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenSwitch } from '@/components/ui/zen';
-
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 
 interface PromisesKanbanProps {
   studioSlug: string;
   promises: PromiseWithContact[];
   pipelineStages: PipelineStage[];
-  initialAvailableTags?: PromiseTag[]; // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
   search: string;
   onSearchChange: (search: string) => void;
   onPromiseCreated: () => void;
@@ -59,7 +56,6 @@ function PromisesKanban({
   studioSlug,
   promises,
   pipelineStages,
-  initialAvailableTags = [], // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
   search: externalSearch,
   onSearchChange,
   onPromiseCreated,
@@ -451,7 +447,7 @@ function PromisesKanban({
   // ✅ PRESERVAR ORDEN: Mantener el orden que viene de la BD (NO reordenar)
   const visibleStages = useMemo(() => {
     // Filtrar manteniendo el orden original de la BD
-    return localPipelineStages.filter((stage) => {
+    const filtered = localPipelineStages.filter((stage) => {
       // REGLA DE ORO: Columnas críticas siempre visibles
       if (CRITICAL_STAGE_SLUGS.includes(stage.slug)) {
         return true;
@@ -472,7 +468,9 @@ function PromisesKanban({
       // Mostrar siempre los demás stages
       return true;
     });
-    // ✅ NO REORDENAR: El orden viene de la BD, solo filtrar
+    
+    // ✅ ORDENAR: Asegurar orden correcto por campo 'order' (0: nuevo, 1: seguimiento, 2: cierre, 3: aprobado, 4: archivado, 5: cancelado)
+    return filtered.sort((a, b) => a.order - b.order);
   }, [localPipelineStages, showArchived, showCanceled, showApproved]);
 
   // Determinar si estamos en "vista completa" (ambos activos) o "vista compacta"
@@ -881,47 +879,43 @@ function PromisesKanban({
                 Configuración de Vista
               </div>
               <ZenDropdownMenuSeparator />
+              {/* Todas las etapas en orden correcto del pipeline */}
               <div className="px-2 py-1.5">
-                <div className="flex items-center justify-between gap-4">
-                  <label htmlFor="show-approved" className="text-sm text-zinc-300 cursor-pointer">
-                    Mostrar Aprobado
-                  </label>
-                  <ZenSwitch
-                    id="show-approved"
-                    checked={showApproved}
-                    onCheckedChange={setShowApproved}
-                  />
+                <div className="space-y-1.5">
+                  {localPipelineStages
+                    .sort((a, b) => a.order - b.order)
+                    .map((stage) => {
+                      const isAlwaysVisible = ['pending', 'negotiation', 'closing'].includes(stage.slug);
+                      const isApproved = stage.slug === 'approved' || stage.slug === 'aprobada';
+                      const isArchived = stage.slug === 'archived';
+                      const isCanceled = stage.slug === 'canceled';
+                      const checked = isApproved ? showApproved : isArchived ? showArchived : showCanceled;
+                      const onChange = isApproved ? setShowApproved : isArchived ? setShowArchived : setShowCanceled;
+                      
+                      return (
+                        <div key={stage.id} className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div 
+                              className="w-2 h-2 rounded-full shrink-0" 
+                              style={{ backgroundColor: stage.color }}
+                            />
+                            <label 
+                              htmlFor={`show-${stage.slug}`} 
+                              className={`text-sm flex-1 ${isAlwaysVisible ? 'text-zinc-400 cursor-default' : 'text-zinc-300 cursor-pointer'}`}
+                            >
+                              {stage.name}
+                            </label>
+                          </div>
+                          <ZenSwitch
+                            id={`show-${stage.slug}`}
+                            checked={isAlwaysVisible ? true : checked}
+                            onCheckedChange={isAlwaysVisible ? undefined : onChange}
+                            disabled={isAlwaysVisible}
+                          />
+                        </div>
+                      );
+                    })}
                 </div>
-              </div>
-              <div className="px-2 py-1.5">
-                <div className="flex items-center justify-between gap-4">
-                  <label htmlFor="show-archived" className="text-sm text-zinc-300 cursor-pointer">
-                    Mostrar Archivado
-                  </label>
-                  <ZenSwitch
-                    id="show-archived"
-                    checked={showArchived}
-                    onCheckedChange={setShowArchived}
-                  />
-                </div>
-              </div>
-              <div className="px-2 py-1.5">
-                <div className="flex items-center justify-between gap-4">
-                  <label htmlFor="show-canceled" className="text-sm text-zinc-300 cursor-pointer">
-                    Mostrar Cancelado
-                  </label>
-                  <ZenSwitch
-                    id="show-canceled"
-                    checked={showCanceled}
-                    onCheckedChange={setShowCanceled}
-                  />
-                </div>
-              </div>
-              <ZenDropdownMenuSeparator />
-              <div className="px-2 py-1.5">
-                <p className="text-xs text-zinc-500">
-                  Pendiente, Negociación y Cierre siempre están visibles
-                </p>
               </div>
             </ZenDropdownMenuContent>
           </ZenDropdownMenu>
@@ -965,9 +959,9 @@ function PromisesKanban({
                 onPromiseArchived={handlePromiseArchived}
                 onPromiseDeleted={handlePromiseDeleted}
                 onPromiseUpdated={onPromiseUpdated}
-                pipelineStages={pipelineStages}
+                pipelineStages={localPipelineStages}
                 onPipelineStagesUpdated={onPipelineStagesUpdated}
-                availableTags={initialAvailableTags} // ✅ OPTIMIZACIÓN: Pasar tags desde servidor
+                onUpdateLocalStage={updateLocalStage}
               />
             ))
           ) : (
@@ -987,7 +981,6 @@ function PromisesKanban({
                   pipelineStages={localPipelineStages}
                   onPipelineStagesUpdated={onPipelineStagesUpdated}
                   onUpdateLocalStage={updateLocalStage}
-                  availableTags={initialAvailableTags} // ✅ OPTIMIZACIÓN: Pasar tags desde servidor
                 />
               ))}
             </div>
@@ -1006,7 +999,6 @@ function PromisesKanban({
               <PromiseKanbanCard
                 promise={activePromise}
                 studioSlug={studioSlug}
-                availableTags={initialAvailableTags} // ✅ OPTIMIZACIÓN: Pasar tags desde servidor (CERO POSTs)
                 onArchived={() => activePromise.promise_id && handlePromiseArchived(activePromise.promise_id)}
                 onDeleted={() => activePromise.promise_id && handlePromiseDeleted(activePromise.promise_id)}
                 onTagsUpdated={onPromiseUpdated}
@@ -1052,7 +1044,6 @@ function KanbanColumn({
   pipelineStages = [],
   onPipelineStagesUpdated,
   onUpdateLocalStage,
-  availableTags = [], // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
 }: {
   stage: PipelineStage;
   promises: PromiseWithContact[];
@@ -1065,7 +1056,6 @@ function KanbanColumn({
   pipelineStages?: PipelineStage[];
   onPipelineStagesUpdated?: () => void;
   onUpdateLocalStage?: (stageId: string, updates: Partial<PipelineStage>) => void;
-  availableTags?: PromiseTag[]; // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -1075,7 +1065,24 @@ function KanbanColumn({
   const [editedName, setEditedName] = useState(stage.name);
   const [isHovered, setIsHovered] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Paleta de colores predefinida
+  const colorPalette = [
+    '#3B82F6', // Blue
+    '#10B981', // Emerald
+    '#F59E0B', // Amber
+    '#EF4444', // Red
+    '#8B5CF6', // Purple
+    '#EC4899', // Pink
+    '#06B6D4', // Cyan
+    '#84CC16', // Lime
+    '#F97316', // Orange
+    '#6366F1', // Indigo
+    '#14B8A6', // Teal
+    '#A855F7', // Violet
+  ];
   
   // Obtener nombre original del sistema
   const systemName = getSystemStageName(stage.slug);
@@ -1107,7 +1114,26 @@ function KanbanColumn({
       return;
     }
     
-    const newName = editedName.trim();
+    // Validar que el ID sea válido (debe ser un CUID válido)
+    if (!stage.id || typeof stage.id !== 'string' || stage.id.trim() === '') {
+      toast.error('ID de etapa inválido');
+      setIsEditing(false);
+      return;
+    }
+    
+    // Validar formato CUID: debe empezar con 'c' o 'C' y tener al menos 8 caracteres más
+    const trimmedId = stage.id.trim();
+    const cuidPattern = /^[cC][^\s-]{8,}$/;
+    if (!cuidPattern.test(trimmedId)) {
+      console.error('[KanbanColumn] ID no es un CUID válido:', trimmedId, 'Stage:', stage.slug);
+      toast.error('No se puede actualizar el nombre de esta etapa del sistema');
+      setIsEditing(false);
+      return;
+    }
+    
+    // Capitalizar primera letra
+    const trimmedName = editedName.trim();
+    const newName = trimmedName.charAt(0).toUpperCase() + trimmedName.slice(1).toLowerCase();
     
     // ✅ Actualización optimista: actualizar inmediatamente en el DOM
     onUpdateLocalStage?.(stage.id, { name: newName });
@@ -1117,7 +1143,7 @@ function KanbanColumn({
     try {
       // ✅ Sincronizar con el servidor (sin recargar todo)
       const result = await updatePipelineStage(studioSlug, {
-        id: stage.id,
+        id: trimmedId,
         name: newName,
       });
       
@@ -1151,6 +1177,21 @@ function KanbanColumn({
   const handleReset = async () => {
     if (stage.name === systemName) return;
     
+    // Validar que el ID sea válido (debe ser un CUID válido)
+    if (!stage.id || typeof stage.id !== 'string' || stage.id.trim() === '') {
+      toast.error('ID de etapa inválido');
+      return;
+    }
+    
+    // Validar formato CUID: debe empezar con 'c' o 'C' y tener al menos 8 caracteres más
+    const trimmedId = stage.id.trim();
+    const cuidPattern = /^[cC][^\s-]{8,}$/;
+    if (!cuidPattern.test(trimmedId)) {
+      console.error('[KanbanColumn] ID no es un CUID válido:', trimmedId, 'Stage:', stage.slug);
+      toast.error('No se puede restaurar el nombre de esta etapa del sistema');
+      return;
+    }
+    
     // ✅ Actualización optimista: actualizar inmediatamente en el DOM
     onUpdateLocalStage?.(stage.id, { name: systemName });
     setIsEditing(false);
@@ -1159,7 +1200,7 @@ function KanbanColumn({
     try {
       // ✅ Sincronizar con el servidor (sin recargar todo)
       const result = await updatePipelineStage(studioSlug, {
-        id: stage.id,
+        id: trimmedId,
         name: systemName,
       });
       
@@ -1201,6 +1242,60 @@ function KanbanColumn({
       handleCancel();
     }
   };
+  
+  const handleColorChange = async (newColor: string) => {
+    if (newColor === stage.color) {
+      setIsColorPickerOpen(false);
+      return;
+    }
+    
+    // Validar que el ID sea válido (debe ser un CUID válido)
+    if (!stage.id || typeof stage.id !== 'string' || stage.id.trim() === '') {
+      toast.error('ID de etapa inválido');
+      return;
+    }
+    
+    // Validar formato CUID: debe empezar con 'c' o 'C' y tener al menos 8 caracteres más
+    const trimmedId = stage.id.trim();
+    const cuidPattern = /^[cC][^\s-]{8,}$/;
+    if (!cuidPattern.test(trimmedId)) {
+      console.error('[KanbanColumn] ID no es un CUID válido:', trimmedId, 'Stage:', stage.slug);
+      toast.error('No se puede actualizar el color de esta etapa del sistema');
+      setIsColorPickerOpen(false);
+      return;
+    }
+    
+    // ✅ Actualización optimista: actualizar inmediatamente en el DOM
+    onUpdateLocalStage?.(stage.id, { color: newColor });
+    setIsColorPickerOpen(false);
+    setIsSaving(true);
+    
+    try {
+      // ✅ Sincronizar con el servidor
+      const result = await updatePipelineStage(studioSlug, {
+        id: trimmedId,
+        color: newColor,
+      });
+      
+      if (result.success) {
+        if (result.data) {
+          onUpdateLocalStage?.(stage.id, { color: result.data.color });
+        }
+        toast.success('Color actualizado');
+      } else {
+        // Revertir si falla
+        onUpdateLocalStage?.(stage.id, { color: stage.color });
+        toast.error(result.error || 'Error al actualizar color');
+      }
+    } catch (error) {
+      // Revertir si hay error
+      onUpdateLocalStage?.(stage.id, { color: stage.color });
+      toast.error('Error al actualizar color');
+      console.error('Error updating stage color:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div
@@ -1225,10 +1320,44 @@ function KanbanColumn({
         onMouseLeave={() => setIsHovered(false)}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div
-            className="w-3 h-3 rounded-full shrink-0"
-            style={{ backgroundColor: stage.color }}
-          />
+          <ZenDropdownMenu open={isColorPickerOpen} onOpenChange={setIsColorPickerOpen}>
+            <ZenDropdownMenuTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsColorPickerOpen(true);
+                }}
+                className="w-3 h-3 rounded-full shrink-0 cursor-pointer hover:ring-2 hover:ring-zinc-600 hover:ring-offset-2 hover:ring-offset-zinc-950 transition-all"
+                style={{ backgroundColor: stage.color }}
+                title="Cambiar color"
+              />
+            </ZenDropdownMenuTrigger>
+            <ZenDropdownMenuContent align="start" className="w-40 p-2">
+              <div className="space-y-1.5">
+                <p className="text-xs text-zinc-400 mb-1.5">Selecciona un color</p>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {colorPalette.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleColorChange(color);
+                      }}
+                      className={`w-5 h-5 rounded-full border transition-all hover:scale-110 ${
+                        stage.color === color
+                          ? 'border-white ring-1 ring-offset-1 ring-offset-zinc-900'
+                          : 'border-zinc-700 hover:border-zinc-600'
+                      }`}
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+              </div>
+            </ZenDropdownMenuContent>
+          </ZenDropdownMenu>
           {isEditing ? (
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <input
@@ -1304,7 +1433,6 @@ function KanbanColumn({
               promise={promise}
               onClick={onPromiseClick}
               studioSlug={studioSlug}
-              availableTags={availableTags} // ✅ OPTIMIZACIÓN: Pasar tags desde servidor (CERO POSTs)
               onArchived={() => promise.promise_id && onPromiseArchived?.(promise.promise_id)}
               onDeleted={() => promise.promise_id && onPromiseDeleted?.(promise.promise_id)}
               onTagsUpdated={onPromiseUpdated}

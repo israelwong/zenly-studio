@@ -17,7 +17,6 @@ interface PromisesPageClientProps {
   initialPipelineStages: PipelineStage[];
   initialTestPromisesCount?: number; // ✅ OPTIMIZACIÓN: Pasar desde servidor
   initialUserId?: string | null; // ✅ OPTIMIZACIÓN: Pasar desde servidor
-  initialAvailableTags?: PromiseTag[]; // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
 }
 
 export function PromisesPageClient({
@@ -26,7 +25,6 @@ export function PromisesPageClient({
   initialPipelineStages,
   initialTestPromisesCount = 0, // ✅ OPTIMIZACIÓN: Usar valor del servidor
   initialUserId, // ✅ OPTIMIZACIÓN: Usar userId del servidor
-  initialAvailableTags = [], // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
 }: PromisesPageClientProps) {
   const openPromiseFormRef = useRef<(() => void) | null>(null);
   const removeTestPromisesRef = useRef<(() => void) | null>(null);
@@ -137,7 +135,6 @@ export function PromisesPageClient({
             initialPromises={initialPromises}
             initialPipelineStages={initialPipelineStages}
             initialUserId={initialUserId} // ✅ OPTIMIZACIÓN: Pasar userId desde servidor
-            initialAvailableTags={initialAvailableTags} // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
             onOpenPromiseFormRef={openPromiseFormRef}
             onRemoveTestPromisesRef={removeTestPromisesRef}
           />

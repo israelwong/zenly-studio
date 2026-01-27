@@ -3,16 +3,11 @@ import { cache } from 'react';
 import { getPromises, getPipelineStages } from '@/lib/actions/studio/commercial/promises';
 import { getTestPromisesCount } from '@/lib/actions/studio/commercial/promises/promises.actions';
 import { getCurrentUserId } from '@/lib/actions/studio/notifications/notifications.actions';
-import { getPromiseTags } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 import { PromisesPageClient } from './components/PromisesPageClient';
 
 // ✅ OPTIMIZACIÓN: Cachear userId y tags en el servidor (una sola vez)
 const getCachedUserId = cache(async (studioSlug: string) => {
   return await getCurrentUserId(studioSlug);
-});
-
-const getCachedPromiseTags = cache(async (studioSlug: string) => {
-  return await getPromiseTags(studioSlug);
 });
 
 interface PromisesPageProps {
@@ -56,12 +51,11 @@ export default async function PromisesPage({ params }: PromisesPageProps) {
   );
 
   // ✅ OPTIMIZACIÓN: Pre-cargar TODO en paralelo en el servidor (una sola vez)
-  const [promisesResult, stagesResult, testCountResult, userIdResult, tagsResult] = await Promise.all([
+  const [promisesResult, stagesResult, testCountResult, userIdResult] = await Promise.all([
     getCachedPromises(),
     getCachedPipelineStages(),
     getTestPromisesCount(studioSlug).catch(() => ({ success: false as const, error: 'Error' })), // No bloquear si falla
     getCachedUserId(studioSlug).catch(() => ({ success: false as const, error: 'Error' })), // No bloquear si falla
-    getCachedPromiseTags(studioSlug).catch(() => ({ success: false as const, error: 'Error' })), // ✅ OPTIMIZACIÓN: Tags desde servidor
   ]);
 
   const promises = promisesResult.success && promisesResult.data
@@ -74,7 +68,6 @@ export default async function PromisesPage({ params }: PromisesPageProps) {
 
   const testPromisesCount = testCountResult.success ? (testCountResult.count || 0) : 0;
   const userId = userIdResult.success ? userIdResult.data : null;
-  const availableTags = tagsResult.success && tagsResult.data ? tagsResult.data : []; // ✅ OPTIMIZACIÓN: Tags desde servidor
 
   return (
     <PromisesPageClient
@@ -83,7 +76,6 @@ export default async function PromisesPage({ params }: PromisesPageProps) {
       initialPipelineStages={pipelineStages}
       initialTestPromisesCount={testPromisesCount} // ✅ OPTIMIZACIÓN: Pasar desde servidor
       initialUserId={userId} // ✅ OPTIMIZACIÓN: Pasar desde servidor
-      initialAvailableTags={availableTags} // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
     />
   );
 }

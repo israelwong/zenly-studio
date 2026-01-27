@@ -12,7 +12,6 @@ interface PromisesKanbanClientProps {
   initialPromises: PromiseWithContact[];
   initialPipelineStages: PipelineStage[];
   initialUserId?: string | null; // ✅ OPTIMIZACIÓN: userId pre-obtenido en servidor
-  initialAvailableTags?: PromiseTag[]; // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
   onOpenPromiseFormRef?: React.MutableRefObject<(() => void) | null>;
   onRemoveTestPromisesRef?: React.MutableRefObject<(() => void) | null>;
 }
@@ -22,7 +21,6 @@ export function PromisesKanbanClient({
   initialPromises,
   initialPipelineStages,
   initialUserId, // ✅ OPTIMIZACIÓN: Usar userId del servidor
-  initialAvailableTags = [], // ✅ OPTIMIZACIÓN: Tags desde servidor (CERO POSTs por tarjeta)
   onOpenPromiseFormRef,
   onRemoveTestPromisesRef,
 }: PromisesKanbanClientProps) {
@@ -135,7 +133,6 @@ export function PromisesKanbanClient({
       studioSlug={studioSlug}
       promises={promises}
       pipelineStages={pipelineStages}
-      initialAvailableTags={initialAvailableTags} // ✅ OPTIMIZACIÓN: Pasar tags desde servidor
       search=""
       onSearchChange={() => {}}
       onPromiseCreated={handlePromiseCreated}
