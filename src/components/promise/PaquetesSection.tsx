@@ -11,6 +11,7 @@ import { ComparadorButton } from './ComparadorButton';
 import { getTotalServicios, getFirstServicios } from '@/lib/utils/public-promise';
 import { cn } from '@/lib/utils';
 import { trackPaqueteClick } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
+import { formatRoundedPrice } from '@/lib/utils/price-rounding';
 
 interface CondicionComercial {
     id: string;
@@ -129,12 +130,7 @@ function PaqueteCard({
                         <div className="mt-auto space-y-2">
                             {/* Precio */}
                             <p className="text-xl font-bold text-blue-400">
-                                {new Intl.NumberFormat('es-MX', {
-                                    style: 'currency',
-                                    currency: 'MXN',
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 0,
-                                }).format(paquete.price)}
+                                {formatRoundedPrice(paquete.price, 'charm')}
                             </p>
                         </div>
                     </div>
@@ -190,12 +186,7 @@ export function PaquetesSection({
     }
 
     const formatPrice = (price: number) => {
-        return new Intl.NumberFormat('es-MX', {
-            style: 'currency',
-            currency: 'MXN',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-        }).format(price);
+        return formatRoundedPrice(price, 'charm');
     };
 
     // Detectar scroll para actualizar indicador
