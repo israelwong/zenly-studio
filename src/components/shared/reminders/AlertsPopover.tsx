@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlarmClockCheck, Trash2, Loader2, Calendar } from 'lucide-react';
+import { AlarmClockCheck, Trash2, Loader2, Calendar, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ZenButton } from '@/components/ui/zen';
 import {
@@ -15,7 +15,7 @@ import {
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { RemindersSideSheet } from './RemindersSideSheet';
-import { deleteReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { deleteReminder, completeReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { toast } from 'sonner';
 import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 
@@ -38,6 +38,7 @@ export function AlertsPopover({
   const [isMounted, setIsMounted] = useState(false);
   const [alerts, setAlerts] = useState<ReminderWithPromise[]>(initialAlerts);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState<ReminderWithPromise | null>(null);
 
@@ -80,6 +81,35 @@ export function AlertsPopover({
       router.push(`/${studioSlug}/studio/commercial/promises/${reminder.promise_id}`);
     }
     setOpen(false);
+  };
+
+  const handleCompleteClick = async (reminder: ReminderWithPromise, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    setCompletingId(reminder.id);
+    
+    // Actualización optimista
+    setAlerts(prev => prev.filter(r => r.id !== reminder.id));
+    
+    try {
+      const result = await completeReminder(studioSlug, reminder.id);
+
+      if (result.success) {
+        toast.success('Recordatorio completado');
+        window.dispatchEvent(new CustomEvent('reminder-updated'));
+      } else {
+        // Revertir si falla
+        setAlerts(initialAlerts);
+        toast.error(result.error || 'Error al completar recordatorio');
+      }
+    } catch (error) {
+      // Revertir si falla
+      setAlerts(initialAlerts);
+      console.error('Error completando recordatorio:', error);
+      toast.error('Error al completar recordatorio');
+    } finally {
+      setCompletingId(null);
+    }
   };
 
   const handleDeleteClick = (reminder: ReminderWithPromise, e: React.MouseEvent) => {
@@ -195,7 +225,9 @@ export function AlertsPopover({
                     open={open}
                     isToday={true}
                     onReminderClick={handleReminderClick}
+                    onCompleteClick={handleCompleteClick}
                     onDeleteClick={handleDeleteClick}
+                    isCompleting={completingId === reminder.id}
                   />
                 ))}
               </div>
@@ -218,7 +250,9 @@ export function AlertsPopover({
                       open={open}
                       isToday={false}
                       onReminderClick={handleReminderClick}
+                      onCompleteClick={handleCompleteClick}
                       onDeleteClick={handleDeleteClick}
+                      isCompleting={completingId === reminder.id}
                     />
                   ))}
                 </div>
@@ -290,13 +324,17 @@ function ReminderItem({
   open,
   isToday,
   onReminderClick,
+  onCompleteClick,
   onDeleteClick,
+  isCompleting,
 }: {
   reminder: ReminderWithPromise;
   open: boolean;
   isToday: boolean;
   onReminderClick: (reminder: ReminderWithPromise) => void;
+  onCompleteClick: (reminder: ReminderWithPromise, e: React.MouseEvent) => void;
   onDeleteClick: (reminder: ReminderWithPromise, e: React.MouseEvent) => void;
+  isCompleting: boolean;
 }) {
   const relativeTime = useRelativeTime(reminder.reminder_date, open);
   
@@ -322,16 +360,36 @@ function ReminderItem({
       )}
       onClick={() => onReminderClick(reminder)}
     >
-      <button
-        onClick={(e) => onDeleteClick(reminder, e)}
-        className={cn(
-          "absolute top-2 right-2 p-1.5 rounded hover:bg-zinc-700 text-red-400 hover:text-red-300 transition-colors"
+      <div className="absolute top-2 right-2 flex items-center gap-1">
+        {/* Botón Completar - Solo en sección Hoy */}
+        {isToday && (
+          <button
+            onClick={(e) => onCompleteClick(reminder, e)}
+            disabled={isCompleting}
+            className={cn(
+              "p-1.5 rounded hover:bg-zinc-700 text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-50"
+            )}
+            title="Completar recordatorio"
+          >
+            {isCompleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+          </button>
         )}
-        title="Eliminar recordatorio"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
-      <div className="flex items-start gap-2 w-full pr-8">
+        {/* Botón Eliminar */}
+        <button
+          onClick={(e) => onDeleteClick(reminder, e)}
+          className={cn(
+            "p-1.5 rounded hover:bg-zinc-700 text-red-400 hover:text-red-300 transition-colors"
+          )}
+          title="Eliminar recordatorio"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="flex items-start gap-2 w-full pr-20">
         <div className="flex-1 min-w-0">
           {/* Nombre del evento */}
           <p className="text-sm font-medium text-zinc-200 line-clamp-2">
