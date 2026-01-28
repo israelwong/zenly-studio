@@ -1,9 +1,10 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState, useEffect, useRef } from 'react';
 import { CotizacionesSectionRealtime } from '@/components/promise/CotizacionesSectionRealtime';
 import type { PublicCotizacion } from '@/types/public-promise';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
+import { trackPromisePageView } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 
 interface ActiveQuoteSectionProps {
   activeQuotePromise: Promise<{
@@ -112,6 +113,20 @@ export function ActiveQuoteSection({
   promiseId,
 }: ActiveQuoteSectionProps) {
   const result = use(activeQuotePromise);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const lastTrackTimeRef = useRef<number>(0);
+  const hasTrackedRef = useRef<boolean>(false);
+
+  // Generar o recuperar sessionId para tracking
+  useEffect(() => {
+    const storageKey = `promise_session_${promiseId}`;
+    let storedSessionId = localStorage.getItem(storageKey);
+    if (!storedSessionId) {
+      storedSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem(storageKey, storedSessionId);
+    }
+    setSessionId(storedSessionId);
+  }, [promiseId]);
 
   if (!result.success || !result.data) {
     return null;
@@ -137,6 +152,42 @@ export function ActiveQuoteSection({
     return false;
   });
 
+  // Tracking de visita a la página (solo una vez cuando sessionId y studio.id estén disponibles)
+  useEffect(() => {
+    // Esperar a que sessionId esté disponible (comportamiento normal en React Strict Mode)
+    if (!sessionId || !studio.id) {
+      return;
+    }
+
+    // Evitar tracking duplicado (React Strict Mode ejecuta efectos dos veces en desarrollo)
+    if (hasTrackedRef.current) {
+      return;
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const isPreview = urlParams.get('preview') === 'true';
+
+    if (isPreview) {
+      return;
+    }
+
+    const now = Date.now();
+    const timeSinceLastTrack = now - lastTrackTimeRef.current;
+
+    if (timeSinceLastTrack < 500) {
+      return;
+    }
+
+    lastTrackTimeRef.current = now;
+    hasTrackedRef.current = true;
+
+    trackPromisePageView(studio.id, promiseId, sessionId, isPreview)
+      .catch((error) => {
+        console.error('[ActiveQuoteSection] Error al registrar visita:', error);
+        hasTrackedRef.current = false;
+      });
+  }, [sessionId, promiseId, studio.id]);
+
   // ⚠️ TAREA 3: Renderizar solo la sección de cotizaciones (sin paquetes aún)
   // Los paquetes se cargan después en un Suspense separado
   return (
@@ -148,6 +199,7 @@ export function ActiveQuoteSection({
           promiseId={promiseId}
           studioSlug={studioSlug}
           studioId={studio.id}
+          sessionId={sessionId || undefined}
           condicionesComerciales={condicionesFiltradas}
           terminosCondiciones={terminos_condiciones}
           showCategoriesSubtotals={share_settings.show_categories_subtotals}

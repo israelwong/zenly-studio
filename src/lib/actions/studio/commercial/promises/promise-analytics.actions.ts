@@ -18,23 +18,50 @@ export async function trackPromisePageView(
     return { success: true, skipped: true, reason: 'preview_mode' };
   }
 
-  const headersList = await headers();
-  const ip_address = headersList.get('x-forwarded-for')?.split(',')[0] ||
-    headersList.get('x-real-ip') ||
-    'unknown';
+  // Validar parámetros
+  if (!studioId || studioId.trim() === '') {
+    console.error('[trackPromisePageView] Invalid studioId:', studioId);
+    return { success: false, error: 'Invalid studioId' };
+  }
 
-  return trackContentEvent({
-    studioId,
-    contentType: 'PROMISE',
-    contentId: promiseId,
-    eventType: 'PAGE_VIEW',
-    sessionId,
-    metadata: {
-      promise_id: promiseId,
-      is_preview: false,
-      ip_address,
-    },
-  });
+  if (!promiseId || promiseId.trim() === '') {
+    console.error('[trackPromisePageView] Invalid promiseId:', promiseId);
+    return { success: false, error: 'Invalid promiseId' };
+  }
+
+  if (!sessionId || sessionId.trim() === '') {
+    console.error('[trackPromisePageView] Invalid sessionId:', sessionId);
+    return { success: false, error: 'Invalid sessionId' };
+  }
+
+  try {
+    const headersList = await headers();
+    const ip_address = headersList.get('x-forwarded-for')?.split(',')[0] ||
+      headersList.get('x-real-ip') ||
+      'unknown';
+
+    const result = await trackContentEvent({
+      studioId,
+      contentType: 'PROMISE',
+      contentId: promiseId,
+      eventType: 'PAGE_VIEW',
+      sessionId,
+      metadata: {
+        promise_id: promiseId,
+        is_preview: false,
+        ip_address,
+      },
+    });
+
+    if (!result.success) {
+      console.error('[trackPromisePageView] trackContentEvent failed:', result.error);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('[trackPromisePageView] Error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }
 
 /**
@@ -47,18 +74,45 @@ export async function trackCotizacionClick(
   cotizacionName: string,
   sessionId: string
 ) {
-  return trackContentEvent({
-    studioId,
-    contentType: 'PROMISE',
-    contentId: promiseId,
-    eventType: 'COTIZACION_CLICK',
-    sessionId,
-    metadata: {
-      cotizacion_id: cotizacionId,
-      cotizacion_name: cotizacionName,
-      promise_id: promiseId,
-    },
-  });
+  // Validar parámetros
+  if (!studioId || studioId.trim() === '') {
+    console.error('[trackCotizacionClick] Invalid studioId:', studioId);
+    return { success: false, error: 'Invalid studioId' };
+  }
+
+  if (!promiseId || promiseId.trim() === '') {
+    console.error('[trackCotizacionClick] Invalid promiseId:', promiseId);
+    return { success: false, error: 'Invalid promiseId' };
+  }
+
+  if (!sessionId || sessionId.trim() === '') {
+    console.error('[trackCotizacionClick] Invalid sessionId:', sessionId);
+    return { success: false, error: 'Invalid sessionId' };
+  }
+
+  try {
+    const result = await trackContentEvent({
+      studioId,
+      contentType: 'PROMISE',
+      contentId: promiseId,
+      eventType: 'COTIZACION_CLICK',
+      sessionId,
+      metadata: {
+        cotizacion_id: cotizacionId,
+        cotizacion_name: cotizacionName,
+        promise_id: promiseId,
+      },
+    });
+
+    if (!result.success) {
+      console.error('[trackCotizacionClick] trackContentEvent failed:', result.error);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('[trackCotizacionClick] Error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }
 
 /**
@@ -71,18 +125,45 @@ export async function trackPaqueteClick(
   paqueteName: string,
   sessionId: string
 ) {
-  return trackContentEvent({
-    studioId,
-    contentType: 'PROMISE',
-    contentId: promiseId,
-    eventType: 'PAQUETE_CLICK',
-    sessionId,
-    metadata: {
-      paquete_id: paqueteId,
-      paquete_name: paqueteName,
-      promise_id: promiseId,
-    },
-  });
+  // Validar parámetros
+  if (!studioId || studioId.trim() === '') {
+    console.error('[trackPaqueteClick] Invalid studioId:', studioId);
+    return { success: false, error: 'Invalid studioId' };
+  }
+
+  if (!promiseId || promiseId.trim() === '') {
+    console.error('[trackPaqueteClick] Invalid promiseId:', promiseId);
+    return { success: false, error: 'Invalid promiseId' };
+  }
+
+  if (!sessionId || sessionId.trim() === '') {
+    console.error('[trackPaqueteClick] Invalid sessionId:', sessionId);
+    return { success: false, error: 'Invalid sessionId' };
+  }
+
+  try {
+    const result = await trackContentEvent({
+      studioId,
+      contentType: 'PROMISE',
+      contentId: promiseId,
+      eventType: 'PAQUETE_CLICK',
+      sessionId,
+      metadata: {
+        paquete_id: paqueteId,
+        paquete_name: paqueteName,
+        promise_id: promiseId,
+      },
+    });
+
+    if (!result.success) {
+      console.error('[trackPaqueteClick] trackContentEvent failed:', result.error);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('[trackPaqueteClick] Error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }
 
 /**

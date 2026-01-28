@@ -167,9 +167,10 @@ function PromisePageContent({
     lastTrackTimeRef.current = now;
 
     // Registrar visita (cada refresh cuenta como nueva visita)
-    trackPromisePageView(studio.id, promiseId, sessionId, isPreview).catch((error) => {
-      console.debug('[PromisePageClient] Failed to track page view:', error);
-    });
+    trackPromisePageView(studio.id, promiseId, sessionId, isPreview)
+      .catch((error) => {
+        console.error('[PromisePageClient] Error al registrar visita:', error);
+      });
   }, [sessionId, promiseId, studio.id]);
 
   // Restaurar estado cuando hay un error en el proceso

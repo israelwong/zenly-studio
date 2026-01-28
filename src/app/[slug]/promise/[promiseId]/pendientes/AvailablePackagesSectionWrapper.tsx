@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState, useEffect } from 'react';
 import { AvailablePackagesSection } from './AvailablePackagesSection';
 import { PortafoliosCard } from '@/components/promise/PortafoliosCard';
 import type { PublicCotizacion } from '@/types/public-promise';
@@ -122,6 +122,19 @@ export function AvailablePackagesSectionWrapper({
   studioSlug,
   promiseId,
 }: AvailablePackagesSectionWrapperProps) {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // Generar o recuperar sessionId para tracking
+  useEffect(() => {
+    const storageKey = `promise_session_${promiseId}`;
+    let storedSessionId = localStorage.getItem(storageKey);
+    if (!storedSessionId) {
+      storedSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem(storageKey, storedSessionId);
+    }
+    setSessionId(storedSessionId);
+  }, [promiseId]);
+
   // Resolver ambas promesas
   const activeQuoteResult = use(activeQuotePromise);
   const availablePackagesResult = use(availablePackagesPromise);
@@ -147,6 +160,7 @@ export function AvailablePackagesSectionWrapper({
           studioId={basicPromise.studio.id}
           promiseId={promiseId}
           studioSlug={studioSlug}
+          sessionId={sessionId || undefined}
           showAsAlternative={hasActiveQuote}
           condicionesComerciales={activeQuoteData?.condiciones_comerciales}
           terminosCondiciones={activeQuoteData?.terminos_condiciones}

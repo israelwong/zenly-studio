@@ -158,13 +158,15 @@ export function PendientesPageClient({
       localStorage.setItem(storageKey, storedSessionId);
     }
     setSessionId(storedSessionId);
-  }, [promiseId]);
+  }, [promiseId, studio.id]);
 
   // Tracking de visita a la página
   const lastTrackTimeRef = useRef<number>(0);
 
   useEffect(() => {
-    if (!sessionId || !studio.id) return;
+    if (!sessionId || !studio.id) {
+      return;
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
     const isPreview = urlParams.get('preview') === 'true';
@@ -182,9 +184,10 @@ export function PendientesPageClient({
 
     lastTrackTimeRef.current = now;
 
-    trackPromisePageView(studio.id, promiseId, sessionId, isPreview).catch((error) => {
-      console.debug('[PendientesPageClient] Failed to track page view:', error);
-    });
+    trackPromisePageView(studio.id, promiseId, sessionId, isPreview)
+      .catch((error) => {
+        console.error('[PendientesPageClient] Error al registrar visita:', error);
+      });
   }, [sessionId, promiseId, studio.id]);
 
   const handleSettingsUpdated = useCallback((settings: PromiseShareSettings) => {

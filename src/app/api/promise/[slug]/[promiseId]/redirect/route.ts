@@ -35,11 +35,6 @@ async function getRouteStateDirect(studioSlug: string, promiseId: string) {
     },
   });
 
-  // 📊 LOG DE DEPURACIÓN: Estado de visibilidad
-  cotizaciones.forEach(q => {
-    console.log('📊 [Visibility Check] Quote ID:', q.id, 'Status:', q.status, 'Visible:', q.visible_to_client);
-  });
-
   return {
     success: true,
     data: cotizaciones.map(cot => ({
@@ -69,22 +64,10 @@ export async function GET(
 
     const cotizaciones = routeStateResult.data;
 
-    // 🔍 DIAGNÓSTICO: Log antes de llamar a determinePromiseRoute
-    console.log('🔍 [PromiseRedirectAPI] Cotizaciones antes de determinePromiseRoute:', cotizaciones.map(c => ({
-      id: c.id,
-      status: c.status,
-      visible_to_client: c.visible_to_client,
-      selected_by_prospect: c.selected_by_prospect,
-      evento_id: c.evento_id,
-    })));
-
     // Determinar ruta usando la función maestra (evalúa todas las cotizaciones y filtra por visibilidad)
     // La función maestra decide la prioridad: Aprobada > Negociación > Cierre > Pendientes
     // y aplica el filtro de visibilidad obligatorio
     const targetRoute = determinePromiseRoute(cotizaciones, slug, promiseId);
-
-    // 🔍 DIAGNÓSTICO: Log de la ruta determinada
-    console.log('🔍 [PromiseRedirectAPI] Ruta determinada:', targetRoute);
 
     // determinePromiseRoute siempre devuelve una ruta válida
     return NextResponse.json({ redirect: targetRoute });

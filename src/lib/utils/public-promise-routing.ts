@@ -37,30 +37,11 @@ export function determinePromiseRoute(
   slug: string,
   promiseId: string
 ): string {
-  // 🔍 DIAGNÓSTICO: Log de todas las cotizaciones recibidas
-  console.log('🔍 [determinePromiseRoute] Cotizaciones recibidas:', cotizaciones.map(q => ({
-    id: q.id,
-    status: q.status,
-    visible_to_client: q.visible_to_client,
-    selected_by_prospect: q.selected_by_prospect,
-    evento_id: q.evento_id,
-  })));
-
   // FILTRO INICIAL: Solo considerar cotizaciones visibles al cliente
   const visibleQuotes = cotizaciones.filter(q => q.visible_to_client === true);
 
-  // 🔍 DIAGNÓSTICO: Log de cotizaciones visibles
-  console.log('🔍 [determinePromiseRoute] Cotizaciones visibles:', visibleQuotes.map(q => ({
-    id: q.id,
-    status: q.status,
-    normalized: normalizeStatus(q.status),
-    selected_by_prospect: q.selected_by_prospect,
-    evento_id: q.evento_id,
-  })));
-
   // Si no hay cotizaciones visibles, siempre redirigir a /pendientes
   if (visibleQuotes.length === 0) {
-    console.log('🔍 [determinePromiseRoute] No hay cotizaciones visibles, redirigiendo a /pendientes');
     return `/${slug}/promise/${promiseId}/pendientes`;
   }
 
@@ -76,11 +57,6 @@ export function determinePromiseRoute(
   });
 
   if (cotizacionAprobada) {
-    console.log('🔍 [determinePromiseRoute] PRIORIDAD 1: Cotización aprobada con evento encontrada:', {
-      id: cotizacionAprobada.id,
-      status: cotizacionAprobada.status,
-      evento_id: cotizacionAprobada.evento_id,
-    });
     return `/${slug}/cliente`;
   }
 
@@ -94,7 +70,6 @@ export function determinePromiseRoute(
   });
 
   if (cotizacionNegociacion) {
-    console.log('🔍 [determinePromiseRoute] PRIORIDAD 2: Cotización en negociación encontrada');
     return `/${slug}/promise/${promiseId}/negociacion`;
   }
 
@@ -102,18 +77,10 @@ export function determinePromiseRoute(
   // Cierre: status === 'en_cierre' o 'cierre' (acepta selección manual del estudio o del prospecto)
   const cotizacionEnCierre = visibleQuotes.find((cot) => {
     const normalizedStatus = normalizeStatus(cot.status);
-    const isCierre = normalizedStatus === 'en_cierre';
-    console.log('🔍 [determinePromiseRoute] Evaluando cierre:', {
-      id: cot.id,
-      status: cot.status,
-      normalized: normalizedStatus,
-      isCierre,
-    });
-    return isCierre;
+    return normalizedStatus === 'en_cierre';
   });
 
   if (cotizacionEnCierre) {
-    console.log('🔍 [determinePromiseRoute] PRIORIDAD 3: Cotización en cierre encontrada, redirigiendo a /cierre');
     return `/${slug}/promise/${promiseId}/cierre`;
   }
 
@@ -126,12 +93,10 @@ export function determinePromiseRoute(
   // CASO DE USO: Si no hay cotizaciones válidas, permitir acceso a /pendientes para ver paquetes
   // Esto permite que el prospecto vea paquetes disponibles incluso sin cotizaciones
   if (!hasPendientes) {
-    console.log('🔍 [determinePromiseRoute] PRIORIDAD 4: No hay cotizaciones válidas, redirigiendo a /pendientes');
     return `/${slug}/promise/${promiseId}/pendientes`;
   }
 
   // Default: Cotizaciones pendientes
-  console.log('🔍 [determinePromiseRoute] Default: Redirigiendo a /pendientes');
   return `/${slug}/promise/${promiseId}/pendientes`;
 }
 

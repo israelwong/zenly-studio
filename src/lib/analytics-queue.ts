@@ -86,9 +86,27 @@ class AnalyticsQueue {
         }
 
         try {
+            // Validar que todos los eventos tengan studio_id válido
+            const validEvents = eventsToSend.filter(e => {
+                if (!e.studio_id || e.studio_id.trim() === '') {
+                    console.warn('[AnalyticsQueue] Dropping event with invalid studio_id:', {
+                        content_type: e.content_type,
+                        content_id: e.content_id,
+                        event_type: e.event_type,
+                    });
+                    return false;
+                }
+                return true;
+            });
+
+            if (validEvents.length === 0) {
+                console.warn('[AnalyticsQueue] No valid events to flush');
+                return;
+            }
+
             // Batch insert - mucho más eficiente que inserts individuales
-            await prisma.studio_content_analytics.createMany({
-                data: eventsToSend.map(e => ({
+            const result = await prisma.studio_content_analytics.createMany({
+                data: validEvents.map(e => ({
                     studio_id: e.studio_id,
                     content_type: e.content_type,
                     content_id: e.content_id,
@@ -109,14 +127,20 @@ class AnalyticsQueue {
                 skipDuplicates: true
             });
 
-            console.log(`[AnalyticsQueue] Flushed ${eventsToSend.length} events`);
+            console.log(`[AnalyticsQueue] Flushed ${result.count} events (${validEvents.length} valid, ${eventsToSend.length - validEvents.length} invalid)`);
         } catch (error: any) {
             console.error('[AnalyticsQueue] Failed to flush events:', error);
+            console.error('[AnalyticsQueue] Error details:', {
+                code: error?.code,
+                message: error?.message,
+                eventsCount: eventsToSend.length,
+                studioIds: [...new Set(eventsToSend.map(e => e.studio_id))],
+            });
 
             // Si es error de foreign key, NO re-encolar (datos inválidos)
             if (error?.code === 'P2003') {
                 console.warn('[AnalyticsQueue] Foreign key constraint error - dropping invalid events');
-                console.debug('[AnalyticsQueue] Invalid studio_ids:', 
+                console.warn('[AnalyticsQueue] Invalid studio_ids:', 
                     [...new Set(eventsToSend.map(e => e.studio_id))].join(', ')
                 );
             } 

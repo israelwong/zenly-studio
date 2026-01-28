@@ -89,9 +89,15 @@ export function CotizacionesSection({
         cotizacion.id,
         cotizacion.name,
         sessionId
-      ).catch((error) => {
-        console.debug('[CotizacionesSection] Failed to track click:', error);
-      });
+      )
+        .then((result) => {
+          if (!result.success) {
+            console.error('[CotizacionesSection] Tracking failed:', result.error);
+          }
+        })
+        .catch((error) => {
+          console.error('[CotizacionesSection] Failed to track click:', error);
+        });
     }
   };
 

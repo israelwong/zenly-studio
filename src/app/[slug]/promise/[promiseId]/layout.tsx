@@ -33,18 +33,10 @@ async function getServerSideRouteState(
     throw new Error('PromiseId inválido');
   }
 
-  // ✅ Usar label único para evitar conflictos en hot reload
-  const timeLabelStudio = `DB_QUERY_STUDIO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  console.time(timeLabelStudio);
-  let studio;
-  try {
-    studio = await prisma.studios.findUnique({
-      where: { slug: studioSlug },
-      select: { id: true },
-    });
-  } finally {
-    console.timeEnd(timeLabelStudio);
-  }
+  const studio = await prisma.studios.findUnique({
+    where: { slug: studioSlug },
+    select: { id: true },
+  });
 
   if (!studio) {
     throw new Error('Studio no encontrado');
@@ -52,27 +44,20 @@ async function getServerSideRouteState(
 
   // ✅ OPTIMIZACIÓN CRÍTICA: Consulta en dos fases para reducir latencia
   // Fase 1: Solo los 3 campos esenciales (id, status, visible_to_client)
-  const timeLabelPhase1 = `DB_QUERY_PHASE1_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  console.time(timeLabelPhase1);
-  let cotizacionesMinimas;
-  try {
-    cotizacionesMinimas = await prisma.studio_cotizaciones.findMany({
-      where: {
-        promise_id: promiseId,
-        studio_id: studio.id,
-        status: {
-          in: ['pendiente', 'negociacion', 'en_cierre', 'cierre', 'aprobada', 'autorizada', 'approved', 'contract_generated', 'contract_signed'],
-        },
+  const cotizacionesMinimas = await prisma.studio_cotizaciones.findMany({
+    where: {
+      promise_id: promiseId,
+      studio_id: studio.id,
+      status: {
+        in: ['pendiente', 'negociacion', 'en_cierre', 'cierre', 'aprobada', 'autorizada', 'approved', 'contract_generated', 'contract_signed'],
       },
-      select: {
-        id: true,
-        status: true,
-        visible_to_client: true,
-      },
-    });
-  } finally {
-    console.timeEnd(timeLabelPhase1);
-  }
+    },
+    select: {
+      id: true,
+      status: true,
+      visible_to_client: true,
+    },
+  });
 
   // Fase 2: Solo si hay cotizaciones visibles, obtener campos adicionales necesarios
   // (selected_by_prospect y evento_id solo para cotizaciones aprobadas/en negociación)
@@ -93,28 +78,20 @@ async function getServerSideRouteState(
     });
 
     if (needsAdditionalFields) {
-      // ✅ Usar label único para evitar conflictos en hot reload
-      const timeLabelPhase2 = `DB_QUERY_PHASE2_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.time(timeLabelPhase2);
-      let cotizacionesCompletas;
-      try {
-        cotizacionesCompletas = await prisma.studio_cotizaciones.findMany({
-          where: {
-            promise_id: promiseId,
-            studio_id: studio.id,
-            id: { in: visibleQuotes.map(q => q.id) },
-          },
-          select: {
-            id: true,
-            status: true,
-            visible_to_client: true,
-            selected_by_prospect: true,
-            evento_id: true,
-          },
-        });
-      } finally {
-        console.timeEnd(timeLabelPhase2);
-      }
+      const cotizacionesCompletas = await prisma.studio_cotizaciones.findMany({
+        where: {
+          promise_id: promiseId,
+          studio_id: studio.id,
+          id: { in: visibleQuotes.map(q => q.id) },
+        },
+        select: {
+          id: true,
+          status: true,
+          visible_to_client: true,
+          selected_by_prospect: true,
+          evento_id: true,
+        },
+      });
       
       // Combinar: usar completas para visibles, mínimas para no visibles
       cotizaciones = cotizacionesMinimas.map(min => {

@@ -171,9 +171,15 @@ export function PaquetesSection({
                 paquete.id,
                 paquete.name,
                 sessionId
-            ).catch((error) => {
-                console.debug('[PaquetesSection] Failed to track click:', error);
-            });
+            )
+                .then((result) => {
+                    if (!result.success) {
+                        console.error('[PaquetesSection] Tracking failed:', result.error);
+                    }
+                })
+                .catch((error) => {
+                    console.error('[PaquetesSection] Failed to track click:', error);
+                });
         }
     };
     const [activeIndex, setActiveIndex] = useState(0);

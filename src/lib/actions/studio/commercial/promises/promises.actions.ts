@@ -58,21 +58,13 @@ export async function getPromises(
       };
     }
 
-    // ✅ OPTIMIZACIÓN: Medir tiempo de consultas
-    const timeLabelTotal = `GET_PROMISES_TOTAL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.time(timeLabelTotal);
-    
     // ✅ PASO 3: Unificar queries - Ejecutar count() y findMany() en paralelo
-    const timeLabelCount = `GET_PROMISES_COUNT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.time(timeLabelCount);
     const countPromise = prisma.studio_promises.count({ 
       where,
       // ✅ Usará el índice idx_studio_promises_kanban_master (studio_id, pipeline_stage_id, is_test)
     });
 
     // ✅ OPTIMIZACIÓN CRÍTICA: Solo traer campos necesarios para el Kanban
-    const timeLabelQuery = `GET_PROMISES_QUERY_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.time(timeLabelQuery);
     const promisesPromise = prisma.studio_promises.findMany({
       where,
       select: {
@@ -228,14 +220,8 @@ export async function getPromises(
       promisesPromise,
       countPromise,
     ]);
-    
-    console.timeEnd(timeLabelQuery);
-    console.timeEnd(timeLabelCount);
-    console.timeEnd(timeLabelTotal);
 
     // ✅ OPTIMIZACIÓN: Mapear promesas a PromiseWithContact
-    const timeLabelMap = `GET_PROMISES_MAP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.time(timeLabelMap);
     const mappedPromises = promises.map((promise): PromiseWithContact => {
       // ✅ Mapear tags (ya filtrados por is_active en la query)
       const tags = promise.tags?.map((pt) => ({
@@ -345,7 +331,6 @@ export async function getPromises(
         } : null,
       };
     });
-    console.timeEnd(timeLabelMap);
 
     return {
       success: true,

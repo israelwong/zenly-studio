@@ -64,13 +64,6 @@ export function PromiseRouteGuard({
       const cleanCurrent = clean(pathname);
       const cleanTarget = clean(serverTargetRoute);
       
-      // 🔍 LOG: Comparación de rutas para diagnóstico
-      console.log('🔍 [PromiseRouteGuard] Array vacío - Comparación:', {
-        cleanCurrent,
-        cleanTarget,
-        match: cleanCurrent === cleanTarget,
-      });
-      
       if (cleanCurrent === cleanTarget) {
         setIsReady(true);
         serverValidatedRef.current = true;
@@ -87,14 +80,6 @@ export function PromiseRouteGuard({
       // Comparación robusta: limpiar ambas rutas
       const cleanCurrent = clean(pathname);
       const cleanTarget = clean(serverTargetRoute);
-      
-      // 🔍 LOG: Comparación de rutas para diagnóstico
-      console.log('🔍 [PromiseRouteGuard] Con datos - Comparación:', {
-        cleanCurrent,
-        cleanTarget,
-        match: cleanCurrent === cleanTarget,
-        initialQuotesCount: initialQuotes.length,
-      });
       
       if (cleanCurrent !== cleanTarget && !pathname.includes('/cliente')) {
         hasRedirectedRef.current = true;
@@ -117,13 +102,6 @@ export function PromiseRouteGuard({
     if (serverValidatedRef.current && serverTargetRoute && !isReady) {
       const cleanCurrent = clean(pathname);
       const cleanTarget = clean(serverTargetRoute);
-      
-      // 🔍 LOG: Hidratación garantizada
-      console.log('🔍 [PromiseRouteGuard] Hidratación garantizada:', {
-        cleanCurrent,
-        cleanTarget,
-        match: cleanCurrent === cleanTarget,
-      });
       
       if (cleanCurrent === cleanTarget) {
         setIsReady(true);

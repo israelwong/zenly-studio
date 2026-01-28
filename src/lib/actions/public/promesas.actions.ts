@@ -1545,6 +1545,22 @@ export async function getPublicPromiseActiveQuote(
 
     const { promise: promiseBasic, studio } = basicData.data;
 
+    // Validar que studio.id sea válido
+    if (!studio?.id || typeof studio.id !== 'string') {
+      console.error('[getPublicPromiseActiveQuote] Invalid studio:', {
+        studioSlug,
+        promiseId,
+        studioExists: !!studio,
+        studioId: studio?.id,
+        studioKeys: studio ? Object.keys(studio) : null,
+        basicDataSuccess: basicData.success,
+      });
+      return {
+        success: false,
+        error: 'Studio ID inválido',
+      };
+    }
+
     // 2. Obtener share settings
     const shareSettings = {
       show_packages: promiseBasic.share_show_packages ?? studio.promise_share_default_show_packages,
@@ -4992,7 +5008,7 @@ export async function getPublicPromiseUpdate(
  * Cachea por request para evitar queries duplicadas
  */
 const getStudioBySlug = cache(async (studioSlug: string) => {
-  return await prisma.studios.findUnique({
+  const studio = await prisma.studios.findUnique({
     where: { slug: studioSlug },
     select: {
       id: true,
@@ -5013,6 +5029,16 @@ const getStudioBySlug = cache(async (studioSlug: string) => {
       promise_share_default_auto_generate_contract: true,
     },
   });
+
+  if (studio && !studio.id) {
+    console.error('[getStudioBySlug] Studio retornado sin ID:', {
+      studioSlug,
+      studioKeys: Object.keys(studio),
+      studioName: studio.studio_name,
+    });
+  }
+
+  return studio;
 });
 
 export async function getPublicPromiseBasicData(
@@ -5064,13 +5090,30 @@ export async function getPublicPromiseBasicData(
 }> {
   try {
     // ⚠️ TAREA 1: Cache de React para Studio (cachea por request)
-    const fetchStudioStart = Date.now();
     const studio = await getStudioBySlug(studioSlug);
 
     if (!studio) {
+      console.error('[getPublicPromiseBasicData] Studio no encontrado:', {
+        studioSlug,
+      });
       return {
         success: false,
         error: "Studio no encontrado",
+      };
+    }
+
+    if (!studio.id || typeof studio.id !== 'string') {
+      console.error('[getPublicPromiseBasicData] Studio sin ID válido:', {
+        studioSlug,
+        studio: {
+          id: studio.id,
+          studio_name: studio.studio_name,
+          keys: Object.keys(studio),
+        },
+      });
+      return {
+        success: false,
+        error: "Studio ID inválido",
       };
     }
 
