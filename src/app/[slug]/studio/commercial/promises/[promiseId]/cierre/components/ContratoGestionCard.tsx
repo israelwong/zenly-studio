@@ -86,20 +86,24 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
   }, [selectedTemplateId]);
 
   // Sincronizar customizedContent con contractContent del padre
+  // ✅ CORRECCIÓN: Solo usar contractContent si es diferente de la plantilla (personalizado)
   useEffect(() => {
-    if (contractContent !== undefined) {
-      // Si hay contenido desde el padre y es diferente al local, actualizar
-      if (contractContent !== null && contractContent !== customizedContent) {
+    if (contractContent !== undefined && selectedTemplate) {
+      // Si hay contenido desde el padre y es diferente a la plantilla, es personalizado
+      if (contractContent !== null && contractContent !== selectedTemplate.content) {
         setCustomizedContent(contractContent);
         setIsContractCustomized(true);
-      } else if (contractContent === null && customizedContent !== null && !selectedTemplateId) {
-        // Solo limpiar si realmente no hay template seleccionado
-        // Si hay template pero no contenido, mantener el estado local
+      } else if (contractContent === null || contractContent === selectedTemplate.content) {
+        // Si el contenido es null o igual a la plantilla, no está personalizado
         setCustomizedContent(null);
         setIsContractCustomized(false);
       }
+    } else if (contractContent === null && customizedContent !== null && !selectedTemplateId) {
+      // Solo limpiar si realmente no hay template seleccionado
+      setCustomizedContent(null);
+      setIsContractCustomized(false);
     }
-  }, [contractContent]);
+  }, [contractContent, selectedTemplate]);
 
 
   const loadTemplate = async (templateId: string) => {
@@ -338,7 +342,7 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
         <ContractEditorModal
           isOpen={showContractEditor}
           onClose={() => setShowContractEditor(false)}
-          initialContent={contractContent || customizedContent || selectedTemplate.content}
+          initialContent={customizedContent || selectedTemplate?.content || ''}
           onSave={handleSaveCustomContract}
           title="Personalizar Contrato"
           description="Personaliza el contrato para este cliente. Los cambios solo aplicarán a esta promesa."
@@ -450,6 +454,7 @@ export const ContratoGestionCard = memo(function ContratoGestionCard({
         onClose={handleManagerModalClose}
         studioSlug={studioSlug}
         eventTypeId={eventTypeId}
+        zIndex={10080} // ✅ Mayor que el modal de opciones (10070) para aparecer encima
       />
 
       {/* Modal de Historial de Versiones */}

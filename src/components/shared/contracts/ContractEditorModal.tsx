@@ -79,6 +79,7 @@ export function ContractEditorModal({
   const [templateDescription, setTemplateDescription] = useState(initialDescription);
   const [isDefault, setIsDefault] = useState(initialIsDefault);
   const [loadingEventData, setLoadingEventData] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null); // ✅ Estado para error de validación
   const editorRef = useRef<ContractEditorRef>(null);
   const modalContentRef = useRef<HTMLDivElement>(null);
 
@@ -157,6 +158,16 @@ export function ContractEditorModal({
   );
 
   const handleSave = async () => {
+    // ✅ VALIDACIÓN: Verificar que el nombre esté presente para templates
+    if (mode === "create-template" || mode === "edit-template") {
+      if (!name?.trim()) {
+        setNameError("El nombre de la plantilla es requerido");
+        toast.error("El nombre de la plantilla es requerido");
+        return;
+      }
+      setNameError(null); // Limpiar error si es válido
+    }
+
     // Obtener el contenido actual del editor directamente usando el método getContent
     let currentContent = content;
     if (editorRef.current && editorRef.current.getContent) {
@@ -173,8 +184,8 @@ export function ContractEditorModal({
     };
 
     if (mode === "create-template" || mode === "edit-template") {
-      data.name = name;
-      data.description = templateDescription;
+      data.name = name?.trim() || "";
+      data.description = templateDescription?.trim() || "";
       data.is_default = isDefault;
     }
 
@@ -310,14 +321,21 @@ export function ContractEditorModal({
               <div className="p-6 border-b border-zinc-800 space-y-4 shrink-0 bg-zinc-900/30">
                 <h3 className="text-sm font-semibold text-zinc-300 mb-4">Información de la Plantilla</h3>
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-2">
-                    <ZenLabel htmlFor="modal-name">Nombre de la Plantilla *</ZenLabel>
+                  <div>
                     <ZenInput
                       id="modal-name"
+                      label="Nombre de la Plantilla"
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        // ✅ Limpiar error cuando el usuario empiece a escribir
+                        if (nameError) {
+                          setNameError(null);
+                        }
+                      }}
                       placeholder="Ej: Contrato General"
                       required
+                      error={nameError || undefined}
                     />
                   </div>
                   <div className="space-y-2">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   setupRealtimeAuth,
@@ -8,6 +8,7 @@ import {
   RealtimeChannelPresets,
   subscribeToChannel,
 } from '@/lib/realtime/core';
+import { REALTIME_CONFIG, logRealtime } from '@/lib/realtime/realtime-control';
 import { getPromiseLogs } from '@/lib/actions/studio/commercial/promises';
 import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 
@@ -37,6 +38,9 @@ export function usePromiseLogsRealtime({
   const onLogUpdatedRef = useRef(onLogUpdated);
   const onLogDeletedRef = useRef(onLogDeleted);
   const onLogsReloadRef = useRef(onLogsReload);
+  // ✅ OPTIMIZACIÓN: Estado de reconexión para manejar desconexiones
+  const reconnectionAttemptsRef = useRef(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -166,15 +170,25 @@ export function usePromiseLogsRealtime({
     [promiseId]
   );
 
-  useEffect(() => {
-    if (!studioSlug || !promiseId || !enabled) {
-      return;
+  // ✅ OPTIMIZACIÓN: Función de cleanup para reconexión
+  const cleanupConnections = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
-
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!studioSlug || !promiseId || !enabled) {
+      cleanupConnections();
+      return;
+    }
+
+    cleanupConnections();
 
     const setupRealtime = async () => {
       try {
@@ -190,86 +204,94 @@ export function usePromiseLogsRealtime({
         const channel = createRealtimeChannel(supabase, channelConfig);
 
         // Agregar listeners para eventos de realtime.send
-        // Formato: realtime.send envía el payload JSONB directamente
-        // El payload puede venir como: { operation, table, record, new, old, old_record }
-        // O envuelto como: { payload: { operation, table, record, new, old, old_record } }
-        // Similar a useStudioNotifications y useCotizacionesRealtime que funcionan
         channel
           .on('broadcast', { event: 'INSERT' }, (payload: unknown) => {
+            if (!isMountedRef.current) return;
             const p = payload as any;
-            // Intentar múltiples formatos como en useStudioNotifications y useCotizacionesRealtime
             const record = p.record || p.payload?.record || p.new || p.payload?.new;
-            console.log('[usePromiseLogsRealtime] 📨 INSERT recibido:', {
-              payload,
-              record,
-              promiseId,
-              hasRecord: !!record,
-              recordPromiseId: record?.promise_id
-            });
             if (record && record.promise_id === promiseId) {
               handleInsert(payload);
-            } else {
-              console.log('[usePromiseLogsRealtime] ⏭️ INSERT ignorado - promise_id no coincide o no hay record', {
-                recordPromiseId: record?.promise_id,
-                expectedPromiseId: promiseId
-              });
             }
           })
           .on('broadcast', { event: 'UPDATE' }, (payload: unknown) => {
+            if (!isMountedRef.current) return;
             const p = payload as any;
             const record = p.record || p.payload?.record || p.new || p.payload?.new;
-            console.log('[usePromiseLogsRealtime] 📨 UPDATE recibido:', {
-              payload,
-              record,
-              promiseId,
-              hasRecord: !!record,
-              recordPromiseId: record?.promise_id
-            });
             if (record && record.promise_id === promiseId) {
               handleUpdate(payload);
-            } else {
-              console.log('[usePromiseLogsRealtime] ⏭️ UPDATE ignorado - promise_id no coincide o no hay record');
             }
           })
           .on('broadcast', { event: 'DELETE' }, (payload: unknown) => {
+            if (!isMountedRef.current) return;
             const p = payload as any;
             const record = p.old_record || p.payload?.old_record || p.old || p.payload?.old;
-            console.log('[usePromiseLogsRealtime] 📨 DELETE recibido:', {
-              payload,
-              record,
-              promiseId,
-              hasRecord: !!record,
-              recordPromiseId: record?.promise_id
-            });
             if (record && record.promise_id === promiseId) {
               handleDelete(payload);
-            } else {
-              console.log('[usePromiseLogsRealtime] ⏭️ DELETE ignorado - promise_id no coincide o no hay record');
             }
           });
 
+        // ✅ OPTIMIZACIÓN: Manejo de reconexión con estados
         await subscribeToChannel(channel, (status, err) => {
-          if (err) {
-            console.error('[usePromiseLogsRealtime] ❌ Error en suscripción:', err);
-          } else {
-            console.log('[usePromiseLogsRealtime] ✅ Suscrito exitosamente al canal:', channelConfig.channelName, 'Estado:', status);
+          if (!isMountedRef.current) return;
+
+          switch (status) {
+            case 'SUBSCRIBED':
+              reconnectionAttemptsRef.current = 0;
+              logRealtime('PROMISE_LOGS', 'Canal suscrito exitosamente', { status, promiseId });
+              break;
+            case 'CHANNEL_ERROR':
+            case 'TIMED_OUT':
+              reconnectionAttemptsRef.current += 1;
+              logRealtime('PROMISE_LOGS', 'Error en canal', { 
+                status, 
+                error: err?.message, 
+                attempts: reconnectionAttemptsRef.current,
+                promiseId 
+              });
+
+              // ✅ OPTIMIZACIÓN: Intentar reconexión si no hemos excedido el límite
+              if (reconnectionAttemptsRef.current < REALTIME_CONFIG.MAX_RECONNECTION_ATTEMPTS) {
+                reconnectTimeoutRef.current = setTimeout(() => {
+                  if (isMountedRef.current) {
+                    logRealtime('PROMISE_LOGS', 'Intentando reconexión...', { 
+                      attempt: reconnectionAttemptsRef.current,
+                      promiseId 
+                    });
+                    cleanupConnections();
+                    // El useEffect se re-ejecutará automáticamente
+                  }
+                }, REALTIME_CONFIG.RECONNECTION_DELAY);
+              } else {
+                console.error('[usePromiseLogsRealtime] Máximo de intentos de reconexión alcanzado');
+              }
+              break;
+            case 'CLOSED':
+              logRealtime('PROMISE_LOGS', 'Canal cerrado', { status, promiseId });
+              break;
+            default:
+              logRealtime('PROMISE_LOGS', 'Estado del canal', { status, promiseId });
           }
         });
 
         channelRef.current = channel;
-        console.log('[usePromiseLogsRealtime] ✅ Canal configurado:', channelConfig.channelName);
       } catch (error) {
         console.error('[usePromiseLogsRealtime] Error en setupRealtime:', error);
+        // Intentar reconexión en caso de error
+        if (reconnectionAttemptsRef.current < REALTIME_CONFIG.MAX_RECONNECTION_ATTEMPTS) {
+          reconnectionAttemptsRef.current += 1;
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (isMountedRef.current) {
+              cleanupConnections();
+            }
+          }, REALTIME_CONFIG.RECONNECTION_DELAY);
+        }
       }
     };
 
     setupRealtime();
 
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      cleanupConnections();
     };
-  }, [studioSlug, promiseId, enabled, handleInsert, handleUpdate, handleDelete, supabase]);
+  }, [studioSlug, promiseId, enabled, handleInsert, handleUpdate, handleDelete, supabase, cleanupConnections]);
 }

@@ -33,6 +33,7 @@ interface ContractTemplateManagerModalProps {
   studioSlug: string;
   eventTypeId?: string;
   onSelect?: (templateId: string) => void;
+  zIndex?: number; // ✅ Para permitir anidamiento correcto
 }
 
 export function ContractTemplateManagerModal({
@@ -41,6 +42,7 @@ export function ContractTemplateManagerModal({
   studioSlug,
   eventTypeId,
   onSelect,
+  zIndex = 10050, // ✅ Default, pero puede ser sobrescrito para anidamiento
 }: ContractTemplateManagerModalProps) {
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -284,7 +286,7 @@ export function ContractTemplateManagerModal({
         onCancel={onClose}
         cancelLabel="Cerrar"
         closeOnClickOutside={false}
-        zIndex={10050}
+        zIndex={zIndex}
       >
         <div className="space-y-4">
           {/* Mensaje cuando faltan datos del estudio */}

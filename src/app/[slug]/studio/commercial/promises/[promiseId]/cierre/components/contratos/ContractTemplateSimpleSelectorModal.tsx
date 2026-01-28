@@ -208,6 +208,7 @@ export function ContractTemplateSimpleSelectorModal({
         isOpen={showManagerModal}
         onClose={handleManagerModalClose}
         studioSlug={studioSlug}
+        zIndex={10080} // ✅ Mayor que el selector (10070) para aparecer encima
       />
     </>
   );

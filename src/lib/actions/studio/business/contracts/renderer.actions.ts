@@ -7,6 +7,8 @@ import type { CondicionesComercialesData } from "@/app/[slug]/studio/config/cont
 import { renderCondicionesComercialesBlock } from "@/app/[slug]/studio/config/contratos/components/utils/contract-renderer";
 import { construirEstructuraJerarquicaCotizacion, COTIZACION_ITEMS_SELECT_STANDARD } from "@/lib/actions/studio/commercial/promises/cotizacion-structure.utils";
 import { obtenerInfoBancariaTransferencia } from "@/lib/actions/shared/metodos-pago.actions";
+import { calcularCantidadEfectiva } from "@/lib/utils/dynamic-billing-calc";
+import { roundPrice } from "@/lib/utils/price-rounding";
 
 // Tipo extendido que incluye condiciones comerciales y datos adicionales
 export interface EventContractDataWithConditions extends EventContractData {
@@ -156,6 +158,7 @@ export async function getPromiseContractData(
         negociacion_precio_personalizado: true,
         negociacion_precio_original: true,
         event_duration: true,
+        paquete_id: true, // ✅ Para identificar si viene de paquete y aplicar precio charm
         cotizacion_items: {
           select: COTIZACION_ITEMS_SELECT_STANDARD,
           orderBy: {
@@ -205,6 +208,9 @@ export async function getPromiseContractData(
       }
     );
 
+    // ✅ OPTIMIZACIÓN: Identificar si viene de paquete para aplicar precio charm
+    const esPaquete = !!cotizacion.paquete_id;
+    
     // Calcular totales
     // El precio base es el precio de la cotizaci?n (puede incluir descuentos previos)
     // Para el c?lculo correcto, necesitamos el precio base antes de descuentos
@@ -337,11 +343,22 @@ export async function getPromiseContractData(
     }
 
     // Calcular anticipo basado en totalFinal (ya sea negociado o normal)
+    // El anticipo se calcula ANTES de aplicar charm
     if (condiciones) {
       if (condiciones.advance_type === "percentage" && condiciones.advance_percentage) {
         montoAnticipo = (totalFinal * condiciones.advance_percentage) / 100;
       } else if (condiciones.advance_type === "fixed_amount" && condiciones.advance_amount) {
         montoAnticipo = condiciones.advance_amount;
+      }
+    }
+    
+    // ✅ OPTIMIZACIÓN: Aplicar precio charm si es paquete (después de calcular anticipo)
+    let totalFinalParaContrato = totalFinal;
+    if (esPaquete) {
+      totalFinalParaContrato = roundPrice(totalFinal, 'charm');
+      // Recalcular anticipo si es porcentaje (para mantener proporción con el nuevo total)
+      if (condiciones && condiciones.advance_type === "percentage" && condiciones.advance_percentage) {
+        montoAnticipo = (totalFinalParaContrato * condiciones.advance_percentage) / 100;
       }
     }
 
@@ -438,30 +455,43 @@ export async function getPromiseContractData(
       fecha_evento: fechaEvento,
       fecha_firma_cliente: fechaFirmaCliente,
       servicios_incluidos: serviciosLegacy, // Formato legacy para [SERVICIOS_INCLUIDOS]
-      total_contrato: `$${totalFinal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`,
+      total_contrato: `$${totalFinalParaContrato.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`,
       condiciones_pago: condiciones?.description || "Por definir",
       banco,
       titular,
       clabe,
       subtotal: precioBaseReal,
       descuento: descuentoAplicado,
-      total: totalFinal,
+      total: totalFinalParaContrato,
       cotizacionData: {
         secciones: secciones.map(seccion => ({
           ...seccion,
           categorias: seccion.categorias.map(categoria => ({
             ...categoria,
             items: categoria.items.map(item => {
+              // ✅ CORRECCIÓN: Calcular cantidad efectiva para items tipo HOUR
+              const itemId = item.item_id || (item as any)['item_id'];
+              let cantidadEfectiva = item.cantidad;
+              
+              if (itemId) {
+                const billingType = billingTypeMap.get(itemId);
+                if (billingType === 'HOUR' && eventDuration && eventDuration > 0) {
+                  cantidadEfectiva = calcularCantidadEfectiva(
+                    billingType,
+                    item.cantidad,
+                    eventDuration
+                  );
+                }
+              }
+              
               const itemData: any = {
                 nombre: item.nombre,
                 descripcion: item.descripcion,
-                cantidad: item.cantidad,
+                cantidad: cantidadEfectiva, // ✅ Usar cantidad efectiva
                 subtotal: item.subtotal,
               };
               
               // Si el item tiene billing_type HOUR y hay event_duration, agregar horas
-              // item.item_id puede estar en item.item_id o en item['item_id'] debido a la estructura
-              const itemId = item.item_id || (item as any)['item_id'];
               if (itemId) {
                 const billingType = billingTypeMap.get(itemId);
                 if (billingType === 'HOUR' && eventDuration && eventDuration > 0) {
@@ -473,7 +503,7 @@ export async function getPromiseContractData(
             }),
           })),
         })),
-        total: totalFinal,
+        total: totalFinalParaContrato,
       },
       condicionesData: condiciones ? {
         nombre: condiciones.name,
@@ -483,7 +513,7 @@ export async function getPromiseContractData(
         tipo_anticipo: (condiciones.advance_type as "percentage" | "fixed_amount") || undefined,
         monto_anticipo: montoAnticipo,
         total_contrato: esNegociacion ? precioOriginalParaContrato : precioBaseReal, // Precio original en negociaci?n, precio base antes de descuentos en normal
-        total_final: totalFinal, // Precio negociado en negociaci?n, precio despu?s de descuentos en normal
+        total_final: totalFinalParaContrato, // ✅ Precio con charm si es paquete, precio negociado en negociaci?n, precio despu?s de descuentos en normal
         descuento_aplicado: descuentoAplicado, // Monto del descuento aplicado (0 en negociaci?n)
         // Campos para modo negociaci?n
         es_negociacion: esNegociacion,

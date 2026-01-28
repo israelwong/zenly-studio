@@ -36,10 +36,11 @@ export function renderCotizacionBlock(
       categoria.items.forEach((item) => {
         html += `<li class="mb-1">`;
         html += `<span class="font-medium">${item.nombre}</span>`;
-        // Mostrar cantidad con horas si es servicio tipo HOUR
+        // ✅ CORRECCIÓN: Mostrar cantidad efectiva (ya viene calculada desde getPromiseContractData)
+        // Si tiene horas, mostrar cantidad efectiva con horas
         if (item.horas && item.horas > 0) {
           html += ` <span class="text-zinc-500">x${item.cantidad} ${item.horas === 1 ? 'hora' : 'horas'}</span>`;
-        } else {
+        } else if (item.cantidad > 1) {
           html += ` <span class="text-zinc-500">x${item.cantidad}</span>`;
         }
         html += `</li>`;
