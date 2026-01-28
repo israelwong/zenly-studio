@@ -245,6 +245,15 @@ export async function autorizarCotizacionPublica(
                   contrato_definido: true,
                 },
               });
+              
+              // ✅ ACTUALIZAR updated_at de cotización para disparar Realtime
+              // Esto permite que la página de cierre escuche cuando se genera el contrato
+              await prisma.studio_cotizaciones.update({
+                where: { id: cotizacionId },
+                data: {
+                  updated_at: new Date(),
+                },
+              });
             }
           }
         }

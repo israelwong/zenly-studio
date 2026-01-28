@@ -232,7 +232,7 @@ export async function getPromiseContractData(
       }
     });
     
-    // Si billingTypeMap est? vac?o o incompleto, obtener billing_type desde el cat?logo usando obtenerCatalogo
+    // Si billingTypeMap está vacío o incompleto, obtener billing_type desde el catálogo usando obtenerCatalogo
     const itemsSinBillingType = cotizacion.cotizacion_items.filter(
       item => item.item_id && !billingTypeMap.has(item.item_id!)
     );
@@ -244,18 +244,36 @@ export async function getPromiseContractData(
         const catalogoResult = await obtenerCatalogo(studioSlug);
         
         if (catalogoResult.success && catalogoResult.data) {
+          // Crear mapa de item_id -> utility_type para fallback
+          const utilityTypeMap = new Map<string, string>();
+          
           catalogoResult.data.forEach(seccion => {
             seccion.categorias.forEach(categoria => {
               categoria.servicios.forEach(servicio => {
+                // ✅ CORRECCIÓN: Si billing_type está definido, usarlo; sino usar utility_type como fallback
                 if (servicio.billing_type) {
                   billingTypeMap.set(servicio.id, servicio.billing_type as 'HOUR' | 'SERVICE' | 'UNIT');
+                } else if (servicio.tipo_utilidad) {
+                  // Guardar utility_type para fallback después
+                  utilityTypeMap.set(servicio.id, servicio.tipo_utilidad);
                 }
               });
             });
           });
+          
+          // Aplicar fallback basado en utility_type para items sin billing_type
+          utilityTypeMap.forEach((utilityType, itemId) => {
+            if (!billingTypeMap.has(itemId)) {
+              const utilityTypeLower = utilityType.toLowerCase();
+              const fallbackBillingType = utilityTypeLower === 'product' || utilityTypeLower === 'producto'
+                ? 'UNIT'
+                : 'SERVICE';
+              billingTypeMap.set(itemId, fallbackBillingType);
+            }
+          });
         }
       } catch (error) {
-        console.error('[getPromiseContractData] Error obteniendo billing_type desde cat?logo:', error);
+        console.error('[getPromiseContractData] Error obteniendo billing_type desde catálogo:', error);
       }
     }
 
@@ -485,34 +503,58 @@ export async function getPromiseContractData(
           categorias: seccion.categorias.map(categoria => ({
             ...categoria,
             items: categoria.items.map(item => {
-              // ✅ CORRECCIÓN: Calcular cantidad efectiva para items tipo HOUR
               const itemId = item.item_id || (item as any)['item_id'];
-              let cantidadEfectiva = item.cantidad;
               
-              if (itemId) {
-                const billingType = billingTypeMap.get(itemId);
-                if (billingType === 'HOUR' && eventDuration && eventDuration > 0) {
-                  cantidadEfectiva = calcularCantidadEfectiva(
-                    billingType,
-                    item.cantidad,
-                    eventDuration
-                  );
+              // Buscar el item original en cotizacion_items
+              const itemOriginal = cotizacion.cotizacion_items.find(
+                ci => {
+                  if (item.id && ci.id === item.id) return true;
+                  if (itemId && ci.item_id === itemId) return true;
+                  return false;
                 }
+              );
+              
+              // Obtener billing_type del mapa (ya incluye fallback basado en utility_type)
+              const billingTypeFinal = itemId ? (billingTypeMap.get(itemId) || 'SERVICE') : 'SERVICE';
+              const esHOUR = billingTypeFinal === 'HOUR';
+              
+              // ✅ CORRECCIÓN: Calcular cantidad base
+              // Si es HOUR y hay eventDuration, verificar si quantity está guardado como efectiva
+              let cantidadBase = itemOriginal?.quantity ?? item.cantidad;
+              
+              if (esHOUR && eventDuration && eventDuration > 0) {
+                // Si cantidadBase es igual a eventDuration, probablemente está guardado como efectiva
+                // Calcular cantidad base dividiendo por horas
+                if (cantidadBase === eventDuration || cantidadBase > eventDuration) {
+                  // Si es múltiplo exacto, dividir; sino usar 1 como base
+                  cantidadBase = cantidadBase % eventDuration === 0 
+                    ? cantidadBase / eventDuration 
+                    : 1;
+                }
+              }
+              
+              // Calcular cantidad efectiva para items tipo HOUR
+              let cantidadEfectiva = cantidadBase;
+              if (esHOUR && eventDuration && eventDuration > 0) {
+                cantidadEfectiva = calcularCantidadEfectiva(
+                  billingTypeFinal,
+                  cantidadBase,
+                  eventDuration
+                );
               }
               
               const itemData: any = {
                 nombre: item.nombre,
                 descripcion: item.descripcion,
-                cantidad: cantidadEfectiva, // ✅ Usar cantidad efectiva
+                cantidad: cantidadBase, // ✅ Cantidad base para display (1 para HOUR, cantidad real para SERVICE/UNIT)
+                cantidadEfectiva: cantidadEfectiva, // ✅ Cantidad efectiva calculada (cantidad * horas para HOUR)
                 subtotal: item.subtotal,
+                billing_type: billingTypeFinal, // ✅ Tipo de facturación para renderizado (con fallback correcto)
               };
               
               // Si el item tiene billing_type HOUR y hay event_duration, agregar horas
-              if (itemId) {
-                const billingType = billingTypeMap.get(itemId);
-                if (billingType === 'HOUR' && eventDuration && eventDuration > 0) {
-                  itemData.horas = eventDuration;
-                }
+              if (esHOUR && eventDuration && eventDuration > 0) {
+                itemData.horas = eventDuration;
               }
               
               return itemData;

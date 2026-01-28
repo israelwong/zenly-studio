@@ -18,9 +18,11 @@ export interface CotizacionRenderData {
       items: Array<{
         nombre: string;
         descripcion?: string;
-        cantidad: number;
+        cantidad: number; // Cantidad base para display
+        cantidadEfectiva?: number; // Cantidad efectiva calculada (para HOUR: cantidad * horas)
         subtotal: number; // NO mostrar precio unitario
         horas?: number; // Horas de duración para servicios tipo HOUR
+        billing_type?: 'HOUR' | 'SERVICE' | 'UNIT'; // Tipo de facturación para renderizado correcto
       }>;
     }>;
   }>;

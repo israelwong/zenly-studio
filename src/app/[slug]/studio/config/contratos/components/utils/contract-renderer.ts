@@ -36,13 +36,23 @@ export function renderCotizacionBlock(
       categoria.items.forEach((item) => {
         html += `<li class="mb-1">`;
         html += `<span class="font-medium">${item.nombre}</span>`;
-        // ✅ CORRECCIÓN: Mostrar cantidad efectiva (ya viene calculada desde getPromiseContractData)
-        // Si tiene horas, mostrar cantidad efectiva con horas
-        if (item.horas && item.horas > 0) {
-          html += ` <span class="text-zinc-500">x${item.cantidad} ${item.horas === 1 ? 'hora' : 'horas'}</span>`;
-        } else if (item.cantidad > 1) {
-          html += ` <span class="text-zinc-500">x${item.cantidad}</span>`;
+        
+        // ✅ SIMPLIFICADO: Solo mostrar /hrs para horas, xCantidad para el resto (solo si > 1)
+        const billingType = item.billing_type || 'SERVICE';
+        
+        if (billingType === 'HOUR' && item.horas && item.horas > 0) {
+          // Item tipo HOUR: siempre mostrar cantidad efectiva con /hrs (incluso si es 1)
+          // Ejemplo: "x8 /hrs" o "x1 /hrs"
+          const cantidadEfectiva = (item as any).cantidadEfectiva ?? (item.cantidad * item.horas);
+          html += ` <span class="text-zinc-500">x${cantidadEfectiva} /hrs</span>`;
+        } else {
+          // Para SERVICE, UNIT o cualquier otro: solo mostrar xCantidad si cantidad > 1
+          // Si cantidad = 1, no mostrar nada
+          if (item.cantidad > 1) {
+            html += ` <span class="text-zinc-500">x${item.cantidad}</span>`;
+          }
         }
+        
         html += `</li>`;
 
         if (item.descripcion) {

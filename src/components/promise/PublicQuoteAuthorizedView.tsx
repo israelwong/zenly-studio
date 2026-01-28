@@ -14,6 +14,7 @@ import { updatePublicPromiseData, getPublicPromiseData, getPublicCotizacionContr
 import { regeneratePublicContract } from '@/lib/actions/public/cotizaciones.actions';
 import { obtenerInfoBancariaStudio } from '@/lib/actions/cliente/pagos.actions';
 import type { CotizacionChangeInfo } from '@/hooks/useCotizacionesRealtime';
+import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import { toast } from 'sonner';
 import type { PublicCotizacion } from '@/types/public-promise';
@@ -395,9 +396,44 @@ export function PublicQuoteAuthorizedView({
     }
   }, [studioSlug, promiseId, cotizacion.id]);
 
-  // ⚠️ SIN HOOK DE REALTIME: El Gatekeeper en el layout maneja toda la redirección
-  // Si necesitamos actualizar el contrato localmente, podemos usar router.refresh() o eventos
-  // Por ahora, confiamos en que el Gatekeeper redirigirá cuando sea necesario
+  // ✅ REALTIME: Escuchar cambios en cotizaciones para actualizar el contrato cuando se genere
+  // Usar ref para mantener callbacks estables
+  const updateContractLocallyRef = useRef(updateContractLocally);
+  updateContractLocallyRef.current = updateContractLocally;
+  
+  useCotizacionesRealtime({
+    studioSlug,
+    promiseId,
+    ignoreCierreEvents: false, // Queremos escuchar cambios en studio_cotizaciones_cierre
+    onCotizacionUpdated: (cotizacionId, changeInfo) => {
+      // Solo actualizar si es la cotización actual y no estamos navegando
+      if (cotizacionId === cotizacion.id && !getIsNavigating()) {
+        // Si no tenemos contrato pero hay template_id, intentar cargarlo
+        // Esto cubre el caso cuando se genera el contrato por primera vez
+        if (!contractData?.content && hasContractTemplate) {
+          // Actualizar contrato localmente sin recargar toda la cotización
+          // Usar un pequeño delay para asegurar que el servidor haya guardado los cambios
+          setTimeout(() => {
+            updateContractLocallyRef.current();
+          }, 500);
+        }
+        // También actualizar si hay cambios en el contrato (detectados por camposCambiados)
+        else {
+          const camposCambiados = (changeInfo as any)?.camposCambiados || [];
+          const hasContractChanges = camposCambiados.some((campo: string) => 
+            campo.includes('contrato') || campo.includes('contract') || 
+            campo.includes('contrato_definido') || campo.includes('contract_content')
+          );
+          
+          if (hasContractChanges) {
+            setTimeout(() => {
+              updateContractLocallyRef.current();
+            }, 500);
+          }
+        }
+      }
+    },
+  });
 
   const handleUpdateData = async (data: {
     contact_name: string;
