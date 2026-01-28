@@ -774,6 +774,8 @@ model studios {
   promise_share_default_show_offer_conditions     Boolean                          @default(false)
   promise_share_default_portafolios               Boolean                          @default(true)
   promise_share_default_auto_generate_contract     Boolean                          @default(false)
+  promise_share_default_allow_recalc               Boolean                          @default(true)
+  promise_share_default_rounding_mode              String                           @default("charm")
   google_oauth_refresh_token                      String?
   google_oauth_email                              String?
   google_oauth_scopes                             String?
@@ -1349,6 +1351,8 @@ model studio_promises {
   share_show_offer_conditions     Boolean?
   share_portafolios               Boolean?
   share_auto_generate_contract    Boolean?
+  share_allow_recalc             Boolean?
+  share_rounding_mode            String?
   agenda                          studio_agenda[]
   client_notifications            studio_client_notifications[]
   quotes                          studio_cotizaciones[]

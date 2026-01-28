@@ -14,6 +14,11 @@ import { calcularCantidadEfectiva } from './dynamic-billing-calc';
 import { calcularPrecio } from '@/lib/actions/studio/catalogo/calcular-precio';
 import { roundPrice } from './price-rounding';
 
+export interface PackagePriceEngineSettings {
+  allowRecalc: boolean;
+  roundingMode: 'exact' | 'charm';
+}
+
 export interface PackagePriceEngineInput {
   paquete: {
     id: string;
@@ -21,6 +26,8 @@ export interface PackagePriceEngineInput {
     base_hours: number | null;
   };
   eventDurationHours: number | null;
+  /** Si no se pasa, se asume allowRecalc: true, roundingMode: 'charm' (comportamiento actual) */
+  settings?: PackagePriceEngineSettings;
   paqueteItems: Array<{
     item_id: string;
     quantity: number;
@@ -128,23 +135,24 @@ function calculateRecalculatedPrice(
 
 /**
  * Calcula el precio final de un paquete según las horas del evento
- * 
- * Lógica:
- * - Si horas coinciden → Precio Personalizado (Exacto, sin charm)
- * - Si horas difieren → Precio Recalculado + Charm Rounding
- * - Si no hay horas → Precio Personalizado (Exacto, sin charm)
- * 
- * @param input - Parámetros de entrada
+ *
+ * Con settings.allowRecalc = false: siempre retorna precio personalizado (sin recálculo por horas).
+ * Con settings.allowRecalc = true: lógica habitual; settings.roundingMode define si aplicar charm o exacto.
+ *
+ * @param input - Parámetros de entrada (settings opcional: allowRecalc true, roundingMode 'charm' por defecto)
  * @returns Precio final resuelto con metadata
  */
 export function calculatePackagePrice(
   input: PackagePriceEngineInput
 ): PackagePriceEngineOutput {
+  const allowRecalc = input.settings?.allowRecalc ?? true;
+  const roundingMode = input.settings?.roundingMode ?? 'charm';
+
   // 1. Normalizar horas (defensivo)
   const baseHoursNum = normalizeHours(input.paquete.base_hours);
   const eventHoursNum = normalizeHours(input.eventDurationHours);
 
-  // 2. Calcular precio recalculado (siempre, para tenerlo disponible)
+  // 2. Calcular precio recalculado (si allowRecalc, para tenerlo disponible)
   const horasParaCalculo = eventHoursNum ?? baseHoursNum;
   const recalculatedPrice = calculateRecalculatedPrice(
     input.paqueteItems,
@@ -154,54 +162,54 @@ export function calculatePackagePrice(
   );
 
   // 3. Determinar si horas coinciden
-  const hoursMatch = baseHoursNum !== null && 
-                     eventHoursNum !== null && 
-                     baseHoursNum === eventHoursNum;
+  const hoursMatch = baseHoursNum !== null &&
+    eventHoursNum !== null &&
+    baseHoursNum === eventHoursNum;
 
   // 4. Validar que hay precio personalizado válido
-  const hasPersonalizedPrice = input.paquete.precio !== null && 
-                                input.paquete.precio !== undefined && 
-                                input.paquete.precio > 0;
+  const hasPersonalizedPrice = input.paquete.precio !== null &&
+    input.paquete.precio !== undefined &&
+    input.paquete.precio > 0;
 
-  // 5. Decidir precio final según lógica
+  // 5. Decidir precio final según lógica (si allowRecalc false → siempre personalizado)
   let finalPrice: number;
   let priceSource: 'personalized' | 'recalculated' | 'base';
   let shouldApplyCharm: boolean;
 
-  if (hasPersonalizedPrice && hoursMatch) {
-    // Caso 1: Horas coinciden → Precio Personalizado Exacto (sin charm)
+  if (!allowRecalc && hasPersonalizedPrice) {
+    // Preferencia: no recálculo → siempre precio personalizado
+    finalPrice = input.paquete.precio;
+    priceSource = 'personalized';
+    shouldApplyCharm = roundingMode === 'charm';
+  } else if (hasPersonalizedPrice && hoursMatch) {
     finalPrice = input.paquete.precio;
     priceSource = 'personalized';
     shouldApplyCharm = false;
   } else if (hasPersonalizedPrice && !hoursMatch && eventHoursNum !== null) {
-    // Caso 2: Horas diferentes → Precio Recalculado + Charm
     finalPrice = recalculatedPrice > 0 ? recalculatedPrice : input.paquete.precio;
     priceSource = 'recalculated';
-    shouldApplyCharm = true;
+    shouldApplyCharm = roundingMode === 'charm';
   } else if (eventHoursNum === null && hasPersonalizedPrice) {
-    // Caso 3: No hay horas de evento → Precio Personalizado Exacto (sin charm)
     finalPrice = input.paquete.precio;
     priceSource = 'personalized';
     shouldApplyCharm = false;
   } else if (recalculatedPrice > 0) {
-    // Caso 4: Sin precio personalizado pero hay recalculado → Recalculado + Charm
     finalPrice = recalculatedPrice;
     priceSource = 'recalculated';
-    shouldApplyCharm = true;
+    shouldApplyCharm = roundingMode === 'charm';
   } else {
-    // Caso 5: Fallback → Precio base del paquete (sin charm)
     finalPrice = input.paquete.precio || 0;
     priceSource = 'base';
     shouldApplyCharm = false;
   }
 
-  // 6. Aplicar charm rounding si corresponde (reutilizando función existente)
-  const finalPriceWithCharm = shouldApplyCharm 
+  // 6. Aplicar redondeo según roundingMode
+  const finalPriceRounded = shouldApplyCharm && roundingMode === 'charm'
     ? roundPrice(finalPrice, 'charm')
     : finalPrice;
 
   return {
-    finalPrice: finalPriceWithCharm,
+    finalPrice: finalPriceRounded,
     basePrice: input.paquete.precio,
     recalculatedPrice,
     hoursMatch,

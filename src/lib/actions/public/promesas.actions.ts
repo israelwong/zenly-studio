@@ -884,6 +884,8 @@ export async function getPublicPromisePendientes(
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
       portafolios: studio.promise_share_default_portafolios,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
+      allow_recalc: promiseBasic.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
+      rounding_mode: ((promiseBasic.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
     };
 
     // 3. Obtener SOLO cotizaciones pendientes
@@ -1365,6 +1367,7 @@ export async function getPublicPromisePendientes(
         paqueteItems: paqueteItemsForEngine,
         catalogo: catalogo,
         configPrecios: configPrecios,
+        settings: { allowRecalc: shareSettings.allow_recalc, roundingMode: shareSettings.rounding_mode },
       });
 
       return {
@@ -1935,10 +1938,12 @@ export async function getPublicPromiseAvailablePackages(
     const { promise: promiseBasic, studio } = basicData.data;
     const durationHours = promiseBasic.duration_hours ?? null;
 
-    // 2. Obtener share settings (show_packages y portafolios)
+    // 2. Obtener share settings (show_packages, portafolios, preferencias de precio)
     const shareSettings = {
       show_packages: promiseBasic.share_show_packages ?? studio.promise_share_default_show_packages,
       portafolios: studio.promise_share_default_portafolios,
+      allow_recalc: promiseBasic.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
+      rounding_mode: ((promiseBasic.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
     };
 
     if (!shareSettings.show_packages || !promiseBasic.event_type_id) {
@@ -2131,6 +2136,7 @@ export async function getPublicPromiseAvailablePackages(
         paqueteItems: paqueteItemsForEngine,
         catalogo: catalogo,
         configPrecios: configPrecios,
+        settings: { allowRecalc: shareSettings.allow_recalc, roundingMode: shareSettings.rounding_mode },
       });
 
       return {
@@ -3300,6 +3306,8 @@ export async function getPublicPromiseData(
         promise_share_default_show_offer_conditions: true,
         promise_share_default_portafolios: true,
         promise_share_default_auto_generate_contract: true,
+        promise_share_default_allow_recalc: true,
+        promise_share_default_rounding_mode: true,
       },
     });
 
@@ -3330,6 +3338,8 @@ export async function getPublicPromiseData(
         share_show_standard_conditions: true,
         share_show_offer_conditions: true,
         share_auto_generate_contract: true,
+        share_allow_recalc: true,
+        share_rounding_mode: true,
         contact: {
           select: {
             name: true,
@@ -3467,6 +3477,8 @@ export async function getPublicPromiseData(
       show_offer_conditions: boolean;
       portafolios: boolean;
       auto_generate_contract: boolean;
+      allow_recalc: boolean;
+      rounding_mode: 'exact' | 'charm';
     } = {
       show_packages: promise.share_show_packages ?? studio.promise_share_default_show_packages,
       show_categories_subtotals: promise.share_show_categories_subtotals ?? studio.promise_share_default_show_categories_subtotals,
@@ -3476,6 +3488,8 @@ export async function getPublicPromiseData(
       show_offer_conditions: promise.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
       portafolios: studio.promise_share_default_portafolios,
       auto_generate_contract: promise.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
+      allow_recalc: promise.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
+      rounding_mode: ((promise.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
     };
 
     // 3. ⚠️ OPTIMIZACIÓN: Extraer item_ids ANTES de cargar catálogo completo
@@ -3865,6 +3879,7 @@ export async function getPublicPromiseData(
         paqueteItems: paqueteItemsForEngine,
         catalogo: catalogo,
         configPrecios: configPrecios,
+        settings: { allowRecalc: shareSettings.allow_recalc, roundingMode: shareSettings.rounding_mode },
       });
 
       return {
@@ -5008,6 +5023,8 @@ const getStudioBySlug = cache(async (studioSlug: string) => {
       promise_share_default_show_offer_conditions: true,
       promise_share_default_portafolios: true,
       promise_share_default_auto_generate_contract: true,
+      promise_share_default_allow_recalc: true,
+      promise_share_default_rounding_mode: true,
     },
   });
 
@@ -5047,6 +5064,8 @@ export async function getPublicPromiseBasicData(
       share_show_standard_conditions: boolean | null;
       share_show_offer_conditions: boolean | null;
       share_auto_generate_contract: boolean | null;
+      share_allow_recalc: boolean | null;
+      share_rounding_mode: string | null;
     };
     studio: {
       studio_name: string;
@@ -5065,6 +5084,8 @@ export async function getPublicPromiseBasicData(
       promise_share_default_show_offer_conditions: boolean;
       promise_share_default_portafolios: boolean;
       promise_share_default_auto_generate_contract: boolean;
+      promise_share_default_allow_recalc: boolean;
+      promise_share_default_rounding_mode: string;
     };
   };
   error?: string;
@@ -5118,6 +5139,8 @@ export async function getPublicPromiseBasicData(
         share_show_standard_conditions: true,
         share_show_offer_conditions: true,
         share_auto_generate_contract: true,
+        share_allow_recalc: true,
+        share_rounding_mode: true,
         contact: {
           select: {
             name: true,
@@ -5173,6 +5196,8 @@ export async function getPublicPromiseBasicData(
           share_show_standard_conditions: promise.share_show_standard_conditions,
           share_show_offer_conditions: promise.share_show_offer_conditions,
           share_auto_generate_contract: promise.share_auto_generate_contract,
+          share_allow_recalc: promise.share_allow_recalc,
+          share_rounding_mode: promise.share_rounding_mode,
         },
         studio: {
           studio_name: studio.studio_name,
@@ -5191,6 +5216,8 @@ export async function getPublicPromiseBasicData(
           promise_share_default_show_offer_conditions: studio.promise_share_default_show_offer_conditions,
           promise_share_default_portafolios: studio.promise_share_default_portafolios,
           promise_share_default_auto_generate_contract: studio.promise_share_default_auto_generate_contract,
+          promise_share_default_allow_recalc: studio.promise_share_default_allow_recalc ?? true,
+          promise_share_default_rounding_mode: studio.promise_share_default_rounding_mode ?? 'charm',
         },
       },
     };

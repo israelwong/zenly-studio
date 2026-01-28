@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Share2, AlertTriangle } from 'lucide-react';
-import { ZenDialog, ZenButton, ZenSwitch, ZenInput, ZenConfirmModal } from '@/components/ui/zen';
+import { AlertTriangle, Package } from 'lucide-react';
+import { ZenDialog, ZenButton, ZenSwitch, ZenInput, ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
 import { getPromiseShareSettings, updatePromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { toast } from 'sonner';
 
@@ -32,6 +32,8 @@ export function PromiseShareOptionsModal({
   const [showOfferConditions, setShowOfferConditions] = useState(false);
   const [showPortafolios, setShowPortafolios] = useState(true);
   const [autoGenerateContract, setAutoGenerateContract] = useState(false);
+  const [allowRecalc, setAllowRecalc] = useState(true);
+  const [roundingMode, setRoundingMode] = useState<'exact' | 'charm'>('charm');
   const [weContactYou, setWeContactYou] = useState(false);
   const [sendToContractProcess, setSendToContractProcess] = useState(false);
   const [showMinDaysToHire, setShowMinDaysToHire] = useState(true); // Activo por defecto
@@ -65,6 +67,8 @@ export function PromiseShareOptionsModal({
         setShowOfferConditions(result.data.show_offer_conditions ?? false);
         setShowPortafolios(result.data.portafolios ?? true);
         setAutoGenerateContract(result.data.auto_generate_contract ?? false);
+        setAllowRecalc(result.data.allow_recalc ?? true);
+        setRoundingMode(result.data.rounding_mode === 'exact' ? 'exact' : 'charm');
       } else {
         toast.error(result.error || 'Error al cargar preferencias');
       }
@@ -131,9 +135,8 @@ export function PromiseShareOptionsModal({
         show_offer_conditions: showOfferConditions,
         portafolios: showPortafolios,
         auto_generate_contract: autoGenerateContract,
-        // TODO: Agregar estos campos cuando estén disponibles en la acción del servidor
-        // we_contact_you: weContactYou,
-        // send_to_contract_process: sendToContractProcess,
+        allow_recalc: allowRecalc,
+        rounding_mode: roundingMode,
         remember_preferences: rememberPreferences,
       });
 
@@ -307,10 +310,25 @@ export function PromiseShareOptionsModal({
               </div>
             )}
 
-            {/* Sección: Vista general */}
+            {/* Sección: Vista general — Portafolios (izq) y Paquetes (der) misma altura */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-zinc-200">Mostrar en vista general de promesas</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
+                  <ZenSwitch
+                    checked={showPortafolios}
+                    onCheckedChange={setShowPortafolios}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <label className="text-sm font-medium text-zinc-200">
+                      Portafolios
+                    </label>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      El prospecto verá los portafolios disponibles según el tipo de evento
+                    </p>
+                  </div>
+                </div>
                 <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
                   <ZenSwitch
                     checked={showPackages}
@@ -328,109 +346,107 @@ export function PromiseShareOptionsModal({
                     </p>
                   </div>
                 </div>
-
-                <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
-                  <ZenSwitch
-                    checked={showPortafolios}
-                    onCheckedChange={setShowPortafolios}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <label className="text-sm font-medium text-zinc-200">
-                      Portafolios
-                    </label>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      El prospecto verá los portafolios disponibles según el tipo de evento
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Límite de días para contratar */}
-              <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
-                <ZenSwitch
-                  checked={showMinDaysToHire}
-                  onCheckedChange={() => { }} // Solo lectura por ahora
-                  disabled
-                  className="mt-0.5"
-                />
-                <div className="flex-1 flex items-center gap-4">
-                  <div className="flex-1">
-                    <label className="text-sm font-medium text-zinc-200">
-                      Límite de días para poder contratar
-                    </label>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      Días que el prospecto tiene disponibles para contratar
-                    </p>
-                  </div>
-                  <div className="w-20">
-                    <ZenInput
-                      type="number"
-                      min="1"
-                      value={minDaysToHire.toString()}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value, 10);
-                        if (!isNaN(value) && value > 0) {
-                          setMinDaysToHire(value);
-                        } else if (e.target.value === '') {
-                          // Permitir campo vacío temporalmente mientras se escribe
-                          setMinDaysToHire(1);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const value = parseInt(e.target.value, 10);
-                        if (isNaN(value) || value < 1) {
-                          setMinDaysToHire(1);
-                        }
-                      }}
-                      placeholder="30"
-                    />
-                  </div>
-                </div>
               </div>
             </div>
+
+            {/* Sección: Precios de paquetes (revelación progresiva) */}
+            <ZenCard
+              variant="outlined"
+              padding="md"
+              className={`transition-opacity duration-200 ease-out ${!showPackages ? 'opacity-60' : 'opacity-100'}`}
+            >
+              <ZenCardContent className="p-0 pt-0">
+                <h3 className="text-sm font-semibold text-zinc-200 mb-3">Precios de paquetes</h3>
+
+                {/* Nivel 1: Paquetes desactivados — estado vacío */}
+                {!showPackages && (
+                  <div
+                    className="flex flex-col items-center justify-center gap-2 py-6 px-4 rounded-lg bg-zinc-900/30 border border-zinc-800/50 border-dashed"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <Package className="h-8 w-8 text-zinc-500" aria-hidden />
+                    <p className="text-sm text-zinc-500 text-center max-w-[280px]">
+                      Activa la opción de paquetes arriba para configurar la automatización de precios.
+                    </p>
+                  </div>
+                )}
+
+                {/* Nivel 2: Paquetes activados — toggle recálculo */}
+                {showPackages && (
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
+                      <ZenSwitch
+                        checked={allowRecalc}
+                        onCheckedChange={setAllowRecalc}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <label className="text-sm font-medium text-zinc-200">
+                          Recálculo automático de paquetes
+                        </label>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          Ajusta el precio proporcionalmente si las horas del evento cambian.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Nivel 3: Recálculo activado — Radio Cards estilo de redondeo */}
+                    {allowRecalc && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in duration-200">
+                        <p className="text-xs font-medium text-zinc-400 col-span-full mb-0.5">
+                          Estilo de redondeo
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setRoundingMode('exact')}
+                          className={`text-left p-4 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                            roundingMode === 'exact'
+                              ? 'border-emerald-500/50 bg-emerald-500/10'
+                              : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                          }`}
+                          aria-pressed={roundingMode === 'exact'}
+                          aria-label="Estilo Exacto"
+                        >
+                          <span className="text-sm font-medium text-zinc-200 block">Exacto</span>
+                          <span className="text-lg font-semibold text-emerald-400/90 mt-1 block tabular-nums">
+                            $18,452.12
+                          </span>
+                          <p className="text-xs text-zinc-500 mt-1.5">
+                            Muestra el cálculo técnico exacto.
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRoundingMode('charm')}
+                          className={`text-left p-4 rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                            roundingMode === 'charm'
+                              ? 'border-emerald-500/50 bg-emerald-500/10'
+                              : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                          }`}
+                          aria-pressed={roundingMode === 'charm'}
+                          aria-label="Estilo Mágico (Charm)"
+                        >
+                          <span className="text-sm font-medium text-zinc-200 block">Mágico (Charm)</span>
+                          <span className="text-lg font-semibold text-emerald-400/90 mt-1 block tabular-nums">
+                            $18,499
+                          </span>
+                          <p className="text-xs text-zinc-500 mt-1.5">
+                            Aplica redondeo comercial estratégico.
+                          </p>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </ZenCardContent>
+            </ZenCard>
 
             {/* Sección: Información en cotización y paquetes */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-zinc-200">Mostrar información en cotización y paquetes</h3>
               <div className="space-y-4">
-                {/* Primera fila: Condiciones comerciales */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
-                    <ZenSwitch
-                      checked={showStandardConditions}
-                      onCheckedChange={() => { }}
-                      disabled
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <label className="text-sm font-medium text-zinc-200">
-                        Condiciones comerciales estándar
-                      </label>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        El prospecto verá las condiciones comerciales estándar
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
-                    <ZenSwitch
-                      checked={showOfferConditions}
-                      onCheckedChange={setShowOfferConditions}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <label className="text-sm font-medium text-zinc-200">
-                        Condiciones comerciales especiales
-                      </label>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        El prospecto verá las condiciones comerciales de tipo oferta
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Segunda fila: Subtotales y precios */}
+                {/* Primera fila: Subtotales y precios (arriba) */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className={`flex items-start gap-3 p-3 border rounded-lg bg-zinc-900/50 ${
                     showCategoriesSubtotals 
@@ -488,12 +504,92 @@ export function PromiseShareOptionsModal({
                     </div>
                   </div>
                 </div>
+
+                {/* Segunda fila: Condiciones comerciales (abajo) */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
+                    <ZenSwitch
+                      checked={showStandardConditions}
+                      onCheckedChange={() => { }}
+                      disabled
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-zinc-200">
+                        Condiciones comerciales estándar
+                      </label>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        El prospecto verá las condiciones comerciales estándar
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
+                    <ZenSwitch
+                      checked={showOfferConditions}
+                      onCheckedChange={setShowOfferConditions}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-zinc-200">
+                        Condiciones comerciales especiales
+                      </label>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        El prospecto verá las condiciones comerciales de tipo oferta
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Sección: Después de confirmar interés y guardar registro */}
+            {/* Contratación (arriba de Después de confirmar interés) */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-zinc-200">Después de confirmar interés y guardar registro</h3>
+              <h3 className="text-sm font-semibold text-zinc-200">Contratación</h3>
+              <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
+                <ZenSwitch
+                  checked={showMinDaysToHire}
+                  onCheckedChange={() => { }}
+                  disabled
+                  className="mt-0.5"
+                />
+                <div className="flex-1 flex items-center gap-4">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium text-zinc-200">
+                      Límite de días para poder contratar
+                    </label>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Días que el prospecto tiene disponibles para contratar
+                    </p>
+                  </div>
+                  <div className="w-20">
+                    <ZenInput
+                      type="number"
+                      min="1"
+                      value={minDaysToHire.toString()}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value, 10);
+                        if (!isNaN(value) && value > 0) {
+                          setMinDaysToHire(value);
+                        } else if (e.target.value === '') {
+                          setMinDaysToHire(1);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const value = parseInt(e.target.value, 10);
+                        if (isNaN(value) || value < 1) {
+                          setMinDaysToHire(1);
+                        }
+                      }}
+                      placeholder="30"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Opciones post-confirmación (sin label) */}
+            <div className="space-y-3">
               {/* TODO: Próxima implementación */}
               {/* <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-start gap-3 p-3 border border-zinc-800 rounded-lg bg-zinc-900/50">
