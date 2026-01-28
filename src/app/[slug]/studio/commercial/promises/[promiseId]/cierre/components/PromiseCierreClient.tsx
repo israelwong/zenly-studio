@@ -472,7 +472,7 @@ export function PromiseCierreClient({
             loading={cierreLogic.isCancelling}
           />
 
-          {/* Modal Confirmar Autorizar */}
+          {/* Modal Confirmar Autorizar: se muestra al hacer click en "Autorizar y Crear Evento" */}
           <ZenConfirmModal
             isOpen={cierreLogic.showConfirmAutorizarModal}
             onClose={() => cierreLogic.setShowConfirmAutorizarModal(false)}

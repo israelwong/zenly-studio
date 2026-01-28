@@ -407,17 +407,18 @@ export function usePromiseCierreLogic({
   const handleConfirmAutorizar = useCallback(async () => {
     setIsAuthorizing(true);
     setShowConfirmAutorizarModal(false);
-    setCurrentTask('Obteniendo catálogo');
+    setCurrentTask('Obteniendo catálogo de servicios');
     setCompletedTasks([]);
     setAuthorizationError(null);
 
     // Simular progreso de tareas (no podemos obtener progreso real desde server actions)
     const tasks = [
-      'Obteniendo catálogo',
-      'Calculando precios',
-      'Guardando estructura de cotización',
-      'Creando evento',
-      'Actualizando cotización',
+      'Obteniendo catálogo de servicios',
+      'Calculando precios y desglose',
+      'Guardando cotización autorizada',
+      'Creando evento en agenda',
+      'Actualizando estado de cotización',
+      'Archivando otras cotizaciones de la promesa',
       'Registrando pago inicial',
       'Finalizando autorización',
     ];

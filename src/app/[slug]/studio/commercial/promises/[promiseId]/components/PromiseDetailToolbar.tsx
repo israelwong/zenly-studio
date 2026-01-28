@@ -18,7 +18,7 @@ interface PromiseDetailToolbarProps {
     phone: string;
   } | null;
   eventoId?: string | null;
-  onCopyLink: () => void;
+  onCopyLink?: () => void;
   onPreview: () => void;
 }
 
@@ -27,6 +27,7 @@ export function PromiseDetailToolbar({
   promiseId,
   contactData,
   eventoId,
+  onCopyLink,
   onPreview,
 }: PromiseDetailToolbarProps) {
   const [linkCopied, setLinkCopied] = useState(false);
@@ -102,6 +103,7 @@ export function PromiseDetailToolbar({
                 }
                 setLinkCopied(true);
                 setTimeout(() => setLinkCopied(false), 2000);
+                onCopyLink?.();
 
                 // Registrar log
                 if (contactData) {
