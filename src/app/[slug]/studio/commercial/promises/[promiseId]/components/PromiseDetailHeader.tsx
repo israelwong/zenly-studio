@@ -6,6 +6,7 @@ import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, Chev
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
+import { isTerminalStage } from '@/lib/utils/pipeline-stage-names';
 
 interface PromiseDetailHeaderProps {
     studioSlug: string;
@@ -125,11 +126,15 @@ export function PromiseDetailHeader({
                                 );
                             }
 
+                            const activeStages = availableStages.filter((s) => !isTerminalStage(s.slug));
+                            const historialStages = availableStages.filter((s) => isTerminalStage(s.slug));
+
                             return (
                                 <ZenDropdownMenu>
                                     <ZenDropdownMenuTrigger asChild>
                                         <button
                                             disabled={isChangingStage}
+                                            title="Los estados de cierre se agrupan en la columna Historial del Kanban"
                                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 bg-amber-500/20 text-amber-400 border border-amber-500/30"
                                         >
                                             {isChangingStage ? (
@@ -145,11 +150,11 @@ export function PromiseDetailHeader({
                                             )}
                                         </button>
                                     </ZenDropdownMenuTrigger>
-                                    <ZenDropdownMenuContent 
+                                    <ZenDropdownMenuContent
                                         align="start"
                                         className="max-h-[300px] overflow-y-auto"
                                     >
-                                        {availableStages.map((stage) => (
+                                        {activeStages.map((stage) => (
                                             <ZenDropdownMenuItem
                                                 key={stage.id}
                                                 onClick={() => onPipelineStageChange(stage.id, stage.name)}
@@ -161,6 +166,26 @@ export function PromiseDetailHeader({
                                                 )}
                                             </ZenDropdownMenuItem>
                                         ))}
+                                        {historialStages.length > 0 && (
+                                            <>
+                                                <ZenDropdownMenuSeparator />
+                                                <div className="px-2 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                                                    Historial
+                                                </div>
+                                                {historialStages.map((stage) => (
+                                                    <ZenDropdownMenuItem
+                                                        key={stage.id}
+                                                        onClick={() => onPipelineStageChange(stage.id, stage.name)}
+                                                        disabled={stage.id === currentPipelineStageId}
+                                                    >
+                                                        <span className="flex-1">{stage.name}</span>
+                                                        {stage.id === currentPipelineStageId && (
+                                                            <Check className="h-4 w-4 text-emerald-500 ml-2" />
+                                                        )}
+                                                    </ZenDropdownMenuItem>
+                                                ))}
+                                            </>
+                                        )}
                                     </ZenDropdownMenuContent>
                                 </ZenDropdownMenu>
                             );

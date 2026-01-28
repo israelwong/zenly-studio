@@ -18,7 +18,7 @@ import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unifi
 import { getCotizacionesByPromiseId, type CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
-import { createStageNameMap, getCotizacionStatusDisplayName } from '@/lib/utils/pipeline-stage-names';
+import { createStageNameMap, getCotizacionStatusDisplayName, isTerminalStage, getTerminalColor } from '@/lib/utils/pipeline-stage-names';
 
 interface PromiseKanbanCardProps {
     promise: PromiseWithContact;
@@ -431,18 +431,51 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     const promiseId = promise.promise_id || promise.id;
     const href = studioSlug ? `/${studioSlug}/studio/commercial/promises/${promiseId}` : '#';
 
+    // Tinte dinámico: prioridad 1 terminal (getTerminalColor), prioridad 2 primera etiqueta
+    const stageSlug = promise.promise_pipeline_stage?.slug;
+    const terminalColor = stageSlug && isTerminalStage(stageSlug) ? getTerminalColor(stageSlug) : null;
+    const primaryTag = finalTags && finalTags.length > 0 ? finalTags[0] : null;
+    const tagColor = terminalColor ?? primaryTag?.color ?? null;
+
+    const cardStyles: React.CSSProperties = {
+        ...style,
+    };
+
+    const baseClassName = "rounded-lg p-4 border transition-all duration-200 hover:shadow-lg relative cursor-pointer block no-underline text-inherit";
+
+    if (tagColor) {
+        cardStyles.backgroundColor = `${tagColor}14`;
+        cardStyles.borderColor = `${tagColor}33`;
+    } else {
+        cardStyles.backgroundColor = undefined;
+        cardStyles.borderColor = undefined;
+    }
+
     return (
         <>
             <Link
                 href={href}
                 ref={setNodeRef}
-                style={style}
+                style={cardStyles}
                 {...attributes}
                 onClick={handleCardClick}
                 onMouseDown={handleMouseDown}
                 onAuxClick={handleAuxClick}
                 data-id={promiseId}
-                className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700 hover:border-zinc-600 transition-all duration-200 hover:shadow-lg relative cursor-pointer block no-underline text-inherit"
+                className={tagColor
+                    ? baseClassName
+                    : `${baseClassName} bg-zinc-900 border-zinc-700 hover:border-zinc-600`
+                }
+                onMouseEnter={(e) => {
+                    if (tagColor) {
+                        e.currentTarget.style.borderColor = `${tagColor}4D`; // 30% en hover
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    if (tagColor) {
+                        e.currentTarget.style.borderColor = `${tagColor}33`; // 20% normal
+                    }
+                }}
                 suppressHydrationWarning
             >
                 {/* Drag Handle - Esquina superior izquierda */}
@@ -574,6 +607,34 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                     </span>
                                 )}
                             </span>
+                        </div>
+                    )}
+
+                    {/* Tags - Pills redondeados (máximo 3 + contador) */}
+                    {finalTags && finalTags.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                            {finalTags.slice(0, 3).map((tag) => (
+                                <span
+                                    key={tag.id}
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-opacity hover:opacity-80"
+                                    style={{
+                                        backgroundColor: `${tag.color}20`,
+                                        border: `1px solid ${tag.color}40`,
+                                        color: tag.color,
+                                    }}
+                                    title={tag.name}
+                                >
+                                    {tag.name}
+                                </span>
+                            ))}
+                            {finalTags.length > 3 && (
+                                <span
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-700/50 text-zinc-400 border border-zinc-600/50"
+                                    title={`${finalTags.length - 3} etiqueta${finalTags.length - 3 > 1 ? 's' : ''} más: ${finalTags.slice(3).map(t => t.name).join(', ')}`}
+                                >
+                                    +{finalTags.length - 3}
+                                </span>
+                            )}
                         </div>
                     )}
 

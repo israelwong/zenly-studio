@@ -145,7 +145,7 @@ const LOG_ACTIONS: Record<
   event_cancelled: (meta) => {
     const eventName = (meta?.eventName as string) || 'evento';
     const quotationName = meta?.quotationName as string;
-    return `Evento cancelado: ${eventName}${quotationName ? ` (Cotizaci?n: ${quotationName})` : ''}`;
+    return `Evento cancelado: ${eventName}${quotationName ? ` (Cotización: ${quotationName})` : ''}`;
   },
   reminder_created: (meta) => {
     const subjectText = (meta?.subject_text as string) || 'seguimiento';
@@ -336,9 +336,9 @@ export async function getPromiseById(
       return { success: false, error: 'Promesa no encontrada' };
     }
 
-    // Verificar si hay una cotizaci?n autorizada/aprobada con evento_id
-    // Esto es lo que realmente indica que se contrat? (cuando se crea evento se autoriza la cotizaci?n)
-    // IMPORTANTE: Solo usar cotizaciones autorizadas/aprobadas con evento_id, NO la relaci?n directa promise.event
+    // Verificar si hay una cotización autorizada/aprobada con evento_id
+    // Esto es lo que realmente indica que se contrató (cuando se crea evento se autoriza la cotización)
+    // IMPORTANTE: Solo usar cotizaciones autorizadas/aprobadas con evento_id, NO la relación directa promise.event
     const cotizacionAutorizada = promise.quotes.find((q) => {
       // Excluir cotizaciones canceladas o archivadas
       if (q.status === 'cancelada' || q.status === 'archivada') {
@@ -349,7 +349,7 @@ export async function getPromiseById(
                                  q.status === 'autorizada' || 
                                  q.status === 'approved';
       
-      // Solo considerar autorizada si tiene evento_id (indica que se cre? el evento)
+      // Solo considerar autorizada si tiene evento_id (indica que se creó el evento)
       return isAuthorizedStatus && !!q.evento_id;
     });
 
@@ -360,7 +360,7 @@ export async function getPromiseById(
     // porque el evento solo se crea cuando se autoriza una cotización
     const eventoIdFinal = eventoIdFromQuote;
     
-    // Obtener el status del evento solo si hay cotizaci?n autorizada
+    // Obtener el status del evento solo si hay cotización autorizada
     let eventoStatusFinal: string | null = null;
     if (eventoIdFromQuote && promise.event?.id === eventoIdFromQuote) {
       eventoStatusFinal = promise.event.status || null;
@@ -597,15 +597,15 @@ export async function logPromiseAction(
       return { success: false, error: 'Promesa no encontrada' };
     }
 
-    // Generar contenido basado en la acci?n
+    // Generar contenido basado en la acción
     const contentGenerator = LOG_ACTIONS[action];
     if (!contentGenerator) {
-      return { success: false, error: `Acci?n desconocida: ${action}` };
+      return { success: false, error: `Acción desconocida: ${action}` };
     }
 
     const content = contentGenerator(metadata);
 
-    // Determinar user_id seg?n el source
+    // Determinar user_id según el source
     const finalUserId = source === 'user' ? userId || null : null;
 
     const log = await prisma.studio_promise_logs.create({
@@ -652,7 +652,7 @@ export async function logPromiseAction(
     console.error('[PROMISE_LOGS] Error registrando acción:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Error al registrar acci?n',
+      error: error instanceof Error ? error.message : 'Error al registrar acción',
     };
   }
 }

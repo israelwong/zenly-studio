@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Archive, X, TableColumnsSplit, Columns2, Pencil, RotateCcw, Eye, Settings, Undo2, Loader2 } from 'lucide-react';
+import { Search, Archive, X, Pencil, Undo2, Loader2 } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -24,7 +24,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ZenInput, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator, ZenSwitch } from '@/components/ui/zen';
+import { ZenInput, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseKanbanCard } from './PromiseKanbanCard';
 import { EventFormModal } from '@/components/shared/promises';
 import { PromiseTagsManageModal } from './PromiseTagsManageModal';
@@ -33,7 +33,7 @@ import { movePromise } from '@/lib/actions/studio/commercial/promises';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
-import { getSystemStageName } from '@/lib/utils/pipeline-stage-names';
+import { getSystemStageName, isTerminalStage } from '@/lib/utils/pipeline-stage-names';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 
 interface PromisesKanbanProps {
@@ -122,74 +122,28 @@ function PromisesKanban({
       });
     }
   }, [pipelineStages]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Cargar preferencias de visibilidad desde localStorage
-  // Valores por defecto: archived=false, canceled=false, approved=true
-  const [showArchived, setShowArchived] = useState(() => {
+  // Toggle "Mostrar Historial": columna Historial oculta por defecto
+  const [showHistorial, setShowHistorial] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
-      const saved = localStorage.getItem(`kanban-show-archived-${studioSlug}`);
-      // Si hay valor guardado, usarlo; si no, usar false por defecto
+      const saved = localStorage.getItem(`kanban-show-historial-${studioSlug}`);
       return saved !== null ? saved === 'true' : false;
     } catch (error) {
       return false;
     }
   });
-  
-  const [showCanceled, setShowCanceled] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const saved = localStorage.getItem(`kanban-show-canceled-${studioSlug}`);
-      // Si hay valor guardado, usarlo; si no, usar false por defecto
-      return saved !== null ? saved === 'true' : false;
-    } catch (error) {
-      return false;
-    }
-  });
-  
-  const [showApproved, setShowApproved] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    try {
-      const saved = localStorage.getItem(`kanban-show-approved-${studioSlug}`);
-      // Si hay valor guardado, usarlo; si no, usar true por defecto
-      return saved !== null ? saved === 'true' : true;
-    } catch (error) {
-      return true;
-    }
-  });
-  
-  const [showViewConfig, setShowViewConfig] = useState(false);
+
   const [localSearch, setLocalSearch] = useState(externalSearch || '');
   const searchInputRef = useRef<HTMLInputElement>(null);
-  
-  // Persistir cambios de visibilidad en localStorage
-  // Guardar inmediatamente cuando cambia el estado (incluyendo false)
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(`kanban-show-archived-${studioSlug}`, String(showArchived));
-    } catch (error) {
-      // Ignorar errores de localStorage (privado, cuota excedida, etc.)
-      console.warn('[PromisesKanban] Error guardando preferencia de visibilidad:', error);
-    }
-  }, [showArchived, studioSlug]);
-  
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(`kanban-show-canceled-${studioSlug}`, String(showCanceled));
+      localStorage.setItem(`kanban-show-historial-${studioSlug}`, String(showHistorial));
     } catch (error) {
       console.warn('[PromisesKanban] Error guardando preferencia de visibilidad:', error);
     }
-  }, [showCanceled, studioSlug]);
-  
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(`kanban-show-approved-${studioSlug}`, String(showApproved));
-    } catch (error) {
-      console.warn('[PromisesKanban] Error guardando preferencia de visibilidad:', error);
-    }
-  }, [showApproved, studioSlug]);
+  }, [showHistorial, studioSlug]);
 
   // Sincronizar estado local cuando cambian las promesas desde el padre
   // Evitar sincronización durante drag and drop o navegación para prevenir parpadeos
@@ -235,49 +189,6 @@ function PromisesKanban({
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-
-  // Estrategia de detección de colisiones mejorada - solo detecta columnas, ignora cards
-  const collisionDetection: CollisionDetection = (args) => {
-    // Obtener todas las colisiones posibles
-    const pointerIntersections = pointerWithin(args);
-    const cornersCollisions = closestCorners(args);
-    
-    // Combinar ambas estrategias
-    const allCollisions = [...pointerIntersections, ...cornersCollisions];
-    
-    // Filtrar para SOLO considerar columnas (stages), ignorar items sortables (promises)
-    // Las columnas son los IDs de las etapas del pipeline
-    const stageIds = new Set(pipelineStages.map(stage => stage.id));
-    
-    // Buscar solo columnas droppables, ignorar completamente los cards
-    const columnCollisions = allCollisions.filter(collision => 
-      stageIds.has(collision.id as string)
-    );
-    
-    // Si encontramos una columna, devolverla
-    if (columnCollisions.length > 0) {
-      // Si hay múltiples columnas, usar la más cercana al puntero
-      return [columnCollisions[0]];
-    }
-    
-    // Si no hay columna detectada pero estamos arrastrando, usar la columna inicial
-    // Esto evita que los cards interfieran cuando el puntero está sobre ellos
-    if (activePromiseStageId && stageIds.has(activePromiseStageId)) {
-      return [{ id: activePromiseStageId }];
-    }
-    
-    // Fallback: intentar encontrar la columna más cercana usando closestCorners
-    // pero filtrando solo columnas
-    const closestColumn = cornersCollisions.find(collision => 
-      stageIds.has(collision.id as string)
-    );
-    
-    if (closestColumn) {
-      return [closestColumn];
-    }
-    
-    return [];
-  };
 
   // Sincronizar búsqueda externa si cambia (solo una vez al cargar)
   useEffect(() => {
@@ -440,41 +351,57 @@ function PromisesKanban({
     });
   }, [filteredPromises]);
 
-  // Slugs de columnas críticas que siempre deben ser visibles
+  // Slugs de columnas críticas (solo etapas activas)
   const CRITICAL_STAGE_SLUGS = ['pending', 'pendiente', 'negotiation', 'negociacion', 'closing', 'cierre', 'en_cierre'];
-  
-  // Filtrar stages según toggles de vista
-  // ✅ PRESERVAR ORDEN: Mantener el orden que viene de la BD (NO reordenar)
-  const visibleStages = useMemo(() => {
-    // Filtrar manteniendo el orden original de la BD
-    const filtered = localPipelineStages.filter((stage) => {
-      // REGLA DE ORO: Columnas críticas siempre visibles
-      if (CRITICAL_STAGE_SLUGS.includes(stage.slug)) {
-        return true;
-      }
-      
-      // Ocultar archived si showArchived es false
-      if (stage.slug === 'archived') {
-        return showArchived;
-      }
-      // Ocultar canceled si showCanceled es false
-      if (stage.slug === 'canceled') {
-        return showCanceled;
-      }
-      // Ocultar approved si showApproved es false
-      if (stage.slug === 'approved' || stage.slug === 'aprobada') {
-        return showApproved;
-      }
-      // Mostrar siempre los demás stages
-      return true;
-    });
-    
-    // ✅ ORDENAR: Asegurar orden correcto por campo 'order' (0: nuevo, 1: seguimiento, 2: cierre, 3: aprobado, 4: archivado, 5: cancelado)
-    return filtered.sort((a, b) => a.order - b.order);
-  }, [localPipelineStages, showArchived, showCanceled, showApproved]);
 
-  // Determinar si estamos en "vista completa" (ambos activos) o "vista compacta"
-  const isFullView = showArchived && showCanceled;
+  // Etapa virtual "Historial" que agrupa todas las terminales
+  const HISTORIAL_VIRTUAL_STAGE: PipelineStage = {
+    id: 'historial-virtual',
+    name: 'Historial',
+    slug: 'historial',
+    color: '#71717a',
+    order: 999,
+  };
+
+  // Filtrar stages: solo activos + columna virtual Historial si el toggle está activo
+  const visibleStages = useMemo(() => {
+    const activeStages = localPipelineStages
+      .filter((stage) => !isTerminalStage(stage.slug))
+      .sort((a, b) => a.order - b.order);
+
+    return showHistorial ? [...activeStages, HISTORIAL_VIRTUAL_STAGE] : activeStages;
+  }, [localPipelineStages, showHistorial]);
+
+  // IDs droppables: etapas visibles (incluye historial-virtual cuando aplica)
+  const droppableStageIds = useMemo(
+    () => new Set(visibleStages.map((s) => s.id)),
+    [visibleStages]
+  );
+
+  // Estrategia de detección de colisiones: solo columnas, ignora cards
+  const collisionDetection: CollisionDetection = useCallback(
+    (args) => {
+      const pointerIntersections = pointerWithin(args);
+      const cornersCollisions = closestCorners(args);
+      const allCollisions = [...pointerIntersections, ...cornersCollisions];
+
+      const columnCollisions = allCollisions.filter((collision) =>
+        droppableStageIds.has(collision.id as string)
+      );
+      if (columnCollisions.length > 0) return [columnCollisions[0]];
+
+      if (activePromiseStageId && droppableStageIds.has(activePromiseStageId)) {
+        return [{ id: activePromiseStageId }];
+      }
+
+      const closestColumn = cornersCollisions.find((collision) =>
+        droppableStageIds.has(collision.id as string)
+      );
+      if (closestColumn) return [closestColumn];
+      return [];
+    },
+    [droppableStageIds, activePromiseStageId]
+  );
 
   // Función para actualizar un stage localmente (optimista)
   // ✅ PRESERVAR ORDEN: Mantener el orden que viene de la BD (NO reordenar)
@@ -494,22 +421,22 @@ function PromisesKanban({
     });
   }, []);
   
-  // Agrupar promises por stage (ya ordenadas)
-  // Si una promesa no tiene stage_id, se asigna a la primera etapa disponible (no archivada ni cancelada)
+  // Agrupar promises por stage: activos por stage_id; terminales en historial-virtual
   const promisesByStage = useMemo(() => {
-    // Obtener la primera etapa activa (no archivada ni cancelada) para promesas sin stage
-    // ✅ PRESERVAR ORDEN: Usar el primer elemento del array (ya viene ordenado de la BD)
-    const defaultStage = visibleStages
-      .filter((s) => s.slug !== 'archived' && s.slug !== 'canceled')[0];
+    const defaultStage = visibleStages.find((s) => s.id !== 'historial-virtual');
 
     return visibleStages.reduce((acc: Record<string, PromiseWithContact[]>, stage: PipelineStage) => {
-      acc[stage.id] = sortedPromises.filter((p: PromiseWithContact) => {
-        // Si la promesa no tiene stage_id, asignarla a la primera etapa disponible
-        if (!p.promise_pipeline_stage_id && defaultStage && stage.id === defaultStage.id) {
-          return true;
-        }
-        return p.promise_pipeline_stage_id === stage.id;
-      });
+      if (stage.id === 'historial-virtual') {
+        acc['historial-virtual'] = sortedPromises.filter((p: PromiseWithContact) => {
+          const slug = p.promise_pipeline_stage?.slug;
+          return slug != null && isTerminalStage(slug);
+        });
+      } else {
+        acc[stage.id] = sortedPromises.filter((p: PromiseWithContact) => {
+          if (!p.promise_pipeline_stage_id && defaultStage && stage.id === defaultStage.id) return true;
+          return p.promise_pipeline_stage_id === stage.id;
+        });
+      }
       return acc;
     }, {} as Record<string, PromiseWithContact[]>);
   }, [sortedPromises, visibleStages]);
@@ -524,10 +451,20 @@ function PromisesKanban({
       return;
     }
 
-    const draggedPromiseId = active.id as string; // ✅ Este es promise.promise_id (unique ID)
-    const newStageId = over.id as string;
+    const draggedPromiseId = active.id as string;
+    let newStageId = over.id as string;
 
-    // Verificar que es un stage válido
+    // Al soltar en Historial, mapear a la etapa real archived
+    if (newStageId === 'historial-virtual') {
+      const archivedStage = pipelineStages.find((s: PipelineStage) => s.slug === 'archived');
+      if (!archivedStage) {
+        isDraggingRef.current = false;
+        toast.error('No se encontró la etapa Archivado');
+        return;
+      }
+      newStageId = archivedStage.id;
+    }
+
     const stage = pipelineStages.find((s: PipelineStage) => s.id === newStageId);
     if (!stage) {
       isDraggingRef.current = false;
@@ -862,78 +799,16 @@ function PromisesKanban({
           {/* Divisor */}
           <div className="h-6 w-px bg-zinc-700" />
           
-          {/* Menú de Configuración de Vista */}
-          <ZenDropdownMenu open={showViewConfig} onOpenChange={setShowViewConfig}>
-            <ZenDropdownMenuTrigger asChild>
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                className="gap-1.5 h-8"
-              >
-                <Settings className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline text-xs">Vista</span>
-              </ZenButton>
-            </ZenDropdownMenuTrigger>
-            <ZenDropdownMenuContent align="end" className="w-56">
-              <div className="px-2 py-1.5 text-xs font-semibold text-zinc-400">
-                Configuración de Vista
-              </div>
-              <ZenDropdownMenuSeparator />
-              {/* Todas las etapas en orden correcto del pipeline */}
-              <div className="px-2 py-1.5">
-                <div className="space-y-1.5">
-                  {localPipelineStages
-                    .sort((a, b) => a.order - b.order)
-                    .map((stage) => {
-                      const isAlwaysVisible = ['pending', 'negotiation', 'closing'].includes(stage.slug);
-                      const isApproved = stage.slug === 'approved' || stage.slug === 'aprobada';
-                      const isArchived = stage.slug === 'archived';
-                      const isCanceled = stage.slug === 'canceled';
-                      const checked = isApproved ? showApproved : isArchived ? showArchived : showCanceled;
-                      const onChange = isApproved ? setShowApproved : isArchived ? setShowArchived : setShowCanceled;
-                      
-                      return (
-                        <div key={stage.id} className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-2 flex-1">
-                            <div 
-                              className="w-2 h-2 rounded-full shrink-0" 
-                              style={{ backgroundColor: stage.color }}
-                            />
-                            <label 
-                              htmlFor={`show-${stage.slug}`} 
-                              className={`text-sm flex-1 ${isAlwaysVisible ? 'text-zinc-400 cursor-default' : 'text-zinc-300 cursor-pointer'}`}
-                            >
-                              {stage.name}
-                            </label>
-                          </div>
-                          <ZenSwitch
-                            id={`show-${stage.slug}`}
-                            checked={isAlwaysVisible ? true : checked}
-                            onCheckedChange={isAlwaysVisible ? undefined : onChange}
-                            disabled={isAlwaysVisible}
-                          />
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </ZenDropdownMenuContent>
-          </ZenDropdownMenu>
-          
+          {/* Toggle Mostrar Historial: columna oculta por defecto */}
           <ZenButton
             variant="ghost"
             size="sm"
-            onClick={() => {
-              // Toggle vista completa: activa/desactiva ambos
-              const newState = !isFullView;
-              setShowArchived(newState);
-              setShowCanceled(newState);
-            }}
+            onClick={() => setShowHistorial((prev) => !prev)}
             className="gap-1.5 h-8"
-            title={isFullView ? "Ocultar promesas archivadas y canceladas" : "Mostrar todas las promesas (incluyendo archivadas y canceladas)"}
+            title={showHistorial ? 'Ocultar columna Historial' : 'Mostrar columna Historial (aprobadas, archivadas, canceladas)'}
           >
-            {isFullView ? <Columns2 className="h-3.5 w-3.5" /> : <TableColumnsSplit className="h-3.5 w-3.5" />}
-            <span className="text-xs">{isFullView ? 'Pipeline Compacto' : 'Pipeline Completo'}</span>
+            <Archive className="h-3.5 w-3.5" />
+            <span className="text-xs">{showHistorial ? 'Ocultar Historial' : 'Mostrar Historial'}</span>
           </ZenButton>
         </div>
       </div>
@@ -1060,6 +935,8 @@ function KanbanColumn({
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
   });
+
+  const isVirtualHistorial = stage.id === 'historial-virtual';
   
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(stage.name);
@@ -1084,9 +961,9 @@ function KanbanColumn({
     '#A855F7', // Violet
   ];
   
-  // Obtener nombre original del sistema
-  const systemName = getSystemStageName(stage.slug);
-  const isRenamed = stage.name !== systemName;
+  // Obtener nombre original del sistema (no aplicar a columna virtual)
+  const systemName = isVirtualHistorial ? stage.name : getSystemStageName(stage.slug);
+  const isRenamed = !isVirtualHistorial && stage.name !== systemName;
   
   // Sincronizar editedName cuando cambia stage.name
   useEffect(() => {
@@ -1102,6 +979,7 @@ function KanbanColumn({
   }, [isEditing]);
   
   const handleSave = async () => {
+    if (isVirtualHistorial) return;
     if (editedName.trim() === stage.name.trim()) {
       setIsEditing(false);
       return;
@@ -1320,6 +1198,7 @@ function KanbanColumn({
         onMouseLeave={() => setIsHovered(false)}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          {!isVirtualHistorial && (
           <ZenDropdownMenu open={isColorPickerOpen} onOpenChange={setIsColorPickerOpen}>
             <ZenDropdownMenuTrigger asChild>
               <button
@@ -1358,6 +1237,14 @@ function KanbanColumn({
               </div>
             </ZenDropdownMenuContent>
           </ZenDropdownMenu>
+          )}
+          {isVirtualHistorial && (
+            <div
+              className="w-3 h-3 rounded-full shrink-0"
+              style={{ backgroundColor: stage.color }}
+              title="Historial"
+            />
+          )}
           {isEditing ? (
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <input
@@ -1389,9 +1276,9 @@ function KanbanColumn({
           ) : (
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <h3 
-                className="font-medium text-white text-sm truncate cursor-pointer hover:text-blue-400 transition-colors flex-1 min-w-0"
-                onClick={() => setIsEditing(true)}
-                title={isRenamed ? `Etapa original: ${systemName}` : 'Clic para editar'}
+                className={`font-medium text-white text-sm truncate flex-1 min-w-0 ${isVirtualHistorial ? 'cursor-default' : 'cursor-pointer hover:text-blue-400 transition-colors'}`}
+                onClick={() => !isVirtualHistorial && setIsEditing(true)}
+                title={isVirtualHistorial ? 'Historial' : (isRenamed ? `Etapa original: ${systemName}` : 'Clic para editar')}
               >
                 {stage.name}
               </h3>
@@ -1401,7 +1288,7 @@ function KanbanColumn({
               )}
             </div>
           )}
-          {!isEditing && !isSaving && isHovered && (
+          {!isVirtualHistorial && !isEditing && !isSaving && isHovered && (
             <button
               onClick={(e) => {
                 e.stopPropagation();

@@ -81,3 +81,26 @@ export function getCotizacionStatusDisplayName(
 export function getSystemStageName(slug: string): string {
   return DEFAULT_STAGE_NAMES[slug] || slug;
 }
+
+const TERMINAL_SLUGS = new Set([
+  'approved', 'aprobada', 'autorizada',
+  'canceled', 'cancelado',
+  'archived', 'archivado',
+]);
+
+/**
+ * Retorna true si el slug es una etapa terminal (cierre del pipeline).
+ */
+export function isTerminalStage(slug: string): boolean {
+  return TERMINAL_SLUGS.has(slug);
+}
+
+/**
+ * Color por tipo de etapa terminal: aprobado verde, cancelado rojo, archivado gris.
+ */
+export function getTerminalColor(slug: string): string {
+  if (slug === 'approved' || slug === 'aprobada' || slug === 'autorizada') return '#10B981';
+  if (slug === 'canceled' || slug === 'cancelado') return '#EF4444';
+  if (slug === 'archived' || slug === 'archivado') return '#71717a';
+  return '#71717a';
+}
