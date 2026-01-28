@@ -1343,7 +1343,6 @@ export async function getPublicPromisePendientes(
       // Usar el engine de precios (SSoT)
       if (!configPrecios) {
         // Fallback si no hay configuración de precios
-        console.log('[getPublicPromisePendientes] ⚠️ Sin configPrecios, usando precio base:', paq.precio);
         return {
           id: paq.id,
           name: paq.name,
@@ -1366,19 +1365,6 @@ export async function getPublicPromisePendientes(
         paqueteItems: paqueteItemsForEngine,
         catalogo: catalogo,
         configPrecios: configPrecios,
-      });
-
-      // 🔍 LOG: Verificación del engine
-      console.log('[getPublicPromisePendientes] Engine result:', {
-        paqueteId: paq.id,
-        paqueteName: paq.name,
-        base_hours: paq.base_hours,
-        promiseDurationHours: promiseDurationHours,
-        finalPrice: priceResult.finalPrice,
-        basePrice: priceResult.basePrice,
-        recalculatedPrice: priceResult.recalculatedPrice,
-        hoursMatch: priceResult.hoursMatch,
-        priceSource: priceResult.priceSource,
       });
 
       return {
@@ -2123,7 +2109,6 @@ export async function getPublicPromiseAvailablePackages(
       // Usar el engine de precios (SSoT)
       if (!configPrecios) {
         // Fallback si no hay configuración de precios
-        console.log('[getPublicPromiseAvailablePackages] ⚠️ Sin configPrecios, usando precio base:', paq.precio);
         return {
           id: paq.id,
           name: paq.name,
@@ -2146,19 +2131,6 @@ export async function getPublicPromiseAvailablePackages(
         paqueteItems: paqueteItemsForEngine,
         catalogo: catalogo,
         configPrecios: configPrecios,
-      });
-
-      // 🔍 LOG: Verificación del engine
-      console.log('[getPublicPromiseAvailablePackages] Engine result:', {
-        paqueteId: paq.id,
-        paqueteName: paq.name,
-        base_hours: paq.base_hours,
-        eventDurationHours: durationHours,
-        finalPrice: priceResult.finalPrice,
-        basePrice: priceResult.basePrice,
-        recalculatedPrice: priceResult.recalculatedPrice,
-        hoursMatch: priceResult.hoursMatch,
-        priceSource: priceResult.priceSource,
       });
 
       return {
@@ -3871,7 +3843,6 @@ export async function getPublicPromiseData(
       // Usar el engine de precios (SSoT)
       if (!configPrecios) {
         // Fallback si no hay configuración de precios
-        console.log('[getPublicPromiseData] ⚠️ Sin configPrecios, usando precio base:', paq.precio);
         return {
           id: paq.id,
           name: paq.name,
@@ -3894,19 +3865,6 @@ export async function getPublicPromiseData(
         paqueteItems: paqueteItemsForEngine,
         catalogo: catalogo,
         configPrecios: configPrecios,
-      });
-
-      // 🔍 LOG: Verificación del engine
-      console.log('[getPublicPromiseData] Engine result:', {
-        paqueteId: paq.id,
-        paqueteName: paq.name,
-        base_hours: paq.base_hours,
-        promiseDurationHours: promiseDurationHours,
-        finalPrice: priceResult.finalPrice,
-        basePrice: priceResult.basePrice,
-        recalculatedPrice: priceResult.recalculatedPrice,
-        hoursMatch: priceResult.hoursMatch,
-        priceSource: priceResult.priceSource,
       });
 
       return {
