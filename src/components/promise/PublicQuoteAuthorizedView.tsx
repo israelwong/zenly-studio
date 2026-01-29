@@ -276,26 +276,24 @@ export function PublicQuoteAuthorizedView({
   }, [contractData]);
 
   // ⚠️ TAREA 4: Callback cuando se firma el contrato (después de Server Action exitosa)
+  // El optimistic update (onContractSignedOptimistic) ya puso signed_at antes de la action,
+  // así que al cerrar el modal el card de Pago ya se muestra; este refetch sincroniza con el servidor.
   const handleContractSigned = useCallback(async () => {
     try {
-      // ⚠️ TAREA 4: Activar flag de navegación para bloquear Realtime
       setNavigating('post-sign');
-      
-      // Recargar datos del contrato para obtener contract_signed_at actualizado del servidor
+
       const result = await getPublicCotizacionContract(studioSlug, cotizacion.id);
       if (result.success && result.data) {
         const contractUpdate = {
           template_id: result.data.template_id,
           content: result.data.content,
           version: result.data.version || 1,
-          signed_at: result.data.signed_at, // Fecha real del servidor
+          signed_at: result.data.signed_at,
           condiciones_comerciales: result.data.condiciones_comerciales,
         };
-        
-        // ⚠️ TAREA 4: Actualizar estado con startTransition
+
         startTransition(() => {
           setContractData(contractUpdate);
-          // Limpiar flag de navegación después de un breve delay
           clearNavigating(500);
         });
       } else {
@@ -404,33 +402,30 @@ export function PublicQuoteAuthorizedView({
   useCotizacionesRealtime({
     studioSlug,
     promiseId,
-    ignoreCierreEvents: false, // Queremos escuchar cambios en studio_cotizaciones_cierre
+    ignoreCierreEvents: false, // Escuchar studio_cotizaciones_cierre (generar, actualizar, cancelar contrato)
     onCotizacionUpdated: (cotizacionId, changeInfo) => {
-      // Solo actualizar si es la cotización actual y no estamos navegando
-      if (cotizacionId === cotizacion.id && !getIsNavigating()) {
-        // Si no tenemos contrato pero hay template_id, intentar cargarlo
-        // Esto cubre el caso cuando se genera el contrato por primera vez
-        if (!contractData?.content && hasContractTemplate) {
-          // Actualizar contrato localmente sin recargar toda la cotización
-          // Usar un pequeño delay para asegurar que el servidor haya guardado los cambios
-          setTimeout(() => {
-            updateContractLocallyRef.current();
-          }, 500);
-        }
-        // También actualizar si hay cambios en el contrato (detectados por camposCambiados)
-        else {
-          const camposCambiados = (changeInfo as any)?.camposCambiados || [];
-          const hasContractChanges = camposCambiados.some((campo: string) => 
-            campo.includes('contrato') || campo.includes('contract') || 
-            campo.includes('contrato_definido') || campo.includes('contract_content')
-          );
-          
-          if (hasContractChanges) {
-            setTimeout(() => {
-              updateContractLocallyRef.current();
-            }, 500);
-          }
-        }
+      if (cotizacionId !== cotizacion.id || getIsNavigating()) return;
+
+      const info = changeInfo as { contractSignedAt?: Date | null; camposCambiados?: string[] } | undefined;
+      // Evento de cierre: siempre refrescar contrato (cubre generar, actualizar y cancelar contrato)
+      const isCierreEvent = info && 'contractSignedAt' in info;
+      if (isCierreEvent) {
+        setTimeout(() => updateContractLocallyRef.current(), 500);
+        return;
+      }
+
+      // Evento en studio_cotizaciones: actualizar si hay cambios de contrato
+      if (!contractData?.content && hasContractTemplate) {
+        setTimeout(() => updateContractLocallyRef.current(), 500);
+        return;
+      }
+      const camposCambiados = info?.camposCambiados || [];
+      const hasContractChanges = camposCambiados.some((campo: string) =>
+        campo.includes('contrato') || campo.includes('contract') ||
+        campo.includes('contrato_definido') || campo.includes('contract_content')
+      );
+      if (hasContractChanges) {
+        setTimeout(() => updateContractLocallyRef.current(), 500);
       }
     },
   });

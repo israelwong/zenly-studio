@@ -53,6 +53,7 @@ interface ContratoDigitalCardProps {
   showContratoOptionsModal: boolean;
   onCloseContratoOptionsModal: () => void;
   onContratoSuccess: () => void;
+  onCancelarContrato?: () => Promise<void> | void;
   onEditarDatosClick: () => void;
 }
 
@@ -69,6 +70,7 @@ export function ContratoDigitalCard({
   showContratoOptionsModal,
   onCloseContratoOptionsModal,
   onContratoSuccess,
+  onCancelarContrato,
   onEditarDatosClick,
 }: ContratoDigitalCardProps) {
   const [showContractPreview, setShowContractPreview] = useState(false);
@@ -147,6 +149,7 @@ export function ContratoDigitalCard({
           showContratoOptionsModal={showContratoOptionsModal}
           onCloseContratoOptionsModal={onCloseContratoOptionsModal}
           onContratoSuccess={onContratoSuccess}
+          onCancelarContrato={onCancelarContrato}
           studioSlug={studioSlug}
           promiseId={promiseId}
           cotizacionId={cotizacion.id}

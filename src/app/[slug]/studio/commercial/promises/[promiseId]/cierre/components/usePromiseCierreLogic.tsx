@@ -197,6 +197,24 @@ export function usePromiseCierreLogic({
     }
   }, [cotizacion.id, loadRegistroCierre]);
 
+  // Realtime: escuchar cambios en studio_cotizaciones_cierre (firma del cliente o cancelación)
+  // Solo mostrar toast de firma cuando contractSignedAt viene definido (cliente firmó), no cuando se canceló
+  const lastFirmadoToastRef = useRef(0);
+  useCotizacionesRealtime({
+    studioSlug,
+    promiseId,
+    ignoreCierreEvents: false,
+    onCotizacionUpdated: (updatedCotizacionId, changeInfo) => {
+      if (updatedCotizacionId !== cotizacion.id) return;
+      loadRegistroCierre();
+      const signedAt = (changeInfo as { contractSignedAt?: Date | null })?.contractSignedAt;
+      if (signedAt && Date.now() - lastFirmadoToastRef.current > 2000) {
+        lastFirmadoToastRef.current = Date.now();
+        toast.info('¡El cliente ha firmado el contrato!');
+      }
+    },
+  });
+
   const handleDefinirCondiciones = useCallback(() => {
     setShowCondicionesModal(true);
   }, []);
@@ -268,6 +286,16 @@ export function usePromiseCierreLogic({
   const handleCloseContratoOptions = useCallback(() => {
     setShowContratoOptionsModal(false);
   }, []);
+
+  const handleCancelarContrato = useCallback(async () => {
+    const result = await actualizarContratoCierre(studioSlug, cotizacion.id, '', null);
+    if (result.success) {
+      toast.success('Contrato cancelado correctamente');
+      await loadRegistroCierre();
+    } else {
+      toast.error(result.error || 'Error al cancelar contrato');
+    }
+  }, [studioSlug, cotizacion.id, loadRegistroCierre]);
 
   const handleContratoSuccess = useCallback(async () => {
     const result = await obtenerDatosContratoCierre(studioSlug, cotizacion.id);
@@ -552,6 +580,7 @@ export function usePromiseCierreLogic({
     handleCondicionesSuccess,
     handleContratoButtonClick,
     handleCloseContratoOptions,
+    handleCancelarContrato,
     handleContratoSuccess,
     handleTemplateSelected,
     handlePreviewConfirm,

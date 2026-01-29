@@ -826,13 +826,15 @@ export async function actualizarContratoCierre(
           contract_content: isClearing ? null : contentToSave,
           contract_version: 1, // Primera versi?n
           contrato_definido: !isClearing,
+          ...(isClearing ? { contract_signed_at: null } : {}),
         },
         update: {
           contract_template_id: isClearing ? null : templateId,
           contract_content: isClearing ? null : contentToSave,
-          // Si se est? limpiando, resetear a versi?n 1 ya que eliminamos el historial
+          // Si se est? limpiando, resetear versi?n y firma
           contract_version: isClearing ? 1 : (registroActual?.contract_version || 1),
           contrato_definido: !isClearing,
+          ...(isClearing ? { contract_signed_at: null } : {}),
         },
       });
 

@@ -244,6 +244,7 @@ export function PromiseCierreClient({
               showContratoOptionsModal={cierreLogic.showContratoOptionsModal}
               onCloseContratoOptionsModal={cierreLogic.handleCloseContratoOptions}
               onContratoSuccess={cierreLogic.handleContratoSuccess}
+              onCancelarContrato={cierreLogic.handleCancelarContrato}
               onEditarDatosClick={() => cierreLogic.setShowEditPromiseModal(true)}
             />
 

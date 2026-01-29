@@ -12,12 +12,9 @@ const SignPublicContractSchema = z.object({
 
 /**
  * Firmar contrato desde flujo público (sin autenticación)
- * 
- * Flujo:
- * 1. Validar que la cotización existe y está en estado contract_generated
- * 2. Validar que el contrato está definido en studio_cotizaciones_cierre
- * 3. Actualizar status de cotización a contract_signed
- * 4. Crear notificación para el estudio
+ *
+ * La vista /promise/[slug]/[promiseId]/cierre muestra contrato cuando hay cotización en cierre con contrato.
+ * Puede ser por flujo prospecto (selected_by_prospect) o por pase manual del estudio; en ambos casos se permite firma.
  */
 export async function signPublicContract(
   studioSlug: string,
@@ -41,14 +38,13 @@ export async function signPublicContract(
       return { success: false, error: "Studio no encontrado" };
     }
 
-    // Verificar que la cotización existe y está en estado correcto
+    // Verificar que la cotización existe y está en cierre (prospecto o estudio); si la vista muestra contrato, se permite firma
     const cotizacion = await prisma.studio_cotizaciones.findFirst({
       where: {
         id: cotizacionId,
         promise_id: promiseId,
         studio_id: studio.id,
-        status: { in: ['contract_generated', 'en_cierre'] },
-        selected_by_prospect: true,
+        status: { in: ['contract_generated', 'en_cierre', 'cierre'] },
       },
       include: {
         promise: {
@@ -72,6 +68,13 @@ export async function signPublicContract(
     });
 
     if (!cotizacion) {
+      const exists = await prisma.studio_cotizaciones.findFirst({
+        where: { id: cotizacionId, promise_id: promiseId, studio_id: studio.id },
+        select: { status: true },
+      });
+      if (exists && !['contract_generated', 'en_cierre', 'cierre'].includes(exists.status)) {
+        return { success: false, error: "La cotización no está en estado de cierre para firma" };
+      }
       return { success: false, error: "Cotización no encontrada o no disponible para firma" };
     }
 
@@ -103,7 +106,7 @@ export async function signPublicContract(
       },
     });
 
-    // Crear notificación para el estudio
+    // Notificación al estudio (trigger para UI/centro de notificaciones; Realtime se dispara por trigger DB en studio_cotizaciones_cierre)
     await createStudioNotification({
       scope: StudioNotificationScope.STUDIO,
       studio_id: studio.id,

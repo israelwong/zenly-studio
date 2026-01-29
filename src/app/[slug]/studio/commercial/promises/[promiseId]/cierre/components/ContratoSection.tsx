@@ -1,7 +1,8 @@
 'use client';
 
 import React, { memo, useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, Eye } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2 } from 'lucide-react';
+import { ZenConfirmModal } from '@/components/ui/zen';
 import { ContratoGestionCard } from './ContratoGestionCard';
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
 import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
@@ -40,6 +41,7 @@ interface ContratoSectionProps {
   showContratoOptionsModal: boolean;
   onCloseContratoOptionsModal: () => void;
   onContratoSuccess: () => void;
+  onCancelarContrato?: () => Promise<void> | void;
   // Props para ContratoGestionCard
   studioSlug: string;
   promiseId: string;
@@ -66,6 +68,7 @@ export const ContratoSection = memo(function ContratoSection({
   showContratoOptionsModal,
   onCloseContratoOptionsModal,
   onContratoSuccess,
+  onCancelarContrato,
   studioSlug,
   promiseId,
   cotizacionId,
@@ -74,6 +77,8 @@ export const ContratoSection = memo(function ContratoSection({
   promiseData,
 }: ContratoSectionProps) {
   const [showContractPreview, setShowContractPreview] = useState(false);
+  const [showCancelarContratoConfirm, setShowCancelarContratoConfirm] = useState(false);
+  const [isCancellingContrato, setIsCancellingContrato] = useState(false);
   const [contractTemplate, setContractTemplate] = useState<ContractTemplate | null>(null);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
 
@@ -122,6 +127,17 @@ export const ContratoSection = memo(function ContratoSection({
     }
   };
 
+  const handleConfirmCancelarContrato = async () => {
+    if (!onCancelarContrato) return;
+    setIsCancellingContrato(true);
+    try {
+      await onCancelarContrato();
+      setShowCancelarContratoConfirm(false);
+    } finally {
+      setIsCancellingContrato(false);
+    }
+  };
+
   let contratoIcon: React.ReactNode;
   let contratoEstado: string;
   let contratoColor: string;
@@ -131,7 +147,7 @@ export const ContratoSection = memo(function ContratoSection({
     // Si el contrato está firmado (verificar desde tabla temporal)
     if (contratoFirmado) {
       contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
-      contratoEstado = 'Firmado por el cliente';
+      contratoEstado = 'Contrato firmado';
       contratoColor = 'text-emerald-400';
       contratoBoton = null;
     } else {
@@ -150,7 +166,7 @@ export const ContratoSection = memo(function ContratoSection({
           break;
         case 'contract_signed':
           contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
-          contratoEstado = 'Firmado por el cliente';
+          contratoEstado = 'Contrato firmado';
           contratoColor = 'text-emerald-400';
           contratoBoton = null;
           break;
@@ -182,50 +198,84 @@ export const ContratoSection = memo(function ContratoSection({
       }
     }
   } else {
-    if (tieneContratoGenerado) {
+    // Flujo manual del estudio: si ya está firmado, mostrar Contrato firmado
+    if (contratoFirmado) {
+      contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+      contratoEstado = 'Contrato firmado';
+      contratoColor = 'text-emerald-400';
+      contratoBoton = null;
+    } else if (tieneContratoGenerado) {
       contratoIcon = <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
       contratoEstado = '';
       contratoColor = 'text-emerald-400';
       contratoBoton = 'Editar';
     } else {
       contratoIcon = <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
-      contratoEstado = 'No definido';
+      contratoEstado = 'No definido. Clic en Definir para seleccionar plantilla.';
       contratoColor = 'text-amber-400';
       contratoBoton = 'Definir';
     }
   }
+  const handleOpenPreview = (e: React.MouseEvent) => {
+    if (contratoFirmado && contractData?.contract_template_id) {
+      e.stopPropagation();
+      handleViewContract();
+    }
+  };
+
   return (
     <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-3">
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-3">
         {loadingRegistro ? (
           <Loader2 className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5 animate-spin" />
         ) : (
           contratoIcon
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">
-              Contrato Digital
-            </span>
-            {contratoBoton && (
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            {contratoFirmado && contractData?.contract_template_id ? (
+              <button
+                type="button"
+                onClick={handleOpenPreview}
+                className="flex-1 min-w-0 text-left group"
+              >
+                <span className="text-xs uppercase tracking-wide font-semibold text-emerald-400 group-hover:text-emerald-300 transition-colors">
+                  Contrato firmado
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5 group-hover:text-zinc-400">
+                  <Eye className="h-3.5 w-3.5 shrink-0" />
+                  Clic para ver preview
+                </span>
+              </button>
+            ) : (
+              <span className={`text-xs uppercase tracking-wide font-semibold ${contratoFirmado ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                {contratoFirmado ? 'Contrato firmado' : 'Contrato Digital'}
+              </span>
+            )}
+            {contratoBoton && !contratoFirmado && (
               <button
                 onClick={onContratoButtonClick}
-                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors shrink-0"
               >
                 {contratoBoton}
               </button>
             )}
-            {contratoFirmado && contractData?.contract_template_id && (
+            {contratoFirmado && onCancelarContrato && (
               <button
-                onClick={handleViewContract}
-                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCancelarContratoConfirm(true);
+                }}
+                className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                title="Cancelar contrato"
+                aria-label="Cancelar contrato"
               >
-                <Eye className="h-3 w-3" />
-                Ver contrato
+                <Trash2 className="h-4 w-4" />
               </button>
             )}
           </div>
-          {contratoEstado && (
+          {contratoEstado && !contratoFirmado && (
             <div className={`text-xs ${contratoColor}`}>
               <p>{contratoEstado}</p>
               {contractData?.contrato_definido && contractData?.contract_version && (
@@ -245,6 +295,11 @@ export const ContratoSection = memo(function ContratoSection({
                 </p>
               )}
             </div>
+          )}
+          {contratoFirmado && contractData?.contract_version && (
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Versión {contractData.contract_version}
+            </p>
           )}
         </div>
       </div>
@@ -268,6 +323,18 @@ export const ContratoSection = memo(function ContratoSection({
           />
         </div>
       )}
+
+      <ZenConfirmModal
+        isOpen={showCancelarContratoConfirm}
+        onClose={() => !isCancellingContrato && setShowCancelarContratoConfirm(false)}
+        onConfirm={handleConfirmCancelarContrato}
+        title="Cancelar contrato"
+        description="¿Estás seguro de que deseas cancelar el contrato? Se quitará la plantilla y el contenido. Esta acción no se puede deshacer."
+        confirmText="Cancelar contrato"
+        cancelText="No, mantener"
+        variant="destructive"
+        loading={isCancellingContrato}
+      />
 
       {/* Modal Preview de Contrato Firmado */}
       {contratoFirmado && contractTemplate && (
@@ -298,7 +365,8 @@ export const ContratoSection = memo(function ContratoSection({
     prevProps.loadingRegistro === nextProps.loadingRegistro &&
     prevProps.showContratoOptionsModal === nextProps.showContratoOptionsModal &&
     prevProps.cotizacionStatus === nextProps.cotizacionStatus &&
-    prevProps.isClienteNuevo === nextProps.isClienteNuevo
+    prevProps.isClienteNuevo === nextProps.isClienteNuevo &&
+    prevProps.onCancelarContrato === nextProps.onCancelarContrato
   );
 });
 

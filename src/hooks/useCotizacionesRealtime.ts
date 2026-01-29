@@ -176,15 +176,14 @@ export function useCotizacionesRealtime({
         const record = p.record || p.new || p.payload?.new || p.payload?.record;
         if (record && record.cotizacion_id) {
           const cotizacionId = record.cotizacion_id as string;
-          // ⚠️ TAREA 3: Construir información de cambio para eventos de cierre
-          // Incluir statusChanged para que se ejecute la redirección automática
+          // Incluir contract_signed_at para distinguir firma del cliente (truthy) de cancelación (null)
           const changeInfo: CotizacionChangeInfo = {
             cotizacionId,
-            // Los eventos de cierre no tienen status directo, pero podemos inferirlo
             status: 'en_cierre',
             statusChanged: true,
-            oldStatus: 'pendiente', // Asumir que venía de pendiente (o negociación)
+            oldStatus: 'pendiente',
             camposCambiados: ['status'],
+            contractSignedAt: record.contract_signed_at ?? null,
           };
           if (cotizacionId && onUpdatedRef.current) {
             onUpdatedRef.current(cotizacionId, changeInfo);

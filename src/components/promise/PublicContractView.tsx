@@ -382,8 +382,21 @@ export function PublicContractView({
         zIndex={10070}
         fullScreen={isMobile}
       >
-        <div className="space-y-4">
-          {/* Contenido del contrato */}
+        <div className="space-y-4 relative">
+          {/* Overlay de firma: no ocultar contenido, bloquear con overlay integrado */}
+          {isSigning && (
+            <div
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-white/70 dark:bg-zinc-900/80 backdrop-blur-sm"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <Loader2 className="h-8 w-8 animate-spin text-zinc-600 dark:text-zinc-300 shrink-0" />
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Firmando contrato legalmente...
+              </p>
+            </div>
+          )}
+          {/* Contenido del contrato (siempre montado; overlay encima cuando isSigning) */}
           {/* ⚠️ Mostrar skeleton mientras se cargan los datos (loadingContract o loadingData) */}
           {(loadingContract || loadingData) && (!templateContent || !eventData) ? (
             <div className="bg-zinc-900 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">
@@ -516,10 +529,10 @@ export function PublicContractView({
         </div>
       </ZenDialog>
 
-      {/* Modal de confirmación de firma */}
+      {/* Modal de confirmación de firma (no cerrar mientras isSigning) */}
       <ZenDialog
         isOpen={showSignConfirmModal}
-        onClose={() => setShowSignConfirmModal(false)}
+        onClose={() => !isSigning && setShowSignConfirmModal(false)}
         title="¿Confirmar firma del contrato?"
         description="Al firmar este contrato, confirmas que estás de acuerdo con todas las condiciones establecidas."
         maxWidth="md"
@@ -532,7 +545,8 @@ export function PublicContractView({
           <div className="flex gap-2">
             <ZenButton
               variant="ghost"
-              onClick={() => setShowSignConfirmModal(false)}
+              onClick={() => !isSigning && setShowSignConfirmModal(false)}
+              disabled={isSigning}
               className="flex-1"
             >
               Cancelar
@@ -545,12 +559,12 @@ export function PublicContractView({
             >
               {isSigning ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0" />
                   Firmando...
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  <CheckCircle2 className="w-4 h-4 mr-2 shrink-0" />
                   Confirmar Firma
                 </>
               )}
