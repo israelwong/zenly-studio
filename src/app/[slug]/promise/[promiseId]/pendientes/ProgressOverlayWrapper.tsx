@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { startTransition } from 'react';
 import confetti from 'canvas-confetti';
 import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
-import { updatePublicPromiseData, getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
+import { updatePublicPromiseData, getPublicPromiseData, invalidatePublicPromiseRouteState } from '@/lib/actions/public/promesas.actions';
 import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.actions';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 
@@ -20,8 +18,7 @@ interface ProgressOverlayWrapperProps {
  * Contiene la lógica de procesamiento de autorización
  */
 export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverlayWrapperProps) {
-  const router = useRouter();
-  const { setNavigating, clearNavigating } = usePromiseNavigation();
+  const { setNavigating } = usePromiseNavigation();
   
   const {
     isAuthorizationInProgress,
@@ -172,13 +169,13 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
         // Esperar 600ms mientras se recopilan datos
         await new Promise(resolve => setTimeout(resolve, 600));
 
-        // Paso 5: Generando contrato (condicional, solo si autoGenerateContract)
+        // Paso 5: Generando contrato (condicional; el contrato ya se generó en autorizarCotizacionPublica)
         if (shouldGenerateContract) {
           setProgressStep('generating_contract');
-          await new Promise(resolve => setTimeout(resolve, 1200));
+          await new Promise(resolve => setTimeout(resolve, 1800));
         }
 
-        // Paso 6: Completado - Listo
+        // Paso 6: Completado - Listo (el overlay mostrará todos los pasos con check, incluido Generando contrato)
         setProgressStep('completed');
 
         isProcessing = false;
@@ -200,24 +197,23 @@ export function ProgressOverlayWrapper({ studioSlug, promiseId }: ProgressOverla
   // Redirigir a cierre cuando el proceso esté completado
   // Pausa de Momentum: 3 segundos para disfrutar la celebración
   useEffect(() => {
-    if (progressStep === 'completed' && isAuthorizationInProgress) {
-      const redirectPath = `/${studioSlug}/promise/${promiseId}/cierre`;
-      
-      // Pausa de Momentum: 3 segundos exactos para disfrutar el confeti y la celebración
-      const timer = setTimeout(() => {
-        // NO limpiar isAuthorizationInProgress aquí - se mantiene en true durante la transición
-        // Solo limpiar datos y disparar navegación
-        setAuthorizationData(null);
-        setNavigating('cierre');
-        window.dispatchEvent(new CustomEvent('close-overlays'));
-        startTransition(() => {
-          router.push(redirectPath);
-          clearNavigating(1000);
-        });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [progressStep, isAuthorizationInProgress, studioSlug, promiseId, router, setNavigating, clearNavigating, setAuthorizationData]);
+    if (progressStep !== 'completed' || !isAuthorizationInProgress) return;
+
+    const redirectPath = `/${studioSlug}/promise/${promiseId}/cierre`;
+
+    const timer = setTimeout(async () => {
+      setAuthorizationData(null);
+      setNavigating('cierre');
+      window.dispatchEvent(new CustomEvent('close-overlays'));
+      // Revalidar caché de ruta pública para que la página de cierre obtenga datos frescos
+      // (evita que getPublicPromiseRouteState devuelva caché de otra instancia/serverless)
+      await invalidatePublicPromiseRouteState(studioSlug, promiseId);
+      // Cache-bust para evitar respuesta HTML cacheada por el navegador
+      window.location.href = `${redirectPath}?t=${Date.now()}`;
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [progressStep, isAuthorizationInProgress, studioSlug, promiseId, setNavigating, setAuthorizationData]);
 
   // Limpiar lock global solo cuando el componente se desmonte (navegación completa)
   useEffect(() => {
