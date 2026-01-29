@@ -72,6 +72,7 @@ export function PublicContractView({
   eventTypeId,
 }: PublicContractViewProps) {
   const [isSigning, setIsSigning] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showSignConfirmModal, setShowSignConfirmModal] = useState(false);
   const [loadingContract, setLoadingContract] = useState(false);
@@ -277,16 +278,16 @@ export function PublicContractView({
       toast.info('El contrato ya ha sido firmado');
       return;
     }
-    // ⚠️ TAREA 3: Cerrar overlays antes de mostrar modal de confirmación
     window.dispatchEvent(new CustomEvent('close-overlays'));
+    setIsSuccess(false);
     setShowSignConfirmModal(true);
   };
 
   const handleConfirmSign = async () => {
     setIsSigning(true);
-    setShowSignConfirmModal(false);
+    // Modal de confirmación se mantiene abierto durante toda la firma; se cierra solo al éxito en startTransition
 
-    // ⚠️ TAREA 3: OPTIMISTIC UPDATE - Actualizar estado ANTES de Server Action
+    // OPTIMISTIC UPDATE - Actualizar estado ANTES de Server Action
     if (onContractSignedOptimistic) {
       onContractSignedOptimistic();
     }
@@ -309,34 +310,32 @@ export function PublicContractView({
       });
 
       if (result.success) {
-        // ⚠️ TAREA 3: Usar startTransition para actualizaciones de UI no bloqueantes
-        startTransition(() => {
-          toast.success('Contrato firmado exitosamente');
-          // ⚠️ TAREA 3: Cerrar overlays antes de cerrar modal
-          window.dispatchEvent(new CustomEvent('close-overlays'));
-          // Cerrar modal
-          onClose();
-          // Sincronizar con servidor (actualizar con datos reales)
-          if (onContractSigned) {
-            onContractSigned();
-          }
-        });
+        setIsSuccess(true);
+        toast.success('Contrato firmado exitosamente');
+        window.dispatchEvent(new CustomEvent('close-overlays'));
+        setTimeout(() => {
+          startTransition(() => {
+            setShowSignConfirmModal(false);
+            onClose();
+            if (onContractSigned) {
+              onContractSigned();
+            }
+          });
+        }, 300);
       } else {
-        // ⚠️ TAREA 3: ROLLBACK - Si falla, revertir estado optimista
         console.error('[handleConfirmSign] Error en firma:', result.error);
         toast.error(result.error || 'Error al firmar contrato');
         if (onContractSignedRollback) {
           onContractSignedRollback();
         }
+        setIsSigning(false);
       }
     } catch (error) {
-      // ⚠️ TAREA 3: ROLLBACK - Si hay excepción, revertir estado optimista
       console.error('[handleConfirmSign] Error signing contract:', error);
       toast.error('Error al firmar contrato');
       if (onContractSignedRollback) {
         onContractSignedRollback();
       }
-    } finally {
       setIsSigning(false);
     }
   };
@@ -369,7 +368,7 @@ export function PublicContractView({
     <>
       <ZenDialog
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={() => !isSigning && onClose()}
         title="Contrato de Prestación de Servicios"
         description={
           isSigned 
@@ -383,80 +382,58 @@ export function PublicContractView({
         fullScreen={isMobile}
       >
         <div className="space-y-4 relative">
-          {/* Overlay de firma: no ocultar contenido, bloquear con overlay integrado */}
-          {isSigning && (
-            <div
-              className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-white/70 dark:bg-zinc-900/80 backdrop-blur-sm"
-              aria-live="polite"
-              aria-busy="true"
-            >
-              <Loader2 className="h-8 w-8 animate-spin text-zinc-600 dark:text-zinc-300 shrink-0" />
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                Firmando contrato legalmente...
-              </p>
-            </div>
-          )}
-          {/* Contenido del contrato (siempre montado; overlay encima cuando isSigning) */}
-          {/* ⚠️ Mostrar skeleton mientras se cargan los datos (loadingContract o loadingData) */}
-          {(loadingContract || loadingData) && (!templateContent || !eventData) ? (
-            <div className="bg-zinc-900 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">
+          {/* Contrato estático y legible; skeleton solo mientras cargan datos */}
+          {((loadingContract || loadingData) && (!templateContent || !eventData)) ? (
+            <div className="bg-zinc-950 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">
               <div className="space-y-6 animate-pulse">
                 {/* Skeleton para título */}
                 <div className="space-y-2">
-                  <div className="h-8 bg-zinc-800 rounded w-3/4"></div>
-                  <div className="h-4 bg-zinc-800/50 rounded w-1/2"></div>
+                  <div className="h-8 bg-zinc-800 rounded w-3/4" />
+                  <div className="h-4 bg-zinc-800/50 rounded w-1/2" />
                 </div>
-                
-                {/* Skeleton para párrafos */}
                 <div className="space-y-3">
-                  <div className="h-4 bg-zinc-800 rounded w-full"></div>
-                  <div className="h-4 bg-zinc-800 rounded w-5/6"></div>
-                  <div className="h-4 bg-zinc-800 rounded w-4/6"></div>
-                  <div className="h-4 bg-zinc-800 rounded w-full"></div>
+                  <div className="h-4 bg-zinc-800 rounded w-full" />
+                  <div className="h-4 bg-zinc-800 rounded w-5/6" />
+                  <div className="h-4 bg-zinc-800 rounded w-4/6" />
+                  <div className="h-4 bg-zinc-800 rounded w-full" />
                 </div>
-                
-                {/* Skeleton para sección */}
                 <div className="space-y-3 pt-4">
-                  <div className="h-6 bg-zinc-800 rounded w-2/5"></div>
+                  <div className="h-6 bg-zinc-800 rounded w-2/5" />
                   <div className="space-y-2 pl-4">
-                    <div className="h-4 bg-zinc-800/70 rounded w-full"></div>
-                    <div className="h-4 bg-zinc-800/70 rounded w-4/5"></div>
-                    <div className="h-4 bg-zinc-800/70 rounded w-3/5"></div>
+                    <div className="h-4 bg-zinc-800/70 rounded w-full" />
+                    <div className="h-4 bg-zinc-800/70 rounded w-4/5" />
+                    <div className="h-4 bg-zinc-800/70 rounded w-3/5" />
                   </div>
                 </div>
-                
-                {/* Skeleton para lista */}
                 <div className="space-y-2 pt-2">
-                  <div className="h-5 bg-zinc-800 rounded w-1/3"></div>
+                  <div className="h-5 bg-zinc-800 rounded w-1/3" />
                   <div className="space-y-2 pl-6">
-                    <div className="h-4 bg-zinc-800/70 rounded w-full"></div>
-                    <div className="h-4 bg-zinc-800/70 rounded w-5/6"></div>
-                    <div className="h-4 bg-zinc-800/70 rounded w-4/6"></div>
+                    <div className="h-4 bg-zinc-800/70 rounded w-full" />
+                    <div className="h-4 bg-zinc-800/70 rounded w-5/6" />
+                    <div className="h-4 bg-zinc-800/70 rounded w-4/6" />
                   </div>
                 </div>
-                
-                {/* Skeleton para tabla/desglose */}
                 <div className="space-y-2 pt-4">
-                  <div className="h-6 bg-zinc-800 rounded w-2/5"></div>
+                  <div className="h-6 bg-zinc-800 rounded w-2/5" />
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <div className="h-4 bg-zinc-800/70 rounded w-1/3"></div>
-                      <div className="h-4 bg-zinc-800/70 rounded w-1/4"></div>
+                      <div className="h-4 bg-zinc-800/70 rounded w-1/3" />
+                      <div className="h-4 bg-zinc-800/70 rounded w-1/4" />
                     </div>
                     <div className="flex justify-between">
-                      <div className="h-4 bg-zinc-800/70 rounded w-1/4"></div>
-                      <div className="h-4 bg-zinc-800/70 rounded w-1/5"></div>
+                      <div className="h-4 bg-zinc-800/70 rounded w-1/4" />
+                      <div className="h-4 bg-zinc-800/70 rounded w-1/5" />
                     </div>
                     <div className="flex justify-between pt-2 border-t border-zinc-800">
-                      <div className="h-5 bg-zinc-800 rounded w-1/4"></div>
-                      <div className="h-5 bg-zinc-800 rounded w-1/5"></div>
+                      <div className="h-5 bg-zinc-800 rounded w-1/4" />
+                      <div className="h-5 bg-zinc-800 rounded w-1/5" />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           ) : (templateContent || renderedContent) ? (
-            <div className="bg-zinc-900 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">
+            <div className="bg-zinc-950 rounded-lg max-h-[60vh] overflow-y-auto p-4 md:p-6">
               <ContractPreview
                 // ⚠️ HIGIENE DE DATOS: Si hay condiciones comerciales, usar template original para re-renderizar con desglose
                 // Si no hay condiciones comerciales, usar contenido renderizado
@@ -470,17 +447,17 @@ export function PublicContractView({
               />
             </div>
           ) : (
-            <div className="text-center py-8 text-zinc-400">
+            <div className="bg-zinc-950 rounded-lg py-8 text-center text-zinc-400">
               No se pudo cargar el contrato
             </div>
           )}
 
-          {/* Acciones */}
+          {/* Acciones: estado firmado → botones deshabilitados, mostrar Firmado */}
           <div className="flex flex-row gap-2 pt-4 border-t border-zinc-800">
             <ZenButton
               variant="ghost"
               onClick={handleExportPDF}
-              disabled={isExportingPDF}
+              disabled={isExportingPDF || isSigned}
               className="flex-1 text-sm py-2"
             >
               {isExportingPDF ? (
@@ -515,7 +492,7 @@ export function PublicContractView({
             {isSigned && (
               <div className="flex-1 flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-2.5">
                 <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-400" />
-                <span className="text-sm font-medium text-emerald-400">Contrato Firmado</span>
+                <span className="text-sm font-medium text-emerald-400">Firmado</span>
               </div>
             )}
           </div>
@@ -529,47 +506,62 @@ export function PublicContractView({
         </div>
       </ZenDialog>
 
-      {/* Modal de confirmación de firma (no cerrar mientras isSigning) */}
+      {/* Modal de confirmación: isSuccess/isSigning muestran estado; cierre bloqueado hasta que se cierren tras éxito */}
       <ZenDialog
         isOpen={showSignConfirmModal}
-        onClose={() => !isSigning && setShowSignConfirmModal(false)}
-        title="¿Confirmar firma del contrato?"
-        description="Al firmar este contrato, confirmas que estás de acuerdo con todas las condiciones establecidas."
+        onClose={() => !isSigning && !isSuccess && setShowSignConfirmModal(false)}
+        title={
+          isSuccess
+            ? '¡Contrato firmado con éxito!'
+            : isSigning
+              ? 'Procesando tu firma...'
+              : '¿Confirmar firma del contrato?'
+        }
+        description={
+          isSuccess
+            ? 'Redirigiendo al resumen.'
+            : isSigning
+              ? 'Un momento mientras registramos tu firma.'
+              : 'Al firmar este contrato, confirmas que estás de acuerdo con todas las condiciones establecidas.'
+        }
         maxWidth="md"
         zIndex={10080}
       >
         <div className="space-y-4">
-          <p className="text-sm text-zinc-300">
-            Esta acción es irreversible. Asegúrate de haber leído y entendido todos los términos del contrato.
-          </p>
-          <div className="flex gap-2">
-            <ZenButton
-              variant="ghost"
-              onClick={() => !isSigning && setShowSignConfirmModal(false)}
-              disabled={isSigning}
-              className="flex-1"
-            >
-              Cancelar
-            </ZenButton>
-            <ZenButton
-              variant="primary"
-              onClick={handleConfirmSign}
-              disabled={isSigning}
-              className="flex-1"
-            >
-              {isSigning ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0" />
-                  Firmando...
-                </>
-              ) : (
-                <>
+          {isSuccess ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-6" aria-live="polite">
+              <CheckCircle2 className="h-12 w-12 text-emerald-400 shrink-0" />
+              <p className="text-sm font-medium text-zinc-200">¡Contrato firmado con éxito!</p>
+            </div>
+          ) : isSigning ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-6" aria-live="polite" aria-busy="true">
+              <Loader2 className="h-10 w-10 animate-spin text-zinc-300 shrink-0" />
+              <p className="text-sm font-medium text-zinc-200">Procesando tu firma...</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-zinc-300">
+                Esta acción es irreversible. Asegúrate de haber leído y entendido todos los términos del contrato.
+              </p>
+              <div className="flex gap-2">
+                <ZenButton
+                  variant="ghost"
+                  onClick={() => setShowSignConfirmModal(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </ZenButton>
+                <ZenButton
+                  variant="primary"
+                  onClick={handleConfirmSign}
+                  className="flex-1"
+                >
                   <CheckCircle2 className="w-4 h-4 mr-2 shrink-0" />
                   Confirmar Firma
-                </>
-              )}
-            </ZenButton>
-          </div>
+                </ZenButton>
+              </div>
+            </>
+          )}
         </div>
       </ZenDialog>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, startTransition } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { X, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
@@ -76,6 +76,7 @@ export function CotizacionForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
+  const redirectingRef = useRef(false);
   const isEditMode = !!cotizacionId;
   const onLoadingChangeRef = useRef(onLoadingChange);
 
@@ -773,25 +774,15 @@ export function CotizacionForm({
 
         // Cerrar overlays antes de navegar
         window.dispatchEvent(new CustomEvent('close-overlays'));
-
-        // Redirigir usando startTransition para evitar bloqueos
+        redirectingRef.current = true;
         if (redirectOnSuccess) {
-          startTransition(() => {
-            router.push(redirectOnSuccess);
-            router.refresh();
-          });
+          router.push(redirectOnSuccess);
         } else if (promiseId) {
-          startTransition(() => {
-            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-            router.refresh();
-          });
+          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
         } else {
-          startTransition(() => {
-            router.back();
-            router.refresh();
-          });
+          router.back();
         }
-        // Mantener loading hasta que se complete la navegación
+        router.refresh();
         return;
       }
 
@@ -820,25 +811,16 @@ export function CotizacionForm({
           return;
         }
 
-        // Si no se obtuvo revisionId, redirigir normalmente
         window.dispatchEvent(new CustomEvent('close-overlays'));
+        redirectingRef.current = true;
         if (redirectOnSuccess) {
-          startTransition(() => {
-            router.push(redirectOnSuccess);
-            router.refresh();
-          });
+          router.push(redirectOnSuccess);
         } else if (promiseId) {
-          startTransition(() => {
-            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-            router.refresh();
-          });
+          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
         } else {
-          startTransition(() => {
-            router.back();
-            router.refresh();
-          });
+          router.back();
         }
-        // Mantener loading hasta que se complete la navegación
+        router.refresh();
         return;
       }
 
@@ -864,35 +846,23 @@ export function CotizacionForm({
 
       toast.success('Cotización creada exitosamente');
 
-      // Cerrar overlays antes de navegar
       window.dispatchEvent(new CustomEvent('close-overlays'));
-
-      // Redirigir usando startTransition - NO resetear loading aquí
+      redirectingRef.current = true;
       if (redirectOnSuccess) {
-        startTransition(() => {
-          router.push(redirectOnSuccess);
-          router.refresh();
-        });
+        router.push(redirectOnSuccess);
       } else if (promiseId) {
-        startTransition(() => {
-          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-          router.refresh();
-        });
+        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
       } else {
-        startTransition(() => {
-          router.back();
-          router.refresh();
-        });
+        router.back();
       }
-      // Mantener loading hasta que se complete la navegación
+      router.refresh();
       return;
     } catch (error) {
       console.error('Error saving quote:', error);
       toast.error(`Error al ${isEditMode ? 'actualizar' : 'crear'} cotización`);
     } finally {
-      // ✅ CORRECCIÓN DEFENSIVA: Asegurar que el loading se resetee siempre
-      // Si algo falla, hay un callback, o la navegación tarda, el botón vuelve a la vida
-      // Solo resetear si el componente sigue montado (evitar warnings de React)
+      // No resetear loading si ya iniciamos redirección (evita re-render que bloquea router.push)
+      if (redirectingRef.current) return;
       if (isSubmittingRef.current) {
         isSubmittingRef.current = false;
         setLoading(false);

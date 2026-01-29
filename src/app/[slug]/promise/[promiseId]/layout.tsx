@@ -5,6 +5,7 @@ import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { PublicPageFooterServer } from '@/components/shared/PublicPageFooterServer';
 import { PromiseProfileLink } from '@/components/promise/PromiseProfileLink';
 import { PromiseRouteGuard } from '@/components/promise/PromiseRouteGuard';
+import { PromiseNotFoundView } from '@/components/promise/PromiseNotFoundView';
 import { prisma } from '@/lib/prisma';
 import { determinePromiseRoute, normalizeStatus } from '@/lib/utils/public-promise-routing';
 
@@ -13,22 +14,25 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Obtener estado de ruta en el servidor (sin caché)
- * Retorna la ruta objetivo y las cotizaciones formateadas
+ * Retorna la ruta objetivo y las cotizaciones formateadas, o promiseNotFound si la promesa fue eliminada
  */
 async function getServerSideRouteState(
   studioSlug: string,
   promiseId: string
-): Promise<{
-  targetRoute: string;
-  quotes: Array<{
-    id: string;
-    status: string;
-    selected_by_prospect: boolean;
-    visible_to_client: boolean;
-    evento_id: string | null;
-  }>;
-}> {
-  // ✅ OPTIMIZACIÓN: Validar promiseId antes de consultar (evitar consultas innecesarias)
+): Promise<
+  | { promiseNotFound: true; targetRoute: ''; quotes: [] }
+  | {
+      promiseNotFound?: false;
+      targetRoute: string;
+      quotes: Array<{
+        id: string;
+        status: string;
+        selected_by_prospect: boolean;
+        visible_to_client: boolean;
+        evento_id: string | null;
+      }>;
+    }
+> {
   if (!promiseId || typeof promiseId !== 'string' || promiseId.trim().length === 0) {
     throw new Error('PromiseId inválido');
   }
@@ -42,8 +46,17 @@ async function getServerSideRouteState(
     throw new Error('Studio no encontrado');
   }
 
-  // ✅ OPTIMIZACIÓN CRÍTICA: Consulta en dos fases para reducir latencia
-  // Fase 1: Solo los 3 campos esenciales (id, status, visible_to_client)
+  // Verificar que la promesa exista (no eliminada)
+  const promiseExists = await prisma.studio_promises.findFirst({
+    where: { id: promiseId, studio_id: studio.id },
+    select: { id: true },
+  });
+
+  if (!promiseExists) {
+    return { promiseNotFound: true, targetRoute: '', quotes: [] };
+  }
+
+  // Consulta en dos fases para reducir latencia
   const cotizacionesMinimas = await prisma.studio_cotizaciones.findMany({
     where: {
       promise_id: promiseId,
@@ -196,11 +209,64 @@ export default async function PromiseLayout({
     redirect(`/${slug}`);
   }
 
-  const { targetRoute, quotes: initialQuotes } = routeState;
+  // Si la promesa fue eliminada, mostrar vista de "no disponible" sin guard ni hijos
+  if ('promiseNotFound' in routeState && routeState.promiseNotFound) {
+    const [studioData, platformConfig] = await Promise.allSettled([
+      prisma.studios.findUnique({
+        where: { slug },
+        select: {
+          studio_name: true,
+          slogan: true,
+          logo_url: true,
+        },
+      }),
+      getPlatformConfigCached(),
+    ]);
+    const studioInfo = studioData.status === 'fulfilled' ? studioData.value : null;
+    const platformConfigData = platformConfig.status === 'fulfilled' ? platformConfig.value : null;
 
-  // 2. No hacer redirect aquí en el layout - dejar que PromiseRouteGuard lo haga en el cliente
-  // con los datos del servidor. Esto evita problemas con boundaries (error 500) y mantiene
-  // la optimización (sin fetch inicial en el cliente, redirección instantánea)
+    return (
+      <div className="min-h-screen bg-zinc-950">
+        {studioInfo && (
+          <header className="fixed top-0 left-0 right-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50">
+            <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {studioInfo.logo_url && (
+                  <img
+                    src={studioInfo.logo_url}
+                    alt={studioInfo.studio_name}
+                    className="h-9 w-9 object-contain rounded-full"
+                  />
+                )}
+                <div>
+                  <h1 className="text-sm font-semibold text-white">{studioInfo.studio_name}</h1>
+                  {studioInfo.slogan && (
+                    <p className="text-[10px] text-zinc-400">{studioInfo.slogan}</p>
+                  )}
+                </div>
+              </div>
+              <PromiseProfileLink
+                href={`/${slug}`}
+                className="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 rounded-md border border-zinc-700 hover:border-zinc-600 transition-colors"
+              >
+                Ver perfil
+              </PromiseProfileLink>
+            </div>
+          </header>
+        )}
+        <div className="pt-[65px] pb-[10px]">
+          <PromiseNotFoundView studioSlug={slug} />
+        </div>
+        <PublicPageFooterServer
+          companyName={platformConfigData?.company_name || 'Zenly México'}
+          commercialName={platformConfigData?.commercial_name || platformConfigData?.company_name || 'Zenly Studio'}
+          domain={platformConfigData?.domain || 'zenly.mx'}
+        />
+      </div>
+    );
+  }
+
+  const { targetRoute, quotes: initialQuotes } = routeState;
 
   // Manejo robusto de errores: Obtener información básica del studio y platform config
   const [studioData, platformConfig] = await Promise.allSettled([
