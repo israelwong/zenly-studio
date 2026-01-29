@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2, RefreshCw } from 'lucide-react';
 import { ZenConfirmModal } from '@/components/ui/zen';
 import { ContratoGestionCard } from './ContratoGestionCard';
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
@@ -42,6 +42,7 @@ interface ContratoSectionProps {
   onCloseContratoOptionsModal: () => void;
   onContratoSuccess: () => void;
   onCancelarContrato?: () => Promise<void> | void;
+  onRegenerateContract?: () => Promise<void>;
   // Props para ContratoGestionCard
   studioSlug: string;
   promiseId: string;
@@ -69,6 +70,7 @@ export const ContratoSection = memo(function ContratoSection({
   onCloseContratoOptionsModal,
   onContratoSuccess,
   onCancelarContrato,
+  onRegenerateContract,
   studioSlug,
   promiseId,
   cotizacionId,
@@ -78,7 +80,9 @@ export const ContratoSection = memo(function ContratoSection({
 }: ContratoSectionProps) {
   const [showContractPreview, setShowContractPreview] = useState(false);
   const [showCancelarContratoConfirm, setShowCancelarContratoConfirm] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [isCancellingContrato, setIsCancellingContrato] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [contractTemplate, setContractTemplate] = useState<ContractTemplate | null>(null);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
 
@@ -135,6 +139,17 @@ export const ContratoSection = memo(function ContratoSection({
       setShowCancelarContratoConfirm(false);
     } finally {
       setIsCancellingContrato(false);
+    }
+  };
+
+  const handleConfirmRegenerate = async () => {
+    if (!onRegenerateContract) return;
+    setIsRegenerating(true);
+    try {
+      await onRegenerateContract();
+      setShowRegenerateConfirm(false);
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -260,6 +275,29 @@ export const ContratoSection = memo(function ContratoSection({
                 {contratoBoton}
               </button>
             )}
+            {tieneContratoGenerado && onRegenerateContract && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (contratoFirmado) {
+                    setShowRegenerateConfirm(true);
+                  } else {
+                    handleConfirmRegenerate();
+                  }
+                }}
+                disabled={isRegenerating}
+                className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                title="Regenerar contrato"
+                aria-label="Regenerar contrato"
+              >
+                {isRegenerating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </button>
+            )}
             {contratoFirmado && onCancelarContrato && (
               <button
                 type="button"
@@ -336,6 +374,18 @@ export const ContratoSection = memo(function ContratoSection({
         loading={isCancellingContrato}
       />
 
+      <ZenConfirmModal
+        isOpen={showRegenerateConfirm}
+        onClose={() => !isRegenerating && setShowRegenerateConfirm(false)}
+        onConfirm={handleConfirmRegenerate}
+        title="Regenerar contrato"
+        description="Esta acción invalidará la firma actual del cliente y requerirá que firme de nuevo. ¿Deseas continuar?"
+        confirmText="Regenerar"
+        cancelText="Cancelar"
+        variant="default"
+        loading={isRegenerating}
+      />
+
       {/* Modal Preview de Contrato Firmado */}
       {contratoFirmado && contractTemplate && (
         <ContractPreviewForPromiseModal
@@ -366,7 +416,8 @@ export const ContratoSection = memo(function ContratoSection({
     prevProps.showContratoOptionsModal === nextProps.showContratoOptionsModal &&
     prevProps.cotizacionStatus === nextProps.cotizacionStatus &&
     prevProps.isClienteNuevo === nextProps.isClienteNuevo &&
-    prevProps.onCancelarContrato === nextProps.onCancelarContrato
+    prevProps.onCancelarContrato === nextProps.onCancelarContrato &&
+    prevProps.onRegenerateContract === nextProps.onRegenerateContract
   );
 });
 

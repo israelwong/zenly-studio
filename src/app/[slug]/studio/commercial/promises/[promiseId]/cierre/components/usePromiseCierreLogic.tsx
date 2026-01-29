@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { cancelarCierre, autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
-import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosCondicionesCierre, obtenerDatosPagoCierre, autorizarYCrearEvento } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosCondicionesCierre, obtenerDatosPagoCierre, autorizarYCrearEvento, regenerateStudioContract } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { ContractTemplate } from '@/types/contracts';
@@ -297,6 +297,16 @@ export function usePromiseCierreLogic({
     }
   }, [studioSlug, cotizacion.id, loadRegistroCierre]);
 
+  const handleRegenerateContract = useCallback(async () => {
+    const result = await regenerateStudioContract(studioSlug, promiseId, cotizacion.id);
+    if (result.success) {
+      toast.success('Contrato regenerado. El cliente deberá firmar la nueva versión.');
+      await loadRegistroCierre();
+    } else {
+      toast.error(result.error || 'Error al regenerar contrato');
+    }
+  }, [studioSlug, promiseId, cotizacion.id, loadRegistroCierre]);
+
   const handleContratoSuccess = useCallback(async () => {
     const result = await obtenerDatosContratoCierre(studioSlug, cotizacion.id);
     if (result.success && result.data) {
@@ -581,6 +591,7 @@ export function usePromiseCierreLogic({
     handleContratoButtonClick,
     handleCloseContratoOptions,
     handleCancelarContrato,
+    handleRegenerateContract,
     handleContratoSuccess,
     handleTemplateSelected,
     handlePreviewConfirm,

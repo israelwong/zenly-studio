@@ -1028,6 +1028,152 @@ export async function regenerarContratoCierre(
 }
 
 /**
+ * Regenera el contrato desde el estudio: invalida firma previa, genera nueva versión.
+ * No modifica el status de studio_cotizaciones (permanece en cierre).
+ */
+export async function regenerateStudioContract(
+  studioSlug: string,
+  promiseId: string,
+  cotizacionId: string
+): Promise<CierreResponse> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Studio no encontrado' };
+    }
+
+    const cotizacion = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        id: cotizacionId,
+        studio_id: studio.id,
+        promise_id: promiseId,
+      },
+    });
+
+    if (!cotizacion) {
+      return { success: false, error: 'Cotización no encontrada' };
+    }
+
+    const registroCierre = await prisma.studio_cotizaciones_cierre.findUnique({
+      where: { cotizacion_id: cotizacionId },
+      include: { condiciones_comerciales: true },
+    });
+
+    if (!registroCierre || !registroCierre.contrato_definido || !registroCierre.contract_template_id) {
+      return { success: false, error: 'No hay contrato generado para regenerar' };
+    }
+
+    const templateResult = await getContractTemplate(studioSlug, registroCierre.contract_template_id);
+    if (!templateResult.success || !templateResult.data) {
+      return { success: false, error: 'No se encontró la plantilla del contrato' };
+    }
+
+    const condicionComercialInfo = registroCierre.condiciones_comerciales
+      ? {
+          id: registroCierre.condiciones_comerciales.id,
+          name: registroCierre.condiciones_comerciales.name,
+          description: registroCierre.condiciones_comerciales.description || null,
+          discount_percentage: registroCierre.condiciones_comerciales.discount_percentage || null,
+          advance_percentage: registroCierre.condiciones_comerciales.advance_percentage || null,
+          advance_type: registroCierre.condiciones_comerciales.advance_type || null,
+          advance_amount: registroCierre.condiciones_comerciales.advance_amount || null,
+        }
+      : undefined;
+
+    const contractDataResult = await getPromiseContractData(
+      studioSlug,
+      promiseId,
+      cotizacionId,
+      condicionComercialInfo
+    );
+
+    if (!contractDataResult.success || !contractDataResult.data) {
+      return { success: false, error: contractDataResult.error || 'Error al obtener datos del contrato' };
+    }
+
+    const renderResult = await renderContractContent(
+      templateResult.data.content,
+      contractDataResult.data,
+      contractDataResult.data.condicionesData
+    );
+
+    if (!renderResult.success || !renderResult.data) {
+      return { success: false, error: renderResult.error || 'Error al renderizar contrato' };
+    }
+
+    const currentVersion = registroCierre.contract_version || 1;
+    const newVersion = currentVersion + 1;
+    const renderedContent = renderResult.data;
+
+    if (registroCierre.contract_content) {
+      const existingPrevious = await prisma.studio_cotizaciones_cierre_contract_versions.findFirst({
+        where: { cotizacion_id: cotizacionId, version: currentVersion },
+      });
+      if (!existingPrevious) {
+        await prisma.studio_cotizaciones_cierre_contract_versions.create({
+          data: {
+            cotizacion_id: cotizacionId,
+            version: currentVersion,
+            content: registroCierre.contract_content,
+            change_type: 'STUDIO_REGENERATE',
+            change_reason: 'El estudio regeneró el contrato. Firma previa invalidada',
+          },
+        });
+      }
+    }
+
+    await prisma.studio_cotizaciones_cierre.update({
+      where: { cotizacion_id: cotizacionId },
+      data: {
+        contract_content: renderedContent,
+        contract_version: newVersion,
+        contract_signed_at: null,
+      },
+    });
+
+    await prisma.studio_cotizaciones.update({
+      where: { id: cotizacionId },
+      data: { updated_at: new Date() },
+    });
+
+    await prisma.studio_promise_logs.create({
+      data: {
+        promise_id: promiseId,
+        user_id: null,
+        content: 'El estudio regeneró el contrato. Firma previa invalidada',
+        log_type: 'system',
+        metadata: {
+          action: 'studio_regenerate_contract',
+          cotizacion_id: cotizacionId,
+        },
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidatePath(`/${studioSlug}/promise/${promiseId}`);
+    revalidateTag(`public-promise-${studioSlug}-${promiseId}`, 'max');
+    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, 'max');
+    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`, 'max');
+
+    return {
+      success: true,
+      data: { id: registroCierre.id, cotizacion_id: cotizacionId },
+    };
+  } catch (error) {
+    console.error('[regenerateStudioContract] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al regenerar contrato',
+    };
+  }
+}
+
+/**
  * Actualiza el pago en el registro de cierre
  * Si todos los campos son null, se marca como "promesa de pago" (pago_registrado = false)
  * Si hay datos, se marca como "pago registrado" (pago_registrado = true)

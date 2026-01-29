@@ -83,6 +83,15 @@ export function PublicContractView({
   const [isMobile, setIsMobile] = useState(false);
   const printableRef = useRef<HTMLDivElement>(null);
 
+  // Limpiar estado de firma cuando el contrato deja de estar firmado (p. ej. regenerado por el estudio)
+  useEffect(() => {
+    if (!isSigned) {
+      setIsSigning(false);
+      setIsSuccess(false);
+      setShowSignConfirmModal(false);
+    }
+  }, [isSigned]);
+
   // Detectar si es mobile
   useEffect(() => {
     const checkIsMobile = () => {
@@ -313,15 +322,13 @@ export function PublicContractView({
         setIsSuccess(true);
         toast.success('Contrato firmado exitosamente');
         window.dispatchEvent(new CustomEvent('close-overlays'));
-        setTimeout(() => {
-          startTransition(() => {
-            setShowSignConfirmModal(false);
-            onClose();
-            if (onContractSigned) {
-              onContractSigned();
-            }
-          });
-        }, 300);
+        startTransition(() => {
+          setShowSignConfirmModal(false);
+          onClose();
+          if (onContractSigned) {
+            onContractSigned();
+          }
+        });
       } else {
         console.error('[handleConfirmSign] Error en firma:', result.error);
         toast.error(result.error || 'Error al firmar contrato');
@@ -339,6 +346,11 @@ export function PublicContractView({
       setIsSigning(false);
     }
   };
+
+  const isPreviewMounted = !!(
+    (templateContent || renderedContent) &&
+    !((loadingContract || loadingData) && (!templateContent || !eventData))
+  );
 
   const handleExportPDF = async () => {
     if (!printableRef.current) {
@@ -452,12 +464,12 @@ export function PublicContractView({
             </div>
           )}
 
-          {/* Acciones: estado firmado → botones deshabilitados, mostrar Firmado */}
+          {/* Acciones: habilitar solo cuando el preview del contrato está montado */}
           <div className="flex flex-row gap-2 pt-4 border-t border-zinc-800">
             <ZenButton
               variant="ghost"
               onClick={handleExportPDF}
-              disabled={isExportingPDF || isSigned}
+              disabled={!isPreviewMounted || isExportingPDF || isSigned}
               className="flex-1 text-sm py-2"
             >
               {isExportingPDF ? (
@@ -473,7 +485,7 @@ export function PublicContractView({
               <ZenButton
                 variant="primary"
                 onClick={handleSign}
-                disabled={isSigning}
+                disabled={!isPreviewMounted || isSigning}
                 className="flex-1 text-sm py-2"
               >
                 {isSigning ? (
