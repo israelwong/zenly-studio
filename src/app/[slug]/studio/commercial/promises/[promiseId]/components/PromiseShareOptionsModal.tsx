@@ -177,52 +177,21 @@ export function PromiseShareOptionsModal({
       description="Define que información verá el prospecto de manera automatica en la pagina de promesa"
       maxWidth="xl"
       zIndex={10080}
+      onSave={() => handleSave(true)}
+      saveLabel="Guardar para todas las promesas"
+      onCancel={onClose}
+      isLoading={saving && savingScope === 'all'}
+      saveDisabled={minDaysToHire < 1 || saving}
       footerLeftContent={
-        saving ? (
-          <div className="flex items-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent" />
-            <span className="text-sm text-zinc-400">
-              {savingScope === 'all'
-                ? 'Guardando para todas las promesas...'
-                : 'Guardando para esta promesa...'}
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-2 w-full">
-            <ZenButton
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancelar
-            </ZenButton>
-            <div className="flex items-center gap-2 flex-1 justify-end">
-              <ZenButton
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={() => handleSave(true)}
-                disabled={minDaysToHire < 1 || saving}
-                loading={saving && savingScope === 'all'}
-              >
-                Guardar para todas las promesas
-              </ZenButton>
-              <ZenButton
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleSave(false)}
-                disabled={minDaysToHire < 1 || saving}
-                loading={saving && savingScope === 'single'}
-                className="flex-1 min-w-[120px] border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500"
-              >
-                Solo para esta promesa
-              </ZenButton>
-            </div>
-          </div>
-        )
+        <ZenButton
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          disabled={saving}
+        >
+          Cancelar
+        </ZenButton>
       }
     >
       <div className="space-y-6">

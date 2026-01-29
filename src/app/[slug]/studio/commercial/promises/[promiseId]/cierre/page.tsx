@@ -1,49 +1,37 @@
-import { redirect } from 'next/navigation';
-import { determinePromiseState } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
-import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+'use client';
+
+import { useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { startTransition } from 'react';
+import { usePromiseContext } from '../context/PromiseContext';
 import { PromiseCierreClient } from './components/PromiseCierreClient';
-import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
-interface PromiseCierrePageProps {
-  params: Promise<{
-    slug: string;
-    promiseId: string;
-  }>;
-}
+/**
+ * Página cierre: datos vienen del layout (una sola carga).
+ * Evita doble fetch que causaba "cargar → refrescar → cargar todo".
+ */
+export default function PromiseCierrePage() {
+  const params = useParams();
+  const router = useRouter();
+  const { cotizacionEnCierre, promiseState } = usePromiseContext();
+  const studioSlug = params.slug as string;
+  const promiseId = params.promiseId as string;
 
-export default async function PromiseCierrePage({ params }: PromiseCierrePageProps) {
-  const { slug: studioSlug, promiseId } = await params;
-
-  // ✅ OPTIMIZACIÓN: Paralelizar queries independientes
-  const [stateResult, cotizacionesResult] = await Promise.all([
-    determinePromiseState(promiseId),
-    getCotizacionesByPromiseId(promiseId),
-  ]);
-
-  // Validar estado actual de la promesa y redirigir si no está en cierre
-  if (stateResult.success && stateResult.data) {
-    const state = stateResult.data.state;
-    if (state === 'pendiente') {
-      redirect(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`);
-    } else if (state === 'autorizada') {
-      redirect(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+  useEffect(() => {
+    if (!promiseState) return;
+    if (promiseState === 'pendiente') {
+      startTransition(() => router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`));
+      return;
     }
+    if (promiseState === 'autorizada') {
+      startTransition(() => router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`));
+      return;
+    }
+  }, [promiseState, studioSlug, promiseId, router]);
+
+  if (promiseState === 'pendiente' || promiseState === 'autorizada') {
+    return null;
   }
 
-  // Buscar cotización en cierre o aprobada sin evento
-  const cotizacionEnCierre: CotizacionListItem | null = cotizacionesResult.success && cotizacionesResult.data
-    ? (() => {
-        const enCierre = cotizacionesResult.data.find(c => c.status === 'en_cierre');
-        const aprobada = cotizacionesResult.data.find(
-          c => (c.status === 'aprobada' || c.status === 'approved') && !c.evento_id
-        );
-        return enCierre || aprobada || null;
-      })()
-    : null;
-
-  return (
-    <PromiseCierreClient
-      initialCotizacionEnCierre={cotizacionEnCierre}
-    />
-  );
+  return <PromiseCierreClient initialCotizacionEnCierre={cotizacionEnCierre ?? null} />;
 }

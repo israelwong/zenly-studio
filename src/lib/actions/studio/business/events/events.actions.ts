@@ -1389,13 +1389,16 @@ export async function obtenerEventoDetalle(
  * Cancelar un evento
  * - Cambia status del evento a "CANCELLED"
  * - Actualiza cotización a "cancelada"
- * - Actualiza promesa a etapa "pending" y libera promise_id
+ * - Quita etiqueta "Aprobado" de la promesa
+ * - Mueve promesa a etapa elegida (pending o canceled) y agrega etiqueta "Cancelada"
  * - Registra log en promise_logs
  */
 export async function cancelarEvento(
   studioSlug: string,
-  eventoId: string
+  eventoId: string,
+  options?: { promiseTargetStageSlug?: 'pending' | 'canceled' }
 ): Promise<CancelarEventoResponse> {
+  const targetStageSlug = options?.promiseTargetStageSlug ?? 'pending';
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
@@ -1506,16 +1509,23 @@ export async function cancelarEvento(
       };
     }
 
-    // Obtener etapa "pending" del pipeline de promises
-    const etapaPendiente = evento.promise_id
+    // Obtener etapa destino del pipeline de promises (pending o canceled)
+    const etapaDestino = evento.promise_id
       ? await prisma.studio_promise_pipeline_stages.findFirst({
         where: {
           studio_id: studio.id,
-          slug: 'pending',
+          slug: targetStageSlug,
           is_active: true,
         },
       })
       : null;
+
+    if (evento.promise_id && !etapaDestino) {
+      return {
+        success: false,
+        error: `No se encontró la etapa "${targetStageSlug}" en el pipeline de promesas`,
+      };
+    }
 
     // Buscar agendamiento antes de la transacción para reducir trabajo dentro
     const agendamiento = await prisma.studio_agenda.findFirst({
@@ -1580,26 +1590,48 @@ export async function cancelarEvento(
         });
       }
 
-      // 3. Actualizar promesa a etapa "pending" y liberar relación con evento
-      if (evento.promise_id && etapaPendiente) {
-        // Verificar que la promesa existe antes de actualizar
+      // 3. Actualizar promesa: quitar etiqueta Aprobado, mover a etapa elegida y agregar etiqueta Cancelada
+      if (evento.promise_id && etapaDestino) {
         const promesaExiste = await tx.studio_promises.findUnique({
           where: { id: evento.promise_id },
           select: { id: true },
         });
 
         if (promesaExiste) {
+          // 3.1. Quitar etiqueta "Aprobado" de la promesa si existe
+          const tagAprobado = await tx.studio_promise_tags.findFirst({
+            where: {
+              studio_id: studio.id,
+              OR: [{ slug: 'aprobado' }, { name: 'Aprobado' }],
+              is_active: true,
+            },
+          });
+          if (tagAprobado) {
+            const relacionAprobado = await tx.studio_promises_tags.findFirst({
+              where: {
+                promise_id: evento.promise_id,
+                tag_id: tagAprobado.id,
+              },
+            });
+            if (relacionAprobado) {
+              await tx.studio_promises_tags.delete({
+                where: { id: relacionAprobado.id },
+              });
+            }
+          }
+
+          // 3.2. Mover promesa a etapa elegida (pending o canceled)
           await tx.studio_promises.update({
             where: { id: evento.promise_id },
             data: {
               pipeline_stage: {
-                connect: { id: etapaPendiente.id },
+                connect: { id: etapaDestino.id },
               },
               updated_at: new Date(),
             },
           });
 
-          // Crear o encontrar etiqueta "cancelada" y agregarla a la promesa
+          // 3.3. Crear o encontrar etiqueta "Cancelada" y agregarla a la promesa
           const tagSlug = 'cancelada';
           let tagCancelada = await tx.studio_promise_tags.findUnique({
             where: {

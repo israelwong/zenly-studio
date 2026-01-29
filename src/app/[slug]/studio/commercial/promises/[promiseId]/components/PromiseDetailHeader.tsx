@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, ChevronDown, Check, Zap, Settings } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, Settings } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
+import { PromiseNotesButton } from './PromiseNotesButton';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
-import { isTerminalStage } from '@/lib/utils/pipeline-stage-names';
 
 interface PromiseDetailHeaderProps {
     studioSlug: string;
@@ -106,88 +106,14 @@ export function PromiseDetailHeader({
                             }
 
                             const currentStage = pipelineStages.find((s) => s.id === currentPipelineStageId);
-                            const isApprovedStage = currentStage?.slug === 'approved' || currentStage?.slug === 'aprobado' ||
-                                currentStage?.name.toLowerCase().includes('aprobado');
-                            const hasEvent = promiseData.has_event || false;
-                            const isRestricted = isApprovedStage && hasEvent;
-
-                            // Filtrar etapas: si está restringido, solo mostrar "archived" además de la actual
-                            // Si no está restringido, mostrar todas las etapas (ya vienen filtradas por is_active del servidor)
-                            const availableStages = isRestricted
-                                ? pipelineStages.filter((s) => s.slug === 'archived' || s.id === currentPipelineStageId)
-                                : pipelineStages;
-
-                            if (!mounted) {
-                                return (
-                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                        <span>{currentStage?.name}</span>
-                                        <ChevronDown className="h-2.5 w-2.5" />
-                                    </div>
-                                );
-                            }
-
-                            const activeStages = availableStages.filter((s) => !isTerminalStage(s.slug));
-                            const historialStages = availableStages.filter((s) => isTerminalStage(s.slug));
 
                             return (
-                                <ZenDropdownMenu>
-                                    <ZenDropdownMenuTrigger asChild>
-                                        <button
-                                            disabled={isChangingStage}
-                                            title="Los estados de cierre se agrupan en la columna Historial del Kanban"
-                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                                        >
-                                            {isChangingStage ? (
-                                                <>
-                                                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                                                    <span>Actualizando...</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <span>{currentStage?.name}</span>
-                                                    <ChevronDown className="h-2.5 w-2.5" />
-                                                </>
-                                            )}
-                                        </button>
-                                    </ZenDropdownMenuTrigger>
-                                    <ZenDropdownMenuContent
-                                        align="start"
-                                        className="max-h-[300px] overflow-y-auto"
-                                    >
-                                        {activeStages.map((stage) => (
-                                            <ZenDropdownMenuItem
-                                                key={stage.id}
-                                                onClick={() => onPipelineStageChange(stage.id, stage.name)}
-                                                disabled={stage.id === currentPipelineStageId}
-                                            >
-                                                <span className="flex-1">{stage.name}</span>
-                                                {stage.id === currentPipelineStageId && (
-                                                    <Check className="h-4 w-4 text-emerald-500 ml-2" />
-                                                )}
-                                            </ZenDropdownMenuItem>
-                                        ))}
-                                        {historialStages.length > 0 && (
-                                            <>
-                                                <ZenDropdownMenuSeparator />
-                                                <div className="px-2 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                                                    Historial
-                                                </div>
-                                                {historialStages.map((stage) => (
-                                                    <ZenDropdownMenuItem
-                                                        key={stage.id}
-                                                        onClick={() => onPipelineStageChange(stage.id, stage.name)}
-                                                        disabled={stage.id === currentPipelineStageId}
-                                                    >
-                                                        <span className="flex-1">{stage.name}</span>
-                                                        {stage.id === currentPipelineStageId && (
-                                                            <Check className="h-4 w-4 text-emerald-500 ml-2" />
-                                                        )}
-                                                    </ZenDropdownMenuItem>
-                                                ))}
-                                            </>
-                                        )}
-                                    </ZenDropdownMenuContent>
-                                </ZenDropdownMenu>
+                                <span
+                                    title="Etapa actual del pipeline"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                >
+                                    {currentStage?.name ?? '—'}
+                                </span>
                             );
                         })()}
                     </div>
@@ -242,21 +168,9 @@ export function PromiseDetailHeader({
                             return null; // Evento contratado y activo: ocultar botones
                         }
 
-                        // No hay evento: mostrar botones
+                        // No hay evento: mostrar botones (Automatizar está en la card "Lo que el prospecto ve")
                         return (
                             <>
-                                {/* Botón Automatizar */}
-                                {promiseId && contactData && (
-                                    <ZenButton
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={onAutomateClick}
-                                        className="gap-1.5 px-2.5 py-1.5 h-7 text-xs border-l-2 border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_8px_rgba(16,185,129,0.1)] transition-all duration-300"
-                                    >
-                                        <Zap className="h-3.5 w-3.5 text-emerald-400/90" style={{ animation: 'pulse 3s ease-in-out infinite' }} />
-                                        <span>Automatizar</span>
-                                    </ZenButton>
-                                )}
                                 {/* Botón Configurar */}
                                 {onConfigClick && (
                                     <ZenButton
@@ -270,9 +184,19 @@ export function PromiseDetailHeader({
                                         <span>Configurar</span>
                                     </ZenButton>
                                 )}
-                            </>
+                                </>
                         );
                     })()}
+                    {promiseId && contactData?.contactId && (
+                        <>
+                            <div className="h-4 w-px bg-zinc-700" aria-hidden />
+                            <PromiseNotesButton
+                                studioSlug={studioSlug}
+                                promiseId={promiseId}
+                                contactId={contactData.contactId}
+                            />
+                        </>
+                    )}
                     {/* Dropdown menu: solo mostrar si NO hay evento creado */}
                     {(() => {
                         // Validar primero: si hay evento creado, no mostrar dropdown

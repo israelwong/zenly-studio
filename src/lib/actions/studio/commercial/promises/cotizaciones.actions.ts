@@ -1373,6 +1373,30 @@ export async function quitarCancelacionCotizacion(
       data: { status: 'pendiente' },
     });
 
+    // Quitar etiqueta "Cancelada" de la promesa si existe
+    if (cotizacion.promise_id) {
+      const tagCancelada = await prisma.studio_promise_tags.findFirst({
+        where: {
+          studio_id: studio.id,
+          OR: [{ slug: 'cancelada' }, { name: 'Cancelada' }],
+          is_active: true,
+        },
+      });
+      if (tagCancelada) {
+        const relacionCancelada = await prisma.studio_promises_tags.findFirst({
+          where: {
+            promise_id: cotizacion.promise_id,
+            tag_id: tagCancelada.id,
+          },
+        });
+        if (relacionCancelada) {
+          await prisma.studio_promises_tags.delete({
+            where: { id: relacionCancelada.id },
+          });
+        }
+      }
+    }
+
     // Registrar log si hay promise_id
     if (cotizacion.promise_id) {
       const { logPromiseAction } = await import('./promise-logs.actions');

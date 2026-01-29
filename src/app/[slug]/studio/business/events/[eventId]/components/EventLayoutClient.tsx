@@ -69,14 +69,13 @@ export function EventLayoutClient({
     loadAdditionalData();
   }, [studioSlug, eventId]);
 
-  const handleCancelClick = () => {
-    setShowCancelModal(true);
-  };
+  const handleCancelClick = () => setShowCancelModal(true);
 
   const handleCancelConfirm = async () => {
+    const targetSlug = eventData?.promise_id ? 'pending' : undefined;
     setIsCancelling(true);
     try {
-      const result = await cancelarEvento(studioSlug, eventId);
+      const result = await cancelarEvento(studioSlug, eventId, targetSlug ? { promiseTargetStageSlug: targetSlug } : undefined);
       if (result.success) {
         toast.success('Evento cancelado correctamente');
         setShowCancelModal(false);
@@ -144,49 +143,66 @@ export function EventLayoutClient({
 
       <ZenConfirmModal
         isOpen={showCancelModal}
-        onClose={() => {
-          if (!isCancelling) {
-            setShowCancelModal(false);
-          }
-        }}
+        onClose={() => !isCancelling && setShowCancelModal(false)}
         onConfirm={handleCancelConfirm}
         title="Cancelar Evento"
+        headerDescription="Al cancelar este evento, se realizarán las siguientes acciones:"
         description={
-          <div className="space-y-3">
-            <p className="text-sm text-zinc-300 font-medium">
-              Al cancelar este evento, se realizarán las siguientes acciones:
-            </p>
-            <ul className="text-sm text-zinc-400 space-y-2 list-disc list-inside">
-              <li>El evento cambiará a estado <strong className="text-zinc-300">Cancelado</strong></li>
-              {cotizacionesCount > 0 && (
-                <li>
-                  Se cancelarán todas las cotizaciones asociadas ({cotizacionesCount} cotización{cotizacionesCount > 1 ? 'es' : ''}).
-                  Las cotizaciones no se eliminarán, solo cambiarán su estado a <strong className="text-zinc-300">cancelada</strong>
+          <div className="space-y-5">
+            <div className="rounded-lg bg-zinc-800/40 border border-zinc-700/60 p-4">
+              <ul className="text-sm text-zinc-400 space-y-2.5 list-none">
+                <li className="flex gap-2">
+                  <span className="text-zinc-500 shrink-0">•</span>
+                  <span>El evento cambiará a estado <strong className="text-zinc-300">Cancelado</strong></span>
                 </li>
-              )}
-              {eventData?.promise_id && (
-                <>
-                  <li>La promesa regresará a la etapa <strong className="text-zinc-300">Pendiente</strong></li>
-                  <li>Se agregará la etiqueta <strong className="text-zinc-300">Cancelada</strong> a la promesa</li>
-                </>
-              )}
-              {contratosCount > 0 && (
-                <li>
-                  Se cancelará el contrato asociado.
-                  El contrato no se eliminará, solo cambiará su estado a <strong className="text-zinc-300">cancelado</strong> (se mantendrá para estadísticas)
+                {cotizacionesCount > 0 && (
+                  <li className="flex gap-2">
+                    <span className="text-zinc-500 shrink-0">•</span>
+                    <span>
+                      Se cancelarán todas las cotizaciones asociadas ({cotizacionesCount} cotización{cotizacionesCount > 1 ? 'es' : ''}).
+                      Las cotizaciones no se eliminarán, solo cambiarán su estado a <strong className="text-zinc-300">cancelada</strong>
+                    </span>
+                  </li>
+                )}
+                {eventData?.promise_id && (
+                  <>
+                    <li className="flex gap-2">
+                      <span className="text-zinc-500 shrink-0">•</span>
+                      <span>Se quitará la etiqueta <strong className="text-zinc-300">Aprobado</strong> de la promesa</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-zinc-500 shrink-0">•</span>
+                      <span>Se agregará la etiqueta <strong className="text-zinc-300">Cancelada</strong> a la promesa</span>
+                    </li>
+                  </>
+                )}
+                {contratosCount > 0 && (
+                  <li className="flex gap-2">
+                    <span className="text-zinc-500 shrink-0">•</span>
+                    <span>
+                      Se cancelará el contrato asociado.
+                      El contrato no se eliminará, solo cambiará su estado a <strong className="text-zinc-300">cancelado</strong> (se mantendrá para estadísticas)
+                    </span>
+                  </li>
+                )}
+                <li className="flex gap-2">
+                  <span className="text-zinc-500 shrink-0">•</span>
+                  <span>Se eliminará el agendamiento asociado al evento</span>
                 </li>
-              )}
-              <li>Se eliminará el agendamiento asociado al evento</li>
-            </ul>
-            <p className="text-sm text-amber-400 font-medium pt-2 border-t border-zinc-800">
-              ⚠️ Esta acción no se puede deshacer. ¿Deseas continuar?
-            </p>
+              </ul>
+            </div>
+            <div className="rounded-lg bg-amber-950/20 border border-amber-800/40 p-3">
+              <p className="text-sm text-amber-300 font-medium">
+                ⚠️ Esta acción no se puede deshacer. ¿Deseas continuar?
+              </p>
+            </div>
           </div>
         }
         confirmText="Sí, cancelar evento"
         cancelText="No cancelar"
         variant="destructive"
         loading={isCancelling}
+        contentClassName="sm:max-w-xl"
       />
 
       <ContractTemplateManagerModal

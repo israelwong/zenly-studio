@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
-import { PromiseNotesButton } from './PromiseNotesButton';
 import { ReminderButton } from './ReminderButton';
 import { AgendaButton } from './AgendaButton';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
@@ -160,16 +159,14 @@ export function PromiseDetailToolbar({
           <div className="h-4 w-px bg-zinc-700" />
         )}
 
-        {/* Grupo: Contactar */}
+        {/* WhatsApp */}
         {contactData.phone && (
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-500 font-medium">Contactar</span>
-            {/* Botón WhatsApp */}
             <ZenButton
               variant="ghost"
               size="sm"
               onClick={handleWhatsApp}
-              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs hover:bg-emerald-500/10 hover:text-emerald-400"
+              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
             >
               <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
               <span>WhatsApp</span>
@@ -177,8 +174,9 @@ export function PromiseDetailToolbar({
           </div>
         )}
 
-        {/* Grupo: Seguimiento y Agenda */}
-        <div className="h-4 w-px bg-zinc-700" />
+      </div>
+      {/* Agregar recordatorio y Agendar cita alineados a la derecha */}
+      <div className="flex items-center gap-1.5">
         <ReminderButton studioSlug={studioSlug} promiseId={promiseId} />
         <AgendaButton
           studioSlug={studioSlug}
@@ -186,13 +184,6 @@ export function PromiseDetailToolbar({
           eventoId={eventoId}
         />
       </div>
-
-      {/* Botón de bitácora alineado a la derecha */}
-      <PromiseNotesButton
-        studioSlug={studioSlug}
-        promiseId={promiseId}
-        contactId={contactData.contactId}
-      />
     </div>
   );
 }

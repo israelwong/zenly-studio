@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { Logs } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { usePromiseLogs } from '@/hooks/usePromiseLogs';
 import { usePromiseLogsRealtime } from '@/hooks/usePromiseLogsRealtime';
@@ -69,8 +69,8 @@ export function PromiseNotesButton({
         title="Bitácora"
         onClick={() => setIsSheetOpen(true)}
       >
+        <Logs className="h-3.5 w-3.5 shrink-0" />
         <span>Bitácora</span>
-        <ChevronRight className="h-3.5 w-3.5" />
       </ZenButton>
 
       <BitacoraSheet

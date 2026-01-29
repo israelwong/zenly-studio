@@ -79,11 +79,11 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
         router.refresh();
         window.dispatchEvent(new CustomEvent('reminder-updated'));
       } else {
-        toast.error(result.error || 'Error al eliminar seguimiento');
+        toast.error(result.error || 'Error al eliminar recordatorio');
       }
     } catch (error) {
       console.error('Error eliminando seguimiento:', error);
-      toast.error('Error al eliminar seguimiento');
+      toast.error('Error al eliminar recordatorio');
     } finally {
       setDeleting(false);
     }
@@ -97,12 +97,12 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
           size="sm"
           onClick={() => setModalOpen(true)}
           className={`gap-1.5 px-2.5 py-1.5 h-7 text-xs rounded-md transition-colors cursor-pointer ${reminderButtonClass}`}
-          title={hasReminder ? 'Editar seguimiento' : 'Agendar seguimiento'}
+          title={hasReminder ? 'Editar recordatorio' : 'Agregar recordatorio'}
         >
           {hasReminder ? (
             <>
               <Clock className="h-3.5 w-3.5 shrink-0" />
-              <span className="font-medium">Seguimiento</span>
+              <span className="font-medium">Recordatorio</span>
               {dateStatus && (
                 <span className="text-white font-normal">{dateStatus.text}</span>
               )}
@@ -110,7 +110,7 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
           ) : (
             <>
               <Clock className="h-3.5 w-3.5 shrink-0" />
-              <span>Agendar seguimiento</span>
+              <span>Agregar recordatorio</span>
             </>
           )}
         </ZenButton>
@@ -123,8 +123,8 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
               e.stopPropagation();
               setShowDeleteConfirm(true);
             }}
-            title="Eliminar seguimiento"
-            aria-label="Eliminar seguimiento"
+            title="Eliminar recordatorio"
+            aria-label="Eliminar recordatorio"
           >
             <X className="h-3.5 w-3.5" />
           </ZenButton>
@@ -135,7 +135,7 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDeleteReminder}
-        title="Eliminar seguimiento"
+        title="Eliminar recordatorio"
         description="¿Eliminar este recordatorio? No se puede deshacer."
         confirmText="Eliminar"
         cancelText="Cancelar"

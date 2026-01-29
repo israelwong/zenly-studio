@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
+import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 
 export interface PromiseContextData {
   id: string;
@@ -28,27 +29,39 @@ export interface PromiseContextData {
   promise_id: string;
 }
 
+export type PromiseStateSegment = 'pendiente' | 'cierre' | 'autorizada';
+
 interface PromiseContextValue {
   promiseData: PromiseContextData | null;
   isLoading: boolean;
+  /** Estado de la promesa (del layout) para redirigir desde /cierre si no aplica */
+  promiseState: PromiseStateSegment | null;
+  /** Cotización en cierre o aprobada sin evento (del layout, evita doble fetch en /cierre) */
+  cotizacionEnCierre: CotizacionListItem | null;
 }
 
 const PromiseContext = createContext<PromiseContextValue>({
   promiseData: null,
   isLoading: true,
+  promiseState: null,
+  cotizacionEnCierre: null,
 });
 
 export function PromiseProvider({
   children,
   promiseData,
   isLoading,
+  promiseState = null,
+  cotizacionEnCierre = null,
 }: {
   children: React.ReactNode;
   promiseData: PromiseContextData | null;
   isLoading: boolean;
+  promiseState?: PromiseStateSegment | null;
+  cotizacionEnCierre?: CotizacionListItem | null;
 }) {
   return (
-    <PromiseContext.Provider value={{ promiseData, isLoading }}>
+    <PromiseContext.Provider value={{ promiseData, isLoading, promiseState, cotizacionEnCierre }}>
       {children}
     </PromiseContext.Provider>
   );

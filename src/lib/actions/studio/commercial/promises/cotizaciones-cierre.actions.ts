@@ -1356,11 +1356,12 @@ export async function obtenerVersionesContratoCierre(
  *    (La relaci?n evento_autorizado se establece autom?ticamente cuando evento tiene cotizacion_id)
  * 7. Registrar pago inicial (si aplica)
  * 8. Eliminar todas las etiquetas asociadas a la promesa
- * 9. Cambiar etapa de promesa a 'aprobado'
- * 10. Archivar otras cotizaciones de la promesa
- * 11. Eliminar citas comerciales y crear agenda del evento (si hay fecha)
- * 12. Eliminar registro temporal de cierre
- * 13. Crear log de autorizaci?n
+ * 9. Cambiar etapa de promesa a 'aprobado' (aparece en columna Historial del Pipeline)
+ * 10. Asignar etiqueta "Aprobado" a la promesa
+ * 11. Archivar otras cotizaciones de la promesa
+ * 12. Eliminar citas comerciales y crear agenda del evento (si hay fecha)
+ * 13. Eliminar registro temporal de cierre
+ * 14. Crear log de autorizaci?n
  *
  * @returns Evento creado y cotizaci?n autorizada
  */
@@ -1751,6 +1752,32 @@ export async function autorizarYCrearEvento(
             connect: { id: etapaAprobado.id },
           },
           updated_at: new Date(),
+        },
+      });
+
+      // 8.7.1. Asignar etiqueta "Aprobado" a la promesa (visible en Kanban e historial)
+      let tagAprobado = await tx.studio_promise_tags.findFirst({
+        where: {
+          studio_id: studio.id,
+          OR: [{ name: 'Aprobado' }, { slug: 'aprobado' }],
+          is_active: true,
+        },
+      });
+      if (!tagAprobado) {
+        tagAprobado = await tx.studio_promise_tags.create({
+          data: {
+            studio_id: studio.id,
+            name: 'Aprobado',
+            slug: 'aprobado',
+            color: '#10B981',
+            order: 0,
+          },
+        });
+      }
+      await tx.studio_promises_tags.create({
+        data: {
+          promise_id: promiseId,
+          tag_id: tagAprobado.id,
         },
       });
 

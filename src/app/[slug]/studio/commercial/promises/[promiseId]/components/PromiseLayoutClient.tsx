@@ -11,6 +11,7 @@ import { BitacoraSheet } from '@/components/shared/bitacora';
 import { ZenCard, ZenCardContent } from '@/components/ui/zen';
 import { toast } from 'sonner';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
+import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { useContactUpdateListener } from '@/hooks/useContactRefresh';
 import type { PromiseStateData } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
 import { PromiseContentSkeleton } from './PromiseLayoutSkeleton';
@@ -20,6 +21,7 @@ interface PromiseLayoutClientProps {
   promiseId: string;
   stateData: PromiseStateData;
   pipelineStages: PipelineStage[];
+  initialCotizacionEnCierre?: CotizacionListItem | null;
 }
 
 export function PromiseLayoutClient({
@@ -27,6 +29,7 @@ export function PromiseLayoutClient({
   promiseId,
   stateData,
   pipelineStages,
+  initialCotizacionEnCierre = null,
   children,
 }: PromiseLayoutClientProps & { children: React.ReactNode }) {
   const router = useRouter();
@@ -263,7 +266,12 @@ export function PromiseLayoutClient({
   };
 
   return (
-    <PromiseProvider promiseData={contextPromiseData} isLoading={false}>
+    <PromiseProvider
+      promiseData={contextPromiseData}
+      isLoading={false}
+      promiseState={stateData.state}
+      cotizacionEnCierre={initialCotizacionEnCierre}
+    >
       <div className="w-full max-w-7xl mx-auto">
         <ZenCard variant="default" padding="none">
           <PromiseDetailHeader

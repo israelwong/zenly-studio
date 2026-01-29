@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Eye, Settings2, AlertTriangle } from 'lucide-react';
+import { Eye, Settings2, AlertTriangle, Globe } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenCardFooter, ZenSwitch, ZenButton, ZenInput, ZenConfirmModal } from '@/components/ui/zen';
 import { getPromiseShareSettings, updatePromiseShareSettings, type PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
@@ -250,10 +250,22 @@ export function PromisePublicConfigCard({
     <>
       <ZenCard variant="outlined" className="border-zinc-800 shadow-lg shadow-black/20">
         <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
-          <ZenCardTitle className="text-sm font-medium flex items-center gap-1.5 pt-1">
-            <Eye className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-            Lo que el prospecto ve
-          </ZenCardTitle>
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <ZenCardTitle className="text-sm font-medium flex items-center gap-1.5">
+              <Eye className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+              Lo que el prospecto ve
+            </ZenCardTitle>
+            <ZenButton
+              variant="outline"
+              size="sm"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-share-options-modal'))}
+              className="gap-1 px-1.5 py-0.5 h-6 text-[10px] font-medium border-l-2 border-emerald-500/30 hover:border-emerald-500/50 hover:shadow-[0_0_6px_rgba(16,185,129,0.1)] transition-all duration-200 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-300 border-zinc-700"
+              title="Automatizar envío y compartir"
+            >
+              <Globe className="h-3 w-3 text-emerald-400 shrink-0" />
+              <span>Global</span>
+            </ZenButton>
+          </div>
         </ZenCardHeader>
         <ZenCardContent className="p-3 space-y-3">
           <p className="text-xs text-zinc-500 leading-relaxed">
