@@ -52,6 +52,7 @@ interface PromiseQuotesPanelCardProps {
   onDelete?: (id: string) => void;
   onArchive?: (id: string) => void;
   onUnarchive?: (id: string) => void;
+  onQuitarCancelacion?: (id: string) => void;
   onNameUpdate?: (id: string, newName: string) => void;
   onPasarACierre?: (id: string) => void;
   onCierreCancelado?: (id: string) => void;
@@ -75,6 +76,7 @@ export function PromiseQuotesPanelCard({
   onDelete,
   onArchive,
   onUnarchive,
+  onQuitarCancelacion,
   onNameUpdate,
   onPasarACierre,
   onCierreCancelado,
@@ -651,8 +653,8 @@ export function PromiseQuotesPanelCard({
       const result = await quitarCancelacionCotizacion(cotizacion.id, studioSlug);
       if (result.success) {
         toast.success('Cancelación quitada, cotización vuelta a estado pendiente');
+        onQuitarCancelacion?.(cotizacion.id);
         router.refresh();
-        onUpdate?.(cotizacion.id);
       } else {
         toast.error(result.error || 'Error al quitar cancelación');
       }

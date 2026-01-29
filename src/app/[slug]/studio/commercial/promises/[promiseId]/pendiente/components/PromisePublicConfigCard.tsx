@@ -326,6 +326,7 @@ export function PromisePublicConfigCard({
                       >
                         <span className="text-xs font-medium text-zinc-200 block">Exacto</span>
                         <span className="text-[10px] text-zinc-500 mt-0.5 block">Cálculo técnico exacto.</span>
+                        <span className="text-[10px] text-zinc-500/80 mt-1 font-mono block">Ej.: $36,450.00</span>
                       </button>
                       <button
                         type="button"
@@ -340,6 +341,7 @@ export function PromisePublicConfigCard({
                       >
                         <span className="text-xs font-medium text-zinc-200 block">Mágico</span>
                         <span className="text-[10px] text-zinc-500 mt-0.5 block">Redondeo comercial.</span>
+                        <span className="text-[10px] text-zinc-500/80 mt-1 font-mono block">Ej.: $36,499</span>
                       </button>
                     </div>
                   </div>

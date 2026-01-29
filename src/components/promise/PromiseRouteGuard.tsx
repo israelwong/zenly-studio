@@ -174,12 +174,15 @@ export function PromiseRouteGuard({
         currentQuotes[existingIndex] = {
           ...currentQuotes[existingIndex],
           status: changeInfo.status || currentQuotes[existingIndex].status,
-          selected_by_prospect: changeInfo.selected_by_prospect !== undefined 
-            ? changeInfo.selected_by_prospect 
+          selected_by_prospect: changeInfo.selected_by_prospect !== undefined
+            ? changeInfo.selected_by_prospect
             : currentQuotes[existingIndex].selected_by_prospect,
           visible_to_client: changeInfo.visible_to_client !== undefined
             ? changeInfo.visible_to_client
             : currentQuotes[existingIndex].visible_to_client,
+          evento_id: changeInfo.evento_id !== undefined
+            ? changeInfo.evento_id
+            : currentQuotes[existingIndex].evento_id,
         };
       } else if (changeInfo) {
         // Nueva cotización insertada

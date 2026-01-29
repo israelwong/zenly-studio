@@ -709,6 +709,19 @@ export function PromiseQuotesPanel({
           return [...pendientes, ...archivadas, ...canceladas];
         });
       }}
+      onQuitarCancelacion={(id) => {
+        localChangesRef.current.add(id);
+        // Actualización local: quitar cancelación → status pendiente; quita etiqueta "Cancelada" del listado
+        setCotizaciones((prev) => {
+          const updated = prev.map((c) =>
+            c.id === id ? { ...c, status: 'pendiente' as const } : c
+          );
+          const pendientes = updated.filter((c) => c.status === 'pendiente' || c.status === 'negociacion');
+          const archivadas = updated.filter((c) => c.status === 'archivada');
+          const canceladas = updated.filter((c) => c.status === 'cancelada');
+          return [...pendientes, ...archivadas, ...canceladas];
+        });
+      }}
       onNameUpdate={(id, newName) => {
         // Marcar como cambio local para evitar recarga desde realtime
         localChangesRef.current.add(id);
