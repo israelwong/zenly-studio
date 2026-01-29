@@ -17,6 +17,8 @@ export interface ZenDialogProps {
   saveLabel?: string;
   cancelLabel?: string;
   isLoading?: boolean;
+  /** Si true, el botón Guardar/Actualizar se deshabilita (ej. sin cambios en el formulario) */
+  saveDisabled?: boolean;
   saveVariant?: 'primary' | 'destructive' | 'outline' | 'ghost';
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '5xl' | '6xl' | '7xl';
   showCloseButton?: boolean;
@@ -55,6 +57,7 @@ export function ZenDialog({
   saveLabel = 'Guardar',
   cancelLabel = 'Cancelar',
   isLoading = false,
+  saveDisabled = false,
   saveVariant = 'primary',
   maxWidth = '2xl',
   showCloseButton = true,
@@ -249,6 +252,7 @@ export function ZenDialog({
                   <ZenButton
                     onClick={onSave}
                     loading={isLoading}
+                    disabled={saveDisabled}
                     variant={saveVariant}
                   >
                     {saveLabel}

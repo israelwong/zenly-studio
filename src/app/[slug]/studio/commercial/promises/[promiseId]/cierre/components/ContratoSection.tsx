@@ -263,9 +263,14 @@ export const ContratoSection = memo(function ContratoSection({
                 </span>
               </button>
             ) : (
-              <span className={`text-xs uppercase tracking-wide font-semibold ${contratoFirmado ? 'text-emerald-400' : 'text-zinc-400'}`}>
-                {contratoFirmado ? 'Contrato firmado' : 'Contrato Digital'}
-              </span>
+              <div className="flex flex-col gap-0.5">
+                <span className={`text-xs uppercase tracking-wide font-semibold ${contratoFirmado ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                  {contratoFirmado ? 'Contrato firmado' : 'Contrato Digital'}
+                </span>
+                {!contratoFirmado && !contratoEstado && contractData?.contrato_definido && contractData?.contract_version && (
+                  <span className="text-xs text-zinc-500">Versión {contractData.contract_version}</span>
+                )}
+              </div>
             )}
             {contratoBoton && !contratoFirmado && (
               <button

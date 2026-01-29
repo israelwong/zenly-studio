@@ -4335,6 +4335,17 @@ export async function updatePublicPromiseData(
           event_location: eventLocation || null,
         },
       });
+
+      // Log: contacto actualizó sus datos para contrato
+      await tx.studio_promise_logs.create({
+        data: {
+          promise_id: promiseId,
+          user_id: null,
+          content: `${data.contact_name.trim()} actualizó sus datos para contrato`,
+          log_type: "system",
+          metadata: { action: "public_promise_data_updated" },
+        },
+      });
     });
 
     // 5. Revalidar paths

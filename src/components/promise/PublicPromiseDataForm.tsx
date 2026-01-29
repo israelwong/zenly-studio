@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ZenInput, ZenTextarea } from '@/components/ui/zen';
 import { Loader2 } from 'lucide-react';
 import { getPublicPromiseData } from '@/lib/actions/public/promesas.actions';
@@ -30,6 +30,12 @@ interface PublicPromiseDataFormProps {
   }) => Promise<void>;
   isSubmitting?: boolean;
   showEventTypeAndDate?: boolean;
+  /** Se llama cuando cambia si el formulario tiene diferencias respecto a initialData (solo campos editables) */
+  onHasChangesChange?: (hasChanges: boolean) => void;
+}
+
+function normalize(s: string | null | undefined): string {
+  return (s ?? '').trim();
 }
 
 export function PublicPromiseDataForm({
@@ -39,6 +45,7 @@ export function PublicPromiseDataForm({
   onSubmit,
   isSubmitting = false,
   showEventTypeAndDate = true,
+  onHasChangesChange,
 }: PublicPromiseDataFormProps) {
   // Inicializar loading en true si no hay initialData y hay promiseId
   const [loadingPromiseData, setLoadingPromiseData] = useState(!initialData && !!promiseId);
@@ -72,6 +79,22 @@ export function PublicPromiseDataForm({
       loadPromiseData();
     }
   }, [promiseId, initialData]);
+
+  const hasChanges = useMemo(() => {
+    if (!initialData) return false;
+    return (
+      normalize(formData.contact_name) !== normalize(initialData.contact_name) ||
+      normalize(formData.contact_phone) !== normalize(initialData.contact_phone) ||
+      normalize(formData.contact_email) !== normalize(initialData.contact_email ?? '') ||
+      normalize(formData.contact_address) !== normalize(initialData.contact_address ?? '') ||
+      normalize(formData.event_name) !== normalize(initialData.event_name ?? '') ||
+      normalize(formData.event_location) !== normalize(initialData.event_location ?? '')
+    );
+  }, [formData, initialData]);
+
+  useEffect(() => {
+    onHasChangesChange?.(hasChanges);
+  }, [hasChanges, onHasChangesChange]);
 
   const loadPromiseData = async () => {
     setLoadingPromiseData(true);

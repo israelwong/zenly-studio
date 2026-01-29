@@ -62,6 +62,8 @@ export function PublicQuoteAuthorizedView({
   const router = useRouter();
   const [showContractView, setShowContractView] = useState(false);
   const [showEditDataModal, setShowEditDataModal] = useState(false);
+  const [showSuccessDataModal, setShowSuccessDataModal] = useState(false);
+  const [hasFormChanges, setHasFormChanges] = useState(false);
   const [isUpdatingData, setIsUpdatingData] = useState(false);
   const [isRegeneratingContract, setIsRegeneratingContract] = useState(false);
   const [cotizacion, setCotizacion] = useState<PublicCotizacion>(initialCotizacion);
@@ -491,14 +493,14 @@ export function PublicQuoteAuthorizedView({
         } else {
           // Actualizar solo el contrato localmente después de regenerar
           await updateContractLocally();
-          toast.success('Datos actualizados y contrato regenerado correctamente');
           setIsRegeneratingContract(false);
+          setShowSuccessDataModal(true);
         }
       } else {
-        toast.success('Datos actualizados correctamente');
+        setShowSuccessDataModal(true);
       }
 
-      // 3. Cerrar modal
+      // 3. Cerrar modal de edición
       setShowEditDataModal(false);
     } catch (error) {
       console.error('Error en handleUpdateData:', error);
@@ -727,7 +729,12 @@ export function PublicQuoteAuthorizedView({
       {/* Modal para editar datos */}
       <ZenDialog
         isOpen={showEditDataModal}
-        onClose={() => !isUpdatingData && setShowEditDataModal(false)}
+        onClose={() => {
+          if (!isUpdatingData) {
+            setShowEditDataModal(false);
+            setHasFormChanges(false);
+          }
+        }}
         title="Actualizar mis datos"
         description="Actualiza tu información de contacto y del evento. El contrato se regenerará automáticamente con los nuevos datos."
         maxWidth="2xl"
@@ -737,10 +744,16 @@ export function PublicQuoteAuthorizedView({
             form.requestSubmit();
           }
         }}
-        onCancel={() => !isUpdatingData && setShowEditDataModal(false)}
+        onCancel={() => {
+          if (!isUpdatingData) {
+            setShowEditDataModal(false);
+            setHasFormChanges(false);
+          }
+        }}
         saveLabel={isUpdatingData ? 'Guardando...' : 'Actualizar datos'}
         cancelLabel="Cancelar"
         isLoading={isUpdatingData}
+        saveDisabled={!hasFormChanges}
         zIndex={10060}
       >
         <PublicPromiseDataForm
@@ -750,7 +763,23 @@ export function PublicQuoteAuthorizedView({
           onSubmit={handleUpdateData}
           isSubmitting={isUpdatingData}
           showEventTypeAndDate={true}
+          onHasChangesChange={setHasFormChanges}
         />
+      </ZenDialog>
+
+      {/* Modal de éxito tras actualizar datos */}
+      <ZenDialog
+        isOpen={showSuccessDataModal}
+        onClose={() => setShowSuccessDataModal(false)}
+        title="Datos actualizados correctamente"
+        description="Ya están disponibles en el contrato para revisión y firma."
+        maxWidth="sm"
+        onCancel={() => setShowSuccessDataModal(false)}
+        cancelLabel="Entendido"
+        showCloseButton={true}
+        zIndex={10061}
+      >
+        <div className="py-2" />
       </ZenDialog>
 
       {/* Modal de información bancaria */}
