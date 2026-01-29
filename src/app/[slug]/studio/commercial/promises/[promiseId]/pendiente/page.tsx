@@ -4,6 +4,8 @@ import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condi
 import { getPaymentMethodsForAuthorization } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getPromiseStats } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
+import { getPromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
+import { getPromiseTagsByPromiseId } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 import { PromisePendienteClient } from './components/PromisePendienteClient';
 
 interface PromisePendientePageProps {
@@ -27,12 +29,21 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     }
   }
 
-  // ✅ OPTIMIZACIÓN: Cargar datos en paralelo incluyendo estadísticas
-  const [condicionesResult, paymentMethodsResult, cotizacionesResult, statsResult] = await Promise.all([
+  // ✅ Protocolo Zenly: select atómico + paralelismo (Promise.all)
+  const [
+    condicionesResult,
+    paymentMethodsResult,
+    cotizacionesResult,
+    statsResult,
+    shareSettingsResult,
+    tagsResult,
+  ] = await Promise.all([
     obtenerCondicionesComerciales(studioSlug),
     getPaymentMethodsForAuthorization(studioSlug),
     getCotizacionesByPromiseId(promiseId),
-    getPromiseStats(promiseId), // ✅ Nueva query consolidada
+    getPromiseStats(promiseId),
+    getPromiseShareSettings(studioSlug, promiseId),
+    getPromiseTagsByPromiseId(promiseId),
   ]);
 
   const condicionesComerciales = condicionesResult.success && condicionesResult.data
@@ -73,18 +84,18 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
       })()
     : null;
 
-  // ✅ OPTIMIZACIÓN: Preparar estadísticas iniciales
   const initialStats = statsResult.success && statsResult.data
     ? statsResult.data
     : {
-        views: {
-          totalViews: 0,
-          uniqueViews: 0,
-          lastView: null,
-        },
+        views: { totalViews: 0, uniqueViews: 0, lastView: null },
         cotizaciones: [],
         paquetes: [],
       };
+
+  const initialShareSettings =
+    shareSettingsResult.success && shareSettingsResult.data ? shareSettingsResult.data : null;
+
+  const initialTags = tagsResult.success && tagsResult.data ? tagsResult.data : [];
 
   return (
     <PromisePendienteClient
@@ -93,6 +104,8 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
       initialSelectedCotizacion={selectedCotizacion}
       initialCotizaciones={cotizacionesResult.success && cotizacionesResult.data ? cotizacionesResult.data : []}
       initialStats={initialStats}
+      initialShareSettings={initialShareSettings}
+      initialTags={initialTags}
     />
   );
 }

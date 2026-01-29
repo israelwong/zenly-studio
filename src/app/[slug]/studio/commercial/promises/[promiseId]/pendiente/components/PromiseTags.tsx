@@ -18,7 +18,9 @@ interface PromiseTagsProps {
   studioSlug: string;
   promiseId: string | null;
   isSaved: boolean;
-  eventoId?: string | null; // Si existe, deshabilitar creación de etiquetas
+  eventoId?: string | null;
+  /** Datos iniciales del servidor (Protocolo Zenly). Sin fetch en mount. */
+  initialTags?: PromiseTag[];
 }
 
 interface TagWithPending extends PromiseTag {
@@ -31,8 +33,9 @@ export function PromiseTags({
   promiseId,
   isSaved,
   eventoId,
+  initialTags: initialTagsProp,
 }: PromiseTagsProps) {
-  const [tags, setTags] = useState<TagWithPending[]>([]);
+  const [tags, setTags] = useState<TagWithPending[]>(() => initialTagsProp ?? []);
   const [globalTags, setGlobalTags] = useState<PromiseTag[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoadingTags, setIsLoadingTags] = useState(false);
@@ -98,14 +101,19 @@ export function PromiseTags({
     setGlobalTags((prev) => prev.filter((tag) => tag.id !== tagId));
   }, []);
 
+  // Protocolo Zenly: si el servidor pasó initialTags, no hacer fetch en mount
   useEffect(() => {
-    if (isSaved && promiseId) {
-      loadTags();
-      loadGlobalTags();
-    } else {
+    if (!isSaved || !promiseId) {
       setTags([]);
+      return;
     }
-  }, [isSaved, promiseId, loadTags, loadGlobalTags]);
+    if (initialTagsProp !== undefined) {
+      loadGlobalTags();
+      return;
+    }
+    loadTags();
+    loadGlobalTags();
+  }, [isSaved, promiseId, loadTags, loadGlobalTags, initialTagsProp]);
 
   // Filtrar sugerencias basadas en input
   useEffect(() => {

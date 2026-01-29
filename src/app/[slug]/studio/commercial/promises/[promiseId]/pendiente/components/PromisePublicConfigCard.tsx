@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Eye, Settings2, AlertTriangle } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenCardFooter, ZenSwitch, ZenButton, ZenInput, ZenConfirmModal } from '@/components/ui/zen';
-import { getPromiseShareSettings, updatePromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
+import { getPromiseShareSettings, updatePromiseShareSettings, type PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { CondicionesComercialesManager } from '@/components/shared/condiciones-comerciales';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -21,37 +21,80 @@ interface SavedSnapshot {
   show_items_prices: boolean;
 }
 
+type ShareSettingsData = PromiseShareSettings & { has_cotizacion?: boolean; remember_preferences?: boolean };
+
 interface PromisePublicConfigCardProps {
   studioSlug: string;
   promiseId: string;
+  /** Datos iniciales del servidor (Protocolo Zenly). Sin fetch en mount. */
+  initialShareSettings?: ShareSettingsData | null;
+  initialCondicionesComerciales?: Array<{
+    id: string;
+    name: string;
+    advance_percentage?: number | null;
+    type?: string | null;
+  }>;
+  selectedCotizacionPrice?: number | null;
 }
 
 export function PromisePublicConfigCard({
   studioSlug,
   promiseId,
+  initialShareSettings: initialShareSettingsProp = null,
+  initialCondicionesComerciales = [],
+  selectedCotizacionPrice = null,
 }: PromisePublicConfigCardProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const hasInitialData = initialShareSettingsProp != null;
+  const [loading, setLoading] = useState(!hasInitialData);
   const [saving, setSaving] = useState(false);
   const [showOfertasModal, setShowOfertasModal] = useState(false);
-  const [showPackages, setShowPackages] = useState(true);
-  const [showPortafolios, setShowPortafolios] = useState(true);
-  const [allowRecalc, setAllowRecalc] = useState(true);
-  const [roundingMode, setRoundingMode] = useState<'exact' | 'charm'>('charm');
-  const [showStandardConditions, setShowStandardConditions] = useState(true);
-  const [showOfferConditions, setShowOfferConditions] = useState(false);
-  const [minDaysToHire, setMinDaysToHire] = useState(30);
-  const [autoGenerateContract, setAutoGenerateContract] = useState(false);
-  const [showCategoriesSubtotals, setShowCategoriesSubtotals] = useState(false);
-  const [showItemsPrices, setShowItemsPrices] = useState(false);
+  const [showPackages, setShowPackages] = useState(initialShareSettingsProp?.show_packages ?? true);
+  const [showPortafolios, setShowPortafolios] = useState(initialShareSettingsProp?.portafolios ?? true);
+  const [allowRecalc, setAllowRecalc] = useState(initialShareSettingsProp?.allow_recalc ?? true);
+  const [roundingMode, setRoundingMode] = useState<'exact' | 'charm'>(
+    initialShareSettingsProp?.rounding_mode ?? 'charm'
+  );
+  const [showStandardConditions, setShowStandardConditions] = useState(
+    initialShareSettingsProp?.show_standard_conditions ?? true
+  );
+  const [showOfferConditions, setShowOfferConditions] = useState(
+    initialShareSettingsProp?.show_offer_conditions ?? false
+  );
+  const [minDaysToHire, setMinDaysToHire] = useState(initialShareSettingsProp?.min_days_to_hire ?? 30);
+  const [autoGenerateContract, setAutoGenerateContract] = useState(
+    initialShareSettingsProp?.auto_generate_contract ?? false
+  );
+  const [showCategoriesSubtotals, setShowCategoriesSubtotals] = useState(
+    initialShareSettingsProp?.show_categories_subtotals ?? false
+  );
+  const [showItemsPrices, setShowItemsPrices] = useState(
+    initialShareSettingsProp?.show_items_prices ?? false
+  );
   const [showConfirmSensitiveModal, setShowConfirmSensitiveModal] = useState(false);
   const [pendingSensitiveOption, setPendingSensitiveOption] = useState<'subtotals' | 'prices' | null>(null);
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
-  const lastSavedRef = useRef<SavedSnapshot | null>(null);
+  const lastSavedRef = useRef<SavedSnapshot | null>(
+    hasInitialData && initialShareSettingsProp
+      ? {
+          show_packages: initialShareSettingsProp.show_packages,
+          portafolios: initialShareSettingsProp.portafolios,
+          allow_recalc: initialShareSettingsProp.allow_recalc,
+          rounding_mode: initialShareSettingsProp.rounding_mode,
+          show_standard_conditions: initialShareSettingsProp.show_standard_conditions ?? true,
+          show_offer_conditions: initialShareSettingsProp.show_offer_conditions ?? false,
+          min_days_to_hire: initialShareSettingsProp.min_days_to_hire ?? 30,
+          auto_generate_contract: initialShareSettingsProp.auto_generate_contract ?? false,
+          show_categories_subtotals: initialShareSettingsProp.show_categories_subtotals ?? false,
+          show_items_prices: initialShareSettingsProp.show_items_prices ?? false,
+        }
+      : null
+  );
 
   useEffect(() => {
+    if (hasInitialData) return;
     loadSettings();
-  }, [studioSlug, promiseId]);
+  }, [studioSlug, promiseId, hasInitialData]);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -217,9 +260,9 @@ export function PromisePublicConfigCard({
             Define qué información y opciones verá el prospecto en la página de la promesa.
           </p>
 
-          {/* Disclaimer */}
+          {/* Disclaimer (Protocolo Zenly) */}
           <p className="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1 leading-snug">
-            Solo afecta lo que ve el prospecto en esta promesa. No cambia la configuración global del estudio.
+            Ajustes locales para esta promesa. Sobreescribe la configuración global.
           </p>
 
           {/* A. Portafolio (al inicio) */}
@@ -305,19 +348,10 @@ export function PromisePublicConfigCard({
             )}
           </div>
 
-          {/* C. Bloque Cotización (ofertas + subtotal + precio ítem) */}
+          {/* C. Bloque Cotización (subtotal + precio ítem) */}
           <div className="space-y-0">
             <div className="flex items-center justify-between gap-2 mb-0.5">
               <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Cotización</p>
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowOfertasModal(true)}
-                className="h-6 px-1.5 text-zinc-400 hover:text-emerald-400 shrink-0"
-                title="Gestionar ofertas"
-              >
-                <Settings2 className="h-3.5 w-3.5" />
-              </ZenButton>
             </div>
             <div className={rowClass}>
               <div className="min-w-0 flex-1">
@@ -327,18 +361,6 @@ export function PromisePublicConfigCard({
               <ZenSwitch
                 checked={showStandardConditions}
                 onCheckedChange={setShowStandardConditions}
-                disabled={saving}
-                className="shrink-0"
-              />
-            </div>
-            <div className={rowClass}>
-              <div className="min-w-0 flex-1">
-                <span className={labelClass}>Condiciones comerciales especiales</span>
-                <p className={descClass}>El prospecto verá las condiciones de tipo oferta</p>
-              </div>
-              <ZenSwitch
-                checked={showOfferConditions}
-                onCheckedChange={setShowOfferConditions}
                 disabled={saving}
                 className="shrink-0"
               />
@@ -385,7 +407,85 @@ export function PromisePublicConfigCard({
             </div>
           </div>
 
-          {/* D. Bloque Cierre (límite días + contrato automático) */}
+          {/* D. Bloque Ofertas (lista + Gestionar + Smart Warning) */}
+          {(() => {
+            const ofertas = initialCondicionesComerciales.filter(
+              (c) => (c.type ?? 'standard') === 'offer' || (c as { type?: string }).type === 'oferta'
+            );
+            const hasAdvanceWarning =
+              showOfferConditions &&
+              selectedCotizacionPrice != null &&
+              selectedCotizacionPrice > 0 &&
+              ofertas.some((o) => (o.advance_percentage ?? 0) > 50);
+            return (
+              <div className="space-y-0">
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Ofertas</p>
+                  <ZenButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowOfertasModal(true)}
+                    className="h-6 px-1.5 text-zinc-400 hover:text-emerald-400 shrink-0"
+                    title="Gestionar ofertas"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                  </ZenButton>
+                </div>
+                {ofertas.length > 0 ? (
+                  <div className="space-y-1">
+                    {ofertas.map((oferta) => (
+                      <div key={oferta.id} className={rowClass}>
+                        <div className="min-w-0 flex-1 flex items-center gap-2">
+                          <span className={labelClass}>{oferta.name}</span>
+                          {(oferta.advance_percentage ?? 0) > 50 && showOfferConditions && selectedCotizacionPrice != null && selectedCotizacionPrice > 0 && (
+                            <span
+                              className="inline-flex items-center text-amber-400"
+                              title="Anticipo mayor al 50% del total de la cotización"
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div className={rowClass}>
+                      <div className="min-w-0 flex-1">
+                        <span className={labelClass}>Mostrar ofertas especiales</span>
+                        <p className={descClass}>El prospecto verá las condiciones de tipo oferta</p>
+                      </div>
+                      <ZenSwitch
+                        checked={showOfferConditions}
+                        onCheckedChange={setShowOfferConditions}
+                        disabled={saving}
+                        className="shrink-0"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className={rowClass}>
+                    <div className="min-w-0 flex-1">
+                      <span className={labelClass}>Condiciones comerciales especiales</span>
+                      <p className={descClass}>El prospecto verá las condiciones de tipo oferta</p>
+                    </div>
+                    <ZenSwitch
+                      checked={showOfferConditions}
+                      onCheckedChange={setShowOfferConditions}
+                      disabled={saving}
+                      className="shrink-0"
+                    />
+                  </div>
+                )}
+                {hasAdvanceWarning && (
+                  <p className="text-[11px] text-amber-400 flex items-center gap-1 mt-1" title="Una oferta activa tiene anticipo mayor al 50% del total">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    Anticipo &gt; 50% del total de la cotización
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* E. Bloque Cierre (límite días + contrato automático) */}
           <div className="space-y-0">
             <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-0.5">Cierre</p>
             <div className={rowClass}>

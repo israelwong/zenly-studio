@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock } from 'lucide-react';
-import { ZenButton } from '@/components/ui/zen';
-import { getReminderByPromise, type Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { Clock, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { ZenButton, ZenConfirmModal } from '@/components/ui/zen';
+import { getReminderByPromise, deleteReminder, type Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { getRelativeDateLabel } from '@/lib/utils/date-formatter';
 import { ReminderFormModal } from '@/components/shared/reminders';
 
@@ -18,6 +19,8 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadReminder();
@@ -63,9 +66,32 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
           ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/15 hover:border-amber-500/30'
           : 'bg-zinc-800/80 text-zinc-300 border border-zinc-600/50 hover:bg-zinc-700/80 hover:border-zinc-500/50';
 
+  const handleDeleteReminder = async () => {
+    if (!reminder) return;
+    setDeleting(true);
+    try {
+      const result = await deleteReminder(studioSlug, reminder.id);
+      if (result.success) {
+        toast.success('Seguimiento eliminado');
+        setReminder(null);
+        setShowDeleteConfirm(false);
+        loadReminder();
+        router.refresh();
+        window.dispatchEvent(new CustomEvent('reminder-updated'));
+      } else {
+        toast.error(result.error || 'Error al eliminar seguimiento');
+      }
+    } catch (error) {
+      console.error('Error eliminando seguimiento:', error);
+      toast.error('Error al eliminar seguimiento');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <>
-      <div className="flex items-center gap-1.5 cursor-pointer">
+      <div className="flex items-center gap-1.5 border-r border-zinc-700/80 pr-3 mr-1">
         <ZenButton
           variant="ghost"
           size="sm"
@@ -88,7 +114,34 @@ export function ReminderButton({ studioSlug, promiseId }: ReminderButtonProps) {
             </>
           )}
         </ZenButton>
+        {hasReminder && (
+          <ZenButton
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 rounded-md text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDeleteConfirm(true);
+            }}
+            title="Eliminar seguimiento"
+            aria-label="Eliminar seguimiento"
+          >
+            <X className="h-3.5 w-3.5" />
+          </ZenButton>
+        )}
       </div>
+
+      <ZenConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteReminder}
+        title="Eliminar seguimiento"
+        description="¿Eliminar este recordatorio? No se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={deleting}
+      />
 
       <ReminderFormModal
         isOpen={modalOpen}

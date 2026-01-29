@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar } from 'lucide-react';
-import { ZenButton } from '@/components/ui/zen';
-import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
+import { Calendar, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { ZenButton, ZenConfirmModal } from '@/components/ui/zen';
+import { obtenerAgendamientoPorPromise, eliminarAgendamiento } from '@/lib/actions/shared/agenda-unified.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import { getRelativeDateLabel } from '@/lib/utils/date-formatter';
 import { AgendaFormModal } from '@/components/shared/agenda';
@@ -20,6 +21,8 @@ export function AgendaButton({ studioSlug, promiseId, eventoId }: AgendaButtonPr
   const [agendamiento, setAgendamiento] = useState<AgendaItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadAgendamiento();
@@ -45,6 +48,36 @@ export function AgendaButton({ studioSlug, promiseId, eventoId }: AgendaButtonPr
     ? getRelativeDateLabel(agendamiento.date, { pastLabel: 'Vencida', futureVariant: 'success' })
     : null;
   const timeSuffix = hasAgenda && agendamiento?.time ? ` · ${agendamiento.time}` : '';
+  const tipoLabel =
+    hasAgenda && agendamiento?.type_scheduling
+      ? agendamiento.type_scheduling === 'presencial'
+        ? 'Presencial'
+        : 'Virtual'
+      : null;
+  const canDelete = hasAgenda && !isDisabled && agendamiento?.id;
+
+  const handleDeleteAgendamiento = async () => {
+    if (!agendamiento?.id) return;
+    setDeleting(true);
+    try {
+      const result = await eliminarAgendamiento(studioSlug, agendamiento.id);
+      if (result.success) {
+        toast.success('Agendamiento eliminado correctamente');
+        setAgendamiento(null);
+        setShowDeleteConfirm(false);
+        loadAgendamiento();
+        window.dispatchEvent(new CustomEvent('agenda-updated'));
+        router.refresh();
+      } else {
+        toast.error(result.error || 'Error al eliminar agendamiento');
+      }
+    } catch (error) {
+      console.error('Error eliminando agendamiento:', error);
+      toast.error('Error al eliminar agendamiento');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const buttonClass =
     !hasAgenda
@@ -73,7 +106,7 @@ export function AgendaButton({ studioSlug, promiseId, eventoId }: AgendaButtonPr
 
   return (
     <>
-      <div className="flex items-center gap-1.5 cursor-pointer">
+      <div className="flex items-center gap-1.5">
         <ZenButton
           variant="ghost"
           size="sm"
@@ -91,7 +124,7 @@ export function AgendaButton({ studioSlug, promiseId, eventoId }: AgendaButtonPr
           {hasAgenda ? (
             <>
               <Calendar className="h-3.5 w-3.5 shrink-0" />
-              <span className="font-medium">Agenda</span>
+              <span className="font-medium">{tipoLabel ? `Cita ${tipoLabel}` : 'Cita'}</span>
               {dateStatus && (
                 <span className="text-white font-normal">{dateStatus.text}{timeSuffix}</span>
               )}
@@ -103,7 +136,34 @@ export function AgendaButton({ studioSlug, promiseId, eventoId }: AgendaButtonPr
             </>
           )}
         </ZenButton>
+        {canDelete && (
+          <ZenButton
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 rounded-md text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDeleteConfirm(true);
+            }}
+            title="Eliminar agendamiento"
+            aria-label="Eliminar agendamiento"
+          >
+            <X className="h-3.5 w-3.5" />
+          </ZenButton>
+        )}
       </div>
+
+      <ZenConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteAgendamiento}
+        title="Eliminar agendamiento"
+        description="¿Eliminar este agendamiento? No se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+        loading={deleting}
+      />
 
       {modalOpen && (
         <AgendaFormModal

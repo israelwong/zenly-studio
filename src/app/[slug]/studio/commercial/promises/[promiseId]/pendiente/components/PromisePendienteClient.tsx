@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { EventInfoCard } from '@/components/shared/promises';
 import { PromiseQuotesPanel } from './cotizaciones/PromiseQuotesPanel';
@@ -10,8 +10,11 @@ import { PromisePublicConfigCard } from './PromisePublicConfigCard';
 import { EventFormModal } from '@/components/shared/promises';
 import { AuthorizeCotizacionModal } from './cotizaciones/AuthorizeCotizacionModal';
 import { usePromiseContext } from '../../context/PromiseContext';
+import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
+import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
+import { ZenCard, ZenCardContent, ZenCardHeader } from '@/components/ui/zen';
 
-interface PromisePendienteClientProps {
+export interface PromisePendienteClientProps {
   initialCondicionesComerciales: Array<{
     id: string;
     name: string;
@@ -41,7 +44,6 @@ interface PromisePendienteClientProps {
     price: number;
     status: string;
     click_count?: number;
-    [key: string]: unknown;
   }>;
   initialStats?: {
     views: {
@@ -60,6 +62,40 @@ interface PromisePendienteClientProps {
       clicks: number;
     }>;
   };
+  /** Datos iniciales del servidor (Protocolo Zenly). Sin fetch en mount. */
+  initialShareSettings?: (PromiseShareSettings & { has_cotizacion?: boolean; remember_preferences?: boolean }) | null;
+  initialTags?: PromiseTag[];
+}
+
+function SidebarSkeleton() {
+  return (
+    <ZenCard variant="outlined" className="border-zinc-800">
+      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3">
+        <div className="h-4 w-40 bg-zinc-800 rounded animate-pulse" />
+      </ZenCardHeader>
+      <ZenCardContent className="p-3 space-y-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-9 bg-zinc-800/50 rounded animate-pulse" />
+        ))}
+      </ZenCardContent>
+    </ZenCard>
+  );
+}
+
+function StatsSkeleton() {
+  return (
+    <ZenCard>
+      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3">
+        <div className="h-4 w-28 bg-zinc-800 rounded animate-pulse" />
+      </ZenCardHeader>
+      <ZenCardContent className="p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="h-16 bg-zinc-800/50 rounded animate-pulse" />
+          <div className="h-16 bg-zinc-800/50 rounded animate-pulse" />
+        </div>
+      </ZenCardContent>
+    </ZenCard>
+  );
 }
 
 export function PromisePendienteClient({
@@ -68,6 +104,8 @@ export function PromisePendienteClient({
   initialSelectedCotizacion,
   initialCotizaciones = [],
   initialStats,
+  initialShareSettings = null,
+  initialTags = [],
 }: PromisePendienteClientProps) {
   const params = useParams();
   const studioSlug = params.slug as string;
@@ -229,12 +267,12 @@ export function PromisePendienteClient({
               onEdit={() => setShowEditModal(true)}
               context="promise"
             />
-            {/* Etiquetas (debajo de Información) */}
             <PromiseTags
               studioSlug={studioSlug}
               promiseId={promiseId}
               isSaved={true}
               eventoId={eventoId}
+              initialTags={initialTags}
             />
           </div>
 
@@ -261,21 +299,26 @@ export function PromisePendienteClient({
               initialCotizaciones={initialCotizaciones}
             />
 
-            {/* Estadísticas (debajo de Cotizaciones) */}
-            <PromiseStatsCard
-              studioSlug={studioSlug}
-              promiseId={promiseId}
-              initialStats={initialStats}
-            />
+            <Suspense fallback={<StatsSkeleton />}>
+              <PromiseStatsCard
+                studioSlug={studioSlug}
+                promiseId={promiseId}
+                initialStats={initialStats}
+              />
+            </Suspense>
           </div>
 
-          {/* Columna 3: Configuración pública + Recordatorio (compacto) */}
+          {/* Columna 3: Centro de control "Lo que el prospecto ve" */}
           <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-            {/* Lo que el prospecto ve */}
-            <PromisePublicConfigCard
-              studioSlug={studioSlug}
-              promiseId={promiseId}
-            />
+            <Suspense fallback={<SidebarSkeleton />}>
+              <PromisePublicConfigCard
+                studioSlug={studioSlug}
+                promiseId={promiseId}
+                initialShareSettings={initialShareSettings}
+                initialCondicionesComerciales={initialCondicionesComerciales}
+                selectedCotizacionPrice={selectedCotizacion?.price ?? null}
+              />
+            </Suspense>
           </div>
         </div>
       </div>

@@ -538,7 +538,7 @@ export function PromiseQuotesPanelCard({
     }
   };
 
-  const handlePasarACierre = async (deleteReminder: boolean = false) => {
+  const handlePasarACierre = async (shouldDeleteReminder: boolean = false) => {
     if (!promiseId) {
       toast.error('No se puede pasar a cierre sin una promesa asociada');
       return;
@@ -547,7 +547,7 @@ export function PromiseQuotesPanelCard({
     setLoading(true);
     try {
       // Eliminar recordatorio si el usuario lo solicitó
-      if (deleteReminder && reminder) {
+      if (shouldDeleteReminder && reminder) {
         try {
           const deleteResult = await deleteReminder(studioSlug, reminder.id);
           if (deleteResult.success) {
