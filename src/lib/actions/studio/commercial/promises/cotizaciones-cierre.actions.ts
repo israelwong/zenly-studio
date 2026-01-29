@@ -62,29 +62,41 @@ export async function obtenerRegistroCierre(
       return { success: false, error: 'Cotizaci?n no encontrada' };
     }
 
-    const registro = await prisma.studio_cotizaciones_cierre.findUnique({
-      where: { cotizacion_id: cotizacionId },
-      include: {
-        condiciones_comerciales: true,
-        contract_template: true,
-      },
-    });
+    // Paralelizar: registro de cierre + última versión del contrato
+    const [registro, ultimaVersion] = await Promise.all([
+      prisma.studio_cotizaciones_cierre.findUnique({
+        where: { cotizacion_id: cotizacionId },
+        include: {
+          condiciones_comerciales: true,
+          contract_template: true,
+        },
+      }),
+      prisma.studio_cotizaciones_cierre_contract_versions.findFirst({
+        where: { cotizacion_id: cotizacionId },
+        orderBy: { version: 'desc' },
+        select: {
+          version: true,
+          change_reason: true,
+          change_type: true,
+          created_at: true,
+        },
+      }),
+    ]);
 
     if (!registro) {
       return { success: false, error: 'Registro de cierre no encontrado' };
     }
 
-    // Obtener informaci?n de la ?ltima versi?n del contrato
-    const ultimaVersion = await prisma.studio_cotizaciones_cierre_contract_versions.findFirst({
-      where: { cotizacion_id: cotizacionId },
-      orderBy: { version: 'desc' },
-      select: {
-        version: true,
-        change_reason: true,
-        change_type: true,
-        created_at: true,
-      },
-    });
+    let pago_metodo_nombre: string | null = null;
+    if (registro.pago_metodo_id) {
+      const metodoPago = await prisma.studio_metodos_pago.findUnique({
+        where: { id: registro.pago_metodo_id },
+        select: { payment_method_name: true },
+      });
+      if (metodoPago) {
+        pago_metodo_nombre = metodoPago.payment_method_name;
+      }
+    }
 
     // Convertir Decimal a number para serializaci?n
     return {
@@ -104,6 +116,7 @@ export async function obtenerRegistroCierre(
         pago_monto: registro.pago_monto ? Number(registro.pago_monto) : null,
         pago_fecha: registro.pago_fecha,
         pago_metodo_id: registro.pago_metodo_id,
+        pago_metodo_nombre,
         condiciones_comerciales: registro.condiciones_comerciales ? {
           id: registro.condiciones_comerciales.id,
           name: registro.condiciones_comerciales.name,
@@ -254,11 +267,7 @@ export async function actualizarCondicionesCierre(
       },
     });
 
-    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    if (cotizacion.promise_id) {
-      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-    }
-
+    // Sin revalidatePath: actualización local vía onSuccess en el cliente
     return {
       success: true,
       data: {
@@ -577,11 +586,7 @@ export async function quitarCondicionesCierre(
       },
     });
 
-    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    if (cotizacion.promise_id) {
-      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-    }
-
+    // Sin revalidatePath: actualización local en el cliente
     return {
       success: true,
       data: {
@@ -717,12 +722,7 @@ export async function actualizarContratoCierre(
         },
       });
 
-      revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-      if (cotizacion.promise_id) {
-        revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-        revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`);
-      }
-
+      // Sin revalidatePath: actualización local vía setContractData en el cliente
       return {
         success: true,
         data: {
@@ -742,12 +742,7 @@ export async function actualizarContratoCierre(
         },
       });
 
-      revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-      if (cotizacion.promise_id) {
-        revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-        revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`);
-      }
-
+      // Sin revalidatePath: actualización local vía setContractData en el cliente
       return {
         success: true,
         data: {
@@ -795,12 +790,7 @@ export async function actualizarContratoCierre(
         },
       });
 
-      revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-      if (cotizacion.promise_id) {
-        revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-        revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`);
-      }
-
+      // Sin revalidatePath: actualización local vía setContractData en el cliente
       return {
         success: true,
         data: {
@@ -838,12 +828,7 @@ export async function actualizarContratoCierre(
         },
       });
 
-      revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-      if (cotizacion.promise_id) {
-        revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-        revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`);
-      }
-
+      // Sin revalidatePath: actualización local vía setContractData en el cliente
       return {
         success: true,
         data: {
@@ -1005,12 +990,7 @@ export async function regenerarContratoCierre(
       });
     }
 
-    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    if (cotizacion.promise_id) {
-      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-      revalidatePath(`/${studioSlug}/promise/${cotizacion.promise_id}`);
-    }
-
+    // Sin revalidatePath: actualización local en el cliente
     return {
       success: true,
       data: {
@@ -1153,13 +1133,7 @@ export async function regenerateStudioContract(
       },
     });
 
-    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-    revalidatePath(`/${studioSlug}/promise/${promiseId}`);
-    revalidateTag(`public-promise-${studioSlug}-${promiseId}`, 'max');
-    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, 'max');
-    revalidateTag(`public-promise-cierre-${studioSlug}-${promiseId}`, 'max');
-
+    // Sin revalidatePath/revalidateTag: estudio actualiza vía loadRegistroCierre; cliente vía Realtime
     return {
       success: true,
       data: { id: registroCierre.id, cotizacion_id: cotizacionId },
@@ -1233,11 +1207,7 @@ export async function actualizarPagoCierre(
       },
     });
 
-    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    if (cotizacion.promise_id) {
-      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-    }
-
+    // Sin revalidatePath: actualización local vía setPagoData en el cliente
     return {
       success: true,
       data: {
@@ -1289,11 +1259,7 @@ export async function eliminarRegistroCierre(
       where: { cotizacion_id: cotizacionId },
     });
 
-    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
-    if (cotizacion.promise_id) {
-      revalidatePath(`/${studioSlug}/studio/commercial/promises/${cotizacion.promise_id}`);
-    }
-
+    // Sin revalidatePath: actualización local en el cliente
     return {
       success: true,
       data: {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { startTransition } from 'react';
+import React, { startTransition, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, Edit2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton } from '@/components/ui/zen';
@@ -37,7 +37,7 @@ interface CotizacionCardProps {
   isRemovingCondiciones: boolean;
 }
 
-export function CotizacionCard({
+function CotizacionCardInner({
   cotizacion,
   studioSlug,
   promiseId,
@@ -125,3 +125,5 @@ export function CotizacionCard({
     </ZenCard>
   );
 }
+
+export const CotizacionCard = memo(CotizacionCardInner);

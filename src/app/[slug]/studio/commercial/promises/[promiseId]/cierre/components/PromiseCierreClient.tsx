@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, Suspense, memo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { EventInfoCard } from '@/components/shared/promises';
 import { EventFormModal } from '@/components/shared/promises';
@@ -22,10 +22,179 @@ import { RegistroPagoModal } from './RegistroPagoModal';
 import { CierreActionButtons } from './CierreActionButtons';
 import { ZenConfirmModal } from '@/components/ui/zen';
 import { AutorizacionProgressOverlay } from '@/components/promise/AutorizacionProgressOverlay';
+import { CotizacionCardSkeleton, ContratoDigitalCardSkeleton, PagoInicialCardSkeleton } from './PromiseCierreSkeleton';
 
 interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
 }
+
+/** Skeleton solo en mount inicial (sin datos). Una vez hay datos, nunca volver a mostrar skeleton. */
+function useShowSkeletons(
+  loadingRegistro: boolean,
+  condicionesData: unknown,
+  contractData: unknown,
+  pagoData: unknown
+) {
+  return useMemo(() => {
+    const hasInitialData = condicionesData != null || contractData != null || pagoData != null;
+    return loadingRegistro && !hasInitialData;
+  }, [loadingRegistro, condicionesData, contractData, pagoData]);
+}
+
+type CotizacionListItemType = CotizacionListItem;
+
+interface CierreColumn2Props {
+  cotizacion: CotizacionListItemType;
+  studioSlug: string;
+  promiseId: string;
+  showSkeleton: boolean;
+  condicionesData: { condiciones_comerciales_id?: string | null; condiciones_comerciales_definidas?: boolean; condiciones_comerciales?: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_type?: string; advance_percentage?: number | null; advance_amount?: number | null } | null } | null;
+  loadingRegistro: boolean;
+  negociacionData: { negociacion_precio_original?: number | null; negociacion_precio_personalizado?: number | null };
+  onPreviewClick: () => void;
+  loadingCotizacion: boolean;
+  onDefinirCondiciones: () => void;
+  onQuitarCondiciones: () => void;
+  isRemovingCondiciones: boolean;
+}
+
+const CierreColumn2 = memo(function CierreColumn2({
+  cotizacion,
+  studioSlug,
+  promiseId,
+  showSkeleton,
+  condicionesData,
+  loadingRegistro,
+  negociacionData,
+  onPreviewClick,
+  loadingCotizacion,
+  onDefinirCondiciones,
+  onQuitarCondiciones,
+  isRemovingCondiciones,
+}: CierreColumn2Props) {
+  return (
+    <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+      <Suspense fallback={<CotizacionCardSkeleton />}>
+        {showSkeleton ? (
+          <CotizacionCardSkeleton />
+        ) : (
+          <CotizacionCard
+            cotizacion={cotizacion}
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+            condicionesData={condicionesData}
+            loadingRegistro={loadingRegistro}
+            negociacionData={negociacionData}
+            onPreviewClick={onPreviewClick}
+            loadingCotizacion={loadingCotizacion}
+            onDefinirCondiciones={onDefinirCondiciones}
+            onQuitarCondiciones={onQuitarCondiciones}
+            isRemovingCondiciones={isRemovingCondiciones}
+          />
+        )}
+      </Suspense>
+    </div>
+  );
+});
+
+interface CierreColumn3Props {
+  cotizacion: CotizacionListItemType;
+  studioSlug: string;
+  promiseId: string;
+  showSkeleton: boolean;
+  eventTypeId: string | null;
+  contractData: { contract_template_id?: string | null; contract_content?: string | null; contract_version?: number; contract_signed_at?: Date | null; contrato_definido?: boolean; ultima_version_info?: unknown } | null;
+  loadingRegistro: boolean;
+  condicionesComerciales: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_type?: string; advance_percentage?: number | null; advance_amount?: number | null; } | null | undefined;
+  promiseData: { name: string; phone: string; email: string | null; address: string | null; event_date: Date | null; event_name: string | null; event_type_name: string | null; event_location?: string | null; duration_hours?: number | null };
+  onContratoButtonClick: () => void;
+  showContratoOptionsModal: boolean;
+  onCloseContratoOptionsModal: () => void;
+  onContratoSuccess: () => void | Promise<void>;
+  onCancelarContrato: () => void | Promise<void>;
+  onRegenerateContract: () => void | Promise<void>;
+  onEditarDatosClick: () => void;
+  pagoData: { pago_registrado?: boolean; pago_concepto?: string | null; pago_monto?: number | null; pago_fecha?: Date | null; pago_metodo_id?: string | null; pago_metodo_nombre?: string | null } | null;
+  onRegistrarPagoClick: () => void;
+  onEliminarPago?: () => void | Promise<void>;
+  onAutorizar: () => void;
+  onCancelarCierre: () => void;
+  isAuthorizing: boolean;
+  puedeAutorizar: boolean;
+}
+
+const CierreColumn3 = memo(function CierreColumn3({
+  cotizacion,
+  studioSlug,
+  promiseId,
+  showSkeleton,
+  eventTypeId,
+  contractData,
+  loadingRegistro,
+  condicionesComerciales,
+  promiseData,
+  onContratoButtonClick,
+  showContratoOptionsModal,
+  onCloseContratoOptionsModal,
+  onContratoSuccess,
+  onCancelarContrato,
+  onRegenerateContract,
+  onEditarDatosClick,
+  pagoData,
+  onRegistrarPagoClick,
+  onEliminarPago,
+  onAutorizar,
+  onCancelarCierre,
+  isAuthorizing,
+  puedeAutorizar,
+}: CierreColumn3Props) {
+  return (
+    <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+      <Suspense fallback={<ContratoDigitalCardSkeleton />}>
+        {showSkeleton ? (
+          <ContratoDigitalCardSkeleton />
+        ) : (
+          <ContratoDigitalCard
+            cotizacion={cotizacion}
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+            contractData={contractData}
+            loadingRegistro={loadingRegistro}
+            eventTypeId={eventTypeId}
+            condicionesComerciales={condicionesComerciales}
+            promiseData={promiseData}
+            onContratoButtonClick={onContratoButtonClick}
+            showContratoOptionsModal={showContratoOptionsModal}
+            onCloseContratoOptionsModal={onCloseContratoOptionsModal}
+            onContratoSuccess={onContratoSuccess}
+            onCancelarContrato={onCancelarContrato}
+            onRegenerateContract={onRegenerateContract}
+            onEditarDatosClick={onEditarDatosClick}
+          />
+        )}
+      </Suspense>
+      <Suspense fallback={<PagoInicialCardSkeleton />}>
+        {showSkeleton ? (
+          <PagoInicialCardSkeleton />
+        ) : (
+          <PagoInicialCard
+            pagoData={pagoData}
+            loadingRegistro={loadingRegistro}
+            onRegistrarPagoClick={onRegistrarPagoClick}
+            onEliminarPago={onEliminarPago}
+          />
+        )}
+      </Suspense>
+      <CierreActionButtons
+        onAutorizar={onAutorizar}
+        onCancelarCierre={onCancelarCierre}
+        isAuthorizing={isAuthorizing}
+        loadingRegistro={loadingRegistro}
+        puedeAutorizar={puedeAutorizar}
+      />
+    </div>
+  );
+});
 
 export function PromiseCierreClient({
   initialCotizacionEnCierre,
@@ -152,6 +321,14 @@ export function PromiseCierreClient({
     return null;
   }
 
+  // Skeletons solo en mount inicial (sin datos). Actualizaciones posteriores son silenciosas.
+  const showSkeletons = useShowSkeletons(
+    cierreLogic.loadingRegistro,
+    cierreLogic.condicionesData,
+    cierreLogic.contractData,
+    cierreLogic.pagoData
+  );
+
   return (
     <>
       <div className="space-y-6">
@@ -209,62 +386,50 @@ export function PromiseCierreClient({
             />
           </div>
 
-          {/* Columna 2: Cotización */}
+          {/* Columna 2: Cotización — memoizada; skeleton solo en mount inicial */}
           {cotizacionEnCierre && (
-            <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-              <CotizacionCard
-                cotizacion={cotizacionEnCierre}
-                studioSlug={studioSlug}
-                promiseId={promiseId}
-                condicionesData={cierreLogic.condicionesData}
-                loadingRegistro={cierreLogic.loadingRegistro}
-                negociacionData={cierreLogic.negociacionData}
-                onPreviewClick={cierreLogic.handleOpenPreview}
-                loadingCotizacion={cierreLogic.loadingCotizacion}
-                onDefinirCondiciones={cierreLogic.handleDefinirCondiciones}
-                onQuitarCondiciones={cierreLogic.handleQuitarCondiciones}
-                isRemovingCondiciones={cierreLogic.isRemovingCondiciones}
-              />
-            </div>
-          )}
-
-          {/* Columna 3: Contrato Digital, Pago Inicial y Acciones */}
-          <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-            {/* Card: Contrato Digital */}
-            <ContratoDigitalCard
+            <CierreColumn2
               cotizacion={cotizacionEnCierre}
               studioSlug={studioSlug}
               promiseId={promiseId}
-              contractData={cierreLogic.contractData}
+              showSkeleton={showSkeletons}
+              condicionesData={cierreLogic.condicionesData}
               loadingRegistro={cierreLogic.loadingRegistro}
-              eventTypeId={contextPromiseData.event_type_id || null}
-              condicionesComerciales={cierreLogic.condicionesData?.condiciones_comerciales || null}
-              promiseData={cierreLogic.localPromiseData}
-              onContratoButtonClick={cierreLogic.handleContratoButtonClick}
-              showContratoOptionsModal={cierreLogic.showContratoOptionsModal}
-              onCloseContratoOptionsModal={cierreLogic.handleCloseContratoOptions}
-              onContratoSuccess={cierreLogic.handleContratoSuccess}
-              onCancelarContrato={cierreLogic.handleCancelarContrato}
-              onRegenerateContract={cierreLogic.handleRegenerateContract}
-              onEditarDatosClick={() => cierreLogic.setShowEditPromiseModal(true)}
+              negociacionData={cierreLogic.negociacionData}
+              onPreviewClick={cierreLogic.handleOpenPreview}
+              loadingCotizacion={cierreLogic.loadingCotizacion}
+              onDefinirCondiciones={cierreLogic.handleDefinirCondiciones}
+              onQuitarCondiciones={cierreLogic.handleQuitarCondiciones}
+              isRemovingCondiciones={cierreLogic.isRemovingCondiciones}
             />
+          )}
 
-            {/* Nuevo Card: Pago Inicial */}
-            <PagoInicialCard
-              pagoData={cierreLogic.pagoData}
-              loadingRegistro={cierreLogic.loadingRegistro}
-              onRegistrarPagoClick={cierreLogic.handleRegistrarPagoClick}
-            />
-
-            {/* Botones de Acción */}
-            <CierreActionButtons
-              onAutorizar={cierreLogic.handleAutorizar}
-              onCancelarCierre={() => cierreLogic.setShowCancelModal(true)}
-              isAuthorizing={cierreLogic.isAuthorizing}
-              loadingRegistro={cierreLogic.loadingRegistro}
-              puedeAutorizar={cierreLogic.puedeAutorizar}
-            />
-          </div>
+          {/* Columna 3: Contrato, Pago, Acciones — memoizada; skeleton solo en mount inicial */}
+          <CierreColumn3
+            cotizacion={cotizacionEnCierre}
+            studioSlug={studioSlug}
+            promiseId={promiseId}
+            showSkeleton={showSkeletons}
+            eventTypeId={contextPromiseData.event_type_id || null}
+            contractData={cierreLogic.contractData}
+            loadingRegistro={cierreLogic.loadingRegistro}
+            condicionesComerciales={cierreLogic.condicionesData?.condiciones_comerciales ?? null}
+            promiseData={cierreLogic.localPromiseData}
+            onContratoButtonClick={cierreLogic.handleContratoButtonClick}
+            showContratoOptionsModal={cierreLogic.showContratoOptionsModal}
+            onCloseContratoOptionsModal={cierreLogic.handleCloseContratoOptions}
+            onContratoSuccess={cierreLogic.handleContratoSuccess}
+            onCancelarContrato={cierreLogic.handleCancelarContrato}
+            onRegenerateContract={cierreLogic.handleRegenerateContract}
+            onEditarDatosClick={cierreLogic.handleEditarDatosClick}
+            pagoData={cierreLogic.pagoData}
+            onRegistrarPagoClick={cierreLogic.handleRegistrarPagoClick}
+            onEliminarPago={cierreLogic.handleEliminarPago}
+            onAutorizar={cierreLogic.handleAutorizar}
+            onCancelarCierre={cierreLogic.handleOpenCancelModal}
+            isAuthorizing={cierreLogic.isAuthorizing}
+            puedeAutorizar={cierreLogic.puedeAutorizar}
+          />
         </div>
       </div>
 

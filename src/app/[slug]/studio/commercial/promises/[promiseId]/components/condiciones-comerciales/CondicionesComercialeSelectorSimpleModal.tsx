@@ -16,7 +16,24 @@ interface CondicionComercial {
   description?: string | null;
   advance_percentage?: number | null;
   discount_percentage?: number | null;
+  advance_type?: string | null;
+  advance_amount?: number | null;
   type?: string | null;
+}
+
+/** Payload para actualización local sin refetch: solo el card de condiciones usa esto */
+export interface CondicionesCierrePayload {
+  condiciones_comerciales_id: string;
+  condiciones_comerciales_definidas: boolean;
+  condiciones_comerciales: {
+    id: string;
+    name: string;
+    description?: string | null;
+    discount_percentage?: number | null;
+    advance_type?: string;
+    advance_percentage?: number | null;
+    advance_amount?: number | null;
+  } | null;
 }
 
 interface CondicionesComercialeSelectorSimpleModalProps {
@@ -25,7 +42,7 @@ interface CondicionesComercialeSelectorSimpleModalProps {
   studioSlug: string;
   cotizacionId: string;
   selectedId?: string | null;
-  onSuccess?: () => void;
+  onSuccess?: (data: CondicionesCierrePayload) => void;
 }
 
 export function CondicionesComercialeSelectorSimpleModal({
@@ -101,9 +118,23 @@ export function CondicionesComercialeSelectorSimpleModal({
       );
 
       if (result.success) {
-        const condicionNombre = condiciones.find(c => c.id === tempSelectedId)?.name;
+        const selected = condiciones.find(c => c.id === tempSelectedId);
+        const condicionNombre = selected?.name;
         toast.success(`Condiciones comerciales definidas: ${condicionNombre}`);
-        onSuccess?.();
+        // Actualización local: pasar payload para que el padre solo actualice condicionesData sin refetch
+        onSuccess?.({
+          condiciones_comerciales_id: tempSelectedId,
+          condiciones_comerciales_definidas: true,
+          condiciones_comerciales: selected ? {
+            id: selected.id,
+            name: selected.name,
+            description: selected.description ?? null,
+            discount_percentage: selected.discount_percentage ?? null,
+            advance_type: selected.advance_type ?? undefined,
+            advance_percentage: selected.advance_percentage ?? null,
+            advance_amount: selected.advance_amount ?? null,
+          } : null,
+        });
         onClose();
       } else {
         toast.error(result.error || 'Error al guardar condiciones comerciales');

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Eye, Trash2 } from 'lucide-react';
 import { ZenConfirmModal } from '@/components/ui/zen';
 import { ContratoGestionCard } from './ContratoGestionCard';
 import { ContractPreviewForPromiseModal } from './contratos/ContractPreviewForPromiseModal';
@@ -287,14 +287,14 @@ export const ContratoSection = memo(function ContratoSection({
                   }
                 }}
                 disabled={isRegenerating}
-                className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors shrink-0 disabled:opacity-50"
                 title="Regenerar contrato"
                 aria-label="Regenerar contrato"
               >
                 {isRegenerating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                 ) : (
-                  <RefreshCw className="h-4 w-4" />
+                  'Regenerar'
                 )}
               </button>
             )}

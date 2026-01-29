@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { startTransition } from 'react';
 import { cancelarCierre, autorizarCotizacion } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { autorizarCotizacionLegacy } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
-import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosCondicionesCierre, obtenerDatosPagoCierre, autorizarYCrearEvento, regenerateStudioContract } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
+import { obtenerRegistroCierre, quitarCondicionesCierre, obtenerDatosContratoCierre, obtenerDatosPagoCierre, actualizarPagoCierre, autorizarYCrearEvento, regenerateStudioContract } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promises/cotizaciones-cierre.actions';
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { ContractTemplate } from '@/types/contracts';
@@ -114,6 +114,10 @@ export function usePromiseCierreLogic({
   } | null>(null);
 
   const [loadingRegistro, setLoadingRegistro] = useState(true);
+  const initialLoadDoneRef = useRef(false);
+  const [loadingCondiciones, setLoadingCondiciones] = useState(false);
+  const [loadingContract, setLoadingContract] = useState(false);
+  const [loadingPago, setLoadingPago] = useState(false);
 
   // Sincronizar promiseData local con prop
   // Usar useRef para comparar valores anteriores y evitar loops infinitos
@@ -149,7 +153,10 @@ export function usePromiseCierreLogic({
   ]);
 
   const loadRegistroCierre = useCallback(async () => {
-    setLoadingRegistro(true);
+    const isInitialLoad = !initialLoadDoneRef.current;
+    if (isInitialLoad) {
+      setLoadingRegistro(true);
+    }
     try {
       const result = await obtenerRegistroCierre(studioSlug, cotizacion.id);
       if (result.success && result.data) {
@@ -176,6 +183,7 @@ export function usePromiseCierreLogic({
           pago_monto: data.pago_monto,
           pago_fecha: data.pago_fecha,
           pago_metodo_id: data.pago_metodo_id,
+          pago_metodo_nombre: data.pago_metodo_nombre,
         });
 
         setNegociacionData({
@@ -186,13 +194,16 @@ export function usePromiseCierreLogic({
     } catch (error) {
       console.error('[loadRegistroCierre] Error:', error);
     } finally {
-      setLoadingRegistro(false);
+      if (isInitialLoad) {
+        setLoadingRegistro(false);
+      }
+      initialLoadDoneRef.current = true;
     }
   }, [studioSlug, cotizacion.id]);
 
   useEffect(() => {
-    // Solo cargar si tenemos una cotización válida
     if (cotizacion.id) {
+      initialLoadDoneRef.current = false; // Reset para mostrar skeletons al cambiar de cotización
       loadRegistroCierre();
     }
   }, [cotizacion.id, loadRegistroCierre]);
@@ -225,10 +236,12 @@ export function usePromiseCierreLogic({
       const result = await quitarCondicionesCierre(studioSlug, cotizacion.id);
       if (result.success) {
         toast.success('Condiciones comerciales removidas');
-        const condiciones = await obtenerDatosCondicionesCierre(studioSlug, cotizacion.id);
-        if (condiciones.success && condiciones.data) {
-          setCondicionesData(condiciones.data);
-        }
+        // Actualización local: no refetch para no recargar Cotizacion/Contrato
+        setCondicionesData({
+          condiciones_comerciales_id: null,
+          condiciones_comerciales_definidas: false,
+          condiciones_comerciales: null,
+        });
       } else {
         toast.error(result.error || 'Error al quitar condiciones');
       }
@@ -261,19 +274,28 @@ export function usePromiseCierreLogic({
     }
   };
 
-  const handleCondicionesSuccess = useCallback(async () => {
-    const result = await obtenerDatosCondicionesCierre(studioSlug, cotizacion.id);
-    if (result.success && result.data) {
-      setCondicionesData(prev => {
-        const hasChanges =
-          prev?.condiciones_comerciales_id !== result.data!.condiciones_comerciales_id ||
-          prev?.condiciones_comerciales_definidas !== result.data!.condiciones_comerciales_definidas;
-
-        if (!hasChanges) return prev;
-        return result.data!;
-      });
-    }
-  }, [studioSlug, cotizacion.id]);
+  /** Actualización local: el modal pasa el payload; no refetch para no recargar Cotizacion/Contrato */
+  const handleCondicionesSuccess = useCallback((data: {
+    condiciones_comerciales_id?: string | null;
+    condiciones_comerciales_definidas?: boolean;
+    condiciones_comerciales?: {
+      id: string;
+      name: string;
+      description?: string | null;
+      discount_percentage?: number | null;
+      advance_type?: string;
+      advance_percentage?: number | null;
+      advance_amount?: number | null;
+    } | null;
+  }) => {
+    setCondicionesData(prev => {
+      const hasChanges =
+        prev?.condiciones_comerciales_id !== data.condiciones_comerciales_id ||
+        prev?.condiciones_comerciales_definidas !== data.condiciones_comerciales_definidas;
+      if (!hasChanges) return prev;
+      return data;
+    });
+  }, []);
 
   const handleContratoButtonClick = useCallback(() => {
     if (contractData?.contract_template_id) {
@@ -409,6 +431,28 @@ export function usePromiseCierreLogic({
     }
   }, [studioSlug, cotizacion.id]);
 
+  const handleEliminarPago = useCallback(async () => {
+    const result = await actualizarPagoCierre(studioSlug, cotizacion.id, {
+      concepto: null,
+      monto: null,
+      fecha: null,
+      metodo_id: null,
+    });
+    if (result.success) {
+      toast.success('Pago eliminado');
+      setPagoData({
+        pago_registrado: false,
+        pago_concepto: null,
+        pago_monto: null,
+        pago_fecha: null,
+        pago_metodo_id: null,
+        pago_metodo_nombre: null,
+      });
+    } else {
+      toast.error(result.error || 'Error al eliminar pago');
+    }
+  }, [studioSlug, cotizacion.id]);
+
   const handleCancelarCierre = useCallback(async () => {
     setIsCancelling(true);
     try {
@@ -437,6 +481,9 @@ export function usePromiseCierreLogic({
   const handleAutorizar = useCallback(() => {
     setShowConfirmAutorizarModal(true);
   }, []);
+
+  const handleOpenCancelModal = useCallback(() => setShowCancelModal(true), []);
+  const handleEditarDatosClick = useCallback(() => setShowEditPromiseModal(true), []);
 
   const [currentTask, setCurrentTask] = useState<string>('');
   const [completedTasks, setCompletedTasks] = useState<string[]>([]);
@@ -578,6 +625,9 @@ export function usePromiseCierreLogic({
     contractData,
     pagoData,
     loadingRegistro,
+    loadingCondiciones,
+    loadingContract,
+    loadingPago,
     // Progreso de autorización
     currentTask,
     completedTasks,
@@ -599,10 +649,13 @@ export function usePromiseCierreLogic({
     handleSaveCustomContract,
     handleRegistrarPagoClick,
     handlePagoSuccess,
+    handleEliminarPago,
     handleCancelarCierre,
     handleAutorizar,
     handleConfirmAutorizar,
     puedeAutorizar,
+    handleOpenCancelModal,
+    handleEditarDatosClick,
     // Router
     router,
   };
