@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getAgendaCount } from '@/lib/actions/shared/agenda-unified.actions';
-import { getRemindersDueCount, getRemindersDue } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { getRemindersDue } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { getCurrentUserId } from '@/lib/actions/studio/notifications/notifications.actions';
 import { obtenerAgendaUnificada } from '@/lib/actions/shared/agenda-unified.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
@@ -31,11 +31,9 @@ export function HeaderDataLoader({ studioSlug, onDataLoaded }: HeaderDataLoaderP
 
     const loadData = async () => {
       try {
-        const [headerUserIdResult, agendaCountResult, remindersCountResult, agendaEventsResult, remindersAlertsResult, remindersResult] = await Promise.all([
+        const [headerUserIdResult, agendaCountResult, agendaEventsResult, remindersResult] = await Promise.all([
           getCurrentUserId(studioSlug).catch(() => ({ success: false as const, error: 'Error' })),
           getAgendaCount(studioSlug).catch(() => ({ success: false as const, count: 0, error: 'Error' })),
-          // El conteo se calculará basado en remindersAlertsResult.length
-          Promise.resolve(0),
           obtenerAgendaUnificada(studioSlug, { filtro: 'all', startDate: new Date() }).then(result => {
             if (result.success && result.data) {
               const now = new Date();
@@ -75,83 +73,32 @@ export function HeaderDataLoader({ studioSlug, onDataLoaded }: HeaderDataLoaderP
             }
             return [];
           }).catch(() => []),
-          Promise.all([
-            getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'today' }),
-            getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'all' }),
-          ]).then(([today, all]) => {
-            const alerts: ReminderWithPromise[] = [];
+          getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'all' }).then((result) => {
+            if (!result.success || !result.data) return { alerts: [], reminders: [] };
             const now = new Date();
-            now.setHours(0, 0, 0, 0);
-            const todayEnd = new Date(now);
-            todayEnd.setDate(todayEnd.getDate() + 1);
-
-            // Obtener recordatorios de hoy
-            if (today.success && today.data) {
-              alerts.push(...today.data);
-            }
-
-            // Obtener recordatorios próximos (futuros, no vencidos)
-            if (all.success && all.data) {
-              const todayIds = new Set(alerts.map(r => r.id));
-              all.data.forEach(r => {
-                const reminderDate = new Date(r.reminder_date);
-                reminderDate.setHours(0, 0, 0, 0);
-                // Solo agregar si es futuro y no está ya en la lista
-                if (reminderDate >= todayEnd && !todayIds.has(r.id)) {
-                  alerts.push(r);
-                }
-              });
-            }
-
-            return alerts.sort((a, b) => {
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const todayTime = todayStart.getTime();
+            const filtered = result.data.filter((r) => {
+              const d = new Date(r.reminder_date);
+              const reminderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+              return reminderDay.getTime() >= todayTime;
+            });
+            const sorted = filtered.sort((a, b) => {
               const dateA = new Date(a.reminder_date).getTime();
               const dateB = new Date(b.reminder_date).getTime();
               return dateA - dateB;
             });
-          }).catch(() => []),
-          Promise.all([
-            getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'today' }),
-            getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'all' }),
-          ]).then(([today, all]) => {
-            const reminders: ReminderWithPromise[] = [];
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
-            const todayEnd = new Date(now);
-            todayEnd.setDate(todayEnd.getDate() + 1);
-
-            // Obtener recordatorios de hoy
-            if (today.success && today.data) {
-              reminders.push(...today.data);
-            }
-
-            // Obtener recordatorios próximos (futuros)
-            if (all.success && all.data) {
-              const todayIds = new Set(reminders.map(r => r.id));
-              all.data.forEach(r => {
-                const reminderDate = new Date(r.reminder_date);
-                reminderDate.setHours(0, 0, 0, 0);
-                // Solo agregar si es futuro y no está ya en la lista
-                if (reminderDate >= todayEnd && !todayIds.has(r.id)) {
-                  reminders.push(r);
-                }
-              });
-            }
-
-            return reminders.sort((a, b) => {
-              const dateA = new Date(a.reminder_date).getTime();
-              const dateB = new Date(b.reminder_date).getTime();
-              return dateA - dateB;
-            });
-          }).catch(() => []),
+            return { alerts: sorted, reminders: sorted };
+          }).catch(() => ({ alerts: [] as ReminderWithPromise[], reminders: [] as ReminderWithPromise[] })),
         ]);
 
         const loadedData = {
           headerUserId: headerUserIdResult.success ? headerUserIdResult.data : null,
           agendaCount: agendaCountResult.success ? (agendaCountResult.count || 0) : 0,
-          remindersCount: remindersAlertsResult.length, // ✅ Contar solo hoy + próximos (sin vencidos)
+          remindersCount: remindersResult.alerts.length,
           agendaEvents: agendaEventsResult,
-          remindersAlerts: remindersAlertsResult,
-          reminders: remindersResult,
+          remindersAlerts: remindersResult.alerts,
+          reminders: remindersResult.reminders,
         };
         
         onDataLoaded(loadedData);

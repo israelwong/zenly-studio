@@ -47,22 +47,22 @@ export function AlertsPopover({
     setAlerts(initialAlerts);
   }, [initialAlerts]);
 
-  // Categorizar recordatorios: Hoy vs Próximos
+  // Categorizar recordatorios: Hoy vs Próximos (comparar por día local para evitar desfase UTC)
   const categorizeReminders = () => {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const today: ReminderWithPromise[] = [];
     const upcoming: ReminderWithPromise[] = [];
 
     alerts.forEach(r => {
-      const date = new Date(r.reminder_date);
-      date.setHours(0, 0, 0, 0);
-      if (date >= todayStart && date < todayEnd) {
+      const d = new Date(r.reminder_date);
+      const reminderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const reminderTime = reminderDay.getTime();
+      const todayTime = todayStart.getTime();
+      if (reminderTime === todayTime) {
         today.push(r);
-      } else if (date >= todayEnd) {
+      } else if (reminderTime > todayTime) {
         upcoming.push(r);
       }
     });
@@ -194,7 +194,7 @@ export function AlertsPopover({
         </ZenDropdownMenuTrigger>
         <ZenDropdownMenuContent
           align="end"
-          className="w-80 max-h-[500px] flex flex-col p-0"
+          className="w-80 max-h-[500px] flex flex-col p-0 overflow-x-hidden"
         >
           <div className="px-3 py-2 border-b border-zinc-700 flex-shrink-0">
             <h3 className="text-sm font-semibold text-zinc-200">Recordatorios</h3>
@@ -205,7 +205,7 @@ export function AlertsPopover({
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0">
             {/* Sección Hoy */}
             <div className="px-3 py-2.5 border-b border-zinc-800">
               <h4 className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">
