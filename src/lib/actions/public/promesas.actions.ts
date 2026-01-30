@@ -1152,6 +1152,7 @@ export async function getPublicPromisePendientes(
       status: string;
       order: number;
       is_courtesy: boolean;
+      billing_type?: string | null;
     };
 
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
@@ -1205,7 +1206,7 @@ export async function getPublicPromisePendientes(
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
-            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
               ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
@@ -1685,6 +1686,7 @@ export async function getPublicPromiseActiveQuote(
       status: string;
       order: number;
       is_courtesy: boolean;
+      billing_type?: string | null;
     };
 
     // ⚠️ HIGIENE DE DATOS: Crear mapa de orden de sección y categoría desde catálogo
@@ -1771,7 +1773,7 @@ export async function getPublicPromiseActiveQuote(
             // ⚠️ TAREA 1: No incluir media en vista previa
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
-            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
               ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
@@ -1954,7 +1956,7 @@ export async function getPublicPromiseAvailablePackages(
         () => prisma.studio_paquetes.findMany({
           where: {
             studio_id: studio.id,
-            event_type_id: promiseBasic.event_type_id,
+            ...(promiseBasic.event_type_id != null && { event_type_id: promiseBasic.event_type_id }),
             status: 'active',
           },
           select: {
@@ -2544,6 +2546,7 @@ export async function getPublicPromiseNegociacion(
       status: string;
       order: number;
       is_courtesy: boolean;
+      billing_type?: string | null;
     };
 
     const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
@@ -2599,7 +2602,7 @@ export async function getPublicPromiseNegociacion(
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
-            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
               ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
@@ -3042,6 +3045,7 @@ export async function getPublicPromiseCierre(
       status: string;
       order: number;
       is_courtesy: boolean;
+      billing_type?: string | null;
     };
 
     const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
@@ -3097,7 +3101,7 @@ export async function getPublicPromiseCierre(
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
-            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
               ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
@@ -3323,8 +3327,6 @@ export async function getPublicPromiseData(
   };
   error?: string;
 }> {
-  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
-  console.log('🚀 Ejecutando Action: getPublicPromiseData');
   try {
     // 1. Validar que el studio existe
     const studio = await prisma.studios.findUnique({
@@ -3668,6 +3670,7 @@ export async function getPublicPromiseData(
       status: string;
       order: number;
       is_courtesy?: boolean;
+      billing_type?: string | null;
     };
 
     const mappedCotizaciones: PublicCotizacion[] = (quotesOrdenadas as any[]).map((cot: any) => {
@@ -3725,7 +3728,7 @@ export async function getPublicPromiseData(
             const itemMedia = item.item_id ? itemsMediaMap.get(item.item_id) : undefined;
             const originalItem = itemsFiltrados.find(i => i.id === item.id);
             // Usar billing_type guardado en cotizacion_item (no del catálogo)
-            const billingType = (originalItem?.billing_type || item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+            const billingType = (originalItem?.billing_type ?? (item as { billing_type?: string | null }).billing_type ?? 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
             // Calcular cantidad efectiva si es tipo HOUR y hay duration_hours
             const cantidadEfectiva = billingType === 'HOUR' && promiseDurationHours !== null
               ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
@@ -4216,8 +4219,6 @@ export async function updatePublicPromiseData(
   success: boolean;
   error?: string;
 }> {
-  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
-  console.log('🚀 Ejecutando Action: updatePublicPromiseData');
   try {
     // 1. Validar que el studio existe
     const studio = await prisma.studios.findUnique({
@@ -4906,6 +4907,7 @@ export async function getPublicPromiseUpdate(
       status: string;
       order: number;
       is_courtesy: boolean;
+      billing_type?: string | null;
     };
 
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
@@ -5094,6 +5096,10 @@ export async function getPublicPromiseBasicData(
       contact_address: string | null;
       event_type_id: string | null;
       event_type_name: string | null;
+      event_type_cover_image_url: string | null;
+      event_type_cover_video_url: string | null;
+      event_type_cover_media_type: string | null;
+      event_type_cover_design_variant: string | null;
       event_name: string | null;
       event_date: Date | null;
       event_location: string | null;
@@ -5221,11 +5227,10 @@ export async function getPublicPromiseBasicData(
           contact_address: promise.contact.address,
           event_type_id: promise.event_type?.id || null,
           event_type_name: promise.event_type?.name || null,
-          event_type_cover_image_url: promise.event_type?.cover_image_url || null,
-          event_type_cover_video_url: promise.event_type?.cover_video_url || null,
-          event_type_cover_media_type: promise.event_type?.cover_media_type as 'image' | 'video' | null || null,
-          event_type_cover_design_variant: promise.event_type?.cover_design_variant as 'solid' | 'gradient' | null || null,
-          event_type_cover_design_variant: promise.event_type?.cover_design_variant as 'solid' | 'gradient' | null || null,
+          event_type_cover_image_url: promise.event_type?.cover_image_url ?? null,
+          event_type_cover_video_url: promise.event_type?.cover_video_url ?? null,
+          event_type_cover_media_type: promise.event_type?.cover_media_type ?? null,
+          event_type_cover_design_variant: promise.event_type?.cover_design_variant ?? null,
           event_name: promise.name,
           event_date: promise.event_date,
           event_location: promise.event_location,
@@ -5279,8 +5284,6 @@ export async function invalidatePublicPromiseRouteState(
   studioSlug: string,
   promiseId: string
 ): Promise<{ success: boolean }> {
-  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
-  console.log('🚀 Ejecutando Action: invalidatePublicPromiseRouteState');
   try {
     const { revalidateTag } = await import('next/cache');
     revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, 'max');

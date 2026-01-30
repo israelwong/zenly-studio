@@ -111,21 +111,6 @@ export function PendientesPageClient({
   const router = useRouter();
   const { setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
 
-  // 🏗️ DEBUG: Contador de montajes para detectar re-montados excesivos (quitar en producción)
-  const mountCountRef = useRef(0);
-  useEffect(() => {
-    mountCountRef.current += 1;
-    const count = mountCountRef.current;
-    // eslint-disable-next-line no-console -- DEBUG: exceso de POST en /pendientes
-    console.log(`🏗️ PendientesPageClient montado (vez #${count})`, {
-      promiseId,
-      timestamp: new Date().toISOString(),
-    });
-    return () => {
-      // eslint-disable-next-line no-console -- DEBUG
-      console.log('🏗️ PendientesPageClient desmontado', { promiseId, habíaSidoMontado: count });
-    };
-  }, []); // Dependencias vacías: solo al montar/desmontar
   const {
     progressStep,
     progressError,
@@ -407,9 +392,6 @@ export function PendientesPageClient({
       return false;
     });
   }, [condiciones_comerciales, shareSettings.show_standard_conditions, shareSettings.show_offer_conditions]);
-
-  // 💎 DEBUG: Log de render para verificar estado
-  console.log('💎 Render Check - isAuth:', isAuthorizationInProgress, 'step:', progressStep, 'hasData:', !!authorizationData);
 
   return (
     <>

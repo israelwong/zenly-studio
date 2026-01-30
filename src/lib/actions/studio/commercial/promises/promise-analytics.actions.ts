@@ -18,8 +18,6 @@ export async function trackPromisePageView(
   sessionId: string,
   isPreview: boolean = false
 ) {
-  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
-  console.log('🚀 Ejecutando Action: trackPromisePageView');
   if (isPreview) {
     return { success: true, skipped: true, reason: 'preview_mode' };
   }

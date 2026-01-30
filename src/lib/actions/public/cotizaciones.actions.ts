@@ -28,8 +28,6 @@ export async function autorizarCotizacionPublica(
   };
   error?: string;
 }> {
-  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
-  console.log('🚀 Ejecutando Action: autorizarCotizacionPublica');
   try {
     // 1. Validar que la promesa y cotización existen
     const promise = await prisma.studio_promises.findUnique({

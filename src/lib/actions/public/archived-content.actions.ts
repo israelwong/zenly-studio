@@ -120,7 +120,7 @@ export async function getArchivedContent(
             id: post.id,
             title: post.title,
             caption: post.caption,
-            slug: post.slug,
+            slug: post.slug ?? '',
             cover_media_url: post.media[0]?.file_url || null,
             created_at: post.created_at,
             updated_at: post.updated_at

@@ -325,43 +325,12 @@ export function useCotizacionesRealtime({
         }
       }
 
-      // ⚠️ DEBUG: Log para verificar qué se está enviando
-      if (changeInfo.status === 'en_cierre' || changeInfo.status === 'cierre') {
-        console.log('[useCotizacionesRealtime] Evento de cierre detectado:', {
-          cotizacionId,
-          status: changeInfo.status,
-          statusChanged: changeInfo.statusChanged,
-          oldStatus: changeInfo.oldStatus,
-          hasOldRecord: !!oldRecord,
-          hasNewRecord: !!newRecord,
-        });
-        console.log('[useCotizacionesRealtime] Llamando onUpdatedRef.current:', {
-          cotizacionId,
-          hasCallback: !!onUpdatedRef.current,
-          changeInfo,
-        });
-      }
-
-      // ⚠️ TAREA 3: Pasar información completa de cambio
-      // Normalizar payload: pasar changeInfo directamente como segundo parámetro
       if (cotizacionId && onUpdatedRef.current) {
         try {
-          console.log('[useCotizacionesRealtime] Ejecutando callback onCotizacionUpdated', {
-            cotizacionId,
-            status: changeInfo.status,
-            statusChanged: changeInfo.statusChanged,
-          });
-          // Pasar changeInfo directamente como segundo parámetro
           onUpdatedRef.current(cotizacionId, changeInfo);
-          console.log('[useCotizacionesRealtime] Callback ejecutado exitosamente');
         } catch (error) {
           console.error('[useCotizacionesRealtime] Error al ejecutar callback:', error);
         }
-      } else {
-        console.warn('[useCotizacionesRealtime] No se puede ejecutar callback:', {
-          cotizacionId,
-          hasCallback: !!onUpdatedRef.current,
-        });
       }
     },
     [promiseId, extractCotizacion, ignoreCierreEvents]

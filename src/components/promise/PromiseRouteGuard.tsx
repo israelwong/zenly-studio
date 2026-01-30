@@ -54,19 +54,8 @@ export function PromiseRouteGuard({
   const [isReady, setIsReady] = useState(false);
   const serverValidatedRef = useRef(false);
 
-  // DEBUG: confirmar si el Guard es desmontado por un padre (bucle de parpadeo)
-  useEffect(() => {
-    console.log('🟢 GUARD MONTADO');
-    return () => console.log('🔴 GUARD DESMONTADO - ¿Quién me mató?');
-  }, []);
-
   // Decisionador Único: useLayoutEffect para comparar rutas ANTES del primer render
   useLayoutEffect(() => {
-    const status = isReady ? 'ready' : 'loading';
-    const target = serverTargetRoute ?? '(sin target)';
-    // eslint-disable-next-line no-console -- DEBUG: identificar origen de redirecciones (quitar en producción)
-    console.log('[PromiseRouteGuard] Guard ejecutado. Estado:', status, ', Hacia:', target, ', pathname:', pathname);
-
     if (hasRedirectedRef.current) return;
 
     // ✅ BLOQUEO DE REDUNDANCIA / YA EN DESTINO: Si ya estamos en la subruta correcta, no redirigir nunca
