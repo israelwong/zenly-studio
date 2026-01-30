@@ -5,6 +5,7 @@ import { Calendar, MapPin, Tag, ChevronRight } from 'lucide-react';
 import { ZenCard, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { useClientAuth } from '@/hooks/useClientAuth';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { formatMoney } from '@/lib/utils/package-price-formatter';
 import type { ClientEvent } from '@/types/client';
 
 interface EventCardProps {
@@ -24,15 +25,6 @@ export function EventCard({ evento }: EventCardProps) {
     month: 'long',
     year: 'numeric',
   });
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
 
   const isPagado = evento.cotizacion.pendiente <= 0;
 
@@ -79,20 +71,20 @@ export function EventCard({ evento }: EventCardProps) {
           )}
         </div>
 
-        {/* Resumen de pago */}
+        {/* Resumen de pago (solo Total a pagar, Total pagado, Saldo pendiente) */}
         <div className="pt-4 border-t border-zinc-800">
           <div className="space-y-1 text-sm">
             <div className="flex justify-between text-zinc-400">
-              <span>Total:</span>
+              <span>Total a pagar</span>
               <span className="text-zinc-300">{formatMoney(evento.cotizacion.total)}</span>
             </div>
             <div className="flex justify-between text-zinc-400">
-              <span>Pagado:</span>
+              <span>Total pagado</span>
               <span className="text-emerald-400">{formatMoney(evento.cotizacion.pagado)}</span>
             </div>
             {!isPagado && (
               <div className="flex justify-between font-semibold text-zinc-300 pt-1">
-                <span>Pendiente:</span>
+                <span>Saldo pendiente</span>
                 <span className="text-yellow-400">{formatMoney(evento.cotizacion.pendiente)}</span>
               </div>
             )}

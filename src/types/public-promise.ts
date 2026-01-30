@@ -105,6 +105,14 @@ export interface PublicCotizacion {
       discount_percentage: number | null;
     } | null;
   };
+  /** Total a pagar resuelto por el engine (SSoT). Opcional hasta que el servidor lo envíe. */
+  totalAPagar?: number;
+  /** Anticipo calculado por el engine sobre totalAPagar. Opcional hasta que el servidor lo envíe. */
+  anticipo?: number;
+  /** Diferido (totalAPagar − anticipo). Opcional hasta que el servidor lo envíe. */
+  diferido?: number;
+  /** Descuento aplicado resuelto por el engine. Opcional hasta que el servidor lo envíe. */
+  descuentoAplicado?: number;
 }
 
 export interface PublicPaquete {

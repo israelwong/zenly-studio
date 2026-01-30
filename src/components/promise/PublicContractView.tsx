@@ -9,6 +9,7 @@ import type { CondicionesComercialesData } from '@/app/[slug]/studio/config/cont
 import { signPublicContract } from '@/lib/actions/public/contracts.actions';
 import { toast } from 'sonner';
 import { generatePDFFromElement } from '@/lib/utils/pdf-generator';
+import { formatMoney } from '@/lib/utils/package-price-formatter';
 
 interface PublicContractViewProps {
   isOpen: boolean;
@@ -47,6 +48,12 @@ interface PublicContractViewProps {
     email?: string | null;
     address?: string | null;
   };
+  /** Totales del engine (SSoT). Si no se pasan, se usa cotizacionPrice como fallback solo para total. */
+  totalAPagar?: number;
+  anticipo?: number;
+  diferido?: number;
+  descuentoAplicado?: number;
+  /** Fallback cuando totalAPagar no viene del servidor (datos legacy). */
   cotizacionPrice: number;
   isSigned: boolean;
   eventTypeId?: string | null;
@@ -67,10 +74,18 @@ export function PublicContractView({
   condicionesComerciales,
   promise,
   studio,
+  totalAPagar: totalAPagarProp,
+  anticipo: anticipoProp,
+  diferido: diferidoProp,
+  descuentoAplicado: descuentoAplicadoProp,
   cotizacionPrice,
   isSigned,
   eventTypeId,
 }: PublicContractViewProps) {
+  const totalAPagar = totalAPagarProp ?? cotizacionPrice;
+  const anticipo = anticipoProp ?? 0;
+  const diferido = diferidoProp ?? 0;
+  const descuentoAplicado = descuentoAplicadoProp ?? 0;
   const [isSigning, setIsSigning] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -204,21 +219,6 @@ export function PublicContractView({
     }
   }, [isOpen, contractContent, contractTemplateId, shouldUseTemplate, loadPromiseData, loadContractFromTemplate]);
 
-  // Calcular total con descuentos y condiciones comerciales
-  const calcularTotal = () => {
-    let total = cotizacionPrice;
-    
-    // Aplicar descuento de condiciones comerciales si existe
-    if (condicionesComerciales?.discount_percentage) {
-      const descuento = (total * condicionesComerciales.discount_percentage) / 100;
-      total = total - descuento;
-    }
-    
-    return total;
-  };
-
-  const totalContrato = calcularTotal();
-
   // Preparar datos del evento para el preview (fallback si no se cargan desde el servidor)
   const eventDataFallback: EventContractData = {
     nombre_cliente: promise.contact_name,
@@ -235,7 +235,7 @@ export function PublicContractView({
           day: 'numeric',
         })
       : 'Fecha por definir',
-    total_contrato: `$${totalContrato.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`,
+    total_contrato: formatMoney(totalAPagar),
     condiciones_pago: condicionesComerciales?.description || 'Por definir',
     nombre_studio: studio.studio_name,
     nombre_representante: studio.representative_name || undefined,
@@ -245,41 +245,19 @@ export function PublicContractView({
     servicios_incluidos: [], // Se renderiza desde el contenido del contrato
   };
 
-  // Construir condicionesData con todos los campos necesarios para el desglose
+  // Condiciones comerciales: valores del engine (SSoT), metadata de condiciones para el bloque
   const condicionesData: CondicionesComercialesData | undefined = condicionesComerciales
-    ? (() => {
-        // Calcular descuento aplicado
-        let descuentoAplicado = 0;
-        if (condicionesComerciales.discount_percentage) {
-          descuentoAplicado = (cotizacionPrice * condicionesComerciales.discount_percentage) / 100;
-        }
-        
-        const totalFinal = cotizacionPrice - descuentoAplicado;
-        
-        // Calcular anticipo
-        let montoAnticipo: number | undefined;
-        const advanceType = condicionesComerciales.advance_type as 'percentage' | 'fixed_amount' | null;
-        
-        if (advanceType === 'fixed_amount' && condicionesComerciales.advance_amount) {
-          montoAnticipo = condicionesComerciales.advance_amount;
-        } else if (advanceType === 'percentage' && condicionesComerciales.advance_percentage) {
-          montoAnticipo = (totalFinal * condicionesComerciales.advance_percentage) / 100;
-        }
-        
-        const data = {
-          nombre: condicionesComerciales.name,
-          descripcion: condicionesComerciales.description || undefined,
-          porcentaje_descuento: condicionesComerciales.discount_percentage || undefined,
-          porcentaje_anticipo: condicionesComerciales.advance_percentage || undefined,
-          tipo_anticipo: advanceType || undefined,
-          monto_anticipo: montoAnticipo,
-          total_contrato: cotizacionPrice, // Precio base antes de descuentos
-          total_final: totalFinal, // Precio después de descuentos
-          descuento_aplicado: descuentoAplicado, // Monto del descuento aplicado
-        };
-
-        return data;
-      })()
+    ? {
+        nombre: condicionesComerciales.name,
+        descripcion: condicionesComerciales.description || undefined,
+        porcentaje_descuento: condicionesComerciales.discount_percentage || undefined,
+        porcentaje_anticipo: condicionesComerciales.advance_percentage || undefined,
+        tipo_anticipo: (condicionesComerciales.advance_type as 'percentage' | 'fixed_amount') || undefined,
+        monto_anticipo: anticipo > 0 ? anticipo : undefined,
+        total_contrato: totalAPagar + descuentoAplicado > 0 ? totalAPagar + descuentoAplicado : totalAPagar,
+        total_final: totalAPagar,
+        descuento_aplicado: descuentoAplicado > 0 ? descuentoAplicado : undefined,
+      }
     : undefined;
 
   const handleSign = () => {

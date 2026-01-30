@@ -19,8 +19,11 @@ export interface ClientCotizacion {
   id: string;
   name: string;
   status: string;
+  /** Total a pagar (resuelto en servidor por cotizacion-calculation-engine). */
   total: number;
+  /** Monto ya pagado. */
   pagado: number;
+  /** Saldo pendiente (total − pagado). */
   pendiente: number;
   descuento: number | null;
   descripcion: string | null;

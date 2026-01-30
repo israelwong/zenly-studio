@@ -135,7 +135,7 @@
     "@types/react-dom": "^19.2.0",
     "@types/sharp": "^0.31.1",
     "autoprefixer": "^10.4.21",
-    "baseline-browser-mapping": "^2.8.28",
+    "baseline-browser-mapping": "^2.9.19",
     "eslint": "^9",
     "eslint-config-next": "^16.0.7",
     "mini-css-extract-plugin": "^2.9.4",

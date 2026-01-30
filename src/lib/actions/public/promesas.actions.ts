@@ -13,6 +13,7 @@ import type { SeccionData } from "@/lib/actions/schemas/catalogo-schemas";
 import { construirEstructuraJerarquicaCotizacion } from "@/lib/actions/studio/commercial/promises/cotizacion-structure.utils";
 import { calcularCantidadEfectiva } from "@/lib/utils/dynamic-billing-calc";
 import { calculatePackagePrice } from "@/lib/utils/package-price-engine";
+import { calculateCotizacionTotals } from "@/lib/utils/cotizacion-calculation-engine";
 import type { PipelineStage } from "@/lib/actions/schemas/promises-schemas";
 
 /**
@@ -857,12 +858,7 @@ export async function getPublicPromisePendientes(
   };
   error?: string;
 }> {
-  const startTime = Date.now();
-  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
   try {
-    // 1. Obtener datos básicos
-    const basicDataStart = Date.now();
     const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
 
     if (!basicData.success || !basicData.data) {
@@ -1082,8 +1078,6 @@ export async function getPublicPromisePendientes(
     const allItemIds = Array.from(new Set([...itemIdsFromQuotes, ...itemIdsFromPaquetes]));
     const itemIdsFromQuotesArray = Array.from(itemIdsFromQuotes);
 
-    // ⚠️ TAREA 3: Paralelizar items, multimedia, condiciones y términos
-    const paralelizacionStart = Date.now();
     const [catalogo, itemsMediaData, condicionesSettled, terminosSettled] = await Promise.all([
       // ⚠️ TAREA 2: Items filtrados SOLO por IDs únicos de cotizaciones y paquetes
       // CRÍTICO: obtenerItemsPorIds usa where: { id: { in: allItemIds } } - solo estos items
@@ -1113,13 +1107,6 @@ export async function getPublicPromisePendientes(
       // Términos y condiciones
       obtenerTerminosCondicionesPublicos(studioSlug).catch(() => ({ success: false, error: 'Error al obtener términos' })),
     ]);
-
-    // ⚠️ TAREA 3: Logging quirúrgico para verificar optimización
-    const paralelizacionTime = Date.now() - paralelizacionStart;
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromisePendientes:paralelizacion: ${paralelizacionTime}ms`);
-      console.log(`[${uniqueId}] getPublicPromisePendientes:catalogo-optimizado: ${allItemIds.length} items (cotizaciones: ${itemIdsFromQuotes.size}, paquetes: ${itemIdsFromPaquetes.size})`);
-    }
 
     const configPrecios = configForm ? {
       utilidad_servicio: parseFloat(configForm.utilidad_servicio || '0.30') / 100,
@@ -1409,11 +1396,6 @@ export async function getPublicPromisePendientes(
       });
     }
 
-    const totalTime = Date.now() - startTime;
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[${uniqueId}] getPublicPromisePendientes:total: ${totalTime}ms`);
-    }
-    
     return {
       success: true,
       data: {
@@ -2375,17 +2357,10 @@ export async function getPublicPromiseNegociacion(
   };
   error?: string;
 }> {
-  const startTime = Date.now();
-  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
   try {
-    // 1. Obtener datos básicos
-    const basicDataStart = Date.now();
     const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
-    console.log(`[${uniqueId}] getPublicPromiseNegociacion:basicData: ${Date.now() - basicDataStart}ms`);
 
     if (!basicData.success || !basicData.data) {
-      console.log(`[${uniqueId}] getPublicPromiseNegociacion:total: ${Date.now() - startTime}ms (early return)`);
       return {
         success: false,
         error: basicData.error || "Error al obtener datos básicos",
@@ -2522,7 +2497,6 @@ export async function getPublicPromiseNegociacion(
     const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
 
     if (allItemIds.size > 0) {
-      const fetchMediaStart = Date.now();
       const itemsMediaData = await prisma.studio_item_media.findMany({
         where: {
           item_id: { in: Array.from(allItemIds) },
@@ -2537,7 +2511,6 @@ export async function getPublicPromiseNegociacion(
         },
         orderBy: { display_order: 'asc' },
       });
-      console.log(`[${uniqueId}] DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
 
       itemsMediaData.forEach((media) => {
         if (!itemsMediaMap.has(media.item_id)) {
@@ -2685,12 +2658,10 @@ export async function getPublicPromiseNegociacion(
     };
 
     // 7. Obtener condiciones comerciales disponibles y términos (con Promise.allSettled)
-    const condicionesStart = Date.now();
     const [condicionesSettled, terminosSettled] = await Promise.allSettled([
       obtenerCondicionesComercialesPublicas(studioSlug),
       obtenerTerminosCondicionesPublicos(studioSlug),
     ]);
-    console.log(`[${uniqueId}] getPublicPromiseNegociacion:condiciones: ${Date.now() - condicionesStart}ms`);
 
     const condicionesResult = condicionesSettled.status === 'fulfilled'
       ? condicionesSettled.value
@@ -2768,7 +2739,7 @@ export async function getPublicPromiseCierreBasic(
 
     const { studio } = basicData.data;
 
-    // Obtener solo precio de la cotización en cierre
+    // Obtener cotización en cierre con campos para el motor de cálculo (SSoT)
     const promise = await prisma.studio_promises.findFirst({
       where: {
         id: promiseId,
@@ -2783,6 +2754,12 @@ export async function getPublicPromiseCierreBasic(
           select: {
             price: true,
             discount: true,
+            negociacion_precio_original: true,
+            negociacion_precio_personalizado: true,
+            condiciones_comerciales_discount_percentage_snapshot: true,
+            condiciones_comerciales_advance_percentage_snapshot: true,
+            condiciones_comerciales_advance_type_snapshot: true,
+            condiciones_comerciales_advance_amount_snapshot: true,
           },
           take: 1,
         },
@@ -2797,11 +2774,21 @@ export async function getPublicPromiseCierreBasic(
     }
 
     const cotizacion = promise.quotes[0];
-    const totalPrice = Number(cotizacion.price) - (Number(cotizacion.discount) || 0);
+    const engineOut = calculateCotizacionTotals({
+      price: Number(cotizacion.price),
+      discount: cotizacion.discount != null ? Number(cotizacion.discount) : null,
+      negociacion_precio_original: cotizacion.negociacion_precio_original != null ? Number(cotizacion.negociacion_precio_original) : null,
+      negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+      condiciones_comerciales_discount_percentage_snapshot: cotizacion.condiciones_comerciales_discount_percentage_snapshot != null ? Number(cotizacion.condiciones_comerciales_discount_percentage_snapshot) : null,
+      condiciones_comerciales_advance_percentage_snapshot: cotizacion.condiciones_comerciales_advance_percentage_snapshot != null ? Number(cotizacion.condiciones_comerciales_advance_percentage_snapshot) : null,
+      condiciones_comerciales_advance_type_snapshot: cotizacion.condiciones_comerciales_advance_type_snapshot ?? null,
+      condiciones_comerciales_advance_amount_snapshot: cotizacion.condiciones_comerciales_advance_amount_snapshot != null ? Number(cotizacion.condiciones_comerciales_advance_amount_snapshot) : null,
+      condiciones_comerciales: null,
+    });
 
     return {
       success: true,
-      data: { totalPrice },
+      data: { totalPrice: engineOut.totalAPagar },
     };
   } catch (error) {
     console.error("[getPublicPromiseCierreBasic] Error:", error);
@@ -2895,6 +2882,10 @@ export async function getPublicPromiseCierre(
             order: true,
             negociacion_precio_original: true,
             negociacion_precio_personalizado: true,
+            condiciones_comerciales_discount_percentage_snapshot: true,
+            condiciones_comerciales_advance_percentage_snapshot: true,
+            condiciones_comerciales_advance_type_snapshot: true,
+            condiciones_comerciales_advance_amount_snapshot: true,
             cotizacion_items: {
               select: {
                 id: true,
@@ -3103,6 +3094,23 @@ export async function getPublicPromiseCierre(
     }));
 
     const cierre = cotizacion.cotizacion_cierre as any;
+    const condCierre = cierre?.condiciones_comerciales;
+    const engineOut = calculateCotizacionTotals({
+      price: Number(cotizacion.price),
+      discount: cotizacion.discount != null ? Number(cotizacion.discount) : null,
+      negociacion_precio_original: cotizacion.negociacion_precio_original != null ? Number(cotizacion.negociacion_precio_original) : null,
+      negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+      condiciones_comerciales_discount_percentage_snapshot: (cotizacion as any).condiciones_comerciales_discount_percentage_snapshot != null ? Number((cotizacion as any).condiciones_comerciales_discount_percentage_snapshot) : null,
+      condiciones_comerciales_advance_percentage_snapshot: (cotizacion as any).condiciones_comerciales_advance_percentage_snapshot != null ? Number((cotizacion as any).condiciones_comerciales_advance_percentage_snapshot) : null,
+      condiciones_comerciales_advance_type_snapshot: (cotizacion as any).condiciones_comerciales_advance_type_snapshot ?? null,
+      condiciones_comerciales_advance_amount_snapshot: (cotizacion as any).condiciones_comerciales_advance_amount_snapshot != null ? Number((cotizacion as any).condiciones_comerciales_advance_amount_snapshot) : null,
+      condiciones_comerciales: condCierre ? {
+        discount_percentage: condCierre.discount_percentage != null ? Number(condCierre.discount_percentage) : null,
+        advance_percentage: condCierre.advance_percentage != null ? Number(condCierre.advance_percentage) : null,
+        advance_type: condCierre.advance_type ?? null,
+        advance_amount: condCierre.advance_amount != null ? Number(condCierre.advance_amount) : null,
+      } : null,
+    });
 
     const mappedCotizacion: PublicCotizacion = {
       id: cotizacion.id,
@@ -3124,6 +3132,10 @@ export async function getPublicPromiseCierre(
       negociacion_precio_original: cotizacion.negociacion_precio_original ? Number(cotizacion.negociacion_precio_original) : null,
       negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado ? Number(cotizacion.negociacion_precio_personalizado) : null,
       items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
+      totalAPagar: engineOut.totalAPagar,
+      anticipo: engineOut.anticipo,
+      diferido: engineOut.diferido,
+      descuentoAplicado: engineOut.descuentoAplicado,
       // Información del contrato
       contract: (() => {
         const hasContract = (cierre?.contrato_definido && cierre?.contract_template_id) ||
@@ -3575,7 +3587,6 @@ export async function getPublicPromiseData(
     const itemsMediaMap = new Map<string, Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }>>();
 
     if (itemIdsFromQuotes.length > 0) {
-      const fetchMediaStart = Date.now();
       const itemsMediaData = await prisma.studio_item_media.findMany({
         where: {
           item_id: { in: Array.from(itemIdsFromQuotes) },
@@ -3592,7 +3603,6 @@ export async function getPublicPromiseData(
           display_order: 'asc',
         },
       });
-      console.log(`DB:FetchItemMedia: ${Date.now() - fetchMediaStart}ms`);
 
       // Crear mapa de multimedia por item_id
       itemsMediaData.forEach((media) => {
@@ -4701,12 +4711,7 @@ export async function getPublicPromiseUpdate(
   };
   error?: string;
 }> {
-  const startTime = Date.now();
-  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
   try {
-    // 1. Obtener datos básicos de promise y studio
-    const basicDataStart = Date.now();
     const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
 
     if (!basicData.success || !basicData.data) {
@@ -4719,7 +4724,6 @@ export async function getPublicPromiseUpdate(
     const { promise: promiseBasic, studio } = basicData.data;
 
     // 2. Obtener SOLO cotizaciones pendientes (sin paquetes, portafolios, etc.)
-    const fetchPromiseStart = Date.now();
     const promise = await withRetry(
       () =>
         prisma.studio_promises.findFirst({
@@ -4855,7 +4859,6 @@ export async function getPublicPromiseUpdate(
     });
 
     // 5. Mapear cotizaciones a formato público (usando la misma lógica que getPublicPromisePendientes)
-    const mapearStart = Date.now();
     type CotizacionItem = {
       id: string;
       item_id: string | null;
@@ -4974,9 +4977,6 @@ export async function getPublicPromiseUpdate(
         items_media: cotizacionMedia.length > 0 ? cotizacionMedia : undefined,
       };
     });
-    console.log(`[${uniqueId}] getPublicPromiseUpdate:mapear: ${Date.now() - mapearStart}ms`);
-
-    console.log(`[${uniqueId}] getPublicPromiseUpdate:total: ${Date.now() - startTime}ms`);
 
     return {
       success: true,

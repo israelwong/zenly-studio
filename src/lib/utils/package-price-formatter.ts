@@ -50,3 +50,22 @@ export function formatPackagePrice({
 export function formatPackagePriceSimple(price: number): string {
   return formatPackagePrice({ price });
 }
+
+/**
+ * Formatea un monto en moneda (2 decimales). Uso estándar para totales, anticipo, diferido.
+ */
+export function formatMoney(
+  amount: number,
+  options?: { locale?: string; currency?: string; minimumFractionDigits?: number; maximumFractionDigits?: number }
+): string {
+  const locale = options?.locale ?? 'es-MX';
+  const currency = options?.currency ?? 'MXN';
+  const min = options?.minimumFractionDigits ?? 2;
+  const max = options?.maximumFractionDigits ?? 2;
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: min,
+    maximumFractionDigits: max,
+  }).format(amount);
+}

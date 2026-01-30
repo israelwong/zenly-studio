@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { DollarSign, CheckCircle2 } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
-import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
+import { formatMoney } from '@/lib/utils/package-price-formatter';
 import type { ClientEventDetail } from '@/types/client';
 
 interface BalanceFinancieroCardProps {
@@ -16,9 +16,6 @@ interface BalanceFinancieroCardProps {
 export function BalanceFinancieroCard({ evento, slug, clientId, eventId }: BalanceFinancieroCardProps) {
   const router = useRouter();
 
-  // Calcular precio sin descuento (suma de total + descuento de todas las cotizaciones)
-  const precioSinDescuento = evento.total + (evento.descuento || 0);
-  const descuentoTotal = evento.descuento || 0;
   const totalAPagar = evento.total;
   const totalPagado = evento.pagado;
   const totalPendiente = evento.pendiente;
@@ -58,38 +55,22 @@ export function BalanceFinancieroCard({ evento, slug, clientId, eventId }: Balan
           <>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-400">Precio</span>
-                <span className="text-base font-medium text-zinc-100">
-                  {formatearMoneda(precioSinDescuento)}
+                <span className="text-sm text-zinc-400">Total a pagar</span>
+                <span className="text-lg font-semibold text-zinc-100">
+                  {formatMoney(totalAPagar)}
                 </span>
               </div>
-              {descuentoTotal > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-zinc-400">Descuento</span>
-                  <span className="text-base font-medium text-blue-400">
-                    -{formatearMoneda(descuentoTotal)}
-                  </span>
-                </div>
-              )}
-              <div className="pt-2 border-t border-zinc-800">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-zinc-400">Total a pagar</span>
-                  <span className="text-lg font-semibold text-zinc-100">
-                    {formatearMoneda(totalAPagar)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-zinc-400">Total pagado</span>
-                  <span className="text-base font-medium text-emerald-400">
-                    {formatearMoneda(totalPagado)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-zinc-400">Total pendiente</span>
-                  <span className="text-base font-medium text-amber-400">
-                    {formatearMoneda(totalPendiente)}
-                  </span>
-                </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-zinc-400">Total pagado</span>
+                <span className="text-base font-medium text-emerald-400">
+                  {formatMoney(totalPagado)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-zinc-400">Saldo pendiente</span>
+                <span className="text-base font-medium text-amber-400">
+                  {formatMoney(totalPendiente)}
+                </span>
               </div>
             </div>
             <div className="pt-2">

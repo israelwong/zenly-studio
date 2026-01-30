@@ -16,6 +16,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
+import { calculateCotizacionTotals } from '@/lib/utils/cotizacion-calculation-engine';
+import { formatMoney } from '@/lib/utils/package-price-formatter';
 
 interface NegociacionViewProps {
   promise: {
@@ -97,27 +99,42 @@ export function NegociacionView({
   // ⚠️ TAREA 1: Hook de navegación para prevenir race conditions
   const { isNavigating, setNavigating, getIsNavigating, clearNavigating } = usePromiseNavigation();
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price);
-  };
+  // Totales resueltos por el motor SSoT (misma lógica que servidor/PDF)
+  const precioCalculado = useMemo(() => {
+    const engineOut = calculateCotizacionTotals({
+      price: Number(cotizacion.price),
+      discount: cotizacion.discount != null ? Number(cotizacion.discount) : null,
+      negociacion_precio_original: cotizacion.negociacion_precio_original != null ? Number(cotizacion.negociacion_precio_original) : null,
+      negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+      condiciones_comerciales_discount_percentage_snapshot: null,
+      condiciones_comerciales_advance_percentage_snapshot: null,
+      condiciones_comerciales_advance_type_snapshot: null,
+      condiciones_comerciales_advance_amount_snapshot: null,
+      condiciones_comerciales: {
+        discount_percentage: condicionesComerciales.discount_percentage ?? null,
+        advance_percentage: condicionesComerciales.advance_percentage ?? null,
+        advance_type: condicionesComerciales.advance_type ?? null,
+        advance_amount: condicionesComerciales.advance_amount ?? null,
+      },
+    });
+    const advanceType: 'percentage' | 'fixed_amount' = (condicionesComerciales.advance_type === 'fixed_amount' || condicionesComerciales.advance_type === 'percentage')
+      ? condicionesComerciales.advance_type
+      : 'percentage';
+    const anticipoPorcentaje = advanceType === 'percentage' ? (condicionesComerciales.advance_percentage ?? 0) : null;
+    return {
+      precioBase: engineOut.precioBaseReal,
+      precioOriginal: engineOut.precioOriginalParaComparativa ?? engineOut.precioBaseReal,
+      precioFinalNegociado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+      descuentoCondicion: engineOut.descuentoPorcentaje ?? 0,
+      precioConDescuento: engineOut.totalAPagar,
+      precioAPagar: engineOut.totalAPagar,
+      advanceType,
+      anticipoPorcentaje,
+      anticipo: engineOut.anticipo,
+      diferido: engineOut.diferido,
+    };
+  }, [cotizacion.price, cotizacion.discount, cotizacion.negociacion_precio_original, cotizacion.negociacion_precio_personalizado, condicionesComerciales]);
 
-  // Obtener precio original (usar negociacion_precio_original si existe, sino el precio de la cotización)
-  const precioOriginal = useMemo(() => {
-    return cotizacion.negociacion_precio_original ?? cotizacion.price;
-  }, [cotizacion]);
-
-  // Calcular precio base (precio original con descuento de cotización si aplica)
-  const precioBase = useMemo(() => {
-    if (!cotizacion.discount) return precioOriginal;
-    return precioOriginal - (precioOriginal * cotizacion.discount) / 100;
-  }, [precioOriginal, cotizacion.discount]);
-
-  // Calcular total de cortesías (suma de subtotales de items con is_courtesy: true)
   const totalCortesias = useMemo(() => {
     let total = 0;
     cotizacion.servicios.forEach((seccion) => {
@@ -131,49 +148,6 @@ export function NegociacionView({
     });
     return total;
   }, [cotizacion]);
-
-  // Calcular precio con condición comercial
-  // Si hay precio personalizado negociado, ese es el precio final a pagar
-  const precioCalculado = useMemo(() => {
-    // Si hay precio personalizado negociado, usarlo como precio final
-    const precioFinal = cotizacion.negociacion_precio_personalizado ?? null;
-    
-    // Calcular precio con descuento de condición comercial (para referencia)
-    const descuentoCondicion = condicionesComerciales.discount_percentage ?? 0;
-    const precioConDescuento = descuentoCondicion > 0
-      ? precioBase - (precioBase * descuentoCondicion) / 100
-      : precioBase;
-
-    // Si hay precio personalizado, ese es el precio a pagar (ya incluye todo)
-    // Si no, usar el precio con descuento de condición comercial
-    const precioAPagar = precioFinal ?? precioConDescuento;
-
-    const advanceType: 'percentage' | 'fixed_amount' = (condicionesComerciales.advance_type === 'fixed_amount' || condicionesComerciales.advance_type === 'percentage')
-      ? condicionesComerciales.advance_type
-      : 'percentage';
-    
-    // Calcular anticipo basado en el precio a pagar
-    const anticipo = advanceType === 'fixed_amount' && condicionesComerciales.advance_amount
-      ? condicionesComerciales.advance_amount
-      : (condicionesComerciales.advance_percentage ?? 0) > 0
-        ? (precioAPagar * (condicionesComerciales.advance_percentage ?? 0)) / 100
-        : 0;
-    const anticipoPorcentaje = advanceType === 'percentage' ? (condicionesComerciales.advance_percentage ?? 0) : null;
-    const diferido = precioAPagar - anticipo;
-
-    return {
-      precioBase,
-      precioOriginal,
-      precioFinalNegociado: precioFinal,
-      descuentoCondicion,
-      precioConDescuento,
-      precioAPagar,
-      advanceType,
-      anticipoPorcentaje,
-      anticipo,
-      diferido,
-    };
-  }, [precioBase, precioOriginal, cotizacion.negociacion_precio_personalizado, condicionesComerciales, totalCortesias]);
 
   // ⚠️ SIN LÓGICA DE REDIRECCIÓN: El Gatekeeper en el layout maneja toda la redirección
   // Esta página solo se preocupa por mostrar sus datos
@@ -222,11 +196,11 @@ export function NegociacionView({
             )}
           </div>
 
-          {/* Precio principal */}
+          {/* Precio principal (total a pagar del motor SSoT) */}
           <div className="mb-6">
-            <p className="text-sm text-zinc-400 mb-2">Precio Total</p>
+            <p className="text-sm text-zinc-400 mb-2">Total a pagar</p>
             <p className="text-4xl font-bold text-blue-400">
-              {formatPrice(precioBase)}
+              {formatMoney(precioCalculado.precioAPagar)}
             </p>
           </div>
 

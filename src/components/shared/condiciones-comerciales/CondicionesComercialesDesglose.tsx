@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { CheckCircle2 } from 'lucide-react';
+import { formatMoney } from '@/lib/utils/package-price-formatter';
 
 interface CondicionComercial {
   id: string;
@@ -19,6 +20,12 @@ interface CondicionesComercialesDesgloseProps {
   dropdownMenu?: React.ReactNode;
   negociacionPrecioOriginal?: number | null;
   negociacionPrecioPersonalizado?: number | null;
+  /** Valores ya calculados por el servidor (SSoT). Si están presentes, no se calcula internamente. */
+  totalAPagar?: number;
+  anticipo?: number;
+  diferido?: number;
+  descuentoAplicado?: number;
+  ahorroTotal?: number;
 }
 
 /**
@@ -39,23 +46,17 @@ export function CondicionesComercialesDesglose({
   dropdownMenu,
   negociacionPrecioOriginal,
   negociacionPrecioPersonalizado,
+  totalAPagar: totalAPagarProp,
+  anticipo: anticipoProp,
+  diferido: diferidoProp,
+  descuentoAplicado: descuentoAplicadoProp,
+  ahorroTotal: ahorroTotalProp,
 }: CondicionesComercialesDesgloseProps) {
-  // Función helper para formatear dinero (debe estar antes de cualquier uso)
-  const formatMoney = (amount: number) => {
-    return amount.toLocaleString('es-MX', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
-
-  // Verificar si es modo negociación
-  // Solo mostrar desglose de negociación si existe precio negociado válido (> 0)
   const precioNegociadoNum = negociacionPrecioPersonalizado !== null && negociacionPrecioPersonalizado !== undefined
     ? Number(negociacionPrecioPersonalizado)
     : null;
   const esNegociacion = precioNegociadoNum !== null && !isNaN(precioNegociadoNum) && precioNegociadoNum > 0;
 
-  // Verificar si hay anticipo configurado
   const tieneAnticipoConfigurado = (condicion.advance_type === 'percentage' && condicion.advance_percentage !== null && condicion.advance_percentage !== undefined) ||
     (condicion.advance_type === 'amount' && condicion.advance_amount !== null && condicion.advance_amount !== undefined) ||
     (condicion.advance_type === 'fixed_amount' && condicion.advance_amount !== null && condicion.advance_amount !== undefined);
@@ -64,18 +65,14 @@ export function CondicionesComercialesDesglose({
   if (esNegociacion && precioNegociadoNum !== null) {
     const precioOriginalNegociacion = negociacionPrecioOriginal ?? precioBase;
     const precioNegociado = precioNegociadoNum;
-    const ahorroTotal = precioOriginalNegociacion - precioNegociado;
-    const totalAPagar = precioNegociado;
-
-    // Calcular anticipo basado en precio negociado
-    let anticipoMonto = 0;
-    if (condicion.advance_type === 'percentage' && condicion.advance_percentage !== null && condicion.advance_percentage !== undefined) {
-      anticipoMonto = precioNegociado * (condicion.advance_percentage / 100);
-    } else if ((condicion.advance_type === 'amount' || condicion.advance_type === 'fixed_amount') && condicion.advance_amount !== null && condicion.advance_amount !== undefined) {
-      anticipoMonto = condicion.advance_amount;
-    }
-
-    const diferido = precioNegociado - anticipoMonto;
+    const ahorroTotal = ahorroTotalProp ?? (precioOriginalNegociacion - precioNegociado);
+    const totalAPagar = totalAPagarProp ?? precioNegociado;
+    const anticipoMonto = anticipoProp ?? (condicion.advance_type === 'percentage' && condicion.advance_percentage != null
+      ? precioNegociado * (condicion.advance_percentage / 100)
+      : (condicion.advance_type === 'amount' || condicion.advance_type === 'fixed_amount') && condicion.advance_amount != null
+        ? condicion.advance_amount
+        : 0);
+    const diferido = diferidoProp ?? (precioNegociado - anticipoMonto);
 
     return (
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-5 space-y-3">
@@ -105,20 +102,20 @@ export function CondicionesComercialesDesglose({
             <div className="flex justify-between items-center">
               <span className="text-zinc-400">Precio original:</span>
               <span className="text-white font-medium tabular-nums">
-                ${formatMoney(precioOriginalNegociacion)}
+                {formatMoney(precioOriginalNegociacion)}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-zinc-400">Precio negociado:</span>
               <span className="text-blue-400 font-medium tabular-nums">
-                ${formatMoney(precioNegociado)}
+                {formatMoney(precioNegociado)}
               </span>
             </div>
             {ahorroTotal > 0 && (
               <div className="flex justify-between items-center">
                 <span className="text-zinc-400">Ahorro total:</span>
                 <span className="text-emerald-400 font-medium tabular-nums">
-                  ${formatMoney(ahorroTotal)}
+                  {formatMoney(ahorroTotal)}
                 </span>
               </div>
             )}
@@ -126,7 +123,7 @@ export function CondicionesComercialesDesglose({
             <div className="flex justify-between items-center pt-3 border-t border-zinc-700">
               <span className="text-white font-semibold">Total a pagar:</span>
               <span className="text-emerald-400 font-bold text-lg tabular-nums">
-                ${formatMoney(totalAPagar)}
+                {formatMoney(totalAPagar)}
               </span>
             </div>
 
@@ -140,7 +137,7 @@ export function CondicionesComercialesDesglose({
                   :
                 </span>
                 <span className="text-emerald-400 font-medium tabular-nums">
-                  ${formatMoney(anticipoMonto)}
+                  {formatMoney(anticipoMonto)}
                 </span>
               </div>
             )}
@@ -157,7 +154,7 @@ export function CondicionesComercialesDesglose({
                   :
                 </span>
                 <span className="text-amber-400 font-medium tabular-nums">
-                  ${formatMoney(diferido)}
+                  {formatMoney(diferido)}
                 </span>
               </div>
             )}
@@ -167,22 +164,18 @@ export function CondicionesComercialesDesglose({
     );
   }
 
-  // VARIANTE NORMAL
-  const descuentoMonto = condicion.discount_percentage
+  // VARIANTE NORMAL: usar valores del servidor si vienen, sino calcular (retrocompatibilidad)
+  const descuentoMonto = descuentoAplicadoProp ?? (condicion.discount_percentage
     ? precioBase * (condicion.discount_percentage / 100)
-    : 0;
+    : 0);
   const subtotal = precioBase - descuentoMonto;
-  const totalAPagar = subtotal;
-
-  // Calcular anticipo basado en subtotal
-  let anticipoMonto = 0;
-  if (condicion.advance_type === 'percentage' && condicion.advance_percentage !== null && condicion.advance_percentage !== undefined) {
-    anticipoMonto = subtotal * (condicion.advance_percentage / 100);
-  } else if ((condicion.advance_type === 'amount' || condicion.advance_type === 'fixed_amount') && condicion.advance_amount !== null && condicion.advance_amount !== undefined) {
-    anticipoMonto = condicion.advance_amount;
-  }
-
-  const diferido = subtotal - anticipoMonto;
+  const totalAPagar = totalAPagarProp ?? subtotal;
+  const anticipoMonto = anticipoProp ?? (condicion.advance_type === 'percentage' && condicion.advance_percentage != null
+    ? totalAPagar * (condicion.advance_percentage / 100)
+    : (condicion.advance_type === 'amount' || condicion.advance_type === 'fixed_amount') && condicion.advance_amount != null
+      ? condicion.advance_amount
+      : 0);
+  const diferido = diferidoProp ?? (totalAPagar - anticipoMonto);
 
   return (
     <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-5 space-y-3">
@@ -216,7 +209,7 @@ export function CondicionesComercialesDesglose({
           <div className="flex justify-between items-center">
             <span className="text-zinc-400">Precio base:</span>
             <span className="text-white font-medium tabular-nums">
-              ${formatMoney(precioBase)}
+              {formatMoney(precioBase)}
             </span>
           </div>
 
@@ -226,7 +219,7 @@ export function CondicionesComercialesDesglose({
                 Descuento ({condicion.discount_percentage}%):
               </span>
               <span className="text-red-400 font-medium tabular-nums">
-                -${formatMoney(descuentoMonto)}
+                -{formatMoney(descuentoMonto)}
               </span>
             </div>
           )}
@@ -235,7 +228,7 @@ export function CondicionesComercialesDesglose({
             <div className="flex justify-between items-center pt-2 border-t border-zinc-700">
               <span className="text-zinc-300 font-medium">Subtotal:</span>
               <span className="text-white font-semibold tabular-nums">
-                ${formatMoney(subtotal)}
+                {formatMoney(subtotal)}
               </span>
             </div>
           )}
@@ -243,7 +236,7 @@ export function CondicionesComercialesDesglose({
           <div className="flex justify-between items-center pt-3 border-t border-zinc-700">
             <span className="text-white font-semibold">Total a pagar:</span>
             <span className="text-emerald-400 font-bold text-lg tabular-nums">
-              ${formatMoney(totalAPagar)}
+              {formatMoney(totalAPagar)}
             </span>
           </div>
 
@@ -257,7 +250,7 @@ export function CondicionesComercialesDesglose({
                 :
               </span>
               <span className="text-emerald-400 font-medium tabular-nums">
-                ${formatMoney(anticipoMonto)}
+                {formatMoney(anticipoMonto)}
               </span>
             </div>
           )}
@@ -274,7 +267,7 @@ export function CondicionesComercialesDesglose({
                 :
               </span>
               <span className="text-amber-400 font-medium tabular-nums">
-                ${formatMoney(diferido)}
+                {formatMoney(diferido)}
               </span>
             </div>
           )}

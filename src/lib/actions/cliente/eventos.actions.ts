@@ -12,6 +12,7 @@ import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
 import type { ClientEvent, ClientEventDetail, ApiResponse } from '@/types/client';
 import type { PublicSeccionData } from '@/types/public-promise';
 import { construirEstructuraJerarquicaCotizacion, COTIZACION_ITEMS_SELECT_STANDARD } from '@/lib/actions/studio/commercial/promises/cotizacion-structure.utils';
+import { calculateCotizacionTotals } from '@/lib/utils/cotizacion-calculation-engine';
 
 /**
  * Obtiene todos los eventos contratados del cliente (promesas autorizadas)
@@ -52,6 +53,12 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
             price: true,
             discount: true,
             status: true,
+            negociacion_precio_original: true,
+            negociacion_precio_personalizado: true,
+            condiciones_comerciales_discount_percentage_snapshot: true,
+            condiciones_comerciales_advance_percentage_snapshot: true,
+            condiciones_comerciales_advance_type_snapshot: true,
+            condiciones_comerciales_advance_amount_snapshot: true,
             cotizacion_items: {
               select: {
                 ...COTIZACION_ITEMS_SELECT_STANDARD,
@@ -92,14 +99,21 @@ export async function obtenerEventosCliente(contactId: string): Promise<ApiRespo
         return null;
       }
 
-      // Calcular totales
-      // El descuento viene como monto absoluto en $ (no como factor decimal)
-      const precioBase = cotizacion.price || 0;
-      const descuento = cotizacion.discount || null;
-      const descuentoEnDolares = descuento || 0;
-      const total = precioBase - descuentoEnDolares;
+      const engineOut = calculateCotizacionTotals({
+        price: Number(cotizacion.price ?? 0),
+        discount: cotizacion.discount != null ? Number(cotizacion.discount) : null,
+        negociacion_precio_original: cotizacion.negociacion_precio_original != null ? Number(cotizacion.negociacion_precio_original) : null,
+        negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+        condiciones_comerciales_discount_percentage_snapshot: cotizacion.condiciones_comerciales_discount_percentage_snapshot != null ? Number(cotizacion.condiciones_comerciales_discount_percentage_snapshot) : null,
+        condiciones_comerciales_advance_percentage_snapshot: cotizacion.condiciones_comerciales_advance_percentage_snapshot != null ? Number(cotizacion.condiciones_comerciales_advance_percentage_snapshot) : null,
+        condiciones_comerciales_advance_type_snapshot: cotizacion.condiciones_comerciales_advance_type_snapshot ?? null,
+        condiciones_comerciales_advance_amount_snapshot: cotizacion.condiciones_comerciales_advance_amount_snapshot != null ? Number(cotizacion.condiciones_comerciales_advance_amount_snapshot) : null,
+        condiciones_comerciales: null,
+      });
+      const total = engineOut.totalAPagar;
       const pagado = cotizacion.pagos.reduce((sum, pago) => sum + Number(pago.amount), 0);
       const pendiente = total - pagado;
+      const descuento = engineOut.descuentoAplicado > 0 ? engineOut.descuentoAplicado : (cotizacion.discount != null ? Number(cotizacion.discount) : null);
 
       // ⚠️ OPTIMIZACIÓN: Obtener catálogo del studio para ordenamiento correcto
       const catalogo = promise.studio?.slug ? (catalogosMap.get(promise.studio.slug) || []) : [];
@@ -233,6 +247,12 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
             price: true,
             discount: true,
             status: true,
+            negociacion_precio_original: true,
+            negociacion_precio_personalizado: true,
+            condiciones_comerciales_discount_percentage_snapshot: true,
+            condiciones_comerciales_advance_percentage_snapshot: true,
+            condiciones_comerciales_advance_type_snapshot: true,
+            condiciones_comerciales_advance_amount_snapshot: true,
             cotizacion_items: {
               select: {
                 ...COTIZACION_ITEMS_SELECT_STANDARD,
@@ -271,17 +291,23 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
       }
     }
 
-    // Procesar todas las cotizaciones aprobadas
+    // Procesar todas las cotizaciones aprobadas (total resuelto por motor SSoT)
     const cotizaciones = promise.quotes.map((cotizacion) => {
-      // Calcular totales por cotización
-      const precioBase = cotizacion.price || 0;
-      const descuento = cotizacion.discount || null;
-      const descuentoEnDolares = descuento || 0;
-      const total = precioBase - descuentoEnDolares;
+      const engineOut = calculateCotizacionTotals({
+        price: Number(cotizacion.price ?? 0),
+        discount: cotizacion.discount != null ? Number(cotizacion.discount) : null,
+        negociacion_precio_original: cotizacion.negociacion_precio_original != null ? Number(cotizacion.negociacion_precio_original) : null,
+        negociacion_precio_personalizado: cotizacion.negociacion_precio_personalizado != null ? Number(cotizacion.negociacion_precio_personalizado) : null,
+        condiciones_comerciales_discount_percentage_snapshot: cotizacion.condiciones_comerciales_discount_percentage_snapshot != null ? Number(cotizacion.condiciones_comerciales_discount_percentage_snapshot) : null,
+        condiciones_comerciales_advance_percentage_snapshot: cotizacion.condiciones_comerciales_advance_percentage_snapshot != null ? Number(cotizacion.condiciones_comerciales_advance_percentage_snapshot) : null,
+        condiciones_comerciales_advance_type_snapshot: cotizacion.condiciones_comerciales_advance_type_snapshot ?? null,
+        condiciones_comerciales_advance_amount_snapshot: cotizacion.condiciones_comerciales_advance_amount_snapshot != null ? Number(cotizacion.condiciones_comerciales_advance_amount_snapshot) : null,
+        condiciones_comerciales: null,
+      });
+      const total = engineOut.totalAPagar;
       const pagado = cotizacion.pagos.reduce((sum, pago) => sum + Number(pago.amount), 0);
       const pendiente = total - pagado;
 
-      // Agrupar servicios usando la estructura de la cotización con orden del catálogo
       const serviciosAgrupados = agruparServiciosPorCotizacion(cotizacion.cotizacion_items, catalogo);
 
       return {
@@ -291,7 +317,7 @@ export async function obtenerEventoDetalle(eventIdOrPromiseId: string, contactId
         total,
         pagado,
         pendiente,
-        descuento,
+        descuento: cotizacion.discount != null ? Number(cotizacion.discount) : null,
         descripcion: cotizacion.description,
         servicios: serviciosAgrupados,
       };

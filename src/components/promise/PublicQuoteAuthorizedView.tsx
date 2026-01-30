@@ -539,6 +539,26 @@ export function PublicQuoteAuthorizedView({
 
       <div className="max-w-4xl mx-auto px-4 py-8">
 
+        {/* Resumen financiero (totales del servidor - SSoT) */}
+        <div className="mb-8">
+          <PublicQuoteFinancialCard
+            cotizacionName={cotizacion.name}
+            cotizacionDescription={cotizacion.description}
+            cotizacionPrice={cotizacion.price}
+            cotizacionDiscount={cotizacion.discount}
+            condicionesComerciales={condicionesComerciales}
+            negociacionPrecioOriginal={cotizacion.negociacion_precio_original}
+            negociacionPrecioPersonalizado={cotizacion.negociacion_precio_personalizado}
+            totalAPagar={cotizacion.totalAPagar}
+            anticipo={cotizacion.anticipo}
+            diferido={cotizacion.diferido}
+            descuentoAplicado={cotizacion.descuentoAplicado}
+            ahorroTotal={cotizacion.negociacion_precio_personalizado != null && cotizacion.negociacion_precio_original != null
+              ? cotizacion.negociacion_precio_original - cotizacion.negociacion_precio_personalizado
+              : undefined}
+          />
+        </div>
+
         {/* Flujo reorganizado: Paso principal destacado */}
         <div className="relative space-y-6">
           {/* PASO PRINCIPAL: Firma de Contrato */}
@@ -723,6 +743,10 @@ export function PublicQuoteAuthorizedView({
           condicionesComerciales={condicionesComerciales}
           promise={promise}
           studio={studio}
+          totalAPagar={cotizacion.totalAPagar}
+          anticipo={cotizacion.anticipo}
+          diferido={cotizacion.diferido}
+          descuentoAplicado={cotizacion.descuentoAplicado}
           cotizacionPrice={cotizacionPrice}
           isSigned={isContractSigned}
           eventTypeId={eventTypeId}

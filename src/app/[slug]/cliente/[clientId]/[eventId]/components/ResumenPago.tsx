@@ -5,35 +5,25 @@ import { Receipt, ArrowRight } from 'lucide-react';
 import { ZenCard, ZenButton, ZenBadge } from '@/components/ui/zen';
 import { SeparadorZen } from '@/components/ui/zen';
 import { useClientAuth } from '@/hooks/useClientAuth';
+import { formatMoney } from '@/lib/utils/package-price-formatter';
 
 interface ResumenPagoProps {
   eventoId: string;
   total: number;
   pagado: number;
   pendiente: number;
-  descuento: number | null;
+  /** Solo para cálculo interno; no se expone al cliente (blindaje privacidad). */
+  descuento?: number | null;
   showHistorialButton?: boolean;
 }
 
-export function ResumenPago({ eventoId, total, pagado, pendiente, descuento, showHistorialButton = true }: ResumenPagoProps) {
+export function ResumenPago({ eventoId, total, pagado, pendiente, showHistorialButton = true }: ResumenPagoProps) {
   const router = useRouter();
   const params = useParams();
   const { cliente } = useClientAuth();
   const slug = params?.slug as string;
   const clientId = params?.clientId as string || cliente?.id;
 
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  // Calcular precio sin descuento (igual que BalanceFinancieroCard)
-  const precioSinDescuento = total + (descuento || 0);
-  const descuentoTotal = descuento || 0;
   const totalAPagar = total;
   const totalPagado = pagado;
   const totalPendiente = pendiente;
@@ -54,45 +44,28 @@ export function ResumenPago({ eventoId, total, pagado, pendiente, descuento, sho
         </div>
 
         <div className="space-y-3">
-          {/* Precio sin descuento */}
-          <div className="flex justify-between text-sm">
-            <span className="text-zinc-400">Precio</span>
-            <span className="text-zinc-300">{formatMoney(precioSinDescuento)}</span>
-          </div>
-
-          {/* Descuento si existe */}
-          {descuentoTotal > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-zinc-400">Descuento</span>
-              <span className="text-blue-400">-{formatMoney(descuentoTotal)}</span>
-            </div>
-          )}
-
-          <SeparadorZen />
-
-          {/* Total a pagar */}
           <div className="flex justify-between text-sm font-semibold">
             <span className="text-zinc-400">Total a pagar</span>
             <span className="text-zinc-100">{formatMoney(totalAPagar)}</span>
           </div>
 
-          {/* Total pagado */}
           <div className="flex justify-between text-sm">
             <span className="text-zinc-400">Total pagado</span>
             <span className="text-emerald-400 font-medium">{formatMoney(totalPagado)}</span>
           </div>
 
-          {/* Total pendiente o Todo pagado */}
           {todoPagado ? (
             <div className="flex justify-between text-sm">
               <span className="text-emerald-400 font-medium">Todo pagado</span>
             </div>
           ) : (
             <div className="flex justify-between text-sm">
-              <span className="text-zinc-400">Total pendiente</span>
+              <span className="text-zinc-400">Saldo pendiente</span>
               <span className="text-amber-400 font-medium">{formatMoney(totalPendiente)}</span>
             </div>
           )}
+
+          <SeparadorZen />
 
           {/* Barra de progreso */}
           <div className="space-y-1">
