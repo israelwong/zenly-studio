@@ -8,6 +8,9 @@ import { trackContentEvent } from '@/lib/actions/studio/analytics/analytics.acti
 /**
  * Trackear visita a página de promesa pública
  * Solo trackea si NO es preview mode
+ *
+ * IMPORTANTE: Esta acción (y trackContentEvent) NUNCA deben llamar a revalidatePath
+ * ni revalidateTag. Se ejecutan al cargar la vista y causarían un bucle infinito de refresco.
  */
 export async function trackPromisePageView(
   studioId: string,
@@ -15,6 +18,8 @@ export async function trackPromisePageView(
   sessionId: string,
   isPreview: boolean = false
 ) {
+  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
+  console.log('🚀 Ejecutando Action: trackPromisePageView');
   if (isPreview) {
     return { success: true, skipped: true, reason: 'preview_mode' };
   }

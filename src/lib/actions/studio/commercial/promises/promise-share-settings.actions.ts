@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 export interface PromiseShareSettings {
   show_packages: boolean;
@@ -228,6 +228,8 @@ export async function updatePromiseShareSettings(
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
     revalidatePath(`/${studioSlug}/promise/${promiseId}`);
+    revalidateTag(`public-promise-${studioSlug}-${promiseId}`, "max");
+    revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, "max");
 
     return { success: true };
   } catch (error) {

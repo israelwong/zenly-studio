@@ -21,15 +21,15 @@ interface PromiseRouteGuardProps {
 }
 
 /**
- * Normaliza una ruta eliminando espacios, trailing slashes y query params
- * Asegura comparación robusta entre rutas
+ * Normaliza una ruta: elimina query params, espacios y trailing slashes.
+ * Asegura comparación robusta entre rutas (evita ping-pong pendientes/negociacion/cierre ↔ raíz).
  */
-function clean(path: string): string {
+function normalize(path: string): string {
   if (!path) return '';
   return path
-    .split('?')[0] // Sin query params
-    .trim() // Sin espacios
-    .replace(/\/$/, ''); // Sin trailing slash
+    .split('?')[0]
+    .trim()
+    .replace(/\/+$/, ''); // Una o más barras al final
 }
 
 /**
@@ -54,56 +54,61 @@ export function PromiseRouteGuard({
   const [isReady, setIsReady] = useState(false);
   const serverValidatedRef = useRef(false);
 
+  // DEBUG: confirmar si el Guard es desmontado por un padre (bucle de parpadeo)
+  useEffect(() => {
+    console.log('🟢 GUARD MONTADO');
+    return () => console.log('🔴 GUARD DESMONTADO - ¿Quién me mató?');
+  }, []);
+
   // Decisionador Único: useLayoutEffect para comparar rutas ANTES del primer render
   useLayoutEffect(() => {
+    const status = isReady ? 'ready' : 'loading';
+    const target = serverTargetRoute ?? '(sin target)';
+    // eslint-disable-next-line no-console -- DEBUG: identificar origen de redirecciones (quitar en producción)
+    console.log('[PromiseRouteGuard] Guard ejecutado. Estado:', status, ', Hacia:', target, ', pathname:', pathname);
+
     if (hasRedirectedRef.current) return;
-    
+
+    // ✅ BLOQUEO DE REDUNDANCIA / YA EN DESTINO: Si ya estamos en la subruta correcta, no redirigir nunca
+    const currentNorm = normalize(pathname);
+    const targetNorm = serverTargetRoute ? normalize(serverTargetRoute) : '';
+    if (targetNorm && currentNorm === targetNorm) {
+      setIsReady(true);
+      serverValidatedRef.current = true;
+      return;
+    }
+
     // ✅ MANEJO DE ARRAY VACÍO: Si initialQuotes es [] (array vacío), marcar como ready inmediatamente
     // No debe esperar a que el array tenga longitud para considerar que 'hay datos'
     if (Array.isArray(initialQuotes) && initialQuotes.length === 0 && serverTargetRoute) {
-      const cleanCurrent = clean(pathname);
-      const cleanTarget = clean(serverTargetRoute);
-      
-      if (cleanCurrent === cleanTarget) {
-        setIsReady(true);
-        serverValidatedRef.current = true;
-        return;
-      } else if (!pathname.includes('/cliente')) {
+      // Validación ya en destino hecha arriba; aquí solo redirigir si estamos en ruta distinta y no /cliente
+      if (!pathname.includes('/cliente')) {
         hasRedirectedRef.current = true;
         router.replace(serverTargetRoute);
-        return;
       }
+      return;
     }
     
     // Si tenemos datos del servidor, hacer validación inmediata sin fetch
     if (initialQuotes && initialQuotes.length > 0 && serverTargetRoute) {
-      // Comparación robusta: limpiar ambas rutas
-      const cleanCurrent = clean(pathname);
-      const cleanTarget = clean(serverTargetRoute);
-      
-      if (cleanCurrent !== cleanTarget && !pathname.includes('/cliente')) {
+      // Redirigir solo si la ruta actual no coincide con el target (ya en destino se cubrió arriba)
+      if (currentNorm !== targetNorm && !pathname.includes('/cliente')) {
         hasRedirectedRef.current = true;
         router.replace(serverTargetRoute);
-        return; // No marcar como ready si redirigimos
+        return;
       }
-      
-      // Si la ruta es correcta, marcar como ready
       setIsReady(true);
       serverValidatedRef.current = true;
       return;
     }
     
-    // Si no tenemos datos del servidor, marcar como ready para permitir fetch
-    setIsReady(true);
+    // Paciente: sin datos del servidor no marcar ready; mostrar skeleton hasta fallback 2s o sync
   }, [pathname, serverTargetRoute, initialQuotes, router]);
 
   // ✅ HIDRATACIÓN GARANTIZADA: Si serverValidated es true, intentar ponerse en ready inmediatamente
   useEffect(() => {
     if (serverValidatedRef.current && serverTargetRoute && !isReady) {
-      const cleanCurrent = clean(pathname);
-      const cleanTarget = clean(serverTargetRoute);
-      
-      if (cleanCurrent === cleanTarget) {
+      if (normalize(pathname) === normalize(serverTargetRoute)) {
         setIsReady(true);
       } else if (!pathname.includes('/cliente')) {
         router.replace(serverTargetRoute);
@@ -140,8 +145,11 @@ export function PromiseRouteGuard({
   // Sincronizar al cambiar de ruta (solo si no tenemos datos iniciales)
   useEffect(() => {
     if (initialQuotes && serverTargetRoute) return; // Bypass: ya tenemos datos del servidor
-    
-    hasRedirectedRef.current = false; // Reset al cambiar de ruta
+
+    // No resetear hasRedirectedRef si la ruta actual ya coincide con el target (evita bucle raíz ↔ /pendientes)
+    if (serverTargetRoute && normalize(pathname) === normalize(serverTargetRoute)) return;
+
+    hasRedirectedRef.current = false; // Reset solo cuando pathname cambia a una ruta distinta del target
     handleSyncRoute();
   }, [pathname, promiseId, studioSlug, initialQuotes, serverTargetRoute]);
 
@@ -207,10 +215,7 @@ export function PromiseRouteGuard({
       }));
       
       const newTargetRoute = determinePromiseRoute(updatedQuotes, studioSlug, promiseId);
-      const cleanCurrent = clean(pathname);
-      const cleanTarget = clean(newTargetRoute);
-      
-      if (cleanCurrent !== cleanTarget && !pathname.includes('/cliente')) {
+      if (normalize(pathname) !== normalize(newTargetRoute) && !pathname.includes('/cliente')) {
         hasRedirectedRef.current = true;
         router.replace(newTargetRoute);
       }

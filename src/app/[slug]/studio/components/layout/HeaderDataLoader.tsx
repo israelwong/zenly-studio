@@ -5,6 +5,7 @@ import { getAgendaCount } from '@/lib/actions/shared/agenda-unified.actions';
 import { getRemindersDue } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { getCurrentUserId } from '@/lib/actions/studio/notifications/notifications.actions';
 import { obtenerAgendaUnificada } from '@/lib/actions/shared/agenda-unified.actions';
+import { useStudioReady } from '@/app/[slug]/studio/components/init/StudioReadyContext';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 
@@ -20,14 +21,14 @@ interface HeaderDataLoaderProps {
 }
 
 /**
- * Componente que carga datos no críticos del header después del primer render
- * para no bloquear el render inicial del layout
+ * Carga datos no críticos del header. Mount Guard: solo ejecuta cuando Studio está isReady y una vez por sesión.
  */
 export function HeaderDataLoader({ studioSlug, onDataLoaded }: HeaderDataLoaderProps) {
+  const { isReady } = useStudioReady();
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
-    if (hasLoaded) return;
+    if (!isReady || hasLoaded) return;
 
     const loadData = async () => {
       try {
@@ -122,7 +123,7 @@ export function HeaderDataLoader({ studioSlug, onDataLoaded }: HeaderDataLoaderP
     // Cargar después de un pequeño delay para no bloquear el render inicial
     const timer = setTimeout(loadData, 100);
     return () => clearTimeout(timer);
-  }, [studioSlug, onDataLoaded, hasLoaded]);
+  }, [studioSlug, onDataLoaded, hasLoaded, isReady]);
 
   return null;
 }

@@ -28,6 +28,10 @@ interface PublicQuoteFinancialCardProps {
   diferido?: number;
   descuentoAplicado?: number;
   ahorroTotal?: number;
+  /** Espejo comercial: si false, no se muestran montos (privacidad). Default true. */
+  showItemsPrices?: boolean;
+  /** Espejo comercial: si false, no se muestra desglose detallado, solo total. Default true. */
+  showCategoriesSubtotals?: boolean;
 }
 
 export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
@@ -43,6 +47,8 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
   diferido: diferidoProp,
   descuentoAplicado: descuentoAplicadoProp,
   ahorroTotal: ahorroTotalProp,
+  showItemsPrices = true,
+  showCategoriesSubtotals = true,
 }: PublicQuoteFinancialCardProps) {
   const tienePrecioNegociado = negociacionPrecioPersonalizado != null && Number(negociacionPrecioPersonalizado) > 0;
   const totalAPagar = totalAPagarProp ?? cotizacionPrice;
@@ -67,7 +73,13 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
       </ZenCardHeader>
       <ZenCardContent>
         <div className="space-y-4">
-          {condicionesComerciales ? (
+          {!showItemsPrices ? (
+            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 text-center">
+              <p className="text-sm text-zinc-400">
+                Tu cotización ha sido autorizada. Los montos se confirmarán con el estudio.
+              </p>
+            </div>
+          ) : condicionesComerciales && showCategoriesSubtotals ? (
             <CondicionesComercialesDesglose
               condicion={{
                 ...condicionesComerciales,
@@ -104,6 +116,8 @@ export const PublicQuoteFinancialCard = memo(function PublicQuoteFinancialCard({
     prevProps.negociacionPrecioPersonalizado === nextProps.negociacionPrecioPersonalizado &&
     prevProps.totalAPagar === nextProps.totalAPagar &&
     prevProps.anticipo === nextProps.anticipo &&
-    prevProps.diferido === nextProps.diferido
+    prevProps.diferido === nextProps.diferido &&
+    prevProps.showItemsPrices === nextProps.showItemsPrices &&
+    prevProps.showCategoriesSubtotals === nextProps.showCategoriesSubtotals
   );
 });

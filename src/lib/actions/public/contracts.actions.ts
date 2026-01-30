@@ -31,10 +31,14 @@ export async function signPublicContract(
   try {
     const validated = SignPublicContractSchema.parse(data);
 
-    // Obtener studio
+    // Obtener studio (incl. default de firma para validar toggle)
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: { id: true, studio_name: true },
+      select: {
+        id: true,
+        studio_name: true,
+        promise_share_default_auto_generate_contract: true,
+      },
     });
 
     if (!studio) {
@@ -51,7 +55,8 @@ export async function signPublicContract(
       },
       include: {
         promise: {
-          include: {
+          select: {
+            share_auto_generate_contract: true,
             contact: {
               select: {
                 id: true,
@@ -88,6 +93,22 @@ export async function signPublicContract(
     // Verificar si ya fue firmado (en la tabla temporal)
     if (cotizacion.cotizacion_cierre?.contract_signed_at) {
       return { success: false, error: "El contrato ya ha sido firmado" };
+    }
+
+    const promise = cotizacion.promise;
+    if (!promise) {
+      return { success: false, error: "Promesa no encontrada" };
+    }
+
+    // Espejo comercial: rechazar firma si el estudio tiene desactivado el toggle de firma
+    const allowSignature =
+      promise.share_auto_generate_contract ??
+      studio.promise_share_default_auto_generate_contract;
+    if (!allowSignature) {
+      return {
+        success: false,
+        error: "La firma de contrato no está habilitada para esta promesa",
+      };
     }
 
     // Fecha de firma: día calendario (date-only UTC) para que se muestre el día que el cliente firmó, sin desfase por timezone.
@@ -137,9 +158,9 @@ export async function signPublicContract(
       studio_id: studio.id,
       type: StudioNotificationType.CONTRACT_SIGNED,
       title: "Contrato firmado por el cliente",
-      message: `${cotizacion.promise.contact.name} firmó el contrato de la cotización "${cotizacion.name}"`,
+      message: `${promise.contact.name} firmó el contrato de la cotización "${cotizacion.name}"`,
       priority: NotificationPriority.HIGH,
-      contact_id: cotizacion.promise.contact.id,
+      contact_id: promise.contact.id,
       promise_id: promiseId,
       quote_id: cotizacionId,
       route: '/{slug}/studio/commercial/promises/{promise_id}',

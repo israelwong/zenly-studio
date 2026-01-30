@@ -49,6 +49,12 @@ interface PublicQuoteAuthorizedViewProps {
   };
   cotizacionPrice: number;
   eventTypeId?: string | null;
+  /** Espejo comercial: si viene del cierre, controla paso de firma y visibilidad de precios/desglose */
+  shareSettings?: {
+    auto_generate_contract: boolean;
+    show_items_prices: boolean;
+    show_categories_subtotals: boolean;
+  };
 }
 
 export function PublicQuoteAuthorizedView({
@@ -59,6 +65,7 @@ export function PublicQuoteAuthorizedView({
   studio,
   cotizacionPrice,
   eventTypeId,
+  shareSettings,
 }: PublicQuoteAuthorizedViewProps) {
   const router = useRouter();
   const [showContractView, setShowContractView] = useState(false);
@@ -539,7 +546,7 @@ export function PublicQuoteAuthorizedView({
 
       <div className="max-w-4xl mx-auto px-4 py-8">
 
-        {/* Resumen financiero (totales del servidor - SSoT) */}
+        {/* Resumen financiero (totales del servidor - SSoT); respeta show_items_prices / show_categories_subtotals */}
         <div className="mb-8">
           <PublicQuoteFinancialCard
             cotizacionName={cotizacion.name}
@@ -556,13 +563,15 @@ export function PublicQuoteAuthorizedView({
             ahorroTotal={cotizacion.negociacion_precio_personalizado != null && cotizacion.negociacion_precio_original != null
               ? cotizacion.negociacion_precio_original - cotizacion.negociacion_precio_personalizado
               : undefined}
+            showItemsPrices={shareSettings?.show_items_prices ?? true}
+            showCategoriesSubtotals={shareSettings?.show_categories_subtotals ?? true}
           />
         </div>
 
         {/* Flujo reorganizado: Paso principal destacado */}
         <div className="relative space-y-6">
-          {/* PASO PRINCIPAL: Firma de Contrato */}
-          {(isContractGenerated || isEnCierre) && (
+          {/* PASO PRINCIPAL: Firma de Contrato - solo si el estudio tiene habilitado auto_generate_contract */}
+          {(isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
             <div className="relative">
               {/* Línea conectora al siguiente paso - solo si el contrato está firmado */}
               {isContractSigned && (
@@ -726,8 +735,8 @@ export function PublicQuoteAuthorizedView({
         </div>
       </div>
 
-      {/* Vista de Contrato */}
-      {((hasContract && currentContract?.content) || (hasContractTemplate && currentContract?.template_id)) && (isContractGenerated || isEnCierre) && (
+      {/* Vista de Contrato - solo si firma habilitada (Espejo comercial) */}
+      {((hasContract && currentContract?.content) || (hasContractTemplate && currentContract?.template_id)) && (isContractGenerated || isEnCierre) && (shareSettings == null || shareSettings.auto_generate_contract === true) && (
         <PublicContractView
           isOpen={showContractView}
           onClose={() => setShowContractView(false)}

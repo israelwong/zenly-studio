@@ -5,6 +5,7 @@ import { ContactsSheetProvider } from '@/components/shared/contacts/ContactsShee
 import { SessionTimeoutProvider } from '@/components/providers/SessionTimeoutProvider';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 import { StudioInitializer } from './components/init/StudioInitializer';
+import { StudioReadyProvider } from './components/init/StudioReadyContext';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import { StudioLayoutWrapper } from './components/layout/StudioLayoutWrapper';
 import { obtenerIdentidadStudio } from '@/lib/actions/studio/profile/identidad/identidad.actions';
@@ -186,26 +187,28 @@ export default async function StudioLayout({
     return (
         <SessionTimeoutProvider inactivityTimeout={sessionTimeout}>
             <RealtimeProvider studioSlug={slug} enabled={true}>
-                <StudioInitializer studioSlug={slug} />
-                <ZenMagicChatProvider>
-                    <ContactsSheetProvider>
-                        <ZenSidebarProvider>
-                            <StudioLayoutWrapper 
-                                studioSlug={slug}
-                                initialIdentidadData={identidadData && !('error' in identidadData) ? identidadData : null}
-                                initialStorageData={storageData?.success ? storageData.data : null}
-                                initialAgendaCount={agendaCount} // ✅ PASO 4: Pre-cargado en servidor
-                                initialRemindersCount={remindersCount} // ✅ PASO 4: Pre-cargado en servidor
-                                initialHeaderUserId={headerUserId} // ✅ PASO 4: Pre-cargado en servidor (para useStudioNotifications)
-                                initialAgendaEvents={agendaEvents} // ✅ 6 eventos más próximos
-                                initialRemindersAlerts={remindersAlerts} // ✅ Recordatorios vencidos + hoy
-                            >
-                                {children}
-                            </StudioLayoutWrapper>
-                            <Toaster position="top-right" richColors />
-                        </ZenSidebarProvider>
-                    </ContactsSheetProvider>
-                </ZenMagicChatProvider>
+                <StudioReadyProvider>
+                    <StudioInitializer studioSlug={slug} />
+                    <ZenMagicChatProvider>
+                        <ContactsSheetProvider>
+                            <ZenSidebarProvider>
+                                <StudioLayoutWrapper
+                                    studioSlug={slug}
+                                    initialIdentidadData={identidadData && !('error' in identidadData) ? identidadData : null}
+                                    initialStorageData={storageData?.success ? storageData.data : null}
+                                    initialAgendaCount={agendaCount}
+                                    initialRemindersCount={remindersCount}
+                                    initialHeaderUserId={headerUserId}
+                                    initialAgendaEvents={agendaEvents}
+                                    initialRemindersAlerts={remindersAlerts}
+                                >
+                                    {children}
+                                </StudioLayoutWrapper>
+                                <Toaster position="top-right" richColors />
+                            </ZenSidebarProvider>
+                        </ContactsSheetProvider>
+                    </ZenMagicChatProvider>
+                </StudioReadyProvider>
             </RealtimeProvider>
         </SessionTimeoutProvider>
     );

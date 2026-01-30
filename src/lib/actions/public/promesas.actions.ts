@@ -2839,11 +2839,23 @@ export async function getPublicPromiseCierre(
       content: string;
       is_required: boolean;
     }>;
+    share_settings: {
+      show_packages: boolean;
+      show_categories_subtotals: boolean;
+      show_items_prices: boolean;
+      min_days_to_hire: number;
+      show_standard_conditions: boolean;
+      show_offer_conditions: boolean;
+      portafolios: boolean;
+      auto_generate_contract: boolean;
+      allow_recalc: boolean;
+      rounding_mode: 'exact' | 'charm';
+    };
   };
   error?: string;
 }> {
   try {
-    // 1. Obtener datos básicos
+    // 1. Obtener datos básicos (incl. share_* de promesa y defaults de studio)
     const basicData = await getPublicPromiseBasicData(studioSlug, promiseId);
 
     if (!basicData.success || !basicData.data) {
@@ -2854,6 +2866,19 @@ export async function getPublicPromiseCierre(
     }
 
     const { promise: promiseBasic, studio } = basicData.data;
+
+    const share_settings = {
+      show_packages: promiseBasic.share_show_packages ?? studio.promise_share_default_show_packages,
+      show_categories_subtotals: promiseBasic.share_show_categories_subtotals ?? studio.promise_share_default_show_categories_subtotals,
+      show_items_prices: promiseBasic.share_show_items_prices ?? studio.promise_share_default_show_items_prices,
+      min_days_to_hire: promiseBasic.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire ?? 30,
+      show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions ?? true,
+      show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions ?? false,
+      portafolios: (promiseBasic as { share_portafolios?: boolean | null }).share_portafolios ?? studio.promise_share_default_portafolios ?? true,
+      auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract ?? false,
+      allow_recalc: promiseBasic.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
+      rounding_mode: ((promiseBasic.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
+    };
 
     // 2. Obtener SOLO la cotización en cierre con cotizacion_cierre
     // ⚠️ ÍNDICE: Usa [promise_id] en studio_cotizaciones (existe ✅)
@@ -3198,6 +3223,7 @@ export async function getPublicPromiseCierre(
         },
         cotizaciones: [mappedCotizacion],
         terminos_condiciones: (terminosResult.success && 'data' in terminosResult && terminosResult.data) ? terminosResult.data : undefined,
+        share_settings,
       },
     };
   } catch (error) {
@@ -3297,6 +3323,8 @@ export async function getPublicPromiseData(
   };
   error?: string;
 }> {
+  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
+  console.log('🚀 Ejecutando Action: getPublicPromiseData');
   try {
     // 1. Validar que el studio existe
     const studio = await prisma.studios.findUnique({
@@ -4188,6 +4216,8 @@ export async function updatePublicPromiseData(
   success: boolean;
   error?: string;
 }> {
+  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
+  console.log('🚀 Ejecutando Action: updatePublicPromiseData');
   try {
     // 1. Validar que el studio existe
     const studio = await prisma.studios.findUnique({
@@ -5249,6 +5279,8 @@ export async function invalidatePublicPromiseRouteState(
   studioSlug: string,
   promiseId: string
 ): Promise<{ success: boolean }> {
+  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
+  console.log('🚀 Ejecutando Action: invalidatePublicPromiseRouteState');
   try {
     const { revalidateTag } = await import('next/cache');
     revalidateTag(`public-promise-route-state-${studioSlug}-${promiseId}`, 'max');

@@ -47,6 +47,18 @@ interface CierrePageDeferredProps {
         content: string;
         is_required: boolean;
       }>;
+      share_settings: {
+        show_packages: boolean;
+        show_categories_subtotals: boolean;
+        show_items_prices: boolean;
+        min_days_to_hire: number;
+        show_standard_conditions: boolean;
+        show_offer_conditions: boolean;
+        portafolios: boolean;
+        auto_generate_contract: boolean;
+        allow_recalc: boolean;
+        rounding_mode: 'exact' | 'charm';
+      };
     };
     error?: string;
   }>;
@@ -103,6 +115,7 @@ export function CierrePageDeferred({
     promise,
     studio,
     cotizaciones,
+    share_settings: shareSettings,
   } = result.data;
 
   // Obtener la cotización en cierre (debe ser la única)
@@ -141,6 +154,7 @@ export function CierrePageDeferred({
       }}
       cotizacionPrice={cotizacionEnCierre.price}
       eventTypeId={promise.event_type_id}
+      shareSettings={shareSettings}
     />
   );
 }

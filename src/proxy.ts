@@ -32,8 +32,6 @@ export async function proxy(request: NextRequest) {
   // Redirección para cualquier [slug]/login a /login
   const slugLoginMatch = pathname.match(/^\/([a-zA-Z0-9-]+)\/login$/);
   if (slugLoginMatch) {
-    const slug = slugLoginMatch[1];
-    console.log(`🔄 [ZENLY STUDIO] Redirecting /${slug}/login to /login`);
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -207,7 +205,6 @@ export async function proxy(request: NextRequest) {
       const studioSlug = user.user_metadata.studio_slug;
       const subPath = pathname.replace('/studio', '');
       const redirectUrl = new URL(`/${studioSlug}/studio${subPath}`, request.url);
-      console.log(`🔄 [ZENLY STUDIO] Redirecting ${pathname} to ${redirectUrl.pathname}`);
       return NextResponse.redirect(redirectUrl);
     } else {
       // Si no hay usuario o slug, redirigir a login
@@ -235,7 +232,6 @@ export async function proxy(request: NextRequest) {
     }
 
     // Si la subruta no es válida, redirigir a la página pública del slug
-    console.log(`⚠️ [ZENLY STUDIO] Invalid path ${pathname}, redirecting to /${slug}`);
     return NextResponse.redirect(new URL(`/${slug}`, request.url));
   }
 

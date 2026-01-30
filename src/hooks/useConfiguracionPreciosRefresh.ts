@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 
 // Evento personalizado para notificar cambios en configuración de precios
 export const CONFIGURACION_PRECIOS_UPDATE_EVENT = 'configuracion-precios-update';
@@ -29,8 +29,6 @@ export function useConfiguracionPreciosRefresh() {
       return;
     }
 
-    console.log('[useConfiguracionPreciosRefresh] 📢 Disparando evento de actualización:', { studioSlug, config });
-
     window.dispatchEvent(
       new CustomEvent<ConfiguracionPreciosUpdateEventDetail>(CONFIGURACION_PRECIOS_UPDATE_EVENT, {
         detail: {
@@ -50,32 +48,38 @@ export function useConfiguracionPreciosRefresh() {
 /**
  * Hook para escuchar actualizaciones de configuración de precios
  * Usar en componentes que necesitan recargar cuando cambia la configuración
+ *
+ * Estabilización: onUpdate se guarda en ref para que el useEffect solo dependa de studioSlug
+ * (evita registrar/desregistrar en bucle cuando el padre pasa un callback sin useCallback)
  */
 export function useConfiguracionPreciosUpdateListener(
   studioSlug: string,
   onUpdate: (config?: ConfiguracionPreciosUpdateEventDetail) => void
 ) {
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+
+  const lastCallRef = useRef<{ slug: string; ts: number }>({ slug: '', ts: 0 });
+  const THROTTLE_MS = 800;
+
+  // Nombre del canal estable: solo depende del slug (primitivo)
+  const slugStable = typeof studioSlug === 'string' ? studioSlug : '';
+
   useEffect(() => {
-    console.log('[useConfiguracionPreciosUpdateListener] 👂 Registrando listener para:', studioSlug);
+    if (!slugStable) return;
 
     const handleUpdate = (event: Event) => {
       const customEvent = event as CustomEvent<ConfiguracionPreciosUpdateEventDetail>;
-      console.log('[useConfiguracionPreciosUpdateListener] 📨 Evento recibido:', customEvent.detail);
-
-      if (customEvent.detail?.studioSlug === studioSlug) {
-        console.log('[useConfiguracionPreciosUpdateListener] ✅ Slug coincide, ejecutando callback');
-        onUpdate(customEvent.detail);
-      } else {
-        console.log('[useConfiguracionPreciosUpdateListener] ⚠️ Slug no coincide:', customEvent.detail?.studioSlug, 'vs', studioSlug);
-      }
+      const detail = customEvent.detail;
+      if (!detail?.studioSlug || detail.studioSlug !== slugStable) return;
+      const now = Date.now();
+      if (lastCallRef.current.slug === slugStable && now - lastCallRef.current.ts < THROTTLE_MS) return;
+      lastCallRef.current = { slug: slugStable, ts: now };
+      onUpdateRef.current?.(detail);
     };
 
     window.addEventListener(CONFIGURACION_PRECIOS_UPDATE_EVENT, handleUpdate);
-
-    return () => {
-      console.log('[useConfiguracionPreciosUpdateListener] 🔌 Desregistrando listener para:', studioSlug);
-      window.removeEventListener(CONFIGURACION_PRECIOS_UPDATE_EVENT, handleUpdate);
-    };
-  }, [studioSlug, onUpdate]);
+    return () => window.removeEventListener(CONFIGURACION_PRECIOS_UPDATE_EVENT, handleUpdate);
+  }, [slugStable]);
 }
 

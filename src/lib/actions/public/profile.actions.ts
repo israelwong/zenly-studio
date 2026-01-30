@@ -12,7 +12,6 @@ import {
     PublicStudioProfile,
     PublicSocialNetwork,
     PublicContactInfo,
-    PublicPortfolio
 } from "@/types/public-profile";
 import { PublicProfileDataSchema } from "@/lib/actions/schemas/public-profile-schemas";
 import { getCurrentUser } from "@/lib/auth/user-utils";
@@ -413,7 +412,7 @@ export async function getStudioProfileDeferredPosts(
                 success: true,
                 data: posts.map(post => ({
                     id: post.id,
-                    slug: post.slug,
+                    slug: post.slug ?? '',
                     title: post.title,
                     caption: post.caption,
                     tags: post.tags || [],
@@ -600,7 +599,7 @@ export async function getStudioProfileDeferredPortfolios(
                             title: block.title || undefined,
                             description: block.description || undefined,
                             presentation: block.presentation as 'block' | 'fullwidth',
-                            config: block.config || undefined,
+                            config: (typeof block.config === 'object' && block.config !== null && !Array.isArray(block.config)) ? (block.config as Record<string, unknown>) : undefined,
                             order: block.order,
                             media: blockMediaList.map(bm => {
                                 const media = mediaMap.get(bm.media_id);
@@ -1033,7 +1032,7 @@ export async function getStudioProfileBySlug(
                     title: block.title || undefined,
                     description: block.description || undefined,
                     presentation: block.presentation as 'block' | 'fullwidth',
-                    config: block.config || undefined,
+                    config: (typeof block.config === 'object' && block.config !== null && !Array.isArray(block.config)) ? (block.config as Record<string, unknown>) : undefined,
                     order: block.order,
                     media: block.block_media.map(bm => ({
                         id: bm.media.id,

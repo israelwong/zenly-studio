@@ -22,7 +22,8 @@
     "db:reset": "tsx scripts/prisma-with-direct.ts migrate reset --force && npm run db:seed",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook",
     "audit:check": "npm audit --audit-level=moderate",
-    "audit:fix": "npm audit fix"
+    "audit:fix": "npm audit fix",
+    "refresh-baseline-browser-mapping": "npm i -D baseline-browser-mapping@latest"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

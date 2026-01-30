@@ -28,6 +28,8 @@ export async function autorizarCotizacionPublica(
   };
   error?: string;
 }> {
+  // eslint-disable-next-line no-console -- DEBUG: identificar bucle de POST (quitar en producción)
+  console.log('🚀 Ejecutando Action: autorizarCotizacionPublica');
   try {
     // 1. Validar que la promesa y cotización existen
     const promise = await prisma.studio_promises.findUnique({
@@ -479,7 +481,7 @@ export async function regeneratePublicContract(
       };
     }
 
-    if (cotizacion.status === 'contract_signed') {
+    if (cotizacion.cotizacion_cierre?.contract_signed_at) {
       return {
         success: false,
         error: "No se puede regenerar un contrato firmado",
