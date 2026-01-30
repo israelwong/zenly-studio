@@ -87,6 +87,15 @@ export function MainSection({ posts, filter = 'all', onPostClick, onEditPost, st
         });
     }, [sortedPosts, filter]);
 
+    // Todos los hooks antes de cualquier return condicional (regla de hooks de React)
+    const estimatedItemSize = useMemo(() => {
+        if (filteredPosts.length === 0) return 500;
+        const avgMediaCount = filteredPosts.reduce((sum, p) => sum + (p.media?.length || 0), 0) / filteredPosts.length;
+        if (avgMediaCount <= 1) return 500;
+        if (avgMediaCount <= 3) return 700;
+        return 900;
+    }, [filteredPosts]);
+
     if (sortedPosts.length === 0) {
         return (
             <div className="p-8 text-center">
@@ -112,14 +121,6 @@ export function MainSection({ posts, filter = 'all', onPostClick, onEditPost, st
             </div>
         );
     }
-
-    // Estimar altura de cada post (variable según contenido)
-    const estimatedItemSize = useMemo(() => {
-        const avgMediaCount = filteredPosts.reduce((sum, p) => sum + (p.media?.length || 0), 0) / filteredPosts.length;
-        if (avgMediaCount <= 1) return 500;
-        if (avgMediaCount <= 3) return 700;
-        return 900;
-    }, [filteredPosts]);
 
     // En desktop, renderizar sin VList (scroll natural del viewport)
     if (isDesktop) {
