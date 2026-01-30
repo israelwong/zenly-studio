@@ -28,16 +28,27 @@ interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
 }
 
-/** Skeleton solo en mount inicial (sin datos). Una vez hay datos, nunca volver a mostrar skeleton. */
+/** Skeletons por columna: cada bloque muestra skeleton hasta que sus datos estén listos (evita "Contrato Digital" vacío ~2s). */
 function useShowSkeletons(
   loadingRegistro: boolean,
   condicionesData: unknown,
-  contractData: unknown,
+  contractData: {
+    contract_content?: string | null;
+    contrato_definido?: boolean;
+  } | null,
   pagoData: unknown
 ) {
   return useMemo(() => {
-    const hasInitialData = condicionesData != null || contractData != null || pagoData != null;
-    return loadingRegistro && !hasInitialData;
+    const showCotizacionSkeleton = loadingRegistro && condicionesData == null;
+    const showPagoSkeleton = loadingRegistro && pagoData == null;
+    const showContratoSkeleton =
+      (loadingRegistro && contractData == null) ||
+      (contractData != null && !!contractData.contrato_definido && (contractData.contract_content == null || contractData.contract_content === ''));
+    return {
+      showCotizacionSkeleton,
+      showContratoSkeleton,
+      showPagoSkeleton,
+    };
   }, [loadingRegistro, condicionesData, contractData, pagoData]);
 }
 
@@ -101,9 +112,17 @@ interface CierreColumn3Props {
   cotizacion: CotizacionListItemType;
   studioSlug: string;
   promiseId: string;
-  showSkeleton: boolean;
+  showContratoSkeleton: boolean;
+  showPagoSkeleton: boolean;
   eventTypeId: string | null;
-  contractData: { contract_template_id?: string | null; contract_content?: string | null; contract_version?: number; contract_signed_at?: Date | null; contrato_definido?: boolean; ultima_version_info?: unknown } | null;
+  contractData: {
+    contract_template_id?: string | null;
+    contract_content?: string | null;
+    contract_version?: number;
+    contract_signed_at?: Date | null;
+    contrato_definido?: boolean;
+    ultima_version_info?: { version: number; change_reason: string | null; change_type: string; created_at: Date } | null;
+  } | null;
   loadingRegistro: boolean;
   condicionesComerciales: { id: string; name: string; description?: string | null; discount_percentage?: number | null; advance_type?: string; advance_percentage?: number | null; advance_amount?: number | null; } | null | undefined;
   promiseData: { name: string; phone: string; email: string | null; address: string | null; event_date: Date | null; event_name: string | null; event_type_name: string | null; event_location?: string | null; duration_hours?: number | null };
@@ -127,7 +146,8 @@ const CierreColumn3 = memo(function CierreColumn3({
   cotizacion,
   studioSlug,
   promiseId,
-  showSkeleton,
+  showContratoSkeleton,
+  showPagoSkeleton,
   eventTypeId,
   contractData,
   loadingRegistro,
@@ -151,7 +171,7 @@ const CierreColumn3 = memo(function CierreColumn3({
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
       <Suspense fallback={<ContratoDigitalCardSkeleton />}>
-        {showSkeleton ? (
+        {showContratoSkeleton ? (
           <ContratoDigitalCardSkeleton />
         ) : (
           <ContratoDigitalCard
@@ -168,13 +188,13 @@ const CierreColumn3 = memo(function CierreColumn3({
             onCloseContratoOptionsModal={onCloseContratoOptionsModal}
             onContratoSuccess={onContratoSuccess}
             onCancelarContrato={onCancelarContrato}
-            onRegenerateContract={onRegenerateContract}
+            onRegenerateContract={async () => { await onRegenerateContract(); }}
             onEditarDatosClick={onEditarDatosClick}
           />
         )}
       </Suspense>
       <Suspense fallback={<PagoInicialCardSkeleton />}>
-        {showSkeleton ? (
+        {showPagoSkeleton ? (
           <PagoInicialCardSkeleton />
         ) : (
           <PagoInicialCard
@@ -321,7 +341,7 @@ export function PromiseCierreClient({
     return null;
   }
 
-  // Skeletons solo en mount inicial (sin datos). Actualizaciones posteriores son silenciosas.
+  // Skeletons por columna: contrato sigue en skeleton hasta tener content o saber que no hay contrato (evita bloque vacío ~2s).
   const showSkeletons = useShowSkeletons(
     cierreLogic.loadingRegistro,
     cierreLogic.condicionesData,
@@ -352,7 +372,7 @@ export function PromiseCierreClient({
                 event_name: contextPromiseData.event_name || null,
                 duration_hours: contextPromiseData.duration_hours ?? null,
                 event_date: contextPromiseData.event_date || null,
-                interested_dates: contextPromiseData.interested_dates,
+                interested_dates: Array.isArray(contextPromiseData.interested_dates) ? (contextPromiseData.interested_dates[0] ?? null) : (contextPromiseData.interested_dates ?? null),
               }}
               acquisitionData={{
                 acquisition_channel_id: contextPromiseData.acquisition_channel_id,
@@ -375,7 +395,7 @@ export function PromiseCierreClient({
                 event_location: contextPromiseData.event_location || null,
                 event_name: contextPromiseData.event_name || null,
                 duration_hours: contextPromiseData.duration_hours ?? null,
-                interested_dates: contextPromiseData.interested_dates,
+                interested_dates: Array.isArray(contextPromiseData.interested_dates) ? (contextPromiseData.interested_dates[0] ?? null) : (contextPromiseData.interested_dates ?? null),
                 acquisition_channel_id: contextPromiseData.acquisition_channel_id || null,
                 social_network_id: contextPromiseData.social_network_id || null,
                 referrer_contact_id: contextPromiseData.referrer_contact_id || null,
@@ -392,7 +412,7 @@ export function PromiseCierreClient({
               cotizacion={cotizacionEnCierre}
               studioSlug={studioSlug}
               promiseId={promiseId}
-              showSkeleton={showSkeletons}
+              showSkeleton={showSkeletons.showCotizacionSkeleton}
               condicionesData={cierreLogic.condicionesData}
               loadingRegistro={cierreLogic.loadingRegistro}
               negociacionData={cierreLogic.negociacionData}
@@ -409,7 +429,8 @@ export function PromiseCierreClient({
             cotizacion={cotizacionEnCierre}
             studioSlug={studioSlug}
             promiseId={promiseId}
-            showSkeleton={showSkeletons}
+            showContratoSkeleton={showSkeletons.showContratoSkeleton}
+            showPagoSkeleton={showSkeletons.showPagoSkeleton}
             eventTypeId={contextPromiseData.event_type_id || null}
             contractData={cierreLogic.contractData}
             loadingRegistro={cierreLogic.loadingRegistro}
@@ -452,7 +473,7 @@ export function PromiseCierreClient({
               event_name: contextPromiseData.event_name || undefined,
               duration_hours: contextPromiseData.duration_hours ?? undefined,
               event_date: contextPromiseData.event_date || undefined,
-              interested_dates: contextPromiseData.interested_dates || undefined,
+              interested_dates: Array.isArray(contextPromiseData.interested_dates) ? (contextPromiseData.interested_dates[0] ?? undefined) : (contextPromiseData.interested_dates ?? undefined),
               acquisition_channel_id: contextPromiseData.acquisition_channel_id || undefined,
               social_network_id: contextPromiseData.social_network_id || undefined,
               referrer_contact_id: contextPromiseData.referrer_contact_id || undefined,
@@ -477,7 +498,7 @@ export function PromiseCierreClient({
                 event_name: contextPromiseData.event_name || undefined,
                 duration_hours: contextPromiseData.duration_hours ?? undefined,
                 event_date: contextPromiseData.event_date || undefined,
-                interested_dates: contextPromiseData.interested_dates || undefined,
+                interested_dates: Array.isArray(contextPromiseData.interested_dates) ? (contextPromiseData.interested_dates[0] ?? undefined) : (contextPromiseData.interested_dates ?? undefined),
                 acquisition_channel_id: contextPromiseData.acquisition_channel_id || undefined,
                 social_network_id: contextPromiseData.social_network_id || undefined,
                 referrer_contact_id: contextPromiseData.referrer_contact_id || undefined,
@@ -530,7 +551,7 @@ export function PromiseCierreClient({
                 cotizacion={cierreLogic.cotizacionCompleta}
                 studioSlug={studioSlug}
                 promiseId={promiseId}
-                condicionesComerciales={cierreLogic.condicionesData?.condiciones_comerciales as any}
+                condicionesComerciales={(cierreLogic.condicionesData?.condiciones_comerciales ?? null) as React.ComponentProps<typeof ResumenCotizacion>['condicionesComerciales']}
                 negociacionPrecioOriginal={cierreLogic.negociacionData.negociacion_precio_original}
                 negociacionPrecioPersonalizado={cierreLogic.negociacionData.negociacion_precio_personalizado}
               />

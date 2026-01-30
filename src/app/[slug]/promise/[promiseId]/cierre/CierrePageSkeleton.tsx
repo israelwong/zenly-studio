@@ -1,4 +1,37 @@
 /**
+ * Skeleton reutilizable para la card de contrato (PASO 1: Firma).
+ * Usado en CierrePageSkeleton y en PublicQuoteAuthorizedView cuando el contrato aún no tiene content.
+ */
+export function ContractStepCardSkeleton() {
+  return (
+    <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg animate-pulse">
+      <div className="p-4 sm:p-6 border-b border-zinc-800">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-zinc-800 rounded-lg shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="h-5 sm:h-6 bg-zinc-800 rounded w-32 sm:w-40 mb-2" />
+              <div className="h-3 sm:h-4 bg-zinc-800 rounded w-24 sm:w-32" />
+            </div>
+          </div>
+          <div className="hidden sm:block w-24 h-6 bg-zinc-800 rounded" />
+        </div>
+      </div>
+      <div className="p-4 sm:p-6 space-y-4">
+        <div className="space-y-2">
+          <div className="h-4 bg-zinc-800 rounded w-full" />
+          <div className="h-4 bg-zinc-800 rounded w-5/6" />
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2">
+          <div className="h-10 bg-zinc-800 rounded w-full sm:w-32" />
+          <div className="h-10 bg-zinc-800 rounded w-full sm:w-32" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * ⚠️ STREAMING: Skeleton específico para la página de cierre
  * Solo muestra placeholders para el contenido del contrato (deferred)
  * El header ya está renderizado por CierrePageBasic
@@ -26,33 +59,7 @@ export function CierrePageSkeleton() {
               </div>
 
               {/* Skeleton para PublicContractCard */}
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg animate-pulse">
-                {/* Header del card */}
-                <div className="p-4 sm:p-6 border-b border-zinc-800">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-zinc-800 rounded-lg shrink-0"></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="h-5 sm:h-6 bg-zinc-800 rounded w-32 sm:w-40 mb-2"></div>
-                        <div className="h-3 sm:h-4 bg-zinc-800 rounded w-24 sm:w-32"></div>
-                      </div>
-                    </div>
-                    <div className="hidden sm:block w-24 h-6 bg-zinc-800 rounded"></div>
-                  </div>
-                </div>
-
-                {/* Content del card */}
-                <div className="p-4 sm:p-6 space-y-4">
-                  <div className="space-y-2">
-                    <div className="h-4 bg-zinc-800 rounded w-full"></div>
-                    <div className="h-4 bg-zinc-800 rounded w-5/6"></div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2">
-                    <div className="h-10 bg-zinc-800 rounded w-full sm:w-32"></div>
-                    <div className="h-10 bg-zinc-800 rounded w-full sm:w-32"></div>
-                  </div>
-                </div>
-              </div>
+              <ContractStepCardSkeleton />
             </div>
           </div>
         </div>

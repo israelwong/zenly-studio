@@ -7,6 +7,7 @@ import { ZenButton, ZenDialog, ZenCard } from '@/components/ui/zen';
 import { PublicPromiseDataForm } from './PublicPromiseDataForm';
 import { PublicContractView } from './PublicContractView';
 import { PublicContractCard } from './PublicContractCard';
+import { ContractStepCardSkeleton } from '@/app/[slug]/promise/[promiseId]/cierre/CierrePageSkeleton';
 import { PublicQuoteFinancialCard } from './PublicQuoteFinancialCard';
 import { PublicPromisePageHeader } from './PublicPromisePageHeader';
 import { BankInfoModal } from '@/components/shared/BankInfoModal';
@@ -575,22 +576,24 @@ export function PublicQuoteAuthorizedView({
                         : 'Revisa y firma tu contrato digital para oficializar tu reserva'}
                     </p>
                   </div>
-                  <PublicContractCard
-                    contract={currentContract || null}
-                    isContractSigned={isContractSigned}
-                    isRegeneratingContract={isRegeneratingContract}
-                    isUpdatingData={isUpdatingData}
-                    onEditData={() => {
-                      // ⚠️ TAREA 3: Cerrar overlays antes de abrir modal de edición
-                      window.dispatchEvent(new CustomEvent('close-overlays'));
-                      setShowEditDataModal(true);
-                    }}
-                    onViewContract={() => {
-                      // ⚠️ TAREA 3: Cerrar overlays antes de abrir vista de contrato
-                      window.dispatchEvent(new CustomEvent('close-overlays'));
-                      setShowContractView(true);
-                    }}
-                  />
+                  {hasContract ? (
+                    <PublicContractCard
+                      contract={currentContract || null}
+                      isContractSigned={isContractSigned}
+                      isRegeneratingContract={isRegeneratingContract}
+                      isUpdatingData={isUpdatingData}
+                      onEditData={() => {
+                        window.dispatchEvent(new CustomEvent('close-overlays'));
+                        setShowEditDataModal(true);
+                      }}
+                      onViewContract={() => {
+                        window.dispatchEvent(new CustomEvent('close-overlays'));
+                        setShowContractView(true);
+                      }}
+                    />
+                  ) : (
+                    <ContractStepCardSkeleton />
+                  )}
                 </div>
               </div>
             </div>

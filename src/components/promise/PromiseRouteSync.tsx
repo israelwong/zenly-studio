@@ -23,7 +23,7 @@ interface PromiseRouteSyncProps {
 export function PromiseRouteSync({ studioSlug, promiseId }: PromiseRouteSyncProps) {
   const hasRedirectedRef = useRef(false);
 
-  // Función para sincronizar ruta con el servidor
+  // Función para sincronizar ruta con el servidor (solo en Realtime; la validación inicial la hace PromiseRouteGuard)
   const handleSyncRoute = async () => {
     if (hasRedirectedRef.current) return;
     
@@ -37,10 +37,8 @@ export function PromiseRouteSync({ studioSlug, promiseId }: PromiseRouteSyncProp
     }
   };
 
-  // Carga inicial: Sincronizar inmediatamente al montar
-  useEffect(() => {
-    handleSyncRoute();
-  }, [studioSlug, promiseId]);
+  // No sincronizar al montar: PromiseRouteGuard (layout) ya hace la validación inicial con datos del servidor o una sola llamada a /api/.../redirect.
+  // Evita llamadas duplicadas a la API de redirect.
 
   // Realtime: Reaccionar a cualquier cambio en cotizaciones (incluyendo visible_to_client)
   // Usar ref para mantener la función estable

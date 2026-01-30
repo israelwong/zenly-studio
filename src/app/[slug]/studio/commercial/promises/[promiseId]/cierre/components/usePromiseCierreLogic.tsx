@@ -10,6 +10,42 @@ import { actualizarContratoCierre } from '@/lib/actions/studio/commercial/promis
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { ContractTemplate } from '@/types/contracts';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+
+/** Forma de datos devueltos por obtenerRegistroCierre (data) */
+interface RegistroCierreLoadData {
+  condiciones_comerciales_id?: string | null;
+  condiciones_comerciales_definidas?: boolean;
+  condiciones_comerciales?: {
+    id: string;
+    name: string;
+    description?: string | null;
+    discount_percentage?: number | null;
+    advance_type?: string;
+    advance_percentage?: number | null;
+    advance_amount?: number | null;
+  } | null;
+  contract_template_id?: string | null;
+  contract_content?: string | null;
+  contract_version?: number;
+  contract_signed_at?: Date | null;
+  contrato_definido?: boolean;
+  ultima_version_info?: {
+    version: number;
+    change_reason: string | null;
+    change_type: string;
+    created_at: Date;
+  } | null;
+  pago_registrado?: boolean;
+  pago_concepto?: string | null;
+  pago_monto?: number | null;
+  pago_fecha?: Date | null;
+  pago_metodo_id?: string | null;
+  pago_metodo_nombre?: string | null;
+  negociacion_precio_original?: number | null;
+  negociacion_precio_personalizado?: number | null;
+}
+
+type CotizacionByIdData = NonNullable<Awaited<ReturnType<typeof getCotizacionById>>['data']>;
 import { toast } from 'sonner';
 import { useCotizacionesRealtime } from '@/hooks/useCotizacionesRealtime';
 
@@ -59,7 +95,7 @@ export function usePromiseCierreLogic({
   const [showContratoOptionsModal, setShowContratoOptionsModal] = useState(false);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [showCotizacionPreview, setShowCotizacionPreview] = useState(false);
-  const [cotizacionCompleta, setCotizacionCompleta] = useState<any>(null);
+  const [cotizacionCompleta, setCotizacionCompleta] = useState<CotizacionByIdData | null>(null);
   const [loadingCotizacion, setLoadingCotizacion] = useState(false);
   const [isRemovingCondiciones, setIsRemovingCondiciones] = useState(false);
   const [showEditPromiseModal, setShowEditPromiseModal] = useState(false);
@@ -160,7 +196,7 @@ export function usePromiseCierreLogic({
     try {
       const result = await obtenerRegistroCierre(studioSlug, cotizacion.id);
       if (result.success && result.data) {
-        const data = result.data as any;
+        const data = result.data as unknown as RegistroCierreLoadData;
 
         setCondicionesData({
           condiciones_comerciales_id: data.condiciones_comerciales_id,
