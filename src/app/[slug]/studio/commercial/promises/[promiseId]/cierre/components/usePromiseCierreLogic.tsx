@@ -150,7 +150,9 @@ export function usePromiseCierreLogic({
   } | null>(null);
 
   const [loadingRegistro, setLoadingRegistro] = useState(true);
+  const [hasLoadedRegistroOnce, setHasLoadedRegistroOnce] = useState(false);
   const initialLoadDoneRef = useRef(false);
+  const lastCotizacionIdRef = useRef<string | null>(null);
   const [loadingCondiciones, setLoadingCondiciones] = useState(false);
   const [loadingContract, setLoadingContract] = useState(false);
   const [loadingPago, setLoadingPago] = useState(false);
@@ -189,6 +191,7 @@ export function usePromiseCierreLogic({
   ]);
 
   const loadRegistroCierre = useCallback(async () => {
+    // Atómico: solo mostrar skeleton en la primera carga; si ya cargó (initialLoadDoneRef) no tocar loadingRegistro
     const isInitialLoad = !initialLoadDoneRef.current;
     if (isInitialLoad) {
       setLoadingRegistro(true);
@@ -234,15 +237,33 @@ export function usePromiseCierreLogic({
         setLoadingRegistro(false);
       }
       initialLoadDoneRef.current = true;
+      setHasLoadedRegistroOnce(true);
     }
   }, [studioSlug, cotizacion.id]);
 
+  // Cargar registro de cierre; solo mostrar skeleton en la primera carga de esta cotización (no al re-ejecutar el efecto)
   useEffect(() => {
-    if (cotizacion.id) {
-      initialLoadDoneRef.current = false; // Reset para mostrar skeletons al cambiar de cotización
-      loadRegistroCierre();
+    if (!cotizacion.id) {
+      setLoadingRegistro(false);
+      return;
     }
+    const isNewCotizacion = lastCotizacionIdRef.current !== cotizacion.id;
+    if (isNewCotizacion) {
+      lastCotizacionIdRef.current = cotizacion.id;
+      initialLoadDoneRef.current = false;
+      setHasLoadedRegistroOnce(false);
+    }
+    loadRegistroCierre();
   }, [cotizacion.id, loadRegistroCierre]);
+
+  // Timeout de respaldo: si la carga no termina en 10s, quitar skeleton para no bloquear UI
+  useEffect(() => {
+    if (!cotizacion.id) return;
+    const t = setTimeout(() => {
+      setLoadingRegistro((prev) => (prev ? false : prev));
+    }, 10000);
+    return () => clearTimeout(t);
+  }, [cotizacion.id]);
 
   // Realtime: escuchar cambios en studio_cotizaciones_cierre (firma del cliente o cancelación)
   // Solo mostrar toast de firma cuando contractSignedAt viene definido (cliente firmó), no cuando se canceló
@@ -661,6 +682,7 @@ export function usePromiseCierreLogic({
     contractData,
     pagoData,
     loadingRegistro,
+    hasLoadedRegistroOnce,
     loadingCondiciones,
     loadingContract,
     loadingPago,

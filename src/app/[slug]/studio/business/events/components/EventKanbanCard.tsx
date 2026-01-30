@@ -4,7 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { EventWithContact } from '@/lib/actions/schemas/events-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
-import { formatDisplayDateShort, getRelativeDateDiffDays } from '@/lib/utils/date-formatter';
+import { getRelativeDateLabel } from '@/lib/utils/date-formatter';
 import { ZenAvatar, ZenAvatarFallback } from '@/components/ui/zen';
 
 interface EventKanbanCardProps {
@@ -47,12 +47,10 @@ export function EventKanbanCard({ event, onClick, studioSlug }: EventKanbanCardP
     }
   };
 
-  const formatDate = formatDisplayDateShort;
-
-  // Días restantes usando fecha local del usuario (getRelativeDateDiffDays)
-  const daysRemaining = getRelativeDateDiffDays(event.event_date);
-  const isExpired = daysRemaining !== null && daysRemaining < 0;
-  const isToday = daysRemaining === 0;
+  // Misma lógica que PromiseKanbanCard/ReminderButton: getRelativeDateLabel (fechas relativas consistentes)
+  const relativeDate = event.event_date != null ? getRelativeDateLabel(event.event_date, { pastLabel: 'Vencida', futureVariant: 'success' }) : null;
+  const isExpired = relativeDate?.variant === 'destructive';
+  const isToday = relativeDate?.variant === 'warning';
 
   // Obtener contacto (prioridad: contact > promise.contact)
   const contact = event.contact || event.promise?.contact;
@@ -93,25 +91,15 @@ export function EventKanbanCard({ event, onClick, studioSlug }: EventKanbanCardP
           </div>
         </div>
 
-        {/* Fecha del evento */}
-        <div className={`text-xs ${isExpired ? 'text-red-400' : isToday ? 'text-blue-400' : 'text-zinc-400'
-          }`}>
-          <span>
-            {formatDate(event.event_date)}
-            {daysRemaining !== null && (
-              <span className={`ml-1.5 ${isExpired ? 'text-red-400 font-medium' :
-                isToday ? 'text-blue-400 font-medium' :
-                  'text-zinc-500'
-                }`}>
-                {isExpired
-                  ? `(Hace ${Math.abs(daysRemaining)} ${Math.abs(daysRemaining) === 1 ? 'día' : 'días'})`
-                  : isToday
-                    ? '(Hoy)'
-                    : `(Faltan ${daysRemaining} ${daysRemaining === 1 ? 'día' : 'días'})`
-                }
-              </span>
-            )}
-          </span>
+        {/* Fecha del evento — mismo formato que PromiseKanbanCard (getRelativeDateLabel) */}
+        <div className={`text-xs ${isExpired ? 'text-red-400' : isToday ? 'text-blue-400' : 'text-zinc-400'}`}>
+          {relativeDate ? (
+            <span className={isExpired ? 'font-medium' : isToday ? 'font-medium' : undefined}>
+              {relativeDate.text}
+            </span>
+          ) : (
+            <span>—</span>
+          )}
         </div>
 
         {/* Dirección */}

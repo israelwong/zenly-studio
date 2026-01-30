@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useMemo, Suspense, memo } from 'react';
+import React, { useState, useCallback, useMemo, memo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { EventInfoCard } from '@/components/shared/promises';
 import { EventFormModal } from '@/components/shared/promises';
@@ -28,7 +28,7 @@ interface PromiseCierreClientProps {
   initialCotizacionEnCierre: CotizacionListItem | null;
 }
 
-/** Skeletons por columna: cada bloque muestra skeleton hasta que sus datos estén listos (evita "Contrato Digital" vacío ~2s). */
+/** Skeletons por columna: sticky — una vez que pasan a false no vuelven a true (salvo cambio de promiseId/cotización). */
 function useShowSkeletons(
   loadingRegistro: boolean,
   condicionesData: unknown,
@@ -36,20 +36,22 @@ function useShowSkeletons(
     contract_content?: string | null;
     contrato_definido?: boolean;
   } | null,
-  pagoData: unknown
+  pagoData: unknown,
+  hasLoadedRegistroOnce: boolean
 ) {
   return useMemo(() => {
-    const showCotizacionSkeleton = loadingRegistro && condicionesData == null;
-    const showPagoSkeleton = loadingRegistro && pagoData == null;
+    const showCotizacionSkeleton = !hasLoadedRegistroOnce && loadingRegistro && condicionesData == null;
+    const showPagoSkeleton = !hasLoadedRegistroOnce && loadingRegistro && pagoData == null;
     const showContratoSkeleton =
-      (loadingRegistro && contractData == null) ||
-      (contractData != null && !!contractData.contrato_definido && (contractData.contract_content == null || contractData.contract_content === ''));
+      !hasLoadedRegistroOnce &&
+      ((loadingRegistro && contractData == null) ||
+        (contractData != null && !!contractData.contrato_definido && (contractData.contract_content == null || contractData.contract_content === '')));
     return {
       showCotizacionSkeleton,
       showContratoSkeleton,
       showPagoSkeleton,
     };
-  }, [loadingRegistro, condicionesData, contractData, pagoData]);
+  }, [loadingRegistro, condicionesData, contractData, pagoData, hasLoadedRegistroOnce]);
 }
 
 type CotizacionListItemType = CotizacionListItem;
@@ -85,25 +87,23 @@ const CierreColumn2 = memo(function CierreColumn2({
 }: CierreColumn2Props) {
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-      <Suspense fallback={<CotizacionCardSkeleton />}>
-        {showSkeleton ? (
-          <CotizacionCardSkeleton />
-        ) : (
-          <CotizacionCard
-            cotizacion={cotizacion}
-            studioSlug={studioSlug}
-            promiseId={promiseId}
-            condicionesData={condicionesData}
-            loadingRegistro={loadingRegistro}
-            negociacionData={negociacionData}
-            onPreviewClick={onPreviewClick}
-            loadingCotizacion={loadingCotizacion}
-            onDefinirCondiciones={onDefinirCondiciones}
-            onQuitarCondiciones={onQuitarCondiciones}
-            isRemovingCondiciones={isRemovingCondiciones}
-          />
-        )}
-      </Suspense>
+      {showSkeleton ? (
+        <CotizacionCardSkeleton />
+      ) : (
+        <CotizacionCard
+          cotizacion={cotizacion}
+          studioSlug={studioSlug}
+          promiseId={promiseId}
+          condicionesData={condicionesData}
+          loadingRegistro={loadingRegistro}
+          negociacionData={negociacionData}
+          onPreviewClick={onPreviewClick}
+          loadingCotizacion={loadingCotizacion}
+          onDefinirCondiciones={onDefinirCondiciones}
+          onQuitarCondiciones={onQuitarCondiciones}
+          isRemovingCondiciones={isRemovingCondiciones}
+        />
+      )}
     </div>
   );
 });
@@ -170,11 +170,10 @@ const CierreColumn3 = memo(function CierreColumn3({
 }: CierreColumn3Props) {
   return (
     <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-      <Suspense fallback={<ContratoDigitalCardSkeleton />}>
-        {showContratoSkeleton ? (
-          <ContratoDigitalCardSkeleton />
-        ) : (
-          <ContratoDigitalCard
+      {showContratoSkeleton ? (
+        <ContratoDigitalCardSkeleton />
+      ) : (
+        <ContratoDigitalCard
             cotizacion={cotizacion}
             studioSlug={studioSlug}
             promiseId={promiseId}
@@ -192,19 +191,16 @@ const CierreColumn3 = memo(function CierreColumn3({
             onEditarDatosClick={onEditarDatosClick}
           />
         )}
-      </Suspense>
-      <Suspense fallback={<PagoInicialCardSkeleton />}>
-        {showPagoSkeleton ? (
-          <PagoInicialCardSkeleton />
-        ) : (
-          <PagoInicialCard
+      {showPagoSkeleton ? (
+        <PagoInicialCardSkeleton />
+      ) : (
+        <PagoInicialCard
             pagoData={pagoData}
             loadingRegistro={loadingRegistro}
             onRegistrarPagoClick={onRegistrarPagoClick}
             onEliminarPago={onEliminarPago}
           />
         )}
-      </Suspense>
       <CierreActionButtons
         onAutorizar={onAutorizar}
         onCancelarCierre={onCancelarCierre}
@@ -346,7 +342,8 @@ export function PromiseCierreClient({
     cierreLogic.loadingRegistro,
     cierreLogic.condicionesData,
     cierreLogic.contractData,
-    cierreLogic.pagoData
+    cierreLogic.pagoData,
+    cierreLogic.hasLoadedRegistroOnce
   );
 
   return (
