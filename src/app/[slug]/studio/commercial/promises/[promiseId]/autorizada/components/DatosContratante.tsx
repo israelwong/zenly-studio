@@ -3,6 +3,8 @@
 import React from 'react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle } from '@/components/ui/zen';
 import { User } from 'lucide-react';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface DatosContratanteProps {
   promise: {
@@ -15,24 +17,9 @@ interface DatosContratanteProps {
 }
 
 export function DatosContratante({ promise }: DatosContratanteProps) {
-  // ✅ Obtener fecha de celebración desde event_date (único campo)
-  const fechaCelebracion = promise.event_date
-    ? promise.event_date.toISOString()
+  const fechaCelebracionStr = promise.event_date
+    ? formatDisplayDateLong(toUtcDateOnly(promise.event_date))
     : null;
-
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('es-MX', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
-  };
 
   return (
     <ZenCard variant="outlined">
@@ -69,10 +56,10 @@ export function DatosContratante({ promise }: DatosContratanteProps) {
           </div>
         )}
 
-        {fechaCelebracion && (
+        {fechaCelebracionStr && (
           <div>
             <label className="text-sm font-medium text-zinc-400">Fecha de celebración</label>
-            <p className="text-white mt-1 capitalize">{formatDate(fechaCelebracion)}</p>
+            <p className="text-white mt-1 capitalize">{fechaCelebracionStr}</p>
           </div>
         )}
       </ZenCardContent>

@@ -17,6 +17,8 @@ import { ContractPreviewForPromiseModal } from '../../cierre/components/contrato
 import { CondicionesComercialesDesglose } from '@/components/shared/condiciones-comerciales';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { formatNumber } from '@/lib/actions/utils/formatting';
+import { formatDisplayDate, formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface CotizacionAutorizadaCardProps {
   cotizacion: CotizacionListItem;
@@ -337,11 +339,7 @@ export function CotizacionAutorizadaCard({
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-zinc-500 mb-1">Fecha de Pago</p>
                           <p className="text-zinc-300 leading-tight">
-                            {new Date(primerPago.payment_date).toLocaleDateString('es-MX', {
-                              day: 'numeric',
-                              month: 'long',
-                              year: 'numeric'
-                            })}
+                            {formatDisplayDate(toUtcDateOnly(primerPago.payment_date))}
                           </p>
                         </div>
                       </div>
@@ -387,13 +385,13 @@ export function CotizacionAutorizadaCard({
                             </div>
                             <div className="pl-5">
                               <p className="text-xs text-blue-400/80">
-                                {new Date(contrato.signed_at).toLocaleDateString('es-MX', {
-                                  day: 'numeric',
-                                  month: 'long',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
+                                {(() => {
+                                  const d = toUtcDateOnly(contrato.signed_at);
+                                  const t = new Date(contrato.signed_at);
+                                  const dateStr = d ? formatDisplayDateLong(d) : '—';
+                                  const timeStr = `${t.getUTCHours().toString().padStart(2, '0')}:${t.getUTCMinutes().toString().padStart(2, '0')}`;
+                                  return `${dateStr}, ${timeStr}`;
+                                })()}
                               </p>
                             </div>
                           </>
@@ -439,13 +437,14 @@ export function CotizacionAutorizadaCard({
                             </div>
                             <div className="pl-5">
                               <p className="text-xs text-blue-400/80">
-                                {new Date(resumen.cotizacion.contract_signed_at_snapshot).toLocaleDateString('es-MX', {
-                                  day: 'numeric',
-                                  month: 'long',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
+                                {(() => {
+                                  const signedAt = resumen.cotizacion.contract_signed_at_snapshot;
+                                  const d = toUtcDateOnly(signedAt);
+                                  const t = new Date(signedAt);
+                                  const dateStr = d ? formatDisplayDateLong(d) : '—';
+                                  const timeStr = `${t.getUTCHours().toString().padStart(2, '0')}:${t.getUTCMinutes().toString().padStart(2, '0')}`;
+                                  return `${dateStr}, ${timeStr}`;
+                                })()}
                               </p>
                             </div>
                           </>
@@ -470,13 +469,14 @@ export function CotizacionAutorizadaCard({
               <div className="flex items-center gap-2 text-xs text-zinc-500 pt-2">
                 <Calendar className="w-3.5 h-3.5 shrink-0" />
                 <span>
-                  Evento creado el {new Date(resumen.evento.created_at).toLocaleDateString('es-MX', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  Evento creado el {(() => {
+                    const created = resumen.evento.created_at;
+                    const d = toUtcDateOnly(created);
+                    const t = new Date(created);
+                    const dateStr = d ? formatDisplayDateLong(d) : '—';
+                    const timeStr = `${t.getUTCHours().toString().padStart(2, '0')}:${t.getUTCMinutes().toString().padStart(2, '0')}`;
+                    return `${dateStr}, ${timeStr}`;
+                  })()}
                 </span>
               </div>
             )}

@@ -5,9 +5,12 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { createStudioNotification } from "@/lib/notifications/studio/studio-notification.service";
 import { StudioNotificationScope, StudioNotificationType, NotificationPriority } from "@/lib/notifications/studio/types";
 import { z } from "zod";
+import { parseDateOnlyToUtc, dateToDateOnlyString } from "@/lib/utils/date-only";
 
 const SignPublicContractSchema = z.object({
   ip_address: z.string(),
+  /** Fecha local del cliente al firmar (YYYY-MM-DD). Se guarda como día legal para evitar desfase por timezone. */
+  signature_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 /**
@@ -87,12 +90,34 @@ export async function signPublicContract(
       return { success: false, error: "El contrato ya ha sido firmado" };
     }
 
-    // Guardar fecha de firma en cotizacion_cierre
-    // Usar fecha de hoy (fecha de cuando el cliente abre el contrato para revisión y firma)
+    // Fecha de firma: día calendario (date-only UTC) para que se muestre el día que el cliente firmó, sin desfase por timezone.
+    // Si el cliente envía signature_date (YYYY-MM-DD), validar que sea hoy o ayer UTC y guardar ese día a mediodía UTC.
+    const now = new Date();
+    const todayUtc = dateToDateOnlyString(now) ?? "";
+    const yesterdayUtc = (() => {
+      const d = new Date(now);
+      d.setUTCDate(d.getUTCDate() - 1);
+      return dateToDateOnlyString(d) ?? "";
+    })();
+    let signedAt: Date;
+    if (validated.signature_date) {
+      if (validated.signature_date !== todayUtc && validated.signature_date !== yesterdayUtc) {
+        return { success: false, error: "Fecha de firma no válida" };
+      }
+      const parsed = parseDateOnlyToUtc(validated.signature_date);
+      if (!parsed) {
+        return { success: false, error: "Fecha de firma no válida" };
+      }
+      signedAt = parsed;
+    } else {
+      // Fallback: "hoy" en UTC como date-only (mediodía UTC) para no depender del instante
+      signedAt = parseDateOnlyToUtc(todayUtc) ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0));
+    }
+
     await prisma.studio_cotizaciones_cierre.update({
       where: { cotizacion_id: cotizacionId },
       data: {
-        contract_signed_at: new Date(),
+        contract_signed_at: signedAt,
       },
     });
 

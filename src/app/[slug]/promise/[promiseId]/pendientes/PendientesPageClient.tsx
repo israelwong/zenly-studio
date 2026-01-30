@@ -19,6 +19,8 @@ import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
 import { trackPromisePageView } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface PendientesPageClientProps {
   promise: {
@@ -447,15 +449,11 @@ export function PendientesPageClient({
                 Sugerimos contratar antes del{' '}
                 <span className="font-medium text-emerald-400">
                   {(() => {
-                    const eventDate = new Date(promise.event_date);
-                    const fechaSugerida = new Date(eventDate);
-                    fechaSugerida.setDate(fechaSugerida.getDate() - shareSettings.min_days_to_hire);
-                    return fechaSugerida.toLocaleDateString('es-MX', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    });
+                    const eventDateUtc = toUtcDateOnly(promise.event_date);
+                    if (!eventDateUtc) return '—';
+                    const fechaSugerida = new Date(eventDateUtc);
+                    fechaSugerida.setUTCDate(fechaSugerida.getUTCDate() - shareSettings.min_days_to_hire);
+                    return formatDisplayDateLong(fechaSugerida);
                   })()}
                 </span>
               </p>

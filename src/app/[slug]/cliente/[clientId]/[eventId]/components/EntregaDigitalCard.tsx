@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { FileText, CheckCircle2, Clock, ArrowRight } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
 import type { DashboardInfo } from '@/lib/actions/cliente/dashboard.actions';
+import { formatDisplayDateShort } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface EntregaDigitalCardProps {
   dashboardInfo: DashboardInfo | null;
@@ -49,7 +51,7 @@ export function EntregaDigitalCard({ dashboardInfo, loading, slug, clientId, eve
                 </div>
                 {dashboardInfo.entregables_status.last_delivery_date && (
                   <div className="text-xs text-zinc-500">
-                    Última entrega: {new Date(dashboardInfo.entregables_status.last_delivery_date).toLocaleDateString('es-MX')}
+                    Última entrega: {formatDisplayDateShort(toUtcDateOnly(dashboardInfo.entregables_status.last_delivery_date))}
                   </div>
                 )}
               </>

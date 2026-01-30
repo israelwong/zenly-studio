@@ -3,6 +3,8 @@
 import { Calendar, CreditCard, CheckCircle2, Clock, Receipt } from 'lucide-react';
 import { ZenBadge } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
+import { formatDisplayDateShort } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 import type { ClientPago } from '@/types/client';
 
 interface PagoItemProps {
@@ -12,16 +14,8 @@ interface PagoItemProps {
 export function PagoItem({ pago }: PagoItemProps) {
   const formatFecha = (fecha: string | null) => {
     if (!fecha) return 'Fecha no disponible';
-    try {
-      const fechaObj = new Date(fecha);
-      return fechaObj.toLocaleDateString('es-MX', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
-    } catch (error) {
-      return 'Fecha no disponible';
-    }
+    const normalized = toUtcDateOnly(fecha);
+    return normalized ? formatDisplayDateShort(normalized) : 'Fecha no disponible';
   };
 
   const getStatusBadge = (status: string) => {

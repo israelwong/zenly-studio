@@ -10,6 +10,8 @@ import { obtenerInfoBancariaTransferencia } from "@/lib/actions/shared/metodos-p
 import { calcularCantidadEfectiva } from "@/lib/utils/dynamic-billing-calc";
 import { roundPrice } from "@/lib/utils/price-rounding";
 import { formatItemQuantity } from "@/lib/utils/contract-item-formatter";
+import { formatDisplayDateLong } from "@/lib/utils/date-formatter";
+import { toUtcDateOnly, getDateOnlyInTimezone } from "@/lib/utils/date-only";
 
 // Tipo extendido que incluye condiciones comerciales y datos adicionales
 export interface EventContractDataWithConditions extends EventContractData {
@@ -109,6 +111,7 @@ export async function getPromiseContractData(
         phone: true,
         email: true,
         address: true,
+        timezone: true,
       },
     });
 
@@ -189,15 +192,10 @@ export async function getPromiseContractData(
       return { success: false, error: "Cotizaci?n no encontrada" };
     }
 
-    // Formatear fecha
+    // Formatear fecha (SSoT: solo UTC, sin lógica local)
     const eventDate = promise.event_date;
     const fechaEvento = eventDate
-      ? new Date(eventDate).toLocaleDateString("es-ES", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
+      ? formatDisplayDateLong(toUtcDateOnly(eventDate))
       : "Fecha por definir";
 
     // Construir estructura jer?rquica usando funci?n centralizada
@@ -423,39 +421,26 @@ export async function getPromiseContractData(
       });
     });
 
-    // Formatear fecha de firma
-    // Si selected_by_prospect es true:
-    //   - Si ya est? firmado (contract_signed_at existe), usar esa fecha
-    //   - Si no est? firmado, mostrar fecha de hoy (para el preview)
-    // Si selected_by_prospect es false: usar fecha de hoy (generaci?n manual del estudio)
+    // Fecha de firma del cliente (la que se muestra en el contrato como "firmado el día X").
+    // Usar día calendario en timezone del estudio para coincidir con la tarjeta del estudio (ej. jueves 29, 22:50).
+    const studioTz = studio.timezone ?? 'America/Mexico_City';
     let fechaFirmaCliente: string | undefined;
-    
+    const todayUtc = (() => {
+      const n = new Date();
+      return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate(), 12, 0, 0));
+    })();
+
     if (cotizacion.selected_by_prospect) {
       if (cotizacion.cotizacion_cierre?.contract_signed_at) {
-        // Ya est? firmado: usar la fecha guardada
-        fechaFirmaCliente = new Date(cotizacion.cotizacion_cierre.contract_signed_at).toLocaleDateString("es-ES", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        });
+        const signedAt = cotizacion.cotizacion_cierre.contract_signed_at;
+        const dayInTz = getDateOnlyInTimezone(signedAt, studioTz);
+        const normalized = dayInTz ?? toUtcDateOnly(signedAt);
+        fechaFirmaCliente = normalized ? formatDisplayDateLong(normalized) : formatDisplayDateLong(todayUtc);
       } else {
-        // No est? firmado: mostrar fecha de hoy para el preview
-        fechaFirmaCliente = new Date().toLocaleDateString("es-ES", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        });
+        fechaFirmaCliente = formatDisplayDateLong(todayUtc);
       }
     } else {
-      // Estudio genera manualmente: usar fecha de hoy
-      fechaFirmaCliente = new Date().toLocaleDateString("es-ES", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+      fechaFirmaCliente = formatDisplayDateLong(todayUtc);
     }
 
     // Obtener informaci?n bancaria del estudio
@@ -603,6 +588,7 @@ export async function getEventContractData(
         phone: true,
         email: true,
         address: true,
+        timezone: true,
       },
     });
 
@@ -799,15 +785,10 @@ export async function getEventContractData(
       }
     });
 
-    // Formatear fecha - leer de promise.event_date primero, luego event.event_date
+    // Formatear fecha (SSoT: solo UTC, sin lógica local)
     const eventDate = event.promise?.event_date || event.event_date;
     const fechaEvento = eventDate
-      ? new Date(eventDate).toLocaleDateString("es-ES", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
+      ? formatDisplayDateLong(toUtcDateOnly(eventDate))
       : "Fecha por definir";
 
     // Ordenar items por categor?a (usando snapshots o relaciones)
@@ -969,28 +950,20 @@ export async function getEventContractData(
       };
     }
 
-    // Formatear fecha de firma
-    // Si selected_by_prospect es true: usar fecha de firma del contrato (si existe)
-    // Si selected_by_prospect es false: usar fecha de hoy (generaci?n manual del estudio)
+    // Fecha de firma: día calendario en timezone del estudio (coincide con tarjeta del estudio).
+    const studioTzEvent = studio.timezone ?? 'America/Mexico_City';
+    const todayUtcBuild = (() => {
+      const n = new Date();
+      return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate(), 12, 0, 0));
+    })();
     let fechaFirmaCliente: string | undefined;
     if (cotizacionAprobada.selected_by_prospect) {
-      // Prospecto seleccion?: usar fecha de firma real si existe
-      fechaFirmaCliente = event.contracts?.[0]?.signed_at
-        ? new Date(event.contracts[0].signed_at).toLocaleDateString("es-ES", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })
-        : undefined;
+      const signedAt = event.contracts?.[0]?.signed_at;
+      const dayInTz = signedAt ? getDateOnlyInTimezone(signedAt, studioTzEvent) : null;
+      const normalized = dayInTz ?? (signedAt ? toUtcDateOnly(signedAt) : null);
+      fechaFirmaCliente = normalized ? formatDisplayDateLong(normalized) : undefined;
     } else {
-      // Estudio genera manualmente: usar fecha de hoy
-      fechaFirmaCliente = new Date().toLocaleDateString("es-ES", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+      fechaFirmaCliente = formatDisplayDateLong(todayUtcBuild);
     }
 
     // Obtener informaci?n bancaria del estudio

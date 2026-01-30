@@ -35,6 +35,8 @@ import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { getSystemStageName, isTerminalStage } from '@/lib/utils/pipeline-stage-names';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
+import { formatDisplayDateShort } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface PromisesKanbanProps {
   studioSlug: string;
@@ -229,22 +231,14 @@ function PromisesKanban({
       // Búsqueda por fecha de evento
       let dateMatch = false;
       if (p.defined_date) {
-        const eventDate = new Date(p.defined_date);
-        const dateStr = eventDate.toLocaleDateString('es-MX', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        }).toLowerCase();
+        const normalized = toUtcDateOnly(p.defined_date);
+        const dateStr = normalized ? formatDisplayDateShort(normalized).toLowerCase() : '';
         dateMatch = dateStr.includes(searchLower);
       }
       if (!dateMatch && p.interested_dates && p.interested_dates.length > 0) {
         dateMatch = p.interested_dates.some(date => {
-          const dateObj = new Date(date);
-          const dateStr = dateObj.toLocaleDateString('es-MX', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          }).toLowerCase();
+          const normalized = toUtcDateOnly(date);
+          const dateStr = normalized ? formatDisplayDateShort(normalized).toLowerCase() : '';
           return dateStr.includes(searchLower);
         });
       }
@@ -278,12 +272,8 @@ function PromisesKanban({
           // Búsqueda por fecha de agendamiento
           let agendaDateMatch = false;
           if (p.agenda.date) {
-            const agendaDate = new Date(p.agenda.date);
-            const agendaDateStr = agendaDate.toLocaleDateString('es-MX', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-            }).toLowerCase();
+            const normalized = toUtcDateOnly(p.agenda.date);
+            const agendaDateStr = normalized ? formatDisplayDateShort(normalized).toLowerCase() : '';
             agendaDateMatch = agendaDateStr.includes(searchLower);
           }
 

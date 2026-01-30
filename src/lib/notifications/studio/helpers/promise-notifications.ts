@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/prisma';
 import { createStudioNotification } from '../studio-notification.service';
 import { StudioNotificationScope, StudioNotificationType, NotificationPriority } from '../types';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 export async function notifyPromiseCreated(
   studioId: string,
@@ -27,21 +29,11 @@ export async function notifyPromiseCreated(
     message += ` - ${eventType}`;
   }
   if (eventDate) {
-    // Parsear fecha de forma segura (sin cambios por zona horaria)
-    let date: Date;
-    const dateMatch = eventDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (dateMatch) {
-      const [, year, month, day] = dateMatch;
-      date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    } else {
-      date = new Date(eventDate);
-    }
-    const formattedDate = date.toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-    message += ` (${formattedDate})`;
+    const normalized = toUtcDateOnly(eventDate);
+    const formattedDate = normalized
+      ? formatDisplayDate(normalized, { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    if (formattedDate) message += ` (${formattedDate})`;
   }
 
   // Agregar información sobre paquetes si aplica

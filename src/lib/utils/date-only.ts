@@ -44,6 +44,32 @@ export const dateToDateOnlyString = (date: Date | null | undefined): string | nu
 };
 
 /**
+ * Dado un instante y una zona horaria (ej. America/Mexico_City), devuelve el día
+ * calendario en esa zona como Date a mediodía UTC, para mostrar como "fecha legal"
+ * (ej. firma el jueves 29 a las 22:50 México → mostrar "jueves, 29 de enero").
+ */
+export function getDateOnlyInTimezone(value: Date | string, timeZone: string): Date | null {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const parts = formatter.formatToParts(date);
+    const year = parts.find((p) => p.type === 'year')?.value;
+    const month = parts.find((p) => p.type === 'month')?.value;
+    const day = parts.find((p) => p.type === 'day')?.value;
+    if (!year || !month || !day) return null;
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Formatea una fecha usando métodos UTC para extraer los componentes de fecha
  * Evita problemas de zona horaria al usar getUTCDate(), getUTCMonth(), getUTCFullYear()
  */

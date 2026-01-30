@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Eye, FileText, Loader2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenButton, ZenDialog, ZenBadge } from '@/components/ui/zen';
 import { formatearMoneda } from '@/lib/actions/studio/catalogo/calcular-precio';
-import { formatDate } from '@/lib/actions/utils/formatting';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 import { getCotizacionById } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { obtenerResumenEventoCreado } from '@/lib/actions/studio/commercial/promises/evento-resumen.actions';
 import { ContractPreviewForPromiseModal } from '@/app/[slug]/studio/commercial/promises/[promiseId]/cierre/components/contratos/ContractPreviewForPromiseModal';
@@ -216,7 +217,7 @@ export function ResumenEvento({ studioSlug, eventId, eventData }: ResumenEventoP
                   {isContratoFirmado && fechaEvento && (
                     <div>
                       <p className="text-xs font-medium text-zinc-400 mb-0.5">Fecha de evento</p>
-                      <p className="text-xs text-zinc-300">{formatDate(fechaEvento)}</p>
+                      <p className="text-xs text-zinc-300">{formatDisplayDateLong(toUtcDateOnly(fechaEvento))}</p>
                     </div>
                   )}
                 </>

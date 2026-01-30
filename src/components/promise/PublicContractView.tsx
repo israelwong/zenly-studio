@@ -10,6 +10,8 @@ import { signPublicContract } from '@/lib/actions/public/contracts.actions';
 import { toast } from 'sonner';
 import { generatePDFFromElement } from '@/lib/utils/pdf-generator';
 import { formatMoney } from '@/lib/utils/package-price-formatter';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface PublicContractViewProps {
   isOpen: boolean;
@@ -228,12 +230,7 @@ export function PublicContractView({
     nombre_evento: promise.event_name || promise.event_type_name || 'Evento',
     tipo_evento: promise.event_type_name || 'Evento',
     fecha_evento: promise.event_date
-      ? new Date(promise.event_date).toLocaleDateString('es-ES', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
+      ? formatDisplayDateLong(toUtcDateOnly(promise.event_date))
       : 'Fecha por definir',
     total_contrato: formatMoney(totalAPagar),
     condiciones_pago: condicionesComerciales?.description || 'Por definir',
@@ -291,9 +288,12 @@ export function PublicContractView({
         // Continuar con IP por defecto
       }
 
-      // ⚠️ TAREA 3: Ejecutar Server Action
+      // Fecha local del cliente al firmar (YYYY-MM-DD) para guardar el día legal sin desfase por timezone
+      const d = new Date();
+      const signature_date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const result = await signPublicContract(studioSlug, promiseId, cotizacionId, {
         ip_address: clientIp,
+        signature_date,
       });
 
       if (result.success) {

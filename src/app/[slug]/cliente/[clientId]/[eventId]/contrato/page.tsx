@@ -2,7 +2,8 @@ import { unstable_cache } from 'next/cache';
 import type { Metadata } from 'next';
 import { obtenerDashboardInfo } from '@/lib/actions/cliente/dashboard.actions';
 import { getAllEventContractsForClient, getEventContractForClient } from '@/lib/actions/studio/business/contracts/contracts.actions';
-import { getEventContractData } from '@/lib/actions/studio/business/contracts/renderer.actions';
+import { getEventContractData, renderContractContent } from '@/lib/actions/studio/business/contracts/renderer.actions';
+import { getContractTemplate } from '@/lib/actions/studio/business/contracts/templates.actions';
 import { getClienteSession, obtenerStudioPublicInfo } from '@/lib/actions/cliente';
 import EventoContratoClient from './page-client';
 import type { EventContract } from '@/types/contracts';
@@ -95,9 +96,25 @@ export default async function EventoContratoPage({ params }: EventoContratoPageP
   if (dashboardResult.success && dashboardResult.data?.contract?.content) {
     // Usar contrato inmutable desde snapshot
     const immutableContract = dashboardResult.data.contract;
+    let contractContent = immutableContract.content;
+    // Re-renderizar con plantilla + eventData cuando haya template_id para corregir fecha del evento (SSoT date-only)
+    const templateId = immutableContract.template_id;
+    if (templateId && contractDataResult.success && contractDataResult.data) {
+      const templateResult = await getContractTemplate(slug, templateId);
+      if (templateResult.success && templateResult.data?.content) {
+        const rendered = await renderContractContent(
+          templateResult.data.content,
+          contractDataResult.data,
+          contractDataResult.data.condicionesData
+        );
+        if (rendered.success && rendered.data) {
+          contractContent = rendered.data;
+        }
+      }
+    }
     initialContract = {
       id: immutableContract.id,
-      content: immutableContract.content,
+      content: contractContent,
       status: immutableContract.status as any,
       created_at: immutableContract.created_at,
       updated_at: immutableContract.created_at,

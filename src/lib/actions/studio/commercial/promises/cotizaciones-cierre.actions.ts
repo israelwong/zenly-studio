@@ -10,6 +10,8 @@ import { renderContractContent } from '@/lib/actions/studio/business/contracts/r
 import { normalizePaymentDate } from '@/lib/actions/utils/payment-date';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import type { ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface CierreResponse {
   success: boolean;
@@ -1870,11 +1872,10 @@ export async function autorizarYCrearEvento(
       // 8.11. Crear log de autorizaci?n y creaci?n de evento
       const eventoNombre = cotizacion.promise.event_name || cotizacion.promise.name || 'Evento';
       const eventoFecha = cotizacion.promise.event_date
-        ? new Date(cotizacion.promise.event_date).toLocaleDateString('es-MX', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        })
+        ? (() => {
+            const normalized = toUtcDateOnly(cotizacion.promise.event_date);
+            return normalized ? formatDisplayDate(normalized, { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+          })()
         : null;
 
       let logContent = `Evento creado: ${eventoNombre}`;

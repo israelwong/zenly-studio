@@ -14,6 +14,8 @@ import {
 import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { AgendaUnifiedSheet } from './AgendaUnifiedSheet';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface AgendaPopoverProps {
   studioSlug: string;
@@ -167,13 +169,10 @@ function AgendaEventItem({
 }) {
   const relativeTime = useRelativeTime(event.date, open);
   
-  // Formatear fecha y hora
+  // Formatear fecha y hora (SSoT UTC)
   const formatDateTime = (date: Date | string, time?: string | null) => {
-    const dateObj = date instanceof Date ? date : new Date(date);
-    const dateStr = dateObj.toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-    });
+    const normalized = toUtcDateOnly(date);
+    const dateStr = normalized ? formatDisplayDate(normalized, { day: 'numeric', month: 'short' }) : '';
     if (time) {
       return `${dateStr} a las ${time}`;
     }

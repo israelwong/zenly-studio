@@ -18,6 +18,8 @@ import { RemindersSideSheet } from './RemindersSideSheet';
 import { deleteReminder, completeReminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { toast } from 'sonner';
 import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface AlertsPopoverProps {
   studioSlug: string;
@@ -338,13 +340,11 @@ function ReminderItem({
 }) {
   const relativeTime = useRelativeTime(reminder.reminder_date, open);
   
-  // Formatear fecha
+  // Formatear fecha (SSoT UTC)
   const formatDate = (date: Date | string | null) => {
     if (!date) return '';
-    return new Date(date).toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-    });
+    const normalized = toUtcDateOnly(date);
+    return normalized ? formatDisplayDate(normalized, { day: 'numeric', month: 'short' }) : '';
   };
 
   const eventName = reminder.promise?.name || reminder.promise?.contact?.name || 'Evento';

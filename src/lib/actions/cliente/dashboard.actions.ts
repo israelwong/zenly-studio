@@ -32,6 +32,7 @@ export interface DashboardInfo {
     status: string;
     created_at: Date;
     signed_at: Date | null;
+    template_id?: string | null;
   } | null;
   contact?: {
     name: string;
@@ -228,6 +229,7 @@ export async function obtenerDashboardInfo(
           status: contractStatus,
           created_at: contractData?.created_at || new Date(), // Fecha del contrato o ahora
           signed_at: contratoInmutable?.signed_at || contractData?.signed_at || null,
+          template_id: contratoInmutable?.template_id ?? null,
         };
       }
     }

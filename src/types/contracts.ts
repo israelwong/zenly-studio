@@ -97,6 +97,7 @@ export interface EventContractData {
   telefono_studio?: string;
   correo_studio?: string;
   direccion_studio?: string;
+  /** Fecha en que el cliente firmó el contrato digital. Origen: studio_cotizaciones_cierre.contract_signed_at; formateo: formatDisplayDateLong(toUtcDateOnly(...)). */
   fecha_firma_cliente?: string;
   servicios_incluidos: ServiceCategory[];
   banco?: string;

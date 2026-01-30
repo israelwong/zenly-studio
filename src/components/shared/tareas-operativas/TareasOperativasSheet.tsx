@@ -21,6 +21,7 @@ import { tieneGoogleCalendarHabilitado } from '@/lib/integrations/google/clients
 import { obtenerEstadoConexion } from '@/lib/integrations/google';
 import { AlertTriangle, Trash2, Settings } from 'lucide-react';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface TareasOperativasSheetProps {
   open: boolean;
@@ -220,20 +221,16 @@ export function TareasOperativasSheet({
   };
 
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    const normalized = toUtcDateOnly(date);
+    return normalized ? formatDisplayDate(normalized, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   };
 
   const formatDateTime = (date: Date) => {
-    return new Date(date).toLocaleString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const normalized = toUtcDateOnly(date);
+    const d = new Date(date);
+    const dateStr = normalized ? formatDisplayDate(normalized, { day: 'numeric', month: 'short' }) : '—';
+    const timeStr = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+    return `${dateStr}, ${timeStr}`;
   };
 
   const formatDateRange = (startDate: Date, endDate: Date) => {

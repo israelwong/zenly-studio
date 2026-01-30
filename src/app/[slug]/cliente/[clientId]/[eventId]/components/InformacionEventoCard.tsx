@@ -3,10 +3,8 @@
 import { Calendar, Tag } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent } from '@/components/ui/zen';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 import { useEvento } from '../context/EventoContext';
-
-// Usar formatDisplayDateLong que usa métodos UTC exclusivamente
-const formatFecha = formatDisplayDateLong;
 
 export function InformacionEventoCard() {
   const { evento } = useEvento();
@@ -30,7 +28,7 @@ export function InformacionEventoCard() {
         <div className="pt-3 border-t border-zinc-800 space-y-2">
           <div className="flex items-center gap-2 text-xs text-zinc-300">
             <Calendar className="h-3.5 w-3.5 text-zinc-500" />
-            <span>{formatFecha(evento.event_date)}</span>
+            <span>{evento.event_date ? formatDisplayDateLong(toUtcDateOnly(evento.event_date)) : 'Sin fecha'}</span>
           </div>
           {evento.event_type && (
             <div className="flex items-center gap-2 text-xs text-zinc-300">

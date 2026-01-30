@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { Info, CheckCircle2, FileText, CreditCard, XCircle, Bell } from 'lucide-react';
 import { ZenDialog, ZenBadge, ZenCheckbox } from '@/components/ui/zen';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface ReminderInfo {
   id: string;
@@ -140,12 +142,7 @@ export function ClosingProcessInfoModal({
                     </p>
                   )}
                   <p className="text-xs text-amber-300/60">
-                    Fecha: {new Date(reminder.reminder_date).toLocaleDateString('es-MX', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
+                    Fecha: {formatDisplayDateLong(toUtcDateOnly(reminder.reminder_date))}
                   </p>
                 </div>
                 <div className="pt-2 border-t border-amber-500/20">

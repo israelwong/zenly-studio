@@ -143,3 +143,51 @@ export function formatDisplayDateLong(
     year: 'numeric',
   });
 }
+
+/**
+ * Prueba interna de certificación SSoT: una fecha ISO de medianoche UTC
+ * (ej. 2025-04-25T00:00:00.000Z) debe devolver siempre el mismo día calendario
+ * formateado (sábado, 25 de abril de 2025) sin importar la zona horaria del entorno.
+ * Valida que toUtcDateOnly + formatDisplayDateLong son seguros para fechas legales.
+ */
+export function runDateOnlyLegalDisplayTest(): { ok: boolean; message: string } {
+  const ISO_MIDNIGHT = '2025-04-25T00:00:00.000Z';
+  const EXPECTED = 'sábado, 25 de abril de 2025';
+
+  const normalized = toUtcDateOnly(ISO_MIDNIGHT);
+  if (!normalized) {
+    return { ok: false, message: 'toUtcDateOnly(ISO_MIDNIGHT) returned null' };
+  }
+
+  const formatted = formatDisplayDateLong(normalized);
+  if (formatted !== EXPECTED) {
+    return {
+      ok: false,
+      message: `Expected "${EXPECTED}", got "${formatted}" (ISO midnight UTC must render as 25 April 2025 regardless of TZ)`,
+    };
+  }
+
+  // También validar string YYYY-MM-DD y Date de medianoche
+  const fromDateOnlyString = formatDisplayDateLong(toUtcDateOnly('2025-04-25'));
+  if (fromDateOnlyString !== EXPECTED) {
+    return {
+      ok: false,
+      message: `Date-only string "2025-04-25": expected "${EXPECTED}", got "${fromDateOnlyString}"`,
+    };
+  }
+
+  const midnightDate = new Date(ISO_MIDNIGHT);
+  const fromMidnightDate = formatDisplayDateLong(toUtcDateOnly(midnightDate));
+  if (fromMidnightDate !== EXPECTED) {
+    return {
+      ok: false,
+      message: `Date(ISO_MIDNIGHT) via toUtcDateOnly: expected "${EXPECTED}", got "${fromMidnightDate}"`,
+    };
+  }
+
+  return {
+    ok: true,
+    message:
+      'Certificación SSoT fechas legales: ISO medianoche y YYYY-MM-DD devuelven siempre "sábado, 25 de abril de 2025" (independiente de zona horaria).',
+  };
+}

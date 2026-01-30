@@ -20,6 +20,8 @@ import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { PromisePageProvider, usePromisePageContext } from './PromisePageContext';
 import { ProgressOverlay } from './ProgressOverlay';
 import { trackPromisePageView } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
+import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface PromisePageClientProps {
   promise: {
@@ -523,15 +525,11 @@ function PromisePageContent({
                       Sugerimos contratar antes del {' '}
                       <span className="font-medium text-emerald-400">
                         {(() => {
-                          const eventDate = new Date(promise.event_date);
-                          const fechaSugerida = new Date(eventDate);
-                          fechaSugerida.setDate(fechaSugerida.getDate() - shareSettings.min_days_to_hire);
-                          return fechaSugerida.toLocaleDateString('es-MX', {
-                            weekday: 'long',
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                          });
+                          const eventDateUtc = toUtcDateOnly(promise.event_date);
+                          if (!eventDateUtc) return '—';
+                          const fechaSugerida = new Date(eventDateUtc);
+                          fechaSugerida.setUTCDate(fechaSugerida.getUTCDate() - shareSettings.min_days_to_hire);
+                          return formatDisplayDateLong(fechaSugerida);
                         })()}
                       </span>
                     </p>

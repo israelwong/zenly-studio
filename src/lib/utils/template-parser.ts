@@ -1,7 +1,11 @@
 /**
  * Parser de plantillas de chat con variables
  * Soporta sintaxis {{variable}} para reemplazo dinámico
+ * Fechas: usa SSoT UTC (formatDisplayDateLong/formatDisplayDateShort + toUtcDateOnly).
  */
+
+import { formatDisplayDateLong, formatDisplayDateShort } from '@/lib/utils/date-formatter';
+import { toUtcDateOnly } from '@/lib/utils/date-only';
 
 interface ContactData {
   id: string;
@@ -76,20 +80,11 @@ export function parseChatTemplate(
       data.promise.event_type?.name || "evento"
     );
     if (data.promise.event_date) {
-      const date = new Date(data.promise.event_date);
-      parsed = parsed.replace(
-        /\{\{promise_event_date\}\}/g,
-        date.toLocaleDateString("es-MX", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-      );
-      parsed = parsed.replace(
-        /\{\{promise_event_date_short\}\}/g,
-        date.toLocaleDateString("es-MX")
-      );
+      const normalized = toUtcDateOnly(data.promise.event_date);
+      if (normalized) {
+        parsed = parsed.replace(/\{\{promise_event_date\}\}/g, formatDisplayDateLong(normalized));
+        parsed = parsed.replace(/\{\{promise_event_date_short\}\}/g, formatDisplayDateShort(normalized));
+      }
     }
     parsed = parsed.replace(
       /\{\{promise_event_location\}\}/g,
@@ -97,22 +92,13 @@ export function parseChatTemplate(
     );
   }
 
-  // Variables de evento
+  // Variables de evento (SSoT UTC)
   if (data.event) {
-    const date = new Date(data.event.event_date);
-    parsed = parsed.replace(
-      /\{\{event_date\}\}/g,
-      date.toLocaleDateString("es-MX", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    );
-    parsed = parsed.replace(
-      /\{\{event_date_short\}\}/g,
-      date.toLocaleDateString("es-MX")
-    );
+    const normalized = toUtcDateOnly(data.event.event_date);
+    if (normalized) {
+      parsed = parsed.replace(/\{\{event_date\}\}/g, formatDisplayDateLong(normalized));
+      parsed = parsed.replace(/\{\{event_date_short\}\}/g, formatDisplayDateShort(normalized));
+    }
     parsed = parsed.replace(
       /\{\{event_type\}\}/g,
       data.event.event_type?.name || "evento"
