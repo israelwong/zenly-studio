@@ -10,10 +10,10 @@ export const createClientSupabase = (): SupabaseClient => {
         return clientInstance
     }
     
-    // ✅ SINGLETON: Crear solo una vez
+    // ✅ SINGLETON: Crear solo una vez (misma env que browser.ts para evitar crash en prod)
     clientInstance = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
     
     return clientInstance
