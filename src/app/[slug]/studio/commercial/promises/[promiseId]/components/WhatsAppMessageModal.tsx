@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X } from 'lucide-react';
+import { ImagePlus } from 'lucide-react';
 import { ZenDialog, ZenButton } from '@/components/ui/zen';
 import {
   getWhatsAppTemplates,
@@ -10,6 +10,13 @@ import {
   updateWhatsAppTemplate,
 } from '@/lib/actions/studio/commercial/promises';
 import { getOrCreateShortUrl } from '@/lib/actions/studio/commercial/promises/promise-short-url.actions';
+import {
+  getPortfoliosForWhatsApp,
+  getTopShots,
+  addTopShot,
+  removeTopShot,
+} from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
+import type { PortfolioForWhatsApp, TopShot } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
 import {
   replaceWhatsAppTemplateVariables,
   formatEventDateForWhatsApp,
@@ -46,10 +53,13 @@ const VAR_LABELS: Record<string, string> = {
   fecha_evento: 'Fecha evento',
 };
 
-type Segment = { type: 'text'; value: string } | { type: 'variable'; key: string };
+type Segment =
+  | { type: 'text'; value: string }
+  | { type: 'variable'; key: string }
+  | { type: 'portfolio_link'; slug: string };
 
 function parseMessageToSegments(str: string): Segment[] {
-  const re = /\[\[(\w+)\]\]/g;
+  const re = /\[\[(?:link_portafolio:([^\]]+)|(\w+))\]\]/g;
   const segments: Segment[] = [];
   let lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -57,7 +67,11 @@ function parseMessageToSegments(str: string): Segment[] {
     if (m.index > lastIndex) {
       segments.push({ type: 'text', value: str.slice(lastIndex, m.index) });
     }
-    segments.push({ type: 'variable', key: m[1] });
+    if (m[1] != null) {
+      segments.push({ type: 'portfolio_link', slug: m[1] });
+    } else if (m[2] != null) {
+      segments.push({ type: 'variable', key: m[2] });
+    }
     lastIndex = m.index + m[0].length;
   }
   if (lastIndex < str.length) {
@@ -85,28 +99,41 @@ export function WhatsAppMessageModal({
   eventDate = null,
 }: WhatsAppMessageModalProps) {
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [portfolios, setPortfolios] = useState<PortfolioForWhatsApp[]>([]);
+  const [topShots, setTopShots] = useState<TopShot[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [loadingResources, setLoadingResources] = useState(false);
   const [shortUrl, setShortUrl] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
   const [saving, setSaving] = useState(false);
   const [messageSource, setMessageSource] = useState<'template' | 'chip' | null>(null);
+  const [uploadingShot, setUploadingShot] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   const loadData = useCallback(async () => {
     if (!isOpen || !studioSlug || !promiseId) return;
     setLoadingTemplates(true);
+    setLoadingResources(true);
     try {
-      const [tplRes, urlRes] = await Promise.all([
+      const [tplRes, urlRes, portRes, shotsRes] = await Promise.all([
         getWhatsAppTemplates(studioSlug),
         getOrCreateShortUrl(studioSlug, promiseId),
+        getPortfoliosForWhatsApp(studioSlug),
+        getTopShots(studioSlug),
       ]);
       if (tplRes.success && tplRes.data) setTemplates(tplRes.data);
       if (urlRes.success && urlRes.data) {
-        setShortUrl(`${typeof window !== 'undefined' ? window.location.origin : ''}/s/${urlRes.data.shortCode}`);
+        const base = typeof window !== 'undefined' ? window.location.origin : '';
+        setShortUrl(`${base}/s/${urlRes.data.shortCode}`);
       }
+      if (portRes.success && portRes.data) setPortfolios(portRes.data);
+      if (shotsRes.success && shotsRes.data) setTopShots(shotsRes.data);
     } finally {
       setLoadingTemplates(false);
+      setLoadingResources(false);
     }
   }, [isOpen, studioSlug, promiseId]);
 
@@ -149,6 +176,11 @@ export function WhatsAppMessageModal({
       }
       if (node.nodeType === Node.ELEMENT_NODE) {
         const el = node as HTMLElement;
+        const portfolioSlug = el.getAttribute?.('data-portfolio-slug');
+        if (portfolioSlug != null) {
+          parts.push(`[[link_portafolio:${portfolioSlug}]]`);
+          return;
+        }
         if (el.getAttribute?.('data-var')) {
           parts.push(`[[${el.getAttribute('data-var')}]]`);
           return;
@@ -167,6 +199,10 @@ export function WhatsAppMessageModal({
     const html = segments
       .map((s) => {
         if (s.type === 'text') return escapeHtml(s.value);
+        if (s.type === 'portfolio_link') {
+          const label = `Portafolio: ${s.slug}`;
+          return `<span data-portfolio-slug="${escapeHtml(s.slug)}" contenteditable="false" class="whatsapp-modal-chip">${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span></span>`;
+        }
         const label = VAR_LABELS[s.key] ?? s.key;
         return `<span data-var="${escapeHtml(s.key)}" contenteditable="false" class="whatsapp-modal-chip">${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span></span>`;
       })
@@ -249,11 +285,103 @@ export function WhatsAppMessageModal({
     }
   };
 
+  /** Inserta chip de portafolio [[link_portafolio:slug]] en el editor */
+  const insertPortfolioChip = (slug: string, label: string) => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      setMessage(message + ` [[link_portafolio:${slug}]] `);
+      setMessageSource('chip');
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.setAttribute('data-portfolio-slug', slug);
+    span.setAttribute('contenteditable', 'false');
+    span.className = 'whatsapp-modal-chip';
+    span.innerHTML = `${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span>`;
+    try {
+      range.insertNode(span);
+      const prev = span.previousSibling;
+      const next = span.nextSibling;
+      const needsSpaceBefore =
+        !prev ||
+        prev.nodeType !== Node.TEXT_NODE ||
+        !/[\s\u00A0]$/.test((prev as Text).textContent || '');
+      const needsSpaceAfter =
+        !next ||
+        next.nodeType !== Node.TEXT_NODE ||
+        !/^[\s\u00A0]/.test((next as Text).textContent || '');
+      if (needsSpaceBefore) {
+        span.parentNode?.insertBefore(document.createTextNode(' '), span);
+      }
+      if (needsSpaceAfter) {
+        span.parentNode?.insertBefore(document.createTextNode(' '), span.nextSibling);
+      }
+      range.setStartAfter(span);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch {
+      setMessage(message + ` [[link_portafolio:${slug}]] `);
+      setMessageSource('chip');
+      return;
+    }
+    setMessage(getMessageFromEditor());
+  };
+
+  const handlePortfolioClick = (p: PortfolioForWhatsApp) => {
+    insertPortfolioChip(p.slug, `Portafolio: ${p.title}`);
+  };
+
+  const handleTopShotClick = async (shot: TopShot) => {
+    try {
+      const res = await fetch(shot.file_url, { mode: 'cors' });
+      const blob = await res.blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      toast.success('¡Foto copiada! Pégala en WhatsApp con Ctrl+V');
+    } catch {
+      toast.error('No se pudo copiar la imagen. Prueba en otro navegador.');
+    }
+  };
+
+  const handleTopShotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploadingShot(true);
+    const formData = new FormData();
+    formData.set('file', file);
+    const res = await addTopShot(studioSlug, formData);
+    if (res.success) {
+      setTopShots((prev) => [...prev, res.data!].sort((a, b) => a.display_order - b.display_order));
+      toast.success('Foto agregada al repositorio');
+    } else {
+      toast.error(res.error);
+    }
+    setUploadingShot(false);
+  };
+
+  const handleRemoveTopShot = async (id: string) => {
+    const res = await removeTopShot(studioSlug, id);
+    if (res.success) {
+      setTopShots((prev) => prev.filter((s) => s.id !== id));
+      toast.success('Foto eliminada');
+    } else {
+      toast.error(res.error);
+    }
+  };
+
   const getCurrentMessage = (): string =>
     editorRef.current ? getMessageFromEditor() : message;
 
   const getTextToSend = (): string => {
-    const currentMessage = getCurrentMessage();
+    let currentMessage = getCurrentMessage();
+    currentMessage = currentMessage.replace(
+      /\[\[link_portafolio:([^\]]+)\]\]/g,
+      (_, slug) => `${origin}/${studioSlug}?portfolio=${encodeURIComponent(slug.trim())}`
+    );
     return replaceWhatsAppTemplateVariables(currentMessage, vars).trim() || contactName;
   };
 
@@ -368,12 +496,39 @@ export function WhatsAppMessageModal({
     onClose();
   };
 
-  /** Vista previa: nombre_contacto, nombre_evento, fecha_evento en negritas; link_promesa como enlace */
+  /** Vista previa: negritas, link_promesa y links de portafolio en azul */
   const previewStyled = (() => {
     const segments = parseMessageToSegments(message);
     if (segments.length === 0) return '—';
+    const basePortfolioUrl = `${origin}/${studioSlug}?portfolio=`;
+    const portfolioUrlRe = new RegExp(`(${basePortfolioUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\s]*)`, 'g');
+    const isPortfolioUrl = (s: string) => s.includes('?portfolio=') && (s.startsWith(origin) || s.startsWith('/'));
     return segments.map((seg, i) => {
-      if (seg.type === 'text') return <React.Fragment key={i}>{seg.value}</React.Fragment>;
+      if (seg.type === 'text') {
+        if (!seg.value) return <React.Fragment key={i} />;
+        const parts = seg.value.split(portfolioUrlRe);
+        return (
+          <React.Fragment key={i}>
+            {parts.map((part, j) =>
+              isPortfolioUrl(part) ? (
+                <span key={`t-${i}-${j}`} className="text-blue-500 underline cursor-pointer">
+                  {part}
+                </span>
+              ) : (
+                part
+              )
+            )}
+          </React.Fragment>
+        );
+      }
+      if (seg.type === 'portfolio_link') {
+        const url = `${origin}/${studioSlug}?portfolio=${encodeURIComponent(seg.slug)}`;
+        return (
+          <span key={i} className="text-blue-500 underline cursor-pointer">
+            {url}
+          </span>
+        );
+      }
       const resolved = (vars as Record<string, string>)[seg.key] ?? `[[${seg.key}]]`;
       if (seg.key === 'link_promesa') {
         return (
@@ -407,7 +562,7 @@ export function WhatsAppMessageModal({
       }
       saveDisabled={saving || !previewMessage.trim()}
       isLoading={saving}
-      maxWidth="2xl"
+      maxWidth="5xl"
       footerLeftContent={
         hasChanges ? (
           <div className="flex items-center gap-2">
@@ -443,7 +598,7 @@ export function WhatsAppMessageModal({
       }
     >
       <div className="flex gap-0 min-h-[380px]">
-        {/* Sidebar: plantillas */}
+        {/* Col 1: Plantillas */}
         <aside className="w-52 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-900/40 rounded-l-lg overflow-hidden">
           <div className="px-2.5 py-2 border-b border-zinc-800">
             <p className="text-xs font-medium text-zinc-500">Plantillas</p>
@@ -478,7 +633,87 @@ export function WhatsAppMessageModal({
           </div>
         </aside>
 
-        {/* Editor + Preview (bloque derecho integrado) */}
+        {/* Col 2: Recursos (Portafolios + Top Shots) */}
+        <aside className="w-56 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-900/30 overflow-hidden">
+          <div className="px-2.5 py-2 border-b border-zinc-800">
+            <p className="text-xs font-medium text-zinc-500">Recursos</p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-3">
+            {/* Portafolios: botones que insertan link */}
+            <div>
+              <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">Portafolios</p>
+              {loadingResources ? (
+                <p className="text-xs text-zinc-500">Cargando…</p>
+              ) : portfolios.length === 0 ? (
+                <p className="text-xs text-zinc-500">Sin portafolios publicados</p>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {portfolios.map((p) => (
+                    <ZenButton
+                      key={p.id}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePortfolioClick(p)}
+                      className="text-xs h-7 px-2"
+                    >
+                      {p.title}
+                    </ZenButton>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Top Shots: rejilla + copiar al portapapeles */}
+            <div>
+              <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">Fotos Top</p>
+              {loadingResources ? (
+                <p className="text-xs text-zinc-500">Cargando…</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {topShots.map((shot) => (
+                      <button
+                        key={shot.id}
+                        type="button"
+                        onClick={() => handleTopShotClick(shot)}
+                        className="aspect-square rounded-md overflow-hidden border border-zinc-700 bg-zinc-800 hover:ring-2 hover:ring-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                        title="Clic para copiar. Pega en WhatsApp con Ctrl+V"
+                      >
+                        <img
+                          src={shot.file_url}
+                          alt="Top shot"
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                    {topShots.length < 12 && (
+                      <label className="aspect-square rounded-md border border-dashed border-zinc-600 flex items-center justify-center cursor-pointer hover:bg-zinc-800/50 hover:border-zinc-500">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          onChange={handleTopShotUpload}
+                          disabled={uploadingShot}
+                        />
+                        {uploadingShot ? (
+                          <span className="text-[10px] text-zinc-500">Subiendo…</span>
+                        ) : (
+                          <ImagePlus className="h-5 w-5 text-zinc-500" />
+                        )}
+                      </label>
+                    )}
+                  </div>
+                  {topShots.length === 0 && (
+                    <p className="text-xs text-zinc-500 mt-1">Sube fotos para copiar y pegar en WhatsApp</p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        {/* Col 3: Editor + Preview (Taller) */}
         <div className="flex-1 flex flex-col min-w-0 border border-zinc-800 border-l-0 rounded-r-lg bg-zinc-800/30 overflow-hidden">
           <div className="p-3 flex flex-col gap-3 flex-1 min-h-0">
             {/* Chips de variables */}

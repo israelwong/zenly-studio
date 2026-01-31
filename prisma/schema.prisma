@@ -831,6 +831,7 @@ model studios {
   reminders                                       studio_reminders[]
   reminder_subjects                               studio_reminder_subjects[]
   short_urls                                      studio_short_urls[]
+  top_shots                                       studio_top_shots[]
   recurring_expenses                              studio_recurring_expenses[]
   revenue_transactions                            studio_revenue_transactions[]
   studio_role_permissions                         studio_role_permissions[]
@@ -1424,6 +1425,18 @@ model studio_whatsapp_templates {
   message   String
   created_at DateTime @default(now())
   studio    studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@index([studio_id])
+}
+
+model studio_top_shots {
+  id            String   @id @default(cuid())
+  studio_id     String
+  file_url      String
+  storage_path  String
+  display_order Int      @default(0)
+  created_at    DateTime @default(now())
+  studio        studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@index([studio_id])
 }
