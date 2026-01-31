@@ -1418,14 +1418,16 @@ model studio_promise_log_templates {
 }
 
 model studio_whatsapp_templates {
-  id        String   @id @default(cuid())
-  studio_id String
-  title     String
-  message   String
-  created_at DateTime @default(now())
-  studio    studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  studio_id     String
+  title         String
+  message       String
+  display_order Int      @default(0)
+  created_at    DateTime @default(now())
+  studio        studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@index([studio_id])
+  @@index([studio_id, display_order])
 }
 
 model studio_promise_logs {

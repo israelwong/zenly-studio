@@ -45,6 +45,8 @@ export {
   updateWhatsAppTemplate,
   deleteWhatsAppTemplate,
   duplicateWhatsAppTemplate,
+  updateTemplatesOrder,
+  getWhatsAppSentTemplateIdsForPromise,
 } from './whatsapp-templates.actions';
 export type { WhatsAppTemplate } from './whatsapp-templates.actions';
 

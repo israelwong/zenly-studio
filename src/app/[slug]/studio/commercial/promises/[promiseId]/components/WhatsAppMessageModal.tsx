@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MoreVertical, Copy, Trash2, ChevronDown, ChevronRight, Eye, Plus, Loader2 } from 'lucide-react';
+import { MoreVertical, Copy, Trash2, ChevronDown, ChevronRight, Eye, Plus, Loader2, GripVertical, Check } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenInput, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import {
   getWhatsAppTemplates,
@@ -10,6 +10,8 @@ import {
   updateWhatsAppTemplate,
   deleteWhatsAppTemplate,
   duplicateWhatsAppTemplate,
+  updateTemplatesOrder,
+  getWhatsAppSentTemplateIdsForPromise,
 } from '@/lib/actions/studio/commercial/promises';
 import { getOrCreateShortUrl, getOrCreatePortfolioShortUrl } from '@/lib/actions/studio/commercial/promises/promise-short-url.actions';
 import { getPortfoliosForWhatsApp, getPortfolioFullDetail } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
@@ -23,6 +25,17 @@ import {
 import type { WhatsAppTemplate } from '@/lib/actions/studio/commercial/promises/whatsapp-templates.actions';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 export interface WhatsAppMessageModalProps {
   isOpen: boolean;
@@ -87,6 +100,164 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+interface TemplateSortableListProps {
+  templates: WhatsAppTemplate[];
+  selectedTemplateId: string | null;
+  sentTemplateIds: Set<string>;
+  lastUsedTemplateId: string | null;
+  isReordering: boolean;
+  onSelect: (t: WhatsAppTemplate) => void;
+  onDuplicate: (e: React.MouseEvent, id: string) => void;
+  onDelete: (e: React.MouseEvent, id: string) => void;
+  onReorder: (newOrder: WhatsAppTemplate[]) => void;
+}
+
+function SortableTemplateItem({
+  t,
+  isSelected,
+  isSent,
+  isLastUsed,
+  onSelect,
+  onDuplicate,
+  onDelete,
+}: {
+  t: WhatsAppTemplate;
+  isSelected: boolean;
+  isSent: boolean;
+  isLastUsed: boolean;
+  onSelect: () => void;
+  onDuplicate: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: t.id,
+  });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const trimmed = t.message.replace(/\s+/g, ' ').trim();
+  const snippet = trimmed.slice(0, 38);
+  const snippetDisplay = trimmed.length > 38 ? snippet + '…' : snippet;
+  return (
+    <li ref={setNodeRef} style={style}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onSelect}
+        onKeyDown={(e) => e.key === 'Enter' && onSelect()}
+        className={cn(
+          'flex items-start gap-1 w-full text-left rounded-md transition-colors cursor-pointer border',
+          isSelected ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'border-transparent hover:bg-zinc-800/80 hover:text-zinc-200 text-zinc-400',
+          isLastUsed && !isSelected && 'border-l-2 border-l-amber-500/60'
+        )}
+      >
+        <div
+          {...attributes}
+          {...listeners}
+          className="shrink-0 touch-none p-1 rounded cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-400 hover:bg-zinc-800"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          aria-label="Arrastrar para reordenar"
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1 py-1.5 pr-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="font-semibold text-sm truncate">{t.title}</p>
+            {isSent && (
+              <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-emerald-400" title="Enviado a este prospecto">
+                <Check className="h-3 w-3" />
+                Enviado
+              </span>
+            )}
+            {isLastUsed && !isSent && !isSelected && (
+              <span className="shrink-0 text-[10px] text-amber-400/90">Reciente</span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-500 truncate mt-0.5">{snippetDisplay}</p>
+        </div>
+        <ZenDropdownMenu>
+          <ZenDropdownMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              className="shrink-0 p-0.5 rounded hover:bg-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              aria-label="Acciones"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+          </ZenDropdownMenuTrigger>
+          <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <ZenDropdownMenuItem onClick={onDuplicate}>
+              <Copy className="h-4 w-4 mr-2" />
+              Duplicar
+            </ZenDropdownMenuItem>
+            <ZenDropdownMenuItem onClick={onDelete} className="text-red-400 focus:text-red-300">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Eliminar
+            </ZenDropdownMenuItem>
+          </ZenDropdownMenuContent>
+        </ZenDropdownMenu>
+      </div>
+    </li>
+  );
+}
+
+function TemplateSortableList({
+  templates,
+  selectedTemplateId,
+  sentTemplateIds,
+  lastUsedTemplateId,
+  isReordering,
+  onSelect,
+  onDuplicate,
+  onDelete,
+  onReorder,
+}: TemplateSortableListProps) {
+  const [localTemplates, setLocalTemplates] = useState(templates);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  useEffect(() => {
+    setLocalTemplates(templates);
+  }, [templates]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = localTemplates.findIndex((x) => x.id === active.id);
+      const newIndex = localTemplates.findIndex((x) => x.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const next = arrayMove(localTemplates, oldIndex, newIndex);
+        setLocalTemplates(next);
+        onReorder(next);
+      }
+    }
+  };
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={localTemplates.map((x) => x.id)} strategy={verticalListSortingStrategy}>
+        <ul className={cn('space-y-0.5', isReordering && 'pointer-events-none opacity-70')}>
+          {localTemplates.map((t) => (
+            <SortableTemplateItem
+              key={t.id}
+              t={t}
+              isSelected={selectedTemplateId === t.id}
+              isSent={sentTemplateIds.has(t.id)}
+              isLastUsed={lastUsedTemplateId === t.id}
+              onSelect={() => onSelect(t)}
+              onDuplicate={(e) => onDuplicate(e as React.MouseEvent, t.id)}
+              onDelete={(e) => onDelete(e as React.MouseEvent, t.id)}
+            />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 export function WhatsAppMessageModal({
   isOpen,
   onClose,
@@ -98,12 +269,15 @@ export function WhatsAppMessageModal({
   eventDate = null,
 }: WhatsAppMessageModalProps) {
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [sentTemplateIds, setSentTemplateIds] = useState<Set<string>>(new Set());
+  const [lastUsedTemplateId, setLastUsedTemplateId] = useState<string | null>(null);
   const [portfolioGroups, setPortfolioGroups] = useState<PortfolioGroup[]>([]);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [previewPortfolio, setPreviewPortfolio] = useState<PublicPortfolio | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [loadingPreviewSlug, setLoadingPreviewSlug] = useState<string | null>(null);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [isReorderingTemplates, setIsReorderingTemplates] = useState(false);
   const [loadingResources, setLoadingResources] = useState(false);
   const [shortUrl, setShortUrl] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -119,12 +293,14 @@ export function WhatsAppMessageModal({
     setLoadingTemplates(true);
     setLoadingResources(true);
     try {
-      const [tplRes, urlRes, portRes] = await Promise.all([
+      const [tplRes, urlRes, portRes, sentRes] = await Promise.all([
         getWhatsAppTemplates(studioSlug),
         getOrCreateShortUrl(studioSlug, promiseId),
         getPortfoliosForWhatsApp(studioSlug),
+        getWhatsAppSentTemplateIdsForPromise(promiseId),
       ]);
       if (tplRes.success && tplRes.data) setTemplates(tplRes.data);
+      if (sentRes.success && sentRes.data) setSentTemplateIds(new Set(sentRes.data));
       if (urlRes.success && urlRes.data) {
         const base = typeof window !== 'undefined' ? window.location.origin : '';
         setShortUrl(`${base}/s/${urlRes.data.shortCode}`);
@@ -257,13 +433,14 @@ export function WhatsAppMessageModal({
     setTemplateName(t.title);
     setMessage(t.message);
     setMessageSource('template');
+    setLastUsedTemplateId(t.id);
   };
 
   const handleDuplicateTemplate = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const res = await duplicateWhatsAppTemplate(studioSlug, id);
     if (res.success && res.data) {
-      setTemplates((prev) => [res.data!, ...prev]);
+      setTemplates((prev) => [...prev, res.data!]);
       toast.success('Plantilla duplicada');
     } else {
       toast.error(res.success ? undefined : res.error);
@@ -417,13 +594,17 @@ export function WhatsAppMessageModal({
     return replaceWhatsAppTemplateVariables(currentMessage, vars).trim() || contactName;
   };
 
-  const openWhatsAppAndLog = (textToSend: string) => {
+  const openWhatsAppAndLog = (textToSend: string, templateId?: string | null) => {
     const cleanPhone = phone.replace(/\D/g, '');
     if (!cleanPhone) return;
     const encoded = encodeURIComponent(textToSend);
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encoded}`;
     window.open(whatsappUrl, '_blank');
-    logWhatsAppSentWithMessage(studioSlug, promiseId, contactName, phone, textToSend).catch((e) => {
+    logWhatsAppSentWithMessage(studioSlug, promiseId, contactName, phone, textToSend, templateId ?? undefined).then(
+      (res) => {
+        if (res.success && templateId) setSentTemplateIds((prev) => new Set(prev).add(templateId));
+      }
+    ).catch((e) => {
       console.error('Error registrando WhatsApp:', e);
       toast.error('Error al registrar en bitácora');
     });
@@ -477,7 +658,7 @@ export function WhatsAppMessageModal({
       toast.error('Escribe un mensaje');
       return;
     }
-    openWhatsAppAndLog(textToSend);
+    openWhatsAppAndLog(textToSend, selectedTemplateId ?? undefined);
     onClose();
   };
 
@@ -517,7 +698,7 @@ export function WhatsAppMessageModal({
         }
         setTemplates((prev) => [res.data!, ...prev]);
       }
-      openWhatsAppAndLog(textToSend);
+      openWhatsAppAndLog(textToSend, selectedTemplateId ?? undefined);
       onClose();
     } finally {
       setSaving(false);
@@ -530,7 +711,7 @@ export function WhatsAppMessageModal({
       toast.error('Escribe un mensaje');
       return;
     }
-    openWhatsAppAndLog(textToSend);
+    openWhatsAppAndLog(textToSend, selectedTemplateId ?? undefined);
     onClose();
   };
 
@@ -605,7 +786,7 @@ export function WhatsAppMessageModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Enviar por WhatsApp"
-      description="Plantillas a la izquierda, editor y vista previa a la derecha"
+      description="Plantillas y portafolios por tipo de evento. Se expande la categoría del evento en gestión."
       onCancel={onClose}
       cancelLabel="Cancelar"
       onSave={hasChanges ? handleGuardarYEnviar : handleEnviarWhatsApp}
@@ -655,13 +836,13 @@ export function WhatsAppMessageModal({
         ) : undefined
       }
     >
-      <div className="flex gap-0 min-h-[380px]">
-        {/* Col 1: Plantillas */}
-        <aside className="w-52 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-900/40 rounded-l-lg overflow-hidden">
-          <div className="px-2.5 py-2 border-b border-zinc-800">
+      <div className="flex gap-0 max-h-[85vh] min-h-[380px] overflow-hidden rounded-lg bg-zinc-950 border border-zinc-800">
+        {/* Col 1: Plantillas (card-grouped-list + drag) */}
+        <aside className="w-52 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-950 rounded-l-lg overflow-hidden">
+          <div className="shrink-0 sticky top-0 z-10 px-2.5 py-2 border-b border-zinc-800 bg-zinc-950">
             <p className="text-xs font-medium text-zinc-500">Plantillas</p>
           </div>
-          <div className="flex-1 overflow-y-auto p-2">
+          <div className="flex-1 overflow-y-auto p-2 min-h-0">
             {loadingTemplates ? (
               <p className="text-xs text-zinc-500 py-4 px-1">Cargando…</p>
             ) : templates.length === 0 ? (
@@ -669,72 +850,36 @@ export function WhatsAppMessageModal({
                 Configuración → Plantillas WhatsApp
               </p>
             ) : (
-              <ul className="space-y-0.5">
-                {templates.map((t) => {
-                  const trimmed = t.message.replace(/\s+/g, ' ').trim();
-                  const snippet = trimmed.slice(0, 38);
-                  const snippetDisplay = trimmed.length > 38 ? snippet + '…' : snippet;
-                  return (
-                    <li key={t.id}>
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleSelectTemplate(t)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSelectTemplate(t)}
-                        className={cn(
-                          'flex justify-between items-start gap-1 w-full text-left px-2 py-1.5 rounded-md transition-colors cursor-pointer',
-                          selectedTemplateId === t.id
-                            ? 'bg-emerald-500/20 text-emerald-300'
-                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                        )}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-sm truncate">{t.title}</p>
-                          <p className="text-xs text-zinc-500 truncate mt-0.5">{snippetDisplay}</p>
-                        </div>
-                        <ZenDropdownMenu>
-                          <ZenDropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
-                              className="shrink-0 p-0.5 rounded hover:bg-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                              aria-label="Acciones"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </button>
-                          </ZenDropdownMenuTrigger>
-                          <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                            <ZenDropdownMenuItem
-                              onClick={(e) => handleDuplicateTemplate(e as unknown as React.MouseEvent, t.id)}
-                            >
-                              <Copy className="h-4 w-4 mr-2" />
-                              Duplicar
-                            </ZenDropdownMenuItem>
-                            <ZenDropdownMenuItem
-                              onClick={(e) => handleDeleteTemplate(e as unknown as React.MouseEvent, t.id)}
-                              className="text-red-400 focus:text-red-300"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Eliminar
-                            </ZenDropdownMenuItem>
-                          </ZenDropdownMenuContent>
-                        </ZenDropdownMenu>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <TemplateSortableList
+                templates={templates}
+                selectedTemplateId={selectedTemplateId}
+                sentTemplateIds={sentTemplateIds}
+                lastUsedTemplateId={lastUsedTemplateId}
+                isReordering={isReorderingTemplates}
+                onSelect={handleSelectTemplate}
+                onDuplicate={handleDuplicateTemplate}
+                onDelete={handleDeleteTemplate}
+                onReorder={async (newOrder) => {
+                  setTemplates(newOrder);
+                  setIsReorderingTemplates(true);
+                  const res = await updateTemplatesOrder(studioSlug, newOrder.map((x) => x.id));
+                  setIsReorderingTemplates(false);
+                  if (!res.success) {
+                    toast.error(res.error);
+                    loadData();
+                  }
+                }}
+              />
             )}
           </div>
         </aside>
 
         {/* Col 2: Portafolios por tipo de evento */}
-        <aside className="w-56 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-900/30 overflow-hidden">
-          <div className="px-2.5 py-2 border-b border-zinc-800">
+        <aside className="w-56 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-950 overflow-hidden">
+          <div className="shrink-0 sticky top-0 z-10 px-2.5 py-2 border-b border-zinc-800 bg-zinc-950">
             <p className="text-xs font-medium text-zinc-500">Portafolios</p>
           </div>
-          <div className="flex-1 overflow-y-auto p-2">
+          <div className="flex-1 overflow-y-auto p-2 min-h-0">
             {loadingResources ? (
               <p className="text-xs text-zinc-500">Cargando…</p>
             ) : portfolioGroups.length === 0 ? (
@@ -830,38 +975,40 @@ export function WhatsAppMessageModal({
         </aside>
 
         {/* Col 3: Editor + Preview (Taller) */}
-        <div className="flex-1 flex flex-col min-w-0 border border-zinc-800 border-l-0 rounded-r-lg bg-zinc-800/30 overflow-hidden">
-          <div className="p-3 flex flex-col gap-3 flex-1 min-h-0">
-            {/* Título de la plantilla */}
-            <div>
-              <label className="text-xs font-medium text-zinc-500 block mb-1.5">
-                Título de la plantilla
-              </label>
+        <div className="flex-1 flex flex-col min-w-0 border-l border-zinc-800 rounded-r-lg bg-zinc-950 overflow-hidden">
+          <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+            <div className="shrink-0 sticky top-0 z-10 p-3 pb-2 border-b border-zinc-800 bg-zinc-950 space-y-3">
+              {/* Título de la plantilla */}
+              <div>
+                <label className="text-xs font-medium text-zinc-500 block mb-1.5">
+                  Título de la plantilla
+                </label>
               <ZenInput
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
                 placeholder="Ej. Saludo inicial"
                 className="bg-zinc-900/50 border-zinc-700"
               />
+              {/* Chips de variables */}
+              <div className="flex flex-wrap gap-1.5">
+                {VAR_CHIPS.map((chip) => (
+                  <ZenButton
+                    key={chip.value}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => insertVariableAtCursor(chip.value)}
+                    className="text-xs h-6 px-2"
+                  >
+                    {chip.label}
+                  </ZenButton>
+                ))}
+              </div>
             </div>
-            {/* Chips de variables */}
-            <div className="flex flex-wrap gap-1.5">
-              {VAR_CHIPS.map((chip) => (
-                <ZenButton
-                  key={chip.value}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => insertVariableAtCursor(chip.value)}
-                  className="text-xs h-6 px-2"
-                >
-                  {chip.label}
-                </ZenButton>
-              ))}
             </div>
 
             {/* Editor con Smart Chips */}
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 p-3 pt-2">
               <label className="text-xs font-medium text-zinc-500 block mb-1.5">Mensaje</label>
               <div
                 ref={editorRef}
@@ -879,7 +1026,7 @@ export function WhatsAppMessageModal({
             </div>
 
             {/* Burbuja WhatsApp (espejo en tiempo real) */}
-            <div className="shrink-0 pt-1 border-t border-zinc-700/50">
+            <div className="shrink-0 p-3 pt-2 border-t border-zinc-800">
               <p className="text-xs font-medium text-zinc-500 mb-1.5">Vista previa</p>
               <div className="flex justify-end">
               <div

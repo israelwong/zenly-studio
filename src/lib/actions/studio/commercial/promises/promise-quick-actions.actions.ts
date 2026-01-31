@@ -49,13 +49,15 @@ export async function logWhatsAppSent(
 /**
  * Registrar envío de WhatsApp con el texto completo enviado (para bitácora).
  * Crea un log con log_type 'whatsapp_sent' y content = mensaje completo.
+ * Si se pasa whatsappTemplateId, se guarda en metadata para badge "Enviado".
  */
 export async function logWhatsAppSentWithMessage(
   studioSlug: string,
   promiseId: string,
   contactName: string,
   phone: string,
-  messageText: string
+  messageText: string,
+  whatsappTemplateId?: string | null
 ): Promise<ActionResponse<{ logged: boolean }>> {
   try {
     const promise = await prisma.studio_promises.findUnique({
@@ -72,13 +74,18 @@ export async function logWhatsAppSentWithMessage(
     if (!studio || studio.slug !== studioSlug) {
       return { success: false, error: 'Estudio no coincide' };
     }
+    const metadata: { contactName: string; phone: string; whatsappTemplateId?: string } = {
+      contactName,
+      phone,
+    };
+    if (whatsappTemplateId) metadata.whatsappTemplateId = whatsappTemplateId;
     await prisma.studio_promise_logs.create({
       data: {
         promise_id: promiseId,
         user_id: null,
         content: messageText.trim() || `WhatsApp enviado a ${contactName}`,
         log_type: 'whatsapp_sent',
-        metadata: { contactName, phone },
+        metadata,
       },
     });
     return { success: true, data: { logged: true } };
