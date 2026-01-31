@@ -56,28 +56,16 @@ export function PromisesKanbanClient({
 
   // ✅ OPTIMIZACIÓN: Callbacks de Realtime sin POSTs adicionales
   // Solo actualizar estado local basado en el payload de realtime
-  const handlePromiseInserted = useCallback((promiseId: string) => {
-    // No procesar si estamos navegando
+  const handlePromiseInserted = useCallback(() => {
     if (isNavigatingRef.current) return;
-
-    console.log('[PromisesKanbanClient] Nueva promesa detectada:', promiseId);
-    // ✅ OPTIMIZACIÓN: No hacer POST, solo agregar placeholder o esperar a que se recargue la página
-    // El realtime solo notifica, no carga datos completos
   }, []);
 
-  const handlePromiseUpdatedRealtime = useCallback((promiseId: string) => {
-    // No procesar si estamos navegando
+  const handlePromiseUpdatedRealtime = useCallback(() => {
     if (isNavigatingRef.current) return;
-
-    console.log('[PromisesKanbanClient] Promesa actualizada:', promiseId);
-    // ✅ OPTIMIZACIÓN: No hacer POST, solo marcar como "necesita refresh" o actualizar campos básicos localmente
-    // El realtime solo notifica cambios, no carga datos completos
   }, []);
 
   const handlePromiseDeleted = useCallback((promiseId: string) => {
     if (isNavigatingRef.current) return;
-
-    console.log('[PromisesKanbanClient] Promesa eliminada:', promiseId);
     startTransition(() => {
       setPromises((prev) => prev.filter((p) => p.promise_id !== promiseId));
     });

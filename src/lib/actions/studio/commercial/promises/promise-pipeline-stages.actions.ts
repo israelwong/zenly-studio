@@ -34,13 +34,14 @@ export async function getPipelineStages(
       return { success: false, error: 'Studio no encontrado' };
     }
 
+    // Orden exclusivamente por order (sin orden secundario por nombre ni updated_at)
     const stages = await withRetry(
       () => prisma.studio_promise_pipeline_stages.findMany({
       where: {
         studio_id: studio.id,
         is_active: true,
       },
-      orderBy: { order: 'asc' },
+      orderBy: [{ order: 'asc' }],
     }),
       { maxRetries: 3, baseDelay: 1000, maxDelay: 5000 }
     );
@@ -174,16 +175,10 @@ export async function updatePipelineStage(
       return { success: false, error: 'Etapa no encontrada' };
     }
 
-    // No permitir editar campos críticos de etapas del sistema
-    const updateData: {
-      name?: string;
-      color?: string;
-      order?: number;
-    } = {};
+    // Solo actualizar name y color; NUNCA tocar order (el orden solo se cambia con reorderPipelineStages)
+    const updateData: { name?: string; color?: string } = {};
     if (validatedData.name !== undefined) updateData.name = validatedData.name;
     if (validatedData.color !== undefined) updateData.color = validatedData.color;
-    if (validatedData.order !== undefined) updateData.order = validatedData.order;
-    // slug e is_system no se pueden cambiar
 
     const stage = await prisma.studio_promise_pipeline_stages.update({
       where: { id: validatedData.id },

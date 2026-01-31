@@ -18,7 +18,7 @@ const CIERRE_SLUGS = new Set([
  * Determina la sub-ruta según el slug del pipeline_stage.
  * - Terminal (approved, canceled, archived, etc.) → autorizada
  * - Cierre (closing, cierre, en_cierre) → cierre
- * - Resto → pendiente
+ * - Resto (pendiente, negociacion, interesado, etc.) → pendiente
  */
 export function getPromiseRouteStateFromSlug(slug: string | null | undefined): PromiseRouteState {
   if (!slug) return 'pendiente';

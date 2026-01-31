@@ -23,12 +23,13 @@ import type { PipelineStage } from "@/lib/actions/schemas/promises-schemas";
 async function _getPublicPipelineStagesInternal(
   studioId: string
 ): Promise<PipelineStage[]> {
+  // Orden exclusivamente por order (sin orden secundario por nombre ni updated_at)
   const stages = await prisma.studio_promise_pipeline_stages.findMany({
     where: {
       studio_id: studioId,
       is_active: true,
     },
-    orderBy: { order: 'asc' },
+    orderBy: [{ order: 'asc' }],
     select: {
       id: true,
       studio_id: true,

@@ -41,7 +41,6 @@ export function usePromisesRealtime({
   const handleInsert = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
-      console.log('[Realtime] Nueva promesa insertada:', payload);
       const p = payload as any;
       // Soporte para múltiples formatos: broadcast_changes y realtime.send
       const promiseId = p.payload?.record?.id
@@ -63,7 +62,6 @@ export function usePromisesRealtime({
   const handleUpdate = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
-      console.log('[Realtime] Promesa actualizada:', payload);
       const p = payload as any;
       // Soporte para múltiples formatos: broadcast_changes y realtime.send
       const promiseId = p.payload?.record?.id
@@ -81,7 +79,6 @@ export function usePromisesRealtime({
   const handleDelete = useCallback(
     (payload: unknown) => {
       if (!isMountedRef.current) return;
-      console.log('[Realtime] Promesa eliminada:', payload);
       const p = payload as any;
       // Soporte para múltiples formatos: broadcast_changes y realtime.send
       const promiseId = p.payload?.old_record?.id
@@ -109,30 +106,20 @@ export function usePromisesRealtime({
   }, [handleInsert, handleUpdate, handleDelete]);
 
   useEffect(() => {
-    if (!studioSlug) {
-      console.warn('[usePromisesRealtime] No studio slug provided');
-      return;
-    }
+    if (!studioSlug) return;
 
     // ✅ PASO 4: Verificar si ya hay una conexión activa (evitar múltiples suscripciones)
     if (channelRef.current?.state === 'subscribed' || channelRef.current?.state === 'SUBSCRIBED') {
-      console.log('[usePromisesRealtime] Canal ya suscrito, evitando duplicación');
       return;
     }
 
-    // ✅ PASO 4: Prevenir múltiples ejecuciones simultáneas
     if (setupInProgressRef.current) {
-      console.log('[usePromisesRealtime] Setup ya en progreso, evitando duplicación');
       return;
     }
     
     const setupRealtime = async () => {
-      setupInProgressRef.current = true; // ✅ PASO 4: Marcar como en progreso
+      setupInProgressRef.current = true;
       try {
-        console.log('[usePromisesRealtime] 🚀 Iniciando setup de Realtime (v2):', {
-          studioSlug,
-          timestamp: new Date().toISOString(),
-        });
 
         // Promises siempre requieren autenticación (solo studio)
         const requiresAuth = true;
@@ -153,10 +140,7 @@ export function usePromisesRealtime({
         // ✅ OPTIMIZACIÓN CRÍTICA: Si userId viene del servidor, no hacer POST adicional
         // Solo validar permisos si NO se pasó userId (compatibilidad legacy)
         if (!userId) {
-          console.warn('[usePromisesRealtime] ⚠️ userId no proporcionado, omitiendo validación de permisos');
           // En modo legacy, continuar sin validación (menos seguro pero evita POST)
-        } else {
-          console.log('[usePromisesRealtime] ✅ Usando userId del servidor:', userId);
         }
 
         // Crear configuración del canal usando preset
@@ -189,20 +173,16 @@ export function usePromisesRealtime({
         });
 
         channelRef.current = channel;
-        setupInProgressRef.current = false; // ✅ PASO 4: Marcar setup como completado
-        console.log('[usePromisesRealtime] ✅ Canal configurado y suscrito exitosamente');
+        setupInProgressRef.current = false;
       } catch (error) {
-        setupInProgressRef.current = false; // ✅ PASO 4: Resetear en caso de error
-        console.error('[usePromisesRealtime] ❌ Error en setupRealtime:', error);
+        setupInProgressRef.current = false;
       }
     };
 
     setupRealtime();
 
-    // Cleanup al desmontar
     return () => {
       if (channelRef.current) {
-        console.log('[usePromisesRealtime] 🧹 Desuscribiéndose del canal');
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }

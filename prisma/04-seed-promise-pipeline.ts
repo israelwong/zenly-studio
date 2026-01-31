@@ -1,14 +1,17 @@
 // prisma/04-seed-promise-pipeline.ts
 /**
  * SEED PROMISE PIPELINE
- * 
- * Pobla el pipeline inicial de promises para un studio
- * Crea las 6 etapas por defecto: Pendiente, En Negociación, Aprobado, En Cierre, Archivado, Cancelada
- * 
- * Uso: 
+ *
+ * Pobla el pipeline inicial de promises para un studio.
+ * 7 etapas: Pendiente (0), Negociación (1), Interesado (2), Cierre (3), Aprobado (4), Archivado (5), Cancelado (6).
+ *
+ * Uso:
  *   npm run db:seed-promise-pipeline demo-studio
- *   npm run db:seed-promise-pipeline (sin argumentos pobla todos los studios activos)
- * Orden: 04 (último)
+ *   npm run db:seed-promise-pipeline (sin argumentos = todos los studios activos)
+ *
+ * Estudios existentes: ejecutar de nuevo este seed para añadir la etapa "Interesado" y reordenar;
+ * hace upsert por (studio_id, slug), así que no duplica.
+ * Orden: 04 (último).
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -38,50 +41,15 @@ const prisma = new PrismaClient({
 });
 
 async function seedPromisePipeline(studioId: string, studioName: string) {
-    // Etapas del pipeline (6 estados)
+    // Etapas del pipeline: Pendiente → Negociación → Interesado → Cierre → Aprobado → Archivado → Cancelado
     const promiseStages = [
-        {
-            slug: 'pending',
-            name: 'Pendiente',
-            color: '#3B82F6',
-            order: 0,
-            is_system: true
-        },
-        {
-            slug: 'negotiation',
-            name: 'En Negociación',
-            color: '#8B5CF6',
-            order: 1,
-            is_system: false
-        },
-        {
-            slug: 'closing',
-            name: 'En Cierre',
-            color: '#F59E0B',
-            order: 2,
-            is_system: true
-        },
-        {
-            slug: 'approved',
-            name: 'Aprobada',
-            color: '#10B981',
-            order: 3,
-            is_system: true
-        },
-        {
-            slug: 'archived',
-            name: 'Archivada',
-            color: '#6B7280',
-            order: 4,
-            is_system: true
-        },
-        {
-            slug: 'canceled',
-            name: 'Cancelada',
-            color: '#EF4444',
-            order: 5,
-            is_system: true
-        },
+        { slug: 'pending', name: 'Pendiente', color: '#3B82F6', order: 0, is_system: true },
+        { slug: 'negotiation', name: 'En Negociación', color: '#8B5CF6', order: 1, is_system: false },
+        { slug: 'interesado', name: 'Interesado', color: '#06B6D4', order: 2, is_system: false },
+        { slug: 'closing', name: 'En Cierre', color: '#F59E0B', order: 3, is_system: true },
+        { slug: 'approved', name: 'Aprobada', color: '#10B981', order: 4, is_system: true },
+        { slug: 'archived', name: 'Archivada', color: '#6B7280', order: 5, is_system: true },
+        { slug: 'canceled', name: 'Cancelada', color: '#EF4444', order: 6, is_system: true },
     ];
 
     for (const stage of promiseStages) {

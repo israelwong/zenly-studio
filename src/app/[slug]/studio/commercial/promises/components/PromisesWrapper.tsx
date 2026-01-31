@@ -76,7 +76,6 @@ export function PromisesWrapper({ studioSlug, onOpenPromiseFormRef, onReloadKanb
 
   // Callback para Realtime - agregar solo la nueva promesa sin recargar todo
   const handlePromiseInserted = useCallback(async (promiseId: string) => {
-    console.log('[PromisesWrapper] Nueva promesa detectada:', promiseId);
     try {
       // Obtener solo la nueva promesa en formato PromiseWithContact
       const result = await getPromiseByIdAsPromiseWithContact(studioSlug, promiseId);
@@ -91,15 +90,12 @@ export function PromisesWrapper({ studioSlug, onOpenPromiseFormRef, onReloadKanb
           return [result.data!, ...prev];
         });
       }
-    } catch (error) {
-      console.error('[PromisesWrapper] Error al obtener nueva promesa:', error);
-      // Fallback: recargar todo si falla
+    } catch {
       loadData();
     }
   }, [studioSlug, loadData]);
 
   const handlePromiseUpdatedRealtime = useCallback(async (promiseId: string) => {
-    console.log('[PromisesWrapper] Promesa actualizada:', promiseId);
     // Actualizar solo la promesa específica en lugar de recargar todo
     try {
       const result = await getPromiseByIdAsPromiseWithContact(studioSlug, promiseId);
@@ -119,16 +115,12 @@ export function PromisesWrapper({ studioSlug, onOpenPromiseFormRef, onReloadKanb
         // Fallback: recargar todo si falla
         loadData();
       }
-    } catch (error) {
-      console.error('[PromisesWrapper] Error al actualizar promesa:', error);
-      // Fallback: recargar todo si falla
+    } catch {
       loadData();
     }
   }, [studioSlug, loadData]);
 
   const handlePromiseDeleted = useCallback((promiseId: string) => {
-    console.log('[PromisesWrapper] Promesa eliminada:', promiseId);
-    // Remover del estado local sin recargar
     setPromises((prev) => prev.filter((p) => p.promise_id !== promiseId));
   }, []);
 
@@ -167,7 +159,7 @@ export function PromisesWrapper({ studioSlug, onOpenPromiseFormRef, onReloadKanb
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col">
       <PromisesKanban
         studioSlug={studioSlug}
         promises={promises}

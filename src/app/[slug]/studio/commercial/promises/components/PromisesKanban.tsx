@@ -79,50 +79,43 @@ function PromisesKanban({
   const [activePromiseStageId, setActivePromiseStageId] = useState<string | null>(null);
   const [localPromises, setLocalPromises] = useState<PromiseWithContact[]>(promises);
   // ✅ PRESERVAR ORDEN: El orden viene de la BD, NO reordenar en frontend
-  const [localPipelineStages, setLocalPipelineStages] = useState<PipelineStage[]>(pipelineStages);
+  // Orden por order; si empatan, desempate por id (estable, sin usar nombre)
+  const sortStagesByOrder = (stages: PipelineStage[]) =>
+    [...stages].sort((a, b) => a.order !== b.order ? a.order - b.order : a.id.localeCompare(b.id));
+
+  const [localPipelineStages, setLocalPipelineStages] = useState<PipelineStage[]>(() =>
+    sortStagesByOrder(pipelineStages)
+  );
   const prevPromisesRef = useRef<PromiseWithContact[]>(promises);
   const isDraggingRef = useRef(false);
-  
-  // Sincronizar stages locales cuando cambian desde el padre
-  // ✅ PRESERVAR ORDEN: Mantener el orden que viene de la BD (NO reordenar)
-  // Solo actualizar si hay cambios en el orden o en los valores de order
-  // NO actualizar solo por cambios en el nombre
+
+  // Sincronizar stages locales cuando cambian desde el padre. Siempre ordenar por order (BD).
   useEffect(() => {
-    // Verificar que el orden de los IDs sea el mismo (preservar orden local)
     const pipelineIds = pipelineStages.map(s => s.id);
     const localIds = localPipelineStages.map(s => s.id);
-    
-    // Verificar si hay cambios en el orden de los IDs o en los valores de order
-    const hasOrderChanges = pipelineIds.length !== localIds.length ||
+
+    const hasOrderChanges =
+      pipelineIds.length !== localIds.length ||
       pipelineIds.some((id, index) => id !== localIds[index]) ||
       pipelineStages.some((stage) => {
         const localStage = localPipelineStages.find(s => s.id === stage.id);
         return !localStage || stage.order !== localStage.order;
       });
-    
+
     if (hasOrderChanges) {
-      // ✅ PRESERVAR ORDEN: Si cambió el orden, usar el orden exacto que viene de la BD
-      setLocalPipelineStages(pipelineStages);
+      setLocalPipelineStages(sortStagesByOrder(pipelineStages));
     } else {
-      // ✅ PRESERVAR ORDEN: Si solo cambió el nombre u otros campos, actualizar solo esos campos
-      // manteniendo el orden local (que es el correcto de la BD)
-      setLocalPipelineStages(prev => {
-        // Mantener el orden local y solo actualizar campos que NO afectan el orden
-        return prev.map(localStage => {
-          const updatedStage = pipelineStages.find(s => s.id === localStage.id);
-          if (updatedStage) {
-            // ✅ IMPORTANTE: Actualizar solo name, color, etc. pero PRESERVAR el order local
-            // NO copiar el order del servidor si es diferente (puede ser un problema de sincronización)
-            return { 
-              ...localStage, 
-              name: updatedStage.name,
-              color: updatedStage.color,
-              // NO actualizar order - mantener el order local que es el correcto
-            };
-          }
-          return localStage;
-        });
-      });
+      setLocalPipelineStages(prev =>
+        sortStagesByOrder(
+          prev.map(localStage => {
+            const updatedStage = pipelineStages.find(s => s.id === localStage.id);
+            if (updatedStage) {
+              return { ...localStage, name: updatedStage.name, color: updatedStage.color };
+            }
+            return localStage;
+          })
+        )
+      );
     }
   }, [pipelineStages]); // eslint-disable-line react-hooks/exhaustive-deps
   // Toggle "Mostrar Historial": columna Historial oculta por defecto
@@ -354,11 +347,11 @@ function PromisesKanban({
     order: 999,
   };
 
-  // Filtrar stages: solo activos + columna virtual Historial si el toggle está activo
+  // Filtrar stages: solo activos (no terminales) + columna virtual Historial. Orden por stage.order (BD).
   const visibleStages = useMemo(() => {
-    const activeStages = localPipelineStages
-      .filter((stage) => !isTerminalStage(stage.slug))
-      .sort((a, b) => a.order - b.order);
+    const activeStages = sortStagesByOrder(
+      localPipelineStages.filter((stage) => !isTerminalStage(stage.slug))
+    );
 
     return showHistorial ? [...activeStages, HISTORIAL_VIRTUAL_STAGE] : activeStages;
   }, [localPipelineStages, showHistorial]);
@@ -472,10 +465,10 @@ function PromisesKanban({
     const currentStageSlug = promise.promise_pipeline_stage?.slug;
     const targetStageSlug = stage.slug;
 
-    // Validación 1: Desde pending o negotiation NO puede ir a closing o approved
+    // Validación 1: Desde pending, interesado o negotiation NO puede ir a closing o approved
     // Estas transiciones requieren acciones específicas en las cotizaciones
     if (
-      (currentStageSlug === 'pending' || currentStageSlug === 'negotiation') &&
+      (currentStageSlug === 'pending' || currentStageSlug === 'interesado' || currentStageSlug === 'negotiation') &&
       (targetStageSlug === 'closing' || targetStageSlug === 'approved')
     ) {
       toast.error(
@@ -752,7 +745,7 @@ function PromisesKanban({
     : null;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-4 shrink-0">
         <div className="flex-1 w-full relative">
@@ -805,8 +798,11 @@ function PromisesKanban({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto overflow-y-hidden flex-1 min-h-0 h-full pb-4 items-stretch">
-          {/* Si hay más de 3 etapas, todas tienen ancho fijo con scroll */}
+        <div className="flex flex-col h-auto">
+          {/* items-stretch: todas las columnas miden lo mismo que la más alta (acordeón) */}
+          <div
+            className={`flex gap-3 pb-4 items-stretch overflow-x-auto overflow-y-visible ${showHistorial ? '[&::-webkit-scrollbar]:hidden [scrollbar-width:none]' : ''}`}
+          >
           {visibleStages.length > 3 ? (
             visibleStages.map((stage: PipelineStage) => (
               <KanbanColumn
@@ -825,8 +821,8 @@ function PromisesKanban({
               />
             ))
           ) : (
-            /* Si hay 3 o menos, las primeras 3 ocupan el ancho disponible */
-            <div className="flex gap-3 flex-1 min-w-0 w-full h-full items-stretch">
+            /* Si hay 3 o menos, items-stretch = columnas sincronizadas a la más alta */
+            <div className="flex gap-3 flex-1 min-w-0 w-full items-stretch">
               {visibleStages.map((stage: PipelineStage) => (
                 <KanbanColumn
                   key={stage.id}
@@ -845,6 +841,7 @@ function PromisesKanban({
               ))}
             </div>
           )}
+        </div>
         </div>
 
         <DragOverlay 
@@ -1166,7 +1163,7 @@ function KanbanColumn({
       className={`${isFlexible
         ? 'flex-1 min-w-[280px]'
         : 'w-[280px] min-w-[280px] max-w-[280px] shrink-0'
-        } flex flex-col rounded-lg border p-4 h-full overflow-hidden transition-all duration-300 ease-in-out ${isOver
+        } flex flex-col min-h-0 rounded-lg border p-4 transition-all duration-300 ease-in-out ${isOver
           ? 'bg-zinc-900/90'
           : 'bg-zinc-950/60 border-zinc-800'
         }`}
@@ -1175,9 +1172,9 @@ function KanbanColumn({
         // Expandir área de detección con padding negativo visual pero manteniendo el área droppable
       }}
     >
-      {/* Header de columna */}
+      {/* Header de columna (shrink-0 para que el área droppable use el resto) */}
       <div
-        className="flex items-center justify-between mb-4 pb-2 border-b border-zinc-700 group"
+        className="flex items-center justify-between mb-4 pb-2 border-b border-zinc-700 group shrink-0"
         style={{ borderBottomColor: stage.color + '40' }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -1261,7 +1258,7 @@ function KanbanColumn({
           ) : (
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <h3 
-                className={`font-medium text-white text-sm truncate flex-1 min-w-0 ${isVirtualHistorial ? 'cursor-default' : 'cursor-pointer hover:text-blue-400 transition-colors'}`}
+                className={`font-medium text-zinc-200 text-sm truncate flex-1 min-w-0 capitalize ${isVirtualHistorial ? 'cursor-default' : 'cursor-pointer hover:text-zinc-100 transition-colors'}`}
                 onClick={() => !isVirtualHistorial && setIsEditing(true)}
                 title={isVirtualHistorial ? 'Historial' : (isRenamed ? `Etapa original: ${systemName}` : 'Clic para editar')}
               >
@@ -1291,38 +1288,42 @@ function KanbanColumn({
         </span>
       </div>
 
-      {/* Lista de promises - Área droppable expandida */}
-      <div
-        className="space-y-3 flex-1 overflow-y-auto min-h-0 -mx-2 px-2 h-full"
-      >
-        <SortableContext
-          items={promises.map((p) => p.promise_id || p.id)} // ✅ FIX: Usar promise_id como ID único
-          strategy={verticalListSortingStrategy}
-        >
-          {promises.map((promise) => (
-            <PromiseKanbanCard
-              key={promise.promise_id}
-              promise={promise}
-              onClick={onPromiseClick}
-              studioSlug={studioSlug}
-              onArchived={() => promise.promise_id && onPromiseArchived?.(promise.promise_id)}
-              onDeleted={() => promise.promise_id && onPromiseDeleted?.(promise.promise_id)}
-              onTagsUpdated={onPromiseUpdated}
-              pipelineStages={pipelineStages}
-            />
-          ))}
-        </SortableContext>
+      {/* Área droppable: flex-1 + min-h para zona de tiro amplia */}
+      <div className="flex flex-col flex-1 min-h-[500px] -mx-2 px-2">
+        <div className="space-y-3 flex-1 min-h-0">
+          <SortableContext
+            items={promises.map((p) => p.promise_id || p.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {promises.map((promise) => (
+              <PromiseKanbanCard
+                key={promise.promise_id}
+                promise={promise}
+                onClick={onPromiseClick}
+                studioSlug={studioSlug}
+                onArchived={() => promise.promise_id && onPromiseArchived?.(promise.promise_id)}
+                onDeleted={() => promise.promise_id && onPromiseDeleted?.(promise.promise_id)}
+                onTagsUpdated={onPromiseUpdated}
+                pipelineStages={pipelineStages}
+              />
+            ))}
+          </SortableContext>
 
-        {promises.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full min-h-[200px] px-4 text-center">
-            <p className="text-sm text-zinc-500 font-medium mb-1">
-              Sin promesas
-            </p>
-            <p className="text-xs text-zinc-600">
-              Arrastra aquí para mover
-            </p>
-          </div>
-        )}
+          {promises.length === 0 && (
+            <div className="flex flex-col items-center justify-center min-h-[500px] px-4 text-center">
+              <p className="text-sm text-zinc-500 font-medium mb-1">
+                Sin promesas
+              </p>
+              <p className="text-xs text-zinc-600">
+                Arrastra aquí para mover
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-auto py-4 text-center text-xs tracking-tighter text-zinc-500/60 font-medium select-none pointer-events-none capitalize">
+          {stage.name}
+        </div>
       </div>
     </div>
   );

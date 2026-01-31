@@ -78,8 +78,8 @@ export function PromisesPageClient({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto h-full flex flex-col">
-      <ZenCard variant="default" padding="none" className="flex flex-col flex-1 min-h-0">
+    <div className="w-full max-w-7xl mx-auto flex flex-col">
+      <ZenCard variant="default" padding="none" className="flex flex-col">
         <ZenCardHeader className="border-b border-zinc-800 shrink-0">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -134,7 +134,7 @@ export function PromisesPageClient({
           </div>
         )}
 
-        <ZenCardContent className="p-6 flex-1 min-h-0 overflow-hidden">
+        <ZenCardContent className="p-6 overflow-hidden">
           <PromisesKanbanClient
             studioSlug={studioSlug}
             initialPromises={initialPromises}

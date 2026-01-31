@@ -279,17 +279,9 @@ export function AuthorizeCotizacionModal({
     try {
       const result = await getPromiseByIdAsPromiseWithContact(studioSlug, promiseId);
       if (result.success && result.data) {
-        console.log('[loadPromiseData] Promise data loaded:', {
-          name: result.data.name,
-          phone: result.data.phone,
-          email: result.data.email,
-          event_type: result.data.event_type?.name,
-          event_date: result.data.event_date
-        });
         setPromiseData(result.data);
       }
-    } catch (error) {
-      console.error('[loadPromiseData] Error:', error);
+    } catch {
     } finally {
       setLoadingPromise(false);
     }

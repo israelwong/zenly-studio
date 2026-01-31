@@ -76,25 +76,7 @@ export function PromiseLayoutClient({
   const handlePipelineStageChange = async (newStageId: string, stageName?: string) => {
     if (!promiseId || newStageId === stateData.promiseData.pipeline_stage_id) return;
 
-    // Log para debugging
-    console.log('[PromiseLayoutClient] Cambiando etapa:', {
-      promiseId,
-      newStageId,
-      stageName,
-      currentStageId: stateData.promiseData.pipeline_stage_id,
-      newStageIdType: typeof newStageId,
-      newStageIdLength: newStageId?.length,
-    });
-
-    // Validar que newStageId sea un string no vacío
-    // La validación completa de CUID se hace en el servidor
     if (!newStageId || typeof newStageId !== 'string' || newStageId.trim().length === 0) {
-      console.error('[PromiseLayoutClient] ID de etapa inv?lido:', {
-        newStageId,
-        stageName,
-        type: typeof newStageId,
-        length: newStageId?.length,
-      });
       const stageInfo = stageName ? ` (${stageName})` : '';
       toast.error(`Error: El ID de la etapa seleccionada${stageInfo} est? vac?o o no es v?lido. Por favor, recarga la p?gina e intenta nuevamente.`);
       return;
@@ -106,14 +88,6 @@ export function PromiseLayoutClient({
       
       // Asegurar que newStageId sea un string limpio
       const cleanStageId = String(newStageId).trim();
-      
-      console.log('[PromiseLayoutClient] Llamando a movePromise con:', {
-        studioSlug,
-        promise_id: promiseId,
-        new_stage_id: cleanStageId,
-        stageName,
-      });
-      
       const result = await movePromise(studioSlug, {
         promise_id: promiseId,
         new_stage_id: cleanStageId,
@@ -138,7 +112,6 @@ export function PromiseLayoutClient({
         }
       }
     } catch (error) {
-      console.error('[PromiseLayoutClient] Error cambiando etapa:', error);
       // Si es un error de Zod, mostrar mensaje m?s espec?fico
       if (error && typeof error === 'object' && 'issues' in error) {
         const zodError = error as { issues: Array<{ path: string[]; message: string }> };

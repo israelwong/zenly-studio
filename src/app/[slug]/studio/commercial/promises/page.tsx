@@ -43,7 +43,7 @@ export default async function PromisesPage({ params }: PromisesPageProps) {
     ['pipeline-stages', studioSlug],
     {
       tags: [`pipeline-stages-${studioSlug}`],
-      revalidate: 3600,
+      revalidate: 60, // 1 min: tras migración de etapas el orden se refleja pronto
     }
   );
 

@@ -10,6 +10,8 @@ const DEFAULT_STAGE_NAMES: Record<string, string> = {
   closing: 'Cierre',
   archived: 'Archivado',
   canceled: 'Cancelado',
+  interesado: 'Interesado',
+  interested: 'Interesado',
   // Slugs en español (legacy)
   pendiente: 'Pendiente',
   negociacion: 'Negociación',
@@ -103,4 +105,16 @@ export function getTerminalColor(slug: string): string {
   if (slug === 'canceled' || slug === 'cancelado') return '#EF4444';
   if (slug === 'archived' || slug === 'archivado') return '#71717a';
   return '#71717a';
+}
+
+/** Color por defecto para etapa Interesado (fallback si la etapa no trae color del API). */
+const INTERESADO_COLOR = '#06B6D4';
+
+/**
+ * Color distintivo para etapa no terminal (ej. Interesado). El Kanban usa stage.color del API;
+ * usar este fallback solo cuando no haya color (p. ej. stage recién creado).
+ */
+export function getStageColorFallback(slug: string): string | null {
+  if (slug === 'interesado' || slug === 'interested') return INTERESADO_COLOR;
+  return null;
 }
