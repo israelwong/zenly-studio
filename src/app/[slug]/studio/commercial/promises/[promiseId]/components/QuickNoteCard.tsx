@@ -309,30 +309,45 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 flex-1 min-h-0 flex flex-col pb-0">
           <p className="text-xs font-medium text-zinc-500">Últimos registros</p>
           {lastThree.length === 0 ? (
             <p className="text-xs text-zinc-600">Aún no hay notas</p>
           ) : (
-            <ul className="space-y-0.5">
+            <ul className="flex flex-col justify-start relative pb-0">
+              {/* Línea vertical tenue que conecta los dots */}
+              <span
+                className="absolute left-[4px] top-2 bottom-2 w-px bg-zinc-700/60 -translate-x-px"
+                aria-hidden
+              />
               {lastThree.map((log, index) => {
                 const isNewest = index === lastThree.length - 1;
                 return (
                   <li
                     key={log.id}
                     className={cn(
-                      'text-xs flex gap-1.5 items-center group',
-                      isNewest ? 'text-amber-400' : 'text-zinc-400'
+                      'text-xs flex gap-2 items-start group',
+                      isNewest ? 'text-amber-400' : 'text-zinc-400',
+                      index < lastThree.length - 1 && 'pb-2'
                     )}
                   >
-                    <span className={cn('shrink-0', isNewest ? 'text-amber-500' : 'text-zinc-500')}>
-                      {formatDateTime(log.created_at)}
-                    </span>
-                    <span className="truncate min-w-0 flex-1">
-                      {log.content.length > EXCERPT_LENGTH
-                        ? log.content.slice(0, EXCERPT_LENGTH) + '…'
-                        : log.content}
-                    </span>
+                    <span
+                      className={cn(
+                        'h-2 w-2 shrink-0 rounded-full z-[1] mt-1.5',
+                        isNewest ? 'bg-amber-400' : 'bg-zinc-500'
+                      )}
+                      aria-hidden
+                    />
+                    <div className="flex-1 min-w-0 flex items-baseline gap-1.5 flex-wrap">
+                      <span className={cn('shrink-0 text-[10px]', isNewest ? 'text-amber-500' : 'text-zinc-500')}>
+                        {formatDateTime(log.created_at)}
+                      </span>
+                      <span className="truncate min-w-0 flex-1">
+                        {log.content.length > EXCERPT_LENGTH
+                          ? log.content.slice(0, EXCERPT_LENGTH) + '…'
+                          : log.content}
+                      </span>
+                    </div>
                     <ZenButton
                       type="button"
                       variant="ghost"

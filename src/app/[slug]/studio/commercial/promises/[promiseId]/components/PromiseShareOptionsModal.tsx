@@ -5,12 +5,15 @@ import { AlertTriangle, Package } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenSwitch, ZenInput, ZenCard, ZenCardContent, ZenConfirmModal } from '@/components/ui/zen';
 import { getPromiseShareSettings, updatePromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface PromiseShareOptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   studioSlug: string;
   promiseId: string;
+  /** Llamado tras guardar (esta promesa o global) para refrescar la vista */
+  onSuccess?: () => void;
 }
 
 export function PromiseShareOptionsModal({
@@ -18,6 +21,7 @@ export function PromiseShareOptionsModal({
   onClose,
   studioSlug,
   promiseId,
+  onSuccess,
 }: PromiseShareOptionsModalProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -41,6 +45,8 @@ export function PromiseShareOptionsModal({
   const [pendingSensitiveOption, setPendingSensitiveOption] = useState<'subtotals' | 'prices' | null>(null);
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
   const [pendingSaveScope, setPendingSaveScope] = useState<'all' | 'single' | null>(null);
+  /** Ámbito del guardado: solo esta promesa (remember_preferences: false) o todas (true) */
+  const [saveScope, setSaveScope] = useState<'single' | 'all'>('single');
 
   useEffect(() => {
     if (isOpen && promiseId) {
@@ -146,6 +152,7 @@ export function PromiseShareOptionsModal({
         } else {
           toast.success('Preferencias guardadas solo para esta promesa');
         }
+        onSuccess?.();
         onClose();
       } else {
         toast.error(result.error || 'Error al guardar preferencias');
@@ -175,28 +182,61 @@ export function PromiseShareOptionsModal({
       onClose={onClose}
       title="Opciones de automatización"
       description="Define que información verá el prospecto de manera automatica en la pagina de promesa"
-      maxWidth="xl"
+      maxWidth="2xl"
       zIndex={10080}
-      onSave={() => handleSave(true)}
-      saveLabel="Guardar para todas las promesas"
+      onSave={undefined}
       onCancel={onClose}
-      isLoading={saving && savingScope === 'all'}
-      saveDisabled={minDaysToHire < 1 || saving}
       footerLeftContent={
-        <ZenButton
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onClose}
-          disabled={saving}
-        >
-          Cancelar
-        </ZenButton>
+        <div className="flex flex-col gap-3 w-full min-w-0">
+          <div
+            className="flex w-full rounded-lg border border-zinc-700 bg-zinc-900/50 p-0.5"
+            role="group"
+            aria-label="Ámbito de guardado"
+          >
+            <button
+              type="button"
+              onClick={() => setSaveScope('single')}
+              disabled={saving}
+              className={cn(
+                'flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors',
+                saveScope === 'single'
+                  ? 'bg-zinc-700 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-300'
+              )}
+            >
+              Solo esta promesa
+            </button>
+            <button
+              type="button"
+              onClick={() => setSaveScope('all')}
+              disabled={saving}
+              className={cn(
+                'flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors',
+                saveScope === 'all'
+                  ? 'bg-zinc-700 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-300'
+              )}
+            >
+              Todas las promesas
+            </button>
+          </div>
+          <ZenButton
+            type="button"
+            variant="primary"
+            size="sm"
+            className="w-full"
+            onClick={() => handleSave(saveScope === 'all')}
+            loading={saving}
+            disabled={minDaysToHire < 1 || saving}
+          >
+            {saving ? 'Guardando…' : 'Guardar cambios'}
+          </ZenButton>
+        </div>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-4">
         {loading ? (
-          <div className="space-y-6 animate-pulse">
+          <div className="space-y-4 animate-pulse">
             {/* Skeleton: Mostrar en vista general de promesas */}
             <div className="space-y-3">
               <div className="h-5 bg-zinc-800 rounded w-64" />
@@ -321,7 +361,7 @@ export function PromiseShareOptionsModal({
             {/* Sección: Precios de paquetes (revelación progresiva) */}
             <ZenCard
               variant="outlined"
-              padding="md"
+              padding="sm"
               className={`transition-opacity duration-200 ease-out ${!showPackages ? 'opacity-60' : 'opacity-100'}`}
             >
               <ZenCardContent className="p-0 pt-0">

@@ -4,7 +4,6 @@ import React, { useState, useCallback, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { EventInfoCard } from '@/components/shared/promises';
 import { PromiseQuotesPanel } from './cotizaciones/PromiseQuotesPanel';
-import { PromiseTags } from './PromiseTags';
 import { PromiseStatsCard } from './PromiseStatsCard';
 import { PromisePublicConfigCard } from './PromisePublicConfigCard';
 import { EventFormModal } from '@/components/shared/promises';
@@ -13,7 +12,6 @@ import { QuickNoteCard } from '../../components/QuickNoteCard';
 import { SeguimientoMinimalCard } from '../../components/SeguimientoMinimalCard';
 import { usePromiseContext } from '../../context/PromiseContext';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
-import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { ZenCard, ZenCardContent, ZenCardHeader } from '@/components/ui/zen';
@@ -62,8 +60,7 @@ export interface PromisePendienteClientProps {
   };
   /** Datos iniciales del servidor (Protocolo Zenly). Sin fetch en mount. */
   initialShareSettings?: (PromiseShareSettings & { has_cotizacion?: boolean; remember_preferences?: boolean }) | null;
-  initialTags?: PromiseTag[];
-  /** Últimos 3 logs para preview en Registro de Seguimiento (inicialización) */
+  /** Últimos 3 logs para preview en Bitácora (inicialización) */
   initialLastLogs?: PromiseLog[];
 }
 
@@ -105,7 +102,6 @@ export function PromisePendienteClient({
   initialCotizaciones = [],
   initialStats,
   initialShareSettings = null,
-  initialTags = [],
   initialLastLogs = [],
 }: PromisePendienteClientProps) {
   const params = useParams();
@@ -219,7 +215,7 @@ export function PromisePendienteClient({
       <div className="space-y-6">
         {/* Layout de 3 columnas: Info+Etiquetas | Cotizaciones+Estadísticas+Agenda | Config+Recordatorio */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
-          {/* Columna 1: Información + Etiquetas */}
+          {/* Columna 1: Información del contacto y evento */}
           <div className="lg:col-span-1 flex flex-col h-full space-y-6">
             <EventInfoCard
               studioSlug={studioSlug}
@@ -268,13 +264,6 @@ export function PromisePendienteClient({
               onEdit={() => setShowEditModal(true)}
               context="promise"
             />
-            <PromiseTags
-              studioSlug={studioSlug}
-              promiseId={promiseId}
-              isSaved={true}
-              eventoId={eventoId}
-              initialTags={initialTags}
-            />
           </div>
 
           {/* Columna 2: Cotizaciones + Estadísticas + Agenda de días */}
@@ -309,10 +298,12 @@ export function PromisePendienteClient({
             </Suspense>
           </div>
 
-          {/* Columna 3: Registro de Seguimiento + Seguimiento (recordatorio) + Centro de control */}
+          {/* Columna 3: Dar seguimiento + Bitácora (prioridad) + Lo que el prospecto ve (compacto) */}
           <div className="lg:col-span-1 flex flex-col h-full space-y-6">
             <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} />
-            <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
+            <div className="flex-1 min-h-0 flex flex-col">
+              <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
+            </div>
             <Suspense fallback={<SidebarSkeleton />}>
               <PromisePublicConfigCard
                 studioSlug={studioSlug}

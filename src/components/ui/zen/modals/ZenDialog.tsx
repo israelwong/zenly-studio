@@ -199,7 +199,7 @@ export function ZenDialog({
           {/* Content */}
           <ZenCardContent className={cn(
             'overflow-y-auto flex-1 min-h-0',
-            title ? 'p-6' : 'p-6',
+            title ? 'px-6 py-4' : 'px-6 py-4',
             title ? '' : 'border-0'
           )} style={{
             maxHeight: fullScreen
@@ -212,9 +212,14 @@ export function ZenDialog({
 
           {/* Footer */}
           {(onSave || onCancel || showDeleteButton || footerLeftContent) && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-700">
+            footerLeftContent && !onSave && !(showDeleteButton && onDelete && deleteOnRight) ? (
+              <div className="w-full px-6 py-4 border-t border-zinc-700">
+                {footerLeftContent}
+              </div>
+            ) : (
+            <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-zinc-700">
               {/* Izquierda: footerLeftContent o Cancelar */}
-              <div className="flex items-center gap-4">
+              <div className={cn("flex items-center gap-4", footerLeftContent && "flex-1 min-w-0")}>
                 {footerLeftContent}
                 {!footerLeftContent && onCancel && (
                   <ZenButton
@@ -260,6 +265,7 @@ export function ZenDialog({
                 )}
               </div>
             </div>
+            )
           )}
         </div>
     </div>

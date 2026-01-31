@@ -10,6 +10,7 @@ import { es } from 'date-fns/locale';
 import {
   getReminderByPromise,
   upsertReminder,
+  deleteReminder,
   type Reminder,
 } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import {
@@ -36,6 +37,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
@@ -200,6 +202,38 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
       toast.error('Error al guardar seguimiento');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleClear = async () => {
+    if (!reminder) return;
+    setClearing(true);
+    try {
+      const result = await deleteReminder(studioSlug, reminder.id);
+      if (result.success) {
+        setReminder(null);
+        setSubjectText('');
+        setSelectedSubjectId(null);
+        setDescription('');
+        const tomorrow = new Date(Date.UTC(
+          getTodayUtc().getUTCFullYear(),
+          getTodayUtc().getUTCMonth(),
+          getTodayUtc().getUTCDate() + 1,
+          12, 0, 0
+        ));
+        setSelectedDate(tomorrow);
+        setMonth(tomorrow);
+        setErrors({});
+        toast.success('Seguimiento eliminado');
+        window.dispatchEvent(new CustomEvent('reminder-updated'));
+        onSuccess?.();
+      } else {
+        toast.error(result.error ?? 'Error al eliminar');
+      }
+    } catch {
+      toast.error('Error al eliminar seguimiento');
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -370,32 +404,31 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-zinc-400">Fecha del seguimiento *</label>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="grid grid-cols-3 gap-1.5 mb-3">
             <ZenButton
               type="button"
-              variant={isQuickSelected(1) ? 'default' : 'outline'}
+              variant={isQuickSelected(1) ? 'primary' : 'outline'}
               size="sm"
               onClick={() => handleQuickDate(1)}
-              className={cn('text-[11px] h-7', isQuickSelected(1) && 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50')}
+              className={cn('text-[11px] h-7 w-full', isQuickSelected(1) && 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50')}
             >
               Mañana
             </ZenButton>
             <ZenButton
               type="button"
-              variant={isQuickSelected(3) ? 'default' : 'outline'}
+              variant={isQuickSelected(3) ? 'primary' : 'outline'}
               size="sm"
               onClick={() => handleQuickDate(3)}
-              className={cn('text-[11px] h-7', isQuickSelected(3) && 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50')}
+              className={cn('text-[11px] h-7 w-full', isQuickSelected(3) && 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50')}
             >
               En 3 días
             </ZenButton>
             <ZenButton
               type="button"
-              variant={isQuickSelected(7) ? 'default' : 'outline'}
+              variant={isQuickSelected(7) ? 'primary' : 'outline'}
               size="sm"
               onClick={() => handleQuickDate(7)}
-              className={cn('text-[11px] h-7', isQuickSelected(7) && 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50')}
+              className={cn('text-[11px] h-7 w-full', isQuickSelected(7) && 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50')}
             >
               En 1 semana
             </ZenButton>
@@ -440,15 +473,26 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
           {errors.date && <p className="text-[11px] text-red-400">{errors.date}</p>}
         </div>
 
-        <ZenButton
-          type="button"
-          size="sm"
-          className="w-full"
-          onClick={handleSubmit}
-          disabled={saving || !subjectText.trim() || !selectedDate}
-        >
-          {saving ? 'Guardando…' : 'Programar seguimiento'}
-        </ZenButton>
+        <div className="flex gap-2">
+          <ZenButton
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleClear}
+            disabled={!reminder || saving || clearing}
+          >
+            {clearing ? '…' : 'Limpiar'}
+          </ZenButton>
+          <ZenButton
+            type="button"
+            size="sm"
+            className="flex-1"
+            onClick={handleSubmit}
+            disabled={saving || clearing || !subjectText.trim() || !selectedDate}
+          >
+            {saving ? 'Guardando…' : 'Programar seguimiento'}
+          </ZenButton>
+        </div>
       </ZenCardContent>
     </ZenCard>
 

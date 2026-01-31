@@ -301,6 +301,7 @@ export function PromiseLayoutClient({
               onClose={() => setIsShareModalOpen(false)}
               studioSlug={studioSlug}
               promiseId={promiseId}
+              onSuccess={() => router.refresh()}
             />
             <BitacoraSheet
               open={logsSheetOpen}

@@ -6,7 +6,6 @@ import { getPaymentMethodsForAuthorization } from '@/lib/actions/studio/commerci
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { getPromiseStats } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 import { getPromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
-import { getPromiseTagsByPromiseId } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 import { getLastPromiseLogs } from '@/lib/actions/studio/commercial/promises';
 import { PromisePendienteClient } from './components/PromisePendienteClient';
 
@@ -36,7 +35,6 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     cotizacionesResult,
     statsResult,
     shareSettingsResult,
-    tagsResult,
     lastLogsResult,
   ] = await Promise.all([
     obtenerCondicionesComerciales(studioSlug),
@@ -44,7 +42,6 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     getCotizacionesByPromiseId(promiseId),
     getPromiseStats(promiseId),
     getPromiseShareSettings(studioSlug, promiseId),
-    getPromiseTagsByPromiseId(promiseId),
     getLastPromiseLogs(promiseId, 3),
   ]);
 
@@ -97,7 +94,6 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
   const initialShareSettings =
     shareSettingsResult.success && shareSettingsResult.data ? shareSettingsResult.data : null;
 
-  const initialTags = tagsResult.success && tagsResult.data ? tagsResult.data : [];
   const initialLastLogs = lastLogsResult.success && lastLogsResult.data ? lastLogsResult.data : [];
 
   return (
@@ -108,7 +104,6 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
       initialCotizaciones={cotizacionesResult.success && cotizacionesResult.data ? cotizacionesResult.data : []}
       initialStats={initialStats}
       initialShareSettings={initialShareSettings}
-      initialTags={initialTags}
       initialLastLogs={initialLastLogs}
     />
   );
