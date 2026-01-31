@@ -258,7 +258,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
         <ZenCard variant="outlined" className="border-zinc-800">
           <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
             <div className="flex items-center justify-between">
-              <ZenCardTitle className="text-sm font-medium">Dar seguimiento</ZenCardTitle>
+              <ZenCardTitle className="text-sm font-medium">Recordatorio de seguimiento</ZenCardTitle>
               <ZenButton
                 variant="ghost"
                 size="sm"
@@ -305,7 +305,7 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
     <>
     <ZenCard variant="outlined" className="border-zinc-800">
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
-        <ZenCardTitle className="text-sm font-medium">Dar seguimiento</ZenCardTitle>
+        <ZenCardTitle className="text-sm font-medium">Recordatorio de seguimiento</ZenCardTitle>
       </ZenCardHeader>
       <ZenCardContent className="p-4 space-y-3">
         <div className="space-y-1">

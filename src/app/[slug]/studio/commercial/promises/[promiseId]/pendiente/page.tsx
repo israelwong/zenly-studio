@@ -4,7 +4,6 @@ import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import { getPaymentMethodsForAuthorization } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
-import { getPromiseStats } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 import { getPromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { getLastPromiseLogs } from '@/lib/actions/studio/commercial/promises';
 import { PromisePendienteClient } from './components/PromisePendienteClient';
@@ -33,14 +32,12 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     condicionesResult,
     paymentMethodsResult,
     cotizacionesResult,
-    statsResult,
     shareSettingsResult,
     lastLogsResult,
   ] = await Promise.all([
     obtenerCondicionesComerciales(studioSlug),
     getPaymentMethodsForAuthorization(studioSlug),
     getCotizacionesByPromiseId(promiseId),
-    getPromiseStats(promiseId),
     getPromiseShareSettings(studioSlug, promiseId),
     getLastPromiseLogs(promiseId, 3),
   ]);
@@ -83,14 +80,6 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
       })()
     : null;
 
-  const initialStats = statsResult.success && statsResult.data
-    ? statsResult.data
-    : {
-        views: { totalViews: 0, uniqueViews: 0, lastView: null },
-        cotizaciones: [],
-        paquetes: [],
-      };
-
   const initialShareSettings =
     shareSettingsResult.success && shareSettingsResult.data ? shareSettingsResult.data : null;
 
@@ -102,7 +91,6 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
       initialPaymentMethods={paymentMethods}
       initialSelectedCotizacion={selectedCotizacion}
       initialCotizaciones={cotizacionesResult.success && cotizacionesResult.data ? cotizacionesResult.data : []}
-      initialStats={initialStats}
       initialShareSettings={initialShareSettings}
       initialLastLogs={initialLastLogs}
     />

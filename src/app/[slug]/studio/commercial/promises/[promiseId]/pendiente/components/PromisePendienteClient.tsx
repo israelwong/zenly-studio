@@ -4,7 +4,6 @@ import React, { useState, useCallback, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { EventInfoCard } from '@/components/shared/promises';
 import { PromiseQuotesPanel } from './cotizaciones/PromiseQuotesPanel';
-import { PromiseStatsCard } from './PromiseStatsCard';
 import { PromisePublicConfigCard } from './PromisePublicConfigCard';
 import { EventFormModal } from '@/components/shared/promises';
 import { AuthorizeCotizacionModal } from './cotizaciones/AuthorizeCotizacionModal';
@@ -41,23 +40,6 @@ export interface PromisePendienteClientProps {
     } | null;
   } | null;
   initialCotizaciones?: CotizacionListItem[];
-  initialStats?: {
-    views: {
-      totalViews: number;
-      uniqueViews: number;
-      lastView: Date | null;
-    };
-    cotizaciones: Array<{
-      cotizacionId: string;
-      cotizacionName: string;
-      clicks: number;
-    }>;
-    paquetes: Array<{
-      paqueteId: string;
-      paqueteName: string;
-      clicks: number;
-    }>;
-  };
   /** Datos iniciales del servidor (Protocolo Zenly). Sin fetch en mount. */
   initialShareSettings?: (PromiseShareSettings & { has_cotizacion?: boolean; remember_preferences?: boolean }) | null;
   /** Últimos 3 logs para preview en Bitácora (inicialización) */
@@ -79,28 +61,11 @@ function SidebarSkeleton() {
   );
 }
 
-function StatsSkeleton() {
-  return (
-    <ZenCard>
-      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3">
-        <div className="h-4 w-28 bg-zinc-800 rounded animate-pulse" />
-      </ZenCardHeader>
-      <ZenCardContent className="p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="h-16 bg-zinc-800/50 rounded animate-pulse" />
-          <div className="h-16 bg-zinc-800/50 rounded animate-pulse" />
-        </div>
-      </ZenCardContent>
-    </ZenCard>
-  );
-}
-
 export function PromisePendienteClient({
   initialCondicionesComerciales,
   initialPaymentMethods,
   initialSelectedCotizacion,
   initialCotizaciones = [],
-  initialStats,
   initialShareSettings = null,
   initialLastLogs = [],
 }: PromisePendienteClientProps) {
@@ -213,7 +178,7 @@ export function PromisePendienteClient({
   return (
     <>
       <div className="space-y-6">
-        {/* Layout de 3 columnas: Info+Etiquetas | Cotizaciones+Estadísticas+Agenda | Config+Recordatorio */}
+        {/* Layout de 3 columnas: Info+Etiquetas | Cotizaciones+Agenda | Bitácora+Config */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
           {/* Columna 1: Información del contacto y evento */}
           <div className="lg:col-span-1 flex flex-col h-full space-y-6">
@@ -266,9 +231,8 @@ export function PromisePendienteClient({
             />
           </div>
 
-          {/* Columna 2: Cotizaciones + Estadísticas + Agenda de días */}
+          {/* Columna 2: Cotizaciones + Agenda de días */}
           <div className="lg:col-span-1 flex flex-col h-full space-y-6">
-            {/* Cotizaciones */}
             <PromiseQuotesPanel
               studioSlug={studioSlug}
               promiseId={promiseId}
@@ -288,18 +252,10 @@ export function PromisePendienteClient({
               onAuthorizeClick={() => setShowAuthorizeModal(true)}
               initialCotizaciones={initialCotizaciones}
             />
-
-            <Suspense fallback={<StatsSkeleton />}>
-              <PromiseStatsCard
-                studioSlug={studioSlug}
-                promiseId={promiseId}
-                initialStats={initialStats}
-              />
-            </Suspense>
           </div>
 
-          {/* Columna 3: Dar seguimiento + Bitácora (prioridad) + Lo que el prospecto ve (compacto) */}
-          <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+          {/* Columna 3: Bitácora (prioridad) + Lo que el prospecto ve */}
+          <div className="lg:col-span-1 flex flex-col h-full min-h-0 gap-4">
             <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} />
             <div className="flex-1 min-h-0 flex flex-col">
               <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />

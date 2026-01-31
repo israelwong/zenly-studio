@@ -49,6 +49,36 @@ export function AlertsPopover({
     setAlerts(initialAlerts);
   }, [initialAlerts]);
 
+  // Refrescar lista cuando se añade/quita un recordatorio (ej. desde SeguimientoMinimalCard)
+  useEffect(() => {
+    const handleReminderUpdate = async () => {
+      try {
+        const { getRemindersDue } = await import('@/lib/actions/studio/commercial/promises/reminders.actions');
+        const result = await getRemindersDue(studioSlug, { includeCompleted: false, dateRange: 'all' });
+        if (result.success && result.data) {
+          const now = new Date();
+          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const todayTime = todayStart.getTime();
+          const filtered = result.data.filter((r) => {
+            const d = new Date(r.reminder_date);
+            const reminderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            return reminderDay.getTime() >= todayTime;
+          });
+          const sorted = filtered.sort((a, b) => {
+            const dateA = new Date(a.reminder_date).getTime();
+            const dateB = new Date(b.reminder_date).getTime();
+            return dateA - dateB;
+          });
+          setAlerts(sorted);
+        }
+      } catch (err) {
+        console.error('[AlertsPopover] Error refetching reminders:', err);
+      }
+    };
+    window.addEventListener('reminder-updated', handleReminderUpdate);
+    return () => window.removeEventListener('reminder-updated', handleReminderUpdate);
+  }, [studioSlug]);
+
   // Categorizar recordatorios: Hoy vs Próximos (comparar por día local para evitar desfase UTC)
   const categorizeReminders = () => {
     const now = new Date();

@@ -76,11 +76,17 @@ export function AppHeader({
     const { count: hookRemindersCount } = useRemindersCount({ 
         studioSlug, 
         initialCount: initialRemindersCount, // ✅ Pre-cargado en servidor
-        enabled: initialRemindersCount === undefined, // Solo habilitar si no hay datos iniciales
+        enabled: true, // Siempre escuchar 'reminder-updated' para actualizar al añadir/quitar alertas
     });
-    // ✅ Usar datos iniciales si están disponibles, sino usar del hook
+    // ✅ Usar datos iniciales hasta que se dispare reminder-updated; después usar hook
+    const [remindersInvalidated, setRemindersInvalidated] = useState(false);
+    useEffect(() => {
+        const handler = () => setRemindersInvalidated(true);
+        window.addEventListener('reminder-updated', handler);
+        return () => window.removeEventListener('reminder-updated', handler);
+    }, []);
     const agendaCount = initialAgendaCount !== undefined ? initialAgendaCount : hookAgendaCount;
-    const remindersCount = initialRemindersCount !== undefined ? initialRemindersCount : hookRemindersCount;
+    const remindersCount = remindersInvalidated ? hookRemindersCount : (initialRemindersCount ?? hookRemindersCount);
 
     useEffect(() => {
         setIsMounted(true);
