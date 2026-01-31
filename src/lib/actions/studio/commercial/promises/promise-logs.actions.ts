@@ -487,33 +487,24 @@ export async function createPromiseLog(
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (!userError && user) {
-        // Buscar el usuario en la base de datos usando supabase_id
-        const dbUser = await prisma.users.findUnique({
-          where: { supabase_id: user.id },
+        // platform_user_profiles se identifica por supabaseUserId (UUID de Supabase), no por users.id
+        const platformProfile = await prisma.platform_user_profiles.findUnique({
+          where: { supabaseUserId: user.id },
           select: { id: true },
         });
-        
-        if (dbUser) {
-          // Buscar el platform_user_profile relacionado
-          const platformProfile = await prisma.platform_user_profiles.findUnique({
-            where: { user_id: dbUser.id },
+
+        if (platformProfile) {
+          const studioUser = await prisma.studio_users.findFirst({
+            where: {
+              studio_id: promise.studio_id,
+              platform_user_id: platformProfile.id,
+              is_active: true,
+            },
             select: { id: true },
           });
-          
-          if (platformProfile) {
-            // Buscar el studio_user del studio actual que tenga este platform_user_id
-            const studioUser = await prisma.studio_users.findFirst({
-              where: {
-                studio_id: promise.studio_id,
-                platform_user_id: platformProfile.id,
-                is_active: true,
-              },
-              select: { id: true },
-            });
-            
-            if (studioUser) {
-              userId = studioUser.id;
-            }
+
+          if (studioUser) {
+            userId = studioUser.id;
           }
         }
       }

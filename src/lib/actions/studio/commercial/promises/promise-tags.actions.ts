@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import type { ActionResponse } from '@/lib/actions/schemas/promises-schemas';
 
@@ -400,6 +400,7 @@ export async function addTagToPromise(
  * Remover un tag de una promesa
  */
 export async function removeTagFromPromise(
+  studioSlug: string,
   promiseId: string,
   tagId: string
 ): Promise<ActionResponse<void>> {
@@ -419,7 +420,9 @@ export async function removeTagFromPromise(
       where: { id: relation.id },
     });
 
-    revalidatePath(`/studio/commercial/promises`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    revalidatePath(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+    revalidateTag(`promises-list-${studioSlug}`);
     return { success: true };
   } catch (error) {
     console.error('Error removiendo tag de promesa:', error);

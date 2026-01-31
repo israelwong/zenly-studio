@@ -284,7 +284,7 @@ export function PromiseTags({
       setTags((prev) => prev.filter((t) => t.id !== tagId));
 
       try {
-        const result = await removeTagFromPromise(promiseId, tagId);
+        const result = await removeTagFromPromise(studioSlug, promiseId, tagId);
         if (!result.success) {
           // Rollback
           setTags((prev) => {

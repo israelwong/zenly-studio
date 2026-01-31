@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, startTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { PromisesKanban } from './PromisesKanban';
 // ✅ OPTIMIZACIÓN: Eliminado getPromiseByIdAsPromiseWithContact - no hacer POSTs en callbacks de realtime
 import { usePromisesRealtime } from '@/hooks/usePromisesRealtime';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
+
+const PROMISES_RETURNED_FROM_DETAIL_KEY = 'promises-returned-from-detail';
 
 interface PromisesKanbanClientProps {
   studioSlug: string;
@@ -24,6 +27,7 @@ export function PromisesKanbanClient({
   onOpenPromiseFormRef,
   onRemoveTestPromisesRef,
 }: PromisesKanbanClientProps) {
+  const router = useRouter();
   const [promises, setPromises] = useState<PromiseWithContact[]>(initialPromises);
   // ✅ PRESERVAR ORDEN: El orden viene de la BD, NO reordenar en frontend
   const [pipelineStages] = useState<PipelineStage[]>(initialPipelineStages);
@@ -31,27 +35,20 @@ export function PromisesKanbanClient({
   const [isNavigating, setIsNavigating] = useState<string | null>(null);
   const isNavigatingRef = useRef(false);
 
-  // ✅ OPTIMIZACIÓN: Sincronizar solo si hay cambios reales (evitar doble render)
-  // Usar useRef para comparar y evitar actualizaciones innecesarias
-  const prevPromisesRef = useRef<PromiseWithContact[]>(initialPromises);
-  
+  // Al volver del detalle (ej. tras quitar etiqueta), refrescar para obtener datos actualizados
   useEffect(() => {
-    // Solo sincronizar si NO estamos navegando Y hay cambios reales
-    if (isNavigatingRef.current) return;
-    
-    // Comparar por IDs para evitar actualizaciones innecesarias
-    const prevIds = new Set(prevPromisesRef.current.map(p => p.promise_id || p.id));
-    const newIds = new Set(initialPromises.map(p => p.promise_id || p.id));
-    
-    const hasChanges = 
-      prevIds.size !== newIds.size ||
-      [...prevIds].some(id => !newIds.has(id)) ||
-      [...newIds].some(id => !prevIds.has(id));
-    
-    if (hasChanges) {
-      setPromises(initialPromises);
-      prevPromisesRef.current = initialPromises;
+    if (typeof window === 'undefined') return;
+    if (sessionStorage.getItem(PROMISES_RETURNED_FROM_DETAIL_KEY) === '1') {
+      sessionStorage.removeItem(PROMISES_RETURNED_FROM_DETAIL_KEY);
+      router.refresh();
     }
+  }, [router]);
+
+  // Sincronizar con servidor: cuando initialPromises cambia (nueva referencia = datos frescos)
+  // y no estamos navegando, actualizar estado para reflejar tags/etiquetas u otros cambios
+  useEffect(() => {
+    if (isNavigatingRef.current) return;
+    setPromises(initialPromises);
   }, [initialPromises]);
 
   // ✅ OPTIMIZACIÓN: Callbacks de Realtime sin POSTs adicionales

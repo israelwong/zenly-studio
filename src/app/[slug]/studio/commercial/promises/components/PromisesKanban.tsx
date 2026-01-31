@@ -640,6 +640,9 @@ function PromisesKanban({
     const routeId = promise.promise_id || promise.id;
 
     window.dispatchEvent(new CustomEvent('close-overlays'));
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('promises-returned-from-detail', '1');
+    }
 
     if (setIsNavigating) {
       setIsNavigating(routeId);
