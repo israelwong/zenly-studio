@@ -1,22 +1,19 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ImagePlus } from 'lucide-react';
-import { ZenDialog, ZenButton } from '@/components/ui/zen';
+import { Library, MoreVertical, Copy, Trash2 } from 'lucide-react';
+import { ZenDialog, ZenButton, ZenInput, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import {
   getWhatsAppTemplates,
   logWhatsAppSentWithMessage,
   createWhatsAppTemplate,
   updateWhatsAppTemplate,
+  deleteWhatsAppTemplate,
+  duplicateWhatsAppTemplate,
 } from '@/lib/actions/studio/commercial/promises';
 import { getOrCreateShortUrl } from '@/lib/actions/studio/commercial/promises/promise-short-url.actions';
-import {
-  getPortfoliosForWhatsApp,
-  getTopShots,
-  addTopShot,
-  removeTopShot,
-} from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
-import type { PortfolioForWhatsApp, TopShot } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
+import { getPortfoliosForWhatsApp } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
+import type { PortfolioForWhatsApp } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.types';
 import {
   replaceWhatsAppTemplateVariables,
   formatEventDateForWhatsApp,
@@ -100,17 +97,15 @@ export function WhatsAppMessageModal({
 }: WhatsAppMessageModalProps) {
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [portfolios, setPortfolios] = useState<PortfolioForWhatsApp[]>([]);
-  const [topShots, setTopShots] = useState<TopShot[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [loadingResources, setLoadingResources] = useState(false);
   const [shortUrl, setShortUrl] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templateName, setTemplateName] = useState('');
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
   const [saving, setSaving] = useState(false);
   const [messageSource, setMessageSource] = useState<'template' | 'chip' | null>(null);
-  const [uploadingShot, setUploadingShot] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   const loadData = useCallback(async () => {
@@ -118,11 +113,10 @@ export function WhatsAppMessageModal({
     setLoadingTemplates(true);
     setLoadingResources(true);
     try {
-      const [tplRes, urlRes, portRes, shotsRes] = await Promise.all([
+      const [tplRes, urlRes, portRes] = await Promise.all([
         getWhatsAppTemplates(studioSlug),
         getOrCreateShortUrl(studioSlug, promiseId),
         getPortfoliosForWhatsApp(studioSlug),
-        getTopShots(studioSlug),
       ]);
       if (tplRes.success && tplRes.data) setTemplates(tplRes.data);
       if (urlRes.success && urlRes.data) {
@@ -130,7 +124,6 @@ export function WhatsAppMessageModal({
         setShortUrl(`${base}/s/${urlRes.data.shortCode}`);
       }
       if (portRes.success && portRes.data) setPortfolios(portRes.data);
-      if (shotsRes.success && shotsRes.data) setTopShots(shotsRes.data);
     } finally {
       setLoadingTemplates(false);
       setLoadingResources(false);
@@ -141,6 +134,7 @@ export function WhatsAppMessageModal({
     if (isOpen) {
       loadData();
       setSelectedTemplateId(null);
+      setTemplateName('');
       setMessage(DEFAULT_MESSAGE);
       setMessageSource('template');
     }
@@ -161,7 +155,9 @@ export function WhatsAppMessageModal({
     : null;
 
   const isEditedFromTemplate =
-    !!selectedTemplate && message.trim() !== selectedTemplate.message.trim();
+    !!selectedTemplate &&
+    (message.trim() !== selectedTemplate.message.trim() ||
+      templateName.trim() !== selectedTemplate.title.trim());
   const isFromScratch = !selectedTemplateId && message.trim().length > 0;
   const hasChanges = isEditedFromTemplate || isFromScratch;
 
@@ -175,14 +171,18 @@ export function WhatsAppMessageModal({
         return;
       }
       if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as HTMLElement;
-        const portfolioSlug = el.getAttribute?.('data-portfolio-slug');
+        const elem = node as HTMLElement;
+        if (elem.tagName === 'BR') {
+          parts.push('\n');
+          return;
+        }
+        const portfolioSlug = elem.getAttribute?.('data-portfolio-slug');
         if (portfolioSlug != null) {
           parts.push(`[[link_portafolio:${portfolioSlug}]]`);
           return;
         }
-        if (el.getAttribute?.('data-var')) {
-          parts.push(`[[${el.getAttribute('data-var')}]]`);
+        if (elem.getAttribute?.('data-var')) {
+          parts.push(`[[${elem.getAttribute('data-var')}]]`);
           return;
         }
         node.childNodes.forEach(walk);
@@ -198,7 +198,7 @@ export function WhatsAppMessageModal({
     const segments = parseMessageToSegments(str);
     const html = segments
       .map((s) => {
-        if (s.type === 'text') return escapeHtml(s.value);
+        if (s.type === 'text') return escapeHtml(s.value).replace(/\n/g, '<br>');
         if (s.type === 'portfolio_link') {
           const label = `Portafolio: ${s.slug}`;
           return `<span data-portfolio-slug="${escapeHtml(s.slug)}" contenteditable="false" class="whatsapp-modal-chip">${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span></span>`;
@@ -210,6 +210,16 @@ export function WhatsAppMessageModal({
     el.innerHTML = html;
   }, []);
 
+  /** Rango colapsado al final del editor para insertar siempre al final */
+  const getRangeAtEndOfEditor = useCallback((): Range | null => {
+    const el = editorRef.current;
+    if (!el) return null;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    return range;
+  }, []);
+
   useEffect(() => {
     if (messageSource && editorRef.current) {
       setEditorContent(message);
@@ -219,8 +229,37 @@ export function WhatsAppMessageModal({
 
   const handleSelectTemplate = (t: WhatsAppTemplate) => {
     setSelectedTemplateId(t.id);
+    setTemplateName(t.title);
     setMessage(t.message);
     setMessageSource('template');
+  };
+
+  const handleDuplicateTemplate = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const res = await duplicateWhatsAppTemplate(studioSlug, id);
+    if (res.success && res.data) {
+      setTemplates((prev) => [res.data!, ...prev]);
+      toast.success('Plantilla duplicada');
+    } else {
+      toast.error(res.success ? undefined : res.error);
+    }
+  };
+
+  const handleDeleteTemplate = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const res = await deleteWhatsAppTemplate(studioSlug, id);
+    if (res.success) {
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      if (selectedTemplateId === id) {
+        setSelectedTemplateId(null);
+        setTemplateName('');
+        setMessage(DEFAULT_MESSAGE);
+        setMessageSource('template');
+      }
+      toast.success('Plantilla eliminada');
+    } else {
+      toast.error(res.error);
+    }
   };
 
   const handleEditorInput = () => {
@@ -228,52 +267,54 @@ export function WhatsAppMessageModal({
     if (newMsg !== message) setMessage(newMsg);
   };
 
-  const insertVariableAtCursor = (variable: string) => {
-    const el = editorRef.current;
-    if (!el) return;
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) {
-      setMessage(message + ' ' + variable + ' ');
-      setMessageSource('chip');
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    const key = variable.replace(/^\[\[|\]\]$/g, '');
-    const label = VAR_LABELS[key] ?? key;
-    const span = document.createElement('span');
-    span.setAttribute('data-var', key);
-    span.setAttribute('contenteditable', 'false');
-    span.className = 'whatsapp-modal-chip';
-    span.innerHTML = `${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span>`;
-    try {
-      range.insertNode(span);
-      const prev = span.previousSibling;
-      const next = span.nextSibling;
-      const needsSpaceBefore =
-        !prev ||
-        prev.nodeType !== Node.TEXT_NODE ||
-        !/[\s\u00A0]$/.test((prev as Text).textContent || '');
-      const needsSpaceAfter =
-        !next ||
-        next.nodeType !== Node.TEXT_NODE ||
-        !/^[\s\u00A0]/.test((next as Text).textContent || '');
-      if (needsSpaceBefore) {
-        span.parentNode?.insertBefore(document.createTextNode(' '), span);
+  /** Inserta chip de variable [[tag]] siempre al final del editor. variable debe ser ej. [[nombre_evento]]. */
+  const insertVariableAtCursor = useCallback(
+    (variable: string) => {
+      const el = editorRef.current;
+      if (!el) return;
+      el.focus();
+      let range = getRangeAtEndOfEditor();
+      if (!range) {
+        setMessage(message + ' ' + variable + ' ');
+        setMessageSource('chip');
+        return;
       }
-      if (needsSpaceAfter) {
-        span.parentNode?.insertBefore(document.createTextNode(' '), span.nextSibling);
+      const key = variable.replace(/^\[\[|\]\]$/g, '');
+      const label = VAR_LABELS[key] ?? key;
+      const span = document.createElement('span');
+      span.setAttribute('data-var', key);
+      span.setAttribute('contenteditable', 'false');
+      span.className = 'whatsapp-modal-chip';
+      span.innerHTML = `${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span>`;
+      try {
+        const hasContentBefore = (el.textContent?.trim().length ?? 0) > 0;
+        const lastNode = el.childNodes[el.childNodes.length - 1];
+        const prevEndsWithSpace = lastNode?.nodeType === Node.TEXT_NODE && /[\s\u00A0]$/.test((lastNode as Text).textContent || '');
+        if (hasContentBefore && !prevEndsWithSpace) {
+          const spaceBefore = document.createTextNode(' ');
+          range.insertNode(spaceBefore);
+          range.setStartAfter(spaceBefore);
+          range.collapse(true);
+        }
+        range.insertNode(span);
+        const spaceAfter = document.createTextNode(' ');
+        span.parentNode?.insertBefore(spaceAfter, span.nextSibling);
+        const sel = window.getSelection();
+        if (sel) {
+          const newRange = document.createRange();
+          newRange.setStartAfter(spaceAfter);
+          newRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
+        setMessage(getMessageFromEditor());
+      } catch {
+        setMessage(message + ' ' + variable + ' ');
+        setMessageSource('chip');
       }
-      range.setStartAfter(span);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } catch {
-      setMessage(message + ' ' + variable + ' ');
-      setMessageSource('chip');
-      return;
-    }
-    setMessage(getMessageFromEditor());
-  };
+    },
+    [message, getRangeAtEndOfEditor]
+  );
 
   const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -285,92 +326,55 @@ export function WhatsAppMessageModal({
     }
   };
 
-  /** Inserta chip de portafolio [[link_portafolio:slug]] en el editor */
-  const insertPortfolioChip = (slug: string, label: string) => {
-    const el = editorRef.current;
-    if (!el) return;
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) {
-      setMessage(message + ` [[link_portafolio:${slug}]] `);
-      setMessageSource('chip');
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    const span = document.createElement('span');
-    span.setAttribute('data-portfolio-slug', slug);
-    span.setAttribute('contenteditable', 'false');
-    span.className = 'whatsapp-modal-chip';
-    span.innerHTML = `${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span>`;
-    try {
-      range.insertNode(span);
-      const prev = span.previousSibling;
-      const next = span.nextSibling;
-      const needsSpaceBefore =
-        !prev ||
-        prev.nodeType !== Node.TEXT_NODE ||
-        !/[\s\u00A0]$/.test((prev as Text).textContent || '');
-      const needsSpaceAfter =
-        !next ||
-        next.nodeType !== Node.TEXT_NODE ||
-        !/^[\s\u00A0]/.test((next as Text).textContent || '');
-      if (needsSpaceBefore) {
-        span.parentNode?.insertBefore(document.createTextNode(' '), span);
+  /** Inserta chip de portafolio [[link_portafolio:slug]] siempre al final del editor (sin salto de línea). */
+  const insertPortfolioChip = useCallback(
+    (slug: string, label: string) => {
+      const el = editorRef.current;
+      if (!el) return;
+      el.focus();
+      let range = getRangeAtEndOfEditor();
+      if (!range) {
+        setMessage(message + ` [[link_portafolio:${slug}]] `);
+        setMessageSource('chip');
+        return;
       }
-      if (needsSpaceAfter) {
-        span.parentNode?.insertBefore(document.createTextNode(' '), span.nextSibling);
+      const span = document.createElement('span');
+      span.setAttribute('data-portfolio-slug', slug);
+      span.setAttribute('contenteditable', 'false');
+      span.className = 'whatsapp-modal-chip';
+      span.innerHTML = `${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span>`;
+      try {
+        const hasContentBefore = (el.textContent?.trim().length ?? 0) > 0;
+        const lastNode = el.childNodes[el.childNodes.length - 1];
+        const prevEndsWithSpace = lastNode?.nodeType === Node.TEXT_NODE && /[\s\u00A0]$/.test((lastNode as Text).textContent || '');
+        if (hasContentBefore && !prevEndsWithSpace) {
+          const spaceBefore = document.createTextNode(' ');
+          range.insertNode(spaceBefore);
+          range.setStartAfter(spaceBefore);
+          range.collapse(true);
+        }
+        range.insertNode(span);
+        const spaceAfter = document.createTextNode(' ');
+        span.parentNode?.insertBefore(spaceAfter, span.nextSibling);
+        const sel = window.getSelection();
+        if (sel) {
+          const newRange = document.createRange();
+          newRange.setStartAfter(spaceAfter);
+          newRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
+        setMessage(getMessageFromEditor());
+      } catch {
+        setMessage(message + ` [[link_portafolio:${slug}]] `);
+        setMessageSource('chip');
       }
-      range.setStartAfter(span);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } catch {
-      setMessage(message + ` [[link_portafolio:${slug}]] `);
-      setMessageSource('chip');
-      return;
-    }
-    setMessage(getMessageFromEditor());
-  };
+    },
+    [message, getRangeAtEndOfEditor]
+  );
 
   const handlePortfolioClick = (p: PortfolioForWhatsApp) => {
     insertPortfolioChip(p.slug, `Portafolio: ${p.title}`);
-  };
-
-  const handleTopShotClick = async (shot: TopShot) => {
-    try {
-      const res = await fetch(shot.file_url, { mode: 'cors' });
-      const blob = await res.blob();
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-      toast.success('¡Foto copiada! Pégala en WhatsApp con Ctrl+V');
-    } catch {
-      toast.error('No se pudo copiar la imagen. Prueba en otro navegador.');
-    }
-  };
-
-  const handleTopShotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    setUploadingShot(true);
-    const formData = new FormData();
-    formData.set('file', file);
-    const res = await addTopShot(studioSlug, formData);
-    if (res.success) {
-      setTopShots((prev) => [...prev, res.data!].sort((a, b) => a.display_order - b.display_order));
-      toast.success('Foto agregada al repositorio');
-    } else {
-      toast.error(res.error);
-    }
-    setUploadingShot(false);
-  };
-
-  const handleRemoveTopShot = async (id: string) => {
-    const res = await removeTopShot(studioSlug, id);
-    if (res.success) {
-      setTopShots((prev) => prev.filter((s) => s.id !== id));
-      toast.success('Foto eliminada');
-    } else {
-      toast.error(res.error);
-    }
   };
 
   const getCurrentMessage = (): string =>
@@ -399,6 +403,7 @@ export function WhatsAppMessageModal({
 
   const handleGuardarPlantilla = async () => {
     const currentMessage = getCurrentMessage().trim();
+    const titleToSave = templateName.trim() || currentMessage.slice(0, 30) || 'Mensaje rápido';
     if (!currentMessage) {
       toast.error('Escribe un mensaje');
       return;
@@ -409,7 +414,7 @@ export function WhatsAppMessageModal({
         const res = await updateWhatsAppTemplate(
           studioSlug,
           selectedTemplate.id,
-          selectedTemplate.title,
+          titleToSave,
           currentMessage
         );
         if (!res.success) {
@@ -417,17 +422,20 @@ export function WhatsAppMessageModal({
           return;
         }
         setTemplates((prev) =>
-          prev.map((t) => (t.id === selectedTemplate.id ? { ...t, message: currentMessage } : t))
+          prev.map((t) =>
+            t.id === selectedTemplate.id ? { ...t, title: titleToSave, message: currentMessage } : t
+          )
         );
+        setTemplateName(titleToSave);
       } else if (isFromScratch) {
-        const title = currentMessage.slice(0, 30) || 'Mensaje rápido';
-        const res = await createWhatsAppTemplate(studioSlug, title, currentMessage);
+        const res = await createWhatsAppTemplate(studioSlug, titleToSave, currentMessage);
         if (!res.success) {
           toast.error(res.error ?? 'Error al guardar plantilla');
           return;
         }
         setTemplates((prev) => [res.data!, ...prev]);
         setSelectedTemplateId(res.data!.id);
+        setTemplateName(res.data!.title);
       }
       toast.success('Plantilla guardada. El cambio quedó guardado para futuros envíos.');
     } finally {
@@ -452,13 +460,14 @@ export function WhatsAppMessageModal({
       return;
     }
     const currentMessage = getCurrentMessage().trim();
+    const titleToSave = templateName.trim() || currentMessage.slice(0, 30) || 'Mensaje rápido';
     setSaving(true);
     try {
       if (isEditedFromTemplate && selectedTemplate) {
         const res = await updateWhatsAppTemplate(
           studioSlug,
           selectedTemplate.id,
-          selectedTemplate.title,
+          titleToSave,
           currentMessage
         );
         if (!res.success) {
@@ -467,11 +476,12 @@ export function WhatsAppMessageModal({
           return;
         }
         setTemplates((prev) =>
-          prev.map((t) => (t.id === selectedTemplate.id ? { ...t, message: currentMessage } : t))
+          prev.map((t) =>
+            t.id === selectedTemplate.id ? { ...t, title: titleToSave, message: currentMessage } : t
+          )
         );
       } else if (isFromScratch && currentMessage) {
-        const title = currentMessage.slice(0, 30) || 'Mensaje rápido';
-        const res = await createWhatsAppTemplate(studioSlug, title, currentMessage);
+        const res = await createWhatsAppTemplate(studioSlug, titleToSave, currentMessage);
         if (!res.success) {
           toast.error(res.error ?? 'Error al guardar plantilla');
           setSaving(false);
@@ -557,7 +567,9 @@ export function WhatsAppMessageModal({
         saving
           ? 'Enviando…'
           : hasChanges
-            ? 'Guardar y Enviar'
+            ? selectedTemplate
+              ? 'Actualizar y Enviar'
+              : 'Guardar y Enviar'
             : 'Enviar WhatsApp'
       }
       saveDisabled={saving || !previewMessage.trim()}
@@ -612,20 +624,89 @@ export function WhatsAppMessageModal({
               </p>
             ) : (
               <ul className="space-y-0.5">
-                {templates.map((t) => (
-                  <li key={t.id}>
-                    <button
+                {templates.map((t) => {
+                  const trimmed = t.message.replace(/\s+/g, ' ').trim();
+                  const snippet = trimmed.slice(0, 38);
+                  const snippetDisplay = trimmed.length > 38 ? snippet + '…' : snippet;
+                  return (
+                    <li key={t.id}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleSelectTemplate(t)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSelectTemplate(t)}
+                        className={cn(
+                          'flex justify-between items-start gap-1 w-full text-left px-2 py-1.5 rounded-md transition-colors cursor-pointer',
+                          selectedTemplateId === t.id
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                        )}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm truncate">{t.title}</p>
+                          <p className="text-xs text-zinc-500 truncate mt-0.5">{snippetDisplay}</p>
+                        </div>
+                        <ZenDropdownMenu>
+                          <ZenDropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                              className="shrink-0 p-0.5 rounded hover:bg-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                              aria-label="Acciones"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </ZenDropdownMenuTrigger>
+                          <ZenDropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <ZenDropdownMenuItem
+                              onClick={(e) => handleDuplicateTemplate(e as unknown as React.MouseEvent, t.id)}
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicar
+                            </ZenDropdownMenuItem>
+                            <ZenDropdownMenuItem
+                              onClick={(e) => handleDeleteTemplate(e as unknown as React.MouseEvent, t.id)}
+                              className="text-red-400 focus:text-red-300"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Eliminar
+                            </ZenDropdownMenuItem>
+                          </ZenDropdownMenuContent>
+                        </ZenDropdownMenu>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </aside>
+
+        {/* Col 2: Portafolios */}
+        <aside className="w-56 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-900/30 overflow-hidden">
+          <div className="px-2.5 py-2 border-b border-zinc-800">
+            <p className="text-xs font-medium text-zinc-500">Portafolios</p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2">
+            {loadingResources ? (
+              <p className="text-xs text-zinc-500">Cargando…</p>
+            ) : portfolios.length === 0 ? (
+              <p className="text-xs text-zinc-500">Sin portafolios publicados</p>
+            ) : (
+              <ul className="space-y-1">
+                {portfolios.map((p) => (
+                  <li key={p.id}>
+                    <ZenButton
                       type="button"
-                      onClick={() => handleSelectTemplate(t)}
-                      className={cn(
-                        'w-full text-left px-2 py-1.5 rounded-md text-sm truncate transition-colors',
-                        selectedTemplateId === t.id
-                          ? 'bg-emerald-500/20 text-emerald-300'
-                          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                      )}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePortfolioClick(p)}
+                      className="w-full justify-start gap-2 text-left h-auto min-h-9 py-2 px-2.5 text-sm"
                     >
-                      {t.title}
-                    </button>
+                      <Library className="h-4 w-4 shrink-0 text-zinc-400" />
+                      <span className="truncate">{p.title}</span>
+                    </ZenButton>
                   </li>
                 ))}
               </ul>
@@ -633,89 +714,21 @@ export function WhatsAppMessageModal({
           </div>
         </aside>
 
-        {/* Col 2: Recursos (Portafolios + Top Shots) */}
-        <aside className="w-56 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-900/30 overflow-hidden">
-          <div className="px-2.5 py-2 border-b border-zinc-800">
-            <p className="text-xs font-medium text-zinc-500">Recursos</p>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-3">
-            {/* Portafolios: botones que insertan link */}
-            <div>
-              <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">Portafolios</p>
-              {loadingResources ? (
-                <p className="text-xs text-zinc-500">Cargando…</p>
-              ) : portfolios.length === 0 ? (
-                <p className="text-xs text-zinc-500">Sin portafolios publicados</p>
-              ) : (
-                <div className="flex flex-wrap gap-1">
-                  {portfolios.map((p) => (
-                    <ZenButton
-                      key={p.id}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePortfolioClick(p)}
-                      className="text-xs h-7 px-2"
-                    >
-                      {p.title}
-                    </ZenButton>
-                  ))}
-                </div>
-              )}
-            </div>
-            {/* Top Shots: rejilla + copiar al portapapeles */}
-            <div>
-              <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">Fotos Top</p>
-              {loadingResources ? (
-                <p className="text-xs text-zinc-500">Cargando…</p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {topShots.map((shot) => (
-                      <button
-                        key={shot.id}
-                        type="button"
-                        onClick={() => handleTopShotClick(shot)}
-                        className="aspect-square rounded-md overflow-hidden border border-zinc-700 bg-zinc-800 hover:ring-2 hover:ring-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                        title="Clic para copiar. Pega en WhatsApp con Ctrl+V"
-                      >
-                        <img
-                          src={shot.file_url}
-                          alt="Top shot"
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                    ))}
-                    {topShots.length < 12 && (
-                      <label className="aspect-square rounded-md border border-dashed border-zinc-600 flex items-center justify-center cursor-pointer hover:bg-zinc-800/50 hover:border-zinc-500">
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="sr-only"
-                          onChange={handleTopShotUpload}
-                          disabled={uploadingShot}
-                        />
-                        {uploadingShot ? (
-                          <span className="text-[10px] text-zinc-500">Subiendo…</span>
-                        ) : (
-                          <ImagePlus className="h-5 w-5 text-zinc-500" />
-                        )}
-                      </label>
-                    )}
-                  </div>
-                  {topShots.length === 0 && (
-                    <p className="text-xs text-zinc-500 mt-1">Sube fotos para copiar y pegar en WhatsApp</p>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </aside>
-
         {/* Col 3: Editor + Preview (Taller) */}
         <div className="flex-1 flex flex-col min-w-0 border border-zinc-800 border-l-0 rounded-r-lg bg-zinc-800/30 overflow-hidden">
           <div className="p-3 flex flex-col gap-3 flex-1 min-h-0">
+            {/* Título de la plantilla */}
+            <div>
+              <label className="text-xs font-medium text-zinc-500 block mb-1.5">
+                Título de la plantilla
+              </label>
+              <ZenInput
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="Ej. Saludo inicial"
+                className="bg-zinc-900/50 border-zinc-700"
+              />
+            </div>
             {/* Chips de variables */}
             <div className="flex flex-wrap gap-1.5">
               {VAR_CHIPS.map((chip) => (
