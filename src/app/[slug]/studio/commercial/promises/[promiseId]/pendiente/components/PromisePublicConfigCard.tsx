@@ -63,13 +63,16 @@ export function PromisePublicConfigCard({
 
   const s = settings;
   const configProps = {
-    paquetes: s?.show_packages ?? true,
+    show_packages: s?.show_packages ?? true,
     portafolios: s?.portafolios ?? true,
-    contrato: s?.auto_generate_contract ?? false,
-    redondeo: (s?.rounding_mode === 'exact' ? 'Exacto' : 'Mágico') as 'Exacto' | 'Mágico',
-    condEstandar: s?.show_standard_conditions ?? true,
-    ofertas: s?.show_offer_conditions ?? false,
-    dias: s?.min_days_to_hire ?? 30,
+    allow_recalc: s?.allow_recalc ?? true,
+    rounding_mode: s?.rounding_mode === 'exact' ? 'exact' : 'charm',
+    show_categories_subtotals: s?.show_categories_subtotals ?? false,
+    show_items_prices: s?.show_items_prices ?? false,
+    show_standard_conditions: s?.show_standard_conditions ?? true,
+    show_offer_conditions: s?.show_offer_conditions ?? false,
+    min_days_to_hire: s?.min_days_to_hire ?? 30,
+    auto_generate_contract: s?.auto_generate_contract ?? false,
   };
 
   const openConfigModal = () => window.dispatchEvent(new CustomEvent('open-share-options-modal'));
@@ -78,9 +81,9 @@ export function PromisePublicConfigCard({
     <ZenCard variant="outlined" className="border-zinc-800">
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
         <div className="flex items-center justify-between gap-2">
-<ZenCardTitle className="text-sm font-medium">
-              Lo que el prospecto ve
-            </ZenCardTitle>
+          <ZenCardTitle className="text-sm font-medium">
+            Lo que el prospecto ve
+          </ZenCardTitle>
           <ZenButton
             variant="outline"
             size="sm"
