@@ -11,7 +11,7 @@ import {
   deleteWhatsAppTemplate,
   duplicateWhatsAppTemplate,
 } from '@/lib/actions/studio/commercial/promises';
-import { getOrCreateShortUrl } from '@/lib/actions/studio/commercial/promises/promise-short-url.actions';
+import { getOrCreateShortUrl, getOrCreatePortfolioShortUrl } from '@/lib/actions/studio/commercial/promises/promise-short-url.actions';
 import { getPortfoliosForWhatsApp } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
 import type { PortfolioForWhatsApp } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.types';
 import {
@@ -176,6 +176,11 @@ export function WhatsAppMessageModal({
           parts.push('\n');
           return;
         }
+        const portfolioShortUrl = elem.getAttribute?.('data-portfolio-short-url');
+        if (portfolioShortUrl != null) {
+          parts.push(portfolioShortUrl);
+          return;
+        }
         const portfolioSlug = elem.getAttribute?.('data-portfolio-slug');
         if (portfolioSlug != null) {
           parts.push(`[[link_portafolio:${portfolioSlug}]]`);
@@ -210,7 +215,7 @@ export function WhatsAppMessageModal({
     el.innerHTML = html;
   }, []);
 
-  /** Rango colapsado al final del editor para insertar siempre al final */
+  /** Rango colapsado al final del editor. Todas las inserciones (variables y portafolios) se realizan aquí para evitar conflictos con Smart Chips. */
   const getRangeAtEndOfEditor = useCallback((): Range | null => {
     const el = editorRef.current;
     if (!el) return null;
@@ -326,20 +331,21 @@ export function WhatsAppMessageModal({
     }
   };
 
-  /** Inserta chip de portafolio [[link_portafolio:slug]] siempre al final del editor (sin salto de línea). */
+  /** Inserta chip de portafolio siempre al final del editor. Si shortUrl está definido, el chip usa link corto para previsualización en WhatsApp. */
   const insertPortfolioChip = useCallback(
-    (slug: string, label: string) => {
+    (slug: string, label: string, shortUrl?: string) => {
       const el = editorRef.current;
       if (!el) return;
       el.focus();
-      let range = getRangeAtEndOfEditor();
+      const range = getRangeAtEndOfEditor();
       if (!range) {
-        setMessage(message + ` [[link_portafolio:${slug}]] `);
+        setMessage(message + (shortUrl ? ` ${shortUrl} ` : ` [[link_portafolio:${slug}]] `));
         setMessageSource('chip');
         return;
       }
       const span = document.createElement('span');
       span.setAttribute('data-portfolio-slug', slug);
+      if (shortUrl) span.setAttribute('data-portfolio-short-url', shortUrl);
       span.setAttribute('contenteditable', 'false');
       span.className = 'whatsapp-modal-chip';
       span.innerHTML = `${escapeHtml(label)}<span class="chip-remove" contenteditable="false" role="button" tabindex="-1">×</span>`;
@@ -366,15 +372,17 @@ export function WhatsAppMessageModal({
         }
         setMessage(getMessageFromEditor());
       } catch {
-        setMessage(message + ` [[link_portafolio:${slug}]] `);
+        setMessage(message + (shortUrl ? ` ${shortUrl} ` : ` [[link_portafolio:${slug}]] `));
         setMessageSource('chip');
       }
     },
     [message, getRangeAtEndOfEditor]
   );
 
-  const handlePortfolioClick = (p: PortfolioForWhatsApp) => {
-    insertPortfolioChip(p.slug, `Portafolio: ${p.title}`);
+  const handlePortfolioClick = async (p: PortfolioForWhatsApp) => {
+    const res = await getOrCreatePortfolioShortUrl(studioSlug, p.slug);
+    const shortUrl = res.success && res.data ? `${origin}/s/${res.data.shortCode}` : undefined;
+    insertPortfolioChip(p.slug, `Portafolio: ${p.title}`, shortUrl);
   };
 
   const getCurrentMessage = (): string =>

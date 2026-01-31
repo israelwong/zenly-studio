@@ -275,6 +275,61 @@ export async function getOrCreatePostShortUrl(
 }
 
 /**
+ * Generar o obtener URL corta para un portafolio (para envío por WhatsApp con previsualización)
+ */
+export async function getOrCreatePortfolioShortUrl(
+  studioSlug: string,
+  portfolioSlug: string
+): Promise<ActionResponse<{ shortCode: string }>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Estudio no encontrado' };
+
+    const originalUrl = `/${studioSlug}?portfolio=${encodeURIComponent(portfolioSlug)}`;
+    const existing = await prisma.studio_short_urls.findFirst({
+      where: {
+        studio_id: studio.id,
+        original_url: originalUrl,
+      },
+      select: { short_code: true },
+    });
+    if (existing) {
+      return { success: true, data: { shortCode: existing.short_code } };
+    }
+
+    let shortCode: string;
+    let attempts = 0;
+    const maxAttempts = 10;
+    do {
+      shortCode = generateShortCode();
+      const exists = await prisma.studio_short_urls.findUnique({
+        where: { short_code: shortCode },
+        select: { id: true },
+      });
+      if (!exists) break;
+      attempts++;
+    } while (attempts < maxAttempts);
+    if (attempts >= maxAttempts) return { success: false, error: 'Error al generar código único' };
+
+    await prisma.studio_short_urls.create({
+      data: {
+        short_code: shortCode,
+        original_url: originalUrl,
+        studio_id: studio.id,
+        studio_slug: studioSlug,
+      },
+    });
+    return { success: true, data: { shortCode } };
+  } catch (e) {
+    console.error('[SHORT_URL] getOrCreatePortfolioShortUrl:', e);
+    return { success: false, error: e instanceof Error ? e.message : 'Error al generar URL corta' };
+  }
+}
+
+/**
  * Sincronizar la ruta del short URL según el estado actual de las cotizaciones
  * Actualiza el original_url para que apunte a la sub-ruta correcta según determinePromiseRoute
  */

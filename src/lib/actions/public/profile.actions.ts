@@ -361,6 +361,50 @@ export async function getStudioProfileMetadata(
 }
 
 /**
+ * Metadata de un portafolio para openGraph (previsualización en WhatsApp cuando se comparte link corto)
+ */
+export async function getPortfolioMetadataForOg(
+    studioSlug: string,
+    portfolioSlug: string
+): Promise<{
+    success: boolean;
+    data?: { title: string; cover_image_url: string | null; studio_name: string };
+    error?: string;
+}> {
+    try {
+        const portfolio = await prisma.studio_portfolios.findFirst({
+            where: {
+                slug: portfolioSlug,
+                is_published: true,
+                studio: { slug: studioSlug, is_active: true },
+            },
+            select: {
+                title: true,
+                cover_image_url: true,
+                studio: { select: { studio_name: true } },
+            },
+        });
+        if (!portfolio) {
+            return { success: false, error: 'Portafolio no encontrado' };
+        }
+        return {
+            success: true,
+            data: {
+                title: portfolio.title,
+                cover_image_url: portfolio.cover_image_url,
+                studio_name: portfolio.studio.studio_name,
+            },
+        };
+    } catch (error) {
+        console.error('[getPortfolioMetadataForOg] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al obtener metadata del portafolio',
+        };
+    }
+}
+
+/**
  * ⚠️ STREAMING: Get deferred posts (pesados)
  * Se carga en segundo plano mientras se muestra el header
  * ⚠️ CACHE: Cacheado con tag por studio para invalidación granular

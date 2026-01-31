@@ -96,15 +96,18 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     }
 }
 
-import { getStudioProfileMetadata } from '@/lib/actions/public/profile.actions';
+import { getStudioProfileMetadata, getPortfolioMetadataForOg } from '@/lib/actions/public/profile.actions';
 import { Metadata } from 'next';
+
+type GenerateMetadataProps = PublicProfilePageProps & { searchParams: Promise<{ portfolio?: string }> };
 
 /**
  * ⚠️ METADATA LIGERA: Solo 5 campos esenciales para SEO
- * Elimina la doble carga en generateMetadata
+ * Si searchParams.portfolio está presente, metadata del portafolio para openGraph (preview WhatsApp).
  */
-export async function generateMetadata({ params }: PublicProfilePageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: GenerateMetadataProps): Promise<Metadata> {
     const { slug } = await params;
+    const { portfolio: portfolioSlug } = await searchParams;
 
     // Excluir rutas reservadas como /s (short URLs)
     if (slug === 's') {
@@ -115,6 +118,31 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
     }
 
     try {
+        if (portfolioSlug?.trim()) {
+            const portfolioMeta = await getPortfolioMetadataForOg(slug, portfolioSlug.trim());
+            if (portfolioMeta.success && portfolioMeta.data) {
+                const { title: portfolioTitle, cover_image_url, studio_name } = portfolioMeta.data;
+                const title = portfolioTitle;
+                const description = `Mira nuestro trabajo en ${studio_name}`;
+                return {
+                    title,
+                    description,
+                    openGraph: {
+                        title,
+                        description,
+                        images: cover_image_url ? [cover_image_url] : undefined,
+                        type: 'website',
+                    },
+                    twitter: {
+                        card: 'summary_large_image',
+                        title,
+                        description,
+                        images: cover_image_url ? [cover_image_url] : undefined,
+                    },
+                };
+            }
+        }
+
         const result = await getStudioProfileMetadata(slug);
 
         if (!result.success || !result.data) {
@@ -128,7 +156,6 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
         const title = `${studio_name}${slogan ? ` - ${slogan}` : ''}`;
         const description = presentation || `Perfil profesional de ${studio_name}`;
 
-        // Configurar favicon dinámico usando el logo del studio
         const icons = logo_url ? {
             icon: [
                 { url: logo_url, type: 'image/png' },
@@ -145,7 +172,7 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
             title,
             description,
             keywords: keywords || undefined,
-            icons, // ← Favicon dinámico
+            icons,
             openGraph: {
                 title,
                 description,
