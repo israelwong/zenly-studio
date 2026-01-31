@@ -63,6 +63,16 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
       .finally(() => setLoadingTemplates(false));
   };
 
+  // Precargar plantillas al montar para que el dropdown abra al instante al hacer focus (igual que SeguimientoMinimalCard con asuntos)
+  useEffect(() => {
+    setLoadingTemplates(true);
+    getPromiseLogTemplates(studioSlug)
+      .then((res) => {
+        if (res.success && res.data) setTemplates(res.data);
+      })
+      .finally(() => setLoadingTemplates(false));
+  }, [studioSlug]);
+
   const filteredTemplates = useMemo(() => {
     if (!search.trim()) return templates;
     const q = search.trim().toLowerCase();
@@ -219,7 +229,7 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
     <ZenCard variant="outlined" className="border-zinc-800">
       <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
         <div className="flex items-center justify-between gap-2">
-          <ZenCardTitle className="text-sm font-medium">Registro de Seguimiento</ZenCardTitle>
+          <ZenCardTitle className="text-sm font-medium">Bitácora de seguimiento</ZenCardTitle>
           <ZenButton
             variant="ghost"
             size="sm"
@@ -238,10 +248,7 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
             <ZenInput
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onFocus={() => {
-                loadTemplates();
-                setShowSuggestions(true);
-              }}
+              onFocus={() => setShowSuggestions(true)}
               onBlur={() => {
                 setTimeout(() => setShowSuggestions(false), 200);
               }}

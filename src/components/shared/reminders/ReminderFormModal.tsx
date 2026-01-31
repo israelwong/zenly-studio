@@ -697,10 +697,10 @@ export function ReminderFormModal({
 }
 
 // =============================================================================
-// MODAL DE GESTIÓN DE ASUNTOS
+// MODAL DE GESTIÓN DE ASUNTOS (exportado para uso en SeguimientoMinimalCard)
 // =============================================================================
 
-interface ManageSubjectsModalProps {
+export interface ManageSubjectsModalProps {
   isOpen: boolean;
   onClose: () => void;
   studioSlug: string;
@@ -709,7 +709,7 @@ interface ManageSubjectsModalProps {
   zIndex?: number;
 }
 
-function ManageSubjectsModal({
+export function ManageSubjectsModal({
   isOpen,
   onClose,
   studioSlug,

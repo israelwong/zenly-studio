@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
-import { ReminderButton } from './ReminderButton';
 import { AgendaButton } from './AgendaButton';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { logWhatsAppSent, logProfileShared } from '@/lib/actions/studio/commercial/promises';
@@ -175,9 +174,7 @@ export function PromiseDetailToolbar({
         )}
 
       </div>
-      {/* Agregar recordatorio y Agendar cita alineados a la derecha */}
       <div className="flex items-center gap-1.5">
-        <ReminderButton studioSlug={studioSlug} promiseId={promiseId} />
         <AgendaButton
           studioSlug={studioSlug}
           promiseId={promiseId}

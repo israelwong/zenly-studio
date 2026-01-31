@@ -10,10 +10,12 @@ import { PromisePublicConfigCard } from './PromisePublicConfigCard';
 import { EventFormModal } from '@/components/shared/promises';
 import { AuthorizeCotizacionModal } from './cotizaciones/AuthorizeCotizacionModal';
 import { QuickNoteCard } from '../../components/QuickNoteCard';
+import { SeguimientoMinimalCard } from '../../components/SeguimientoMinimalCard';
 import { usePromiseContext } from '../../context/PromiseContext';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
+import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import { ZenCard, ZenCardContent, ZenCardHeader } from '@/components/ui/zen';
 
 export interface PromisePendienteClientProps {
@@ -40,13 +42,7 @@ export interface PromisePendienteClientProps {
       name: string;
     } | null;
   } | null;
-  initialCotizaciones?: Array<{
-    id: string;
-    name: string;
-    price: number;
-    status: string;
-    click_count?: number;
-  }>;
+  initialCotizaciones?: CotizacionListItem[];
   initialStats?: {
     views: {
       totalViews: number;
@@ -241,7 +237,7 @@ export function PromisePendienteClient({
                 event_name: promiseData.event_name || null,
                 duration_hours: promiseData.duration_hours ?? null,
                 event_date: promiseData.event_date || null,
-                interested_dates: promiseData.interested_dates,
+                interested_dates: promiseData.interested_dates?.[0] ?? null,
               }}
               acquisitionData={{
                 acquisition_channel_id: promiseData.acquisition_channel_id,
@@ -263,7 +259,7 @@ export function PromisePendienteClient({
                 event_type_id: promiseData.event_type_id,
                 event_location: promiseData.event_location || null,
                 event_name: promiseData.event_name || null,
-                interested_dates: promiseData.interested_dates,
+                interested_dates: promiseData.interested_dates?.[0] ?? null,
                 acquisition_channel_id: promiseData.acquisition_channel_id || null,
                 social_network_id: promiseData.social_network_id || null,
                 referrer_contact_id: promiseData.referrer_contact_id || null,
@@ -313,8 +309,9 @@ export function PromisePendienteClient({
             </Suspense>
           </div>
 
-          {/* Columna 3: Centro de control "Lo que el prospecto ve" + Registro de Seguimiento */}
+          {/* Columna 3: Registro de Seguimiento + Seguimiento (recordatorio) + Centro de control */}
           <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+            <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} />
             <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
             <Suspense fallback={<SidebarSkeleton />}>
               <PromisePublicConfigCard
@@ -347,7 +344,7 @@ export function PromisePendienteClient({
             event_name: promiseData.event_name || undefined,
             duration_hours: promiseData.duration_hours ?? undefined,
             event_date: promiseData.event_date || undefined,
-            interested_dates: promiseData.interested_dates || undefined,
+            interested_dates: promiseData.interested_dates?.[0] ?? undefined,
             acquisition_channel_id: promiseData.acquisition_channel_id || undefined,
             social_network_id: promiseData.social_network_id || undefined,
             referrer_contact_id: promiseData.referrer_contact_id || undefined,
