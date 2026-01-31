@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { X, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
@@ -711,7 +711,7 @@ export function CotizacionForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Prevenir doble submit
+    // Prevenir doble submit: deshabilitar desde el primer clic
     if (isSubmittingRef.current || loading) {
       return;
     }
@@ -764,25 +764,24 @@ export function CotizacionForm({
 
         // Ejecutar callback si existe
         if (onAfterSave) {
-          // ✅ CORRECCIÓN DEFENSIVA: Resetear loading antes de ejecutar callback
-          // Si el callback no navega o hay un delay, el botón vuelve a la vida
           isSubmittingRef.current = false;
           setLoading(false);
           onAfterSave();
           return;
         }
 
-        // Cerrar overlays antes de navegar
         window.dispatchEvent(new CustomEvent('close-overlays'));
         redirectingRef.current = true;
-        if (redirectOnSuccess) {
-          router.push(redirectOnSuccess);
-        } else if (promiseId) {
-          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-        } else {
-          router.back();
-        }
         router.refresh();
+        startTransition(() => {
+          if (redirectOnSuccess) {
+            router.push(redirectOnSuccess);
+          } else if (promiseId) {
+            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+          } else {
+            router.back();
+          }
+        });
         return;
       }
 
@@ -804,23 +803,22 @@ export function CotizacionForm({
 
         toast.success('Revisión creada exitosamente');
 
-        // Si se creó la revisión y hay revisionId, el callback ya manejó la redirección
-        // Solo retornar, no hacer nada más aquí
         if (revisionResult.revisionId) {
-          // Mantener loading hasta que se complete la navegación
           return;
         }
 
         window.dispatchEvent(new CustomEvent('close-overlays'));
         redirectingRef.current = true;
-        if (redirectOnSuccess) {
-          router.push(redirectOnSuccess);
-        } else if (promiseId) {
-          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-        } else {
-          router.back();
-        }
         router.refresh();
+        startTransition(() => {
+          if (redirectOnSuccess) {
+            router.push(redirectOnSuccess);
+          } else if (promiseId) {
+            router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+          } else {
+            router.back();
+          }
+        });
         return;
       }
 
@@ -848,14 +846,16 @@ export function CotizacionForm({
 
       window.dispatchEvent(new CustomEvent('close-overlays'));
       redirectingRef.current = true;
-      if (redirectOnSuccess) {
-        router.push(redirectOnSuccess);
-      } else if (promiseId) {
-        router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
-      } else {
-        router.back();
-      }
       router.refresh();
+      startTransition(() => {
+        if (redirectOnSuccess) {
+          router.push(redirectOnSuccess);
+        } else if (promiseId) {
+          router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
+        } else {
+          router.back();
+        }
+      });
       return;
     } catch (error) {
       console.error('Error saving quote:', error);
