@@ -62,17 +62,19 @@ export function usePromiseLogs({ promiseId, enabled = true }: UsePromiseLogsOpti
     setLogs((prev) => prev.filter((log) => log.id !== logId));
   }, []);
 
-  // ✅ OPTIMIZACIÓN: Eliminado reordenamiento duplicado
-  // Los logs ya vienen ordenados asc desde el servidor
-  // Si se necesita orden desc para preview, usar useMemo en el componente
+  // Actualizar un log en estado local (tras edición)
+  const updateLog = useCallback((logId: string, updated: PromiseLog) => {
+    setLogs((prev) => prev.map((l) => (l.id === logId ? updated : l)));
+  }, []);
 
   return {
-    logs, // ✅ Ya viene ordenado asc desde servidor
+    logs,
     loading,
     error,
     refetch: loadLogs,
     addLog,
     removeLog,
+    updateLog,
   };
 }
 

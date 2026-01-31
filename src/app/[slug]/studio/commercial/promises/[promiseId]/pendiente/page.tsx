@@ -7,6 +7,7 @@ import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/prom
 import { getPromiseStats } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 import { getPromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { getPromiseTagsByPromiseId } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
+import { getLastPromiseLogs } from '@/lib/actions/studio/commercial/promises';
 import { PromisePendienteClient } from './components/PromisePendienteClient';
 
 interface PromisePendientePageProps {
@@ -36,6 +37,7 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     statsResult,
     shareSettingsResult,
     tagsResult,
+    lastLogsResult,
   ] = await Promise.all([
     obtenerCondicionesComerciales(studioSlug),
     getPaymentMethodsForAuthorization(studioSlug),
@@ -43,6 +45,7 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     getPromiseStats(promiseId),
     getPromiseShareSettings(studioSlug, promiseId),
     getPromiseTagsByPromiseId(promiseId),
+    getLastPromiseLogs(promiseId, 3),
   ]);
 
   const condicionesComerciales = condicionesResult.success && condicionesResult.data
@@ -95,6 +98,7 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
     shareSettingsResult.success && shareSettingsResult.data ? shareSettingsResult.data : null;
 
   const initialTags = tagsResult.success && tagsResult.data ? tagsResult.data : [];
+  const initialLastLogs = lastLogsResult.success && lastLogsResult.data ? lastLogsResult.data : [];
 
   return (
     <PromisePendienteClient
@@ -105,6 +109,7 @@ export default async function PromisePendientePage({ params }: PromisePendienteP
       initialStats={initialStats}
       initialShareSettings={initialShareSettings}
       initialTags={initialTags}
+      initialLastLogs={initialLastLogs}
     />
   );
 }

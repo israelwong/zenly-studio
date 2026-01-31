@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, MoreVertical, Archive, ArchiveRestore, Trash2, Loader2, Settings } from 'lucide-react';
 import { ZenCardHeader, ZenCardTitle, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
-import { PromiseNotesButton } from './PromiseNotesButton';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 
 interface PromiseDetailHeaderProps {
@@ -187,16 +186,6 @@ export function PromiseDetailHeader({
                                 </>
                         );
                     })()}
-                    {promiseId && contactData?.contactId && (
-                        <>
-                            <div className="h-4 w-px bg-zinc-700" aria-hidden />
-                            <PromiseNotesButton
-                                studioSlug={studioSlug}
-                                promiseId={promiseId}
-                                contactId={contactData.contactId}
-                            />
-                        </>
-                    )}
                     {/* Dropdown menu: solo mostrar si NO hay evento creado */}
                     {(() => {
                         // Validar primero: si hay evento creado, no mostrar dropdown

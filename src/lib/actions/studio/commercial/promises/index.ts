@@ -19,7 +19,9 @@ export {
 
 export {
   getPromiseLogs,
+  getLastPromiseLogs,
   createPromiseLog,
+  updatePromiseLog,
   deletePromiseLog,
   getPromiseIdByContactId,
   getPromiseById,
@@ -27,6 +29,15 @@ export {
 } from './promise-logs.actions';
 
 export type { PromiseLogAction, PromiseLog, PromiseLogsResponse } from './promise-logs.actions';
+
+export {
+  getPromiseLogTemplates,
+  createPromiseLogTemplate,
+  updatePromiseLogTemplate,
+  deletePromiseLogTemplate,
+} from './promise-log-templates.actions';
+
+export type { PromiseLogTemplate } from './promise-log-templates.actions';
 
 export {
   logWhatsAppSent,

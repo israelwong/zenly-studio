@@ -73,6 +73,13 @@ export function PromiseLayoutClient({
     return () => window.removeEventListener('open-share-options-modal', handler);
   }, []);
 
+  // Abrir bitácora desde QuickNoteCard
+  useEffect(() => {
+    const handler = () => setLogsSheetOpen(true);
+    window.addEventListener('open-bitacora-sheet', handler);
+    return () => window.removeEventListener('open-bitacora-sheet', handler);
+  }, []);
+
   const handlePipelineStageChange = async (newStageId: string, stageName?: string) => {
     if (!promiseId || newStageId === stateData.promiseData.pipeline_stage_id) return;
 

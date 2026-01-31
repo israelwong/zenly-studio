@@ -9,9 +9,11 @@ import { PromiseStatsCard } from './PromiseStatsCard';
 import { PromisePublicConfigCard } from './PromisePublicConfigCard';
 import { EventFormModal } from '@/components/shared/promises';
 import { AuthorizeCotizacionModal } from './cotizaciones/AuthorizeCotizacionModal';
+import { QuickNoteCard } from '../../components/QuickNoteCard';
 import { usePromiseContext } from '../../context/PromiseContext';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
+import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 import { ZenCard, ZenCardContent, ZenCardHeader } from '@/components/ui/zen';
 
 export interface PromisePendienteClientProps {
@@ -65,6 +67,8 @@ export interface PromisePendienteClientProps {
   /** Datos iniciales del servidor (Protocolo Zenly). Sin fetch en mount. */
   initialShareSettings?: (PromiseShareSettings & { has_cotizacion?: boolean; remember_preferences?: boolean }) | null;
   initialTags?: PromiseTag[];
+  /** Últimos 3 logs para preview en Registro de Seguimiento (inicialización) */
+  initialLastLogs?: PromiseLog[];
 }
 
 function SidebarSkeleton() {
@@ -106,6 +110,7 @@ export function PromisePendienteClient({
   initialStats,
   initialShareSettings = null,
   initialTags = [],
+  initialLastLogs = [],
 }: PromisePendienteClientProps) {
   const params = useParams();
   const studioSlug = params.slug as string;
@@ -308,8 +313,9 @@ export function PromisePendienteClient({
             </Suspense>
           </div>
 
-          {/* Columna 3: Centro de control "Lo que el prospecto ve" */}
+          {/* Columna 3: Centro de control "Lo que el prospecto ve" + Registro de Seguimiento */}
           <div className="lg:col-span-1 flex flex-col h-full space-y-6">
+            <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
             <Suspense fallback={<SidebarSkeleton />}>
               <PromisePublicConfigCard
                 studioSlug={studioSlug}

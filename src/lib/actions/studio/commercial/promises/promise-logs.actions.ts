@@ -10,6 +10,7 @@ const createPromiseLogSchema = z.object({
   content: z.string().min(1, 'El contenido es requerido'),
   log_type: z.string().default('user_note'),
   metadata: z.record(z.unknown()).optional(),
+  template_id: z.string().optional(),
 });
 
 export type CreatePromiseLogData = z.infer<typeof createPromiseLogSchema>;
@@ -410,6 +411,54 @@ export async function getPromiseById(
 }
 
 /**
+ * Obtener los N últimos logs de una promesa (para preview en Registro de Seguimiento)
+ */
+export async function getLastPromiseLogs(
+  promiseId: string,
+  take: number = 3
+): Promise<{ success: true; data: PromiseLog[] } | { success: false; error: string }> {
+  try {
+    const logs = await prisma.studio_promise_logs.findMany({
+      where: { promise_id: promiseId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            full_name: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+      take,
+    });
+
+    const promiseLogs: PromiseLog[] = logs.map((log) => ({
+      id: log.id,
+      promise_id: log.promise_id,
+      user_id: log.user_id,
+      content: log.content,
+      log_type: log.log_type,
+      metadata: log.metadata as Record<string, unknown> | null,
+      created_at: log.created_at,
+      user: log.user
+        ? {
+          id: log.user.id,
+          full_name: log.user.full_name,
+        }
+        : null,
+    }));
+
+    return { success: true, data: promiseLogs };
+  } catch (error) {
+    console.error('[PROMISE_LOGS] Error obteniendo últimos logs:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+/**
  * Obtener logs de una promesa
  * ✅ OPTIMIZACIÓN: Orden asc directamente en servidor + límite de seguridad
  */
@@ -520,6 +569,7 @@ export async function createPromiseLog(
       data: {
         promise_id: validatedData.promise_id,
         user_id: userId,
+        template_id: validatedData.template_id ?? null,
         content: validatedData.content,
         log_type: finalLogType,
         metadata: validatedData.metadata || null,
@@ -549,6 +599,13 @@ export async function createPromiseLog(
         }
         : null,
     };
+
+    if (validatedData.template_id) {
+      await prisma.studio_promise_log_templates.update({
+        where: { id: validatedData.template_id },
+        data: { usage_count: { increment: 1 } },
+      });
+    }
 
     revalidatePath(`/${studioSlug}/studio/commercial/promises`);
 
@@ -644,6 +701,76 @@ export async function logPromiseAction(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al registrar acción',
+    };
+  }
+}
+
+/**
+ * Actualizar contenido de un log (solo notas de usuario)
+ */
+export async function updatePromiseLog(
+  studioSlug: string,
+  logId: string,
+  content: string
+): Promise<ActionResponse<PromiseLog>> {
+  try {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      return { success: false, error: 'El contenido no puede estar vacío' };
+    }
+
+    const log = await prisma.studio_promise_logs.findUnique({
+      where: { id: logId },
+      include: {
+        user: { select: { id: true, full_name: true } },
+        promise: { select: { studio_id: true } },
+      },
+    });
+
+    if (!log) {
+      return { success: false, error: 'Log no encontrado' };
+    }
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio || log.promise?.studio_id !== studio.id) {
+      return { success: false, error: 'No autorizado' };
+    }
+
+    if (log.log_type !== 'user_note' && log.log_type !== 'note') {
+      return { success: false, error: 'Solo se pueden editar notas de usuario' };
+    }
+
+    const updated = await prisma.studio_promise_logs.update({
+      where: { id: logId },
+      data: { content: trimmed },
+      include: {
+        user: { select: { id: true, full_name: true } },
+      },
+    });
+
+    const promiseLog: PromiseLog = {
+      id: updated.id,
+      promise_id: updated.promise_id,
+      user_id: updated.user_id,
+      content: updated.content,
+      log_type: updated.log_type,
+      metadata: updated.metadata as Record<string, unknown> | null,
+      created_at: updated.created_at,
+      user: updated.user
+        ? { id: updated.user.id, full_name: updated.user.full_name }
+        : null,
+    };
+
+    revalidatePath(`/${studioSlug}/studio/commercial/promises`);
+    return { success: true, data: promiseLog };
+  } catch (error) {
+    console.error('[PROMISE_LOGS] Error actualizando log:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar',
     };
   }
 }
