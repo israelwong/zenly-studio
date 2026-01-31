@@ -824,6 +824,7 @@ model studios {
   post_media                                      studio_post_media[]              @relation("post_media")
   posts                                           studio_posts[]
   promise_log_templates                          studio_promise_log_templates[]
+  whatsapp_templates                             studio_whatsapp_templates[]
   promise_pipeline_stages                         studio_promise_pipeline_stages[]
   promise_tags                                    studio_promise_tags[]
   promises                                        studio_promises[]
@@ -1413,6 +1414,17 @@ model studio_promise_log_templates {
   logs        studio_promise_logs[]
 
   @@unique([studio_id, text])
+  @@index([studio_id])
+}
+
+model studio_whatsapp_templates {
+  id        String   @id @default(cuid())
+  studio_id String
+  title     String
+  message   String
+  created_at DateTime @default(now())
+  studio    studios   @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
   @@index([studio_id])
 }
 

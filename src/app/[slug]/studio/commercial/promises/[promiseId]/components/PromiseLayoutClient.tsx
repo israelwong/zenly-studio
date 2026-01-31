@@ -282,6 +282,8 @@ export function PromiseLayoutClient({
               contactName: promiseDataForHeader.name,
               phone: promiseDataForHeader.phone,
             }}
+            eventName={stateData.promiseData.event_type_name}
+            eventDate={stateData.promiseData.event_date}
             onPreview={() => {
               const previewUrl = `${window.location.origin}/${studioSlug}/promise/${promiseId}`;
               window.open(previewUrl, '_blank');

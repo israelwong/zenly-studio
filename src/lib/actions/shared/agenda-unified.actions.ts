@@ -855,6 +855,7 @@ export async function obtenerAgendamientoPorId(
             new Date(eventMainDate).toDateString() === agendaDate.toDateString() &&
             agenda.contexto === 'evento';
 
+        const rawMetadata = agenda.metadata as Record<string, unknown> | null;
         const item: AgendaItem = {
             id: agenda.id,
             date: agenda.date || new Date(),
@@ -868,7 +869,7 @@ export async function obtenerAgendamientoPorId(
             contexto: (agenda.contexto as 'promise' | 'evento' | null) || null,
             promise_id: agenda.promise_id,
             evento_id: agenda.evento_id,
-            metadata: agenda.metadata as Record<string, unknown> | null,
+            metadata: rawMetadata,
             created_at: agenda.created_at || null,
             updated_at: agenda.updated_at || null,
             contact_name: agenda.promise?.contact?.name || agenda.eventos?.contact?.name || null,
@@ -884,6 +885,18 @@ export async function obtenerAgendamientoPorId(
             is_main_event_date: isMainEventDate || false,
             google_event_id: agenda.eventos?.google_event_id || null,
         };
+        // Retrocompatibilidad: asegurar agenda_type para registros antiguos sin metadata
+        if (!rawMetadata || (typeof rawMetadata === 'object' && !rawMetadata.agenda_type)) {
+            item.metadata = obtenerMetadataAgenda({
+                contexto: item.contexto as 'promise' | 'evento',
+                type_scheduling: item.type_scheduling,
+                evento_id: agenda.evento_id,
+                promise_id: agenda.promise_id,
+                date: agenda.date,
+                metadata: rawMetadata,
+                eventos: agenda.eventos,
+            });
+        }
 
         return {
             success: true,
@@ -944,6 +957,7 @@ export async function obtenerAgendamientoPorPromise(
             return { success: true, data: undefined };
         }
 
+        const rawMetadata = agenda.metadata as Record<string, unknown> | null;
         const item: AgendaItem = {
             id: agenda.id,
             date: agenda.date || new Date(),
@@ -957,7 +971,7 @@ export async function obtenerAgendamientoPorPromise(
             contexto: 'promise',
             promise_id: agenda.promise_id,
             evento_id: agenda.evento_id,
-            metadata: agenda.metadata as Record<string, unknown> | null,
+            metadata: rawMetadata,
             created_at: agenda.created_at || null,
             updated_at: agenda.updated_at || null,
             contact_name: agenda.promise?.contact?.name || agenda.eventos?.contact?.name || null,
@@ -968,6 +982,18 @@ export async function obtenerAgendamientoPorPromise(
             contact_avatar_url: agenda.promise?.contact?.avatar_url || agenda.eventos?.contact?.avatar_url || null,
             promise_status: 'pending',
         };
+        // Retrocompatibilidad: asegurar agenda_type para registros antiguos sin metadata
+        if (!rawMetadata || (typeof rawMetadata === 'object' && !rawMetadata.agenda_type)) {
+            item.metadata = obtenerMetadataAgenda({
+                contexto: 'promise',
+                type_scheduling: item.type_scheduling,
+                evento_id: null,
+                promise_id: item.promise_id,
+                date: item.date,
+                metadata: rawMetadata,
+                eventos: null,
+            });
+        }
 
         return {
             success: true,
@@ -1039,13 +1065,13 @@ export async function obtenerAgendamientosPorEvento(
         });
 
         const items: AgendaItem[] = agendas.map((agenda) => {
-            // Determinar si es fecha principal del evento
             const eventMainDate = agenda.eventos?.promise?.event_date;
             const agendaDate = agenda.date ? new Date(agenda.date) : null;
-            const isMainEventDate = eventMainDate && agendaDate && 
+            const isMainEventDate = eventMainDate && agendaDate &&
                 new Date(eventMainDate).toDateString() === agendaDate.toDateString();
+            const rawMetadata = agenda.metadata as Record<string, unknown> | null;
 
-            return {
+            const item: AgendaItem = {
                 id: agenda.id,
                 date: agenda.date || new Date(),
                 time: agenda.time,
@@ -1058,7 +1084,7 @@ export async function obtenerAgendamientosPorEvento(
                 contexto: 'evento',
                 promise_id: agenda.promise_id,
                 evento_id: agenda.evento_id,
-                metadata: agenda.metadata as Record<string, unknown> | null,
+                metadata: rawMetadata,
                 created_at: agenda.created_at || null,
                 updated_at: agenda.updated_at || null,
                 contact_name: agenda.eventos?.contact?.name || null,
@@ -1071,6 +1097,19 @@ export async function obtenerAgendamientosPorEvento(
                 is_main_event_date: isMainEventDate || false,
                 google_event_id: agenda.eventos?.google_event_id || null,
             };
+            // Retrocompatibilidad: asegurar agenda_type para registros antiguos sin metadata
+            if (!rawMetadata || (typeof rawMetadata === 'object' && !rawMetadata.agenda_type)) {
+                item.metadata = obtenerMetadataAgenda({
+                    contexto: 'evento',
+                    type_scheduling: item.type_scheduling,
+                    evento_id: agenda.evento_id,
+                    promise_id: agenda.promise_id,
+                    date: agenda.date,
+                    metadata: rawMetadata,
+                    eventos: agenda.eventos,
+                });
+            }
+            return item;
         });
 
         return {

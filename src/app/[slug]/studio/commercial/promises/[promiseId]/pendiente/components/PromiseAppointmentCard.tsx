@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, MapPin, Video, Settings2, Trash2 } from 'lucide-react';
+import { Calendar, MapPin, Video, CalendarClock, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenInput, ZenSelect } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { ZenCalendar } from '@/components/ui/zen';
@@ -87,7 +87,8 @@ export function PromiseAppointmentCard({
   }, [agendamiento, editMode]);
 
   const isDisabled = !!eventoId;
-  const hasAgenda = !!agendamiento;
+  // Solo considerar cita "activa" (no cancelada) para bloquear formulario y mostrar resumen
+  const hasAgenda = !!agendamiento && agendamiento.status !== 'cancelado';
   const tipoPresencial = agendamiento?.type_scheduling === 'presencial';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -211,9 +212,10 @@ export function PromiseAppointmentCard({
                   onClick={() => setEditMode(true)}
                   disabled={submitting}
                   className="flex-1 gap-1 h-7 text-xs border-zinc-700 text-zinc-300"
+                  title="Cambiar fecha, hora o tipo de cita"
                 >
-                  <Settings2 className="h-3 w-3 shrink-0" />
-                  Editar
+                  <CalendarClock className="h-3 w-3 shrink-0" />
+                  Reprogramar
                 </ZenButton>
                 <ZenButton
                   type="button"

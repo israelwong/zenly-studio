@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
-import { logWhatsAppSent, logProfileShared } from '@/lib/actions/studio/commercial/promises';
+import { logProfileShared } from '@/lib/actions/studio/commercial/promises';
 import { getOrCreateShortUrl } from '@/lib/actions/studio/commercial/promises/promise-short-url.actions';
 import { toast } from 'sonner';
+import { WhatsAppMessageModal } from './WhatsAppMessageModal';
 
 interface PromiseDetailToolbarProps {
   studioSlug: string;
@@ -16,6 +17,10 @@ interface PromiseDetailToolbarProps {
     contactName: string;
     phone: string;
   } | null;
+  /** Nombre del evento para plantillas WhatsApp [[nombre_evento]] */
+  eventName?: string | null;
+  /** Fecha del evento para [[fecha_evento]] */
+  eventDate?: Date | null;
   onCopyLink?: () => void;
   onPreview: () => void;
 }
@@ -24,30 +29,17 @@ export function PromiseDetailToolbar({
   studioSlug,
   promiseId,
   contactData,
+  eventName = null,
+  eventDate = null,
   onCopyLink,
   onPreview,
 }: PromiseDetailToolbarProps) {
   const [linkCopied, setLinkCopied] = useState(false);
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
 
   if (!promiseId || !contactData) {
     return null;
   }
-
-  const handleWhatsApp = async () => {
-    if (!contactData.phone) return;
-
-    const cleanPhone = contactData.phone.replace(/\D/g, '');
-    const message = encodeURIComponent(`Hola ${contactData.contactName}`);
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
-
-    if (promiseId) {
-      logWhatsAppSent(studioSlug, promiseId, contactData.contactName, contactData.phone).catch((error) => {
-        console.error('Error registrando WhatsApp:', error);
-      });
-    }
-
-    window.open(whatsappUrl, '_blank');
-  };
 
   return (
     <div className="flex items-center justify-between gap-1.5 px-6 py-2.5 border-b border-zinc-800 bg-zinc-900/50">
@@ -149,28 +141,33 @@ export function PromiseDetailToolbar({
             <span>Vista previa</span>
           </ZenButton>
         </div>
-
-        {/* Divisor entre Compartir y Contactar */}
-        {contactData.phone && (
-          <div className="h-4 w-px bg-zinc-700" />
-        )}
-
-        {/* WhatsApp */}
-        {contactData.phone && (
-          <div className="flex items-center gap-1.5">
-            <ZenButton
-              variant="ghost"
-              size="sm"
-              onClick={handleWhatsApp}
-              className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
-            >
-              <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
-              <span>WhatsApp</span>
-            </ZenButton>
-          </div>
-        )}
-
       </div>
+
+      {/* WhatsApp: lado derecho del toolbar */}
+      {contactData.phone && (
+        <div className="flex items-center gap-1.5">
+          <ZenButton
+            variant="ghost"
+            size="sm"
+            onClick={() => setWhatsappModalOpen(true)}
+            className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+          >
+            <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
+            <span>WhatsApp</span>
+          </ZenButton>
+        </div>
+      )}
+
+      <WhatsAppMessageModal
+        isOpen={whatsappModalOpen}
+        onClose={() => setWhatsappModalOpen(false)}
+        studioSlug={studioSlug}
+        promiseId={promiseId}
+        contactName={contactData.contactName}
+        phone={contactData.phone}
+        eventName={eventName}
+        eventDate={eventDate}
+      />
     </div>
   );
 }

@@ -1,0 +1,1 @@
+export { WhatsAppTemplatesClient } from './WhatsAppTemplatesClient';

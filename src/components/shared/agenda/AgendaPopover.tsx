@@ -18,7 +18,11 @@ import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import { formatDisplayDate } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
 
-/** Filtra items para el header: excluye event_date (fechas de promesa sin cita), ordena y toma los 6 próximos */
+/**
+ * Filtra items para el header: excluye event_date (fechas de promesa sin cita), ordena y toma los 6 próximos.
+ * Retrocompatibilidad: si un registro antiguo no tiene metadata.agenda_type, se deduce por contexto + type_scheduling
+ * (promise + type_scheduling → cita comercial; evento → evento/cita evento).
+ */
 function filterAgendaForHeader(items: AgendaItem[]): AgendaItem[] {
   const now = new Date();
   return items
@@ -28,6 +32,7 @@ function filterAgendaForHeader(items: AgendaItem[]): AgendaItem[] {
       const metadata = item.metadata as Record<string, unknown> | null;
       const agendaType = metadata?.agenda_type as string | undefined;
       if (agendaType === 'event_date') return false;
+      // Fallback: registros sin metadata → excluir promise sin type_scheduling; incluir resto
       if (!agendaType && item.contexto === 'promise' && !item.type_scheduling) return false;
       if (item.contexto === 'promise' && item.type_scheduling) return true;
       if (item.contexto === 'evento') return true;

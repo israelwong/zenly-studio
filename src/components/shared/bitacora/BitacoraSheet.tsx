@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Trash2, MessageSquare } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import {
   Sheet,
   SheetContent,
@@ -193,6 +194,7 @@ export function BitacoraSheet({
                   const canDelete = isUserNote(log);
                   const authorLabel = log.user?.full_name || (canDelete ? 'Tú' : 'Sistema');
                   const isSystem = !canDelete;
+                  const isWhatsApp = log.log_type === 'whatsapp_sent';
 
                   return (
                     <div
@@ -205,6 +207,9 @@ export function BitacoraSheet({
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5">
+                            {isWhatsApp && (
+                              <WhatsAppIcon className="h-3.5 w-3.5 text-emerald-400 shrink-0" size={14} />
+                            )}
                             <span className={cn(
                               "text-xs font-medium",
                               isSystem ? "text-zinc-500" : "text-zinc-300"

@@ -40,7 +40,16 @@ export {
 export type { PromiseLogTemplate } from './promise-log-templates.actions';
 
 export {
+  getWhatsAppTemplates,
+  createWhatsAppTemplate,
+  updateWhatsAppTemplate,
+  deleteWhatsAppTemplate,
+} from './whatsapp-templates.actions';
+export type { WhatsAppTemplate } from './whatsapp-templates.actions';
+
+export {
   logWhatsAppSent,
+  logWhatsAppSentWithMessage,
   logCallMade,
   logProfileShared,
   logEmailSent,

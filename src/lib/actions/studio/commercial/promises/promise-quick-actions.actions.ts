@@ -1,5 +1,6 @@
 'use server';
 
+import { prisma } from '@/lib/prisma';
 import { logPromiseAction } from './promise-logs.actions';
 import { getPromiseById } from './promise-logs.actions';
 
@@ -38,6 +39,51 @@ export async function logWhatsAppSent(
     return { success: true, data: { logged: true } };
   } catch (error) {
     console.error('[PROMISE_QUICK_ACTIONS] Error registrando WhatsApp:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al registrar WhatsApp',
+    };
+  }
+}
+
+/**
+ * Registrar envío de WhatsApp con el texto completo enviado (para bitácora).
+ * Crea un log con log_type 'whatsapp_sent' y content = mensaje completo.
+ */
+export async function logWhatsAppSentWithMessage(
+  studioSlug: string,
+  promiseId: string,
+  contactName: string,
+  phone: string,
+  messageText: string
+): Promise<ActionResponse<{ logged: boolean }>> {
+  try {
+    const promise = await prisma.studio_promises.findUnique({
+      where: { id: promiseId },
+      select: { studio_id: true },
+    });
+    if (!promise) {
+      return { success: false, error: 'Promesa no encontrada' };
+    }
+    const studio = await prisma.studios.findUnique({
+      where: { id: promise.studio_id },
+      select: { slug: true },
+    });
+    if (!studio || studio.slug !== studioSlug) {
+      return { success: false, error: 'Estudio no coincide' };
+    }
+    await prisma.studio_promise_logs.create({
+      data: {
+        promise_id: promiseId,
+        user_id: null,
+        content: messageText.trim() || `WhatsApp enviado a ${contactName}`,
+        log_type: 'whatsapp_sent',
+        metadata: { contactName, phone },
+      },
+    });
+    return { success: true, data: { logged: true } };
+  } catch (error) {
+    console.error('[PROMISE_QUICK_ACTIONS] Error registrando WhatsApp con mensaje:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al registrar WhatsApp',
