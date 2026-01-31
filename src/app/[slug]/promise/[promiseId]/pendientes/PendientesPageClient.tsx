@@ -17,7 +17,6 @@ import { autorizarCotizacionPublica } from '@/lib/actions/public/cotizaciones.ac
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { usePromisePageContext } from '@/components/promise/PromisePageContext';
-import { trackPromisePageView } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 import { usePromiseNavigation } from '@/hooks/usePromiseNavigation';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
@@ -150,36 +149,6 @@ export function PendientesPageClient({
     }
     setSessionId(storedSessionId);
   }, [promiseId, studio.id]);
-
-  // Tracking de visita a la página
-  const lastTrackTimeRef = useRef<number>(0);
-
-  useEffect(() => {
-    if (!sessionId || !studio.id) {
-      return;
-    }
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const isPreview = urlParams.get('preview') === 'true';
-
-    if (isPreview) {
-      return;
-    }
-
-    const now = Date.now();
-    const timeSinceLastTrack = now - lastTrackTimeRef.current;
-
-    if (timeSinceLastTrack < 500) {
-      return;
-    }
-
-    lastTrackTimeRef.current = now;
-
-    trackPromisePageView(studio.id, promiseId, sessionId, isPreview)
-      .catch((error) => {
-        console.error('[PendientesPageClient] Error al registrar visita:', error);
-      });
-  }, [sessionId, promiseId, studio.id]);
 
   const handleSettingsUpdated = useCallback((settings: PromiseShareSettings) => {
     setShareSettings(settings);

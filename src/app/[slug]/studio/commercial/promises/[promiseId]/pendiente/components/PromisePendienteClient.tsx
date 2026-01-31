@@ -9,6 +9,7 @@ import { EventFormModal } from '@/components/shared/promises';
 import { AuthorizeCotizacionModal } from './cotizaciones/AuthorizeCotizacionModal';
 import { QuickNoteCard } from '../../components/QuickNoteCard';
 import { SeguimientoMinimalCard } from '../../components/SeguimientoMinimalCard';
+import { PromiseAppointmentCard } from './PromiseAppointmentCard';
 import { usePromiseContext } from '../../context/PromiseContext';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
@@ -254,12 +255,15 @@ export function PromisePendienteClient({
             />
           </div>
 
-          {/* Columna 3: Bitácora (prioridad) + Lo que el prospecto ve */}
-          <div className="lg:col-span-1 flex flex-col h-full min-h-0 gap-4">
+          {/* Columna 3: Recordatorio → Cita → Bitácora → Lo que el prospecto ve (colapsable) */}
+          <div className="lg:col-span-1 flex flex-col gap-4">
             <SeguimientoMinimalCard studioSlug={studioSlug} promiseId={promiseId} />
-            <div className="flex-1 min-h-0 flex flex-col">
-              <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
-            </div>
+            <PromiseAppointmentCard
+              studioSlug={studioSlug}
+              promiseId={promiseId}
+              eventoId={eventoId}
+            />
+            <QuickNoteCard studioSlug={studioSlug} promiseId={promiseId} initialLastLogs={initialLastLogs} />
             <Suspense fallback={<SidebarSkeleton />}>
               <PromisePublicConfigCard
                 studioSlug={studioSlug}

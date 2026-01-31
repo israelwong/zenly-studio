@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
-import { AgendaButton } from './AgendaButton';
 import { WhatsAppIcon } from '@/components/ui/icons/WhatsAppIcon';
 import { logWhatsAppSent, logProfileShared } from '@/lib/actions/studio/commercial/promises';
 import { getOrCreateShortUrl } from '@/lib/actions/studio/commercial/promises/promise-short-url.actions';
@@ -17,7 +16,6 @@ interface PromiseDetailToolbarProps {
     contactName: string;
     phone: string;
   } | null;
-  eventoId?: string | null;
   onCopyLink?: () => void;
   onPreview: () => void;
 }
@@ -26,7 +24,6 @@ export function PromiseDetailToolbar({
   studioSlug,
   promiseId,
   contactData,
-  eventoId,
   onCopyLink,
   onPreview,
 }: PromiseDetailToolbarProps) {
@@ -173,13 +170,6 @@ export function PromiseDetailToolbar({
           </div>
         )}
 
-      </div>
-      <div className="flex items-center gap-1.5">
-        <AgendaButton
-          studioSlug={studioSlug}
-          promiseId={promiseId}
-          eventoId={eventoId}
-        />
       </div>
     </div>
   );

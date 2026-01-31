@@ -27,7 +27,7 @@ export function useAgendaCount({
     const [error, setError] = useState<string | null>(null);
 
     const loadCount = useCallback(async () => {
-        if (!enabled || !studioSlug) {
+        if (!studioSlug) {
             setLoading(false);
             return;
         }
@@ -49,7 +49,7 @@ export function useAgendaCount({
         } finally {
             setLoading(false);
         }
-    }, [studioSlug, enabled]);
+    }, [studioSlug]);
 
     // ✅ OPTIMIZACIÓN: Solo hacer fetch si no hay datos iniciales
     useEffect(() => {
@@ -58,10 +58,8 @@ export function useAgendaCount({
         }
     }, [loadCount, initialCount]);
 
-    // Escuchar eventos de actualización de agenda
+    // Siempre escuchar agenda-updated para actualizar el conteo (crear/cancelar cita, etc.)
     useEffect(() => {
-        if (!enabled) return;
-
         const handleAgendaUpdate = () => {
             loadCount();
         };
@@ -70,7 +68,7 @@ export function useAgendaCount({
         return () => {
             window.removeEventListener('agenda-updated', handleAgendaUpdate);
         };
-    }, [enabled, loadCount]);
+    }, [loadCount]);
 
     return {
         count,

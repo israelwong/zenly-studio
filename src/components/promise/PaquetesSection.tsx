@@ -10,7 +10,6 @@ import { PaqueteDetailSheet } from './PaqueteDetailSheet';
 import { ComparadorButton } from './ComparadorButton';
 import { getTotalServicios, getFirstServicios } from '@/lib/utils/public-promise';
 import { cn } from '@/lib/utils';
-import { trackPaqueteClick } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 import { formatPackagePriceSimple } from '@/lib/utils/package-price-formatter';
 
 interface CondicionComercial {
@@ -162,25 +161,6 @@ export function PaquetesSection({
 
     const handlePaqueteClick = (paquete: PublicPaquete) => {
         setSelectedPaquete(paquete);
-        
-        // Trackear click si tenemos studioId y sessionId
-        if (studioId && sessionId) {
-            trackPaqueteClick(
-                studioId,
-                promiseId,
-                paquete.id,
-                paquete.name,
-                sessionId
-            )
-                .then((result) => {
-                    if (!result.success) {
-                        console.error('[PaquetesSection] Tracking failed:', result.error);
-                    }
-                })
-                .catch((error) => {
-                    console.error('[PaquetesSection] Failed to track click:', error);
-                });
-        }
     };
     const [activeIndex, setActiveIndex] = useState(0);
     const [autoplayEnabled, setAutoplayEnabled] = useState(true);

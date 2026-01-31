@@ -19,7 +19,6 @@ import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promi
 import type { PublicCotizacion, PublicPaquete } from '@/types/public-promise';
 import { PromisePageProvider, usePromisePageContext } from './PromisePageContext';
 import { ProgressOverlay } from './ProgressOverlay';
-import { trackPromisePageView } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 import { formatDisplayDateLong } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
 
@@ -142,38 +141,6 @@ function PromisePageContent({
     }
     setSessionId(storedSessionId);
   }, [promiseId]);
-
-  // Tracking de visita a la página (cada vez que se carga/refresca, solo si NO es preview)
-  const lastTrackTimeRef = useRef<number>(0);
-
-  useEffect(() => {
-    if (!sessionId || !studio.id) return;
-
-    // Detectar si es preview mode desde URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const isPreview = urlParams.get('preview') === 'true';
-
-    if (isPreview) {
-      return;
-    }
-
-    // Evitar múltiples tracks muy cercanos (menos de 500ms) para prevenir duplicados en re-renders
-    const now = Date.now();
-    const timeSinceLastTrack = now - lastTrackTimeRef.current;
-
-    if (timeSinceLastTrack < 500) {
-      return;
-    }
-
-    // Marcar tiempo de tracking
-    lastTrackTimeRef.current = now;
-
-    // Registrar visita (cada refresh cuenta como nueva visita)
-    trackPromisePageView(studio.id, promiseId, sessionId, isPreview)
-      .catch((error) => {
-        console.error('[PromisePageClient] Error al registrar visita:', error);
-      });
-  }, [sessionId, promiseId, studio.id]);
 
   // Restaurar estado cuando hay un error en el proceso
   useEffect(() => {

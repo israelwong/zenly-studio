@@ -68,10 +68,10 @@ export function AppHeader({
     const identidadData = initialIdentidadData || hookIdentidadData;
     const commercialNameShort = useCommercialNameShort();
     // ✅ OPTIMIZACIÓN: Pasar initialCount a los hooks para evitar POSTs en mount
-    const { count: hookAgendaCount } = useAgendaCount({ 
-        studioSlug, 
-        initialCount: initialAgendaCount, // ✅ Pre-cargado en servidor
-        enabled: initialAgendaCount === undefined, // Solo habilitar si no hay datos iniciales
+    const { count: hookAgendaCount } = useAgendaCount({
+        studioSlug,
+        initialCount: initialAgendaCount,
+        enabled: initialAgendaCount === undefined,
     });
     const { count: hookRemindersCount } = useRemindersCount({ 
         studioSlug, 
@@ -85,7 +85,8 @@ export function AppHeader({
         window.addEventListener('reminder-updated', handler);
         return () => window.removeEventListener('reminder-updated', handler);
     }, []);
-    const agendaCount = initialAgendaCount !== undefined ? initialAgendaCount : hookAgendaCount;
+    // Usar conteo del hook (se actualiza con agenda-updated); valor inicial viene de initialAgendaCount
+    const agendaCount = hookAgendaCount;
     const remindersCount = remindersInvalidated ? hookRemindersCount : (initialRemindersCount ?? hookRemindersCount);
 
     useEffect(() => {

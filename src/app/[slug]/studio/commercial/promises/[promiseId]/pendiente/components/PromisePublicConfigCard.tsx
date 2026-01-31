@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Settings2 } from 'lucide-react';
-import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton } from '@/components/ui/zen';
+import { Settings2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ZenCard, ZenCardHeader, ZenCardContent, ZenButton } from '@/components/ui/zen';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/shadcn/collapsible';
 import { getPromiseShareSettings, type PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 import { PublicConfigList } from './PublicConfigList';
+import { cn } from '@/lib/utils';
 
 type ShareSettingsData = PromiseShareSettings & { has_cotizacion?: boolean; remember_preferences?: boolean };
 
@@ -31,6 +33,7 @@ export function PromisePublicConfigCard({
   const hasInitialData = initialShareSettingsProp != null;
   const [loading, setLoading] = useState(!hasInitialData);
   const [settings, setSettings] = useState<ShareSettingsData | null>(initialShareSettingsProp);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!hasInitialData) {
@@ -75,30 +78,55 @@ export function PromisePublicConfigCard({
     auto_generate_contract: s?.auto_generate_contract ?? false,
   };
 
-  const openConfigModal = () => window.dispatchEvent(new CustomEvent('open-share-options-modal'));
+  const openConfigModal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.dispatchEvent(new CustomEvent('open-share-options-modal'));
+  };
+
+  const totalAjustes =
+    2 + // Vista general
+    (configProps.show_packages ? 2 : 0) + // Precios (recálculo + redondeo)
+    4 + // Info cotización
+    2; // Contratación
 
   return (
-    <ZenCard variant="outlined" className="border-zinc-800">
-      <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 flex-shrink-0">
-        <div className="flex items-center justify-between gap-2">
-          <ZenCardTitle className="text-sm font-medium">
-            Lo que el prospecto ve
-          </ZenCardTitle>
+    <Collapsible open={open} onOpenChange={setOpen} defaultOpen={false}>
+      <ZenCard variant="outlined" className="border-zinc-800">
+        <div className="flex items-center justify-between gap-2 py-2 px-3 border-b border-zinc-800">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'flex-1 flex items-center gap-2 text-left rounded transition-colors min-w-0',
+                'hover:bg-zinc-800/50 py-0.5 -my-0.5 px-1 -mx-1'
+              )}
+            >
+              <span className="text-sm font-medium text-zinc-300 truncate">
+                {totalAjustes} ajustes activos
+              </span>
+              {open ? (
+                <ChevronUp className="h-4 w-4 text-zinc-400 shrink-0" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-zinc-400 shrink-0" />
+              )}
+            </button>
+          </CollapsibleTrigger>
           <ZenButton
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={openConfigModal}
-            className="gap-1.5 px-2 py-1 h-7 text-xs border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-            title="Configurar opciones de automatización"
+            className="gap-1 px-1.5 py-0.5 h-6 text-[11px] border-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 shrink-0"
+            title="Configurar"
           >
-            <Settings2 className="h-3.5 w-3.5 shrink-0" />
-            <span>Configurar</span>
+            <Settings2 className="h-3 w-3" />
           </ZenButton>
         </div>
-      </ZenCardHeader>
-      <ZenCardContent className="p-3">
-        <PublicConfigList {...configProps} />
-      </ZenCardContent>
-    </ZenCard>
+        <CollapsibleContent>
+          <ZenCardContent className="p-3 border-t-0">
+            <PublicConfigList {...configProps} />
+          </ZenCardContent>
+        </CollapsibleContent>
+      </ZenCard>
+    </Collapsible>
   );
 }

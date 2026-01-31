@@ -5,7 +5,6 @@ import { ChevronRight, Tag as TagIcon, Sparkles } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenBadge } from '@/components/ui/zen';
 import type { PublicCotizacion } from '@/types/public-promise';
 import { CotizacionDetailSheet } from './CotizacionDetailSheet';
-import { trackCotizacionClick } from '@/lib/actions/studio/commercial/promises/promise-analytics.actions';
 
 interface CondicionComercial {
   id: string;
@@ -78,27 +77,7 @@ export function CotizacionesSection({
 
   // Manejar click en cotización
   const handleCotizacionClick = (cotizacion: PublicCotizacion) => {
-    // Abrir sheet de detalle
     setSelectedCotizacion(cotizacion);
-
-    // Trackear click si tenemos studioId y sessionId
-    if (studioId && sessionId) {
-      trackCotizacionClick(
-        studioId,
-        promiseId,
-        cotizacion.id,
-        cotizacion.name,
-        sessionId
-      )
-        .then((result) => {
-          if (!result.success) {
-            console.error('[CotizacionesSection] Tracking failed:', result.error);
-          }
-        })
-        .catch((error) => {
-          console.error('[CotizacionesSection] Failed to track click:', error);
-        });
-    }
   };
 
   // Ordenar cotizaciones por order antes de renderizar
