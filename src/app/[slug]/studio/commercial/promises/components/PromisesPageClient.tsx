@@ -4,8 +4,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { UserSearch, Plus, AlertTriangle, Trash2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenCardHeader, ZenCardTitle, ZenCardDescription, ZenButton, ZenConfirmModal } from '@/components/ui/zen';
 import { PromisesKanbanClient } from './PromisesKanbanClient';
-// ✅ OPTIMIZACIÓN: Eliminado import de getTestPromisesCount - ya viene del servidor
-import { deleteTestPromises } from '@/lib/actions/studio/commercial/promises/promises.actions';
+import { deleteTestPromises, getTestPromisesCount } from '@/lib/actions/studio/commercial/promises/promises.actions';
 import { toast } from 'sonner';
 import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 
@@ -15,21 +14,18 @@ interface PromisesPageClientProps {
   studioSlug: string;
   initialPromises: PromiseWithContact[];
   initialPipelineStages: PipelineStage[];
-  initialTestPromisesCount?: number; // ✅ OPTIMIZACIÓN: Pasar desde servidor
-  initialUserId?: string | null; // ✅ OPTIMIZACIÓN: Pasar desde servidor
+  initialUserId?: string | null;
 }
 
 export function PromisesPageClient({
   studioSlug,
   initialPromises,
   initialPipelineStages,
-  initialTestPromisesCount = 0, // ✅ OPTIMIZACIÓN: Usar valor del servidor
-  initialUserId, // ✅ OPTIMIZACIÓN: Usar userId del servidor
+  initialUserId,
 }: PromisesPageClientProps) {
   const openPromiseFormRef = useRef<(() => void) | null>(null);
   const removeTestPromisesRef = useRef<(() => void) | null>(null);
-  // ✅ OPTIMIZACIÓN: Inicializar con valor del servidor (no hacer POST adicional)
-  const [testPromisesCount, setTestPromisesCount] = useState(initialTestPromisesCount);
+  const [testPromisesCount, setTestPromisesCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -37,7 +33,16 @@ export function PromisesPageClient({
     document.title = 'Zenly Studio - Promesas';
   }, []);
 
-  // ✅ OPTIMIZACIÓN: Ya no se carga desde el cliente, viene del servidor
+  // ✅ Defer: cargar conteo de promesas de prueba después del montaje para reducir ráfaga inicial
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const result = await getTestPromisesCount(studioSlug).catch(() => ({ success: false as const, count: 0 }));
+      if (result.success && result.count != null) {
+        setTestPromisesCount(result.count);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [studioSlug]);
 
   const handleOpenPromiseForm = () => {
     if (openPromiseFormRef.current) {

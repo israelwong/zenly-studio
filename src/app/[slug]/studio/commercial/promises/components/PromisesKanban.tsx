@@ -34,6 +34,7 @@ import type { PromiseWithContact, PipelineStage } from '@/lib/actions/schemas/pr
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { getSystemStageName, isTerminalStage } from '@/lib/utils/pipeline-stage-names';
+import { getPromisePath } from '@/lib/utils/promise-navigation';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises/promise-tags.actions';
 import { formatDisplayDateShort } from '@/lib/utils/date-formatter';
 import { toUtcDateOnly } from '@/lib/utils/date-only';
@@ -643,23 +644,17 @@ function PromisesKanban({
   };
 
   const handlePromiseClick = (promise: PromiseWithContact) => {
-    // Usar promiseId si está disponible, de lo contrario usar contactId como fallback
     const routeId = promise.promise_id || promise.id;
-    
-    // Cerrar overlays globales (RemindersSideSheet, etc.) antes de navegar
+
     window.dispatchEvent(new CustomEvent('close-overlays'));
-    
-    // Activar flag de navegación para prevenir revalidaciones
+
     if (setIsNavigating) {
       setIsNavigating(routeId);
     }
 
-    // Usar startTransition para dar prioridad a la navegación sobre actualizaciones de fondo
     startTransition(() => {
-      router.push(`/${studioSlug}/studio/commercial/promises/${routeId}`);
-      
-      // Limpiar flag después de un delay para permitir que la navegación se complete
-      // Next.js manejará la transición, pero mantenemos el flag por seguridad
+      router.push(getPromisePath(studioSlug, promise));
+
       setTimeout(() => {
         if (setIsNavigating) {
           setIsNavigating(null);

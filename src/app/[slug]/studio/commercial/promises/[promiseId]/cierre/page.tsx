@@ -1,37 +1,30 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { determinePromiseState } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
+import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
+import { CierrePageInner } from './components/CierrePageInner';
 
-import { useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { startTransition } from 'react';
-import { usePromiseContext } from '../context/PromiseContext';
-import { PromiseCierreClient } from './components/PromiseCierreClient';
+interface PromiseCierrePageProps {
+  params: Promise<{
+    slug: string;
+    promiseId: string;
+  }>;
+}
 
 /**
- * Página cierre: datos vienen del layout (una sola carga).
- * Evita doble fetch que causaba "cargar → refrescar → cargar todo".
+ * Cadenero: si la promesa no está en cierre, redirect a la sub-ruta correcta.
+ * Si está en cierre, renderiza el contenido (datos vienen del layout).
  */
-export default function PromiseCierrePage() {
-  const params = useParams();
-  const router = useRouter();
-  const { cotizacionEnCierre, promiseState } = usePromiseContext();
-  const studioSlug = params.slug as string;
-  const promiseId = params.promiseId as string;
+export default async function PromiseCierrePage({ params }: PromiseCierrePageProps) {
+  const { slug: studioSlug, promiseId } = await params;
 
-  useEffect(() => {
-    if (!promiseState) return;
-    if (promiseState === 'pendiente') {
-      startTransition(() => router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/pendiente`));
-      return;
-    }
-    if (promiseState === 'autorizada') {
-      startTransition(() => router.replace(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`));
-      return;
-    }
-  }, [promiseState, studioSlug, promiseId, router]);
+  const stateResult = await determinePromiseState(promiseId);
 
-  if (promiseState === 'pendiente' || promiseState === 'autorizada') {
-    return null;
+  if (stateResult.success && stateResult.data) {
+    const state = stateResult.data.state;
+    if (state !== 'cierre') {
+      redirect(getPromisePathFromState(studioSlug, promiseId, state));
+    }
   }
 
-  return <PromiseCierreClient initialCotizacionEnCierre={cotizacionEnCierre ?? null} />;
+  return <CierrePageInner />;
 }

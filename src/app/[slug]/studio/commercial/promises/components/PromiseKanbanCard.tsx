@@ -12,13 +12,13 @@ import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { deletePromise } from '@/lib/actions/studio/commercial/promises';
-import { getReminderByPromise, type Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
+import type { Reminder } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 import { toast } from 'sonner';
-import { obtenerAgendamientoPorPromise } from '@/lib/actions/shared/agenda-unified.actions';
-import { getCotizacionesByPromiseId, type CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import { createStageNameMap, getCotizacionStatusDisplayName, isTerminalStage, getTerminalColor } from '@/lib/utils/pipeline-stage-names';
+import { getPromisePath } from '@/lib/utils/promise-navigation';
 
 interface PromiseKanbanCardProps {
     promise: PromiseWithContact;
@@ -131,96 +131,6 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
             setFallbackTags(promise.tags as PromiseTag[]);
         }
     }, [promise.tags]);
-
-    // ✅ AISLAMIENTO: Comentado temporalmente para eliminar POSTs - los datos vienen del servidor
-    // useEffect(() => {
-    //     const promiseId = promise.promise_id;
-    //     if (!promiseId || !studioSlug) return;
-
-    //     // Solo cargar si no vienen en la promesa
-    //     if (promise.tags && promise.agenda !== undefined && promise.cotizaciones_count !== undefined) {
-    //         return; // Ya tenemos los datos
-    //     }
-
-    //     const loadData = async () => {
-    //         // Cargar etiquetas solo si no vienen
-    //         if (!promise.tags) {
-    //             try {
-    //                 const tagsResult = await getPromiseTagsByPromiseId(promiseId);
-    //                 if (tagsResult.success && tagsResult.data) {
-    //                     setFallbackTags(tagsResult.data);
-    //                 }
-    //             } catch (error) {
-    //                 console.error('Error loading tags:', error);
-    //             }
-    //         }
-
-    //         // Cargar agendamiento solo si no viene
-    //         if (promise.agenda === undefined) {
-    //             try {
-    //                 const agendaResult = await obtenerAgendamientoPorPromise(studioSlug, promiseId);
-    //                 if (agendaResult.success && agendaResult.data) {
-    //                     setFallbackAgendamiento(agendaResult.data);
-    //                 }
-    //             } catch (error) {
-    //                 console.error('Error loading agendamiento:', error);
-    //             }
-    //         }
-
-    //         // Cargar cotizaciones solo si no viene
-    //         if (promise.cotizaciones_count === undefined) {
-    //             try {
-    //                 const cotizacionesResult = await getCotizacionesByPromiseId(promiseId);
-    //                 if (cotizacionesResult.success && cotizacionesResult.data) {
-    //                     setFallbackCotizacionesCount(cotizacionesResult.data.length);
-    //                     setFallbackCotizaciones(cotizacionesResult.data);
-    //                 }
-    //             } catch (error) {
-    //                 console.error('Error loading cotizaciones:', error);
-    //             }
-    //         }
-
-    //         // Cargar recordatorio (reminder) si existe
-    //         if (studioSlug) {
-    //             try {
-    //                 const reminderResult = await getReminderByPromise(studioSlug, promiseId);
-    //                 if (reminderResult.success && reminderResult.data && !reminderResult.data.is_completed) {
-    //                     setReminder(reminderResult.data);
-    //                 }
-    //             } catch (error) {
-    //                 console.error('Error loading reminder:', error);
-    //             }
-    //         }
-    //     };
-
-    //     loadData();
-    // }, [promise.promise_id, studioSlug, promise.tags, promise.agenda, promise.cotizaciones_count]);
-
-    // ✅ AISLAMIENTO: Comentado - reminder viene en la promesa
-    // useEffect(() => {
-    //     const promiseId = promise.promise_id;
-    //     if (!promiseId || !studioSlug) {
-    //         setReminder(null);
-    //         return;
-    //     }
-
-    //     const loadReminder = async () => {
-    //         try {
-    //             const reminderResult = await getReminderByPromise(studioSlug, promiseId);
-    //             if (reminderResult.success && reminderResult.data && !reminderResult.data.is_completed) {
-    //                 setReminder(reminderResult.data);
-    //             } else {
-    //                 setReminder(null);
-    //             }
-    //         } catch (error) {
-    //             console.error('Error loading reminder:', error);
-    //             setReminder(null);
-    //         }
-    //     };
-
-    //     loadReminder();
-    // }, [promise.promise_id, studioSlug]);
-
 
     // Validar si un agendamiento tiene una cita válida (con date y type_scheduling)
     const hasValidCita = (agenda: AgendaItem | null): boolean => {
@@ -359,7 +269,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     };
 
     const promiseId = promise.promise_id || promise.id;
-    const href = studioSlug ? `/${studioSlug}/studio/commercial/promises/${promiseId}` : '#';
+    const href = studioSlug ? getPromisePath(studioSlug, promise) : '#';
 
     // Tinte dinámico: prioridad 1 terminal (getTerminalColor), prioridad 2 primera etiqueta
     const stageSlug = promise.promise_pipeline_stage?.slug;

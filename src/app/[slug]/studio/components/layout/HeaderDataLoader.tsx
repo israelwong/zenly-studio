@@ -120,8 +120,8 @@ export function HeaderDataLoader({ studioSlug, onDataLoaded }: HeaderDataLoaderP
       }
     };
 
-    // Cargar después de un pequeño delay para no bloquear el render inicial
-    const timer = setTimeout(loadData, 100);
+    // ✅ Retrasar carga para no sumar a la ráfaga inicial (p. ej. Kanban: 3 requests). Evita "Too many requests".
+    const timer = setTimeout(loadData, 400);
     return () => clearTimeout(timer);
   }, [studioSlug, onDataLoaded, hasLoaded, isReady]);
 

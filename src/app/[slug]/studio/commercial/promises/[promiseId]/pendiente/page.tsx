@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { determinePromiseState } from '@/lib/actions/studio/commercial/promises/promise-state.actions';
+import { getPromisePathFromState } from '@/lib/utils/promise-navigation';
 import { obtenerCondicionesComerciales } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import { getPaymentMethodsForAuthorization } from '@/lib/actions/studio/commercial/promises/authorize-legacy.actions';
 import { getCotizacionesByPromiseId } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -18,14 +19,12 @@ interface PromisePendientePageProps {
 export default async function PromisePendientePage({ params }: PromisePendientePageProps) {
   const { slug: studioSlug, promiseId } = await params;
 
-  // Validar estado actual de la promesa y redirigir si no está en pendiente
+  // Cadenero: si la promesa no pertenece a esta página, redirect a la correcta
   const stateResult = await determinePromiseState(promiseId);
   if (stateResult.success && stateResult.data) {
     const state = stateResult.data.state;
-    if (state === 'cierre') {
-      redirect(`/${studioSlug}/studio/commercial/promises/${promiseId}/cierre`);
-    } else if (state === 'autorizada') {
-      redirect(`/${studioSlug}/studio/commercial/promises/${promiseId}/autorizada`);
+    if (state !== 'pendiente') {
+      redirect(getPromisePathFromState(studioSlug, promiseId, state));
     }
   }
 

@@ -75,11 +75,12 @@ export function PromisesKanbanClient({
   }, []);
 
   const handlePromiseDeleted = useCallback((promiseId: string) => {
-    // No procesar si estamos navegando
     if (isNavigatingRef.current) return;
 
     console.log('[PromisesKanbanClient] Promesa eliminada:', promiseId);
-    setPromises((prev) => prev.filter((p) => p.promise_id !== promiseId));
+    startTransition(() => {
+      setPromises((prev) => prev.filter((p) => p.promise_id !== promiseId));
+    });
   }, []);
 
   // ✅ OPTIMIZACIÓN: Suscribirse a cambios en tiempo real (una sola instancia)
