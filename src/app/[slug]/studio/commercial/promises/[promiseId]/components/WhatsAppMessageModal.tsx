@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Library, MoreVertical, Copy, Trash2 } from 'lucide-react';
+import { MoreVertical, Copy, Trash2, ChevronDown, ChevronRight, Eye, Plus, Loader2 } from 'lucide-react';
 import { ZenDialog, ZenButton, ZenInput, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem } from '@/components/ui/zen';
 import {
   getWhatsAppTemplates,
@@ -12,8 +12,10 @@ import {
   duplicateWhatsAppTemplate,
 } from '@/lib/actions/studio/commercial/promises';
 import { getOrCreateShortUrl, getOrCreatePortfolioShortUrl } from '@/lib/actions/studio/commercial/promises/promise-short-url.actions';
-import { getPortfoliosForWhatsApp } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
-import type { PortfolioForWhatsApp } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.types';
+import { getPortfoliosForWhatsApp, getPortfolioFullDetail } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.actions';
+import type { PortfolioForWhatsApp, PortfolioGroup } from '@/lib/actions/studio/commercial/promises/whatsapp-resources.types';
+import type { PublicPortfolio } from '@/types/public-profile';
+import { PortfolioDetailModal } from '@/components/profile/sections/PortfolioDetailModal';
 import {
   replaceWhatsAppTemplateVariables,
   formatEventDateForWhatsApp,
@@ -96,7 +98,11 @@ export function WhatsAppMessageModal({
   eventDate = null,
 }: WhatsAppMessageModalProps) {
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
-  const [portfolios, setPortfolios] = useState<PortfolioForWhatsApp[]>([]);
+  const [portfolioGroups, setPortfolioGroups] = useState<PortfolioGroup[]>([]);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [previewPortfolio, setPreviewPortfolio] = useState<PublicPortfolio | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [loadingPreviewSlug, setLoadingPreviewSlug] = useState<string | null>(null);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [loadingResources, setLoadingResources] = useState(false);
   const [shortUrl, setShortUrl] = useState<string | null>(null);
@@ -123,12 +129,26 @@ export function WhatsAppMessageModal({
         const base = typeof window !== 'undefined' ? window.location.origin : '';
         setShortUrl(`${base}/s/${urlRes.data.shortCode}`);
       }
-      if (portRes.success && portRes.data) setPortfolios(portRes.data);
+      if (portRes.success && portRes.data) {
+        setPortfolioGroups(portRes.data);
+        const eventNameNorm = (eventName ?? '').trim().toLowerCase();
+        const toExpand = new Set<string>();
+        if (eventNameNorm) {
+          const match = portRes.data.find(
+            (g) => g.eventTypeName.trim().toLowerCase() === eventNameNorm
+          );
+          if (match) toExpand.add(match.eventTypeName);
+        }
+        if (toExpand.size === 0) {
+          portRes.data.forEach((g) => toExpand.add(g.eventTypeName));
+        }
+        setExpandedSections(toExpand);
+      }
     } finally {
       setLoadingTemplates(false);
       setLoadingResources(false);
     }
-  }, [isOpen, studioSlug, promiseId]);
+  }, [isOpen, studioSlug, promiseId, eventName]);
 
   useEffect(() => {
     if (isOpen) {
@@ -514,22 +534,40 @@ export function WhatsAppMessageModal({
     onClose();
   };
 
-  /** Vista previa: negritas, link_promesa y links de portafolio en azul */
+  /** Vista previa: negritas, links en azul tipo enlace */
+  const linkClass = 'text-blue-600 underline underline-offset-1 cursor-pointer hover:text-blue-700';
   const previewStyled = (() => {
     const segments = parseMessageToSegments(message);
     if (segments.length === 0) return '—';
     const basePortfolioUrl = `${origin}/${studioSlug}?portfolio=`;
     const portfolioUrlRe = new RegExp(`(${basePortfolioUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\s]*)`, 'g');
+    const escapedOrigin = origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const shortUrlRe = new RegExp(`(${escapedOrigin}/s/[^\\s]+)`, 'g');
     const isPortfolioUrl = (s: string) => s.includes('?portfolio=') && (s.startsWith(origin) || s.startsWith('/'));
+    const isShortUrl = (s: string) => (s.startsWith(origin) || s.startsWith('/')) && /\/s\/[^\s]+/.test(s);
+    const isLink = (s: string) => isPortfolioUrl(s) || isShortUrl(s);
+    const splitByUrls = (text: string): string[] => {
+      const byPortfolio = text.split(portfolioUrlRe);
+      const result: string[] = [];
+      for (const part of byPortfolio) {
+        if (isPortfolioUrl(part)) {
+          result.push(part);
+        } else {
+          const byShort = part.split(shortUrlRe);
+          byShort.forEach((p) => result.push(p));
+        }
+      }
+      return result;
+    };
     return segments.map((seg, i) => {
       if (seg.type === 'text') {
         if (!seg.value) return <React.Fragment key={i} />;
-        const parts = seg.value.split(portfolioUrlRe);
+        const parts = splitByUrls(seg.value);
         return (
           <React.Fragment key={i}>
             {parts.map((part, j) =>
-              isPortfolioUrl(part) ? (
-                <span key={`t-${i}-${j}`} className="text-blue-500 underline cursor-pointer">
+              isLink(part) ? (
+                <span key={`t-${i}-${j}`} className={linkClass}>
                   {part}
                 </span>
               ) : (
@@ -542,7 +580,7 @@ export function WhatsAppMessageModal({
       if (seg.type === 'portfolio_link') {
         const url = `${origin}/${studioSlug}?portfolio=${encodeURIComponent(seg.slug)}`;
         return (
-          <span key={i} className="text-blue-500 underline cursor-pointer">
+          <span key={i} className={linkClass}>
             {url}
           </span>
         );
@@ -550,7 +588,7 @@ export function WhatsAppMessageModal({
       const resolved = (vars as Record<string, string>)[seg.key] ?? `[[${seg.key}]]`;
       if (seg.key === 'link_promesa') {
         return (
-          <span key={i} className="text-blue-500 underline cursor-pointer">
+          <span key={i} className={linkClass}>
             {resolved}
           </span>
         );
@@ -691,7 +729,7 @@ export function WhatsAppMessageModal({
           </div>
         </aside>
 
-        {/* Col 2: Portafolios */}
+        {/* Col 2: Portafolios por tipo de evento */}
         <aside className="w-56 shrink-0 border-r border-zinc-800 flex flex-col bg-zinc-900/30 overflow-hidden">
           <div className="px-2.5 py-2 border-b border-zinc-800">
             <p className="text-xs font-medium text-zinc-500">Portafolios</p>
@@ -699,24 +737,93 @@ export function WhatsAppMessageModal({
           <div className="flex-1 overflow-y-auto p-2">
             {loadingResources ? (
               <p className="text-xs text-zinc-500">Cargando…</p>
-            ) : portfolios.length === 0 ? (
+            ) : portfolioGroups.length === 0 ? (
               <p className="text-xs text-zinc-500">Sin portafolios publicados</p>
             ) : (
               <ul className="space-y-1">
-                {portfolios.map((p) => (
-                  <li key={p.id}>
-                    <ZenButton
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePortfolioClick(p)}
-                      className="w-full justify-start gap-2 text-left h-auto min-h-9 py-2 px-2.5 text-sm"
-                    >
-                      <Library className="h-4 w-4 shrink-0 text-zinc-400" />
-                      <span className="truncate">{p.title}</span>
-                    </ZenButton>
-                  </li>
-                ))}
+                {portfolioGroups.map((group) => {
+                  const isExpanded = expandedSections.has(group.eventTypeName);
+                  const isHighlighted =
+                  (eventName ?? '').trim().toLowerCase() ===
+                  group.eventTypeName.trim().toLowerCase();
+                  return (
+                    <li key={group.eventTypeName}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedSections((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(group.eventTypeName)) next.delete(group.eventTypeName);
+                            else next.add(group.eventTypeName);
+                            return next;
+                          })
+                        }
+                        className={cn(
+                          'flex items-center gap-1 w-full text-left px-2 py-1.5 rounded-md text-xs font-medium transition-colors',
+                          isHighlighted ? 'bg-emerald-500/15 text-emerald-300' : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                        )}
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <span className="truncate">{group.eventTypeName}</span>
+                        <span className="shrink-0 text-zinc-500">({group.portfolios.length})</span>
+                      </button>
+                      {isExpanded && (
+                        <ul className="mt-0.5 ml-3 space-y-0.5 border-l border-zinc-700/60 pl-2">
+                          {group.portfolios.map((p) => (
+                            <li key={p.id} className="flex items-center gap-1 group/row">
+                              <span className="min-w-0 flex-1 truncate text-sm text-zinc-300" title={p.title}>
+                                {p.title}
+                              </span>
+                              <div className="flex shrink-0 opacity-70 group-hover/row:opacity-100">
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    setLoadingPreviewSlug(p.slug);
+                                    const res = await getPortfolioFullDetail(studioSlug, p.slug);
+                                    setLoadingPreviewSlug(null);
+                                    if (res.success) {
+                                      setPreviewPortfolio(res.data);
+                                      setIsPreviewOpen(true);
+                                    } else {
+                                      toast.error(res.error ?? 'Error al cargar portafolio');
+                                    }
+                                  }}
+                                  disabled={loadingPreviewSlug !== null}
+                                  className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+                                  title="Vista previa"
+                                  aria-label="Vista previa"
+                                >
+                                  {loadingPreviewSlug === p.slug ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Eye className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePortfolioClick(p);
+                                  }}
+                                  className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-emerald-400"
+                                  title="Agregar al mensaje"
+                                  aria-label="Agregar al mensaje"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -786,6 +893,18 @@ export function WhatsAppMessageModal({
           </div>
         </div>
       </div>
+
+      {/* Overlay: previsualización de portafolio sin cerrar el modal de WhatsApp */}
+      <PortfolioDetailModal
+        portfolio={previewPortfolio}
+        studioSlug={studioSlug}
+        isOpen={isPreviewOpen}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setPreviewPortfolio(null);
+        }}
+        hideShareButton
+      />
     </ZenDialog>
   );
 }

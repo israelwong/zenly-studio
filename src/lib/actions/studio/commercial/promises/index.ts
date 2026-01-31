@@ -44,6 +44,7 @@ export {
   createWhatsAppTemplate,
   updateWhatsAppTemplate,
   deleteWhatsAppTemplate,
+  duplicateWhatsAppTemplate,
 } from './whatsapp-templates.actions';
 export type { WhatsAppTemplate } from './whatsapp-templates.actions';
 

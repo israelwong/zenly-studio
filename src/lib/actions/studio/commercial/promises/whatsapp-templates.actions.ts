@@ -125,3 +125,38 @@ export async function deleteWhatsAppTemplate(
     };
   }
 }
+
+export async function duplicateWhatsAppTemplate(
+  studioSlug: string,
+  id: string
+): Promise<Result<WhatsAppTemplate>> {
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+    if (!studio) return { success: false, error: 'Estudio no encontrado' };
+
+    const original = await prisma.studio_whatsapp_templates.findFirst({
+      where: { id, studio_id: studio.id },
+    });
+    if (!original) return { success: false, error: 'Plantilla no encontrada' };
+
+    const newTitle = `Copia de ${original.title}`;
+    const created = await prisma.studio_whatsapp_templates.create({
+      data: {
+        studio_id: studio.id,
+        title: newTitle,
+        message: original.message,
+      },
+    });
+    revalidatePath(`/${studioSlug}/studio`);
+    return { success: true, data: created as WhatsAppTemplate };
+  } catch (e) {
+    console.error('[whatsapp-templates] duplicateWhatsAppTemplate:', e);
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Error al duplicar plantilla',
+    };
+  }
+}
