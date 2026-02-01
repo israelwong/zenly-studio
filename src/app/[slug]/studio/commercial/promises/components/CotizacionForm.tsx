@@ -880,23 +880,21 @@ export function CotizacionForm({
     }
   };
 
-  // Auto-expandir secciones y categorías cuando hay filtros
+  // Expandir todas las secciones y categorías al cargar el catálogo (o al filtrar)
   useEffect(() => {
-    if (filtroServicio.trim() && catalogoFiltrado.length > 0) {
+    if (catalogoFiltrado.length > 0) {
       const seccionesConResultados = new Set(catalogoFiltrado.map(seccion => seccion.id));
       setSeccionesExpandidas(seccionesConResultados);
 
       const categoriasConResultados = new Set<string>();
       catalogoFiltrado.forEach(seccion => {
         seccion.categorias.forEach(categoria => {
-          if (categoria.servicios.length > 0) {
-            categoriasConResultados.add(categoria.id);
-          }
+          categoriasConResultados.add(categoria.id);
         });
       });
       setCategoriasExpandidas(categoriasConResultados);
     }
-  }, [filtroServicio, catalogoFiltrado]);
+  }, [catalogoFiltrado]);
 
   if (cargandoCatalogo) {
     return (

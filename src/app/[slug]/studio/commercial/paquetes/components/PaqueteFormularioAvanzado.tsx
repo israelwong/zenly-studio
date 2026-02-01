@@ -119,10 +119,12 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
 
     // Inicializar datos del paquete y expandir secciones
     useEffect(() => {
-        // Si hay catálogo inicial, expandir todas las secciones
+        // Si hay catálogo inicial, expandir todas las secciones y categorías
         if (catalogo.length > 0) {
             const todasLasSecciones = new Set(catalogo.map(seccion => seccion.id));
             setSeccionesExpandidas(todasLasSecciones);
+            const todasLasCategorias = new Set(catalogo.flatMap(seccion => seccion.categorias.map(c => c.id)));
+            setCategoriasExpandidas(todasLasCategorias);
         }
 
         // Si estamos editando un paquete, cargar sus datos
