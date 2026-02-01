@@ -20,6 +20,7 @@ interface SeccionEditorModalProps {
 export interface SeccionFormData {
     id?: string;
     name: string;
+    description?: string;
 }
 
 /**
@@ -47,10 +48,12 @@ export function SeccionEditorModal({
             setFormData({
                 id: seccion.id,
                 name: seccion.name,
+                description: seccion.description ?? undefined,
             });
         } else {
             setFormData({
                 name: "",
+                description: "",
             });
         }
         setErrors({});

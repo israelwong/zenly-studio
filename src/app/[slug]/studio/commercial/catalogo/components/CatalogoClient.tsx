@@ -460,8 +460,8 @@ export function CatalogoClient({
             if (data.id) {
                 const response = await actualizarSeccion(studioSlug, {
                     id: data.id,
-                    nombre: data.name,
-                    descripcion: data.description,
+                    name: data.name,
+                    description: data.description,
                 });
                 if (!response.success) throw new Error(response.error);
 
@@ -471,16 +471,16 @@ export function CatalogoClient({
                 toast.success("Sección actualizada");
             } else {
                 const response = await crearSeccion(studioSlug, {
-                    nombre: data.name,
-                    descripcion: data.description,
+                    name: data.name,
+                    description: data.description,
                 });
                 if (!response.success) throw new Error(response.error);
 
                 if (response.data) {
                     setSecciones(prev => [...prev, {
                         id: response.data!.id,
-                        name: response.data!.nombre,
-                        order: response.data!.orden,
+                        name: response.data!.name,
+                        order: response.data!.order,
                         totalCategorias: 0,
                         totalItems: 0,
                     }]);
@@ -1323,12 +1323,13 @@ export function CatalogoClient({
                                     e.stopPropagation();
                                     handleCreateCategoria(seccion.id);
                                 }}
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                className="w-8 h-8 p-0"
+                                className="gap-1 h-5 px-1.5 py-1 text-[11px] text-blue-400 hover:text-blue-200 border-blue-500/50 hover:border-blue-400/60"
                                 title="Agregar categoría"
                             >
-                                <Plus className="w-4 h-4" />
+                                <Plus className="size-[10px] shrink-0" />
+                                Categoría
                             </ZenButton>
                             <ZenDropdownMenu>
                                 <ZenDropdownMenuTrigger asChild>
@@ -1370,7 +1371,7 @@ export function CatalogoClient({
                                         onClick={() => handleCreateCategoria(seccion.id)}
                                         className="mt-2"
                                     >
-                                        <Plus className="h-4 w-4 mr-2" />
+                                        <Plus className="size-[12px] shrink-0" />
                                         Crear categoría
                                     </ZenButton>
                                 </div>
@@ -1511,12 +1512,13 @@ export function CatalogoClient({
                                 e.stopPropagation();
                                 handleCreateItem(categoria.id);
                             }}
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            className="w-8 h-8 p-0"
+                            className="gap-1 h-5 px-1.5 py-1 text-[11px] text-blue-400 hover:text-blue-200 border-blue-500/50 hover:border-blue-400/60"
                             title="Agregar item"
                         >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="size-[10px] shrink-0" />
+                            Item
                         </ZenButton>
                         <ZenDropdownMenu>
                             <ZenDropdownMenuTrigger asChild>
@@ -1640,19 +1642,24 @@ export function CatalogoClient({
                 onSaved={() => getServiceLinks(studioSlug).then(r => r.success && r.data && setServiceLinksMap(r.data))}
             />
 
-            {isSelectionMode && (
-                <SmartLinkBar
-                    selectedCount={selectedIds.length}
-                    selectedItems={selectedIds.map((id) => {
-                        const it = Object.values(itemsData).flat().find((i) => i.id === id);
-                        return it ? { id: it.id, name: it.name } : { id, name: id };
-                    })}
-                    existingGroupSourceId={existingGroupSourceId}
-                    onCancel={() => {
-                        setIsSelectionMode(false);
-                        setSelectedIds([]);
-                        setSelectedSectionId(null);
-                    }}
+            <SmartLinkBar
+                isSelectionMode={isSelectionMode}
+                onActivate={() => {
+                    setIsSelectionMode(true);
+                    setSelectedIds([]);
+                    setSelectedSectionId(null);
+                }}
+                selectedCount={selectedIds.length}
+                selectedItems={selectedIds.map((id) => {
+                    const it = Object.values(itemsData).flat().find((i) => i.id === id);
+                    return it ? { id: it.id, name: it.name } : { id, name: id };
+                })}
+                existingGroupSourceId={existingGroupSourceId}
+                onCancel={() => {
+                    setIsSelectionMode(false);
+                    setSelectedIds([]);
+                    setSelectedSectionId(null);
+                }}
                     onConfirm={async (parentId) => {
                         const linkedIds = selectedIds.filter((id) => id !== parentId);
                         if (linkedIds.length === 0) return;
@@ -1694,32 +1701,14 @@ export function CatalogoClient({
                             setIsSavingLinks(false);
                         }
                     }}
-                    isSaving={isSavingLinks}
-                />
-            )}
+                isSaving={isSavingLinks}
+            />
 
             <div className="space-y-4">
                 {/* Header con botón de crear sección */}
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-white">Diseña la estructura de tu catálogo comercial</h3>
                     <div className="flex items-center gap-2">
-                        <ZenButton
-                            onClick={() => {
-                                setIsSelectionMode((prev) => {
-                                    if (!prev) {
-                                        setSelectedIds([]);
-                                        setSelectedSectionId(null);
-                                    }
-                                    return !prev;
-                                });
-                            }}
-                            variant={isSelectionMode ? 'default' : 'outline'}
-                            size="sm"
-                            className={isSelectionMode ? 'bg-emerald-600 hover:bg-emerald-500' : ''}
-                        >
-                            <Link className="w-4 h-4" />
-                            {isSelectionMode ? 'Salir Smart Link' : 'Activar Smart Link'}
-                        </ZenButton>
                         <ZenButton
                             onClick={handleCreateSeccion}
                             variant="outline"

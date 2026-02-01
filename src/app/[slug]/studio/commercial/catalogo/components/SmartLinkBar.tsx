@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, Link2Off, X } from 'lucide-react';
 import { ZenButton } from '@/components/ui/zen';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
@@ -12,6 +13,8 @@ export interface SmartLinkItem {
 }
 
 interface SmartLinkBarProps {
+  isSelectionMode: boolean;
+  onActivate: () => void;
   selectedCount: number;
   selectedItems: SmartLinkItem[];
   existingGroupSourceId: string | null;
@@ -22,6 +25,8 @@ interface SmartLinkBarProps {
 }
 
 export function SmartLinkBar({
+  isSelectionMode,
+  onActivate,
   selectedCount,
   selectedItems,
   existingGroupSourceId,
@@ -32,7 +37,9 @@ export function SmartLinkBar({
 }: SmartLinkBarProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [parentId, setParentId] = useState<string>(selectedItems[0]?.id ?? '');
+  const [mounted, setMounted] = useState(false);
 
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (popoverOpen && selectedItems.length > 0) {
       setParentId(selectedItems[0].id);
@@ -50,13 +57,39 @@ export function SmartLinkBar({
     setPopoverOpen(false);
   };
 
-  return (
+  if (!mounted) return null;
+
+  const content = !isSelectionMode ? (
     <div
       className={cn(
-        'fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999]',
+        'fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999]',
+        'transition-all duration-300 rounded-full p-1',
+        'backdrop-blur-xl',
+        'bg-gradient-to-br from-white/25 via-emerald-400/15 to-emerald-900/60',
+        'border border-white/25 shadow-inner shadow-black/20'
+      )}
+    >
+      <ZenButton
+        onClick={onActivate}
+        size="sm"
+        className={cn(
+          'rounded-full text-white px-5 py-2.5 gap-2',
+          'bg-emerald-600/50 hover:bg-emerald-500/60',
+          'border border-white/30 backdrop-blur-sm',
+          'shadow-[inset_0_1px_0_rgba(255,255,255,.25)] shadow-lg shadow-black/30'
+        )}
+      >
+        <Link className="h-4 w-4 shrink-0" />
+        Activar Smart Link
+      </ZenButton>
+    </div>
+  ) : (
+    <div
+      className={cn(
+        'fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999]',
         'flex items-center gap-5 px-5 py-3 rounded-xl max-w-2xl',
-        'bg-zinc-900 border border-zinc-700 shadow-lg shadow-black/30',
-        'animate-in slide-in-from-bottom-4 duration-200'
+        'bg-zinc-900/95 border border-zinc-700 shadow-lg shadow-black/30 backdrop-blur-md',
+        'transition-all duration-300'
       )}
     >
       <p className="text-sm text-emerald-100/80 flex-1 min-w-0">
@@ -143,4 +176,6 @@ export function SmartLinkBar({
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 }
