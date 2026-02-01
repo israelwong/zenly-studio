@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
-import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, DollarSign, Hash, MoveVertical, Link2 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, DollarSign, Hash, MoveVertical, Link, X } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton, ZenDialog, ZenBadge } from '@/components/ui/zen';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 import {
     ZenDropdownMenu,
     ZenDropdownMenuContent,
@@ -16,6 +15,8 @@ import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { SeccionEditorModal, SeccionFormData, CategoriaEditorModal, CategoriaFormData } from './';
 import { ItemEditorModal, ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
 import { ItemLinksModal } from './ItemLinksModal';
+import { SmartLinkBar } from './SmartLinkBar';
+import { CatalogSortableItem } from './CatalogSortableItem';
 import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
 import { ConfiguracionPrecios, calcularPrecio as calcularPrecioSistema } from '@/lib/actions/studio/catalogo/calcular-precio';
 import {
@@ -31,7 +32,7 @@ import {
 } from '@/lib/actions/studio/catalogo';
 import { useConfiguracionPreciosUpdateListener } from '@/hooks/useConfiguracionPreciosRefresh';
 import { reordenarItems, moverItemACategoria, toggleItemPublish, reordenarCategorias, reordenarSecciones } from '@/lib/actions/studio/catalogo';
-import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
+import { getServiceLinks, updateServiceLinks, clearAllLinksForItem, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { toast } from 'sonner';
 import {
     DndContext,
@@ -54,6 +55,7 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { cn } from '@/lib/utils';
 
 interface Seccion {
     id: string;
@@ -212,12 +214,10 @@ export function CatalogoClient({
     // Estados para drag & drop
     const [activeId, setActiveId] = useState<string | null>(null);
 
-    // Configuración de sensores para drag & drop
+    // Configuración de sensores para drag & drop: distancia mínima evita que un clic se interprete como arrastre
     const sensors = useSensors(
         useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8,
-            },
+            activationConstraint: { distance: 10 },
         }),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
@@ -248,10 +248,129 @@ export function CatalogoClient({
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [linkModalItemId, setLinkModalItemId] = useState<Item | null>(null);
 
-    // Ítems que son "hijos" de algún padre (para badge minimalista)
+    // Smart Link Bar: modo selección en canvas
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+    const [hoverHighlightGroupIds, setHoverHighlightGroupIds] = useState<Set<string> | null>(null);
+    const [isSavingLinks, setIsSavingLinks] = useState(false);
+
+    // Ítems que son "hijos" de algún padre (para badge y hover)
     const linkedIdsSet = React.useMemo(
         () => new Set(Object.values(serviceLinksMap).flat()),
         [serviceLinksMap]
+    );
+
+    // Padre (nombre corto) por ítem hijo para badge
+    const parentNameByLinkedId = React.useMemo(() => {
+        const flatItems = Object.values(itemsData).flat();
+        const idToName = (id: string) => flatItems.find((i) => i.id === id)?.name ?? id;
+        const out: Record<string, string> = {};
+        Object.entries(serviceLinksMap).forEach(([sourceId, linkedIds]) => {
+            const parentName = idToName(sourceId);
+            linkedIds.forEach((linkedId) => {
+                out[linkedId] = parentName;
+            });
+        });
+        return out;
+    }, [serviceLinksMap, itemsData]);
+
+    // Grupo (padre + hermanos) para highlight al hover
+    const getGroupIds = useCallback(
+        (itemId: string): string[] => {
+            if (serviceLinksMap[itemId]) return [itemId, ...serviceLinksMap[itemId]];
+            const entry = Object.entries(serviceLinksMap).find(([, ids]) => ids.includes(itemId));
+            if (entry) return [entry[0], ...entry[1]];
+            return [];
+        },
+        [serviceLinksMap]
+    );
+
+    const getSeccionIdForItem = useCallback(
+        (item: Item): string | undefined => {
+            const catId = item.categoriaId;
+            if (!catId) return undefined;
+            return Object.keys(categoriasData).find((secId) =>
+                (categoriasData[secId] ?? []).some((c) => c.id === catId)
+            );
+        },
+        [categoriasData]
+    );
+
+    const handleToggleSmartLinkSelection = useCallback(
+        (item: Item) => {
+            const secId = getSeccionIdForItem(item);
+            const groupIds = getGroupIds(item.id);
+
+            setSelectedIds((prev) => {
+                const has = prev.includes(item.id);
+                if (has) {
+                    const next = prev.filter((id) => id !== item.id);
+                    if (next.length === 0) setSelectedSectionId(null);
+                    return next;
+                }
+                if (prev.length === 0) {
+                    setSelectedSectionId(secId ?? null);
+                    if (groupIds.length > 0) {
+                        const isParent = (serviceLinksMap[item.id]?.length ?? 0) > 0;
+                        const groupName = isParent ? item.name : (parentNameByLinkedId[item.id] ?? item.name);
+                        toast.info(`Editando grupo: ${groupName}`);
+                        return groupIds;
+                    }
+                    return [item.id];
+                }
+                if (secId !== selectedSectionId) return prev;
+                return [...prev, item.id];
+            });
+        },
+        [getSeccionIdForItem, selectedSectionId, getGroupIds, serviceLinksMap, parentNameByLinkedId]
+    );
+
+    // Si la selección actual coincide exactamente con un grupo existente, tenemos su sourceId para "Desvincular"
+    const existingGroupSourceId = React.useMemo(() => {
+        if (selectedIds.length === 0) return null;
+        const selectedSet = new Set(selectedIds);
+        for (const [sourceId, linkedIds] of Object.entries(serviceLinksMap)) {
+            const groupSet = new Set([sourceId, ...linkedIds]);
+            if (groupSet.size === selectedSet.size && [...groupSet].every((id) => selectedSet.has(id))) return sourceId;
+        }
+        return null;
+    }, [selectedIds, serviceLinksMap]);
+
+    const router = useRouter();
+    const handleClearLinksForItem = useCallback(
+        async (itemId: string) => {
+            try {
+                const result = await clearAllLinksForItem(studioSlug, itemId);
+                if (result.success) {
+                    const res = await getServiceLinks(studioSlug);
+                    if (res.success && res.data) setServiceLinksMap(res.data);
+                    router.refresh();
+                    toast.success('Vínculos del ítem eliminados');
+                } else {
+                    toast.error(result.error ?? 'Error al desvincular');
+                }
+            } catch (err) {
+                console.error('[CatalogoClient] clearLinksForItem:', err);
+                toast.error('Error al romper vínculo');
+            }
+        },
+        [studioSlug, router]
+    );
+
+    /** Activa modo Smart Link y carga el grupo del ítem en selectedIds (desde el badge "Editar vínculo"). */
+    const handleEditLinkFromBadge = useCallback(
+        (item: Item) => {
+            const groupIds = getGroupIds(item.id);
+            if (groupIds.length === 0) return;
+            setIsSelectionMode(true);
+            setSelectedIds(groupIds);
+            setSelectedSectionId(getSeccionIdForItem(item) ?? null);
+            const isParent = (serviceLinksMap[item.id]?.length ?? 0) > 0;
+            const groupName = isParent ? item.name : (parentNameByLinkedId[item.id] ?? item.name);
+            toast.info(`Editando grupo: ${groupName}`);
+        },
+        [getGroupIds, getSeccionIdForItem, serviceLinksMap, parentNameByLinkedId]
     );
 
     // Función para cargar configuración de precios
@@ -529,6 +648,93 @@ export function CatalogoClient({
         setItemToDelete(item);
         setIsDeleteItemModalOpen(true);
     };
+
+    const handleItemTogglePublish = useCallback(
+        async (item: Item) => {
+            try {
+                setIsLoading(true);
+                const response = await toggleItemPublish(item.id);
+                if (response.success && response.data) {
+                    setItemsData(prev => {
+                        const newData = { ...prev };
+                        Object.keys(newData).forEach(categoriaId => {
+                            newData[categoriaId] = newData[categoriaId].map(i =>
+                                i.id === item.id ? { ...i, status: response.data?.status || 'active' } : i
+                            );
+                        });
+                        return newData;
+                    });
+                    setItemToEdit(prev =>
+                        prev && prev.id === item.id ? { ...prev, status: response.data?.status || 'active' } : prev
+                    );
+                    toast.success(
+                        response.data.status === 'active' ? 'Item activado exitosamente' : 'Item desactivado exitosamente'
+                    );
+                }
+            } catch (error) {
+                console.error('Error toggling publish:', error);
+                toast.error('Error al cambiar estado del item');
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        []
+    );
+
+    const handleItemDuplicate = useCallback(async (item: Item) => {
+        try {
+            setIsLoading(true);
+            const response = await crearItem({
+                name: `${item.name} (Copia)`,
+                cost: item.cost,
+                description: item.description,
+                categoriaeId: item.categoriaId || '',
+                billing_type: item.billing_type || 'SERVICE',
+                gastos: item.gastos || [],
+                studioSlug: studioSlug,
+            });
+            if (response.success && response.data) {
+                const newItem: Item = {
+                    id: response.data.id,
+                    name: response.data.name,
+                    cost: response.data.cost,
+                    tipoUtilidad: response.data.tipoUtilidad,
+                    billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+                    order: response.data.order,
+                    status: response.data.status,
+                    isNew: false,
+                    isFeatured: false,
+                    categoriaId: item.categoriaId,
+                    gastos: response.data.gastos,
+                };
+                setItemsData(prev => ({
+                    ...prev,
+                    [item.categoriaId || '']: [...(prev[item.categoriaId || ''] || []), newItem],
+                }));
+                setCategoriasData(prev => {
+                    const newData = { ...prev };
+                    Object.keys(newData).forEach(seccionId => {
+                        newData[seccionId] = newData[seccionId].map(cat =>
+                            cat.id === item.categoriaId ? { ...cat, items: (cat.items || 0) + 1 } : cat
+                        );
+                    });
+                    return newData;
+                });
+                toast.success('Item duplicado exitosamente');
+            }
+        } catch (error) {
+            console.error('Error duplicando item:', error);
+            toast.error('Error al duplicar item');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [studioSlug]);
+
+    const handleOpenMoveItemModal = useCallback((item: Item) => {
+        setItemToMove(item);
+        setSelectedCategoriaId(null);
+        setIsMoveItemModalOpen(true);
+    }, []);
 
     const handleSaveItem = async (data: ItemFormData) => {
         try {
@@ -1180,6 +1386,29 @@ export function CatalogoClient({
                                                 key={categoria.id}
                                                 categoria={categoria}
                                                 categoriaIndex={categoriaIndex}
+                                                seccionId={seccion.id}
+                                                isSelectionMode={isSelectionMode}
+                                                selectedIds={selectedIds}
+                                                selectedSectionId={selectedSectionId}
+                                                onToggleSelect={handleToggleSmartLinkSelection}
+                                                hoverHighlightGroupIds={hoverHighlightGroupIds}
+                                                onHoverGroup={(ids) => {
+                                                    setHoverHighlightGroupIds((prev) => {
+                                                        const next = ids ? new Set(ids) : null;
+                                                        if (prev === null && next === null) return prev;
+                                                        if (prev === null || next === null) return next;
+                                                        if (prev.size !== next.size) return next;
+                                                        for (const id of next) if (!prev.has(id)) return next;
+                                                        return prev;
+                                                    });
+                                                }}
+                                                getGroupIds={getGroupIds}
+                                                serviceLinksMap={serviceLinksMap}
+                                                linkedIdsSet={linkedIdsSet}
+                                                parentNameByLinkedId={parentNameByLinkedId}
+                                                itemsData={itemsData}
+                                                onClearLinksForItem={handleClearLinksForItem}
+                                                onEditLinkFromBadge={handleEditLinkFromBadge}
                                             />
                                         ))}
                                 </SortableContext>
@@ -1194,10 +1423,38 @@ export function CatalogoClient({
     // Componente SortableCategoria
     const SortableCategoria = ({
         categoria,
-        categoriaIndex
+        categoriaIndex,
+        seccionId,
+        isSelectionMode,
+        selectedIds,
+        selectedSectionId,
+        onToggleSelect,
+        hoverHighlightGroupIds,
+        onHoverGroup,
+        getGroupIds,
+        serviceLinksMap,
+        linkedIdsSet,
+        parentNameByLinkedId,
+        itemsData: itemsDataProp,
+        onClearLinksForItem,
+        onEditLinkFromBadge,
     }: {
         categoria: Categoria;
         categoriaIndex: number;
+        seccionId: string;
+        isSelectionMode: boolean;
+        selectedIds: string[];
+        selectedSectionId: string | null;
+        onToggleSelect: (item: Item) => void;
+        hoverHighlightGroupIds: Set<string> | null;
+        onHoverGroup: (ids: string[] | null) => void;
+        getGroupIds: (itemId: string) => string[];
+        serviceLinksMap: ServiceLinksMap;
+        linkedIdsSet: Set<string>;
+        parentNameByLinkedId: Record<string, string>;
+        itemsData: Record<string, Item[]>;
+        onClearLinksForItem: (itemId: string) => void | Promise<void>;
+        onEditLinkFromBadge: (item: Item) => void;
     }) => {
         const {
             attributes,
@@ -1309,320 +1566,38 @@ export function CatalogoClient({
                                 {items
                                     .sort((a, b) => (a.order || 0) - (b.order || 0))
                                     .map((item, itemIndex) => (
-                                        <SortableItem
+                                        <CatalogSortableItem
                                             key={item.id}
                                             item={item}
                                             itemIndex={itemIndex}
+                                            seccionId={seccionId}
+                                            isSelectionMode={isSelectionMode}
+                                            selectedIds={selectedIds}
+                                            selectedSectionId={selectedSectionId}
+                                            onToggleSelect={onToggleSelect}
+                                            hoverHighlightGroupIds={hoverHighlightGroupIds}
+                                            onHoverGroup={onHoverGroup}
+                                            getGroupIds={getGroupIds}
+                                            serviceLinksMap={serviceLinksMap}
+                                            linkedIdsSet={linkedIdsSet}
+                                            parentNameByLinkedId={parentNameByLinkedId}
+                                            allItemsFlat={Object.values(itemsDataProp).flat()}
+                                            onClearLinksForItem={onClearLinksForItem}
+                                            onEditLinkFromBadge={onEditLinkFromBadge}
+                                            onEditItem={handleEditItem}
+                                            onDeleteItem={handleDeleteItem}
+                                            onTogglePublish={handleItemTogglePublish}
+                                            onDuplicateItem={handleItemDuplicate}
+                                            onMoveItem={handleOpenMoveItemModal}
+                                            isItemModalOpen={isItemModalOpen}
+                                            itemToEdit={itemToEdit}
+                                            preciosConfig={preciosConfig}
                                         />
                                     ))}
                             </SortableContext>
                         )}
                     </div>
                 )}
-            </div>
-        );
-    };
-
-    // Componente SortableItem
-    // ⚠️ VIRTUALIZACIÓN: Preparado para integrar Virtua cuando sea necesario
-    // Si una categoría tiene >50 items, considerar usar <Virtuoso> para mantener 60fps
-    const SortableItem = ({
-        item,
-        itemIndex
-    }: {
-        item: Item;
-        itemIndex: number;
-    }) => {
-        const {
-            attributes,
-            listeners,
-            setNodeRef,
-            transform,
-            transition,
-            isDragging,
-        } = useSortable({ id: item.id });
-
-        const style = {
-            transform: CSS.Transform.toString(transform),
-            transition,
-            opacity: isDragging ? 0.5 : 1,
-        };
-
-        const precios = preciosConfig ? calcularPrecioSistema(
-            item.cost,
-            item.gastos?.reduce((acc, g) => acc + g.costo, 0) || 0,
-            item.tipoUtilidad || 'servicio',
-            preciosConfig
-        ) : { precio_final: 0 };
-
-        const isInactive = item.status !== "active";
-
-        return (
-            <div
-                ref={setNodeRef}
-                style={style}
-                className={`flex items-center justify-between p-2 pl-6 ${itemIndex > 0 ? 'border-t border-zinc-700/30' : ''} ${isItemModalOpen && itemToEdit?.id === item.id
-                    ? 'bg-zinc-700/40'
-                    : 'hover:bg-zinc-700/20'
-                    } transition-colors cursor-pointer`}
-                onClick={() => handleEditItem(item)}
-            >
-                <div className="flex items-center gap-2 flex-1 text-left py-1">
-                    <button
-                        {...attributes}
-                        {...listeners}
-                        className={`p-1 hover:bg-zinc-600 rounded cursor-grab active:cursor-grabbing ${isInactive ? 'opacity-50' : ''}`}
-                        title="Arrastrar para reordenar"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <GripVertical className={`h-4 w-4 ${isInactive ? 'text-zinc-500' : 'text-zinc-500'}`} />
-                    </button>
-
-                    <div className="flex-1 min-w-0">
-                        <div className={`text-sm font-light leading-tight ${isInactive ? 'text-zinc-500' : 'text-zinc-300'}`}>
-                            <span className="break-words">{item.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                            <ZenBadge
-                                variant="outline"
-                                size="sm"
-                                className={`px-1 py-0 text-[10px] font-light rounded-sm ${isInactive
-                                    ? 'border-zinc-500 text-zinc-500'
-                                    : (item.tipoUtilidad || 'servicio') === 'servicio'
-                                        ? 'border-blue-600 text-blue-400'
-                                        : 'border-purple-600 text-purple-400'
-                                    }`}
-                            >
-                                {(item.tipoUtilidad || 'servicio') === 'servicio' ? 'Servicio' : 'Producto'}
-                            </ZenBadge>
-                            {item.billing_type && (item.tipoUtilidad || 'servicio') === 'servicio' && (
-                                <ZenBadge
-                                    variant="outline"
-                                    size="sm"
-                                    className={`px-1 py-0 text-[10px] font-light rounded-sm flex items-center gap-0.5 ${isInactive
-                                        ? 'border-zinc-500 text-zinc-500'
-                                        : item.billing_type === 'HOUR'
-                                            ? 'border-amber-600 text-amber-400'
-                                            : item.billing_type === 'UNIT'
-                                                ? 'border-purple-600 text-purple-400'
-                                                : 'border-emerald-600 text-emerald-400'
-                                        }`}
-                                >
-                                    {item.billing_type === 'HOUR' ? (
-                                        <>
-                                            <Clock className="w-2.5 h-2.5" />
-                                            Por Hora
-                                        </>
-                                    ) : item.billing_type === 'UNIT' ? (
-                                        <>
-                                            <Hash className="w-2.5 h-2.5" />
-                                            Por Unidad
-                                        </>
-                                    ) : (
-                                        <>
-                                            <DollarSign className="w-2.5 h-2.5" />
-                                            Fijo
-                                        </>
-                                    )}
-                                </ZenBadge>
-                            )}
-                            <span className={`text-xs ${isInactive ? 'text-zinc-500' : 'text-green-400'}`}>
-                                ${precios.precio_final.toLocaleString()}
-                                {item.billing_type === 'HOUR' && (
-                                    <span className="ml-0.5">/h</span>
-                                )}
-                            </span>
-                            {isInactive && (
-                                <ZenBadge
-                                    variant="outline"
-                                    size="sm"
-                                    className="px-1 py-0 text-[10px] font-light rounded-full border-zinc-600 text-zinc-500 bg-zinc-800/50"
-                                >
-                                    Inactivo
-                                </ZenBadge>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        {(() => {
-                            const hasLinks = (serviceLinksMap[item.id]?.length ?? 0) > 0;
-                            const linkedNames = (serviceLinksMap[item.id] ?? [])
-                                .map(id => Object.values(itemsData).flat().find(i => i.id === id)?.name ?? id);
-                            const linkButton = (
-                                <ZenButton
-                                    variant="ghost"
-                                    size="sm"
-                                    className={`h-8 w-8 p-0 ${isInactive ? 'text-zinc-500 hover:text-zinc-400' : hasLinks ? 'text-emerald-400 hover:text-emerald-300' : 'text-zinc-500 hover:text-zinc-400'}`}
-                                    onClick={() => {
-                                        setLinkModalItemId(item);
-                                        setIsLinkModalOpen(true);
-                                    }}
-                                >
-                                    <Link2 className="h-4 w-4" />
-                                </ZenButton>
-                            );
-                            return hasLinks && linkedNames.length > 0 ? (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>{linkButton}</TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-xs">
-                                        <ul className="list-disc list-inside text-left space-y-0.5">
-                                            {linkedNames.map(name => (
-                                                <li key={name}>{name}</li>
-                                            ))}
-                                        </ul>
-                                    </TooltipContent>
-                                </Tooltip>
-                            ) : linkButton;
-                        })()}
-                        {linkedIdsSet.has(item.id) && (
-                            <span className="flex items-center justify-center w-5 h-5 rounded bg-zinc-700/80 text-zinc-400" title="Se agrega automáticamente con un servicio vinculado">
-                                <Link2 className="h-3 w-3" />
-                            </span>
-                        )}
-                        <ZenDropdownMenu>
-                            <ZenDropdownMenuTrigger asChild>
-                                <ZenButton
-                                    variant="ghost"
-                                    size="sm"
-                                    className={`h-8 w-8 p-0 ${isInactive ? 'text-zinc-500 hover:text-zinc-400' : ''}`}
-                                >
-                                    <MoreHorizontal className={`h-4 w-4 ${isInactive ? 'text-zinc-500' : ''}`} />
-                                </ZenButton>
-                            </ZenDropdownMenuTrigger>
-                            <ZenDropdownMenuContent align="end" className="w-48">
-                                <ZenDropdownMenuItem onClick={() => {
-                                    const togglePublish = async () => {
-                                        try {
-                                            setIsLoading(true);
-                                            const response = await toggleItemPublish(item.id);
-                                            if (response.success && response.data) {
-                                                setItemsData(prev => {
-                                                    const newData = { ...prev };
-                                                    Object.keys(newData).forEach(categoriaId => {
-                                                        newData[categoriaId] = newData[categoriaId].map(i =>
-                                                            i.id === item.id ? { ...i, status: response.data?.status || "active" } : i
-                                                        );
-                                                    });
-                                                    return newData;
-                                                });
-                                                setItemToEdit(prev => prev && prev.id === item.id ? {
-                                                    ...prev,
-                                                    status: response.data?.status || "active"
-                                                } : prev);
-                                                toast.success(
-                                                    response.data.status === "active"
-                                                        ? "Item activado exitosamente"
-                                                        : "Item desactivado exitosamente"
-                                                );
-                                            }
-                                        } catch (error) {
-                                            console.error("Error toggling publish:", error);
-                                            toast.error("Error al cambiar estado del item");
-                                        } finally {
-                                            setIsLoading(false);
-                                        }
-                                    };
-                                    togglePublish();
-                                }}>
-                                    {item.status === "active" ? (
-                                        <>
-                                            <EyeOff className="h-4 w-4 mr-2" />
-                                            Desactivar
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Eye className="h-4 w-4 mr-2" />
-                                            Activar
-                                        </>
-                                    )}
-                                </ZenDropdownMenuItem>
-                                <ZenDropdownMenuSeparator />
-                                <ZenDropdownMenuItem onClick={() => {
-                                    const duplicateItem = async () => {
-                                        try {
-                                            setIsLoading(true);
-                                            const duplicatedItemData = {
-                                                name: `${item.name} (Copia)`,
-                                                cost: item.cost,
-                                                description: item.description,
-                                                categoriaeId: item.categoriaId || '',
-                                                billing_type: item.billing_type || 'SERVICE',
-                                                gastos: item.gastos || [],
-                                                studioSlug: studioSlug,
-                                            };
-
-                                            const response = await crearItem(duplicatedItemData);
-
-                                            if (response.success && response.data) {
-                                                const newItem: Item = {
-                                                    id: response.data.id,
-                                                    name: response.data.name,
-                                                    cost: response.data.cost,
-                                                    tipoUtilidad: response.data.tipoUtilidad,
-                                                    billing_type: (response.data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
-                                                    order: response.data.order,
-                                                    status: response.data.status,
-                                                    isNew: false,
-                                                    isFeatured: false,
-                                                    categoriaId: item.categoriaId,
-                                                    gastos: response.data.gastos,
-                                                };
-
-                                                setItemsData(prev => ({
-                                                    ...prev,
-                                                    [item.categoriaId || '']: [...(prev[item.categoriaId || ''] || []), newItem]
-                                                }));
-
-                                                setCategoriasData(prev => {
-                                                    const newData = { ...prev };
-                                                    Object.keys(newData).forEach(seccionId => {
-                                                        newData[seccionId] = newData[seccionId].map(cat => {
-                                                            if (cat.id === item.categoriaId) {
-                                                                return { ...cat, items: (cat.items || 0) + 1 };
-                                                            }
-                                                            return cat;
-                                                        });
-                                                    });
-                                                    return newData;
-                                                });
-
-                                                toast.success("Item duplicado exitosamente");
-                                            }
-                                        } catch (error) {
-                                            console.error("Error duplicando item:", error);
-                                            toast.error("Error al duplicar item");
-                                        } finally {
-                                            setIsLoading(false);
-                                        }
-                                    };
-                                    duplicateItem();
-                                }}>
-                                    <Copy className="h-4 w-4 mr-2" />
-                                    Duplicar
-                                </ZenDropdownMenuItem>
-                                <ZenDropdownMenuSeparator />
-                                <ZenDropdownMenuItem onClick={() => {
-                                    setItemToMove(item);
-                                    setSelectedCategoriaId(null);
-                                    setIsMoveItemModalOpen(true);
-                                }}>
-                                    <MoveVertical className="h-4 w-4 mr-2" />
-                                    Mover a
-                                </ZenDropdownMenuItem>
-                                <ZenDropdownMenuSeparator />
-                                <ZenDropdownMenuItem
-                                    onClick={() => handleDeleteItem(item)}
-                                    className="text-red-400 focus:text-red-300"
-                                >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Eliminar
-                                </ZenDropdownMenuItem>
-                            </ZenDropdownMenuContent>
-                        </ZenDropdownMenu>
-                    </div>
-                </div>
             </div>
         );
     };
@@ -1665,19 +1640,96 @@ export function CatalogoClient({
                 onSaved={() => getServiceLinks(studioSlug).then(r => r.success && r.data && setServiceLinksMap(r.data))}
             />
 
+            {isSelectionMode && (
+                <SmartLinkBar
+                    selectedCount={selectedIds.length}
+                    selectedItems={selectedIds.map((id) => {
+                        const it = Object.values(itemsData).flat().find((i) => i.id === id);
+                        return it ? { id: it.id, name: it.name } : { id, name: id };
+                    })}
+                    existingGroupSourceId={existingGroupSourceId}
+                    onCancel={() => {
+                        setIsSelectionMode(false);
+                        setSelectedIds([]);
+                        setSelectedSectionId(null);
+                    }}
+                    onConfirm={async (parentId) => {
+                        const linkedIds = selectedIds.filter((id) => id !== parentId);
+                        if (linkedIds.length === 0) return;
+                        setIsSavingLinks(true);
+                        try {
+                            const result = await updateServiceLinks(studioSlug, parentId, linkedIds);
+                            if (result.success) {
+                                const res = await getServiceLinks(studioSlug);
+                                if (res.success && res.data) setServiceLinksMap(res.data);
+                                setIsSelectionMode(false);
+                                setSelectedIds([]);
+                                setSelectedSectionId(null);
+                                toast.success('Smart Link guardado');
+                            } else {
+                                toast.error(result.error ?? 'Error al guardar vínculos');
+                            }
+                        } catch (e) {
+                            toast.error('Error al guardar vínculos');
+                        } finally {
+                            setIsSavingLinks(false);
+                        }
+                    }}
+                    onUnlink={async (sourceId) => {
+                        setIsSavingLinks(true);
+                        try {
+                            const result = await updateServiceLinks(studioSlug, sourceId, []);
+                            if (result.success) {
+                                const res = await getServiceLinks(studioSlug);
+                                if (res.success && res.data) setServiceLinksMap(res.data);
+                                setSelectedIds([]);
+                                setSelectedSectionId(null);
+                                toast.success('Grupo desvinculado');
+                            } else {
+                                toast.error(result.error ?? 'Error al desvincular');
+                            }
+                        } catch (e) {
+                            toast.error('Error al desvincular');
+                        } finally {
+                            setIsSavingLinks(false);
+                        }
+                    }}
+                    isSaving={isSavingLinks}
+                />
+            )}
+
             <div className="space-y-4">
                 {/* Header con botón de crear sección */}
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-white">Diseña la estructura de tu catálogo comercial</h3>
-                    <ZenButton
-                        onClick={handleCreateSeccion}
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-2"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Nueva Sección
-                    </ZenButton>
+                    <div className="flex items-center gap-2">
+                        <ZenButton
+                            onClick={() => {
+                                setIsSelectionMode((prev) => {
+                                    if (!prev) {
+                                        setSelectedIds([]);
+                                        setSelectedSectionId(null);
+                                    }
+                                    return !prev;
+                                });
+                            }}
+                            variant={isSelectionMode ? 'default' : 'outline'}
+                            size="sm"
+                            className={isSelectionMode ? 'bg-emerald-600 hover:bg-emerald-500' : ''}
+                        >
+                            <Link className="w-4 h-4" />
+                            {isSelectionMode ? 'Salir Smart Link' : 'Activar Smart Link'}
+                        </ZenButton>
+                        <ZenButton
+                            onClick={handleCreateSeccion}
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-2"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Nueva Sección
+                        </ZenButton>
+                    </div>
                 </div>
 
                 {/* Lista de secciones con drag & drop unificado */}
@@ -1748,6 +1800,7 @@ export function CatalogoClient({
                 />
 
                 <ItemEditorModal
+                    key={itemToEdit?.id ?? 'item-editor-closed'}
                     isOpen={isItemModalOpen}
                     onClose={() => {
                         setIsItemModalOpen(false);
@@ -1774,7 +1827,7 @@ export function CatalogoClient({
                             status: status
                         } : prev);
                     }}
-                    item={itemToEdit ? {
+                    item={isItemModalOpen && itemToEdit ? {
                         id: itemToEdit.id,
                         name: itemToEdit.name,
                         cost: itemToEdit.cost,
@@ -1784,7 +1837,7 @@ export function CatalogoClient({
                         gastos: itemToEdit.gastos || [],
                         status: itemToEdit.status || 'active'
                     } as ItemFormData : undefined}
-                    categoriaId={selectedCategoriaForItem || ''}
+                    categoriaId={selectedCategoriaForItem ?? ''}
                     studioSlug={studioSlug}
                 />
 

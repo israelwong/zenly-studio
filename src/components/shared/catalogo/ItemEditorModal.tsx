@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSwitch } from "@/components/ui/zen";
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/shadcn/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/shadcn/sheet";
 import { toast } from "sonner";
 import { Loader2, Save, X, Calculator, Clock, Package, DollarSign, Hash } from "lucide-react";
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
@@ -545,6 +545,9 @@ export function ItemEditorModal({
                         <SheetTitle className="text-xl font-semibold text-zinc-100">
                             {item ? "Editar Item" : "Nuevo Item"}
                         </SheetTitle>
+                        <SheetDescription className="sr-only">
+                            {item ? "Formulario para editar el item del catálogo" : "Formulario para crear un nuevo item en el catálogo"}
+                        </SheetDescription>
                     </SheetHeader>
 
                     <div className="px-6 pb-6">

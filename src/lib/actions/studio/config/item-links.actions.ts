@@ -92,3 +92,74 @@ export async function updateServiceLinks(
     };
   }
 }
+
+/**
+ * Elimina cualquier vínculo donde el ítem aparezca como padre (source) o como hijo (linked).
+ * Permite limpiar vínculos legacy o huérfanos por ítem.
+ */
+export async function clearAllLinksForItem(
+  studioSlug: string,
+  itemId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studioId = await getStudioIdFromSlug(studioSlug);
+    if (!studioId) {
+      return { success: false, error: 'Estudio no encontrado' };
+    }
+
+    await prisma.studio_item_links.deleteMany({
+      where: {
+        studio_id: studioId,
+        OR: [
+          { source_item_id: itemId },
+          { linked_item_id: itemId },
+        ],
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
+    return { success: true };
+  } catch (error) {
+    console.error('[ITEM_LINKS] clearAllLinksForItem:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al desvincular ítem',
+    };
+  }
+}
+
+/**
+ * Elimina el vínculo entre dos ítems, sin importar cuál sea padre o hijo.
+ * DELETE WHERE (source=A AND linked=B) OR (source=B AND linked=A).
+ */
+export async function unlinkItems(
+  studioSlug: string,
+  itemIdA: string,
+  itemIdB: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const studioId = await getStudioIdFromSlug(studioSlug);
+    if (!studioId) {
+      return { success: false, error: 'Estudio no encontrado' };
+    }
+
+    await prisma.studio_item_links.deleteMany({
+      where: {
+        studio_id: studioId,
+        OR: [
+          { source_item_id: itemIdA, linked_item_id: itemIdB },
+          { source_item_id: itemIdB, linked_item_id: itemIdA },
+        ],
+      },
+    });
+
+    revalidatePath(`/${studioSlug}/studio/commercial/catalogo`);
+    return { success: true };
+  } catch (error) {
+    console.error('[ITEM_LINKS] unlinkItems:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al desvincular',
+    };
+  }
+}

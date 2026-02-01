@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Link2, Search } from 'lucide-react';
+import { Link, Search } from 'lucide-react';
 import { ZenButton, ZenInput, ZenDialog } from '@/components/ui/zen';
 import { updateServiceLinks } from '@/lib/actions/studio/config/item-links.actions';
 import { toast } from 'sonner';
