@@ -2,8 +2,9 @@
 
 import React, { useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, DollarSign, Hash, MoveVertical } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Edit2, Trash2, Loader2, GripVertical, Copy, MoreHorizontal, Eye, EyeOff, Clock, DollarSign, Hash, MoveVertical, Link2 } from 'lucide-react';
 import { ZenCard, ZenCardContent, ZenButton, ZenDialog, ZenBadge } from '@/components/ui/zen';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/shadcn/tooltip';
 import {
     ZenDropdownMenu,
     ZenDropdownMenuContent,
@@ -14,6 +15,7 @@ import {
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { SeccionEditorModal, SeccionFormData, CategoriaEditorModal, CategoriaFormData } from './';
 import { ItemEditorModal, ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
+import { ItemLinksModal } from './ItemLinksModal';
 import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
 import { ConfiguracionPrecios, calcularPrecio as calcularPrecioSistema } from '@/lib/actions/studio/catalogo/calcular-precio';
 import {
@@ -29,6 +31,7 @@ import {
 } from '@/lib/actions/studio/catalogo';
 import { useConfiguracionPreciosUpdateListener } from '@/hooks/useConfiguracionPreciosRefresh';
 import { reordenarItems, moverItemACategoria, toggleItemPublish, reordenarCategorias, reordenarSecciones } from '@/lib/actions/studio/catalogo';
+import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { toast } from 'sonner';
 import {
     DndContext,
@@ -241,6 +244,15 @@ export function CatalogoClient({
     const [isMoveItemModalOpen, setIsMoveItemModalOpen] = useState(false);
     const [itemToMove, setItemToMove] = useState<Item | null>(null);
     const [selectedCategoriaId, setSelectedCategoriaId] = useState<string | null>(null);
+    const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [linkModalItemId, setLinkModalItemId] = useState<Item | null>(null);
+
+    // Ítems que son "hijos" de algún padre (para badge minimalista)
+    const linkedIdsSet = React.useMemo(
+        () => new Set(Object.values(serviceLinksMap).flat()),
+        [serviceLinksMap]
+    );
 
     // Función para cargar configuración de precios
     const loadConfiguracionPrecios = useCallback(async () => {
@@ -264,6 +276,14 @@ export function CatalogoClient({
         } catch (error) {
             console.error("Error loading price config:", error);
         }
+    }, [studioSlug]);
+
+    // Cargar mapa de vínculos (padre → hijos) para mostrar badge y modal
+    React.useEffect(() => {
+        if (!studioSlug) return;
+        getServiceLinks(studioSlug).then(result => {
+            if (result.success && result.data) setServiceLinksMap(result.data);
+        });
     }, [studioSlug]);
 
     // Escuchar actualizaciones de configuración de precios
@@ -1426,6 +1446,41 @@ export function CatalogoClient({
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                            const hasLinks = (serviceLinksMap[item.id]?.length ?? 0) > 0;
+                            const linkedNames = (serviceLinksMap[item.id] ?? [])
+                                .map(id => Object.values(itemsData).flat().find(i => i.id === id)?.name ?? id);
+                            const linkButton = (
+                                <ZenButton
+                                    variant="ghost"
+                                    size="sm"
+                                    className={`h-8 w-8 p-0 ${isInactive ? 'text-zinc-500 hover:text-zinc-400' : hasLinks ? 'text-emerald-400 hover:text-emerald-300' : 'text-zinc-500 hover:text-zinc-400'}`}
+                                    onClick={() => {
+                                        setLinkModalItemId(item);
+                                        setIsLinkModalOpen(true);
+                                    }}
+                                >
+                                    <Link2 className="h-4 w-4" />
+                                </ZenButton>
+                            );
+                            return hasLinks && linkedNames.length > 0 ? (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>{linkButton}</TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs">
+                                        <ul className="list-disc list-inside text-left space-y-0.5">
+                                            {linkedNames.map(name => (
+                                                <li key={name}>{name}</li>
+                                            ))}
+                                        </ul>
+                                    </TooltipContent>
+                                </Tooltip>
+                            ) : linkButton;
+                        })()}
+                        {linkedIdsSet.has(item.id) && (
+                            <span className="flex items-center justify-center w-5 h-5 rounded bg-zinc-700/80 text-zinc-400" title="Se agrega automáticamente con un servicio vinculado">
+                                <Link2 className="h-3 w-3" />
+                            </span>
+                        )}
                         <ZenDropdownMenu>
                             <ZenDropdownMenuTrigger asChild>
                                 <ZenButton
@@ -1588,6 +1643,27 @@ export function CatalogoClient({
                     onClose={() => setIsUtilidadModalOpen(false)}
                 />
             </ZenDialog>
+
+            <ItemLinksModal
+                isOpen={isLinkModalOpen}
+                onClose={() => { setIsLinkModalOpen(false); setLinkModalItemId(null); }}
+                studioSlug={studioSlug}
+                sourceItemId={linkModalItemId?.id ?? ''}
+                sourceItemName={linkModalItemId?.name ?? ''}
+                allItems={(() => {
+                    if (!linkModalItemId?.categoriaId) return [];
+                    const sourceSectionId = Object.keys(categoriasData).find(secId =>
+                        (categoriasData[secId] ?? []).some(c => c.id === linkModalItemId.categoriaId)
+                    );
+                    if (!sourceSectionId) return [];
+                    const categoryIdsInSection = (categoriasData[sourceSectionId] ?? []).map(c => c.id);
+                    return categoryIdsInSection.flatMap(catId =>
+                        (itemsData[catId] ?? []).map(i => ({ id: i.id, name: i.name }))
+                    );
+                })()}
+                currentLinkedIds={linkModalItemId ? (serviceLinksMap[linkModalItemId.id] ?? []) : []}
+                onSaved={() => getServiceLinks(studioSlug).then(r => r.success && r.data && setServiceLinksMap(r.data))}
+            />
 
             <div className="space-y-4">
                 {/* Header con botón de crear sección */}

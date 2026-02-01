@@ -11,6 +11,7 @@ import { CatalogoServiciosTree } from '@/components/shared/catalogo';
 import { ItemEditorModal, type ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
 import { crearPaquete, actualizarPaquete } from '@/lib/actions/studio/paquetes/paquetes.actions';
 import { crearItem, actualizarItem } from '@/lib/actions/studio/catalogo';
+import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import type { PaqueteFromDB } from '@/lib/actions/schemas/paquete-schemas';
 import type { SeccionData, ServicioData } from '@/lib/actions/schemas/catalogo-schemas';
@@ -107,6 +108,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
     const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [showPublishDialog, setShowPublishDialog] = useState(false);
+    const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
     const summaryRef = useRef<HTMLDivElement>(null);
 
     // Estados para edición/creación de ítems
@@ -184,6 +186,13 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paquete?.id]); // Solo usar paquete.id para evitar re-renders
 
+    // Cargar mapa de vínculos (padre → hijos) para inserción en cascada
+    useEffect(() => {
+        if (!studioSlug) return;
+        getServiceLinks(studioSlug).then(result => {
+            if (result.success && result.data) setServiceLinksMap(result.data);
+        });
+    }, [studioSlug]);
 
     // Crear mapa de servicios para acceso rápido
     // Memoizar valores de configuracionPrecios para evitar re-renders innecesarios
@@ -708,14 +717,14 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
         }
     };
 
-    // Handlers
+    // Handlers (inserción en cascada: al agregar un Padre se agregan sus Hijos — soft-linking)
     const toggleServiceSelection = (servicioId: string) => {
         const servicio = servicioMap.get(servicioId);
+        const linkedIds = serviceLinksMap[servicioId] ?? [];
         setSelectedServices(prev => {
             const newSet = new Set(prev);
             if (newSet.has(servicioId)) {
                 newSet.delete(servicioId);
-                // Si se deselecciona, remover del items también
                 setItems(prevItems => {
                     const newItems = { ...prevItems };
                     delete newItems[servicioId];
@@ -726,17 +735,18 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                 }
             } else {
                 newSet.add(servicioId);
-                // Si se selecciona, inicializar cantidad según tipo
-                const billingType = (servicio?.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT';
+                const toAdd = linkedIds.filter(id => !prev.has(id));
+                toAdd.forEach(id => newSet.add(id));
                 setItems(prevItems => {
-                    const newItems = { ...prevItems };
-                    // Para HOUR, cantidad siempre es 1 (representa "incluido")
-                    // Para otros, cantidad inicial es 1
-                    newItems[servicioId] = 1;
+                    const newItems = { ...prevItems, [servicioId]: 1 };
+                    toAdd.forEach(id => { newItems[id] = 1; });
                     return newItems;
                 });
                 if (servicio) {
                     toast.success(`${servicio.nombre} agregado al paquete`);
+                }
+                if (toAdd.length > 0) {
+                    toast.info('Se han añadido servicios vinculados automáticamente');
                 }
             }
             return newSet;

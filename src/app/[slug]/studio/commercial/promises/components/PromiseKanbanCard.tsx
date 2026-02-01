@@ -8,7 +8,7 @@ import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, Flask
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
 import { formatDisplayDateShort, formatDisplayDate, getRelativeDateLabel, getRelativeDateDiffDays } from '@/lib/utils/date-formatter';
-import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenConfirmModal, ZenBadge, ZenDialog, ZenButton, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenBadge, ZenDialog, ZenButton, ZenTextarea, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { deletePromise } from '@/lib/actions/studio/commercial/promises';
@@ -24,7 +24,7 @@ interface PromiseKanbanCardProps {
     promise: PromiseWithContact;
     onClick?: (promise: PromiseWithContact) => void;
     studioSlug?: string;
-    onArchived?: () => void;
+    onArchived?: (archiveReason?: string) => void;
     onDeleted?: () => void;
     onTagsUpdated?: () => void;
     pipelineStages?: PipelineStage[];
@@ -34,6 +34,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     // Crear mapa de nombres de stages para obtener nombres personalizados
     const stageNameMap = pipelineStages.length > 0 ? createStageNameMap(pipelineStages) : null;
     const [showArchiveModal, setShowArchiveModal] = useState(false);
+    const [archiveReasonText, setArchiveReasonText] = useState('');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     // ✅ OPTIMIZACIÓN: Usar reminder que viene en la promesa (ya no se carga por separado)
@@ -198,13 +199,14 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         setShowArchiveModal(true);
     };
 
-    // Confirmar archivar promesa
+    // Confirmar archivar promesa (con motivo para bitácora)
     const handleConfirmArchive = () => {
         if (!promise.promise_id) return;
+        const reason = archiveReasonText.trim() || undefined;
         setShowArchiveModal(false);
-        // Usar setTimeout para asegurar que el modal se cierre antes de ejecutar onArchived
+        setArchiveReasonText('');
         setTimeout(() => {
-            onArchived?.();
+            onArchived?.(reason);
         }, 0);
     };
 
@@ -450,34 +452,6 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                         </div>
                     )}
 
-                    {/* Tags - Pills redondeados (máximo 3 + contador) */}
-                    {finalTags && finalTags.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                            {finalTags.slice(0, 3).map((tag) => (
-                                <span
-                                    key={tag.id}
-                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-opacity hover:opacity-80"
-                                    style={{
-                                        backgroundColor: `${tag.color}20`,
-                                        border: `1px solid ${tag.color}40`,
-                                        color: tag.color,
-                                    }}
-                                    title={tag.name}
-                                >
-                                    {tag.name}
-                                </span>
-                            ))}
-                            {finalTags.length > 3 && (
-                                <span
-                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-700/50 text-zinc-400 border border-zinc-600/50"
-                                    title={`${finalTags.length - 3} etiqueta${finalTags.length - 3 > 1 ? 's' : ''} más: ${finalTags.slice(3).map(t => t.name).join(', ')}`}
-                                >
-                                    +{finalTags.length - 3}
-                                </span>
-                            )}
-                        </div>
-                    )}
-
                     {/* Detalles - Mostrados directamente debajo de la fecha */}
                     {(promise.offer || finalAgendamiento || promise.updated_at || promise.last_log) && (
                         <div className="space-y-1.5">
@@ -598,17 +572,32 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 </div>
             </Link>
 
-            {/* Modal de confirmación archivar - fuera del contenedor clickeable */}
-            <ZenConfirmModal
+            {/* Modal archivar: motivo para bitácora */}
+            <ZenDialog
                 isOpen={showArchiveModal}
-                onClose={() => setShowArchiveModal(false)}
-                onConfirm={handleConfirmArchive}
+                onClose={() => { setShowArchiveModal(false); setArchiveReasonText(''); }}
                 title="Archivar promesa"
-                description={`¿Estás seguro de que deseas archivar la promesa de "${promise.name}"? Esta acción moverá la promesa a la etapa "Archivado".`}
-                confirmText="Archivar"
-                cancelText="Cancelar"
-                variant="destructive"
-            />
+                description="El motivo se registrará en la bitácora de seguimiento."
+                maxWidth="sm"
+            >
+                <div className="space-y-4">
+                    <ZenTextarea
+                        value={archiveReasonText}
+                        onChange={e => setArchiveReasonText(e.target.value)}
+                        placeholder="¿Por qué se archiva? (opcional)"
+                        rows={3}
+                        className="resize-none"
+                    />
+                    <div className="flex justify-end gap-2">
+                        <ZenButton variant="outline" onClick={() => { setShowArchiveModal(false); setArchiveReasonText(''); }}>
+                            Cancelar
+                        </ZenButton>
+                        <ZenButton variant="destructive" onClick={handleConfirmArchive}>
+                            Archivar
+                        </ZenButton>
+                    </div>
+                </div>
+            </ZenDialog>
 
             {/* Modal de confirmación eliminar - fuera del contenedor clickeable */}
             {promise.promise_id && studioSlug && (

@@ -70,7 +70,10 @@ const LOG_ACTIONS: Record<
     const contactName = (meta?.contactName as string) || 'contacto';
     return `Perfil compartido: ${contactName}`;
   },
-  archived: () => 'Promesa archivada',
+  archived: (meta) => {
+    const r = (meta?.reason as string)?.trim();
+    return r ? `Promesa archivada: ${r}` : 'Promesa archivada';
+  },
   unarchived: () => 'Promesa desarchivada',
   email_sent: (meta) => {
     const contactName = (meta?.contactName as string) || 'contacto';

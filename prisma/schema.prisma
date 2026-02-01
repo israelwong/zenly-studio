@@ -808,6 +808,7 @@ model studios {
   faq                                             studio_faq[]
   gastos                                          studio_gastos[]
   item_media                                      studio_item_media[]              @relation("item_media")
+  item_links                                      studio_item_links[]
   items                                           studio_items[]
   lead_forms                                      studio_lead_forms[]
   manager_pipeline_stages                         studio_manager_pipeline_stages[]
@@ -1096,6 +1097,8 @@ model studio_items {
   service_categories  studio_service_categories @relation(fields: [service_category_id], references: [id])
   studio              studios                   @relation(fields: [studio_id], references: [id])
   package_items       studio_paquete_items[]
+  item_links_as_source studio_item_links[]       @relation("ItemLinksSource")
+  item_links_as_linked studio_item_links[]      @relation("ItemLinksLinked")
 
   @@index([studio_id, status])
   @@index([studio_id, billing_type])
@@ -1260,6 +1263,23 @@ model studio_paquete_items {
   service_categories   studio_service_categories @relation(fields: [service_category_id], references: [id])
 
   @@index([paquete_id])
+}
+
+model studio_item_links {
+  id               String       @id @default(cuid())
+  studio_id         String
+  source_item_id    String       // Padre
+  linked_item_id    String       // Hijo
+  order             Int          @default(0)
+  created_at        DateTime     @default(now())
+  updated_at        DateTime     @updatedAt
+  source_item       studio_items @relation("ItemLinksSource", fields: [source_item_id], references: [id], onDelete: Cascade)
+  linked_item       studio_items @relation("ItemLinksLinked", fields: [linked_item_id], references: [id], onDelete: Cascade)
+  studio            studios      @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+
+  @@unique([studio_id, source_item_id, linked_item_id])
+  @@index([studio_id])
+  @@index([source_item_id])
 }
 
 model studio_contacts {

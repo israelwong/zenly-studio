@@ -11,8 +11,6 @@ import { cn } from '@/lib/utils';
 import type { PromiseLogTemplate } from '@/lib/actions/studio/commercial/promises/promise-log-templates.actions';
 import type { PromiseLog } from '@/lib/actions/studio/commercial/promises/promise-logs.actions';
 
-const EXCERPT_LENGTH = 50;
-
 interface QuickNoteCardProps {
   studioSlug: string;
   promiseId: string;
@@ -326,9 +324,9 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
                   <li
                     key={log.id}
                     className={cn(
-                      'text-xs flex gap-2 items-start group',
+                      'text-xs flex gap-2 items-start group py-1',
                       isNewest ? 'text-amber-400' : 'text-zinc-400',
-                      index < lastThree.length - 1 && 'pb-2'
+                      index < lastThree.length - 1 && 'pb-3'
                     )}
                   >
                     <span
@@ -338,15 +336,15 @@ export function QuickNoteCard({ studioSlug, promiseId, initialLastLogs = [], onL
                       )}
                       aria-hidden
                     />
-                    <div className="flex-1 min-w-0 flex items-baseline gap-1.5 flex-wrap">
-                      <span className={cn('shrink-0 text-[10px]', isNewest ? 'text-amber-500' : 'text-zinc-500')}>
-                        {formatDateTime(log.created_at)}
-                      </span>
-                      <span className="truncate min-w-0 flex-1">
-                        {log.content.length > EXCERPT_LENGTH
-                          ? log.content.slice(0, EXCERPT_LENGTH) + '…'
-                          : log.content}
-                      </span>
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <p className="text-xs text-zinc-300 break-words whitespace-pre-wrap text-left w-full">
+                        {log.content}
+                      </p>
+                      <div className="flex justify-start mt-0.5">
+                        <span className={cn('shrink-0 text-[11px] leading-none', isNewest ? 'text-amber-500' : 'text-zinc-500')}>
+                          {formatDateTime(log.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
                     <ZenButton
                       type="button"

@@ -1550,11 +1550,13 @@ export async function movePromise(
 }
 
 /**
- * Archivar promesa (mover a pipeline stage "archived")
+ * Archivar promesa (mover a pipeline stage "archived").
+ * Si se pasa archiveReason, se registra en la bitácora.
  */
 export async function archivePromise(
   studioSlug: string,
-  promiseId: string
+  promiseId: string,
+  options?: { archiveReason?: string }
 ): Promise<PromiseResponse> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -1636,14 +1638,16 @@ export async function archivePromise(
       return { success: false, error: 'Contacto no encontrado' };
     }
 
-    // Registrar archivo en el log
+    // Registrar archivo en el log (con motivo si se proporciona)
     const { logPromiseAction } = await import('./promise-logs.actions');
+    const metadata = options?.archiveReason?.trim() ? { reason: options.archiveReason!.trim() } : undefined;
     await logPromiseAction(
       studioSlug,
       promiseId,
       'archived',
-      'user', // Asumimos que es acción de usuario
-      null, // TODO: Obtener userId del contexto
+      'user',
+      null,
+      metadata
     ).catch((error) => {
       // No fallar si el log falla, solo registrar error
       console.error('[PROMISES] Error registrando log de archivo:', error);

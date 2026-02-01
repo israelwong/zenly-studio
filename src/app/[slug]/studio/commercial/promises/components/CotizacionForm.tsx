@@ -11,6 +11,7 @@ import { obtenerCatalogo } from '@/lib/actions/studio/config/catalogo.actions';
 import { obtenerConfiguracionPrecios } from '@/lib/actions/studio/catalogo/utilidad.actions';
 import { obtenerPaquetePorId } from '@/lib/actions/studio/paquetes/paquetes.actions';
 import { createCotizacion, updateCotizacion, getCotizacionById, getPromiseDurationHours } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
+import { getServiceLinks, type ServiceLinksMap } from '@/lib/actions/studio/config/item-links.actions';
 import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { PrecioDesglosePaquete } from '@/components/shared/precio';
 import { CatalogoServiciosTree } from '@/components/shared/catalogo';
@@ -117,8 +118,9 @@ export function CotizacionForm({
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [durationHours, setDurationHours] = useState<number | null>(null);
+  const [serviceLinksMap, setServiceLinksMap] = useState<ServiceLinksMap>({});
 
-  // Cargar catálogo, configuración y datos iniciales
+  // Cargar catálogo, configuración, vínculos y datos iniciales
   useEffect(() => {
     const cargarDatos = async () => {
       try {
@@ -126,12 +128,17 @@ export function CotizacionForm({
 
         // Si está en modo edición, cargar y validar la cotización en paralelo con catálogo
         // Si está creando revisión, también cargar datos de la original para pre-poblar
-        const [catalogoResult, configResult, cotizacionResult, originalResult] = await Promise.all([
+        const [catalogoResult, configResult, linksResult, cotizacionResult, originalResult] = await Promise.all([
           obtenerCatalogo(studioSlug),
           obtenerConfiguracionPrecios(studioSlug),
+          getServiceLinks(studioSlug),
           cotizacionId ? getCotizacionById(cotizacionId, studioSlug) : Promise.resolve({ success: true as const, data: null }),
           revisionOriginalId && !cotizacionId ? getCotizacionById(revisionOriginalId, studioSlug) : Promise.resolve({ success: true as const, data: null })
         ]);
+
+        if (linksResult.success && linksResult.data) {
+          setServiceLinksMap(linksResult.data);
+        }
 
         // Validar cotización si está en modo edición
         let cotizacionData: NonNullable<typeof cotizacionResult.data> | null = null;
@@ -635,15 +642,13 @@ export function CotizacionForm({
     });
   };
 
-  // Handler para toggle de selección (click en el servicio)
+  // Handler para toggle de selección (click en el servicio). Inserción en cascada: al agregar un Padre se agregan sus Hijos (soft-linking).
   const onToggleSelection = (servicioId: string) => {
     const servicio = servicioMap.get(servicioId);
     if (!servicio) return;
 
     const currentQuantity = items[servicioId] || 0;
 
-    // Si está seleccionado (cantidad > 0), deseleccionar (cantidad = 0)
-    // Si no está seleccionado, seleccionar con cantidad inicial según billing_type
     if (currentQuantity > 0) {
       setItems(prev => {
         const newItems = { ...prev };
@@ -651,13 +656,18 @@ export function CotizacionForm({
         return newItems;
       });
     } else {
-      // Para HOUR, cantidad inicial es 1 (las horas se manejan con durationHours)
-      // Para SERVICE/UNIT, cantidad inicial es 1
       const initialQuantity = 1;
-      setItems(prev => ({
-        ...prev,
-        [servicioId]: initialQuantity
-      }));
+      const linkedIds = serviceLinksMap[servicioId] ?? [];
+      const toAdd = linkedIds.filter(id => !(items[id] && items[id] > 0));
+
+      setItems(prev => {
+        const next = { ...prev, [servicioId]: initialQuantity };
+        toAdd.forEach(id => { next[id] = 1; });
+        return next;
+      });
+      if (toAdd.length > 0) {
+        toast.info('Se han añadido servicios vinculados automáticamente');
+      }
     }
   };
 

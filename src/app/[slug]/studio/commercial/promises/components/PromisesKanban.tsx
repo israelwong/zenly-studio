@@ -667,8 +667,8 @@ function PromisesKanban({
     setLocalPromises((prev) => prev.filter((p) => p.promise_id !== promiseId));
   };
 
-  // Manejar archivar promesa con actualización local
-  const handlePromiseArchived = async (promiseId: string) => {
+  // Manejar archivar promesa con actualización local y motivo en bitácora
+  const handlePromiseArchived = async (promiseId: string, archiveReason?: string) => {
     if (!studioSlug) return;
 
     // Marcar que estamos en proceso de archivar para evitar sincronización
@@ -721,6 +721,12 @@ function PromisesKanban({
           )
         );
       } else {
+        if (archiveReason?.trim()) {
+          const { logPromiseAction } = await import('@/lib/actions/studio/commercial/promises/promise-logs.actions');
+          await logPromiseAction(studioSlug, promiseId, 'archived', 'user', null, { reason: archiveReason.trim() }).catch((err) => {
+            console.error('[PromisesKanban] Error registrando motivo de archivo:', err);
+          });
+        }
         toast.success('Promesa archivada exitosamente');
       }
     } catch (error) {
@@ -735,7 +741,6 @@ function PromisesKanban({
         )
       );
     } finally {
-      // Permitir sincronización después de un breve delay
       setTimeout(() => {
         isDraggingRef.current = false;
       }, 100);
@@ -859,7 +864,7 @@ function PromisesKanban({
               <PromiseKanbanCard
                 promise={activePromise}
                 studioSlug={studioSlug}
-                onArchived={() => activePromise.promise_id && handlePromiseArchived(activePromise.promise_id)}
+                onArchived={(reason) => activePromise.promise_id && handlePromiseArchived(activePromise.promise_id, reason)}
                 onDeleted={() => activePromise.promise_id && handlePromiseDeleted(activePromise.promise_id)}
                 onTagsUpdated={onPromiseUpdated}
                 pipelineStages={localPipelineStages}
@@ -910,7 +915,7 @@ function KanbanColumn({
   onPromiseClick: (promise: PromiseWithContact) => void;
   studioSlug: string;
   isFlexible?: boolean;
-  onPromiseArchived?: (promiseId: string) => void;
+  onPromiseArchived?: (promiseId: string, archiveReason?: string) => void;
   onPromiseDeleted?: (promiseId: string) => void;
   onPromiseUpdated?: () => void;
   pipelineStages?: PipelineStage[];
@@ -1304,7 +1309,7 @@ function KanbanColumn({
                 promise={promise}
                 onClick={onPromiseClick}
                 studioSlug={studioSlug}
-                onArchived={() => promise.promise_id && onPromiseArchived?.(promise.promise_id)}
+                onArchived={(reason) => promise.promise_id && onPromiseArchived?.(promise.promise_id, reason)}
                 onDeleted={() => promise.promise_id && onPromiseDeleted?.(promise.promise_id)}
                 onTagsUpdated={onPromiseUpdated}
                 pipelineStages={pipelineStages}
