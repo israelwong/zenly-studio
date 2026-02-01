@@ -1323,13 +1323,13 @@ export function CatalogoClient({
                                     e.stopPropagation();
                                     handleCreateCategoria(seccion.id);
                                 }}
-                                variant="outline"
                                 size="sm"
-                                className="gap-1 h-5 px-1.5 py-1 text-[11px] text-blue-400 hover:text-blue-200 border-blue-500/50 hover:border-blue-400/60"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 rounded-md"
                                 title="Agregar categoría"
                             >
-                                <Plus className="size-[10px] shrink-0" />
-                                Categoría
+                                <Plus className="size-4 shrink-0" />
                             </ZenButton>
                             <ZenDropdownMenu>
                                 <ZenDropdownMenuTrigger asChild>
@@ -1512,13 +1512,13 @@ export function CatalogoClient({
                                 e.stopPropagation();
                                 handleCreateItem(categoria.id);
                             }}
-                            variant="outline"
                             size="sm"
-                            className="gap-1 h-5 px-1.5 py-1 text-[11px] text-blue-400 hover:text-blue-200 border-blue-500/50 hover:border-blue-400/60"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 rounded-md"
                             title="Agregar item"
                         >
-                            <Plus className="size-[10px] shrink-0" />
-                            Item
+                            <Plus className="size-4 shrink-0" />
                         </ZenButton>
                         <ZenDropdownMenu>
                             <ZenDropdownMenuTrigger asChild>
