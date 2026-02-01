@@ -666,7 +666,7 @@ export function CotizacionForm({
         return next;
       });
       if (toAdd.length > 0) {
-        toast.info('Se han añadido servicios vinculados automáticamente');
+        toast.success('🔗 Smart Link: Servicios asociados agregados con éxito.', { id: 'cotizacion-smart-link' });
       }
     }
   };
@@ -687,9 +687,9 @@ export function CotizacionForm({
     });
 
     if (cantidad > prevCantidad && servicio) {
-      toast.success(`${servicio.nombre} agregado a la cotización`);
+      toast.success(`${servicio.nombre} agregado a la cotización`, { id: 'cotizacion-add' });
     } else if (cantidad === 0 && prevCantidad > 0 && servicio) {
-      toast.info(`${servicio.nombre} removido de la cotización`);
+      toast.info(`${servicio.nombre} removido de la cotización`, { id: 'cotizacion-remove' });
     }
   };
 

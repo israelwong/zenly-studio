@@ -33,6 +33,8 @@ export interface ItemFormData {
     status?: string;
 }
 
+export type ItemEditorContext = 'catalogo' | 'paquetes' | 'cotizaciones';
+
 interface ItemEditorModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -44,6 +46,8 @@ interface ItemEditorModalProps {
     categoriaId: string;
     preciosConfig?: ConfiguracionPrecios;
     showOverlay?: boolean;
+    /** Desde paquetes o cotizaciones: muestra aviso de que los cambios aplican al catálogo global */
+    context?: ItemEditorContext;
 }
 
 /**
@@ -60,6 +64,7 @@ export function ItemEditorModal({
     categoriaId,
     preciosConfig,
     showOverlay = true,
+    context = 'catalogo',
 }: ItemEditorModalProps) {
     // Estados del formulario
     const [formData, setFormData] = useState<ItemFormData>({
@@ -549,6 +554,12 @@ export function ItemEditorModal({
                             {item ? "Formulario para editar el item del catálogo" : "Formulario para crear un nuevo item en el catálogo"}
                         </SheetDescription>
                     </SheetHeader>
+
+                    {(context === 'paquetes' || context === 'cotizaciones') && item && (
+                        <div className="mx-6 mb-0 rounded-lg border border-amber-600/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-200/90">
+                            Editar con cuidado: se modificará el ítem en el catálogo. Cotizaciones no se afectan (snapshot). En paquetes, el cálculo dinámico usará los nuevos datos; el precio personalizado guardado no cambia.
+                        </div>
+                    )}
 
                     <div className="px-6 pb-6">
                         <form className="space-y-6 mt-6">

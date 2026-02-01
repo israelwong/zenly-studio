@@ -731,7 +731,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     return newItems;
                 });
                 if (servicio) {
-                    toast.info(`${servicio.nombre} removido del paquete`);
+                    toast.info(`${servicio.nombre} removido del paquete`, { id: 'paquete-remove' });
                 }
             } else {
                 newSet.add(servicioId);
@@ -742,11 +742,10 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     toAdd.forEach(id => { newItems[id] = 1; });
                     return newItems;
                 });
-                if (servicio) {
-                    toast.success(`${servicio.nombre} agregado al paquete`);
-                }
                 if (toAdd.length > 0) {
-                    toast.info('Se han añadido servicios vinculados automáticamente');
+                    toast.success('🔗 Smart Link: Servicios asociados agregados con éxito.', { id: 'paquete-smart-link' });
+                } else if (servicio) {
+                    toast.success(`${servicio.nombre} agregado al paquete`, { id: 'paquete-add' });
                 }
             }
             return newSet;
@@ -775,7 +774,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     return newSet;
                 });
                 if (servicio) {
-                    toast.info(`${servicio.nombre} removido del paquete`);
+                    toast.info(`${servicio.nombre} removido del paquete`, { id: 'paquete-remove' });
                 }
             }
             return newItems;
@@ -783,7 +782,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
 
         // Mostrar toast solo si cambió la cantidad (no al seleccionar)
         if (cantidad !== prevCantidad && prevCantidad > 0 && servicio) {
-            toast.success(`Cantidad de ${servicio.nombre} actualizada`);
+            toast.success(`Cantidad de ${servicio.nombre} actualizada`, { id: 'paquete-cantidad' });
         }
     };
 
@@ -1476,6 +1475,7 @@ export const PaqueteFormularioAvanzado = forwardRef<PaqueteFormularioRef, Paquet
                     categoriaId={selectedCategoriaForItem}
                     preciosConfig={configuracionPrecios}
                     showOverlay={true}
+                    context="paquetes"
                 />
             )}
         </div>
