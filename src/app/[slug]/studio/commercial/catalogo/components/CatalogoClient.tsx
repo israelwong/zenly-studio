@@ -1323,7 +1323,6 @@ export function CatalogoClient({
                                     e.stopPropagation();
                                     handleCreateCategoria(seccion.id);
                                 }}
-                                size="sm"
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 w-8 p-0 rounded-md"
@@ -1512,7 +1511,6 @@ export function CatalogoClient({
                                 e.stopPropagation();
                                 handleCreateItem(categoria.id);
                             }}
-                            size="sm"
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 rounded-md"

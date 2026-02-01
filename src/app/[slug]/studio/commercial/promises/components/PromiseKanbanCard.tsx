@@ -8,7 +8,8 @@ import { Calendar, MessageSquare, Video, MapPin, FileText, Archive, Phone, Flask
 import type { PromiseWithContact } from '@/lib/actions/schemas/promises-schemas';
 import { formatRelativeTime, formatInitials } from '@/lib/actions/utils/formatting';
 import { formatDisplayDateShort, formatDisplayDate, getRelativeDateLabel, getRelativeDateDiffDays } from '@/lib/utils/date-formatter';
-import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenBadge, ZenDialog, ZenButton, ZenTextarea, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { ZenAvatar, ZenAvatarImage, ZenAvatarFallback, ZenBadge, ZenDropdownMenu, ZenDropdownMenuTrigger, ZenDropdownMenuContent, ZenDropdownMenuItem, ZenDropdownMenuSeparator } from '@/components/ui/zen';
+import { ArchivePromiseModal } from './ArchivePromiseModal';
 import { PromiseDeleteModal } from '@/components/shared/promises';
 import type { PromiseTag } from '@/lib/actions/studio/commercial/promises';
 import { deletePromise } from '@/lib/actions/studio/commercial/promises';
@@ -34,7 +35,6 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
     // Crear mapa de nombres de stages para obtener nombres personalizados
     const stageNameMap = pipelineStages.length > 0 ? createStageNameMap(pipelineStages) : null;
     const [showArchiveModal, setShowArchiveModal] = useState(false);
-    const [archiveReasonText, setArchiveReasonText] = useState('');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     // ✅ OPTIMIZACIÓN: Usar reminder que viene en la promesa (ya no se carga por separado)
@@ -199,15 +199,10 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
         setShowArchiveModal(true);
     };
 
-    // Confirmar archivar promesa (con motivo para bitácora)
-    const handleConfirmArchive = () => {
+    // Confirmar archivar: el modal unificado pasa el motivo a onArchived; el modal cierra vía onClose
+    const handleConfirmArchive = (archiveReason?: string) => {
         if (!promise.promise_id) return;
-        const reason = archiveReasonText.trim() || undefined;
-        setShowArchiveModal(false);
-        setArchiveReasonText('');
-        setTimeout(() => {
-            onArchived?.(reason);
-        }, 0);
+        onArchived?.(archiveReason);
     };
 
 
@@ -572,32 +567,11 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                 </div>
             </Link>
 
-            {/* Modal archivar: motivo para bitácora */}
-            <ZenDialog
+            <ArchivePromiseModal
                 isOpen={showArchiveModal}
-                onClose={() => { setShowArchiveModal(false); setArchiveReasonText(''); }}
-                title="Archivar promesa"
-                description="El motivo se registrará en la bitácora de seguimiento."
-                maxWidth="sm"
-            >
-                <div className="space-y-4">
-                    <ZenTextarea
-                        value={archiveReasonText}
-                        onChange={e => setArchiveReasonText(e.target.value)}
-                        placeholder="¿Por qué se archiva? (opcional)"
-                        rows={3}
-                        className="resize-none"
-                    />
-                    <div className="flex justify-end gap-2">
-                        <ZenButton variant="outline" onClick={() => { setShowArchiveModal(false); setArchiveReasonText(''); }}>
-                            Cancelar
-                        </ZenButton>
-                        <ZenButton variant="destructive" onClick={handleConfirmArchive}>
-                            Archivar
-                        </ZenButton>
-                    </div>
-                </div>
-            </ZenDialog>
+                onClose={() => setShowArchiveModal(false)}
+                onConfirm={handleConfirmArchive}
+            />
 
             {/* Modal de confirmación eliminar - fuera del contenedor clickeable */}
             {promise.promise_id && studioSlug && (

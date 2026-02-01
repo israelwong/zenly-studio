@@ -8,7 +8,8 @@ import { PromiseShareOptionsModal } from './PromiseShareOptionsModal';
 import { PromiseProvider } from '../context/PromiseContext';
 import { usePromisesConfig } from '../../context/PromisesConfigContext';
 import { BitacoraSheet } from '@/components/shared/bitacora';
-import { ZenCard, ZenCardContent, ZenDialog, ZenButton, ZenTextarea } from '@/components/ui/zen';
+import { ZenCard, ZenCardContent } from '@/components/ui/zen';
+import { ArchivePromiseModal } from '../../components/ArchivePromiseModal';
 import { toast } from 'sonner';
 import type { PipelineStage } from '@/lib/actions/schemas/promises-schemas';
 import type { CotizacionListItem } from '@/lib/actions/studio/commercial/promises/cotizaciones.actions';
@@ -38,7 +39,6 @@ export function PromiseLayoutClient({
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [logsSheetOpen, setLogsSheetOpen] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [archiveReasonText, setArchiveReasonText] = useState('');
   const [isArchiving, setIsArchiving] = useState(false);
 
   const isArchived = stateData.promiseData.pipeline_stage_slug === 'archived';
@@ -147,8 +147,6 @@ export function PromiseLayoutClient({
         archiveReason: archiveReason?.trim() || undefined,
       });
       if (result.success) {
-        setShowArchiveModal(false);
-        setArchiveReasonText('');
         toast.success('Promesa archivada correctamente');
         router.push(`/${studioSlug}/studio/commercial/promises`);
       } else {
@@ -304,32 +302,11 @@ export function PromiseLayoutClient({
           </ZenCardContent>
         </ZenCard>
 
-        {/* Modal archivar: motivo para bitácora */}
-        <ZenDialog
+        <ArchivePromiseModal
           isOpen={showArchiveModal}
-          onClose={() => { setShowArchiveModal(false); setArchiveReasonText(''); }}
-          title="Archivar promesa"
-          description="El motivo se registrará en la bitácora de seguimiento."
-          maxWidth="sm"
-        >
-          <div className="space-y-4">
-            <ZenTextarea
-              value={archiveReasonText}
-              onChange={e => setArchiveReasonText(e.target.value)}
-              placeholder="¿Por qué se archiva? (opcional)"
-              rows={3}
-              className="resize-none"
-            />
-            <div className="flex justify-end gap-2">
-              <ZenButton variant="outline" onClick={() => { setShowArchiveModal(false); setArchiveReasonText(''); }} disabled={isArchiving}>
-                Cancelar
-              </ZenButton>
-              <ZenButton variant="destructive" onClick={() => handleArchive(archiveReasonText.trim() || undefined)} loading={isArchiving}>
-                Archivar
-              </ZenButton>
-            </div>
-          </div>
-        </ZenDialog>
+          onClose={() => setShowArchiveModal(false)}
+          onConfirm={async (archiveReason) => await handleArchive(archiveReason)}
+        />
 
         {/* Modales compartidos */}
         {promiseId && (
