@@ -10,7 +10,8 @@ function isReservedPath(path: string): boolean {
     "/complete-profile", "/confirm", "/unauthorized", "/protected", "/about",
     "/pricing", "/contact", "/features", "/blog", "/help", "/docs", "/demo",
     "/terms", "/privacy", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml",
-    "/auth/callback", // Callback de Supabase Auth OAuth
+    "/auth/callback", // Callback de Supabase Auth OAuth (servidor)
+    "/auth/callback-client", // Callback de OAuth (cliente) - página intermedia
     "/onboarding", // Rutas de onboarding
     "/s", // Rutas de URLs cortas (short URLs)
   ];
@@ -45,9 +46,10 @@ export async function proxy(request: NextRequest) {
       {
         cookies: {
           getAll: () => request.cookies.getAll().map(c => ({ name: c.name, value: c.value })),
-          setAll: (cookies) => {
-            cookies.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options)
+          setAll: (cookiesToSet) => {
+            const baseOpts = { path: '/', sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production' }
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, { ...baseOpts, ...options })
             })
           },
         },
@@ -100,9 +102,10 @@ export async function proxy(request: NextRequest) {
       {
         cookies: {
           getAll: () => request.cookies.getAll().map(c => ({ name: c.name, value: c.value })),
-          setAll: (cookies) => {
-            cookies.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options)
+          setAll: (cookiesToSet) => {
+            const baseOpts = { path: '/', sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production' }
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, { ...baseOpts, ...options })
             })
           },
         },
@@ -190,9 +193,10 @@ export async function proxy(request: NextRequest) {
       {
         cookies: {
           getAll: () => request.cookies.getAll().map(c => ({ name: c.name, value: c.value })),
-          setAll: (cookies) => {
-            cookies.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options)
+          setAll: (cookiesToSet) => {
+            const baseOpts = { path: '/', sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production' }
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, { ...baseOpts, ...options })
             })
           },
         },

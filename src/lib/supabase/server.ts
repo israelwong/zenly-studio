@@ -26,8 +26,13 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
+            const baseOptions = {
+              path: '/',
+              sameSite: 'lax' as const,
+              secure: process.env.NODE_ENV === 'production',
+            }
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, { ...baseOptions, ...options })
             )
           } catch {
             // The `setAll` method was called from a Server Component.

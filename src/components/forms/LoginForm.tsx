@@ -8,7 +8,7 @@
 import { useState, FormEvent, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/browser'
+import { createClient, getOAuthOrigin } from '@/lib/supabase/browser'
 import { setRememberMePreference, getRememberMePreference } from '@/lib/supabase/storage-adapter'
 import { loginAction } from '@/lib/actions/auth/login.actions'
 import { Button } from '@/components/ui/shadcn/button'
@@ -34,10 +34,17 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
 
-  // Mostrar error de acceso restringido si viene en la URL (p. ej. tras OAuth)
+  // Mostrar errores que vienen en la URL (p. ej. tras OAuth)
   useEffect(() => {
-    if (searchParams.get('error') === 'restricted') {
+    const errorParam = searchParams.get('error')
+    if (errorParam === 'restricted') {
       setError('Acceso restringido. El registro de nuevos estudios estará disponible próximamente.')
+    } else if (errorParam === 'timeout') {
+      setError('El proceso de autenticación expiró o fue usado. Por favor intenta nuevamente.')
+    } else if (errorParam === 'auth_failed') {
+      setError('Error al autenticar con Google. Por favor intenta nuevamente.')
+    } else if (errorParam === 'missing_verifier') {
+      setError('Error técnico en la autenticación. Limpia el caché del navegador e intenta nuevamente.')
     }
   }, [searchParams])
 
@@ -55,34 +62,63 @@ export function LoginForm() {
   }, [])
 
   async function handleGoogleSignIn() {
+    // Prevenir clics múltiples
+    if (googleLoading) {
+      console.log('[OAuth] ⚠️ Ya hay un proceso de OAuth en curso')
+      return
+    }
+
     setError('')
     setGoogleLoading(true)
 
     try {
       const supabase = createClient()
       
-      // Capturar URL de origen para persistencia de contexto
-      const currentPath = window.location.pathname + window.location.search;
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(currentPath)}`;
+      // NO hacer signOut - interfiere con el code_verifier
+      // Solo limpiar sesiones expiradas si es necesario
       
-      // Autorización incremental: Solo pedir email y profile para login
-      // Los permisos de Drive y Calendar se pedirán cuando el usuario los necesite
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      const origin = getOAuthOrigin()
+      const currentPath = window.location.pathname + window.location.search
+      // Redirigir directamente al callback del servidor (Supabase maneja PKCE internamente)
+      const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(currentPath)}`
+
+      console.log('[OAuth] 🚀 ONE-SHOT: Iniciando flujo de autenticación con Google')
+      console.log('[OAuth] localStorage antes de OAuth:', {
+        length: localStorage.length,
+        keys: Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)),
+      })
+
+      const { data: oauthData, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo,
-          // No especificar scopes - Supabase usará los scopes por defecto (email, profile)
-          // Esto hace que Google solo pida nombre y correo, mejorando la confianza del usuario
+          skipBrowserRedirect: false,
         },
       })
 
       if (oauthError) {
+        console.error('[OAuth] ❌ Error iniciando OAuth:', oauthError)
         setError(oauthError.message)
         setGoogleLoading(false)
+        return
       }
+
+      // Verificar que se generó el code_verifier antes de la redirección
+      if (oauthData?.url) {
+        console.log('[OAuth] ✅ URL de OAuth generada:', oauthData.url.substring(0, 100) + '...')
+        
+        // Esperar un momento para que el interceptor de localStorage se ejecute
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        console.log('[OAuth] localStorage después de OAuth:', {
+          length: localStorage.length,
+          keys: Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)),
+        })
+      }
+      
       // No hacer setGoogleLoading(false) aquí - la redirección ocurre automáticamente
     } catch (err) {
-      console.error('Google OAuth error:', err)
+      console.error('[OAuth] ❌ Error:', err)
       setError(
         err instanceof Error
           ? err.message

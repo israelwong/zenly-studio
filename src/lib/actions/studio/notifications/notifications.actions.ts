@@ -207,10 +207,15 @@ export async function getCurrentUserId(studioSlug: string) {
         return { success: false, error: 'Usuario no tiene acceso a este estudio' };
       }
 
-      // Crear studio_user_profiles con supabase_id
-      // IMPORTANTE: Asegurar que supabase_id sea string (no UUID)
-      userProfile = await prisma.studio_user_profiles.create({
-        data: {
+      // Crear o actualizar studio_user_profiles con supabase_id
+      // IMPORTANTE: Usar upsert para evitar error de unique constraint
+      userProfile = await prisma.studio_user_profiles.upsert({
+        where: { email: user.email },
+        update: {
+          supabase_id: authUser.id, // Actualizar supabase_id si cambió
+          is_active: true,
+        },
+        create: {
           email: user.email,
           supabase_id: authUser.id, // Ya es string desde Supabase
           studio_id: studio.id,
@@ -220,7 +225,7 @@ export async function getCurrentUserId(studioSlug: string) {
         select: { id: true, studio_id: true, email: true, supabase_id: true },
       });
 
-      console.log('[getCurrentUserId] ✅ Perfil creado:', {
+      console.log('[getCurrentUserId] ✅ Perfil creado/actualizado:', {
         id: userProfile.id,
         email: user.email,
         supabase_id: userProfile.supabase_id,

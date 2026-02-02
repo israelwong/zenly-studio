@@ -22,6 +22,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'bgtapcutchryzhzooony.supabase.co' },
       { protocol: 'https', hostname: 'fhwfdwrrnwkbnwxabkcq.supabase.co' },
       { protocol: 'https', hostname: 'zen.pro' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' }, // Google OAuth avatars
     ],
   },
 

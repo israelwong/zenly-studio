@@ -50,9 +50,14 @@ export async function getCurrentUserProfile(studioSlug?: string) {
       dbUser.full_name ??
       dbUser.email?.split('@')[0] ??
       'Usuario';
+    
+    // ✅ Prioridad avatar: studio_user_profiles → users → metadatos de Supabase Auth (Google OAuth)
     const avatarUrl =
       (studioProfile?.avatar_url as string | undefined) ??
-      (dbUser.avatar_url as string | undefined);
+      (dbUser.avatar_url as string | undefined) ??
+      (user.user_metadata?.avatar_url as string | undefined) ??
+      (user.user_metadata?.picture as string | undefined);
+    
     const normalizedAvatarUrl =
       avatarUrl && typeof avatarUrl === 'string' && avatarUrl.trim() !== ''
         ? avatarUrl.trim()

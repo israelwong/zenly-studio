@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/browser';
+import { createClient, getOAuthOrigin } from '@/lib/supabase/browser';
 import type { AuthIdentities } from '@/lib/actions/studio/account/auth-identities';
 import type { PerfilData } from './types';
 import {
@@ -27,8 +27,11 @@ const GoogleLogo = () => (
 
 async function connectGoogleAccount(studioSlug: string): Promise<{ error: string | null }> {
   const supabase = createClient();
+  // No necesitamos limpiar cookies ni hacer signOut - el flujo OAuth maneja esto automáticamente
+
+  const origin = getOAuthOrigin();
   const next = `/${studioSlug}/studio/config/account?success=true`;
-  const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo },

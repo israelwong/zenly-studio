@@ -52,8 +52,13 @@ export async function obtenerPerfil(studioSlug: string): Promise<ActionResult<Pe
 
     const name =
       studioProfile?.full_name ?? dbUser.full_name ?? dbUser.email?.split('@')[0] ?? '';
+    
+    // ✅ Prioridad avatar: studio_user_profiles → users → metadatos de Supabase Auth (Google OAuth)
     const avatarUrl =
-      (studioProfile?.avatar_url as string | undefined) ?? (dbUser.avatar_url as string | undefined);
+      (studioProfile?.avatar_url as string | undefined) ?? 
+      (dbUser.avatar_url as string | undefined) ??
+      (user.user_metadata?.avatar_url as string | undefined) ??
+      (user.user_metadata?.picture as string | undefined);
 
     const perfilData: PerfilData = {
       id: dbUser.id,
@@ -74,6 +79,8 @@ export async function obtenerPerfil(studioSlug: string): Promise<ActionResult<Pe
 
 /**
  * Actualizar perfil del usuario (users + studio_user_profiles para el estudio actual).
+ * No escribe user_metadata en Supabase Auth (avatar, nombre largo, etc. se consultan desde DB).
+ * Solo role y studio_slug se guardan en JWT (signup/OAuth callback) para mantener el token pequeño.
  */
 export async function actualizarPerfil(
   studioSlug: string,
@@ -187,8 +194,13 @@ export async function actualizarPerfil(
 
     const name =
       studioProfile?.full_name ?? updated.full_name ?? updated.email?.split('@')[0] ?? '';
+    
+    // ✅ Prioridad avatar: studio_user_profiles → users → metadatos de Supabase Auth (Google OAuth)
     const avatarUrl =
-      (studioProfile?.avatar_url as string | undefined) ?? (updated.avatar_url as string | undefined);
+      (studioProfile?.avatar_url as string | undefined) ?? 
+      (updated.avatar_url as string | undefined) ??
+      (user.user_metadata?.avatar_url as string | undefined) ??
+      (user.user_metadata?.picture as string | undefined);
 
     const perfilData: PerfilData = {
       id: updated.id,

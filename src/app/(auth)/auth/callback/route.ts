@@ -4,6 +4,7 @@ import {
   procesarUsuarioOAuth,
   vincularRecursoGoogle,
 } from '@/lib/actions/auth/oauth.actions';
+import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import {
   procesarCallbackGoogleCalendar,
   procesarCallbackGoogleDrive,
@@ -303,42 +304,51 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // IMPORTANTE: Logging detallado de cookies antes de procesar
     const allCookies = request.cookies.getAll();
-    console.log('🍪 [OAuth Callback] ========================================');
-    console.log('🍪 [OAuth Callback] Cookies presentes:', allCookies.map(c => c.name));
-    console.log('🍪 [OAuth Callback] Total de cookies:', allCookies.length);
+    const sbCookies = allCookies.filter(c => c.name.startsWith('sb-'));
+    console.log('[OAuth Callback] 📦 Cookies sb-*:', sbCookies.map(c => ({
+      name: c.name,
+      hasValue: !!c.value,
+      len: (c.value ?? '').length,
+      segmented: /\.\d+$/.test(c.name),
+    })));
+
+    // PRIORIDAD: code_verifier de URL > cookies
+    const verifierFromUrl = searchParams.get('code_verifier');
+    const codeVerifierCookie = allCookies.find(c => c.name.includes('code-verifier'));
     
-    // Filtrar cookies de PKCE para debugging
-    const pkceCookies = allCookies.filter(c => 
-      c.name.includes('code-verifier') || c.name.includes('code-challenge')
-    );
-    console.log('🔐 [OAuth Callback] Cookies de PKCE encontradas:', pkceCookies.length);
-    pkceCookies.forEach(c => {
-      console.log('🔐 [OAuth Callback] Cookie PKCE:', {
-        name: c.name,
-        hasValue: !!c.value,
-        valueLength: c.value?.length || 0,
-        valuePreview: c.value ? c.value.substring(0, 50) + '...' : 'EMPTY ❌',
-        isEmpty: !c.value || c.value?.length === 0,
-      });
+    console.log('[OAuth Callback] 🔐 PKCE Verifier Sources:', {
+      fromUrl: !!verifierFromUrl,
+      fromCookie: !!codeVerifierCookie?.value,
+      urlLength: verifierFromUrl?.length ?? 0,
+      cookieLength: codeVerifierCookie?.value?.length ?? 0,
     });
+
+    // Determinar qué verifier usar (priorizar URL)
+    const finalVerifier = verifierFromUrl || codeVerifierCookie?.value;
     
-    // Si el code_verifier está vacío, mostrar advertencia clara
-    const codeVerifierCookie = pkceCookies.find(c => c.name.includes('code-verifier'));
-    if (codeVerifierCookie) {
-      if (!codeVerifierCookie.value || codeVerifierCookie.value.length === 0) {
-        console.error('❌ [OAuth Callback] ERROR CRÍTICO: Code verifier está VACÍO');
-        console.error('❌ [OAuth Callback] Esto causará un error en exchangeCodeForSession');
-        console.error('❌ [OAuth Callback] Cookie name:', codeVerifierCookie.name);
-        console.error('❌ [OAuth Callback] Cookie value:', codeVerifierCookie.value);
-      } else {
-        console.log('✅ [OAuth Callback] Code verifier tiene valor:', codeVerifierCookie.value.length, 'caracteres');
-      }
+    if (verifierFromUrl) {
+      console.log('[OAuth Callback] ✅ Usando code_verifier desde URL (prioridad):', {
+        length: verifierFromUrl.length,
+        preview: verifierFromUrl.substring(0, 20) + '...',
+      });
+    } else if (codeVerifierCookie?.value) {
+      console.log('[OAuth Callback] ✅ Usando code_verifier desde cookies (fallback)');
     } else {
-      console.error('❌ [OAuth Callback] ERROR: No se encontró cookie de code-verifier');
+      console.error('[OAuth Callback] ❌ CRÍTICO: No se encontró code_verifier');
+      return NextResponse.redirect(
+        new URL('/login?error=missing_verifier', request.url)
+      );
     }
-    console.log('🍪 [OAuth Callback] ========================================');
+
+    // Log del código que se va a intercambiar
+    console.log('[OAuth Callback] 🔄 Preparando intercambio:', {
+      code: code.substring(0, 8) + '...' + code.substring(code.length - 4),
+      codeLength: code.length,
+      verifier: finalVerifier!.substring(0, 20) + '...',
+      verifierLength: finalVerifier!.length,
+      timestamp: new Date().toISOString(),
+    });
 
     // IMPORTANTE: Para vinculación de recurso, guardar cookies originales antes de exchangeCodeForSession
     // porque exchangeCodeForSession sobrescribe las cookies con una sesión temporal
@@ -369,30 +379,48 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // CRUCIAL: En Next.js 14+, debemos usar createServerClient directamente
-    // con las cookies del request para asegurar que el code_verifier esté disponible
-    // Crear respuesta temporal para manejar cookies
     const response = NextResponse.next();
-    
-    // Crear cliente de Supabase usando las cookies del request directamente
-    // Esto asegura que el code_verifier esté disponible cuando se necesite
+    const cookieOptions = {
+      path: '/' as const,
+      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+    };
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll() {
-            // Forzar lectura de cookies del request
-            // Decodificar valores si están codificados (por si usamos encodeURIComponent)
-            const cookies = request.cookies.getAll();
+            let cookies = request.cookies.getAll();
+            const verifierCookie = cookies.find(c => c.name.includes('code-verifier'));
+            
+            // PRIORIDAD: Si viene verifier en URL, SIEMPRE usarlo
+            if (verifierFromUrl) {
+              if (verifierCookie) {
+                // Reemplazar cookie existente con valor de URL
+                console.log('[OAuth Callback] 🔄 Reemplazando code_verifier con valor de URL (prioridad)');
+                cookies = cookies.map(c =>
+                  c.name === verifierCookie.name ? { name: c.name, value: verifierFromUrl } : c
+                );
+              } else {
+                // Crear nueva cookie con el nombre estándar de Supabase
+                const project = process.env.NEXT_PUBLIC_SUPABASE_URL!.split('//')[1].split('.')[0];
+                const verifierName = `sb-${project}-auth-token-code-verifier`;
+                console.log('[OAuth Callback] ➕ Creando code_verifier desde URL:', verifierName);
+                cookies.push({ name: verifierName, value: verifierFromUrl });
+              }
+            } else if (!verifierCookie?.value) {
+              // Si no hay verifier en URL ni en cookies, ERROR
+              console.error('[OAuth Callback] ❌ CRÍTICO: No hay code_verifier disponible en cookies');
+            }
+            
             return cookies.map(cookie => {
-              // Si el valor parece estar codificado (contiene %), decodificarlo
+              // Decodificar cookies que puedan estar encoded
               if (cookie.value && cookie.value.includes('%')) {
                 try {
-                  const decoded = decodeURIComponent(cookie.value);
-                  return { name: cookie.name, value: decoded };
+                  return { name: cookie.name, value: decodeURIComponent(cookie.value) };
                 } catch {
-                  // Si falla la decodificación, usar el valor original
                   return cookie;
                 }
               }
@@ -400,17 +428,18 @@ export async function GET(request: NextRequest) {
             });
           },
           setAll(cookiesToSet) {
-            // Guardar cookies en la respuesta
             cookiesToSet.forEach(({ name, value, options }) => {
+              const opts = { ...cookieOptions, ...options };
               request.cookies.set(name, value);
-              response.cookies.set(name, value, options);
+              response.cookies.set(name, value, opts);
             });
           },
         },
         auth: {
-          persistSession: false,
+          persistSession: true,  // Cambiar a true para que Supabase maneje la sesión
           autoRefreshToken: false,
-          detectSessionInUrl: false, // No detectar sesión en URL para evitar interferencias
+          detectSessionInUrl: true,  // Cambiar a true para detectar code en URL
+          flowType: 'pkce',  // Explícitamente usar PKCE
         },
       }
     );
@@ -431,39 +460,58 @@ export async function GET(request: NextRequest) {
       return redirectResponse;
     };
 
-    // Intercambiar código por sesión
-    // Esto requiere que las cookies de PKCE estén disponibles en el request
-    console.log('[OAuth Callback] Intentando intercambiar código por sesión...');
+    // Intercambiar código por sesión (ONE-SHOT)
+    console.log('[OAuth Callback] 🚀 ONE-SHOT: Intentando intercambiar código por sesión...');
     const { data, error: exchangeError } =
       await supabase.auth.exchangeCodeForSession(code);
 
     if (exchangeError) {
-      console.error(
-        '[OAuth Callback] Error intercambiando código:',
-        exchangeError
-      );
-      
-      // Si es vinculación de recurso, redirigir al studio con error
-      if (type === 'link_resource' && studioSlug) {
-        const redirectPath = getSafeRedirectUrl(
-          next,
-          `/${studioSlug}/studio/config/integraciones`,
-          request
-        );
+      console.error('[OAuth Callback] ❌ Error intercambiando código:', {
+        code: exchangeError.code,
+        message: exchangeError.message,
+        status: exchangeError.status,
+      });
+
+      // Si el código ya se usó o expiró (flow_state_not_found)
+      if (exchangeError.code === 'flow_state_not_found') {
+        console.error('[OAuth Callback] ⏱️ Código OAuth expirado o ya usado (flow_state_not_found)');
         
-        // Limpiar la URL antes de agregar el parámetro de error
-        const redirectUrl = new URL(redirectPath, request.url);
-        redirectUrl.searchParams.delete('success'); // Limpiar success si existe
-        redirectUrl.searchParams.set('error', 'auth_failed');
+        await supabase.auth.signOut();
         
-        return createRedirectResponse(redirectUrl);
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('error', 'timeout');
+        
+        const redirectRes = NextResponse.redirect(loginUrl);
+        // Limpiar todas las cookies de Supabase
+        const allCookies = request.cookies.getAll();
+        allCookies.forEach((c) => {
+          if (c.name.startsWith('sb-')) {
+            redirectRes.cookies.set(c.name, '', { path: '/', maxAge: 0 });
+          }
+        });
+        
+        return redirectRes;
       }
-      
-      const loginRedirect = getSafeRedirectUrl(next, '/login', request);
-      return createRedirectResponse(
-        new URL(`${loginRedirect}?error=auth_failed`, request.url)
-      );
+
+      // Otros errores (validation_failed, etc.)
+      await supabase.auth.signOut();
+
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('error', 'auth_failed');
+
+      const redirectRes = NextResponse.redirect(loginUrl);
+      const allCookies = request.cookies.getAll();
+      allCookies.forEach((c) => {
+        if (c.name.startsWith('sb-')) {
+          redirectRes.cookies.set(c.name, '', { path: '/', maxAge: 0 });
+          redirectRes.cookies.set(c.name, '', { path: '/auth', maxAge: 0 });
+        }
+      });
+
+      return redirectRes;
     }
+
+    console.log('[OAuth Callback] ✅ Intercambio exitoso - Sesión creada');
 
     if (!data.user || !data.session) {
       console.error('[OAuth Callback] No se pudo obtener usuario o sesión');
@@ -599,6 +647,17 @@ export async function GET(request: NextRequest) {
       return createRedirectResponse(
         new URL(`${loginRedirect}?error=processing_failed`, request.url)
       );
+    }
+
+    if (result.studioSlug) {
+      try {
+        const admin = createAdminClient();
+        await admin.auth.admin.updateUserById(data.user.id, {
+          user_metadata: { role: 'suscriptor', studio_slug: result.studioSlug },
+        });
+      } catch (e) {
+        console.warn('[OAuth Callback] No se pudo adelgazar user_metadata:', e);
+      }
     }
 
     // Redirigir según resultado (usuario existente)

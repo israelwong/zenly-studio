@@ -19,15 +19,18 @@ export function createClient(request: NextRequest, response: NextResponse) {
     {
       cookies: {
         getAll() {
-          // Leer todas las cookies del request
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          // Escribir cookies en request y response
-          // Esto sincroniza la sesión entre cliente y servidor
+          const baseOptions = {
+            path: '/',
+            sameSite: 'lax' as const,
+            secure: process.env.NODE_ENV === 'production',
+          }
           cookiesToSet.forEach(({ name, value, options }) => {
+            const opts = { ...baseOptions, ...options }
             request.cookies.set(name, value)
-            response.cookies.set(name, value, options)
+            response.cookies.set(name, value, opts)
           })
         },
       },
