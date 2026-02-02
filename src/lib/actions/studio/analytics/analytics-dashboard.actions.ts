@@ -287,27 +287,7 @@ export async function getStudioAnalyticsSummary(
             dateFilter.lte = dateTo;
         }
 
-        console.log(`[getStudioAnalyticsSummary] 📅 Filtros de fecha:`, {
-            dateFrom: dateLimit.toISOString(),
-            dateTo: dateTo.toISOString(),
-            ownerId: ownerId || 'null',
-            hasOwnerExclusion: Object.keys(ownerExclusionFilter).length > 0,
-        });
-
-        // Verificar cuántos registros hay SIN filtro de owner para debugging
-        const totalProfileViewsWithoutFilter = await prisma.studio_content_analytics.count({
-            where: {
-                studio_id: studioId,
-                content_type: 'PACKAGE',
-                content_id: studioId,
-                event_type: 'PAGE_VIEW',
-                created_at: dateFilter,
-            },
-        });
-        console.log(`[getStudioAnalyticsSummary] 🔍 Total profile views SIN filtro owner: ${totalProfileViewsWithoutFilter}`);
-
         // Paralelizar queries independientes
-        console.log(`[getStudioAnalyticsSummary] 🔍 Ejecutando queries...`);
         const [postsStats, portfoliosStats, offersStats, profileViewsFull, postClicksData] = await Promise.all([
             // Stats de posts (excluyendo owner)
             prisma.studio_content_analytics.groupBy({
@@ -403,12 +383,6 @@ export async function getStudioAnalyticsSummary(
             } catch {
                 return false;
             }
-        });
-
-        console.log(`[getStudioAnalyticsSummary] 🔍 Profile views filtrados:`, {
-            totalViews: profileViewsFull.length,
-            filteredViews: profileViewsFiltered.length,
-            sampleMetadata: profileViewsFull[0]?.metadata || 'none',
         });
 
         // Calcular métricas de perfil (manejar arrays vacíos)
@@ -568,7 +542,6 @@ export async function getTopContent(
     }
 ) {
     try {
-        console.log(`[getTopContent] 🚀 Iniciando para studioId: ${studioId}, limit: ${limit}`);
         // Construir filtro de fecha
         const dateFilter: { gte?: Date; lte?: Date } = {};
         if (options?.dateFrom) {
@@ -586,26 +559,7 @@ export async function getTopContent(
         const ownerId = await getStudioOwnerId(studioId);
         const ownerExclusionFilter = await createOwnerExclusionFilter(studioId, ownerId);
 
-        console.log(`[getTopContent] 📅 Filtros:`, {
-            dateFrom: dateFilter.gte?.toISOString() || 'none',
-            dateTo: dateFilter.lte?.toISOString() || 'none',
-            ownerId: ownerId || 'null',
-            hasOwnerExclusion: Object.keys(ownerExclusionFilter).length > 0,
-        });
-
-        // Verificar cuántos registros hay SIN filtro de owner para debugging
-        const totalPostsWithoutFilter = await prisma.studio_content_analytics.count({
-            where: {
-                studio_id: studioId,
-                content_type: 'POST',
-                event_type: 'FEED_VIEW',
-                created_at: dateFilter,
-            },
-        });
-        console.log(`[getTopContent] 🔍 Total posts SIN filtro owner: ${totalPostsWithoutFilter}`);
-
         // Top posts por vistas (excluyendo owner)
-        console.log(`[getTopContent] 🔍 Buscando top posts...`);
         const topPosts = await prisma.studio_content_analytics.groupBy({
             by: ['content_id'],
             where: {

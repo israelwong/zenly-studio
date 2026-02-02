@@ -80,13 +80,11 @@ function getSafeRedirectUrl(
 ): string {
   const origin = new URL(request.url).origin;
   if (next && isValidInternalUrl(next, origin)) {
-    // Limpiar parámetros de error/success previos para evitar acumulación
     try {
       const url = new URL(next, request.url);
-      // Mantener solo el pathname, eliminar todos los query params
-      return url.pathname;
+      // Preservar pathname + search (ej. ?success=true) para flujos como vinculación Google
+      return url.pathname + url.search;
     } catch {
-      // Si falla el parseo, usar next tal cual
       return next;
     }
   }
@@ -604,25 +602,34 @@ export async function GET(request: NextRequest) {
     }
 
     // Redirigir según resultado (usuario existente)
-    // Prioridad: result.redirectPath (estudio activo) siempre sobre next
+    // Prioridad absoluta: si next existe y es válido, usarlo. Solo si no, estudio reciente o login.
     if (result.needsOnboarding) {
       const url = new URL('/onboarding/setup-studio', request.url);
       url.search = ''; // Limpiar code/state de la barra de direcciones
       return NextResponse.redirect(url);
     }
 
-    if (result.redirectPath) {
-      console.log(`[Auth Callback] Destino: /${result.studioSlug ?? '?'}/studio`);
-      const url = new URL(result.redirectPath, request.url);
-      url.search = ''; // Limpiar code y state para no dejarlos visibles
-      return NextResponse.redirect(url);
+    if (next && isValidInternalUrl(next, new URL(request.url).origin)) {
+      const destination = getSafeRedirectUrl(next, '/login', request);
+      console.log('[Auth Callback] Respetando parámetro next:', destination);
+      const url = new URL(destination, request.url);
+      // Mantener query de next (ej. ?success=true); solo quitar code/state si vinieran en request
+      url.searchParams.delete('code');
+      url.searchParams.delete('state');
+      return createRedirectResponse(url);
     }
 
-    // Fallback: next válido o login (result.redirectPath tiene prioridad sobre next)
+    if (result.redirectPath) {
+      console.log(`[Auth Callback] Destino (sin next): /${result.studioSlug ?? '?'}/studio`);
+      const url = new URL(result.redirectPath, request.url);
+      url.search = '';
+      return createRedirectResponse(url);
+    }
+
     const safeRedirect = getSafeRedirectUrl(next, '/login', request);
     const url = new URL(safeRedirect, request.url);
-    url.search = ''; // Limpiar code/state
-    return NextResponse.redirect(url);
+    url.search = '';
+    return createRedirectResponse(url);
   } catch (error) {
     console.error('[OAuth Callback] Error inesperado:', error);
     const loginRedirect = getSafeRedirectUrl(next, '/login', request);

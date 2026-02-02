@@ -1,8 +1,8 @@
 /**
  * FUNCIÓN ÚNICA DE VERDAD PARA REDIRECCIONES
- * 
- * Centraliza toda la lógica de redirección basada en sesión
- * Usa getDefaultRoute como fuente única de verdad
+ *
+ * Centraliza toda la lógica de redirección basada en sesión.
+ * Si user_metadata no tiene role/studio_slug, el caller debe resolver desde DB (resolveRedirectFromDb).
  */
 
 import { getDefaultRoute } from '@/types/auth';
@@ -14,44 +14,34 @@ export interface RedirectResult {
 }
 
 /**
- * Determina la ruta de redirección basada en el usuario autenticado
- * Fuente única de verdad para todas las redirecciones
+ * Determina la ruta de redirección basada en user_metadata (role, studio_slug).
+ * Si metadata falta (p. ej. tras vincular Google o usuario antiguo), el caller debe usar resolveRedirectFromDb.
  */
 export function getRedirectPathForUser(user: User | null): RedirectResult {
   if (!user) {
-    return {
-      shouldRedirect: false,
-      redirectPath: null,
-    };
+    return { shouldRedirect: false, redirectPath: null };
   }
 
   const userRole = user.user_metadata?.role;
 
   if (!userRole) {
-    return {
-      shouldRedirect: false,
-      redirectPath: null,
-    };
+    return { shouldRedirect: false, redirectPath: null };
   }
-
-  let redirectPath: string;
 
   if (userRole === 'suscriptor') {
     const studioSlug = user.user_metadata?.studio_slug;
     if (!studioSlug) {
-      return {
-        shouldRedirect: false,
-        redirectPath: '/unauthorized',
-      };
+      return { shouldRedirect: false, redirectPath: null };
     }
-    redirectPath = getDefaultRoute(userRole, studioSlug);
-  } else {
-    redirectPath = getDefaultRoute(userRole);
+    return {
+      shouldRedirect: true,
+      redirectPath: getDefaultRoute(userRole, studioSlug),
+    };
   }
 
   return {
     shouldRedirect: true,
-    redirectPath,
+    redirectPath: getDefaultRoute(userRole),
   };
 }
 

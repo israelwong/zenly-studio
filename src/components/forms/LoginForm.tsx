@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * LOGIN FORM - VERSIÓN LIMPIA
- * Sin complejidades, login directo y redirección
+ * LOGIN FORM - Login por contraseña u OAuth.
+ * Redirección resuelta desde user_metadata o desde DB (user_studio_roles) si falta metadata.
  */
 
 import { useState, FormEvent, useEffect } from 'react'
@@ -10,7 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/browser'
 import { setRememberMePreference, getRememberMePreference } from '@/lib/supabase/storage-adapter'
-import { checkUserExists } from '@/lib/actions/auth/login.actions'
+import { loginAction } from '@/lib/actions/auth/login.actions'
 import { Button } from '@/components/ui/shadcn/button'
 import { Input } from '@/components/ui/shadcn/input'
 import { Label } from '@/components/ui/shadcn/label'
@@ -38,6 +38,14 @@ export function LoginForm() {
   useEffect(() => {
     if (searchParams.get('error') === 'restricted') {
       setError('Acceso restringido. El registro de nuevos estudios estará disponible próximamente.')
+    }
+  }, [searchParams])
+
+  // Limpieza de sesión zombie: si hay error en URL (restricted, oauth_cancelled, etc.), cerrar sesión para que el siguiente login sea limpio
+  useEffect(() => {
+    const errorParam = searchParams.get('error')
+    if (errorParam) {
+      createClient().auth.signOut().catch(() => {})
     }
   }, [searchParams])
 
@@ -90,50 +98,22 @@ export function LoginForm() {
     setLoading(true)
 
     try {
-      // Guardar preferencia antes del login para que el storage adapter la respete
       setRememberMePreference(rememberMe)
 
-      const supabase = createClient()
+      const result = await loginAction(email, password)
 
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (signInError) throw signInError
-      if (!data.user) throw new Error('No se pudo obtener usuario')
-
-      // Solo usuarios existentes en nuestra tabla users
-      const exists = await checkUserExists(data.user.id)
-      if (!exists) {
-        await supabase.auth.signOut()
-        setError(
-          'Acceso restringido. El registro de nuevos estudios estará disponible próximamente.'
-        )
+      if (!result.success) {
+        setError(result.error ?? 'Error al iniciar sesión')
         setLoading(false)
         return
       }
 
-      // Determinar redirección según rol
-      const role = data.user.user_metadata?.role
-      const studioSlug = data.user.user_metadata?.studio_slug
-
-      let redirectPath = '/login'
-
-      if (role === 'suscriptor' && studioSlug) {
-        redirectPath = `/${studioSlug}/studio`
-      } else if (role === 'admin') {
-        redirectPath = '/admin/dashboard'
-      } else if (role === 'agente') {
-        redirectPath = '/agente/leads'
+      if (result.redirectTo) {
+        window.location.href = result.redirectTo
+      } else {
+        setError('No se pudo determinar la ruta de redirección')
+        setLoading(false)
       }
-
-      // Esperar que el AuthContext detecte el cambio (el listener onAuthStateChange se dispara)
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      // Usar router.push en lugar de window.location para mantener el contexto
-      router.push(redirectPath)
-
     } catch (err) {
       console.error('Login error:', err)
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
