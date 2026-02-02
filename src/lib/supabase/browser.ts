@@ -47,6 +47,5 @@ export function createClient() {
     }
   )
 
-  console.log('[Supabase Client] ✅ Cliente creado con localStorage nativo')
   return client
 }

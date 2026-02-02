@@ -48,16 +48,6 @@ export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAv
 
     const avatarRefreshTrigger = useAvatarRefreshListener();
 
-    // 🐛 DEBUG: Ver estado de auth
-    console.log('[UserAvatar] Estado:', { 
-        loading, 
-        hasUser: !!user, 
-        email: user?.email,
-        hasInitialProfile: !!initialUserProfile,
-        initialAvatar: initialUserProfile?.avatarUrl,
-        metadataAvatar: user?.user_metadata?.avatar_url || user?.user_metadata?.picture
-    });
-
     // Sincronizar con datos del servidor solo cuando name/avatarUrl cambian (primitivos). Evita bucle por referencia nueva de initialUserProfile.
     const initialName = initialUserProfile?.name;
     const initialAvatarUrl = initialUserProfile?.avatarUrl;
@@ -135,7 +125,6 @@ export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAv
     };
 
     if (loading || isLoading) {
-        console.log('[UserAvatar] Loading...', { loading, isLoading });
         return (
             <div className={`animate-pulse ${className}`}>
                 <div className="w-8 h-8 bg-zinc-700 rounded-full"></div>
@@ -146,14 +135,8 @@ export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAv
     // ✅ CRÍTICO: Si tenemos initialUserProfile del servidor, renderizar aunque useAuth() no tenga usuario
     // Esto resuelve problemas de hidratación donde el servidor tiene sesión pero el cliente no la detecta inmediatamente
     if (!user && !initialUserProfile) {
-        console.log('[UserAvatar] ❌ No user y no initialUserProfile - returning null');
         return null;
     }
-
-    console.log('[UserAvatar] ✅ Rendering:', { 
-        hasUser: !!user, 
-        hasInitialProfile: !!initialUserProfile 
-    });
 
     // Nombre: perfil unificado (studio_user_profiles ?? users) → metadata → email → fallback
     const userName =
@@ -174,15 +157,6 @@ export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAv
         rawAvatar && typeof rawAvatar === "string" && rawAvatar.trim() !== ""
             ? rawAvatar.trim()
             : null;
-
-    console.log('[UserAvatar] 🖼️ Avatar decision:', {
-        userProfile: userProfile?.avatarUrl,
-        initialUserProfile: initialUserProfile?.avatarUrl,
-        metadata_avatar: user?.user_metadata?.avatar_url,
-        metadata_picture: user?.user_metadata?.picture,
-        final: avatarUrl,
-        willShowImage: !!(avatarUrl && !imageError)
-    });
 
     // Iniciales como fallback cuando no hay avatar
     const userInitials = userName
@@ -218,12 +192,10 @@ export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAv
                                 alt={userName}
                                 fill
                                 className="object-cover"
-                                onError={(e) => {
-                                    console.error('[UserAvatar] ❌ Image load error:', avatarUrl, e);
+                                onError={() => {
                                     setImageError(true);
                                 }}
                                 onLoad={() => {
-                                    console.log('[UserAvatar] ✅ Image loaded:', avatarUrl);
                                     setImageError(false);
                                 }}
                                 unoptimized

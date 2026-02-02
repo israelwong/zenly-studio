@@ -23,36 +23,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    console.log('[AuthContext] 🚀 Inicializando...')
     const supabase = createClient()
     
-    // Debug: Ver qué hay en localStorage
-    console.log('[AuthContext] 📦 localStorage keys:', 
-      Object.keys(localStorage).filter(k => k.startsWith('sb-'))
-    )
-    
     // Obtener sesión inicial
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log('[AuthContext] 🔍 Sesión inicial:', { 
-        hasSession: !!session, 
-        hasUser: !!session?.user,
-        email: session?.user?.email,
-        hasMetadata: !!session?.user?.user_metadata,
-        avatar: session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture,
-        error: error?.message
-      })
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
 
     // Escuchar cambios
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[AuthContext] 🔄 Auth state change:', { 
-        event, 
-        hasSession: !!session, 
-        hasUser: !!session?.user,
-        email: session?.user?.email 
-      })
       setUser(session?.user ?? null)
       setLoading(false)
       
