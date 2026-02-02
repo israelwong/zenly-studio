@@ -24,6 +24,7 @@ const SignupStep2Schema = z.object({
     .min(3, "Slug debe tener al menos 3 caracteres")
     .regex(/^[a-z0-9-]+$/, "Solo minúsculas, números y guiones"),
   studio_slogan: z.string().optional(),
+  studio_email: z.string().email("Email del estudio inválido").optional(),
   logo_url: z.string().url().optional(),
 });
 
@@ -115,15 +116,72 @@ export async function createStudioAndSubscription(
       return { success: false, error: "El slug ya está en uso" };
     }
 
-    // Crear studio
+    // Obtener o crear usuario en tabla users (necesario para user_studio_roles y user_platform_roles)
+    let dbUser = await prisma.users.findUnique({
+      where: { supabase_id: userId },
+      select: { id: true, email: true },
+    });
+
+    if (!dbUser) {
+      const profile = await prisma.studio_user_profiles.findUnique({
+        where: { supabase_id: userId },
+        select: { email: true, full_name: true, avatar_url: true },
+      });
+      if (!profile) {
+        return {
+          success: false,
+          error: "No se encontró perfil de usuario. Inicia sesión de nuevo.",
+        };
+      }
+      const newUser = await prisma.users.create({
+        data: {
+          supabase_id: userId,
+          email: profile.email,
+          full_name: profile.full_name ?? undefined,
+          avatar_url: profile.avatar_url ?? undefined,
+          is_active: true,
+        },
+      });
+      dbUser = { id: newUser.id, email: newUser.email };
+    }
+
+    const studioEmail =
+      validated.studio_email ?? dbUser.email;
+
+    // Crear studio (campos según esquema Prisma)
     const studio = await prisma.studios.create({
       data: {
-        name: validated.studio_name,
+        studio_name: validated.studio_name,
         slug: validated.studio_slug,
-        slogan: validated.studio_slogan,
-        logo_url: validated.logo_url,
+        email: studioEmail,
+        slogan: validated.studio_slogan ?? undefined,
+        logo_url: validated.logo_url ?? undefined,
         is_active: true,
       },
+    });
+
+    // Asignar rol OWNER en user_studio_roles (dueño del estudio en BD)
+    await prisma.user_studio_roles.create({
+      data: {
+        user_id: dbUser.id,
+        studio_id: studio.id,
+        role: "OWNER",
+        is_active: true,
+        accepted_at: new Date(),
+      },
+    });
+
+    // Asegurar rol SUSCRIPTOR en user_platform_roles (proxy y rutas)
+    await prisma.user_platform_roles.upsert({
+      where: {
+        user_id_role: { user_id: dbUser.id, role: "SUSCRIPTOR" },
+      },
+      create: {
+        user_id: dbUser.id,
+        role: "SUSCRIPTOR",
+        is_active: true,
+      },
+      update: { is_active: true },
     });
 
     // Actualizar studio_user_profiles con studio_id
@@ -132,28 +190,30 @@ export async function createStudioAndSubscription(
       data: { studio_id: studio.id },
     });
 
-    // Crear suscripción freemium (obtener plan FREE)
-    const freePlan = await prisma.platform_plans.findFirst({
+    // Asignar plan trial al estudio (7 días; sin fila en subscriptions hasta Stripe)
+    const trialPlan = await prisma.platform_plans.findFirst({
       where: {
-        slug: "free",
-        is_active: true,
+        slug: "trial",
+        active: true,
       },
     });
 
-    if (!freePlan) {
-      throw new Error("Plan FREE no encontrado");
+    if (!trialPlan) {
+      throw new Error("Plan trial no encontrado en la base de datos");
     }
 
-    await prisma.subscriptions.create({
+    // Actualizar estudio con plan y estado trial (subscription_start/end = 7 días)
+    await prisma.studios.update({
+      where: { id: studio.id },
       data: {
-        studio_id: studio.id,
-        plan_id: freePlan.id,
-        status: "ACTIVE",
-        started_at: new Date(),
+        plan_id: trialPlan.id,
+        subscription_status: "TRIAL",
+        subscription_start: new Date(),
+        subscription_end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 días de trial
       },
     });
 
-    // Activar módulos core incluidos en FREE
+    // Activar módulos core incluidos en el plan trial
     const coreModules = await prisma.platform_modules.findMany({
       where: {
         category: "CORE",
@@ -186,10 +246,11 @@ export async function createStudioAndSubscription(
       },
     });
 
-    // Actualizar metadata de Supabase Auth con studio_slug
+    // Sincronizar metadata de Supabase (Proxy usa studio_slug y role para acceso a /[slug]/studio)
     await supabase.auth.updateUser({
       data: {
         studio_slug: validated.studio_slug,
+        role: "suscriptor",
       },
     });
 
