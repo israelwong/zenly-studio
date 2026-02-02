@@ -4,12 +4,17 @@ import { prisma } from '@/lib/prisma';
 import { encryptToken } from '@/lib/utils/encryption';
 import type { User, Session } from '@supabase/supabase-js';
 
+const RESTRICTED_MESSAGE =
+  'Acceso restringido. El registro de nuevos estudios estará disponible próximamente.';
+
 export interface ProcesarUsuarioOAuthResult {
   success: boolean;
   needsOnboarding?: boolean;
   redirectPath?: string;
   studioSlug?: string;
   error?: string;
+  /** true cuando el usuario no existe en nuestra DB (solo login para existentes) */
+  restricted?: boolean;
 }
 
 export interface VincularRecursoGoogleResult {
@@ -40,6 +45,29 @@ export async function procesarUsuarioOAuth(
       };
     }
 
+    // Solo usuarios existentes: debe existir en users (por supabase_id o email) o en studio_user_profiles (por email)
+    const existingBySupabaseId = await prisma.users.findUnique({
+      where: { supabase_id: supabaseId },
+      select: { id: true },
+    });
+    const existingByEmail = await prisma.users.findFirst({
+      where: { email },
+      select: { id: true },
+    });
+    const existingLegacyByEmail = await prisma.studio_user_profiles.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    const isExistingUser =
+      !!existingBySupabaseId || !!existingByEmail || !!existingLegacyByEmail;
+    if (!isExistingUser) {
+      return {
+        success: false,
+        error: RESTRICTED_MESSAGE,
+        restricted: true,
+      };
+    }
+
     // Extraer datos de Google
     const fullName =
       userMetadata.full_name ||
@@ -49,60 +77,91 @@ export async function procesarUsuarioOAuth(
     const avatarUrl = userMetadata.avatar_url || userMetadata.picture || null;
 
     // Paso 1: Integridad Dual - Crear/actualizar en AMBOS modelos
+    // Fusión de cuentas: si existe en users por email (ej. creado con contraseña), actualizar ese registro con el nuevo supabase_id
     await prisma.$transaction(async (tx) => {
-      // Buscar usuario legacy por email (puede existir sin supabase_id)
+      const existingInUsersBySupabaseId = await tx.users.findUnique({
+        where: { supabase_id: supabaseId },
+        select: { id: true },
+      });
+      const existingInUsersByEmail = await tx.users.findFirst({
+        where: { email },
+        select: { id: true, supabase_id: true },
+      });
       const existingLegacy = await tx.studio_user_profiles.findUnique({
         where: { email },
       });
 
-      // Crear/actualizar en users
-      await tx.users.upsert({
-        where: { supabase_id: supabaseId },
-        update: {
-          email,
-          full_name: fullName || undefined,
-          avatar_url: avatarUrl || undefined,
-          email_verified: user.email_confirmed_at ? true : undefined,
-        },
-        create: {
-          supabase_id: supabaseId,
-          email,
-          full_name: fullName || undefined,
-          avatar_url: avatarUrl || undefined,
-          email_verified: user.email_confirmed_at ? true : false,
-          is_active: true,
-        },
-      });
+      // users: actualizar por supabase_id, o por email (fusión) si ya existe con otro supabase_id
+      if (existingInUsersBySupabaseId) {
+        await tx.users.update({
+          where: { supabase_id: supabaseId },
+          data: {
+            email,
+            full_name: fullName || undefined,
+            avatar_url: avatarUrl || undefined,
+            email_verified: user.email_confirmed_at ? true : undefined,
+          },
+        });
+      } else if (existingInUsersByEmail) {
+        await tx.users.update({
+          where: { id: existingInUsersByEmail.id },
+          data: {
+            supabase_id: supabaseId,
+            full_name: fullName || undefined,
+            avatar_url: avatarUrl || undefined,
+            email_verified: user.email_confirmed_at ? true : undefined,
+          },
+        });
+      } else {
+        await tx.users.create({
+          data: {
+            supabase_id: supabaseId,
+            email,
+            full_name: fullName || undefined,
+            avatar_url: avatarUrl || undefined,
+            email_verified: user.email_confirmed_at ? true : false,
+            is_active: true,
+          },
+        });
+      }
 
-      // Crear/actualizar en studio_user_profiles
-      if (existingLegacy && !existingLegacy.supabase_id) {
-        // Usuario legacy existe pero sin supabase_id - actualizar
+      // studio_user_profiles: fusionar por email si ya existe (mismo criterio que users)
+      if (existingLegacy) {
         await tx.studio_user_profiles.update({
           where: { id: existingLegacy.id },
           data: {
             supabase_id: supabaseId,
-            full_name: fullName || existingLegacy.full_name,
-            avatar_url: avatarUrl || existingLegacy.avatar_url,
+            full_name: fullName || existingLegacy.full_name || undefined,
+            avatar_url: avatarUrl || existingLegacy.avatar_url || undefined,
+            email,
           },
         });
       } else {
-        // Crear nuevo o actualizar existente
-        await tx.studio_user_profiles.upsert({
+        const existingProfileBySupabaseId = await tx.studio_user_profiles.findUnique({
           where: { supabase_id: supabaseId },
-          update: {
-            email,
-            full_name: fullName || undefined,
-            avatar_url: avatarUrl || undefined,
-          },
-          create: {
-            email,
-            supabase_id: supabaseId,
-            full_name: fullName || undefined,
-            avatar_url: avatarUrl || undefined,
-            role: 'SUSCRIPTOR',
-            is_active: true,
-          },
+          select: { id: true },
         });
+        if (existingProfileBySupabaseId) {
+          await tx.studio_user_profiles.update({
+            where: { supabase_id: supabaseId },
+            data: {
+              email,
+              full_name: fullName || undefined,
+              avatar_url: avatarUrl || undefined,
+            },
+          });
+        } else {
+          await tx.studio_user_profiles.create({
+            data: {
+              email,
+              supabase_id: supabaseId,
+              full_name: fullName || undefined,
+              avatar_url: avatarUrl || undefined,
+              role: 'SUSCRIPTOR',
+              is_active: true,
+            },
+          });
+        }
       }
     });
 
@@ -118,6 +177,19 @@ export async function procesarUsuarioOAuth(
         error: 'Error al crear usuario en base de datos',
       };
     }
+
+    // Asegurar rol SUSCRIPTOR en user_platform_roles (proxy y rutas) antes de redirigir
+    await prisma.user_platform_roles.upsert({
+      where: {
+        user_id_role: { user_id: dbUser.id, role: 'SUSCRIPTOR' },
+      },
+      create: {
+        user_id: dbUser.id,
+        role: 'SUSCRIPTOR',
+        is_active: true,
+      },
+      update: { is_active: true },
+    });
 
     // Buscar studio activo en user_studio_roles
     const studioRole = await prisma.user_studio_roles.findFirst({

@@ -30,10 +30,17 @@ import type { StorageStats } from '@/lib/actions/shared/calculate-storage.action
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
 
+/** Perfil de usuario para el header (nombre + avatar). Origen: users + studio_user_profiles (obtenerPerfil). */
+export interface InitialUserProfile {
+  name: string;
+  avatarUrl: string | null;
+}
+
 interface StudioLayoutWrapperProps {
   studioSlug: string;
   children: React.ReactNode;
   initialIdentidadData?: IdentidadData | null; // ✅ OPTIMIZACIÓN: Datos pre-cargados del servidor
+  initialUserProfile?: InitialUserProfile | null; // ✅ Perfil usuario para header (obtenerPerfil)
   initialStorageData?: StorageStats | null; // ✅ OPTIMIZACIÓN: Storage pre-calculado del servidor
   initialAgendaCount?: number; // ✅ PASO 4: Pre-cargado en servidor (eliminar POST del cliente)
   initialRemindersCount?: number; // ✅ PASO 4: Pre-cargado en servidor (eliminar POSTs del cliente)
@@ -46,6 +53,7 @@ function StudioLayoutContent({
   studioSlug,
   children,
   initialIdentidadData,
+  initialUserProfile,
   initialStorageData,
   initialAgendaCount = 0, // ✅ PASO 4: Pre-cargado en servidor
   initialRemindersCount = 0, // ✅ PASO 4: Pre-cargado en servidor
@@ -285,6 +293,7 @@ function StudioLayoutContent({
         <AppHeader
           studioSlug={studioSlug}
           initialIdentidadData={initialIdentidadData} // ✅ OPTIMIZACIÓN: Pasar datos pre-cargados
+          initialUserProfile={initialUserProfile} // ✅ Perfil usuario (nombre + avatar) desde obtenerPerfil
           initialStorageData={initialStorageData} // ✅ OPTIMIZACIÓN: Pasar storage pre-calculado
           initialAgendaCount={headerData.agendaCount} // ✅ Cargado en cliente después del primer render
           initialRemindersCount={headerData.remindersCount} // ✅ Cargado en cliente después del primer render
@@ -438,6 +447,7 @@ export function StudioLayoutWrapper({
   studioSlug,
   children,
   initialIdentidadData,
+  initialUserProfile,
   initialStorageData,
   initialAgendaCount, // ✅ PASO 4: Pre-cargado en servidor
   initialRemindersCount, // ✅ PASO 4: Pre-cargado en servidor
@@ -450,6 +460,7 @@ export function StudioLayoutWrapper({
       <StudioLayoutContent 
         studioSlug={studioSlug}
         initialIdentidadData={initialIdentidadData}
+        initialUserProfile={initialUserProfile}
         initialStorageData={initialStorageData}
         initialAgendaCount={initialAgendaCount} // ✅ PASO 4: Pre-cargado en servidor
         initialRemindersCount={initialRemindersCount} // ✅ PASO 4: Pre-cargado en servidor

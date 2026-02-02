@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getStripe } from "@/lib/stripe";
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 
 interface CreateCustomerPortalResult {
   success: boolean;
@@ -16,24 +17,62 @@ interface CreateSubscriptionCheckoutResult {
   error?: string;
 }
 
+const ALLOWED_PLAN_SLUGS = ["starter", "pro", "premium"] as const;
+
+function getReturnBaseUrl(returnBaseUrl?: string | null): string {
+  return returnBaseUrl?.trim() || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+}
+
+/** Verifica que el usuario actual sea OWNER del estudio (user_studio_roles) */
+async function assertOwnerOrError(studioId: string): Promise<{ userId: string } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+  if (authError || !authUser) {
+    return { error: "Debes iniciar sesión para realizar esta acción." };
+  }
+  const dbUser = await prisma.users.findUnique({
+    where: { supabase_id: authUser.id },
+    select: { id: true },
+  });
+  if (!dbUser) {
+    return { error: "Usuario no encontrado." };
+  }
+  const ownerRole = await prisma.user_studio_roles.findFirst({
+    where: {
+      user_id: dbUser.id,
+      studio_id: studioId,
+      role: "OWNER",
+      is_active: true,
+    },
+    select: { id: true },
+  });
+  if (!ownerRole) {
+    return { error: "Solo el propietario del estudio puede gestionar la suscripción." };
+  }
+  return { userId: dbUser.id };
+}
+
 /**
- * Crea una sesión de Stripe Customer Portal para gestionar facturación
+ * Crea una sesión de Stripe Customer Portal para gestionar facturación.
+ * Solo el usuario con rol OWNER en user_studio_roles puede abrirlo.
  */
 export async function createCustomerPortal(
-  studioSlug: string
+  studioSlug: string,
+  returnBaseUrl?: string | null
 ): Promise<CreateCustomerPortalResult> {
   try {
     const studio = await prisma.studios.findUnique({
       where: { slug: studioSlug },
-      select: {
-        id: true,
-        stripe_customer_id: true,
-        email: true,
-      },
+      select: { id: true, stripe_customer_id: true, email: true },
     });
 
     if (!studio) {
       return { success: false, error: "Studio no encontrado" };
+    }
+
+    const ownerCheck = await assertOwnerOrError(studio.id);
+    if ("error" in ownerCheck) {
+      return { success: false, error: ownerCheck.error };
     }
 
     if (!studio.stripe_customer_id) {
@@ -43,10 +82,11 @@ export async function createCustomerPortal(
       };
     }
 
+    const baseUrl = getReturnBaseUrl(returnBaseUrl);
     const stripe = getStripe();
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: studio.stripe_customer_id,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/${studioSlug}/studio/config/account/suscripcion`,
+      return_url: `${baseUrl}/${studioSlug}/studio/config/suscripcion`,
     });
 
     return { success: true, url: portalSession.url };
@@ -58,11 +98,14 @@ export async function createCustomerPortal(
 }
 
 /**
- * Crea una sesión de Stripe Checkout para suscripción inicial o actualiza la existente con proration
+ * Crea una sesión de Stripe Checkout para suscripción inicial o actualiza la existente con proration.
+ * Solo el usuario con rol OWNER en user_studio_roles puede iniciar el pago o cambio de plan.
+ * Metadatos obligatorios: studio_id y user_id para que el webhook identifique el estudio.
  */
 export async function createSubscriptionCheckout(
   studioSlug: string,
-  priceId: string
+  priceId: string,
+  returnBaseUrl?: string | null
 ): Promise<CreateSubscriptionCheckoutResult> {
   try {
     const studio = await prisma.studios.findUnique({
@@ -84,28 +127,34 @@ export async function createSubscriptionCheckout(
       return { success: false, error: "Studio no encontrado" };
     }
 
-    // Validar que no sea cuenta UNLIMITED (no puede cambiar suscripción)
+    const ownerCheck = await assertOwnerOrError(studio.id);
+    if ("error" in ownerCheck) {
+      return { success: false, error: ownerCheck.error };
+    }
+    const userId = ownerCheck.userId;
+
     if (studio.subscription_status === "UNLIMITED") {
-      return { 
-        success: false, 
-        error: "Esta cuenta tiene plan ilimitado. No se puede cambiar la suscripción desde aquí." 
+      return {
+        success: false,
+        error: "Esta cuenta tiene plan ilimitado. No se puede cambiar la suscripción desde aquí.",
       };
     }
 
-    // Verificar que el priceId existe y está activo (buscar en mensual o anual)
+    // Solo planes STARTER, PRO, PREMIUM (slug en BD: starter, pro, premium)
     const plan = await prisma.platform_plans.findFirst({
       where: {
         active: true,
+        slug: { in: [...ALLOWED_PLAN_SLUGS] },
         OR: [
           { stripe_price_id: priceId },
           { stripe_price_id_yearly: priceId },
         ],
       },
-      select: { id: true, name: true },
+      select: { id: true, name: true, slug: true },
     });
 
     if (!plan) {
-      return { success: false, error: "Plan no encontrado o inactivo" };
+      return { success: false, error: "Plan no encontrado, inactivo o no permitido (solo Starter, Pro y Premium)." };
     }
 
     const stripe = getStripe();
@@ -207,7 +256,7 @@ export async function createSubscriptionCheckout(
             });
             
             console.log("✅ Suscripción reactivada (mismo plan)");
-            revalidatePath(`/${studioSlug}/studio/config/account/suscripcion`);
+            revalidatePath(`/${studioSlug}/studio/config/suscripcion`);
             return { success: true };
           } else {
             // Si es plan diferente, actualizar con proration
@@ -228,7 +277,7 @@ export async function createSubscriptionCheckout(
             });
             
             console.log("✅ Suscripción reactivada y actualizada con proration");
-            revalidatePath(`/${studioSlug}/studio/config/account/suscripcion`);
+            revalidatePath(`/${studioSlug}/studio/config/suscripcion`);
             return { success: true };
           }
         }
@@ -278,9 +327,10 @@ export async function createSubscriptionCheckout(
                 price: priceId,
               },
             ],
-            proration_behavior: "create_prorations", // Calcula y cobra/credita la diferencia
+            proration_behavior: "create_prorations",
             metadata: {
               studio_id: studio.id,
+              user_id: userId,
               studio_slug: studioSlug,
               plan_id: plan.id,
             },
@@ -290,7 +340,7 @@ export async function createSubscriptionCheckout(
         console.log("✅ Suscripción actualizada con proration:", updatedSubscription.id);
         
         // Revalidar la página para mostrar el estado actualizado
-        revalidatePath(`/${studioSlug}/studio/config/account/suscripcion`);
+        revalidatePath(`/${studioSlug}/studio/config/suscripcion`);
 
         // Retornar success sin URL porque no necesitamos redirigir a Checkout
         return { success: true };
@@ -301,26 +351,26 @@ export async function createSubscriptionCheckout(
       }
     }
 
-    // Si no tiene suscripción activa, crear una nueva con Checkout
+    const baseUrl = getReturnBaseUrl(returnBaseUrl);
+    const successPath = `/${studioSlug}/studio/config/suscripcion?success=true`;
+    const cancelPath = `/${studioSlug}/studio/config/suscripcion?canceled=true`;
+
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/${studioSlug}/studio/config/account/suscripcion?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/${studioSlug}/studio/config/account/suscripcion?canceled=true`,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${baseUrl}${successPath}`,
+      cancel_url: `${baseUrl}${cancelPath}`,
       metadata: {
         studio_id: studio.id,
+        user_id: userId,
         studio_slug: studioSlug,
         plan_id: plan.id,
       },
       subscription_data: {
         metadata: {
           studio_id: studio.id,
+          user_id: userId,
           studio_slug: studioSlug,
           plan_id: plan.id,
         },
@@ -396,7 +446,7 @@ export async function cancelSubscription(studioSlug: string): Promise<{ success:
     }
 
     // Revalidar la página para mostrar el estado actualizado
-    revalidatePath(`/${studioSlug}/studio/config/account/suscripcion`);
+    revalidatePath(`/${studioSlug}/studio/config/suscripcion`);
 
     return { success: true };
   } catch (error) {
@@ -407,14 +457,14 @@ export async function cancelSubscription(studioSlug: string): Promise<{ success:
 }
 
 /**
- * Obtiene todos los planes activos disponibles
+ * Obtiene planes disponibles para checkout: STARTER, PRO, PREMIUM (slug: starter, pro, premium)
  */
 export async function getAvailablePlans() {
   try {
     const plans = await prisma.platform_plans.findMany({
-      where: { 
+      where: {
         active: true,
-        slug: { not: "unlimited" } // Excluir plan unlimited de las opciones
+        slug: { in: [...ALLOWED_PLAN_SLUGS] },
       },
       include: {
         plan_limits: {

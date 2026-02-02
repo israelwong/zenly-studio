@@ -150,7 +150,7 @@ export function SubscriptionPopover({ studioSlug, children }: SubscriptionPopove
                                     </div>
                                 </div>
                                 <Link
-                                    href={`/${studioSlug}/studio/config/account/suscripcion`}
+                                    href={`/${studioSlug}/studio/config/suscripcion`}
                                     onClick={() => setOpen(false)}
                                 >
                                     <ZenButton
@@ -168,7 +168,7 @@ export function SubscriptionPopover({ studioSlug, children }: SubscriptionPopove
                         {/* Footer minimalista */}
                         <div className="px-5 pb-5 pt-4 border-t border-zinc-800">
                             <Link
-                                href={`/${studioSlug}/studio/config/account/suscripcion`}
+                                href={`/${studioSlug}/studio/config/suscripcion`}
                                 onClick={() => setOpen(false)}
                                 className="block"
                             >

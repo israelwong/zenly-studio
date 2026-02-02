@@ -133,8 +133,9 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
             title: 'Configuración',
             icon: Settings,
             items: [
+                { id: 'cuenta', name: 'Cuenta', href: `/config/account`, icon: UserCog },
                 { id: 'perfil-negocio', name: 'Perfil de Negocio', href: `/config/perfil-negocio`, icon: Globe },
-                { id: 'subscriptions', name: 'Suscripción', href: `/config/account/suscripcion`, icon: CreditCard },
+                { id: 'subscriptions', name: 'Suscripción', href: `/config/suscripcion`, icon: CreditCard },
                 { id: 'plantillas-whatsapp', name: 'Plantillas WhatsApp', href: `/config/plantillas-whatsapp`, icon: MessageCircle },
                 { id: 'integraciones', name: 'Integraciones', href: `/config/integraciones`, icon: Plug },
                 // { id: 'magic', name: 'ZEN Magic', href: `/magic`, icon: Sparkles },

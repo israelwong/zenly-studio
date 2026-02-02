@@ -18,42 +18,55 @@ import {
  */
 /**
  * Valida que una URL sea interna (seguridad contra Open Redirect)
- * Solo permite rutas relativas que empiecen con /
+ * Solo permite rutas relativas que empiecen con / o URLs absolutas del mismo host/localhost
  */
-function isValidInternalUrl(url: string | null): boolean {
+function isValidInternalUrl(url: string | null, allowedOrigin?: string): boolean {
   if (!url) return false;
-  
-  // Decodificar si está codificado
+
   let decodedUrl: string;
   try {
     decodedUrl = decodeURIComponent(url);
   } catch {
     return false;
   }
-  
-  // Debe empezar con / (ruta relativa interna)
-  if (!decodedUrl.startsWith('/')) return false;
-  
-  // No debe contener protocolos (http://, https://, etc.)
-  if (decodedUrl.includes('://')) return false;
-  
-  // No debe contener caracteres peligrosos
-  if (decodedUrl.includes('<') || decodedUrl.includes('>') || decodedUrl.includes('javascript:')) {
-    return false;
+
+  // Bloquear protocol-relative (//evil.com)
+  if (decodedUrl.startsWith('//')) return false;
+  if (decodedUrl.includes('<') || decodedUrl.includes('>') || decodedUrl.includes('javascript:')) return false;
+
+  // Si contiene protocolo (http://, https://), solo permitir mismo host o localhost
+  if (decodedUrl.includes('://')) {
+    try {
+      const parsed = new URL(decodedUrl);
+      const host = parsed.hostname?.toLowerCase();
+      if (!host) return false;
+      if (host === 'localhost' || host === '127.0.0.1') return true;
+      if (allowedOrigin) {
+        const allowedHost = new URL(allowedOrigin).hostname?.toLowerCase();
+        return allowedHost ? host === allowedHost : false;
+      }
+      return false;
+    } catch {
+      return false;
+    }
   }
-  
-  // No debe ser una URL absoluta externa
+
+  // Ruta relativa: debe empezar por /
+  if (!decodedUrl.startsWith('/')) return false;
+
   try {
-    // Intentar parsear como URL absoluta
-    const parsed = new URL(decodedUrl);
-    // Si tiene hostname y no es localhost, es externa
-    if (parsed.hostname && parsed.hostname !== 'localhost') {
+    const parsed = new URL(decodedUrl, allowedOrigin ?? 'http://localhost');
+    const host = parsed.hostname?.toLowerCase();
+    if (host && host !== 'localhost' && host !== '127.0.0.1' && allowedOrigin) {
+      const allowedHost = new URL(allowedOrigin).hostname?.toLowerCase();
+      if (allowedHost && host !== allowedHost) return false;
+    } else if (host && host !== 'localhost' && host !== '127.0.0.1') {
       return false;
     }
   } catch {
-    // Si falla el parseo como URL absoluta, es una ruta relativa (válida)
+    // path relativo sin base válida: aceptar si empieza por /
   }
-  
+
   return true;
 }
 
@@ -65,7 +78,8 @@ function getSafeRedirectUrl(
   fallback: string,
   request: NextRequest
 ): string {
-  if (next && isValidInternalUrl(next)) {
+  const origin = new URL(request.url).origin;
+  if (next && isValidInternalUrl(next, origin)) {
     // Limpiar parámetros de error/success previos para evitar acumulación
     try {
       const url = new URL(next, request.url);
@@ -577,36 +591,38 @@ export async function GET(request: NextRequest) {
 
     if (!result.success) {
       console.error('[OAuth Callback] Error procesando usuario:', result.error);
+      if (result.restricted) {
+        await supabase.auth.signOut();
+        return createRedirectResponse(
+          new URL('/login?error=restricted', request.url)
+        );
+      }
       const loginRedirect = getSafeRedirectUrl(next, '/login', request);
-      return NextResponse.redirect(
+      return createRedirectResponse(
         new URL(`${loginRedirect}?error=processing_failed`, request.url)
       );
     }
 
-    // Redirigir según resultado
+    // Redirigir según resultado (usuario existente)
+    // Prioridad: result.redirectPath (estudio activo) siempre sobre next
     if (result.needsOnboarding) {
-      // Para onboarding, no usar next (debe ir a la página de setup)
-      return NextResponse.redirect(
-        new URL('/onboarding/setup-studio', request.url)
-      );
+      const url = new URL('/onboarding/setup-studio', request.url);
+      url.search = ''; // Limpiar code/state de la barra de direcciones
+      return NextResponse.redirect(url);
     }
 
     if (result.redirectPath) {
-      // Si hay un redirectPath del procesamiento, usarlo (tiene prioridad)
-      return NextResponse.redirect(new URL(result.redirectPath, request.url));
+      console.log(`[Auth Callback] Destino: /${result.studioSlug ?? '?'}/studio`);
+      const url = new URL(result.redirectPath, request.url);
+      url.search = ''; // Limpiar code y state para no dejarlos visibles
+      return NextResponse.redirect(url);
     }
 
-    // Si hay next válido y el usuario está autenticado, redirigir allí
-    // Sino, usar fallback seguro
-    const safeRedirect = getSafeRedirectUrl(
-      next,
-      result.redirectPath || '/login',
-      request
-    );
-    
-    return NextResponse.redirect(
-      new URL(safeRedirect, request.url)
-    );
+    // Fallback: next válido o login (result.redirectPath tiene prioridad sobre next)
+    const safeRedirect = getSafeRedirectUrl(next, '/login', request);
+    const url = new URL(safeRedirect, request.url);
+    url.search = ''; // Limpiar code/state
+    return NextResponse.redirect(url);
   } catch (error) {
     console.error('[OAuth Callback] Error inesperado:', error);
     const loginRedirect = getSafeRedirectUrl(next, '/login', request);

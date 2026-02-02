@@ -87,8 +87,24 @@ export async function createAuthUser(data: unknown) {
 }
 
 // ============================================
+// HELPERS
+// ============================================
+
+/** Genera slug a partir del nombre: minúsculas, sin acentos ni caracteres especiales */
+function normalizeSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+// ============================================
 // PASO 2: CREAR STUDIO + SUSCRIPCIÓN
 // ============================================
+
+const TRIAL_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function createStudioAndSubscription(
   userId: string,
@@ -98,7 +114,6 @@ export async function createStudioAndSubscription(
     const validated = SignupStep2Schema.parse(data);
     const supabase = await createClient();
 
-    // Verificar si se permiten nuevos registros
     const { areNewStudiosAllowed } = await import('@/lib/utils/studio-access');
     if (!areNewStudiosAllowed()) {
       return {
@@ -107,16 +122,16 @@ export async function createStudioAndSubscription(
       };
     }
 
-    // Verificar que el slug no existe
-    const existingStudio = await prisma.studios.findUnique({
-      where: { slug: validated.studio_slug },
-    });
+    // Slug desde studio_name: minúsculas, sin espacios/caracteres especiales
+    const slug = normalizeSlug(validated.studio_slug.trim() || validated.studio_name);
 
+    const existingStudio = await prisma.studios.findUnique({
+      where: { slug },
+    });
     if (existingStudio) {
       return { success: false, error: "El slug ya está en uso" };
     }
 
-    // Obtener o crear usuario en tabla users (necesario para user_studio_roles y user_platform_roles)
     let dbUser = await prisma.users.findUnique({
       where: { supabase_id: userId },
       select: { id: true, email: true },
@@ -145,72 +160,62 @@ export async function createStudioAndSubscription(
       dbUser = { id: newUser.id, email: newUser.email };
     }
 
-    const studioEmail =
-      validated.studio_email ?? dbUser.email;
-
-    // Crear studio (campos según esquema Prisma)
-    const studio = await prisma.studios.create({
-      data: {
-        studio_name: validated.studio_name,
-        slug: validated.studio_slug,
-        email: studioEmail,
-        slogan: validated.studio_slogan ?? undefined,
-        logo_url: validated.logo_url ?? undefined,
-        is_active: true,
-      },
-    });
-
-    // Asignar rol OWNER en user_studio_roles (dueño del estudio en BD)
-    await prisma.user_studio_roles.create({
-      data: {
-        user_id: dbUser.id,
-        studio_id: studio.id,
-        role: "OWNER",
-        is_active: true,
-        accepted_at: new Date(),
-      },
-    });
-
-    // Asegurar rol SUSCRIPTOR en user_platform_roles (proxy y rutas)
-    await prisma.user_platform_roles.upsert({
-      where: {
-        user_id_role: { user_id: dbUser.id, role: "SUSCRIPTOR" },
-      },
-      create: {
-        user_id: dbUser.id,
-        role: "SUSCRIPTOR",
-        is_active: true,
-      },
-      update: { is_active: true },
-    });
-
-    // Actualizar studio_user_profiles con studio_id
-    await prisma.studio_user_profiles.updateMany({
-      where: { supabase_id: userId },
-      data: { studio_id: studio.id },
-    });
-
-    // Asignar plan trial al estudio (7 días; sin fila en subscriptions hasta Stripe)
     const trialPlan = await prisma.platform_plans.findFirst({
-      where: {
-        slug: "trial",
-        active: true,
-      },
+      where: { slug: "trial", active: true },
     });
-
     if (!trialPlan) {
       throw new Error("Plan trial no encontrado en la base de datos");
     }
 
-    // Actualizar estudio con plan y estado trial (subscription_start/end = 7 días)
-    await prisma.studios.update({
-      where: { id: studio.id },
-      data: {
-        plan_id: trialPlan.id,
-        subscription_status: "TRIAL",
-        subscription_start: new Date(),
-        subscription_end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 días de trial
-      },
+    const now = new Date();
+    const subscriptionEnd = new Date(now.getTime() + TRIAL_DAYS_MS);
+    const studioEmail = validated.studio_email ?? dbUser.email;
+
+    // Transacción atómica: studio (con trial 7 días) + OWNER + SUSCRIPTOR + studio_user_profiles
+    const studio = await prisma.$transaction(async (tx) => {
+      const newStudio = await tx.studios.create({
+        data: {
+          studio_name: validated.studio_name,
+          slug,
+          email: studioEmail,
+          slogan: validated.studio_slogan ?? undefined,
+          logo_url: validated.logo_url ?? undefined,
+          is_active: true,
+          plan_id: trialPlan.id,
+          subscription_status: "TRIAL",
+          subscription_start: now,
+          subscription_end: subscriptionEnd,
+        },
+      });
+
+      await tx.user_studio_roles.create({
+        data: {
+          user_id: dbUser!.id,
+          studio_id: newStudio.id,
+          role: "OWNER",
+          is_active: true,
+          accepted_at: now,
+        },
+      });
+
+      await tx.user_platform_roles.upsert({
+        where: {
+          user_id_role: { user_id: dbUser!.id, role: "SUSCRIPTOR" },
+        },
+        create: {
+          user_id: dbUser!.id,
+          role: "SUSCRIPTOR",
+          is_active: true,
+        },
+        update: { is_active: true },
+      });
+
+      await tx.studio_user_profiles.updateMany({
+        where: { supabase_id: userId },
+        data: { studio_id: newStudio.id },
+      });
+
+      return newStudio;
     });
 
     // Activar módulos core incluidos en el plan trial
@@ -246,19 +251,18 @@ export async function createStudioAndSubscription(
       },
     });
 
-    // Sincronizar metadata de Supabase (Proxy usa studio_slug y role para acceso a /[slug]/studio)
     await supabase.auth.updateUser({
       data: {
-        studio_slug: validated.studio_slug,
+        studio_slug: slug,
         role: "suscriptor",
       },
     });
 
-    revalidatePath(`/${validated.studio_slug}/studio`);
+    revalidatePath(`/${slug}/studio`);
 
     return {
       success: true,
-      studio_slug: validated.studio_slug,
+      studio_slug: slug,
     };
   } catch (error) {
     console.error("[createStudioAndSubscription] Error:", error);

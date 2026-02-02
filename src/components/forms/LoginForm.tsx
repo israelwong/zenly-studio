@@ -6,10 +6,11 @@
  */
 
 import { useState, FormEvent, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/browser'
 import { setRememberMePreference, getRememberMePreference } from '@/lib/supabase/storage-adapter'
+import { checkUserExists } from '@/lib/actions/auth/login.actions'
 import { Button } from '@/components/ui/shadcn/button'
 import { Input } from '@/components/ui/shadcn/input'
 import { Label } from '@/components/ui/shadcn/label'
@@ -25,12 +26,20 @@ import {
 
 export function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+
+  // Mostrar error de acceso restringido si viene en la URL (p. ej. tras OAuth)
+  useEffect(() => {
+    if (searchParams.get('error') === 'restricted') {
+      setError('Acceso restringido. El registro de nuevos estudios estará disponible próximamente.')
+    }
+  }, [searchParams])
 
   // Cargar preferencia guardada al montar
   useEffect(() => {
@@ -93,6 +102,17 @@ export function LoginForm() {
 
       if (signInError) throw signInError
       if (!data.user) throw new Error('No se pudo obtener usuario')
+
+      // Solo usuarios existentes en nuestra tabla users
+      const exists = await checkUserExists(data.user.id)
+      if (!exists) {
+        await supabase.auth.signOut()
+        setError(
+          'Acceso restringido. El registro de nuevos estudios estará disponible próximamente.'
+        )
+        setLoading(false)
+        return
+      }
 
       // Determinar redirección según rol
       const role = data.user.user_metadata?.role
@@ -192,8 +212,7 @@ export function LoginForm() {
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </Button>
 
-          {/* Botón de Google oculto */}
-          {/* <div className="relative">
+          <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-zinc-700" />
             </div>
@@ -222,7 +241,7 @@ export function LoginForm() {
               <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
             </svg>
             Continuar con Google
-          </ZenButton> */}
+          </ZenButton>
 
           <Button
             type="button"

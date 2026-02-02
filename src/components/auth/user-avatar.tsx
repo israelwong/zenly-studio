@@ -19,47 +19,76 @@ import {
     ZenDropdownMenuTrigger,
 } from "@/components/ui/zen";
 
-interface UserAvatarProps {
-    className?: string;
-    studioSlug?: string;
+/** Perfil de usuario pre-cargado desde el servidor (obtenerPerfil: users + studio_user_profiles). */
+export interface InitialUserProfile {
+    name: string;
+    avatarUrl: string | null;
 }
 
-export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
+export interface UserAvatarProps {
+    className?: string;
+    studioSlug?: string;
+    /** Datos pre-cargados del servidor (layout). Evita parpadeo y petición extra; mismo origen que /cuenta. */
+    initialUserProfile?: InitialUserProfile | null;
+}
+
+export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAvatarProps) {
     const { user, loading } = useAuth();
     const [userProfile, setUserProfile] = useState<{
         fullName?: string | null;
         avatarUrl?: string | null;
-    } | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    } | null>(() =>
+        initialUserProfile
+            ? { fullName: initialUserProfile.name, avatarUrl: initialUserProfile.avatarUrl }
+            : null
+    );
+    const [isLoading, setIsLoading] = useState(!initialUserProfile);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [imageError, setImageError] = useState(false);
 
-    // Escuchar cambios en el avatar
     const avatarRefreshTrigger = useAvatarRefreshListener();
 
+    // Sincronizar con datos del servidor solo cuando name/avatarUrl cambian (primitivos). Evita bucle por referencia nueva de initialUserProfile.
+    const initialName = initialUserProfile?.name;
+    const initialAvatarUrl = initialUserProfile?.avatarUrl;
     useEffect(() => {
-        const loadUserProfile = async () => {
-            if (loading) return;
-            if (!user) {
-                setIsLoading(false);
-                return;
-            }
+        if (initialName !== undefined) {
+            setUserProfile({
+                fullName: initialName,
+                avatarUrl: initialAvatarUrl ?? null,
+            });
+        }
+    }, [initialName, initialAvatarUrl]);
 
+    // Cargar perfil: solo cuando no hay datos del servidor o cuando disparan avatar-refresh. NUNCA depender de initialUserProfile (objeto) para evitar bucle.
+    useEffect(() => {
+        if (loading) return;
+        if (!user) {
+            setIsLoading(false);
+            return;
+        }
+        if (initialName !== undefined && avatarRefreshTrigger === 0) {
+            setIsLoading(false);
+            return;
+        }
+
+        const loadUserProfile = async () => {
             try {
-                setIsLoading(true);
+                if (initialName === undefined) setIsLoading(true);
 
                 const authUser = studioSlug
                     ? await getCurrentUserClient(studioSlug)
                     : await getCurrentUserClient();
 
                 if (authUser) {
-                    const avatarUrl = authUser.profile.avatarUrl && authUser.profile.avatarUrl.trim() !== ''
-                        ? authUser.profile.avatarUrl
-                        : null;
+                    const avatarUrl =
+                        authUser.profile.avatarUrl && authUser.profile.avatarUrl.trim() !== ''
+                            ? authUser.profile.avatarUrl
+                            : null;
 
                     setUserProfile({
                         fullName: authUser.profile.fullName,
-                        avatarUrl: avatarUrl
+                        avatarUrl: avatarUrl,
                     });
                 }
             } catch (error) {
@@ -70,7 +99,7 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
         };
 
         loadUserProfile();
-    }, [user, studioSlug, avatarRefreshTrigger, loading]);
+    }, [user, studioSlug, avatarRefreshTrigger, loading, initialName]);
 
     // Resetear error de imagen cuando cambie el avatarUrl
     useEffect(() => {
@@ -107,17 +136,23 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
         return null;
     }
 
-    // Obtener información del usuario con fallbacks
-    const userName = userProfile?.fullName || user.user_metadata?.full_name || user.email || "Usuario";
+    // Nombre: perfil unificado (studio_user_profiles ?? users) → metadata → email → fallback
+    const userName =
+        userProfile?.fullName ??
+        initialUserProfile?.name ??
+        user.user_metadata?.full_name ??
+        user.email ??
+        "Usuario";
     const userEmail = user.email;
-    // Validar que avatarUrl sea una URL válida (no null, no vacía)
-    const avatarUrl = userProfile?.avatarUrl &&
-        typeof userProfile.avatarUrl === 'string' &&
-        userProfile.avatarUrl.trim() !== ''
-        ? userProfile.avatarUrl.trim()
-        : null;
+    // Avatar: perfil del estudio → users.avatar_url → fallback a iniciales
+    const rawAvatar =
+        userProfile?.avatarUrl ?? initialUserProfile?.avatarUrl ?? null;
+    const avatarUrl =
+        rawAvatar && typeof rawAvatar === "string" && rawAvatar.trim() !== ""
+            ? rawAvatar.trim()
+            : null;
 
-    // Generar iniciales para el fallback
+    // Iniciales como fallback cuando no hay avatar
     const userInitials = userName
         .split(" ")
         .map((name: string) => name[0])
@@ -131,9 +166,9 @@ export function UserAvatar({ className, studioSlug }: UserAvatarProps) {
     // Rutas del menú
     const menuRoutes = {
         verPerfilPublico: studioSlug ? `/${studioSlug}` : '',
-        perfil: `${basePath}/config/account/perfil`,
-        seguridad: `${basePath}/config/account/seguridad`,
-        suscripcion: `${basePath}/config/account/suscripcion`,
+        perfil: `${basePath}/config/account`,
+        seguridad: `${basePath}/config/account`,
+        suscripcion: `${basePath}/config/suscripcion`,
     };
 
     return (

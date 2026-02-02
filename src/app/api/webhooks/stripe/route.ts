@@ -34,9 +34,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Procesar evento según tipo
+  // Procesar evento según tipo. Responder 200 OK solo tras validar firma;
+  // el procesamiento es síncrono para no perder eventos si falla (Stripe reintenta si no hay 200).
   try {
     switch (event.type) {
+      case "checkout.session.completed":
+        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+
       case "payment_intent.succeeded":
         await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
         break;
@@ -62,6 +67,41 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * checkout.session.completed: extrae studio_id y plan_id de metadata y sincroniza con subscription
+ */
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+  console.log("🛒 Procesando checkout.session.completed:", session.id);
+
+  const studioId = session.metadata?.studio_id;
+  const planId = session.metadata?.plan_id;
+
+  if (!studioId) {
+    console.error("❌ studio_id no encontrado en metadata de checkout.session:", session.metadata);
+    return;
+  }
+
+  if (session.mode !== "subscription" || !session.subscription) {
+    console.log("⚠️ Sesión no es de suscripción o sin subscription id, ignorando");
+    return;
+  }
+
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : session.subscription.id;
+  const stripe = getStripe();
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  if (subscription.metadata) {
+    subscription.metadata.studio_id = subscription.metadata.studio_id || studioId;
+    subscription.metadata.plan_id = subscription.metadata.plan_id || planId || "";
+  } else {
+    (subscription as Stripe.Subscription & { metadata?: Record<string, string> }).metadata = {
+      studio_id: studioId,
+      plan_id: planId || "",
+    };
+  }
+  await handleSubscriptionCreatedOrUpdated(subscription);
 }
 
 async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
@@ -365,7 +405,7 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
       subscriptionStatus = "TRIAL";
       break;
     case "past_due":
-      subscriptionStatus = "PAST_DUE";
+      subscriptionStatus = "ACTIVE"; // Stripe past_due: pago pendiente pero suscripción sigue activa; enum no tiene PAST_DUE
       break;
     case "canceled":
     case "unpaid":
@@ -435,29 +475,30 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
   }
 
   if (existingSubscription) {
-    // Actualizar suscripción existente
-    await prisma.subscriptions.update({
-      where: { id: existingSubscription.id },
-      data: {
-        status: subscriptionStatus,
-        plan_id: planIdToUse,
-        current_period_start: subscriptionStart,
-        current_period_end: subscriptionEnd,
-        billing_cycle_anchor: billingCycleAnchor,
-        updated_at: new Date(),
-      },
-    });
-
-    // Actualizar también en studios
-    await prisma.studios.update({
-      where: { id: studioId },
-      data: {
-        subscription_status: subscriptionStatus,
-        plan_id: planIdToUse,
-        subscription_start: subscriptionStart,
-        subscription_end: subscriptionEnd,
-      },
-    });
+    // Actualizar suscripción y studio de forma atómica
+    await prisma.$transaction([
+      prisma.subscriptions.update({
+        where: { id: existingSubscription.id },
+        data: {
+          status: subscriptionStatus,
+          plan_id: planIdToUse,
+          current_period_start: subscriptionStart,
+          current_period_end: subscriptionEnd,
+          billing_cycle_anchor: billingCycleAnchor,
+          updated_at: new Date(),
+        },
+      }),
+      prisma.studios.update({
+        where: { id: studioId },
+        data: {
+          subscription_status: subscriptionStatus,
+          plan_id: planIdToUse,
+          subscription_start: subscriptionStart,
+          subscription_end: subscriptionEnd,
+          stripe_subscription_id: subscription.id,
+        },
+      }),
+    ]);
 
     console.log("✅ Suscripción actualizada:", existingSubscription.id);
   } else {
@@ -502,35 +543,34 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
 
     if (existingSubscription) {
       console.log("⚠️ Suscripción creada entre verificaciones, actualizando:", existingSubscription.id);
-      // Actualizar suscripción existente
-      await prisma.subscriptions.update({
-        where: { id: existingSubscription.id },
-        data: {
-          status: subscriptionStatus,
-          plan_id: planIdToUse,
-          current_period_start: subscriptionStart,
-          current_period_end: subscriptionEnd,
-          billing_cycle_anchor: billingCycleAnchor,
-          updated_at: new Date(),
-        },
-      });
-
-      // Actualizar también en studios
-      await prisma.studios.update({
-        where: { id: studioId },
-        data: {
-          subscription_status: subscriptionStatus,
-          plan_id: planIdToUse,
-          subscription_start: subscriptionStart,
-          subscription_end: subscriptionEnd,
-          stripe_customer_id: customerId,
-          // Si es reactivación, reactivar el studio y limpiar data_retention_until
-          ...(isReactivation && {
-            is_active: true,
-            data_retention_until: null,
-          }),
-        },
-      });
+      await prisma.$transaction([
+        prisma.subscriptions.update({
+          where: { id: existingSubscription.id },
+          data: {
+            status: subscriptionStatus,
+            plan_id: planIdToUse,
+            current_period_start: subscriptionStart,
+            current_period_end: subscriptionEnd,
+            billing_cycle_anchor: billingCycleAnchor,
+            updated_at: new Date(),
+          },
+        }),
+        prisma.studios.update({
+          where: { id: studioId },
+          data: {
+            subscription_status: subscriptionStatus,
+            plan_id: planIdToUse,
+            subscription_start: subscriptionStart,
+            subscription_end: subscriptionEnd,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscription.id,
+            ...(isReactivation && {
+              is_active: true,
+              data_retention_until: null,
+            }),
+          },
+        }),
+      ]);
 
       if (isReactivation) {
         console.log("✅ Studio reactivado:", studioId);
@@ -540,57 +580,75 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
       return; // Salir temprano, ya se actualizó
     }
 
-    // Crear registro en subscriptions con manejo de condición de carrera
+    // Crear suscripción y actualizar studio de forma atómica
     try {
-      await prisma.subscriptions.create({
-        data: {
-          studio_id: studioId,
-          stripe_subscription_id: subscription.id,
-          stripe_customer_id: customerId,
-          plan_id: planIdToUse,
-          status: subscriptionStatus,
-          current_period_start: subscriptionStart,
-          current_period_end: subscriptionEnd,
-          billing_cycle_anchor: billingCycleAnchor,
-        },
-      });
-    } catch (error: any) {
+      await prisma.$transaction([
+        prisma.subscriptions.create({
+          data: {
+            studio_id: studioId,
+            stripe_subscription_id: subscription.id,
+            stripe_customer_id: customerId,
+            plan_id: planIdToUse,
+            status: subscriptionStatus,
+            current_period_start: subscriptionStart,
+            current_period_end: subscriptionEnd,
+            billing_cycle_anchor: billingCycleAnchor,
+          },
+        }),
+        prisma.studios.update({
+          where: { id: studioId },
+          data: {
+            subscription_status: subscriptionStatus,
+            plan_id: planIdToUse,
+            subscription_start: subscriptionStart,
+            subscription_end: subscriptionEnd,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscription.id,
+            ...(isReactivation && {
+              is_active: true,
+              data_retention_until: null,
+            }),
+          },
+        }),
+      ]);
+    } catch (error: unknown) {
+      const prismaError = error as { code?: string; meta?: { target?: string[] } };
       // Si falla por constraint único, significa que otra ejecución ya lo creó
-      if (error?.code === 'P2002' && error?.meta?.target?.includes('stripe_subscription_id')) {
+      if (prismaError?.code === 'P2002' && prismaError?.meta?.target?.includes('stripe_subscription_id')) {
         console.log("⚠️ Suscripción ya existe (condición de carrera), actualizando...");
         // Buscar la suscripción existente y actualizarla
         const existing = await prisma.subscriptions.findUnique({
           where: { stripe_subscription_id: subscription.id },
         });
         if (existing) {
-          await prisma.subscriptions.update({
-            where: { id: existing.id },
-            data: {
-              status: subscriptionStatus,
-              plan_id: planIdToUse,
-              current_period_start: subscriptionStart,
-              current_period_end: subscriptionEnd,
-              billing_cycle_anchor: billingCycleAnchor,
-              updated_at: new Date(),
-            },
-          });
-
-          // Actualizar también en studios
-          await prisma.studios.update({
-            where: { id: studioId },
-            data: {
-              subscription_status: subscriptionStatus,
-              plan_id: planIdToUse,
-              subscription_start: subscriptionStart,
-              subscription_end: subscriptionEnd,
-              stripe_customer_id: customerId,
-              // Si es reactivación, reactivar el studio y limpiar data_retention_until
-              ...(isReactivation && {
-                is_active: true,
-                data_retention_until: null,
-              }),
-            },
-          });
+          await prisma.$transaction([
+            prisma.subscriptions.update({
+              where: { id: existing.id },
+              data: {
+                status: subscriptionStatus,
+                plan_id: planIdToUse,
+                current_period_start: subscriptionStart,
+                current_period_end: subscriptionEnd,
+                billing_cycle_anchor: billingCycleAnchor,
+                updated_at: new Date(),
+              },
+            }),
+            prisma.studios.update({
+              where: { id: studioId },
+              data: {
+                subscription_status: subscriptionStatus,
+                plan_id: planIdToUse,
+                subscription_start: subscriptionStart,
+                subscription_end: subscriptionEnd,
+                stripe_customer_id: customerId,
+                stripe_subscription_id: subscription.id,
+                ...(isReactivation && {
+                  is_active: true,
+                  data_retention_until: null,
+                }),
+              },
+            }),
+          ]);
 
           if (isReactivation) {
             console.log("✅ Studio reactivado:", studioId);
@@ -607,23 +665,6 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
         throw error;
       }
     }
-
-    // Actualizar studios (solo si se creó exitosamente)
-    await prisma.studios.update({
-      where: { id: studioId },
-      data: {
-        subscription_status: subscriptionStatus,
-        plan_id: planIdToUse,
-        subscription_start: subscriptionStart,
-        subscription_end: subscriptionEnd,
-        stripe_customer_id: customerId,
-        // Si es reactivación, reactivar el studio y limpiar data_retention_until
-        ...(isReactivation && {
-          is_active: true,
-          data_retention_until: null,
-        }),
-      },
-    });
 
     if (isReactivation) {
       console.log("✅ Studio reactivado:", studioId);

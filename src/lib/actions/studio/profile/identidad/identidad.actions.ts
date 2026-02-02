@@ -33,7 +33,9 @@ import { FAQItem } from '@/app/[slug]/studio/business/identity/types';
 // HEADER ACTIONS (Datos básicos)
 // ============================================
 
-// Obtener datos de identidad del studio
+// Obtener datos de identidad del studio (nombre, slug, estado de suscripción).
+// El estudio se identifica por slug (de la URL); el layout solo permite acceder a estudios
+// en los que el usuario tiene rol vía user_studio_roles (p. ej. OWNER).
 export async function obtenerIdentidadStudio(studioSlug: string) {
     return await retryDatabaseOperation(async () => {
         const studio = await prisma.studios.findUnique({

@@ -80,7 +80,8 @@ export function PlansComparisonModal({
 
     setLoadingCheckout(plan.id);
     try {
-      const result = await createSubscriptionCheckout(studioSlug, priceId);
+      const returnBaseUrl = typeof window !== "undefined" ? window.location.origin : undefined;
+      const result = await createSubscriptionCheckout(studioSlug, priceId, returnBaseUrl);
       if (result.success) {
         if (result.url) {
           // Nueva suscripción: redirigir a Checkout

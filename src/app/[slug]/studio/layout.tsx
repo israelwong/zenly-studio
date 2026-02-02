@@ -9,6 +9,7 @@ import { StudioReadyProvider } from './components/init/StudioReadyContext';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import { StudioLayoutWrapper } from './components/layout/StudioLayoutWrapper';
 import { obtenerIdentidadStudio } from '@/lib/actions/studio/profile/identidad/identidad.actions';
+import { obtenerPerfil } from '@/lib/actions/studio/account/perfil.actions';
 import { calcularStorageCompleto } from '@/lib/actions/shared/calculate-storage.actions';
 import { getAgendaCount, obtenerAgendaUnificada } from '@/lib/actions/shared/agenda-unified.actions';
 import { getRemindersDueCount, getRemindersDue } from '@/lib/actions/studio/commercial/promises/reminders.actions';
@@ -21,6 +22,16 @@ import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promis
 // ✅ OPTIMIZACIÓN: Cachear funciones pesadas usando React cache()
 const getCachedIdentidad = cache(async (studioSlug: string): Promise<IdentidadData | { error: string }> => {
   return await obtenerIdentidadStudio(studioSlug);
+});
+
+/** Perfil del usuario para el header (nombre + avatar). Misma fuente que /cuenta: users + studio_user_profiles. */
+const getCachedUserProfile = cache(async (studioSlug: string): Promise<{ name: string; avatarUrl: string | null } | null> => {
+  const result = await obtenerPerfil(studioSlug);
+  if (!result.success || !result.data) return null;
+  return {
+    name: result.data.name,
+    avatarUrl: result.data.avatarUrl ?? null,
+  };
 });
 
 const getCachedStorage = cache(async (studioSlug: string) => {
@@ -171,10 +182,12 @@ export default async function StudioLayout({
 }) {
     const { slug } = await params;
     
-    // ✅ OPTIMIZACIÓN CRÍTICA: Solo cargar identidadData (crítico para render)
-    // El resto se carga en el cliente para no bloquear el render inicial
-    const identidadData = await getCachedIdentidad(slug).catch(() => null);
-    
+    // ✅ OPTIMIZACIÓN CRÍTICA: Cargar identidadData y perfil de usuario (header)
+    const [identidadData, userProfile] = await Promise.all([
+      getCachedIdentidad(slug).catch(() => null),
+      getCachedUserProfile(slug).catch(() => null),
+    ]);
+
     // Valores por defecto - se cargarán en el cliente después del primer render
     const headerUserId = null;
     const storageData = null;
@@ -195,6 +208,7 @@ export default async function StudioLayout({
                                 <StudioLayoutWrapper
                                     studioSlug={slug}
                                     initialIdentidadData={identidadData && !('error' in identidadData) ? identidadData : null}
+                                    initialUserProfile={userProfile}
                                     initialStorageData={storageData?.success ? storageData.data : null}
                                     initialAgendaCount={agendaCount}
                                     initialRemindersCount={remindersCount}

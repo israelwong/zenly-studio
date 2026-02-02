@@ -19,6 +19,7 @@ import { obtenerEstadoConexion } from '@/lib/integrations/google';
 import { AgendaPopover } from '@/components/shared/agenda/AgendaPopover';
 import { AlertsPopover } from '@/components/shared/reminders/AlertsPopover';
 import type { IdentidadData } from '@/app/[slug]/studio/business/identity/types';
+import type { InitialUserProfile } from '@/app/[slug]/studio/components/layout/StudioLayoutWrapper';
 import type { StorageStats } from '@/lib/actions/shared/calculate-storage.actions';
 import type { AgendaItem } from '@/lib/actions/shared/agenda-unified.actions';
 import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promises/reminders.actions';
@@ -26,6 +27,7 @@ import type { ReminderWithPromise } from '@/lib/actions/studio/commercial/promis
 interface AppHeaderProps {
     studioSlug: string;
     initialIdentidadData?: IdentidadData | null; // ✅ OPTIMIZACIÓN: Datos pre-cargados del servidor
+    initialUserProfile?: InitialUserProfile | null; // ✅ Perfil usuario (nombre + avatar) desde obtenerPerfil
     initialStorageData?: StorageStats | null; // ✅ OPTIMIZACIÓN: Storage pre-calculado del servidor
     initialAgendaCount?: number; // ✅ PASO 4: Pre-cargado en servidor (eliminar POST del cliente)
     initialRemindersCount?: number; // ✅ PASO 4: Pre-cargado en servidor (eliminar POSTs del cliente)
@@ -43,6 +45,7 @@ interface AppHeaderProps {
 export function AppHeader({
     studioSlug,
     initialIdentidadData, // ✅ OPTIMIZACIÓN: Usar datos pre-cargados
+    initialUserProfile, // ✅ Perfil usuario para header (obtenerPerfil)
     initialStorageData, // ✅ OPTIMIZACIÓN: Usar storage pre-calculado
     initialAgendaCount = 0, // ✅ PASO 4: Pre-cargado en servidor (eliminar POST del cliente)
     initialRemindersCount = 0, // ✅ PASO 4: Pre-cargado en servidor (eliminar POSTs del cliente)
@@ -293,8 +296,8 @@ export function AppHeader({
                 {/* Divider */}
                 <div className="h-6 w-px bg-zinc-700" />
 
-                {/* Avatar del usuario - siempre visible */}
-                <UserAvatar studioSlug={studioSlug} />
+                {/* Avatar del usuario - siempre visible (nombre + avatar desde users + studio_user_profiles) */}
+                <UserAvatar studioSlug={studioSlug} initialUserProfile={initialUserProfile} />
             </div>
         </header>
     );

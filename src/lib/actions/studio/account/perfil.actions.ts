@@ -3,235 +3,225 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { PerfilSchema } from '@/lib/actions/schemas/perfil-schemas';
-import { PerfilData } from '@/app/[slug]/studio/config/account/perfil/types';
+import type { PerfilData } from '@/app/[slug]/studio/config/account/types';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 
 interface ActionResult<T = unknown> {
-    success: boolean;
-    data?: T;
-    error?: string | Record<string, string[]>;
-    message?: string;
+  success: boolean;
+  data?: T;
+  error?: string | Record<string, string[]>;
+  message?: string;
 }
 
-// Obtener perfil del lead asociado al proyecto
+/**
+ * Obtener perfil del usuario autenticado (users + studio_user_profiles para el estudio actual).
+ */
 export async function obtenerPerfil(studioSlug: string): Promise<ActionResult<PerfilData>> {
-    try {
-        // Buscar el proyecto por slug
-        const proyecto = await prisma.studios.findUnique({
-            where: { slug: studioSlug },
-            select: { id: true }
-        });
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-        if (!proyecto) {
-            return {
-                success: false,
-                error: 'Proyecto no encontrado'
-            };
-        }
-
-        // Buscar el lead asociado al proyecto
-        const lead = await prisma.platform_leads.findFirst({
-            where: {
-                studio_id: proyecto.id
-            }
-        });
-
-        if (!lead) {
-            return {
-                success: false,
-                error: 'No se encontró información del perfil asociado a este proyecto'
-            };
-        }
-
-        const perfilData: PerfilData = {
-            id: lead.id,
-            name: lead.name,
-            email: lead.email,
-            phone: lead.phone,
-            avatarUrl: lead.avatar_url as string | undefined,
-            createdAt: lead.created_at,
-            updatedAt: lead.updated_at
-        };
-
-        return {
-            success: true,
-            data: perfilData
-        };
-    } catch (error: unknown) {
-        console.error('Error al obtener perfil:', error);
-        return {
-            success: false,
-            error: 'Error interno del servidor'
-        };
+    if (userError || !user) {
+      return { success: false, error: 'Usuario no autenticado' };
     }
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Estudio no encontrado' };
+    }
+
+    const dbUser = await prisma.users.findUnique({
+      where: { supabase_id: user.id },
+    });
+
+    if (!dbUser) {
+      return { success: false, error: 'Usuario no encontrado en la base de datos' };
+    }
+
+    const studioProfile = await prisma.studio_user_profiles.findFirst({
+      where: { supabase_id: user.id, studio_id: studio.id },
+    });
+
+    const name =
+      studioProfile?.full_name ?? dbUser.full_name ?? dbUser.email?.split('@')[0] ?? '';
+    const avatarUrl =
+      (studioProfile?.avatar_url as string | undefined) ?? (dbUser.avatar_url as string | undefined);
+
+    const perfilData: PerfilData = {
+      id: dbUser.id,
+      name,
+      email: dbUser.email,
+      phone: dbUser.phone ?? '',
+      avatarUrl: avatarUrl ?? undefined,
+      createdAt: dbUser.created_at,
+      updatedAt: dbUser.updated_at,
+    };
+
+    return { success: true, data: perfilData };
+  } catch (error: unknown) {
+    console.error('Error al obtener perfil:', error);
+    return { success: false, error: 'Error interno del servidor' };
+  }
 }
 
-// Actualizar perfil del lead
+/**
+ * Actualizar perfil del usuario (users + studio_user_profiles para el estudio actual).
+ */
 export async function actualizarPerfil(
-    studioSlug: string,
-    data: Record<string, unknown>
+  studioSlug: string,
+  data: Record<string, unknown>
 ): Promise<ActionResult<PerfilData>> {
-    try {
-        // Validar datos
-        const validatedData = PerfilSchema.parse(data);
+  try {
+    const validatedData = PerfilSchema.parse(data);
 
-        // Buscar el proyecto por slug
-        const proyecto = await prisma.studios.findUnique({
-            where: { slug: studioSlug },
-            select: { id: true }
-        });
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-        if (!proyecto) {
-            return {
-                success: false,
-                error: 'Proyecto no encontrado'
-            };
-        }
-
-        // Buscar el lead asociado al proyecto
-        const leadExistente = await prisma.platform_leads.findFirst({
-            where: {
-                studio_id: proyecto.id
-            }
-        });
-
-        if (!leadExistente) {
-            return {
-                success: false,
-                error: 'No se encontró información del perfil asociado a este proyecto'
-            };
-        }
-
-        // Verificar que el email no esté duplicado (excluyendo el lead actual)
-        if (validatedData.email && validatedData.email !== leadExistente.email) {
-            const emailDuplicado = await prisma.platform_leads.findFirst({
-                where: {
-                    email: validatedData.email,
-                    id: { not: leadExistente.id }
-                }
-            });
-
-            if (emailDuplicado) {
-                return {
-                    success: false,
-                    error: 'Ya existe un perfil con este correo electrónico'
-                };
-            }
-
-            // Verificar que el email no esté en uso en Supabase Auth
-            const supabaseAdmin = createAdminClient();
-            const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
-            const emailEnAuth = authUsers?.users.find(u => u.email === validatedData.email);
-            
-            if (emailEnAuth) {
-                return {
-                    success: false,
-                    error: 'Este correo electrónico ya está registrado en otra cuenta'
-                };
-            }
-
-            // Actualizar correo en Supabase Auth
-            const supabase = await createClient();
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-            if (userError || !user) {
-                return {
-                    success: false,
-                    error: 'Usuario no autenticado'
-                };
-            }
-
-            // Actualizar correo usando admin client para evitar confirmación por email
-            const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(
-                user.id,
-                { email: validatedData.email, email_confirm: true }
-            );
-
-            if (updateAuthError) {
-                console.error('Error al actualizar correo en Supabase Auth:', updateAuthError);
-                return {
-                    success: false,
-                    error: 'Error al actualizar el correo de autenticación'
-                };
-            }
-
-            // Actualizar también en users y studio_user_profiles para mantener consistencia
-            await prisma.$transaction(async (tx) => {
-                // Actualizar users si existe
-                const dbUser = await tx.users.findUnique({
-                    where: { supabase_id: user.id }
-                });
-
-                if (dbUser) {
-                    await tx.users.update({
-                        where: { supabase_id: user.id },
-                        data: { email: validatedData.email }
-                    });
-                }
-
-                // Actualizar studio_user_profiles si existe
-                const studioProfile = await tx.studio_user_profiles.findUnique({
-                    where: { supabase_id: user.id }
-                });
-
-                if (studioProfile) {
-                    await tx.studio_user_profiles.update({
-                        where: { supabase_id: user.id },
-                        data: { email: validatedData.email }
-                    });
-                }
-            });
-        }
-
-        // Actualizar el lead
-        const leadActualizado = await prisma.platform_leads.update({
-            where: { id: leadExistente.id },
-            data: {
-                name: validatedData.name,
-                email: validatedData.email,
-                phone: validatedData.phone,
-                avatar_url: validatedData.avatarUrl
-            }
-        });
-
-        const perfilData: PerfilData = {
-            id: leadActualizado.id,
-            name: leadActualizado.name,
-            email: leadActualizado.email,
-            phone: leadActualizado.phone,
-            avatarUrl: leadActualizado.avatar_url ? leadActualizado.avatar_url : undefined,
-            createdAt: leadActualizado.created_at,
-            updatedAt: leadActualizado.updated_at
-        };
-
-        revalidatePath(`/${studioSlug}/studio/config/account/perfil`);
-        revalidatePath(`/${studioSlug}/studio`); // Revalidar rutas del studio para actualizar avatar en header
-
-        return {
-            success: true,
-            data: perfilData,
-            message: 'Perfil actualizado exitosamente'
-        };
-    } catch (error: unknown) {
-        console.error('Error al actualizar perfil:', error);
-
-        if (error instanceof Error && error.name === 'ZodError') {
-            const zodError = error as unknown as {
-                errors: Array<{ path: string[]; message: string }>
-            };
-            return {
-                success: false,
-                error: zodError.errors.reduce((acc, err) => {
-                    acc[err.path[0]] = [err.message];
-                    return acc;
-                }, {} as Record<string, string[]>)
-            };
-        }
-
-        return {
-            success: false,
-            error: 'Error interno del servidor'
-        };
+    if (userError || !user) {
+      return { success: false, error: 'Usuario no autenticado' };
     }
+
+    const studio = await prisma.studios.findUnique({
+      where: { slug: studioSlug },
+      select: { id: true },
+    });
+
+    if (!studio) {
+      return { success: false, error: 'Estudio no encontrado' };
+    }
+
+    const dbUser = await prisma.users.findUnique({
+      where: { supabase_id: user.id },
+    });
+
+    if (!dbUser) {
+      return { success: false, error: 'Usuario no encontrado en la base de datos' };
+    }
+
+    if (validatedData.email && validatedData.email !== dbUser.email) {
+      const emailEnUso = await prisma.users.findFirst({
+        where: { email: validatedData.email, id: { not: dbUser.id } },
+      });
+      if (emailEnUso) {
+        return { success: false, error: 'Ya existe una cuenta con este correo electrónico' };
+      }
+
+      const supabaseAdmin = createAdminClient();
+      const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
+      const otroEnAuth = authUsers?.users.find(
+        (u) => u.email === validatedData.email && u.id !== user.id
+      );
+      if (otroEnAuth) {
+        return { success: false, error: 'Este correo electrónico ya está registrado en otra cuenta' };
+      }
+
+      const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        email: validatedData.email,
+        email_confirm: true,
+      });
+      if (updateAuthError) {
+        console.error('Error al actualizar correo en Supabase Auth:', updateAuthError);
+        return { success: false, error: 'Error al actualizar el correo de autenticación' };
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.users.update({
+        where: { id: dbUser.id },
+        data: {
+          full_name: validatedData.name,
+          email: validatedData.email,
+          phone: validatedData.phone,
+          avatar_url: validatedData.avatarUrl ?? null,
+        },
+      });
+
+      const profile = await tx.studio_user_profiles.findFirst({
+        where: { supabase_id: user.id, studio_id: studio.id },
+      });
+
+      if (profile) {
+        await tx.studio_user_profiles.update({
+          where: { id: profile.id },
+          data: {
+            full_name: validatedData.name,
+            email: validatedData.email,
+            avatar_url: validatedData.avatarUrl ?? null,
+          },
+        });
+      } else {
+        await tx.studio_user_profiles.create({
+          data: {
+            supabase_id: user.id,
+            studio_id: studio.id,
+            email: validatedData.email,
+            full_name: validatedData.name,
+            avatar_url: validatedData.avatarUrl ?? null,
+            role: 'SUSCRIPTOR',
+          },
+        });
+      }
+    });
+
+    const updated = await prisma.users.findUnique({
+      where: { id: dbUser.id },
+    });
+    const studioProfile = await prisma.studio_user_profiles.findFirst({
+      where: { supabase_id: user.id, studio_id: studio.id },
+    });
+
+    if (!updated) {
+      return { success: false, error: 'Error al leer perfil actualizado' };
+    }
+
+    const name =
+      studioProfile?.full_name ?? updated.full_name ?? updated.email?.split('@')[0] ?? '';
+    const avatarUrl =
+      (studioProfile?.avatar_url as string | undefined) ?? (updated.avatar_url as string | undefined);
+
+    const perfilData: PerfilData = {
+      id: updated.id,
+      name,
+      email: updated.email,
+      phone: updated.phone ?? '',
+      avatarUrl: avatarUrl ?? undefined,
+      createdAt: updated.created_at,
+      updatedAt: updated.updated_at,
+    };
+
+    revalidatePath(`/${studioSlug}/studio/config/account`);
+    revalidatePath(`/${studioSlug}/studio/config/account/perfil`);
+    revalidatePath(`/${studioSlug}/studio`, 'layout');
+
+    return { success: true, data: perfilData, message: 'Perfil actualizado exitosamente' };
+  } catch (error: unknown) {
+    console.error('Error al actualizar perfil:', error);
+
+    if (error instanceof Error && error.name === 'ZodError') {
+      const zodError = error as unknown as { errors: Array<{ path: string[]; message: string }> };
+      return {
+        success: false,
+        error: zodError.errors.reduce(
+          (acc, err) => {
+            acc[err.path[0]] = [err.message];
+            return acc;
+          },
+          {} as Record<string, string[]>
+        ),
+      };
+    }
+
+    return { success: false, error: 'Error interno del servidor' };
+  }
 }

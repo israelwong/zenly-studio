@@ -3,11 +3,27 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getRedirectPathForUser } from '@/lib/auth/redirect-utils'
+import { prisma } from '@/lib/prisma'
 
 interface LoginResult {
   success: boolean
   error?: string
   redirectTo?: string
+}
+
+const RESTRICTED_MESSAGE =
+  'Acceso restringido. El registro de nuevos estudios estará disponible próximamente.'
+
+/**
+ * Comprueba si un usuario ya existe en nuestra tabla users (por supabase_id)
+ * o en studio_user_profiles (por email). Solo usuarios existentes pueden entrar.
+ */
+export async function checkUserExists(supabaseId: string): Promise<boolean> {
+  const user = await prisma.users.findUnique({
+    where: { supabase_id: supabaseId },
+    select: { id: true },
+  })
+  return !!user
 }
 
 /**
