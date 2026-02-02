@@ -2,8 +2,8 @@
 
 **Plataforma:** ZENLY - Sistema Multi-tenant para Estudios Fotográficos  
 **Fecha:** 2025-01-27  
-**Versión:** 2.0  
-**Última Actualización:** 2025-01-27  
+**Versión:** 2.1  
+**Última Actualización:** 2026-02-02  
 **Área:** Arquitectura y Desarrollo
 
 ---
@@ -112,10 +112,34 @@ src/app/[slug]/
 │   ├── commercial/      # Módulo comercial
 │   ├── business/        # Módulo de negocio
 │   └── config/          # Configuración
+│       ├── account/     # Cuenta unificada (perfil + seguridad + sesiones)
+│       ├── suscripcion/ # Gestión de suscripción
+│       ├── contratos/   # Plantillas de contratos
+│       ├── integraciones/ # Integraciones externas
+│       └── perfil-negocio/ # Identidad del negocio
 ├── cliente/             # Portal del cliente (auth opcional)
 ├── offer/               # Landing pages de ofertas
 ├── promise/             # Páginas públicas de promesas/contratos
 └── post/                 # Blog público del estudio
+```
+
+**Estructura de Componentes de Account:**
+
+```
+src/app/[slug]/studio/config/account/
+├── page.tsx                    # Server Component (carga datos iniciales)
+├── AccountContent.tsx          # Client Component (lógica de UI)
+├── types.ts                    # Tipos TypeScript compartidos
+├── components/                 # Componentes centralizados
+│   ├── PerfilForm.tsx         # Formulario de edición de perfil
+│   ├── PerfilSkeleton.tsx     # Loading state de perfil
+│   ├── PasswordChangeForm.tsx # Cambio de contraseña
+│   ├── SecuritySettings.tsx   # Configuración de seguridad
+│   ├── SecuritySkeleton.tsx   # Loading state de seguridad
+│   ├── SessionsHistory.tsx    # Historial de sesiones con badges
+│   └── index.ts               # Barrel exports
+└── suscripcion/
+    └── page.tsx               # Redirect → /config/suscripcion
 ```
 
 ---
@@ -180,12 +204,14 @@ src/app/[slug]/
 
 | Ruta                          | Descripción                              | Estado          |
 | ----------------------------- | ---------------------------------------- | --------------- |
-| `/config/account/perfil`      | Perfil del usuario                       | ✅ Implementado |
-| `/config/account/seguridad`   | Configuración de seguridad               | ✅ Implementado |
-| `/config/account/suscripcion` | Gestión de suscripción                   | ✅ Implementado |
+| `/config/account`             | Configuración de cuenta unificada        | ✅ Implementado |
+| `/config/suscripcion`          | Gestión de suscripción                   | ✅ Implementado |
 | `/config/contratos`           | Plantillas de contratos                  | ✅ Implementado |
 | `/config/integraciones`       | Integraciones (Google, Stripe, Manychat) | ✅ Implementado |
+| `/config/perfil-negocio`      | Identidad del negocio                    | ✅ Implementado |
 | `/config/privacidad`          | Aviso de privacidad                      | ✅ Implementado |
+
+**Nota:** Las rutas `/config/account/perfil` y `/config/account/seguridad` ahora redirigen a `/config/account` (vista unificada).
 
 ---
 
@@ -531,20 +557,64 @@ Lead Generado → Promise (Promesa)
 
 ### 3. Área de Configuración (`/studio/config/`)
 
-#### 3.1 Cuenta
+#### 3.1 Cuenta (Vista Unificada)
 
-**Rutas:**
+**Ruta Principal:**
 
-- `/config/account/perfil` - Perfil del usuario
-- `/config/account/seguridad` - Seguridad y sesiones
-- `/config/account/suscripcion` - Gestión de suscripción
+- `/config/account` - Configuración completa de cuenta (unificada)
 
 **Funcionalidades:**
 
-- ✅ Edición de perfil de usuario
-- ✅ Cambio de contraseña
-- ✅ Historial de sesiones
-- ✅ Configuración de timeout de sesión
+- ✅ **Información Personal:**
+  - Edición de perfil de usuario
+  - Nombre, email, avatar
+  - Información de contacto
+
+- ✅ **Seguridad y Acceso:**
+  - Cambio de contraseña
+  - Vinculación/desvinculación de cuenta Google OAuth
+  - Configuración de timeout de sesión
+  - Notificaciones de seguridad
+  - Alertas de dispositivos
+
+- ✅ **Historial de Sesiones:**
+  - Registro completo de inicios de sesión
+  - Método de autenticación (Email/Google)
+  - Información de dispositivo y navegador
+  - Dirección IP y ubicación
+  - Timestamp de cada acceso
+  - Estado de éxito/error
+
+**Estructura de Componentes:**
+
+```
+account/
+├── AccountContent.tsx          # Componente cliente principal
+├── components/                 # Componentes centralizados
+│   ├── PerfilForm.tsx         # Formulario de perfil
+│   ├── PasswordChangeForm.tsx  # Cambio de contraseña
+│   ├── SecuritySettings.tsx   # Configuración de seguridad
+│   └── SessionsHistory.tsx     # Historial de sesiones
+└── suscripcion/
+    └── page.tsx               # Redirect → /config/suscripcion
+```
+
+**Sistema de Logs de Acceso:**
+
+- Tabla `user_access_logs` registra todos los accesos
+- Campos: `action`, `success`, `ip_address`, `user_agent`, `details` (JSON)
+- Provider almacenado en `details.provider` (`email` | `google`)
+- Visualización con badges de método de autenticación
+- Filtrado por `user_id` (unifica accesos del mismo usuario)
+
+#### 3.2 Suscripción
+
+**Ruta:**
+
+- `/config/suscripcion` - Gestión de suscripción
+
+**Funcionalidades:**
+
 - ✅ Vista de plan actual
 - ✅ Historial de facturación
 - ✅ Cambio de plan (estructura lista)
@@ -1042,9 +1112,50 @@ async function canPerformAction(
 
 - ✅ **Supabase Auth** para autenticación de usuarios
 - ✅ **Multi-rol:** `super_admin`, `agente`, `suscriptor`/`studio_owner`
+- ✅ **Métodos de autenticación:**
+  - Email/Password (tradicional)
+  - Google OAuth (SSO)
+  - Vinculación de múltiples identidades por usuario
 - ✅ **Middleware de protección:** `src/proxy.ts` protege rutas administrativas
 - ✅ **Verificación de acceso a studio:** Mediante `user_studio_roles` y `studio_user_profiles`
 - ✅ **Timeout de sesión configurable** por usuario
+
+**Sistema de Logs de Acceso:**
+
+- ✅ **Registro Automático:**
+  - Login exitoso/fallido (email y Google OAuth)
+  - Logout de sesión
+  - Cambio de contraseña
+  - Actualización de configuración de seguridad
+- ✅ **Información Capturada:**
+  - Método de autenticación (`provider`: `email` | `google`)
+  - Dirección IP
+  - User Agent (navegador y dispositivo)
+  - Timestamp preciso
+  - Estado de éxito/error
+- ✅ **Modelo de Datos:**
+  ```prisma
+  model user_access_logs {
+    id         String   @id @default(cuid())
+    user_id    String   // Relación con users
+    action     String   // login, logout, password_change, etc.
+    success    Boolean
+    ip_address String?
+    user_agent String?
+    details    Json?    // { provider: "email" | "google", timestamp: ISO }
+    created_at DateTime @default(now())
+  }
+  ```
+- ✅ **Visualización:**
+  - Historial unificado por usuario (mismo `supabase_id`)
+  - Badges visuales para método de autenticación
+  - Detección automática de dispositivo y navegador
+  - Formato de fecha localizado
+- ✅ **Puntos de Registro:**
+  - `src/app/(auth)/auth/callback/route.ts` - OAuth callbacks
+  - `src/lib/actions/auth/login.actions.ts` - Login con email/password
+  - `src/lib/actions/auth/logout.action.ts` - Cierre de sesión
+  - `src/lib/actions/studio/account/seguridad/seguridad.actions.ts` - Cambios de seguridad
 
 **Aislamiento de Datos:**
 
@@ -1203,6 +1314,13 @@ Studio/
 ---
 
 **Documento generado el:** 2025-01-27  
-**Última actualización:** 2025-01-27 (Optimización de routing de promesas públicas)  
-**Versión:** 2.0  
+**Última actualización:** 2026-02-02  
+**Cambios en esta versión:**
+- ✅ Refactorización de estructura de rutas `/config/account` (vista unificada)
+- ✅ Implementación de sistema de logs de acceso con tracking de providers
+- ✅ Eliminación de subrutas redundantes (`perfil/`, `seguridad/`)
+- ✅ Centralización de componentes en `account/components/`
+- ✅ Mejora en visualización de historial de sesiones con badges de método de autenticación
+
+**Versión:** 2.1  
 **Autor:** Análisis Técnico ZENLY Platform

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LogOut, CreditCard, UserCircle, Shield, Globe, Plus, FolderOpen, Settings } from "lucide-react";
+import { LogOut, CreditCard, UserCircle, Globe, Plus, FolderOpen, Settings } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { logout } from "@/lib/actions/auth/logout.action";
@@ -173,7 +173,6 @@ export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAv
     const menuRoutes = {
         verPerfilPublico: studioSlug ? `/${studioSlug}` : '',
         perfil: `${basePath}/config/account`,
-        seguridad: `${basePath}/config/account`,
         suscripcion: `${basePath}/config/suscripcion`,
     };
 
@@ -277,14 +276,7 @@ export function UserAvatar({ className, studioSlug, initialUserProfile }: UserAv
                 <ZenDropdownMenuItem className="cursor-pointer" asChild>
                     <Link href={menuRoutes.perfil}>
                         <UserCircle className="mr-2 h-4 w-4" />
-                        <span>Perfil</span>
-                    </Link>
-                </ZenDropdownMenuItem>
-
-                <ZenDropdownMenuItem className="cursor-pointer" asChild>
-                    <Link href={menuRoutes.seguridad}>
-                        <Shield className="mr-2 h-4 w-4" />
-                        <span>Seguridad</span>
+                        <span>Configurar</span>
                     </Link>
                 </ZenDropdownMenuItem>
 
