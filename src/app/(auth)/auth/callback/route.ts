@@ -10,6 +10,7 @@ import {
   procesarCallbackGoogleDrive,
   procesarCallbackUnificado,
 } from '@/lib/integrations/google';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Callback de Supabase Auth OAuth
@@ -90,6 +91,53 @@ function getSafeRedirectUrl(
     }
   }
   return fallback;
+}
+
+/**
+ * Registra un log de acceso del usuario
+ */
+async function logUserAccess(
+  supabaseUserId: string,
+  action: string,
+  success: boolean,
+  request: NextRequest
+) {
+  try {
+    // Buscar usuario por supabase_id
+    const dbUser = await prisma.users.findUnique({
+      where: { supabase_id: supabaseUserId },
+    });
+
+    if (!dbUser) {
+      console.warn('[Log Access] Usuario no encontrado en DB:', supabaseUserId);
+      return;
+    }
+
+    // Obtener IP y User Agent
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
+               request.headers.get('x-real-ip') || 
+               'N/A';
+    const userAgent = request.headers.get('user-agent') || 'N/A';
+
+    // Crear log con método de autenticación
+    await prisma.user_access_logs.create({
+      data: {
+        user_id: dbUser.id,
+        action,
+        success,
+        ip_address: ip,
+        user_agent: userAgent,
+        details: {
+          provider: 'google',
+          timestamp: new Date().toISOString(),
+        },
+      },
+    });
+
+    console.log('[Log Access] ✅ Log creado:', { action, success, userId: dbUser.id });
+  } catch (error) {
+    console.error('[Log Access] Error al crear log:', error);
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -637,6 +685,10 @@ export async function GET(request: NextRequest) {
 
     if (!result.success) {
       console.error('[OAuth Callback] Error procesando usuario:', result.error);
+      
+      // Registrar intento fallido de login
+      await logUserAccess(data.user.id, 'login', false, request);
+      
       if (result.restricted) {
         await supabase.auth.signOut();
         return createRedirectResponse(
@@ -648,6 +700,9 @@ export async function GET(request: NextRequest) {
         new URL(`${loginRedirect}?error=processing_failed`, request.url)
       );
     }
+
+    // Registrar login exitoso
+    await logUserAccess(data.user.id, 'login', true, request);
 
     if (result.studioSlug) {
       try {

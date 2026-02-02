@@ -82,6 +82,33 @@ export async function loginAction(
 
     if (error) {
       console.error('❌ Login error:', error.message)
+      
+      // Registrar intento fallido si tenemos el email
+      if (email) {
+        try {
+          const dbUser = await prisma.users.findUnique({
+            where: { email },
+          });
+          if (dbUser) {
+            await prisma.user_access_logs.create({
+              data: {
+                user_id: dbUser.id,
+                action: 'login',
+                success: false,
+                ip_address: 'N/A',
+                user_agent: 'N/A',
+                details: {
+                  provider: 'email',
+                  timestamp: new Date().toISOString(),
+                },
+              },
+            });
+          }
+        } catch (logError) {
+          console.error('Error registrando log de login fallido:', logError);
+        }
+      }
+      
       return { success: false, error: error.message }
     }
 
@@ -107,6 +134,30 @@ export async function loginAction(
     }
 
     console.log('✅ Login exitoso:', data.user.email, '→ Redirect a:', redirectPath)
+
+    // Registrar login exitoso
+    try {
+      const dbUser = await prisma.users.findUnique({
+        where: { supabase_id: data.user.id },
+      });
+      if (dbUser) {
+        await prisma.user_access_logs.create({
+          data: {
+            user_id: dbUser.id,
+            action: 'login',
+            success: true,
+            ip_address: 'N/A',
+            user_agent: 'N/A',
+            details: {
+              provider: 'email',
+              timestamp: new Date().toISOString(),
+            },
+          },
+        });
+      }
+    } catch (logError) {
+      console.error('Error registrando log de login:', logError);
+    }
 
     revalidatePath('/', 'layout')
 

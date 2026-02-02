@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Cierra la sesión del usuario y redirige
@@ -15,6 +16,9 @@ import { redirect } from "next/navigation";
 export async function logout(redirectTo?: string) {
     try {
         const supabase = await createClient();
+        
+        // Obtener usuario antes de cerrar sesión para registrar el log
+        const { data: { user } } = await supabase.auth.getUser();
 
         // Cerrar sesión en Supabase
         const { error } = await supabase.auth.signOut();
@@ -25,6 +29,39 @@ export async function logout(redirectTo?: string) {
         }
 
         console.log("✅ Sesión cerrada exitosamente");
+
+        // Registrar logout en el log de accesos
+        if (user) {
+            try {
+                const dbUser = await prisma.users.findUnique({
+                    where: { supabase_id: user.id },
+                });
+                if (dbUser) {
+                    // Detectar provider desde identities
+                    const supabase = await createClient();
+                    const { data: { user: currentUser } } = await supabase.auth.getUser();
+                    const identities = currentUser?.identities ?? [];
+                    const hasGoogle = identities.some(i => i.provider === 'google');
+                    const provider = hasGoogle ? 'google' : 'email';
+                    
+                    await prisma.user_access_logs.create({
+                        data: {
+                            user_id: dbUser.id,
+                            action: 'logout',
+                            success: true,
+                            ip_address: 'N/A',
+                            user_agent: 'N/A',
+                            details: {
+                                provider,
+                                timestamp: new Date().toISOString(),
+                            },
+                        },
+                    });
+                }
+            } catch (logError) {
+                console.error('Error registrando log de logout:', logError);
+            }
+        }
 
         // Redirigir a la ruta especificada o al login por defecto
         // redirect() lanza NEXT_REDIRECT que es parte del funcionamiento normal de Next.js

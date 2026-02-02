@@ -98,9 +98,14 @@ export function SessionsHistory({ studioSlug }: SessionsHistoryProps) {
     }).format(new Date(date));
   };
 
-  const getActionLabel = (action: string) => {
+  const getActionLabel = (action: string, details?: unknown) => {
+    const detailsObj = details as { provider?: string } | null;
+    const provider = detailsObj?.provider;
+
     switch (action) {
       case 'login':
+        if (provider === 'google') return 'Inicio de sesión con Google';
+        if (provider === 'email') return 'Inicio de sesión con Email';
         return 'Inicio de sesión';
       case 'logout':
         return 'Cierre de sesión';
@@ -117,6 +122,31 @@ export function SessionsHistory({ studioSlug }: SessionsHistoryProps) {
       default:
         return action.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
     }
+  };
+
+  const getProviderBadge = (details?: unknown) => {
+    const detailsObj = details as { provider?: string } | null;
+    const provider = detailsObj?.provider;
+
+    if (!provider) return null;
+
+    if (provider === 'google') {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-medium">
+          Google
+        </span>
+      );
+    }
+
+    if (provider === 'email') {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-medium">
+          Email
+        </span>
+      );
+    }
+
+    return null;
   };
 
   if (loading) {
@@ -182,10 +212,11 @@ export function SessionsHistory({ studioSlug }: SessionsHistoryProps) {
                     {getDeviceIcon(session.user_agent || '')}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-white font-medium text-sm truncate">
-                        {getActionLabel(session.action)}
+                        {getActionLabel(session.action, session.details)}
                       </span>
+                      {getProviderBadge(session.details)}
                       <Badge
                         variant={session.success ? 'default' : 'destructive'}
                         className="text-xs px-2 py-0.5"
