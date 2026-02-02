@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { LogIn, Phone, Mail } from 'lucide-react';
 import Image from 'next/image';
@@ -14,7 +14,7 @@ import { PublicPageFooter } from '@/components/shared/PublicPageFooter';
 import { PublicPageHeader } from '@/components/shared/PublicPageHeader';
 import type { StudioPublicInfo } from '@/lib/actions/cliente';
 
-export default function ClientLoginPage() {
+function ClientLoginPageContent() {
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -340,5 +340,13 @@ export default function ClientLoginPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function ClientLoginPage() {
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <ClientLoginPageContent />
+    </Suspense>
   );
 }
