@@ -14,12 +14,12 @@ export function CatalogoHeaderActions() {
     return (
         <ZenButton
             onClick={handleClick}
-            variant="primary"
+            variant="ghost"
             size="sm"
             className="flex items-center gap-2"
         >
             <Percent className="w-4 h-4" />
-            Márgenes de utilidad
+            Configuración de Rentabilidad
         </ZenButton>
     );
 }

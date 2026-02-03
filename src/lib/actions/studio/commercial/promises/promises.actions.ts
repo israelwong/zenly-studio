@@ -747,6 +747,10 @@ export async function createPromise(
         // ⚠️ DEPRECATED: status removido - usar pipeline_stage_id en su lugar
         event_date: eventDate, // ✅ Guardar directamente en event_date (solo una fecha permitida)
         tentative_dates: Prisma.JsonNull, // ✅ Ya no usar tentative_dates, solo event_date
+        // Campos de atribución de comisiones
+        sales_agent_id: validatedData.sales_agent_id || null,
+        referrer_id: validatedData.referrer_id || null,
+        referrer_type: validatedData.referrer_type || null,
       },
       include: {
         event_type: {
@@ -1057,6 +1061,19 @@ export async function updatePromise(
         }
       }
 
+      // Campos de atribución de comisiones
+      if (validatedData.sales_agent_id !== undefined) {
+        updateData.sales_agent = validatedData.sales_agent_id
+          ? { connect: { id: validatedData.sales_agent_id } }
+          : { disconnect: true };
+      }
+      if (validatedData.referrer_id !== undefined) {
+        updateData.referrer_id = validatedData.referrer_id || null;
+      }
+      if (validatedData.referrer_type !== undefined) {
+        updateData.referrer_type = validatedData.referrer_type || null;
+      }
+
       // Solo actualizar si hay cambios en los datos de la promesa
       if (Object.keys(updateData).length > 0) {
         promise = await prisma.studio_promises.update({
@@ -1127,6 +1144,10 @@ export async function updatePromise(
           tentative_dates: validatedData.interested_dates
             ? (validatedData.interested_dates as Prisma.InputJsonValue)
             : Prisma.JsonNull,
+          // Campos de atribución de comisiones
+          sales_agent_id: validatedData.sales_agent_id || null,
+          referrer_id: validatedData.referrer_id || null,
+          referrer_type: validatedData.referrer_type || null,
         },
         include: {
           event_type: {
@@ -1163,6 +1184,99 @@ export async function updatePromise(
       ).catch((error) => {
         // No fallar si el log falla, solo registrar error
         console.error('[PROMISES] Error registrando log de actualización de contacto:', error);
+      });
+    }
+
+    // Registrar log si hubo cambios en atribución de comisiones
+    const attributionChanges: string[] = [];
+    if (latestPromise && validatedData.sales_agent_id !== undefined) {
+      const oldSalesAgentId = latestPromise.sales_agent_id;
+      if (oldSalesAgentId !== validatedData.sales_agent_id) {
+        // Obtener nombres de los agentes para el log
+        let oldName = 'Ninguno';
+        let newName = 'Ninguno';
+        if (oldSalesAgentId) {
+          const oldAgent = await prisma.studio_users.findUnique({
+            where: { id: oldSalesAgentId },
+            select: { full_name: true },
+          });
+          oldName = oldAgent?.full_name || 'Desconocido';
+        }
+        if (validatedData.sales_agent_id) {
+          const newAgent = await prisma.studio_users.findUnique({
+            where: { id: validatedData.sales_agent_id },
+            select: { full_name: true },
+          });
+          newName = newAgent?.full_name || 'Desconocido';
+        }
+        attributionChanges.push(`Agente de ventas: "${oldName}" → "${newName}"`);
+      }
+    }
+    if (latestPromise && (validatedData.referrer_id !== undefined || validatedData.referrer_type !== undefined)) {
+      const oldReferrerId = latestPromise.referrer_id;
+      const oldReferrerType = latestPromise.referrer_type;
+      const newReferrerId = validatedData.referrer_id ?? oldReferrerId;
+      const newReferrerType = validatedData.referrer_type ?? oldReferrerType;
+      
+      if (oldReferrerId !== newReferrerId || oldReferrerType !== newReferrerType) {
+        let oldReferrerName = 'Ninguno';
+        let newReferrerName = 'Ninguno';
+        
+        if (oldReferrerId && oldReferrerType) {
+          if (oldReferrerType === 'STAFF') {
+            const oldStaff = await prisma.studio_users.findUnique({
+              where: { id: oldReferrerId },
+              select: { full_name: true },
+            }).catch(() => null) || await prisma.studio_crew_members.findUnique({
+              where: { id: oldReferrerId },
+              select: { name: true },
+            }).catch(() => null);
+            oldReferrerName = oldStaff?.full_name || oldStaff?.name || 'Desconocido';
+          } else if (oldReferrerType === 'CONTACT') {
+            const oldContact = await prisma.studio_contacts.findUnique({
+              where: { id: oldReferrerId },
+              select: { name: true },
+            }).catch(() => null);
+            oldReferrerName = oldContact?.name || 'Desconocido';
+          }
+        }
+        
+        if (newReferrerId && newReferrerType) {
+          if (newReferrerType === 'STAFF') {
+            const newStaff = await prisma.studio_users.findUnique({
+              where: { id: newReferrerId },
+              select: { full_name: true },
+            }).catch(() => null) || await prisma.studio_crew_members.findUnique({
+              where: { id: newReferrerId },
+              select: { name: true },
+            }).catch(() => null);
+            newReferrerName = newStaff?.full_name || newStaff?.name || 'Desconocido';
+          } else if (newReferrerType === 'CONTACT') {
+            const newContact = await prisma.studio_contacts.findUnique({
+              where: { id: newReferrerId },
+              select: { name: true },
+            }).catch(() => null);
+            newReferrerName = newContact?.name || 'Desconocido';
+          }
+        }
+        
+        attributionChanges.push(`Referido por: "${oldReferrerName}" (${oldReferrerType || 'N/A'}) → "${newReferrerName}" (${newReferrerType || 'N/A'})`);
+      }
+    }
+    
+    if (attributionChanges.length > 0) {
+      const { logPromiseAction } = await import('./promise-logs.actions');
+      await logPromiseAction(
+        studioSlug,
+        promise.id,
+        'attribution_updated',
+        'user',
+        null,
+        {
+          changes: attributionChanges,
+        }
+      ).catch((error) => {
+        console.error('[PROMISES] Error registrando log de atribución:', error);
       });
     }
 

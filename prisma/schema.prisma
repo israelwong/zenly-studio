@@ -1030,18 +1030,20 @@ model setup_progress_log {
 }
 
 model studio_configuraciones {
-  id                String   @id @default(cuid())
-  studio_id         String
-  status            String   @default("active")
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
-  authorization_key String?
-  markup            Float
-  name              String
-  product_margin    Float
-  sales_commission  Float
-  service_margin    Float
-  studio            studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
+  id                      String   @id @default(cuid())
+  studio_id               String
+  status                  String   @default("active")
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+  authorization_key       String?
+  markup                  Float
+  name                    String
+  product_margin          Float
+  sales_commission        Float
+  service_margin          Float
+  referral_reward_type   ReferralRewardType @default(PERCENTAGE) // Tipo de recompensa para referidos staff
+  referral_reward_value   Float   @default(0.5) // Valor: porcentaje (0.5 = 50%) o monto fijo MXN (ej: 1000)
+  studio                  studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)
 
   @@index([studio_id])
 }
@@ -1375,6 +1377,10 @@ model studio_promises {
   share_auto_generate_contract    Boolean?
   share_allow_recalc             Boolean?
   share_rounding_mode            String?
+  sales_agent_id                 String?                         // FK a studio_users (agente de ventas)
+  referrer_id                    String?                         // ID del referidor (puede ser studio_users, studio_crew_members o studio_contacts)
+  referrer_type                  PromiseReferrerType?            // Tipo de referidor: STAFF | CONTACT
+  commission_payout_total        Float?                          // Monto total calculado de comisión al momento del cierre
   agenda                          studio_agenda[]
   client_notifications            studio_client_notifications[]
   quotes                          studio_cotizaciones[]
@@ -1385,6 +1391,7 @@ model studio_promises {
   status_history                  studio_promise_status_history[] @relation("PromiseStatusHistory")
   condiciones_comerciales_negociacion studio_condiciones_comerciales_negociacion[]
   contact                         studio_contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  sales_agent                     studio_users?                  @relation("PromiseSalesAgent", fields: [sales_agent_id], references: [id])
   event_type                      studio_event_types?             @relation(fields: [event_type_id], references: [id])
   offer                           studio_offers?                  @relation(fields: [offer_id], references: [id])
   pipeline_stage                  studio_promise_pipeline_stages? @relation(fields: [pipeline_stage_id], references: [id])
@@ -1401,6 +1408,8 @@ model studio_promises {
   @@index([offer_id])
   @@index([pipeline_stage_id])
   @@index([event_date])
+  @@index([sales_agent_id])
+  @@index([referrer_id, referrer_type])
   // ✅ PASO 1: Índice maestro para optimizar count() y queries del Kanban
   @@index([studio_id, pipeline_stage_id, is_test])
 }
@@ -3019,6 +3028,7 @@ model studio_users {
   completed_reminders                          studio_reminders[]         @relation("ReminderCompletedBy")
   platform_user_profiles                       platform_user_profiles?     @relation(fields: [platform_user_id], references: [id])
   studio                                       studios                     @relation(fields: [studio_id], references: [id])
+  sales_agent_promises                         studio_promises[]          @relation("PromiseSalesAgent")
 
   @@index([studio_id, status])
   @@index([type])
@@ -3486,6 +3496,16 @@ enum PersonalType {
   OPERATIVO
   ADMINISTRATIVO
   PROVEEDOR
+}
+
+enum PromiseReferrerType {
+  STAFF
+  CONTACT
+}
+
+enum ReferralRewardType {
+  PERCENTAGE
+  FIXED
 }
 
 enum ItemType {

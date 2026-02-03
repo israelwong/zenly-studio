@@ -11,7 +11,7 @@ import {
 } from '@/lib/actions/studio/config/condiciones-comerciales.actions';
 import type { CondicionComercialForm } from '@/lib/actions/schemas/condiciones-comerciales-schemas';
 import { useConfiguracionPreciosUpdateListener, type ConfiguracionPreciosUpdateEventDetail } from '@/hooks/useConfiguracionPreciosRefresh';
-import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
+import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { toast } from 'sonner';
 
 interface CrearCondicionComercialModalProps {
@@ -415,7 +415,7 @@ export function CrearCondicionComercialModal({
         maxWidth="2xl"
         closeOnClickOutside={false}
       >
-        <UtilidadForm
+        <RentabilidadForm
           studioSlug={studioSlug}
           onClose={() => {
             setShowUtilidadModal(false);

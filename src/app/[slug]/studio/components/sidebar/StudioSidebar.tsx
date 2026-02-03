@@ -3,9 +3,10 @@
 import React from 'react';
 import {
     ZenSidebar, ZenSidebarContent, ZenSidebarFooter, ZenSidebarMenu,
-    ZenSidebarMenuItem, useZenSidebar
+    ZenSidebarMenuItem, useZenSidebar, ZenDialog
 } from '@/components/ui/zen';
 import { ZenButton } from '@/components/ui/zen';
+import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { ActiveLink } from './ActiveLink';
 import { LogoutButton } from '@/components/auth/logout-button';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,7 @@ import {
     Package,
     Tags,
     MessageCircle,
+    TrendingUp,
 } from 'lucide-react';
 
 interface StudioSidebarProps {
@@ -75,6 +77,7 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
     const { isOpen, toggleSidebar, isCollapsed, toggleCollapse, isMobile } = useZenSidebar();
     const [isHovered, setIsHovered] = React.useState(false);
     const [isMac, setIsMac] = React.useState(false);
+    const [isRentabilidadOpen, setIsRentabilidadOpen] = React.useState(false);
 
     // En desktop, si está colapsado y se hace hover, expandir temporalmente
     const isExpandedOnHover = !isMobile && isCollapsed && isHovered;
@@ -136,6 +139,7 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
                 { id: 'cuenta', name: 'Cuenta', href: `/config/account`, icon: UserCog },
                 { id: 'subscriptions', name: 'Suscripción', href: `/config/suscripcion`, icon: CreditCard },
                 { id: 'perfil-negocio', name: 'Perfil de Negocio', href: `/config/perfil-negocio`, icon: Globe },
+                { id: 'rentabilidad', name: 'Rentabilidad', href: '#', icon: TrendingUp, onClick: () => setIsRentabilidadOpen(true) },
                 { id: 'plantillas-whatsapp', name: 'Plantillas WhatsApp', href: `/config/plantillas-whatsapp`, icon: MessageCircle },
                 { id: 'integraciones', name: 'Integraciones', href: `/config/integraciones`, icon: Plug },
                 // { id: 'magic', name: 'ZEN Magic', href: `/magic`, icon: Sparkles },
@@ -244,33 +248,70 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
                                 <div className="h-px bg-zinc-800 mx-1.5 my-3" />
                             )}
                             <MenuGroup group={group} isCollapsed={isCollapsed && !isExpandedOnHover}>
-                                {group.items.map(item => (
-                                    <ZenSidebarMenuItem key={item.id}>
-                                        <ActiveLink
-                                            href={item.href.startsWith('/studio/')
-                                                ? `/${studioSlug}${item.href}`
-                                                : `/${studioSlug}/studio${item.href}`}
-                                            className={cn(
-                                                "flex items-center transition-all duration-200 rounded-md group",
-                                                isCollapsed && !isExpandedOnHover
-                                                    ? "justify-center px-0 py-1.5 mx-0"
-                                                    : "gap-2 px-2.5 py-0.5",
-                                                "text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/40"
-                                            )}
-                                            data-tooltip-id="my-tooltip"
-                                            data-tooltip-content={item.name}
-                                            data-tooltip-place="right"
-                                        >
-                                            <item.icon className={cn(
-                                                "shrink-0 text-zinc-500 group-hover:text-zinc-300",
-                                                isCollapsed && !isExpandedOnHover ? "w-5 h-5" : "w-4 h-4"
-                                            )} />
-                                            {(!isCollapsed || isExpandedOnHover) && (
-                                                <span className="text-zinc-300 group-hover:text-white">{item.name}</span>
-                                            )}
-                                        </ActiveLink>
-                                    </ZenSidebarMenuItem>
-                                ))}
+                                {group.items.map(item => {
+                                    const hasOnClick = 'onClick' in item && typeof item.onClick === 'function';
+                                    
+                                    if (hasOnClick) {
+                                        return (
+                                            <ZenSidebarMenuItem key={item.id}>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        item.onClick?.();
+                                                    }}
+                                                    className={cn(
+                                                        "flex items-center transition-all duration-200 rounded-md group",
+                                                        isCollapsed && !isExpandedOnHover
+                                                            ? "justify-center px-0 py-1.5 mx-0"
+                                                            : "px-3 py-0.5",
+                                                        "text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/40"
+                                                    )}
+                                                    data-tooltip-id="my-tooltip"
+                                                    data-tooltip-content={item.name}
+                                                    data-tooltip-place="right"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <item.icon className={cn(
+                                                            "shrink-0 text-zinc-500 group-hover:text-zinc-300",
+                                                            isCollapsed && !isExpandedOnHover ? "w-5 h-5" : "w-4 h-4"
+                                                        )} />
+                                                        {(!isCollapsed || isExpandedOnHover) && (
+                                                            <span className="text-zinc-300 group-hover:text-white">{item.name}</span>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            </ZenSidebarMenuItem>
+                                        );
+                                    }
+                                    
+                                    return (
+                                        <ZenSidebarMenuItem key={item.id}>
+                                            <ActiveLink
+                                                href={item.href.startsWith('/studio/')
+                                                    ? `/${studioSlug}${item.href}`
+                                                    : `/${studioSlug}/studio${item.href}`}
+                                                className={cn(
+                                                    "flex items-center transition-all duration-200 rounded-md group",
+                                                    isCollapsed && !isExpandedOnHover
+                                                        ? "justify-center px-0 py-1.5 mx-0"
+                                                        : "gap-2 px-2.5 py-0.5",
+                                                    "text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/40"
+                                                )}
+                                                data-tooltip-id="my-tooltip"
+                                                data-tooltip-content={item.name}
+                                                data-tooltip-place="right"
+                                            >
+                                                <item.icon className={cn(
+                                                    "shrink-0 text-zinc-500 group-hover:text-zinc-300",
+                                                    isCollapsed && !isExpandedOnHover ? "w-5 h-5" : "w-4 h-4"
+                                                )} />
+                                                {(!isCollapsed || isExpandedOnHover) && (
+                                                    <span className="text-zinc-300 group-hover:text-white">{item.name}</span>
+                                                )}
+                                            </ActiveLink>
+                                        </ZenSidebarMenuItem>
+                                    );
+                                })}
                             </MenuGroup>
                         </React.Fragment>
                     ))}
@@ -290,6 +331,19 @@ export function StudioSidebar({ className, studioSlug, onCommandOpen }: StudioSi
                     </ZenSidebarMenuItem>
                 </ZenSidebarMenu>
             </ZenSidebarFooter>
+            
+            {/* Modal de Rentabilidad */}
+            <ZenDialog
+                isOpen={isRentabilidadOpen}
+                onClose={() => setIsRentabilidadOpen(false)}
+                title="Configuración de Rentabilidad"
+                maxWidth="2xl"
+            >
+                <RentabilidadForm
+                    studioSlug={studioSlug}
+                    onClose={() => setIsRentabilidadOpen(false)}
+                />
+            </ZenDialog>
         </ZenSidebar>
     );
 }

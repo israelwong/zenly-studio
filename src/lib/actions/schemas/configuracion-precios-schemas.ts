@@ -34,6 +34,22 @@ export const ConfiguracionPreciosSchema = z.object({
         })
         .optional(),
 
+    // Políticas de Atribución de Comisiones (Staff)
+    referral_reward_type: z.enum(['PERCENTAGE', 'FIXED']).optional(),
+    
+    referral_reward_value: z.string()
+        .refine(val => {
+            if (!val) return true;
+            const numValue = parseFloat(val);
+            if (isNaN(numValue)) return false;
+            // Validación básica: debe ser >= 0
+            // La validación específica según tipo se hace a nivel de objeto
+            return numValue >= 0;
+        }, {
+            message: "Debe ser un número válido mayor o igual a 0."
+        })
+        .optional(),
+
     // Configuraciones adicionales (simplificadas)
     // incluir_iva: z.boolean().optional(),
     // redondear_precios: z.boolean().optional(),
@@ -44,6 +60,27 @@ export const ConfiguracionPreciosSchema = z.object({
     //   .refine(val => !isNaN(parseInt(val)) && parseInt(val) > 0, { 
     //     message: "Debe ser un número entero mayor a 0." 
     //   }).optional(),
+}).refine((data) => {
+    // Validación cruzada: si hay referral_reward_value, validar según tipo
+    if (!data.referral_reward_value) return true;
+    
+    const numValue = parseFloat(data.referral_reward_value);
+    if (isNaN(numValue)) return false;
+    
+    const rewardType = data.referral_reward_type || 'PERCENTAGE';
+    
+    if (rewardType === 'PERCENTAGE') {
+        // Porcentaje: debe estar entre 0 y 100 (se convertirá a decimal en el servidor)
+        return numValue >= 0 && numValue <= 100;
+    } else if (rewardType === 'FIXED') {
+        // Monto fijo: debe ser >= 0
+        return numValue >= 0;
+    }
+    
+    return true;
+}, {
+    message: "Valor inválido. Si es porcentaje debe estar entre 0 y 100, si es monto fijo debe ser >= 0.",
+    path: ['referral_reward_value'], // El error se mostrará en este campo
 });
 
 export type ConfiguracionPreciosForm = z.infer<typeof ConfiguracionPreciosSchema>;

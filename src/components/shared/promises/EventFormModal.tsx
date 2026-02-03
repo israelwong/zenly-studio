@@ -18,6 +18,8 @@ import type { CreatePromiseData, UpdatePromiseData } from '@/lib/actions/schemas
 import { useContactRefresh } from '@/hooks/useContactRefresh';
 import { TipoEventoEnrichedModal } from '@/components/shared/tipos-evento/TipoEventoEnrichedModal';
 import type { TipoEventoData } from '@/lib/actions/schemas/tipos-evento-schemas';
+import { getStudioUsersForAttribution, getCrewMembersForAttribution } from '@/lib/actions/studio/commercial/promises/promise-attribution.actions';
+import { ZenSelect } from '@/components/ui/zen/forms/ZenSelect';
 
 interface EventFormModalProps {
     isOpen: boolean;
@@ -41,6 +43,9 @@ interface EventFormModalProps {
         social_network_id?: string;
         referrer_contact_id?: string;
         referrer_name?: string;
+        sales_agent_id?: string;
+        referrer_id?: string;
+        referrer_type?: 'STAFF' | 'CONTACT';
     };
     onSuccess?: (updatedData?: {
         id: string;
@@ -148,6 +153,9 @@ export function EventFormModal({
         social_network_id: initialData?.social_network_id,
         referrer_contact_id: initialData?.referrer_contact_id,
         referrer_name: initialData?.referrer_name,
+        sales_agent_id: initialData?.sales_agent_id,
+        referrer_id: initialData?.referrer_id,
+        referrer_type: initialData?.referrer_type,
     });
     const [eventTypes, setEventTypes] = useState<Array<{ id: string; name: string }>>([]);
     const [acquisitionChannels, setAcquisitionChannels] = useState<Array<{ id: string; name: string }>>([]);
@@ -156,6 +164,9 @@ export function EventFormModal({
     const [showContactSuggestions, setShowContactSuggestions] = useState(false);
     const [filteredContactSuggestions, setFilteredContactSuggestions] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
     const [allContacts, setAllContacts] = useState<Array<{ id: string; name: string; phone: string; email: string | null; status?: string; type?: 'contact' | 'crew' }>>([]);
+    const [salesAgents, setSalesAgents] = useState<Array<{ id: string; full_name: string; phone: string | null }>>([]);
+    const [crewMembers, setCrewMembers] = useState<Array<{ id: string; name: string; phone: string | null }>>([]);
+    const [referrerType, setReferrerType] = useState<'STAFF' | 'CONTACT' | null>(null);
 
     // Estado para fecha única (solo una fecha permitida)
     const [selectedDates, setSelectedDates] = useState<Date[]>(() => {
@@ -293,6 +304,25 @@ export function EventFormModal({
         }
     };
 
+    const loadAttributionData = async () => {
+        try {
+            const [usersResult, crewResult] = await Promise.all([
+                getStudioUsersForAttribution(studioSlug),
+                getCrewMembersForAttribution(studioSlug),
+            ]);
+
+            if (usersResult.success && usersResult.data) {
+                setSalesAgents(usersResult.data);
+            }
+
+            if (crewResult.success && crewResult.data) {
+                setCrewMembers(crewResult.data);
+            }
+        } catch (error) {
+            console.error('Error loading attribution data:', error);
+        }
+    };
+
     const getRedesSocialesChannelId = (): string | undefined => {
         const redesChannel = acquisitionChannels.find((c) =>
             c.name.toLowerCase().includes('red') || c.name.toLowerCase().includes('social')
@@ -381,6 +411,9 @@ export function EventFormModal({
                     social_network_id: initialData.social_network_id,
                     referrer_contact_id: initialData.referrer_contact_id,
                     referrer_name: initialData.referrer_name,
+                    sales_agent_id: initialData.sales_agent_id,
+                    referrer_id: initialData.referrer_id,
+                    referrer_type: initialData.referrer_type,
                 });
                 setNameInput(initialData.name || '');
 
@@ -425,6 +458,13 @@ export function EventFormModal({
                 setReferrerInputValue('');
             }
 
+            // Inicializar referrer_type si hay referrer_id
+            if (initialData?.referrer_id && initialData?.referrer_type) {
+                setReferrerType(initialData.referrer_type);
+            } else {
+                setReferrerType(null);
+            }
+
             // Cargar catálogos en segundo plano
             setIsInitialLoading(true);
             Promise.all([
@@ -432,6 +472,7 @@ export function EventFormModal({
                 loadAcquisitionChannels(),
                 loadSocialNetworks(),
                 loadAllContacts(),
+                loadAttributionData(),
             ]).finally(() => {
                 setIsInitialLoading(false);
             });
@@ -449,7 +490,11 @@ export function EventFormModal({
                     social_network_id: undefined,
                     referrer_contact_id: undefined,
                     referrer_name: undefined,
+                    sales_agent_id: undefined,
+                    referrer_id: undefined,
+                    referrer_type: undefined,
                 });
+                setReferrerType(null);
                 setNameInput('');
                 setSelectedDates([]);
                 setEventDate(undefined);
@@ -751,7 +796,10 @@ export function EventFormModal({
                     formData.acquisition_channel_id !== (initialData.acquisition_channel_id || '') ||
                     formData.social_network_id !== (initialData.social_network_id || undefined) ||
                     formData.referrer_contact_id !== (initialData.referrer_contact_id || undefined) ||
-                    formData.referrer_name !== (initialData.referrer_name || undefined);
+                    formData.referrer_name !== (initialData.referrer_name || undefined) ||
+                    formData.sales_agent_id !== (initialData.sales_agent_id || undefined) ||
+                    formData.referrer_id !== (initialData.referrer_id || undefined) ||
+                    formData.referrer_type !== (initialData.referrer_type || undefined);
 
                 // Si solo cambió la fecha y hay una fecha seleccionada, usar actualizarFechaEvento
                 if (datesChanged && !otherFieldsChanged && selectedDates.length === 1) {
@@ -1387,6 +1435,141 @@ export function EventFormModal({
                             </div>
                         </div>
                     )}
+
+                    {/* Atribución y Origen */}
+                    <div className="space-y-4 pt-2 border-t border-zinc-800">
+                        <h3 className="text-sm font-semibold text-zinc-200">Atribución y Origen</h3>
+                        
+                        {/* Agente de Ventas */}
+                        <div>
+                            <ZenSelect
+                                label="Agente de Ventas"
+                                value={formData.sales_agent_id || ''}
+                                onValueChange={(value) => {
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        sales_agent_id: value === '' ? undefined : value,
+                                    }));
+                                }}
+                                options={[
+                                    { value: '', label: 'Ninguno' },
+                                    ...salesAgents.map((agent) => ({
+                                        value: agent.id,
+                                        label: agent.full_name,
+                                    })),
+                                ]}
+                                placeholder="Seleccionar agente de ventas"
+                            />
+                        </div>
+
+                        {/* Referido por (Nuevo sistema) */}
+                        <div className="space-y-3">
+                            <label className="text-sm font-medium text-zinc-300 block">
+                                Tipo de Referido
+                            </label>
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="referrer_type"
+                                        checked={referrerType === 'STAFF'}
+                                        onChange={() => {
+                                            setReferrerType('STAFF');
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                referrer_type: 'STAFF',
+                                                referrer_id: undefined,
+                                            }));
+                                        }}
+                                        className="w-4 h-4 text-emerald-500 bg-zinc-900 border-zinc-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-sm text-zinc-300">Staff</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="referrer_type"
+                                        checked={referrerType === 'CONTACT'}
+                                        onChange={() => {
+                                            setReferrerType('CONTACT');
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                referrer_type: 'CONTACT',
+                                                referrer_id: undefined,
+                                            }));
+                                        }}
+                                        className="w-4 h-4 text-emerald-500 bg-zinc-900 border-zinc-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-sm text-zinc-300">Contacto</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="referrer_type"
+                                        checked={referrerType === null}
+                                        onChange={() => {
+                                            setReferrerType(null);
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                referrer_type: undefined,
+                                                referrer_id: undefined,
+                                            }));
+                                        }}
+                                        className="w-4 h-4 text-emerald-500 bg-zinc-900 border-zinc-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-sm text-zinc-300">Ninguno</span>
+                                </label>
+                            </div>
+
+                            {referrerType === 'STAFF' && (
+                                <ZenSelect
+                                    label="Referido por (Staff)"
+                                    value={formData.referrer_id || ''}
+                                    onValueChange={(value) => {
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            referrer_id: value === '' ? undefined : value,
+                                        }));
+                                    }}
+                                    options={[
+                                        { value: '', label: 'Seleccionar staff' },
+                                        ...salesAgents.map((agent) => ({
+                                            value: agent.id,
+                                            label: agent.full_name,
+                                        })),
+                                        ...crewMembers.map((member) => ({
+                                            value: member.id,
+                                            label: member.name,
+                                        })),
+                                    ]}
+                                    placeholder="Buscar staff..."
+                                />
+                            )}
+
+                            {referrerType === 'CONTACT' && (
+                                <ZenSelect
+                                    label="Referido por (Contacto)"
+                                    value={formData.referrer_id || ''}
+                                    onValueChange={(value) => {
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            referrer_id: value === '' ? undefined : value,
+                                        }));
+                                    }}
+                                    options={[
+                                        { value: '', label: 'Seleccionar contacto' },
+                                        ...allContacts
+                                            .filter((c) => c.type === 'contact')
+                                            .map((contact) => ({
+                                                value: contact.id,
+                                                label: contact.name,
+                                            })),
+                                    ]}
+                                    placeholder="Buscar contacto..."
+                                />
+                            )}
+                        </div>
+                    </div>
 
                     {/* Fecha de Interés / Fecha del Evento */}
                     <div className="space-y-2">

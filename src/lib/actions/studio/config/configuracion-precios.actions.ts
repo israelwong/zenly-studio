@@ -56,6 +56,14 @@ export async function obtenerConfiguracionPrecios(studioSlug: string) {
                     where: { status: 'active' },
                     orderBy: { updated_at: 'desc' },
                     take: 1,
+                    select: {
+                        service_margin: true,
+                        product_margin: true,
+                        sales_commission: true,
+                        markup: true,
+                        referral_reward_type: true,
+                        referral_reward_value: true,
+                    },
                 },
             },
         });
@@ -74,6 +82,16 @@ export async function obtenerConfiguracionPrecios(studioSlug: string) {
             return null;
         }
 
+        // Convertir referral_reward_value según el tipo
+        let referralRewardValueDisplay = '';
+        if (configuracion.referral_reward_type === 'PERCENTAGE') {
+            // Si es porcentaje, convertir a entero para mostrar (0.5 -> 50)
+            referralRewardValueDisplay = String((configuracion.referral_reward_value ?? 0.5) * 100);
+        } else {
+            // Si es monto fijo, mostrar directamente
+            referralRewardValueDisplay = String(configuracion.referral_reward_value ?? 1000);
+        }
+
         return {
             id: studio.id,
             nombre: studio.studio_name,
@@ -82,6 +100,8 @@ export async function obtenerConfiguracionPrecios(studioSlug: string) {
             utilidad_producto: String((configuracion.product_margin ?? 0) * 100),
             comision_venta: String((configuracion.sales_commission ?? 0) * 100),
             sobreprecio: String((configuracion.markup ?? 0) * 100),
+            referral_reward_type: configuracion.referral_reward_type ?? 'PERCENTAGE',
+            referral_reward_value: referralRewardValueDisplay,
         };
     });
 }
@@ -162,11 +182,28 @@ export async function actualizarConfiguracionPrecios(
         // El schema ya valida que los valores estén entre 0.0 y 1.0 (decimales)
         // UtilidadForm convierte de enteros (10) a decimales (0.10) antes de enviar
         // Usar directamente los valores del schema sin dividir por 100
+        const rewardType = validatedData.referral_reward_type || 'PERCENTAGE';
+        let rewardValue: number;
+        
+        if (rewardType === 'PERCENTAGE') {
+            // Si es porcentaje, convertir de entero (50) a decimal (0.5)
+            rewardValue = validatedData.referral_reward_value
+                ? parseFloat(parseFloat(validatedData.referral_reward_value).toFixed(4)) / 100
+                : 0.5; // Default 50%
+        } else {
+            // Si es monto fijo, usar directamente
+            rewardValue = validatedData.referral_reward_value
+                ? parseFloat(parseFloat(validatedData.referral_reward_value).toFixed(2))
+                : 1000; // Default 1000 MXN
+        }
+
         const dataToSave = {
             service_margin: parseFloat(parseFloat(validatedData.utilidad_servicio || '0').toFixed(4)),
             product_margin: parseFloat(parseFloat(validatedData.utilidad_producto || '0').toFixed(4)),
             sales_commission: parseFloat(parseFloat(validatedData.comision_venta || '0').toFixed(4)),
             markup: parseFloat(parseFloat(validatedData.sobreprecio || '0').toFixed(4)),
+            referral_reward_type: rewardType,
+            referral_reward_value: rewardValue,
         };
 
         // Obtener el studio
@@ -198,6 +235,8 @@ export async function actualizarConfiguracionPrecios(
                     product_margin: dataToSave.product_margin,
                     sales_commission: dataToSave.sales_commission,
                     markup: dataToSave.markup,
+                    referral_reward_type: dataToSave.referral_reward_type,
+                    referral_reward_value: dataToSave.referral_reward_value,
                     status: 'active',
                     updated_at: new Date(),
                 },
@@ -211,6 +250,8 @@ export async function actualizarConfiguracionPrecios(
                     product_margin: dataToSave.product_margin,
                     sales_commission: dataToSave.sales_commission,
                     markup: dataToSave.markup,
+                    referral_reward_type: dataToSave.referral_reward_type,
+                    referral_reward_value: dataToSave.referral_reward_value,
                     status: 'active',
                     updated_at: new Date(),
                 },

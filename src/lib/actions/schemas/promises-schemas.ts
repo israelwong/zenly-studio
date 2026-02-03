@@ -47,6 +47,9 @@ export const createPromiseSchema = z.object({
   social_network_id: z.string().optional(),
   referrer_contact_id: z.string().optional(),
   referrer_name: z.string().max(100, 'Nombre del referente es demasiado largo').optional().or(z.literal('')),
+  sales_agent_id: z.string().cuid().optional(),
+  referrer_id: z.string().optional(),
+  referrer_type: z.enum(['STAFF', 'CONTACT']).optional(),
 });
 
 export const updatePromiseSchema = createPromiseSchema.partial().extend({

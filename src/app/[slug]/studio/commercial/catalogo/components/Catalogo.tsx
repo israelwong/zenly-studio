@@ -14,7 +14,7 @@ import {
 import { ZenConfirmModal } from '@/components/ui/zen/overlays/ZenConfirmModal';
 import { SeccionEditorModal, SeccionFormData, CategoriaEditorModal, CategoriaFormData, CatalogoSkeleton } from './';
 import { ItemEditorModal, ItemFormData } from '@/components/shared/catalogo/ItemEditorModal';
-import { UtilidadForm } from '@/components/shared/configuracion/UtilidadForm';
+import { RentabilidadForm } from '@/components/shared/configuracion/RentabilidadForm';
 import { ConfiguracionPrecios, calcularPrecio as calcularPrecioSistema } from '@/lib/actions/studio/catalogo/calcular-precio';
 import {
     crearSeccion,
@@ -1576,12 +1576,12 @@ export default function Catalogo() {
             <ZenDialog
                 isOpen={isUtilidadModalOpen}
                 onClose={() => setIsUtilidadModalOpen(false)}
-                title="Márgenes de Utilidad"
+                title="Configuración de Rentabilidad"
                 description="Gestiona los márgenes de utilidad, comisiones y sobreprecios"
                 maxWidth="2xl"
                 closeOnClickOutside={false}
             >
-                <UtilidadForm
+                <RentabilidadForm
                     studioSlug={studioSlug}
                     onClose={() => setIsUtilidadModalOpen(false)}
                 />
