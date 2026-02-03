@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CalendarIcon, Edit2, Settings } from 'lucide-react';
+import { CalendarIcon, Settings } from 'lucide-react';
 import { ZenCard, ZenCardHeader, ZenCardTitle, ZenCardContent, ZenButton, ZenInput } from '@/components/ui/zen';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
@@ -259,16 +259,28 @@ export function SeguimientoMinimalCard({ studioSlug, promiseId, onSuccess }: Seg
           <ZenCardHeader className="border-b border-zinc-800 py-2 px-3 shrink-0">
             <div className="flex items-center justify-between">
               <ZenCardTitle className="text-sm font-medium">Recordatorio de seguimiento</ZenCardTitle>
-              <ZenButton
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-200"
-                onClick={() => setShowEditModal(true)}
-                title="Editar seguimiento"
-              >
-                <Edit2 className="h-3.5 w-3.5 mr-1" />
-                Editar
-              </ZenButton>
+              <div className="flex items-center gap-1.5">
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-200"
+                  onClick={() => setShowEditModal(true)}
+                  title="Editar seguimiento"
+                >
+                  Editar
+                </ZenButton>
+                <ZenButton
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
+                  onClick={handleClear}
+                  disabled={clearing}
+                  loading={clearing}
+                  title="Limpiar seguimiento"
+                >
+                  Limpiar
+                </ZenButton>
+              </div>
             </div>
           </ZenCardHeader>
           <ZenCardContent className="p-3">
