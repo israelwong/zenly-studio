@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { DollarSign, Info, Users, Coins } from 'lucide-react';
+import { DollarSign, Info, Users, Coins, Building2 } from 'lucide-react';
 import {
     ZenButton,
     ZenInput,
@@ -36,6 +36,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
     const [config, setConfig] = useState<{
         utilidad_servicio?: string;
         utilidad_producto?: string;
+        comision_plataforma?: string;
         comision_venta?: string;
         sobreprecio?: string;
         referral_reward_type?: 'PERCENTAGE' | 'FIXED';
@@ -44,6 +45,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
     }>({
         utilidad_servicio: undefined,
         utilidad_producto: undefined,
+        comision_plataforma: undefined,
         comision_venta: undefined,
         sobreprecio: undefined,
         referral_reward_type: 'PERCENTAGE',
@@ -55,6 +57,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
     const [initialConfig, setInitialConfig] = useState<{
         utilidad_servicio?: string;
         utilidad_producto?: string;
+        comision_plataforma?: string;
         comision_venta?: string;
         sobreprecio?: string;
         referral_reward_type?: 'PERCENTAGE' | 'FIXED';
@@ -63,6 +66,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
     }>({
         utilidad_servicio: undefined,
         utilidad_producto: undefined,
+        comision_plataforma: undefined,
         comision_venta: undefined,
         sobreprecio: undefined,
         referral_reward_type: 'PERCENTAGE',
@@ -93,6 +97,9 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
                 utilidad_producto: result?.utilidad_producto
                     ? String(Math.round(parseFloat(result.utilidad_producto)))
                     : '',
+                comision_plataforma: result?.comision_plataforma
+                    ? String(Math.round(parseFloat(result.comision_plataforma)))
+                    : '',
                 comision_venta: result?.comision_venta
                     ? String(Math.round(parseFloat(result.comision_venta)))
                     : '',
@@ -112,6 +119,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
             const emptyConfig = {
                 utilidad_servicio: '',
                 utilidad_producto: '',
+                comision_plataforma: '',
                 comision_venta: '',
                 sobreprecio: '',
                 referral_reward_type: 'PERCENTAGE' as const,
@@ -125,7 +133,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
         }
     }
 
-    type ConfigField = 'utilidad_servicio' | 'utilidad_producto' | 'comision_venta' | 'sobreprecio' | 'referral_reward_value';
+    type ConfigField = 'utilidad_servicio' | 'utilidad_producto' | 'comision_plataforma' | 'comision_venta' | 'sobreprecio' | 'referral_reward_value';
 
     const handleInputChange = (field: ConfigField, value: string) => {
         // Solo permitir números enteros (sin punto decimal)
@@ -142,8 +150,8 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
                 }
             }
 
-            // Comisión de venta y sobreprecio: máximo 100
-            if ((field === 'comision_venta' || field === 'sobreprecio') && numValue > 100) {
+            // Comisión de plataforma, comisión de venta y sobreprecio: máximo 100
+            if ((field === 'comision_plataforma' || field === 'comision_venta' || field === 'sobreprecio') && numValue > 100) {
                 return; // No actualizar si excede 100
             }
 
@@ -169,6 +177,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
         return (
             config.utilidad_servicio !== initialConfig.utilidad_servicio ||
             config.utilidad_producto !== initialConfig.utilidad_producto ||
+            config.comision_plataforma !== initialConfig.comision_plataforma ||
             config.comision_venta !== initialConfig.comision_venta ||
             config.sobreprecio !== initialConfig.sobreprecio ||
             config.referral_reward_type !== initialConfig.referral_reward_type ||
@@ -201,6 +210,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
             const dataToSend: ConfiguracionPreciosForm = {
                 utilidad_servicio: parseAndValidate(config.utilidad_servicio),
                 utilidad_producto: parseAndValidate(config.utilidad_producto),
+                comision_plataforma: parseAndValidate(config.comision_plataforma),
                 comision_venta: parseAndValidate(config.comision_venta),
                 sobreprecio: parseAndValidate(config.sobreprecio),
                 // Solo enviar datos de referral si está activo
@@ -226,6 +236,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
                 triggerUpdate(studioSlug, {
                     utilidad_servicio: parseFloat(dataToSend.utilidad_servicio || '0'),
                     utilidad_producto: parseFloat(dataToSend.utilidad_producto || '0'),
+                    comision_plataforma: parseFloat(dataToSend.comision_plataforma || '0'),
                     comision_venta: parseFloat(dataToSend.comision_venta || '0'),
                     sobreprecio: parseFloat(dataToSend.sobreprecio || '0'),
                 });
@@ -260,7 +271,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
 
     if (loading) {
         return (
-            <div className="space-y-8 max-w-3xl mx-auto">
+            <div className="space-y-10 max-w-3xl mx-auto">
                 {/* Sección: Márgenes de Ganancia Skeleton */}
                 <div className="space-y-4">
                     <div className="h-7 w-48 bg-zinc-700 rounded animate-pulse" />
@@ -282,24 +293,41 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
                 {/* Separador Skeleton */}
                 <div className="border-t border-zinc-800"></div>
 
-                {/* Sección: Motor de Comisiones Skeleton */}
+                {/* Sección: Estructura de Comisiones Skeleton */}
                 <div className="space-y-6">
                     <div className="h-7 w-64 bg-zinc-700 rounded animate-pulse" />
                     
-                    {/* Comisión Premium Skeleton */}
+                    {/* Comisión Plataforma Skeleton */}
                     <div className="bg-zinc-800/40 rounded-lg p-6 border border-zinc-700/50">
                         <div className="space-y-3">
                             <div className="flex items-center gap-2">
                                 <div className="h-5 w-5 bg-zinc-700 rounded animate-pulse" />
-                                <div className="h-4 w-32 bg-zinc-700 rounded animate-pulse" />
+                                <div className="h-4 w-40 bg-zinc-700 rounded animate-pulse" />
                             </div>
                             <div className="h-10 w-full bg-zinc-700 rounded animate-pulse" />
                             <div className="h-3 w-64 bg-zinc-700 rounded animate-pulse" />
                         </div>
                     </div>
 
-                    {/* Distribución Skeleton */}
-                    <div className="space-y-4 pt-4 border-t border-zinc-800">
+                    {/* Comisión Venta Skeleton */}
+                    <div className="bg-zinc-800/40 rounded-lg p-6 border border-zinc-700/50">
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <div className="h-5 w-5 bg-zinc-700 rounded animate-pulse" />
+                                <div className="h-4 w-48 bg-zinc-700 rounded animate-pulse" />
+                            </div>
+                            <div className="h-10 w-full bg-zinc-700 rounded animate-pulse" />
+                            <div className="h-3 w-64 bg-zinc-700 rounded animate-pulse" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Separador Skeleton */}
+                <div className="border-t border-zinc-800"></div>
+
+                {/* Sección: Distribución por Referencia Skeleton */}
+                <div className="space-y-6">
+                    <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="h-5 w-5 bg-zinc-700 rounded animate-pulse" />
@@ -323,7 +351,7 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-8 max-w-3xl mx-auto">
+        <form onSubmit={handleSubmit} className="space-y-10 max-w-3xl mx-auto">
             {/* Sección: Márgenes de Ganancia */}
             <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -402,18 +430,40 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
             {/* Separador */}
             <SeparadorZen spacing="lg" variant="subtle" />
 
-            {/* Sección: Motor de Comisiones e Incentivos */}
+            {/* Sección: Estructura de Comisiones */}
             <div className="space-y-6">
                 <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-semibold text-zinc-100">Motor de Comisiones e Incentivos</h2>
+                    <h2 className="text-xl font-semibold text-zinc-100">Estructura de Comisiones</h2>
                 </div>
 
-                {/* Comisión de Venta - Diseño Premium */}
+                {/* A. Comisión de Plataforma (ZENLY Fee) */}
+                <div className="bg-zinc-800/40 rounded-lg p-6 border border-zinc-700/50">
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Building2 className="h-5 w-5 text-emerald-400" />
+                            <label className="text-sm font-medium text-zinc-300">Comisión de Plataforma</label>
+                        </div>
+                        <ZenInput
+                            type="text"
+                            inputMode="decimal"
+                            value={config.comision_plataforma || ''}
+                            onChange={(e) => handleInputChange('comision_plataforma', e.target.value)}
+                            placeholder="0"
+                            hint="% de comisión para la plataforma"
+                            className="bg-zinc-900/50"
+                        />
+                        <p className="text-xs text-zinc-400 mt-2">
+                            Porcentaje que la plataforma retiene por el uso del servicio.
+                        </p>
+                    </div>
+                </div>
+
+                {/* B. Comisión de Venta (Agente) */}
                 <div className="bg-zinc-800/40 rounded-lg p-6 border border-zinc-700/50">
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 mb-1">
                             <DollarSign className="h-5 w-5 text-blue-400" />
-                            <label className="text-sm font-medium text-zinc-300">Comisión de Venta</label>
+                            <label className="text-sm font-medium text-zinc-300">Comisión de Venta (Bolsa Global)</label>
                         </div>
                         <ZenInput
                             type="text"
@@ -421,17 +471,22 @@ export function RentabilidadForm({ studioSlug, onClose }: RentabilidadFormProps)
                             value={config.comision_venta || ''}
                             onChange={(e) => handleInputChange('comision_venta', e.target.value)}
                             placeholder="0"
-                            hint="% de comisión para el vendedor"
+                            hint="% de comisión para el agente"
                             className="bg-zinc-900/50"
                         />
                         <p className="text-xs text-zinc-400 mt-2">
-                            Define la bolsa global de comisión que se extraerá de cada venta.
+                            Porcentaje reservado para pagar al agente que cierra la venta.
                         </p>
                     </div>
                 </div>
+            </div>
 
-                {/* Switch de Distribución por Referencia */}
-                <div className="space-y-4 pt-4 border-t border-zinc-800">
+            {/* Separador */}
+            <SeparadorZen spacing="lg" variant="subtle" />
+
+            {/* Sección: Distribución por Referencia (Staff) */}
+            <div className="space-y-6">
+                <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <Users className="h-5 w-5 text-purple-400" />

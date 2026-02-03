@@ -146,14 +146,39 @@ export function PromiseDetailToolbar({
       {/* WhatsApp: lado derecho del toolbar */}
       {contactData.phone && (
         <div className="flex items-center gap-1.5">
+          {/* Label con icono */}
+          <div className="flex items-center gap-1.5">
+            <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
+            <span className="text-xs text-zinc-500 font-medium">WhatsApp</span>
+          </div>
+          
+          {/* Separador vertical */}
+          <div className="h-4 w-px bg-zinc-700" />
+          
+          {/* Botón: Enviar plantilla */}
           <ZenButton
             variant="ghost"
             size="sm"
             onClick={() => setWhatsappModalOpen(true)}
             className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
           >
-            <WhatsAppIcon className="h-3.5 w-3.5" size={14} />
-            <span>WhatsApp</span>
+            <span>Enviar plantilla</span>
+          </ZenButton>
+          
+          {/* Botón: Abrir conversación */}
+          <ZenButton
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              // Formatear número: eliminar espacios, guiones, paréntesis y el prefijo + si existe
+              const cleanPhone = contactData.phone.replace(/[\s\-\(\)\+]/g, '');
+              // Construir URL de WhatsApp
+              const whatsappUrl = `https://wa.me/${cleanPhone}`;
+              window.open(whatsappUrl, '_blank');
+            }}
+            className="gap-1.5 px-2.5 py-1.5 h-7 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+          >
+            <span>Abrir conversación</span>
           </ZenButton>
         </div>
       )}

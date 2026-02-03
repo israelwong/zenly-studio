@@ -1041,6 +1041,7 @@ model studio_configuraciones {
   product_margin          Float
   sales_commission        Float
   service_margin          Float
+  platform_commission_rate Float  @default(0.0) // Comisión de la plataforma (ZENLY Fee)
   referral_reward_type   ReferralRewardType @default(PERCENTAGE) // Tipo de recompensa para referidos staff
   referral_reward_value   Float   @default(0.5) // Valor: porcentaje (0.5 = 50%) o monto fijo MXN (ej: 1000)
   studio                  studios  @relation(fields: [studio_id], references: [id], onDelete: Cascade)

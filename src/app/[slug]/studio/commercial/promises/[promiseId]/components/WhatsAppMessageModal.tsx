@@ -23,6 +23,7 @@ import {
   formatEventDateForWhatsApp,
 } from '@/lib/utils/whatsapp-templates';
 import type { WhatsAppTemplate } from '@/lib/actions/studio/commercial/promises/whatsapp-templates.actions';
+import { WhatsAppAdvancedEditor } from '@/components/shared/whatsapp';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -287,6 +288,7 @@ export function WhatsAppMessageModal({
   const [messageSource, setMessageSource] = useState<'template' | 'chip' | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  
 
   const loadData = useCallback(async () => {
     if (!isOpen || !studioSlug || !promiseId) return;
@@ -582,8 +584,17 @@ export function WhatsAppMessageModal({
     insertPortfolioChip(p.slug, `Portafolio: ${p.title}`, shortUrl);
   };
 
-  const getCurrentMessage = (): string =>
-    editorRef.current ? getMessageFromEditor() : message;
+  // Esta función ahora se obtiene del componente compartido
+  const getCurrentMessageFnRef = useRef<(() => string) | null>(null);
+  const getCurrentMessage = useCallback((): string => {
+    if (getCurrentMessageFnRef.current) return getCurrentMessageFnRef.current();
+    return message;
+  }, [message]);
+  
+  // Callback memoizado para evitar recreación en cada render
+  const handleGetCurrentMessage = useCallback((getter: () => string) => {
+    getCurrentMessageFnRef.current = getter;
+  }, []);
 
   const getTextToSend = (): string => {
     let currentMessage = getCurrentMessage();
@@ -974,70 +985,38 @@ export function WhatsAppMessageModal({
           </div>
         </aside>
 
-        {/* Col 3: Editor + Preview (Taller) */}
+        {/* Col 3: Editor + Preview (usando componente compartido) */}
         <div className="flex-1 flex flex-col min-w-0 border-l border-zinc-800 rounded-r-lg bg-zinc-950 overflow-hidden">
-          <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-            <div className="shrink-0 sticky top-0 z-10 p-3 pb-2 border-b border-zinc-800 bg-zinc-950 space-y-3">
-              {/* Título de la plantilla */}
-              <div>
-                <label className="text-xs font-medium text-zinc-500 block mb-1.5">
-                  Título de la plantilla
-                </label>
-              <ZenInput
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="Ej. Saludo inicial"
-                className="bg-zinc-900/50 border-zinc-700"
-              />
-              {/* Chips de variables */}
-              <div className="flex flex-wrap gap-1.5">
-                {VAR_CHIPS.map((chip) => (
-                  <ZenButton
-                    key={chip.value}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => insertVariableAtCursor(chip.value)}
-                    className="text-xs h-6 px-2"
-                  >
-                    {chip.label}
-                  </ZenButton>
-                ))}
-              </div>
-            </div>
-            </div>
-
-            {/* Editor con Smart Chips */}
-            <div className="flex-1 flex flex-col min-h-0 p-3 pt-2">
-              <label className="text-xs font-medium text-zinc-500 block mb-1.5">Mensaje</label>
-              <div
-                ref={editorRef}
-                contentEditable
-                suppressContentEditableWarning
-                onInput={handleEditorInput}
-                onClick={handleEditorClick}
-                className={cn(
-                  'min-h-[120px] rounded-lg border border-zinc-700 bg-zinc-900/50 px-3 py-2.5 text-sm text-zinc-200',
-                  'focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/30',
-                  '[&_.whatsapp-modal-chip]:inline-flex [&_.whatsapp-modal-chip]:items-center [&_.whatsapp-modal-chip]:gap-0.5 [&_.whatsapp-modal-chip]:rounded [&_.whatsapp-modal-chip]:px-1.5 [&_.whatsapp-modal-chip]:py-0.5 [&_.whatsapp-modal-chip]:text-xs [&_.whatsapp-modal-chip]:bg-emerald-500/25 [&_.whatsapp-modal-chip]:text-emerald-300 [&_.whatsapp-modal-chip]:border [&_.whatsapp-modal-chip]:border-emerald-500/40 [&_.whatsapp-modal-chip]:cursor-default [&_.whatsapp-modal-chip]:mx-0.5 [&_.chip-remove]:cursor-pointer [&_.chip-remove]:opacity-80 hover:[&_.chip-remove]:opacity-100'
-                )}
-                data-placeholder={DEFAULT_MESSAGE}
-              />
-            </div>
-
-            {/* Burbuja WhatsApp (espejo en tiempo real) */}
-            <div className="shrink-0 p-3 pt-2 border-t border-zinc-800">
-              <p className="text-xs font-medium text-zinc-500 mb-1.5">Vista previa</p>
-              <div className="flex justify-end">
-              <div
-                className="max-w-[90%] rounded-lg px-3 py-2 shadow-sm text-sm text-zinc-800 whitespace-pre-wrap break-words text-left"
-                style={{ backgroundColor: '#dcf8c6' }}
-              >
-                {previewStyled}
-              </div>
-              </div>
-            </div>
-          </div>
+          <WhatsAppAdvancedEditor
+            title={templateName}
+            message={message}
+            onTitleChange={setTemplateName}
+            onMessageChange={(newMsg) => {
+              setMessage(newMsg);
+              setMessageSource('chip');
+            }}
+            variables={{
+              nombre_contacto: contactName,
+              nombre_prospecto: contactName,
+              nombre_evento: eventName || undefined,
+              link_promesa: shortUrl || undefined,
+              fecha_evento: eventDate,
+            }}
+            allowSending={true}
+            onSaveTemplate={handleGuardarPlantilla}
+            onSendOnly={handleSoloEnviar}
+            onSaveAndSend={hasChanges ? handleGuardarYEnviar : handleEnviarWhatsApp}
+            isSaving={saving}
+            hasChanges={hasChanges}
+            isEditingTemplate={isEditedFromTemplate}
+            titlePlaceholder="Ej. Saludo inicial"
+            defaultMessage={DEFAULT_MESSAGE}
+            editorRef={editorRef}
+            onInsertVariable={insertVariableAtCursor}
+            onInsertPortfolio={insertPortfolioChip}
+            onGetCurrentMessage={handleGetCurrentMessage}
+            className="flex-1 min-h-0 overflow-y-auto"
+          />
         </div>
       </div>
 

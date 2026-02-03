@@ -61,6 +61,7 @@ export async function obtenerConfiguracionPrecios(studioSlug: string) {
                         product_margin: true,
                         sales_commission: true,
                         markup: true,
+                        platform_commission_rate: true,
                         referral_reward_type: true,
                         referral_reward_value: true,
                     },
@@ -98,6 +99,7 @@ export async function obtenerConfiguracionPrecios(studioSlug: string) {
             slug: studio.slug,
             utilidad_servicio: String((configuracion.service_margin ?? 0) * 100), // Convertir a porcentaje
             utilidad_producto: String((configuracion.product_margin ?? 0) * 100),
+            comision_plataforma: String((configuracion.platform_commission_rate ?? 0) * 100),
             comision_venta: String((configuracion.sales_commission ?? 0) * 100),
             sobreprecio: String((configuracion.markup ?? 0) * 100),
             referral_reward_type: configuracion.referral_reward_type ?? 'PERCENTAGE',
@@ -200,6 +202,7 @@ export async function actualizarConfiguracionPrecios(
         const dataToSave = {
             service_margin: parseFloat(parseFloat(validatedData.utilidad_servicio || '0').toFixed(4)),
             product_margin: parseFloat(parseFloat(validatedData.utilidad_producto || '0').toFixed(4)),
+            platform_commission_rate: parseFloat(parseFloat(validatedData.comision_plataforma || '0').toFixed(4)),
             sales_commission: parseFloat(parseFloat(validatedData.comision_venta || '0').toFixed(4)),
             markup: parseFloat(parseFloat(validatedData.sobreprecio || '0').toFixed(4)),
             referral_reward_type: rewardType,
@@ -233,6 +236,7 @@ export async function actualizarConfiguracionPrecios(
                 data: {
                     service_margin: dataToSave.service_margin,
                     product_margin: dataToSave.product_margin,
+                    platform_commission_rate: dataToSave.platform_commission_rate,
                     sales_commission: dataToSave.sales_commission,
                     markup: dataToSave.markup,
                     referral_reward_type: dataToSave.referral_reward_type,
@@ -248,6 +252,7 @@ export async function actualizarConfiguracionPrecios(
                     name: 'Configuración de Precios',
                     service_margin: dataToSave.service_margin,
                     product_margin: dataToSave.product_margin,
+                    platform_commission_rate: dataToSave.platform_commission_rate,
                     sales_commission: dataToSave.sales_commission,
                     markup: dataToSave.markup,
                     referral_reward_type: dataToSave.referral_reward_type,

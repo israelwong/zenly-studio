@@ -8,6 +8,7 @@ export interface ConfiguracionPreciosUpdateEventDetail {
   // Configuración completa en decimales (0.30 = 30%)
   utilidad_servicio?: number;
   utilidad_producto?: number;
+  comision_plataforma?: number;
   comision_venta?: number;
   sobreprecio?: number;
 }
@@ -20,6 +21,7 @@ export function useConfiguracionPreciosRefresh() {
   const triggerUpdate = useCallback((studioSlug: string, config?: {
     utilidad_servicio?: number;
     utilidad_producto?: number;
+    comision_plataforma?: number;
     comision_venta?: number;
     sobreprecio?: number;
   }) => {
@@ -35,6 +37,7 @@ export function useConfiguracionPreciosRefresh() {
           studioSlug: studioSlug as string,
           utilidad_servicio: config?.utilidad_servicio,
           utilidad_producto: config?.utilidad_producto,
+          comision_plataforma: config?.comision_plataforma,
           comision_venta: config?.comision_venta,
           sobreprecio: config?.sobreprecio,
         },

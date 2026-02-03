@@ -20,6 +20,12 @@ export const ConfiguracionPreciosSchema = z.object({
     // utilidad_paquete eliminada - no está en la base de datos
 
     // Comisiones y sobreprecios (valores decimales 0.0 a 1.0) - opcionales
+    comision_plataforma: z.string()
+        .refine(val => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= 0 && parseFloat(val) <= 1), {
+            message: "Debe ser un número válido entre 0.0 y 1.0 (ej: 0.30 = 30%)."
+        })
+        .optional(),
+
     comision_venta: z.string()
         .refine(val => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= 0 && parseFloat(val) <= 1), {
             message: "Debe ser un número válido entre 0.0 y 1.0 (ej: 0.10 = 10%)."
