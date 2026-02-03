@@ -3,6 +3,7 @@
 import { use, useState, useEffect } from 'react';
 import { AvailablePackagesSection } from './AvailablePackagesSection';
 import { PortafoliosCard } from '@/components/promise/PortafoliosCard';
+import { PortfolioNudge } from '@/components/promise/PortfolioNudge';
 import type { PublicCotizacion } from '@/types/public-promise';
 import type { PromiseShareSettings } from '@/lib/actions/studio/commercial/promises/promise-share-settings.actions';
 
@@ -178,11 +179,15 @@ export function AvailablePackagesSectionWrapper({
 
       {/* Portafolios disponibles - se muestran después de los paquetes */}
       {hasPortafolios && paquetesData.portafolios && (
-        <PortafoliosCard
-          portafolios={paquetesData.portafolios}
-          studioSlug={studioSlug}
-          studioId={basicPromise.studio.id}
-        />
+        <>
+          <PortafoliosCard
+            portafolios={paquetesData.portafolios}
+            studioSlug={studioSlug}
+            studioId={basicPromise.studio.id}
+          />
+          {/* Nudge proactivo para portafolios */}
+          <PortfolioNudge hasPortfolios={paquetesData.portafolios.length > 0} />
+        </>
       )}
     </>
   );

@@ -112,7 +112,7 @@ export function PortafoliosCard({ portafolios, studioSlug, studioId }: Portafoli
 
   return (
     <>
-      <section className="py-8 md:py-12 px-4">
+      <section id="portfolio-section" className="py-8 md:py-12 px-4">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-6">

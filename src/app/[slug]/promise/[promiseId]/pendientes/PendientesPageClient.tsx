@@ -9,6 +9,7 @@ import { CotizacionesSectionRealtime } from '@/components/promise/CotizacionesSe
 import { PaquetesSection } from '@/components/promise/PaquetesSection';
 import { ComparadorButton } from '@/components/promise/ComparadorButton';
 import { PortafoliosCard } from '@/components/promise/PortafoliosCard';
+import { PortfolioNudge } from '@/components/promise/PortfolioNudge';
 import { ProgressOverlay } from '@/components/promise/ProgressOverlay';
 import { usePromiseSettingsRealtime } from '@/hooks/usePromiseSettingsRealtime';
 import { usePromisesRealtime } from '@/hooks/usePromisesRealtime';
@@ -477,6 +478,11 @@ export function PendientesPageClient({
           promiseId={promiseId}
           studioSlug={studioSlug}
         />
+      )}
+
+      {/* Nudge proactivo para portafolios */}
+      {shareSettings.portafolios && portafolios && portafolios.length > 0 && (
+        <PortfolioNudge hasPortfolios={portafolios.length > 0} />
       )}
     </>
   );

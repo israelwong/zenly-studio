@@ -168,7 +168,7 @@ export function PublicPromisePageHeader({
             {/* Mensaje de asesoría secundario */}
             {dateObj && formattedRecommendedDate && daysUntilEvent !== null && (
               <p className={`text-xs md:text-sm text-zinc-400 max-w-2xl mx-auto text-center ${isPreviewMode ? '' : 'mb-4'}`}>
-                Te recomendamos formalizar antes del <span className="text-white font-medium">{formattedRecommendedDate}</span>. La confirmación sucede al firmar contrato y realizar el pago de anticipo.
+                Te recomendamos formalizar antes del <span className="text-white font-medium">{formattedRecommendedDate}</span>. Ten en cuenta que <span className="text-amber-400/90 font-semibold">la disponibilidad de la fecha no está garantizada y puede ser reservada por otro cliente sin previo aviso</span> hasta completar la firma del contrato y el pago del anticipo.
               </p>
             )}
 
