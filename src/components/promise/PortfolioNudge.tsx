@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Video, X } from 'lucide-react';
+import { Smartphone, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PortfolioNudgeProps {
@@ -107,13 +107,10 @@ export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
           'hover:border-emerald-500/50 transition-colors duration-200'
         )}
       >
-        {/* Icono - Multimedia (Foto + Video) */}
+        {/* Icono - Experiencia móvil */}
         <div className="shrink-0 mt-0.5">
           <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-            <div className="flex items-center">
-              <Camera className="w-4 h-4 text-emerald-300" />
-              <Video className="w-4 h-4 text-emerald-300 ml-0.5" />
-            </div>
+            <Smartphone className="w-5 h-5 text-emerald-300" />
           </div>
         </div>
 
