@@ -42,15 +42,41 @@ export default async function PendientesPage({ params }: PendientesPageProps) {
   // ⚠️ MANEJO ROBUSTO: Evitar que errores aborten boundaries
   const basicData = await getPublicPromiseBasicData(slug, promiseId).catch((error) => {
     console.error('[PendientesPage] Error obteniendo basicData:', error);
-    return { success: false, error: 'Error al obtener datos básicos' };
+    return { success: false as const };
   });
 
-  if (!basicData.success || !basicData.data) {
+  if (!basicData.success) {
     // Solo redirigir si es un error crítico, no por discrepancias de estado
     redirect(`/${slug}/promise/${promiseId}`);
   }
 
-  const { promise: promiseBasic, studio: studioBasic } = basicData.data;
+  if (!basicData.data) {
+    redirect(`/${slug}/promise/${promiseId}`);
+  }
+
+  const { promise: promiseRaw, studio: studioBasic } = basicData.data;
+
+  // Mapear promise para ajustar tipos según espera PendientesPageBasic
+  const promiseBasic = {
+    id: promiseRaw.id,
+    contact_name: promiseRaw.contact_name,
+    contact_phone: promiseRaw.contact_phone,
+    contact_email: promiseRaw.contact_email,
+    contact_address: promiseRaw.contact_address,
+    event_type_id: promiseRaw.event_type_id,
+    event_type_name: promiseRaw.event_type_name,
+    event_type_cover_image_url: promiseRaw.event_type_cover_image_url,
+    event_type_cover_video_url: promiseRaw.event_type_cover_video_url,
+    event_type_cover_media_type: (promiseRaw.event_type_cover_media_type === 'image' || promiseRaw.event_type_cover_media_type === 'video')
+      ? (promiseRaw.event_type_cover_media_type as 'image' | 'video')
+      : null,
+    event_type_cover_design_variant: (promiseRaw.event_type_cover_design_variant === 'solid' || promiseRaw.event_type_cover_design_variant === 'gradient')
+      ? (promiseRaw.event_type_cover_design_variant as 'solid' | 'gradient')
+      : null,
+    event_name: promiseRaw.event_name,
+    event_date: promiseRaw.event_date,
+    event_location: promiseRaw.event_location,
+  };
 
   // ⚠️ TAREA 2: Fragmentación - Disparar ambas promesas sin await
   const activeQuotePromise = getPublicPromiseActiveQuote(slug, promiseId);

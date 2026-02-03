@@ -879,7 +879,7 @@ export async function getPublicPromisePendientes(
       min_days_to_hire: promiseBasic.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire,
       show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
-      portafolios: studio.promise_share_default_portafolios,
+      portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
       allow_recalc: promiseBasic.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
       rounding_mode: ((promiseBasic.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
@@ -1548,7 +1548,7 @@ export async function getPublicPromiseActiveQuote(
       min_days_to_hire: promiseBasic.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire,
       show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
-      portafolios: studio.promise_share_default_portafolios,
+      portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
     };
 
@@ -1926,7 +1926,7 @@ export async function getPublicPromiseAvailablePackages(
     // 2. Obtener share settings (show_packages, portafolios, preferencias de precio)
     const shareSettings = {
       show_packages: promiseBasic.share_show_packages ?? studio.promise_share_default_show_packages,
-      portafolios: studio.promise_share_default_portafolios,
+      portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios,
       allow_recalc: promiseBasic.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
       rounding_mode: ((promiseBasic.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
     };
@@ -2380,7 +2380,7 @@ export async function getPublicPromiseNegociacion(
       min_days_to_hire: promiseBasic.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire,
       show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
-      portafolios: studio.promise_share_default_portafolios,
+      portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
     };
 
@@ -2878,7 +2878,7 @@ export async function getPublicPromiseCierre(
       min_days_to_hire: promiseBasic.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire ?? 30,
       show_standard_conditions: promiseBasic.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions ?? true,
       show_offer_conditions: promiseBasic.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions ?? false,
-      portafolios: (promiseBasic as { share_portafolios?: boolean | null }).share_portafolios ?? studio.promise_share_default_portafolios ?? true,
+      portafolios: promiseBasic.share_portafolios ?? studio.promise_share_default_portafolios ?? true,
       auto_generate_contract: promiseBasic.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract ?? false,
       allow_recalc: promiseBasic.share_allow_recalc ?? studio.promise_share_default_allow_recalc ?? true,
       rounding_mode: ((promiseBasic.share_rounding_mode ?? studio.promise_share_default_rounding_mode) === 'exact' ? 'exact' : 'charm') as 'exact' | 'charm',
@@ -3380,6 +3380,7 @@ export async function getPublicPromiseData(
         share_min_days_to_hire: true,
         share_show_standard_conditions: true,
         share_show_offer_conditions: true,
+        share_portafolios: true,
         share_auto_generate_contract: true,
         share_allow_recalc: true,
         share_rounding_mode: true,
@@ -4043,7 +4044,7 @@ export async function getPublicPromiseData(
       min_days_to_hire: promise.share_min_days_to_hire ?? studio.promise_share_default_min_days_to_hire,
       show_standard_conditions: promise.share_show_standard_conditions ?? studio.promise_share_default_show_standard_conditions,
       show_offer_conditions: promise.share_show_offer_conditions ?? studio.promise_share_default_show_offer_conditions,
-      portafolios: studio.promise_share_default_portafolios,
+      portafolios: promise.share_portafolios ?? studio.promise_share_default_portafolios,
       auto_generate_contract: promise.share_auto_generate_contract ?? studio.promise_share_default_auto_generate_contract,
     };
 
@@ -5111,6 +5112,7 @@ export async function getPublicPromiseBasicData(
       share_min_days_to_hire: number | null;
       share_show_standard_conditions: boolean | null;
       share_show_offer_conditions: boolean | null;
+      share_portafolios: boolean | null;
       share_auto_generate_contract: boolean | null;
       share_allow_recalc: boolean | null;
       share_rounding_mode: string | null;
@@ -5186,6 +5188,7 @@ export async function getPublicPromiseBasicData(
         share_min_days_to_hire: true,
         share_show_standard_conditions: true,
         share_show_offer_conditions: true,
+        share_portafolios: true,
         share_auto_generate_contract: true,
         share_allow_recalc: true,
         share_rounding_mode: true,
@@ -5242,6 +5245,7 @@ export async function getPublicPromiseBasicData(
           share_min_days_to_hire: promise.share_min_days_to_hire,
           share_show_standard_conditions: promise.share_show_standard_conditions,
           share_show_offer_conditions: promise.share_show_offer_conditions,
+          share_portafolios: promise.share_portafolios,
           share_auto_generate_contract: promise.share_auto_generate_contract,
           share_allow_recalc: promise.share_allow_recalc,
           share_rounding_mode: promise.share_rounding_mode,
