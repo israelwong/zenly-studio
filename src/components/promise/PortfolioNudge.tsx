@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, X } from 'lucide-react';
+import { Camera, Video, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PortfolioNudgeProps {
@@ -107,22 +107,25 @@ export function PortfolioNudge({ hasPortfolios }: PortfolioNudgeProps) {
           'hover:border-emerald-500/50 transition-colors duration-200'
         )}
       >
-        {/* Icono */}
+        {/* Icono - Multimedia (Foto + Video) */}
         <div className="shrink-0 mt-0.5">
           <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-            <Camera className="h-5 w-5 text-emerald-400" />
+            <div className="flex items-center">
+              <Camera className="w-4 h-4 text-emerald-300" />
+              <Video className="w-4 h-4 text-emerald-300 ml-0.5" />
+            </div>
           </div>
         </div>
 
         {/* Contenido */}
         <div className="flex-1 min-w-0">
           <p className="text-sm text-white font-medium leading-relaxed">
-            ¿Quieres ver ejemplos de este tipo de eventos?{' '}
+            📸 Mira cómo capturamos estos momentos.{' '}
             <button
               onClick={handleClick}
               className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 font-semibold transition-colors"
             >
-              Haz clic aquí
+              Ver portafolio
             </button>
             .
           </p>
