@@ -302,12 +302,12 @@ export function PaqueteDetailSheet({
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] transition-opacity duration-300"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000] transition-opacity duration-300"
         onClick={onClose}
       />
 
       {/* Sheet */}
-      <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[110] overflow-y-auto shadow-2xl">
+      <div className="fixed top-0 right-0 h-full w-full sm:max-w-md md:max-w-lg bg-zinc-900 border-l border-zinc-800 z-[10010] overflow-y-auto shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between gap-3">
