@@ -39,7 +39,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-[100] bg-black/80",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-[10020] bg-black/80",
         className
       )}
       style={style}
@@ -69,7 +69,7 @@ function DialogContent({
         style={overlayZIndex ? { zIndex: overlayZIndex + 1 } : undefined}
         className={cn(
           "bg-zinc-900 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-zinc-800 p-6 shadow-lg duration-200 sm:max-w-lg",
-          !overlayZIndex && "z-[101]",
+          !overlayZIndex && "z-[10030]",
           className
         )}
         {...props}
