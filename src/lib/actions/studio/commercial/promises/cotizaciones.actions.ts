@@ -1625,7 +1625,11 @@ export async function updateCotizacion(
 
     // Calcular y guardar precios de los items del catálogo (los custom ya tienen precios)
     if (catalogItemsToCreate.length > 0) {
-      await calcularYGuardarPreciosCotizacion(validatedData.cotizacion_id, validatedData.studio_slug).catch((error) => {
+      await calcularYGuardarPreciosCotizacion(
+        validatedData.cotizacion_id, 
+        validatedData.studio_slug,
+        validatedData.itemOverrides
+      ).catch((error) => {
         console.error('[COTIZACIONES] Error calculando precios:', error);
         // No fallar la actualizaciรณn si el cรกlculo de precios falla
       });

@@ -29,6 +29,8 @@ export const customItemSchema = z.object({
   quantity: z.number().int().min(1, 'La cantidad debe ser mayor a 0'),
   billing_type: z.enum(['HOUR', 'SERVICE', 'UNIT']).optional().default('SERVICE'),
   tipoUtilidad: z.enum(['servicio', 'producto']).optional().default('servicio'),
+  categoriaId: z.string().min(1, 'La categoría es requerida'),
+  originalItemId: z.string().optional().nullable(), // ID del item del catálogo que reemplaza (null para items "puros")
 });
 
 export type CustomItemData = z.infer<typeof customItemSchema>;
@@ -53,6 +55,14 @@ export const createCotizacionSchema = z.object({
 
 export type CreateCotizacionData = z.infer<typeof createCotizacionSchema>;
 
+// Schema para overrides de items del catálogo (snapshots locales)
+export const itemOverrideSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional().nullable(),
+  cost: z.number().optional(),
+  expense: z.number().optional(),
+});
+
 export const updateCotizacionSchema = z.object({
   studio_slug: z.string().min(1, 'Studio slug requerido'),
   cotizacion_id: z.string().cuid('ID de cotización inválido'),
@@ -61,6 +71,7 @@ export const updateCotizacionSchema = z.object({
   precio: z.number().min(0, 'El precio debe ser mayor o igual a 0'),
   items: z.record(z.string(), z.number().int().min(1)).optional().default({}),
   customItems: z.array(customItemSchema).optional().default([]),
+  itemOverrides: z.record(z.string(), itemOverrideSchema).optional().default({}),
   visible_to_client: z.boolean().optional(),
   event_duration: z.number().positive().optional().nullable(),
 }).refine(

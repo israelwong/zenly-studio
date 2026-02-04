@@ -5,7 +5,7 @@ import { ZenButton, ZenInput, ZenCard, ZenTextarea, ZenSwitch } from "@/componen
 import { ZenConfirmModal } from "@/components/ui/zen/overlays/ZenConfirmModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/shadcn/sheet";
 import { toast } from "sonner";
-import { Loader2, Save, X, Calculator, Clock, Package, DollarSign, Hash } from "lucide-react";
+import { Loader2, Save, X, Calculator, Clock, Package, DollarSign, Hash, Sparkles } from "lucide-react";
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios, type ResultadoPrecio } from "@/lib/actions/studio/catalogo/calcular-precio";
 import { obtenerConfiguracionPrecios } from "@/lib/actions/studio/catalogo/utilidad.actions";
 import { useConfiguracionPreciosUpdateListener } from "@/hooks/useConfiguracionPreciosRefresh";
@@ -24,7 +24,7 @@ interface Gasto {
 export interface ItemFormData {
     id?: string;
     name: string;
-    cost: number;
+    cost: number | undefined;
     description?: string;
     categoriaeId?: string;
     tipoUtilidad?: 'servicio' | 'producto';
@@ -42,7 +42,6 @@ interface ItemEditorModalProps {
         data: ItemFormData,
         options?: {
             saveToCatalog?: boolean;
-            customPrice?: number | null;
         }
     ) => Promise<void>;
     onMediaChange?: (itemId: string, hasPhotos: boolean, hasVideos: boolean) => void;
@@ -75,7 +74,7 @@ export function ItemEditorModal({
     // Estados del formulario
     const [formData, setFormData] = useState<ItemFormData>({
         name: "",
-        cost: 0,
+        cost: undefined,
         description: "",
         categoriaeId: categoriaId,
         tipoUtilidad: "servicio",
@@ -92,7 +91,6 @@ export function ItemEditorModal({
     // Estados iniciales para detectar cambios
     const [initialFormData, setInitialFormData] = useState<ItemFormData | null>(null);
     const [initialGastos, setInitialGastos] = useState<Gasto[]>([]);
-    const [initialCustomPrice, setInitialCustomPrice] = useState<number | null>(null);
     const [showConfirmClose, setShowConfirmClose] = useState(false);
     const [localIsOpen, setLocalIsOpen] = useState(isOpen);
 
@@ -100,7 +98,6 @@ export function ItemEditorModal({
     const [isSaving, setIsSaving] = useState(false);
     
     // Estados para contexto de cotizaciones
-    const [customPrice, setCustomPrice] = useState<number | null>(null);
     const [saveToCatalog, setSaveToCatalog] = useState(false);
 
     // Cargar configuración de precios del estudio
@@ -221,7 +218,7 @@ export function ItemEditorModal({
             };
         }
 
-        const costoNum = formData.cost || 0;
+        const costoNum = formData.cost ?? 0;
         const gastosArray = gastos.map((g) => g.costo);
         const totalGastos = gastosArray.reduce((acc, g) => acc + g, 0);
 
@@ -247,9 +244,7 @@ export function ItemEditorModal({
             
             // Resetear estados de cotización cuando se abre
             if (context === 'cotizaciones') {
-                setCustomPrice(null);
                 setSaveToCatalog(false);
-                setInitialCustomPrice(null);
             }
 
             if (item) {
@@ -278,7 +273,7 @@ export function ItemEditorModal({
             } else {
                 const initialData = {
                     name: "",
-                    cost: 0,
+                    cost: undefined,
                     description: "",
                     categoriaeId: categoriaId,
                     tipoUtilidad: "servicio" as const,
@@ -384,7 +379,8 @@ export function ItemEditorModal({
             return;
         }
 
-        if (formData.cost < 0) {
+        const costoFinal = formData.cost ?? 0;
+        if (costoFinal < 0) {
             toast.error("El costo debe ser mayor o igual a 0");
             return;
         }
@@ -393,8 +389,10 @@ export function ItemEditorModal({
             setIsSaving(true);
 
             // Asegurar que los gastos están sincronizados con el estado actual
+            // Convertir cost undefined a 0 para guardar
             const formDataConGastos = {
                 ...formData,
+                cost: formData.cost ?? 0,
                 gastos: gastos.length > 0 ? gastos : (formData.gastos || [])
             };
 
@@ -404,7 +402,6 @@ export function ItemEditorModal({
                     // Pasar opciones adicionales cuando es contexto de cotización
                     await onSave(formDataConGastos, {
                         saveToCatalog: saveToCatalog,
-                        customPrice: customPrice,
                     });
                 } else {
                     // Comportamiento estándar para otros contextos
@@ -453,9 +450,6 @@ export function ItemEditorModal({
             // Actualizar estado inicial después de guardar
             setInitialFormData({ ...formDataConGastos });
             setInitialGastos([...gastos]);
-            if (context === 'cotizaciones') {
-                setInitialCustomPrice(customPrice);
-            }
 
             setLocalIsOpen(false);
             onClose();
@@ -487,10 +481,7 @@ export function ItemEditorModal({
                 return !initial || g.nombre !== initial.nombre || g.costo !== initial.costo;
             });
 
-        // Comparar precio personalizado (solo en contexto de cotización)
-        const customPriceChanged = context === 'cotizaciones' && customPrice !== initialCustomPrice;
-
-        return formChanged || gastosChanged || customPriceChanged;
+        return formChanged || gastosChanged;
     };
 
     const handleClose = () => {
@@ -588,6 +579,23 @@ export function ItemEditorModal({
                         </SheetDescription>
                     </SheetHeader>
 
+                    {/* Tarjeta informativa para nuevo item en cotizaciones */}
+                    {context === 'cotizaciones' && !item && (
+                        <div className="mx-6 mb-1 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2.5">
+                            <div className="flex items-start gap-2.5">
+                                <Sparkles className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 space-y-0.5">
+                                    <h4 className="text-sm font-semibold text-blue-200">
+                                        Modo: Ítem al vuelo
+                                    </h4>
+                                    <p className="text-xs text-blue-200/80 leading-relaxed">
+                                        Este ítem se creará específicamente para esta cotización (Snapshot). Al guardar, podrás elegir si también deseas agregarlo permanentemente a tu catálogo global.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {context === 'paquetes' && item && (
                         <div className="mx-6 mb-0 rounded-lg border border-amber-600/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-200/90">
                             Editar con cuidado: se modificará el ítem en el catálogo. En paquetes, el cálculo dinámico usará los nuevos datos; el precio personalizado guardado no cambia.
@@ -600,7 +608,7 @@ export function ItemEditorModal({
                     )}
 
                     <div className="px-6 pb-6">
-                        <form className="space-y-6 mt-6">
+                        <form className={`space-y-6 ${context === 'cotizaciones' && !item ? 'mt-2' : 'mt-6'}`}>
                                 {/* Nombre del Item */}
                                 <div>
                                     <label className="block text-sm font-medium text-zinc-200 mb-2">
@@ -624,8 +632,18 @@ export function ItemEditorModal({
                                     </label>
                                     <ZenInput
                                         type="number"
-                                        value={formData.cost}
-                                        onChange={(e) => handleInputChange("cost", parseFloat(e.target.value) || 0)}
+                                        value={formData.cost ?? ''}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            if (value === '') {
+                                                handleInputChange("cost", undefined);
+                                            } else {
+                                                const numValue = parseFloat(value);
+                                                if (!isNaN(numValue)) {
+                                                    handleInputChange("cost", numValue);
+                                                }
+                                            }
+                                        }}
                                         placeholder="0.00"
                                         disabled={isSaving}
                                         min="0"
@@ -785,44 +803,13 @@ export function ItemEditorModal({
                                     />
                                 </ZenCard>
 
-                                {/* Precio Personalizado (solo en contexto de cotización) */}
-                                {context === 'cotizaciones' && configuracion && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-zinc-200 mb-2">
-                                            Precio Unitario Personalizado (MXN)
-                                            <span className="text-xs text-zinc-400 ml-2 font-normal">
-                                                (Opcional: deja vacío para usar el precio calculado)
-                                            </span>
-                                        </label>
-                                        <ZenInput
-                                            type="number"
-                                            value={customPrice ?? ''}
-                                            onChange={(e) => {
-                                                const value = e.target.value;
-                                                setCustomPrice(value === '' ? null : parseFloat(value) || null);
-                                            }}
-                                            placeholder={formatearMoneda(resultadoPrecio.precio_final)}
-                                            disabled={isSaving}
-                                            min="0"
-                                            step="0.01"
-                                        />
-                                        {customPrice !== null && (
-                                            <p className="text-xs text-zinc-400 mt-1">
-                                                Precio calculado: {formatearMoneda(resultadoPrecio.precio_final)}
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Precio del Sistema */}
+                                {/* Precio del Sistema (Solo lectura) */}
                                 {configuracion && (
                                     <div>
                                         <div className="mb-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
                                             <div className="flex items-center justify-between">
                                                 <span className="text-sm font-medium text-zinc-200">
-                                                    {context === 'cotizaciones' && customPrice !== null 
-                                                        ? 'Precio Calculado (Referencia)' 
-                                                        : 'Precio del Sistema'}
+                                                    Precio Calculado
                                                 </span>
                                                 <span className="text-2xl font-bold text-emerald-400">
                                                     {formatearMoneda(resultadoPrecio.precio_final)}
@@ -875,16 +862,33 @@ export function ItemEditorModal({
                                     
                                     {/* Checkbox para guardar en catálogo (solo en contexto de cotización) */}
                                     {context === 'cotizaciones' && item?.id && (
-                                        <div className="flex items-start gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700">
-                                            <ZenSwitch
-                                                checked={saveToCatalog}
-                                                onCheckedChange={setSaveToCatalog}
-                                                disabled={isSaving}
-                                                label="¿Actualizar también en el catálogo global?"
-                                            />
-                                            <p className="text-xs text-zinc-400 mt-0.5 flex-1">
-                                                Si se desactiva, los cambios solo afectarán a esta cotización (Snapshot).
-                                            </p>
+                                        <div className="space-y-3 p-4 bg-gradient-to-br from-blue-500/10 to-blue-600/5 rounded-lg border border-blue-500/30">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                                                <h4 className="text-sm font-semibold text-blue-200">
+                                                    Actualización del Catálogo
+                                                </h4>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <ZenSwitch
+                                                    checked={saveToCatalog}
+                                                    onCheckedChange={setSaveToCatalog}
+                                                    disabled={isSaving}
+                                                    label="Actualizar también en el catálogo global"
+                                                    variant="blue"
+                                                />
+                                                <p className="text-xs text-zinc-400 leading-relaxed pl-1">
+                                                    {saveToCatalog ? (
+                                                        <span>
+                                                            <span className="text-blue-300 font-medium">Los cambios se aplicarán globalmente.</span> Todos los paquetes y cotizaciones futuras usarán los nuevos datos.
+                                                        </span>
+                                                    ) : (
+                                                        <span>
+                                                            <span className="text-amber-300 font-medium">Modo Snapshot activado.</span> Los cambios solo afectarán a esta cotización. El catálogo original permanecerá intacto.
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            </div>
                                         </div>
                                     )}
                                     

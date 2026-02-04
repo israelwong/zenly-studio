@@ -115,6 +115,14 @@ export function CotizacionForm({
   const [items, setItems] = useState<{ [servicioId: string]: number }>({});
   const [customItems, setCustomItems] = useState<CustomItemData[]>([]);
   const [catalogo, setCatalogo] = useState<SeccionData[]>([]);
+  // Estado para almacenar overrides de items del catálogo (snapshots locales cuando saveToCatalog = false)
+  const [itemOverrides, setItemOverrides] = useState<Map<string, {
+    name?: string;
+    description?: string | null;
+    cost?: number;
+    expense?: number;
+    gastos?: Array<{ nombre: string; costo: number }>;
+  }>>(new Map());
   const [configuracionPrecios, setConfiguracionPrecios] = useState<ConfiguracionPrecios | null>(null);
   const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
   const [filtroServicio, setFiltroServicio] = useState('');
@@ -255,6 +263,11 @@ export function CotizacionForm({
           const cotizacionItems: { [id: string]: number } = {};
           const customItemsFromDB: CustomItemData[] = [];
           
+          // Obtener primera categoría disponible como fallback para items personalizados sin categoriaId
+          const primeraCategoriaId = catalogoResult.data.length > 0 && catalogoResult.data[0].categorias.length > 0
+            ? catalogoResult.data[0].categorias[0].id
+            : null;
+          
           if (cotizacionData.items && Array.isArray(cotizacionData.items)) {
             cotizacionData.items.forEach((item: { 
               item_id: string | null; 
@@ -265,12 +278,18 @@ export function CotizacionForm({
               cost?: number | null;
               expense?: number | null;
               billing_type?: string | null;
+              categoria_id?: string | null;
             }) => {
               if (item.item_id && item.quantity > 0) {
                 // Item del catálogo
                 cotizacionItems[item.item_id] = item.quantity;
               } else if (!item.item_id && item.name && item.unit_price) {
-                // Item personalizado
+                // Item personalizado - usar categoriaId del item o fallback a primera categoría
+                const categoriaId = item.categoria_id || primeraCategoriaId;
+                if (!categoriaId) {
+                  console.warn('[CotizacionForm] Item personalizado sin categoriaId y sin categorías disponibles');
+                  return;
+                }
                 customItemsFromDB.push({
                   name: item.name,
                   description: item.description || null,
@@ -280,6 +299,8 @@ export function CotizacionForm({
                   quantity: item.quantity,
                   billing_type: (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                   tipoUtilidad: 'servicio', // Default, se puede inferir de otros campos si es necesario
+                  categoriaId: categoriaId,
+                  originalItemId: null, // Al cargar desde DB, no sabemos si era reemplazo (solo existe en sesión actual)
                 });
               }
             });
@@ -473,7 +494,7 @@ export function CotizacionForm({
     return selected;
   }, [items]);
 
-  // Calcular servicios seleccionados por sección y categoría
+  // Calcular servicios seleccionados por sección y categoría (incluyendo items personalizados)
   const serviciosSeleccionados = useMemo(() => {
     const resumen: {
       secciones: { [seccionId: string]: { total: number; categorias: { [categoriaId: string]: number } } }
@@ -485,6 +506,8 @@ export function CotizacionForm({
 
       seccion.categorias.forEach(categoria => {
         let totalCategoria = 0;
+        
+        // Items del catálogo
         categoria.servicios.forEach(servicio => {
           const cantidad = items[servicio.id] || 0;
           if (cantidad > 0) {
@@ -492,6 +515,14 @@ export function CotizacionForm({
             totalSeccion += cantidad;
           }
         });
+        
+        // Items personalizados de esta categoría
+        const customItemsEnCategoria = customItems.filter(ci => ci.categoriaId === categoria.id);
+        customItemsEnCategoria.forEach(customItem => {
+          totalCategoria += customItem.quantity;
+          totalSeccion += customItem.quantity;
+        });
+        
         if (totalCategoria > 0) {
           categorias[categoria.id] = totalCategoria;
         }
@@ -506,7 +537,7 @@ export function CotizacionForm({
     });
 
     return resumen;
-  }, [catalogoFiltrado, items]);
+  }, [catalogoFiltrado, items, customItems]);
 
   // Estado para el cálculo de precios
   const [calculoPrecio, setCalculoPrecio] = useState({
@@ -672,7 +703,7 @@ export function CotizacionForm({
       tipo_utilidad: 'service' | 'product';
       cantidad: number;
     }>);
-  }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours]);
+  }, [items, precioPersonalizado, configKey, servicioMap, configuracionPrecios, durationHours, customItems]);
 
   // Handlers para toggles (accordion behavior)
   const toggleSeccion = (seccionId: string) => {
@@ -764,35 +795,143 @@ export function CotizacionForm({
     return hasCatalogItems || hasCustomItems;
   }, [items, customItems]);
 
-  // Manejar guardado de item personalizado desde ItemEditorModal
+  // Manejar guardado de item desde ItemEditorModal (personalizado o del catálogo)
   const handleSaveCustomItem = async (
     data: ItemFormData,
-    options?: { saveToCatalog?: boolean; customPrice?: number | null }
+    options?: { saveToCatalog?: boolean }
   ) => {
     try {
-      // Si saveToCatalog es true, guardar/actualizar en catálogo primero
-      if (options?.saveToCatalog && selectedCategoriaForItem) {
-        if (data.id) {
-          // Actualizar item existente en catálogo
+      // Si es un item del catálogo (tiene id y no es custom-)
+      if (data.id && !data.id.startsWith('custom-')) {
+        // Verificar si debe guardarse en catálogo global
+        if (options?.saveToCatalog) {
+          // Actualizar item existente en catálogo global
           const updateResult = await actualizarItem({
             id: data.id,
             name: data.name,
-            cost: data.cost,
+            cost: data.cost ?? 0,
             tipoUtilidad: data.tipoUtilidad,
             billing_type: data.billing_type,
             gastos: data.gastos || [],
             status: data.status,
           });
+        
           if (!updateResult.success) {
             toast.error(updateResult.error || 'Error al actualizar en catálogo');
             return;
           }
+
+          // Recargar catálogo para reflejar cambios
+          const catalogoResult = await obtenerCatalogo(studioSlug);
+          if (catalogoResult.success && catalogoResult.data) {
+            setCatalogo(catalogoResult.data);
+            toast.success('Item actualizado en catálogo. Los cambios se reflejarán en el cálculo.');
+          }
+
+          // Eliminar override si existía (ya está en catálogo global)
+          setItemOverrides(prev => {
+            const updated = new Map(prev);
+            updated.delete(data.id);
+            return updated;
+          });
         } else {
+          // Modo snapshot: convertir item del catálogo a custom item
+          // 1. Obtener cantidad actual antes de remover
+          const cantidadActual = items[data.id] || 1;
+          
+          // 2. Calcular precio final desde costo y gastos
+          const totalGastos = (data.gastos || []).reduce((acc, g) => acc + g.costo, 0);
+          if (!configuracionPrecios) {
+            toast.error('No hay configuración de precios disponible');
+            return;
+          }
+          const tipoUtilidad = data.tipoUtilidad === 'servicio' ? 'servicio' : 'producto';
+          const precios = calcularPrecio(
+            data.cost || 0,
+            totalGastos,
+            tipoUtilidad,
+            configuracionPrecios
+          );
+          const finalPrice = precios.precio_final;
+
+          // 3. Asegurar que hay categoriaId (debe estar en selectedCategoriaForItem)
+          if (!selectedCategoriaForItem) {
+            toast.error('Debe seleccionar una categoría para el item personalizado');
+            return;
+          }
+
+          // 4. Crear custom item con los datos modificados
+          const customItemData: CustomItemData = {
+            name: data.name,
+            description: data.description || null,
+            unit_price: finalPrice,
+            cost: data.cost || 0,
+            expense: totalGastos,
+            quantity: cantidadActual, // Preservar cantidad actual
+            billing_type: (data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+            tipoUtilidad: tipoUtilidad as 'servicio' | 'producto',
+            categoriaId: selectedCategoriaForItem, // Preservar categoriaId
+            originalItemId: data.id, // Guardar ID del item original para reemplazo en el árbol
+          };
+
+          // 5. Remover item del catálogo de la selección
+          setItems(prev => {
+            const updated = { ...prev };
+            delete updated[data.id];
+            return updated;
+          });
+
+          // 6. Agregar como custom item
+          setCustomItems(prev => [...prev, customItemData]);
+
+          // 7. Eliminar override si existía (ya no es necesario)
+          setItemOverrides(prev => {
+            const updated = new Map(prev);
+            updated.delete(data.id);
+            return updated;
+          });
+
+          toast.success('Item convertido a personalizado. Los cambios solo afectan esta cotización.');
+        }
+
+        setIsItemModalOpen(false);
+        setItemToEdit(null);
+        setSelectedCategoriaForItem(null);
+        return;
+      }
+
+      // Si saveToCatalog es true, guardar/actualizar en catálogo primero
+      if (options?.saveToCatalog && selectedCategoriaForItem) {
+        if (data.id && data.id.startsWith('custom-')) {
+          // Crear nuevo item en catálogo desde personalizado
+          const createResult = await crearItem({
+            categoriaeId: selectedCategoriaForItem,
+            name: data.name,
+            cost: data.cost ?? 0,
+            tipoUtilidad: data.tipoUtilidad,
+            billing_type: data.billing_type || (data.tipoUtilidad === 'producto' ? 'UNIT' : 'SERVICE'),
+            gastos: data.gastos || [],
+            status: data.status || 'active',
+          });
+          if (!createResult.success) {
+            toast.error(createResult.error || 'Error al crear en catálogo');
+            return;
+          }
+          // Si se creó en catálogo, agregarlo también a items del catálogo en la cotización
+          if (createResult.data?.id) {
+            setItems(prev => ({ ...prev, [createResult.data!.id]: 1 }));
+            setIsItemModalOpen(false);
+            setItemToEdit(null);
+            setSelectedCategoriaForItem(null);
+            toast.success('Item creado en catálogo y agregado a la cotización');
+            return;
+          }
+        } else if (!data.id) {
           // Crear nuevo item en catálogo
           const createResult = await crearItem({
             categoriaeId: selectedCategoriaForItem,
             name: data.name,
-            cost: data.cost,
+            cost: data.cost ?? 0,
             tipoUtilidad: data.tipoUtilidad,
             billing_type: data.billing_type || (data.tipoUtilidad === 'producto' ? 'UNIT' : 'SERVICE'),
             gastos: data.gastos || [],
@@ -814,25 +953,25 @@ export function CotizacionForm({
         }
       }
 
-      // Calcular precio final (usar customPrice si existe, sino calcular desde costo)
-      let finalPrice: number;
-      if (options?.customPrice !== null && options?.customPrice !== undefined) {
-        finalPrice = options.customPrice;
-      } else {
-        // Calcular desde costo y gastos
-        const totalGastos = (data.gastos || []).reduce((acc, g) => acc + g.costo, 0);
-        if (!configuracionPrecios) {
-          toast.error('No hay configuración de precios disponible');
-          return;
-        }
-        const tipoUtilidad = data.tipoUtilidad === 'servicio' ? 'servicio' : 'producto';
-        const precios = calcularPrecio(
-          data.cost || 0,
-          totalGastos,
-          tipoUtilidad,
-          configuracionPrecios
-        );
-        finalPrice = precios.precio_final;
+      // Calcular precio final desde costo y gastos (siempre usar precio calculado del sistema)
+      const totalGastos = (data.gastos || []).reduce((acc, g) => acc + g.costo, 0);
+      if (!configuracionPrecios) {
+        toast.error('No hay configuración de precios disponible');
+        return;
+      }
+      const tipoUtilidad = data.tipoUtilidad === 'servicio' ? 'servicio' : 'producto';
+      const precios = calcularPrecio(
+        data.cost || 0,
+        totalGastos,
+        tipoUtilidad,
+        configuracionPrecios
+      );
+      const finalPrice = precios.precio_final;
+
+      // Asegurar que hay categoriaId
+      if (!selectedCategoriaForItem) {
+        toast.error('Debe seleccionar una categoría para el item personalizado');
+        return;
       }
 
       // Crear o actualizar item personalizado en la lista
@@ -845,6 +984,8 @@ export function CotizacionForm({
         quantity: 1, // Cantidad inicial, se puede editar después
         billing_type: (data.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
         tipoUtilidad: (data.tipoUtilidad || 'servicio') as 'servicio' | 'producto',
+        categoriaId: selectedCategoriaForItem,
+        originalItemId: null, // Item "puro" creado desde cero, no es reemplazo
       };
 
       if (itemToEdit && itemToEdit.id && itemToEdit.id.startsWith('custom-')) {
@@ -853,7 +994,12 @@ export function CotizacionForm({
         if (!isNaN(index) && index >= 0 && index < customItems.length) {
           setCustomItems(prev => {
             const updated = [...prev];
-            updated[index] = customItemData;
+            // Mantener la categoriaId y originalItemId originales del item existente
+            updated[index] = {
+              ...customItemData,
+              categoriaId: prev[index].categoriaId,
+              originalItemId: prev[index].originalItemId ?? null, // Preservar originalItemId si existe
+            };
             return updated;
           });
           toast.success('Item personalizado actualizado');
@@ -870,30 +1016,72 @@ export function CotizacionForm({
       setItemToEdit(null);
       setSelectedCategoriaForItem(null);
     } catch (error) {
-      console.error('Error guardando item personalizado:', error);
-      toast.error('Error al guardar item personalizado');
+      console.error('Error guardando item:', error);
+      toast.error('Error al guardar item');
     }
   };
 
   // Manejar creación de item personalizado
-  const handleCreateCustomItem = () => {
-    // Usar la primera categoría disponible si no hay una seleccionada
-    let categoriaId: string | null = selectedCategoriaForItem;
+  const handleCreateCustomItem = (categoriaId?: string) => {
+    // Usar la categoría proporcionada o la primera disponible
+    let finalCategoriaId: string | null = categoriaId || selectedCategoriaForItem;
     
-    if (!categoriaId && catalogo.length > 0) {
+    if (!finalCategoriaId && catalogo.length > 0) {
       const primeraSeccion = catalogo[0];
       if (primeraSeccion.categorias.length > 0) {
-        categoriaId = primeraSeccion.categorias[0].id;
+        finalCategoriaId = primeraSeccion.categorias[0].id;
       }
     }
 
-    if (!categoriaId) {
+    if (!finalCategoriaId) {
       toast.error('No hay categorías disponibles. Crea una categoría primero en el catálogo.');
       return;
     }
 
-    setSelectedCategoriaForItem(categoriaId);
+    setSelectedCategoriaForItem(finalCategoriaId);
     setItemToEdit(null);
+    setIsItemModalOpen(true);
+  };
+
+  // Manejar edición de item del catálogo desde el árbol
+  const handleEditCatalogItem = (servicioId: string) => {
+    // Buscar el servicio en el catálogo
+    let servicioEncontrado: any = null;
+    let categoriaId: string | null = null;
+
+    for (const seccion of catalogo) {
+      for (const categoria of seccion.categorias) {
+        const servicio = categoria.servicios.find((s: any) => s.id === servicioId);
+        if (servicio) {
+          servicioEncontrado = servicio;
+          categoriaId = categoria.id;
+          break;
+        }
+      }
+      if (servicioEncontrado) break;
+    }
+
+    if (!servicioEncontrado || !categoriaId) {
+      toast.error('Servicio no encontrado');
+      return;
+    }
+
+    // Convertir a ItemFormData
+    const tipoUtilidad = servicioEncontrado.tipo_utilidad === 'service' ? 'servicio' : 'producto';
+    const itemData: ItemFormData = {
+      id: servicioEncontrado.id,
+      name: servicioEncontrado.nombre,
+      cost: servicioEncontrado.costo,
+      description: servicioEncontrado.descripcion || undefined,
+      categoriaeId: categoriaId,
+      tipoUtilidad,
+      billing_type: (servicioEncontrado.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
+      gastos: servicioEncontrado.gastos?.map((g: any) => ({ nombre: g.nombre, costo: g.costo })) || [],
+      status: servicioEncontrado.status || 'active',
+    };
+
+    setItemToEdit(itemData);
+    setSelectedCategoriaForItem(categoriaId);
     setIsItemModalOpen(true);
   };
 
@@ -912,14 +1100,39 @@ export function CotizacionForm({
     });
     // Guardar el índice para actualizar el item correcto
     setItemToEdit((prev) => prev ? { ...prev, id: `custom-${index}` } : null);
-    setSelectedCategoriaForItem(null); // No necesitamos categoría para editar
+    setSelectedCategoriaForItem(customItem.categoriaId); // Usar la categoriaId del item
     setIsItemModalOpen(true);
   };
 
   // Manejar eliminación de item personalizado
   const handleDeleteCustomItem = (index: number) => {
+    const itemToDelete = customItems[index];
+    
+    // Si es un item de reemplazo (tiene originalItemId), restaurar el item original del catálogo
+    if (itemToDelete?.originalItemId) {
+      setItems(prev => ({
+        ...prev,
+        [itemToDelete.originalItemId!]: itemToDelete.quantity, // Restaurar cantidad
+      }));
+      toast.success('Item personalizado eliminado. Se restauró el item original del catálogo.');
+    } else {
+      toast.success('Item personalizado eliminado');
+    }
+    
     setCustomItems(prev => prev.filter((_, i) => i !== index));
-    toast.success('Item personalizado eliminado');
+  };
+
+  // Manejar actualización de cantidad de item personalizado
+  const handleUpdateCustomItemQuantity = (index: number, quantity: number) => {
+    if (quantity < 1) return;
+    setCustomItems(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        quantity: quantity,
+      };
+      return updated;
+    });
   };
 
   // Manejar intento de cierre
@@ -979,6 +1192,22 @@ export function CotizacionForm({
         : Number(precioPersonalizado);
 
       if (isEditMode) {
+        // Convertir Map de overrides a objeto plano
+        const overridesObj: Record<string, {
+          name?: string;
+          description?: string | null;
+          cost?: number;
+          expense?: number;
+        }> = {};
+        itemOverrides.forEach((override, itemId) => {
+          overridesObj[itemId] = {
+            name: override.name,
+            description: override.description,
+            cost: override.cost,
+            expense: override.expense,
+          };
+        });
+
         // Actualizar cotización
         const result = await updateCotizacion({
           studio_slug: studioSlug,
@@ -990,6 +1219,7 @@ export function CotizacionForm({
             itemsSeleccionados.map(([itemId, cantidad]) => [itemId, cantidad])
           ),
           customItems: customItems,
+          itemOverrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
           event_duration: durationHours && durationHours > 0 ? durationHours : null,
         });
 
@@ -1258,7 +1488,7 @@ export function CotizacionForm({
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
             Servicios Disponibles
             <ZenBadge variant="secondary">
-              {filtroServicio.trim() ?
+              {(filtroServicio.trim() ?
                 catalogoFiltrado.reduce((acc, seccion) =>
                   acc + seccion.categorias.reduce((catAcc, categoria) =>
                     catAcc + categoria.servicios.length, 0), 0
@@ -1267,7 +1497,7 @@ export function CotizacionForm({
                   acc + seccion.categorias.reduce((catAcc, categoria) =>
                     catAcc + categoria.servicios.length, 0), 0
                 )
-              } items
+              ) + customItems.length} items
               {filtroServicio.trim() && (
                 <span className="ml-1 text-xs text-zinc-400">
                   (filtrados)
@@ -1309,75 +1539,16 @@ export function CotizacionForm({
           onToggleCategoria={toggleCategoria}
           onToggleSelection={onToggleSelection}
           onUpdateQuantity={updateQuantity}
+          onEditItem={handleEditCatalogItem}
+          onCreateCustomItem={handleCreateCustomItem}
+          customItems={customItems}
+          onEditCustomItem={handleEditCustomItem}
+          onDeleteCustomItem={handleDeleteCustomItem}
+          onUpdateCustomItemQuantity={handleUpdateCustomItemQuantity}
           serviciosSeleccionados={serviciosSeleccionados}
           configuracionPrecios={configuracionPrecios}
           baseHours={durationHours}
         />
-
-        {/* Botón para agregar item personalizado */}
-        <div className="mt-4 pt-4 border-t border-zinc-800">
-          <ZenButton
-            type="button"
-            variant="outline"
-            onClick={handleCreateCustomItem}
-            className="w-full gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Agregar ítem personalizado
-          </ZenButton>
-        </div>
-
-        {/* Lista de items personalizados */}
-        {customItems.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-zinc-800">
-            <h4 className="text-sm font-medium text-zinc-300 mb-3">Items Personalizados</h4>
-            <div className="space-y-2">
-              {customItems.map((customItem, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-zinc-800/30 rounded-lg border border-zinc-700"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{customItem.name}</p>
-                    {customItem.description && (
-                      <p className="text-xs text-zinc-400 mt-1 line-clamp-1">{customItem.description}</p>
-                    )}
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-xs text-zinc-400">
-                        Cantidad: {customItem.quantity}
-                      </span>
-                      <span className="text-xs text-emerald-400 font-medium">
-                        {formatearMoneda(customItem.unit_price)} c/u
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    <ZenButton
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditCustomItem(index)}
-                      className="h-8 w-8 p-0"
-                      title="Editar item"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </ZenButton>
-                    <ZenButton
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteCustomItem(index)}
-                      className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
-                      title="Eliminar item"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </ZenButton>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Columna 2: Configuración de la Cotización */}

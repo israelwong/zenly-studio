@@ -212,7 +212,13 @@ export async function guardarEstructuraCotizacionAutorizadaSinTx(
  */
 export async function calcularYGuardarPreciosCotizacion(
   cotizacionId: string,
-  studioSlug: string
+  studioSlug: string,
+  itemOverrides?: Record<string, {
+    name?: string;
+    description?: string | null;
+    cost?: number;
+    expense?: number;
+  }>
 ): Promise<void> {
   try {
     // 1️⃣ Obtener configuración de precios
@@ -314,12 +320,19 @@ export async function calcularYGuardarPreciosCotizacion(
         continue;
       }
 
-      // Item del catálogo: calcular desde catálogo
+      // Item del catálogo: calcular desde catálogo (con overrides si existen)
       const datosCatalogo = catalogoMap.get(item.item_id);
       if (!datosCatalogo) {
         console.warn(`[PRICING] Item ${item.item_id} no encontrado en catálogo`);
         continue;
       }
+
+      // Aplicar overrides si existen (snapshots locales sin modificar catálogo global)
+      const override = itemOverrides?.[item.item_id];
+      const nombreFinal = override?.name ?? datosCatalogo.nombre;
+      const descripcionFinal = override?.description ?? datosCatalogo.descripcion;
+      const costoFinal = override?.cost ?? datosCatalogo.costo;
+      const gastoFinal = override?.expense ?? datosCatalogo.gasto;
 
       // Normalizar tipoUtilidad
       const normalizedTipoUtilidad = datosCatalogo.tipoUtilidad?.toLowerCase() || 'service';
@@ -327,10 +340,10 @@ export async function calcularYGuardarPreciosCotizacion(
         ? 'servicio'
         : 'producto';
 
-      // Calcular precios
+      // Calcular precios usando valores finales (con overrides aplicados)
       const precios = calcularPrecio(
-        datosCatalogo.costo || 0,
-        datosCatalogo.gasto || 0,
+        costoFinal || 0,
+        gastoFinal || 0,
         tipoUtilidadFinal,
         configPrecios
       );
@@ -346,29 +359,30 @@ export async function calcularYGuardarPreciosCotizacion(
       );
 
       // Guardar campos operacionales Y snapshots (estructura completa desde creación)
+      // Los snapshots usan los valores finales (con overrides aplicados) para preservar el estado en el momento de la cotización
       await prisma.studio_cotizacion_items.update({
         where: { id: item.id },
         data: {
           billing_type: billingType, // Persistir billing_type
-          // Campos operacionales (mutables)
-          name: datosCatalogo.nombre,
-          description: datosCatalogo.descripcion,
+          // Campos operacionales (mutables) - usar valores finales con overrides
+          name: nombreFinal,
+          description: descripcionFinal,
           category_name: datosCatalogo.categoria,
           seccion_name: datosCatalogo.seccion,
-          cost: datosCatalogo.costo || 0,
-          expense: datosCatalogo.gasto || 0,
+          cost: costoFinal || 0,
+          expense: gastoFinal || 0,
           unit_price: precios.precio_final,
           subtotal: precios.precio_final * cantidadEfectiva, // Usar cantidad efectiva
           profit: precios.utilidad_base,
           public_price: precios.precio_final,
           profit_type: tipoUtilidadFinal,
-          // Snapshots (inmutables - estructura jerárquica completa)
-          name_snapshot: datosCatalogo.nombre,
-          description_snapshot: datosCatalogo.descripcion,
+          // Snapshots (inmutables - usar valores finales con overrides para preservar estado de cotización)
+          name_snapshot: nombreFinal,
+          description_snapshot: descripcionFinal,
           category_name_snapshot: datosCatalogo.categoria,
           seccion_name_snapshot: datosCatalogo.seccion,
-          cost_snapshot: datosCatalogo.costo || 0,
-          expense_snapshot: datosCatalogo.gasto || 0,
+          cost_snapshot: costoFinal || 0,
+          expense_snapshot: gastoFinal || 0,
           unit_price_snapshot: precios.precio_final,
           profit_snapshot: precios.utilidad_base,
           public_price_snapshot: precios.precio_final,

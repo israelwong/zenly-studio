@@ -1,10 +1,12 @@
 'use client';
 
 import React from 'react';
-import { ChevronDown, ChevronRight, Clock, Hash, DollarSign, Edit2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Hash, DollarSign, Edit2, Plus, Trash2 } from 'lucide-react';
 import { ZenBadge, ZenButton } from '@/components/ui/zen';
 import { calcularPrecio, formatearMoneda, type ConfiguracionPrecios } from '@/lib/actions/studio/catalogo/calcular-precio';
 import type { SeccionData } from '@/lib/actions/schemas/catalogo-schemas';
+import type { CustomItemData } from '@/lib/actions/schemas/cotizaciones-schemas';
+import { calcularCantidadEfectiva } from '@/lib/utils/dynamic-billing-calc';
 import { cn } from '@/lib/utils';
 
 interface ServiciosSeleccionados {
@@ -33,6 +35,11 @@ interface CatalogoServiciosTreeProps {
     onToggleSelection: (servicioId: string) => void;
     onUpdateQuantity: (servicioId: string, cantidad: number) => void;
     onEditItem?: (servicioId: string) => void;
+    onCreateCustomItem?: (categoriaId: string) => void;
+    customItems?: CustomItemData[];
+    onEditCustomItem?: (index: number) => void;
+    onDeleteCustomItem?: (index: number) => void;
+    onUpdateCustomItemQuantity?: (index: number, quantity: number) => void;
 
     // Datos calculados
     serviciosSeleccionados: ServiciosSeleccionados;
@@ -56,6 +63,11 @@ export function CatalogoServiciosTree({
     onToggleSelection,
     onUpdateQuantity,
     onEditItem,
+    onCreateCustomItem,
+    customItems = [],
+    onEditCustomItem,
+    onDeleteCustomItem,
+    onUpdateCustomItemQuantity,
     serviciosSeleccionados,
     configuracionPrecios,
     baseHours,
@@ -138,8 +150,8 @@ export function CatalogoServiciosTree({
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-0.5 rounded">
-                                                                        {categoria.servicios.length} {categoria.servicios.length === 1 ? 'item' : 'items'} disponible
-                                                                        {categoria.servicios.length === 1 ? '' : 's'}
+                                                                        {categoria.servicios.length + (customItems?.filter(ci => ci.categoriaId === categoria.id).length || 0)} {(categoria.servicios.length + (customItems?.filter(ci => ci.categoriaId === categoria.id).length || 0)) === 1 ? 'item' : 'items'} disponible
+                                                                        {(categoria.servicios.length + (customItems?.filter(ci => ci.categoriaId === categoria.id).length || 0)) === 1 ? '' : 's'}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -147,9 +159,167 @@ export function CatalogoServiciosTree({
 
                                                         {isCategoriaExpandida && (
                                                             <div className="bg-zinc-800/20 border-l-2 border-zinc-700/30 ml-8">
+                                                                {/* 1. Items del catálogo (con reemplazo por custom items si aplica) */}
                                                                 {categoria.servicios
                                                                     .sort((a, b) => (a.orden || 0) - (b.orden || 0))
                                                                     .map((servicio, servicioIndex) => {
+                                                                        // Verificar si hay un custom item que reemplace este item del catálogo
+                                                                        const replacementCustomItem = customItems.find(
+                                                                            ci => ci.originalItemId === servicio.id && ci.categoriaId === categoria.id
+                                                                        );
+
+                                                                        // Si hay reemplazo, renderizar el custom item en lugar del catálogo
+                                                                        if (replacementCustomItem) {
+                                                                            const globalIndex = customItems.findIndex(ci => ci === replacementCustomItem);
+                                                                            const customItemId = `custom-replace-${globalIndex}`;
+                                                                            const safeDurationHours = baseHours !== null && baseHours !== undefined ? Number(baseHours) : null;
+                                                                            const cantidadEfectiva = calcularCantidadEfectiva(
+                                                                                replacementCustomItem.billing_type,
+                                                                                replacementCustomItem.quantity,
+                                                                                safeDurationHours && safeDurationHours > 0 ? safeDurationHours : 1
+                                                                            );
+                                                                            const subtotal = replacementCustomItem.unit_price * cantidadEfectiva;
+
+                                                                            return (
+                                                                                <div
+                                                                                    key={customItemId}
+                                                                                    className={cn(
+                                                                                        'group flex items-center justify-between py-3 px-2 pl-6 hover:bg-zinc-700/20 transition-colors',
+                                                                                        'border-t border-b border-zinc-700/30',
+                                                                                        servicioIndex === 0 && 'border-t-0',
+                                                                                        'bg-purple-900/10 border-l-2 border-l-purple-500/50'
+                                                                                    )}
+                                                                                >
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <div className="text-sm text-zinc-300 leading-tight font-light">
+                                                                                            <span className="wrap-break-word">{replacementCustomItem.name}</span>
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-2 mt-1">
+                                                                                            <ZenBadge
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                className="px-1 py-0 text-[10px] font-light rounded-sm border-purple-600 text-purple-400"
+                                                                                            >
+                                                                                                Personalizado
+                                                                                            </ZenBadge>
+                                                                                            {replacementCustomItem.billing_type === 'HOUR' && (
+                                                                                                <ZenBadge
+                                                                                                    variant="outline"
+                                                                                                    size="sm"
+                                                                                                    className="px-1 py-0 text-[10px] font-light rounded-sm flex items-center gap-0.5 border-amber-600 text-amber-400"
+                                                                                                >
+                                                                                                    <Clock className="w-2.5 h-2.5" />
+                                                                                                    Por Hora
+                                                                                                </ZenBadge>
+                                                                                            )}
+                                                                                            {replacementCustomItem.billing_type === 'UNIT' && (
+                                                                                                <ZenBadge
+                                                                                                    variant="outline"
+                                                                                                    size="sm"
+                                                                                                    className="px-1 py-0 text-[10px] font-light rounded-sm flex items-center gap-0.5 border-purple-600 text-purple-400"
+                                                                                                >
+                                                                                                    <Hash className="w-2.5 h-2.5" />
+                                                                                                    Por Unidad
+                                                                                                </ZenBadge>
+                                                                                            )}
+                                                                                            <span className="text-xs text-green-400">
+                                                                                                {replacementCustomItem.billing_type === 'HOUR' 
+                                                                                                    ? formatearMoneda(replacementCustomItem.unit_price) + '/h'
+                                                                                                    : formatearMoneda(replacementCustomItem.unit_price)
+                                                                                                }
+                                                                                            </span>
+                                                                                            {onEditCustomItem && (
+                                                                                                <ZenButton
+                                                                                                    type="button"
+                                                                                                    variant="ghost"
+                                                                                                    size="sm"
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        onEditCustomItem(globalIndex);
+                                                                                                    }}
+                                                                                                    className="w-5 h-5 p-0 opacity-40 hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-200 ml-1"
+                                                                                                    title="Editar ítem"
+                                                                                                >
+                                                                                                    <Edit2 className="w-3 h-3" />
+                                                                                                </ZenButton>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                                                                                        <div className="flex items-center gap-1 w-16 justify-center">
+                                                                                            {replacementCustomItem.billing_type === 'HOUR' && safeDurationHours !== null && safeDurationHours > 0 ? (
+                                                                                                <span
+                                                                                                    className="w-6 text-center text-sm font-medium text-emerald-400"
+                                                                                                    title={`${replacementCustomItem.quantity} × ${safeDurationHours}h = ${formatearMoneda(subtotal)}`}
+                                                                                                >
+                                                                                                    {safeDurationHours}
+                                                                                                </span>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    {onUpdateCustomItemQuantity && (
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={(e) => {
+                                                                                                                e.stopPropagation();
+                                                                                                                onUpdateCustomItemQuantity(globalIndex, Math.max(1, replacementCustomItem.quantity - 1));
+                                                                                                            }}
+                                                                                                            className="w-5 h-5 flex items-center justify-center rounded bg-zinc-600 hover:bg-zinc-500 text-zinc-300 hover:text-white transition-colors text-xs"
+                                                                                                        >
+                                                                                                            -
+                                                                                                        </button>
+                                                                                                    )}
+                                                                                                    <span
+                                                                                                        className="w-6 text-center text-sm font-medium text-emerald-400"
+                                                                                                        title={replacementCustomItem.billing_type === 'HOUR' && safeDurationHours !== null && safeDurationHours > 0 
+                                                                                                            ? `${replacementCustomItem.quantity} × ${safeDurationHours}h = ${formatearMoneda(subtotal)}`
+                                                                                                            : `${replacementCustomItem.quantity} × ${formatearMoneda(replacementCustomItem.unit_price)} = ${formatearMoneda(subtotal)}`
+                                                                                                        }
+                                                                                                    >
+                                                                                                        {replacementCustomItem.quantity}
+                                                                                                    </span>
+                                                                                                    {onUpdateCustomItemQuantity && (
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={(e) => {
+                                                                                                                e.stopPropagation();
+                                                                                                                onUpdateCustomItemQuantity(globalIndex, replacementCustomItem.quantity + 1);
+                                                                                                            }}
+                                                                                                            className="w-5 h-5 flex items-center justify-center rounded bg-zinc-600 hover:bg-zinc-500 text-zinc-300 hover:text-white transition-colors text-xs"
+                                                                                                        >
+                                                                                                            +
+                                                                                                        </button>
+                                                                                                    )}
+                                                                                                </>
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        <div className="text-right w-20">
+                                                                                            <div className="text-sm font-medium text-emerald-400">
+                                                                                                {formatearMoneda(subtotal)}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        {onDeleteCustomItem && (
+                                                                                            <ZenButton
+                                                                                                type="button"
+                                                                                                variant="ghost"
+                                                                                                size="sm"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    onDeleteCustomItem(globalIndex);
+                                                                                                }}
+                                                                                                className="w-5 h-5 p-0 opacity-60 hover:opacity-100 transition-opacity text-red-400 hover:text-red-300"
+                                                                                                title="Eliminar ítem"
+                                                                                            >
+                                                                                                <Trash2 className="w-3 h-3" />
+                                                                                            </ZenButton>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        }
+
+                                                                        // Renderizar item del catálogo normalmente si no hay reemplazo
                                                                         const tipoUtilidad = servicio.tipo_utilidad === 'service' ? 'servicio' : 'producto';
                                                                         const precios = configuracionPrecios
                                                                             ? calcularPrecio(servicio.costo, servicio.gasto, tipoUtilidad, configuracionPrecios)
@@ -240,6 +410,21 @@ export function CatalogoServiciosTree({
                                                                                                 : formatearMoneda(precios.precio_final)
                                                                                             }
                                                                                         </span>
+                                                                                        {onEditItem && (
+                                                                                            <ZenButton
+                                                                                                type="button"
+                                                                                                variant="ghost"
+                                                                                                size="sm"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    onEditItem(servicio.id);
+                                                                                                }}
+                                                                                                className="w-5 h-5 p-0 opacity-40 hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-200 ml-1"
+                                                                                                title="Editar ítem"
+                                                                                            >
+                                                                                                <Edit2 className="w-3 h-3" />
+                                                                                            </ZenButton>
+                                                                                        )}
                                                                                     </div>
                                                                                 </div>
 
@@ -296,44 +481,189 @@ export function CatalogoServiciosTree({
                                                                                                 {formatearMoneda(subtotal)}
                                                                                             </div>
                                                                                         </div>
-                                                                                        {onEditItem && (
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                {/* 2. Items personalizados "puros" de esta categoría (sin originalItemId, aparecen al final) */}
+                                                                {customItems
+                                                                    .map((customItem, globalIndex) => ({ customItem, globalIndex }))
+                                                                    .filter(({ customItem }) => 
+                                                                        customItem.categoriaId === categoria.id && 
+                                                                        !customItem.originalItemId // Solo items "puros" sin reemplazo
+                                                                    )
+                                                                    .map(({ customItem, globalIndex }, customIndex) => {
+                                                                        const customItemId = `custom-${globalIndex}`;
+                                                                        const safeDurationHours = baseHours !== null && baseHours !== undefined ? Number(baseHours) : null;
+                                                                        const cantidadEfectiva = calcularCantidadEfectiva(
+                                                                            customItem.billing_type,
+                                                                            customItem.quantity,
+                                                                            safeDurationHours && safeDurationHours > 0 ? safeDurationHours : 1
+                                                                        );
+                                                                        const subtotal = customItem.unit_price * cantidadEfectiva;
+                                                                        // Determinar si es el primer item personalizado para ajustar el borde superior
+                                                                        const isFirstCustomItem = customIndex === 0;
+                                                                        const hasCatalogItems = categoria.servicios.length > 0;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={customItemId}
+                                                                                className={cn(
+                                                                                    'group flex items-center justify-between py-3 px-2 pl-6 hover:bg-zinc-700/20 transition-colors',
+                                                                                    'border-t border-b border-zinc-700/30',
+                                                                                    isFirstCustomItem && hasCatalogItems && 'border-t-0',
+                                                                                    'bg-purple-900/10 border-l-2 border-l-purple-500/50'
+                                                                                )}
+                                                                            >
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="text-sm text-zinc-300 leading-tight font-light">
+                                                                                        <span className="wrap-break-word">{customItem.name}</span>
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                                        <ZenBadge
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            className="px-1 py-0 text-[10px] font-light rounded-sm border-purple-600 text-purple-400"
+                                                                                        >
+                                                                                            Personalizado
+                                                                                        </ZenBadge>
+                                                                                        {customItem.billing_type === 'HOUR' && (
+                                                                                            <ZenBadge
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                className="px-1 py-0 text-[10px] font-light rounded-sm flex items-center gap-0.5 border-amber-600 text-amber-400"
+                                                                                            >
+                                                                                                <Clock className="w-2.5 h-2.5" />
+                                                                                                Por Hora
+                                                                                            </ZenBadge>
+                                                                                        )}
+                                                                                        {customItem.billing_type === 'UNIT' && (
+                                                                                            <ZenBadge
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                className="px-1 py-0 text-[10px] font-light rounded-sm flex items-center gap-0.5 border-purple-600 text-purple-400"
+                                                                                            >
+                                                                                                <Hash className="w-2.5 h-2.5" />
+                                                                                                Por Unidad
+                                                                                            </ZenBadge>
+                                                                                        )}
+                                                                                        <span className="text-xs text-green-400">
+                                                                                            {customItem.billing_type === 'HOUR' 
+                                                                                                ? formatearMoneda(customItem.unit_price) + '/h'
+                                                                                                : formatearMoneda(customItem.unit_price)
+                                                                                            }
+                                                                                        </span>
+                                                                                        {onEditCustomItem && (
                                                                                             <ZenButton
                                                                                                 type="button"
                                                                                                 variant="ghost"
                                                                                                 size="sm"
                                                                                                 onClick={(e) => {
                                                                                                     e.stopPropagation();
-                                                                                                    onEditItem(servicio.id);
+                                                                                                    onEditCustomItem(globalIndex);
                                                                                                 }}
-                                                                                                className="w-7 h-7 p-0 opacity-60 hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-200 ml-1"
+                                                                                                className="w-5 h-5 p-0 opacity-40 hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-200 ml-1"
                                                                                                 title="Editar ítem"
                                                                                             >
-                                                                                                <Edit2 className="w-3.5 h-3.5" />
+                                                                                                <Edit2 className="w-3 h-3" />
                                                                                             </ZenButton>
                                                                                         )}
                                                                                     </div>
-                                                                                )}
-                                                                                {/* Botón de editar cuando NO está seleccionado */}
-                                                                                {!isSelected && onEditItem && (
-                                                                                    <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                                                                                </div>
+
+                                                                                <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                                                                                    <div className="flex items-center gap-1 w-16 justify-center">
+                                                                                        {customItem.billing_type === 'HOUR' && safeDurationHours !== null && safeDurationHours > 0 ? (
+                                                                                            // Para servicios HOUR, mostrar horas base (no editable)
+                                                                                            <span
+                                                                                                className="w-6 text-center text-sm font-medium text-emerald-400"
+                                                                                                title={`${customItem.quantity} × ${safeDurationHours}h = ${formatearMoneda(subtotal)}`}
+                                                                                            >
+                                                                                                {safeDurationHours}
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            // Para servicios SERVICE/UNIT, mostrar selector de cantidad
+                                                                                            <>
+                                                                                                {onUpdateCustomItemQuantity && (
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            onUpdateCustomItemQuantity(globalIndex, Math.max(1, customItem.quantity - 1));
+                                                                                                        }}
+                                                                                                        className="w-5 h-5 flex items-center justify-center rounded bg-zinc-600 hover:bg-zinc-500 text-zinc-300 hover:text-white transition-colors text-xs"
+                                                                                                    >
+                                                                                                        -
+                                                                                                    </button>
+                                                                                                )}
+                                                                                                <span
+                                                                                                    className="w-6 text-center text-sm font-medium text-emerald-400"
+                                                                                                    title={customItem.billing_type === 'HOUR' && safeDurationHours !== null && safeDurationHours > 0 
+                                                                                                        ? `${customItem.quantity} × ${safeDurationHours}h = ${formatearMoneda(subtotal)}`
+                                                                                                        : `${customItem.quantity} × ${formatearMoneda(customItem.unit_price)} = ${formatearMoneda(subtotal)}`
+                                                                                                    }
+                                                                                                >
+                                                                                                    {customItem.quantity}
+                                                                                                </span>
+                                                                                                {onUpdateCustomItemQuantity && (
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            onUpdateCustomItemQuantity(globalIndex, customItem.quantity + 1);
+                                                                                                        }}
+                                                                                                        className="w-5 h-5 flex items-center justify-center rounded bg-zinc-600 hover:bg-zinc-500 text-zinc-300 hover:text-white transition-colors text-xs"
+                                                                                                    >
+                                                                                                        +
+                                                                                                    </button>
+                                                                                                )}
+                                                                                            </>
+                                                                                        )}
+                                                                                    </div>
+
+                                                                                    <div className="text-right w-20">
+                                                                                        <div className="text-sm font-medium text-emerald-400">
+                                                                                            {formatearMoneda(subtotal)}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    {onDeleteCustomItem && (
                                                                                         <ZenButton
                                                                                             type="button"
                                                                                             variant="ghost"
                                                                                             size="sm"
                                                                                             onClick={(e) => {
                                                                                                 e.stopPropagation();
-                                                                                                onEditItem(servicio.id);
+                                                                                                onDeleteCustomItem(globalIndex);
                                                                                             }}
-                                                                                            className="w-7 h-7 p-0 opacity-60 hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-200"
-                                                                                            title="Editar ítem"
+                                                                                            className="w-5 h-5 p-0 opacity-60 hover:opacity-100 transition-opacity text-red-400 hover:text-red-300"
+                                                                                            title="Eliminar ítem"
                                                                                         >
-                                                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                                                            <Trash2 className="w-3 h-3" />
                                                                                         </ZenButton>
-                                                                                    </div>
-                                                                                )}
+                                                                                    )}
+                                                                                </div>
                                                                             </div>
                                                                         );
                                                                     })}
+                                                                {/* 3. Botón + Personalizado al final de cada categoría expandida */}
+                                                                {onCreateCustomItem && (
+                                                                    <div className="px-6 py-2 border-t border-zinc-700/30">
+                                                                        <ZenButton
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                onCreateCustomItem(categoria.id);
+                                                                            }}
+                                                                            className="w-full justify-start gap-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/20"
+                                                                        >
+                                                                            <Plus className="w-3.5 h-3.5" />
+                                                                            Personalizado
+                                                                        </ZenButton>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
