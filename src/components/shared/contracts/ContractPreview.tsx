@@ -130,6 +130,34 @@ export function ContractPreview({
           border-left: 2px solid rgb(63 63 70);
           color: rgb(161 161 170);
         }
+        .contract-preview table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 1rem 0;
+          border: 1px solid rgba(63, 63, 70, 0.5);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .contract-preview table thead {
+          background: linear-gradient(to bottom, rgba(39, 39, 42, 0.8), rgba(39, 39, 42, 0.5));
+          border-bottom: 2px solid rgba(63, 63, 70, 1);
+        }
+        .contract-preview table th {
+          padding: 12px 16px;
+          font-weight: 600;
+          font-size: 13px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: rgba(228, 228, 231, 1);
+        }
+        .contract-preview table td {
+          padding: 12px 16px;
+          font-size: 14px;
+          border-bottom: 1px solid rgba(63, 63, 70, 0.3);
+        }
+        .contract-preview table tbody tr:last-child td {
+          border-bottom: none;
+        }
         .contract-preview [class*="copy"],
         .contract-preview [class*="Copy"],
         .contract-preview [class*="clipboard"],

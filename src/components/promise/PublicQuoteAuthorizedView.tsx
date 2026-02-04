@@ -728,9 +728,102 @@ export function PublicQuoteAuthorizedView({
                       Realiza tu Anticipo
                     </h3>
                     <p className="text-sm text-zinc-400">
-                      ¡Listo! Ahora puedes realizar tu anticipo a esta cuenta:
+                      Transfiere el monto mínimo para formalizar tu reserva
                     </p>
                   </div>
+
+                  {/* Tarjeta de Monto Destacado */}
+                  <ZenCard className="mb-4">
+                    <div className="p-6 space-y-4">
+                      {/* Monto Mínimo Requerido */}
+                      {(() => {
+                        // Calcular si es pago completo (100%)
+                        const advancePercentage = condicionesComerciales?.advance_percentage || 0;
+                        const isFullPayment = advancePercentage === 100;
+
+                        return (
+                          <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/30 rounded-lg p-5">
+                            <div className="text-center">
+                              <p className="text-sm font-medium text-emerald-400 mb-2">
+                                {isFullPayment 
+                                  ? 'Monto para reservar tu fecha'
+                                  : 'Monto mínimo para reservar tu fecha'
+                                }
+                              </p>
+                              <p className="text-4xl font-bold text-emerald-400 mb-1">
+                                {new Intl.NumberFormat('es-MX', {
+                                  style: 'currency',
+                                  currency: 'MXN',
+                                  minimumFractionDigits: 2,
+                                }).format(cotizacion.anticipo || 0)}
+                              </p>
+                              {condicionesComerciales && (
+                                <p className="text-xs text-emerald-400/70">
+                                  {isFullPayment
+                                    ? 'Liquidación total del contrato'
+                                    : condicionesComerciales.advance_type === 'percentage'
+                                      ? `${condicionesComerciales.advance_percentage}% del total como anticipo`
+                                      : 'Anticipo fijo'}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Total del Contrato como Referencia */}
+                      <div className="flex items-center justify-between py-3 px-4 bg-zinc-800/30 rounded-lg border border-zinc-700/30">
+                        <span className="text-sm text-zinc-400">Total del contrato:</span>
+                        <span className="text-sm font-semibold text-zinc-100">
+                          {new Intl.NumberFormat('es-MX', {
+                            style: 'currency',
+                            currency: 'MXN',
+                            minimumFractionDigits: 2,
+                          }).format(cotizacion.totalAPagar || cotizacionPrice)}
+                        </span>
+                      </div>
+
+                      {/* Saldo Pendiente - Solo si NO es pago completo */}
+                      {(() => {
+                        const advancePercentage = condicionesComerciales?.advance_percentage || 0;
+                        const isFullPayment = advancePercentage === 100;
+                        
+                        if (isFullPayment || cotizacion.diferido <= 0) return null;
+                        
+                        return (
+                          <div className="flex items-center justify-between py-3 px-4 bg-zinc-800/30 rounded-lg border border-zinc-700/30">
+                            <span className="text-sm text-zinc-400">Saldo pendiente:</span>
+                            <span className="text-sm font-medium text-zinc-300">
+                              {new Intl.NumberFormat('es-MX', {
+                                style: 'currency',
+                                currency: 'MXN',
+                                minimumFractionDigits: 2,
+                              }).format(cotizacion.diferido)}
+                            </span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Mensaje de Flexibilidad - Solo si NO es pago completo */}
+                      {(() => {
+                        const advancePercentage = condicionesComerciales?.advance_percentage || 0;
+                        const isFullPayment = advancePercentage === 100;
+                        
+                        if (isFullPayment) return null;
+                        
+                        return (
+                          <div className="pt-3 border-t border-zinc-800">
+                            <p className="text-xs text-zinc-400 leading-relaxed">
+                              💡 <span className="font-medium">Flexibilidad de pago:</span> Este es el monto mínimo para formalizar tu fecha. 
+                              Si prefieres abonar una cantidad mayor, puedes hacerlo y se acreditará a tu saldo pendiente.
+                            </p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </ZenCard>
+
+                  {/* Información Bancaria */}
                   <ZenCard>
                     <div className="p-6">
                       {loadingBankInfo ? (
@@ -740,6 +833,16 @@ export function PublicQuoteAuthorizedView({
                         </div>
                       ) : bankInfo ? (
                         <div className="space-y-4">
+                          {/* Título de la sección */}
+                          <div className="pb-3 border-b border-zinc-800">
+                            <h4 className="text-sm font-semibold text-zinc-100 mb-1">
+                              Datos bancarios para tu transferencia
+                            </h4>
+                            <p className="text-xs text-zinc-400">
+                              Usa estos datos para realizar tu pago por SPEI
+                            </p>
+                          </div>
+
                           <div className="space-y-3 text-sm">
                             {bankInfo.banco && (
                               <div>
@@ -791,10 +894,19 @@ export function PublicQuoteAuthorizedView({
                           </div>
 
                           {bankInfo.clabe && (
-                            <div className="pt-4 border-t border-zinc-800">
-                              <p className="text-xs text-zinc-500">
-                                💡 Usa esta CLABE para realizar transferencias SPEI. Recuerda guardar tu comprobante de pago.
-                              </p>
+                            <div className="pt-4 border-t border-zinc-800 space-y-2">
+                              <div className="flex items-start gap-2">
+                                <Building2 className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5" />
+                                <p className="text-xs text-zinc-400 leading-relaxed">
+                                  Usa esta CLABE para realizar transferencias SPEI desde cualquier banco.
+                                </p>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <FileText className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5" />
+                                <p className="text-xs text-zinc-400 leading-relaxed">
+                                  Recuerda guardar tu comprobante de pago para enviarlo al estudio.
+                                </p>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -807,10 +919,23 @@ export function PublicQuoteAuthorizedView({
                       )}
                     </div>
                   </ZenCard>
-                  <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                    <p className="text-sm text-blue-400 text-center">
-                      ✅ Una vez confirmado tu pago por el estudio, tendrás acceso a tu portal de cliente
-                    </p>
+                  
+                  {/* Mensaje de Confirmación */}
+                  <div className="mt-4 space-y-3">
+                    <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-blue-300 mb-1">
+                            Próximos pasos
+                          </p>
+                          <p className="text-xs text-blue-400/80 leading-relaxed">
+                            Una vez que realices tu transferencia, el estudio confirmará tu pago y tendrás acceso 
+                            completo a tu portal de cliente donde podrás dar seguimiento a tu evento.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

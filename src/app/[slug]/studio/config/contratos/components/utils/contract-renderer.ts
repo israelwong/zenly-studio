@@ -110,54 +110,92 @@ export function renderCondicionesComercialesBlock(
     condiciones.total_contrato > 0;
   
   if (debeMostrarDesglose) {
-    html += '<div class="calculo-total space-y-2 mb-4 pt-3 border-t border-zinc-800">';
+    // ⚠️ TABLA PROFESIONAL: Usar <table> con estilos inline para compatibilidad con PDF
+    html += `
+      <div class="calculo-total mb-4 pt-3">
+        <table style="width: 100%; border-collapse: collapse; margin-top: 12px; border: 1px solid rgba(63, 63, 70, 0.5); border-radius: 8px; overflow: hidden;">
+          <thead>
+            <tr style="background: linear-gradient(to bottom, rgba(39, 39, 42, 0.8), rgba(39, 39, 42, 0.5)); border-bottom: 2px solid rgba(63, 63, 70, 1);">
+              <th style="text-align: left; padding: 12px 16px; color: rgba(228, 228, 231, 1); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Concepto
+              </th>
+              <th style="text-align: right; padding: 12px 16px; color: rgba(228, 228, 231, 1); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Monto
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
     
     if (esNegociacion) {
       // MODO NEGOCIACIÓN: Precio original → Precio negociado → Ahorro total
-      // 1. Precio original
       const precioOriginalFormateado = new Intl.NumberFormat("es-MX", {
         style: "currency",
         currency: "MXN",
       }).format(condiciones.precio_original ?? condiciones.total_contrato);
-      html += `<div class="flex justify-between items-center">`;
-      html += `<span class="text-zinc-400">Precio original:</span>`;
-      html += `<span class="text-zinc-300 font-medium">${precioOriginalFormateado}</span>`;
-      html += `</div>`;
+      
+      html += `
+        <tr style="border-bottom: 1px solid rgba(63, 63, 70, 0.3);">
+          <td style="padding: 12px 16px; color: rgba(161, 161, 170, 1); font-size: 14px;">
+            Precio original
+          </td>
+          <td style="padding: 12px 16px; text-align: right; color: rgba(212, 212, 216, 1); font-weight: 500; font-size: 14px;">
+            ${precioOriginalFormateado}
+          </td>
+        </tr>
+      `;
 
-      // 2. Precio negociado
       const precioNegociadoFormateado = new Intl.NumberFormat("es-MX", {
         style: "currency",
         currency: "MXN",
       }).format(condiciones.precio_negociado ?? condiciones.total_final);
-      html += `<div class="flex justify-between items-center">`;
-      html += `<span class="text-zinc-400">Precio negociado:</span>`;
-      html += `<span class="text-blue-400 font-medium">${precioNegociadoFormateado}</span>`;
-      html += `</div>`;
+      
+      html += `
+        <tr style="border-bottom: 1px solid rgba(63, 63, 70, 0.3);">
+          <td style="padding: 12px 16px; color: rgba(161, 161, 170, 1); font-size: 14px;">
+            Precio negociado
+          </td>
+          <td style="padding: 12px 16px; text-align: right; color: rgba(96, 165, 250, 1); font-weight: 500; font-size: 14px;">
+            ${precioNegociadoFormateado}
+          </td>
+        </tr>
+      `;
 
-      // 3. Ahorro total (solo si hay ahorro)
       if (condiciones.ahorro_total !== undefined && condiciones.ahorro_total > 0) {
         const ahorroFormateado = new Intl.NumberFormat("es-MX", {
           style: "currency",
           currency: "MXN",
         }).format(condiciones.ahorro_total);
-        html += `<div class="flex justify-between items-center text-emerald-400">`;
-        html += `<span>Ahorro total:</span>`;
-        html += `<span class="font-medium">${ahorroFormateado}</span>`;
-        html += `</div>`;
+        
+        html += `
+          <tr style="border-bottom: 1px solid rgba(63, 63, 70, 0.3);">
+            <td style="padding: 12px 16px; color: rgba(52, 211, 153, 1); font-size: 14px; font-weight: 500;">
+              Ahorro total
+            </td>
+            <td style="padding: 12px 16px; text-align: right; color: rgba(52, 211, 153, 1); font-weight: 600; font-size: 14px;">
+              ${ahorroFormateado}
+            </td>
+          </tr>
+        `;
       }
     } else {
       // MODO NORMAL: Precio → Descuento → Subtotal
-      // 1. Precio base (total_contrato)
       const precioFormateado = new Intl.NumberFormat("es-MX", {
         style: "currency",
         currency: "MXN",
       }).format(condiciones.total_contrato);
-      html += `<div class="flex justify-between items-center">`;
-      html += `<span class="text-zinc-400">Precio:</span>`;
-      html += `<span class="text-zinc-300 font-medium">${precioFormateado}</span>`;
-      html += `</div>`;
+      
+      html += `
+        <tr style="border-bottom: 1px solid rgba(63, 63, 70, 0.3);">
+          <td style="padding: 12px 16px; color: rgba(161, 161, 170, 1); font-size: 14px;">
+            Precio
+          </td>
+          <td style="padding: 12px 16px; text-align: right; color: rgba(212, 212, 216, 1); font-weight: 500; font-size: 14px;">
+            ${precioFormateado}
+          </td>
+        </tr>
+      `;
 
-      // 2. Descuento (solo si aplica)
       if (tieneDescuento) {
         const descuentoAMostrar = condiciones.descuento_aplicado !== undefined && condiciones.descuento_aplicado > 0
           ? condiciones.descuento_aplicado
@@ -170,64 +208,132 @@ export function renderCondicionesComercialesBlock(
         const porcentajeDescuento = condiciones.porcentaje_descuento 
           ? ` (${condiciones.porcentaje_descuento}%)`
           : '';
-        html += `<div class="flex justify-between items-center text-emerald-400">`;
-        html += `<span>Descuento${porcentajeDescuento}:</span>`;
-        html += `<span class="font-medium">-${descuentoFormateado}</span>`;
-        html += `</div>`;
+        
+        html += `
+          <tr style="border-bottom: 1px solid rgba(63, 63, 70, 0.3);">
+            <td style="padding: 12px 16px; color: rgba(52, 211, 153, 1); font-size: 14px; font-weight: 500;">
+              Descuento${porcentajeDescuento}
+            </td>
+            <td style="padding: 12px 16px; text-align: right; color: rgba(52, 211, 153, 1); font-weight: 600; font-size: 14px;">
+              -${descuentoFormateado}
+            </td>
+          </tr>
+        `;
 
-        // 3. Subtotal (solo si hay descuento)
         const subtotalFormateado = new Intl.NumberFormat("es-MX", {
           style: "currency",
           currency: "MXN",
         }).format(condiciones.total_final);
-        html += `<div class="flex justify-between items-center">`;
-        html += `<span class="text-zinc-400">Subtotal:</span>`;
-        html += `<span class="text-zinc-300 font-medium">${subtotalFormateado}</span>`;
-        html += `</div>`;
+        
+        html += `
+          <tr style="border-bottom: 1px solid rgba(63, 63, 70, 0.3);">
+            <td style="padding: 12px 16px; color: rgba(161, 161, 170, 1); font-size: 14px;">
+              Subtotal
+            </td>
+            <td style="padding: 12px 16px; text-align: right; color: rgba(212, 212, 216, 1); font-weight: 500; font-size: 14px;">
+              ${subtotalFormateado}
+            </td>
+          </tr>
+        `;
       }
     }
 
-    // 4. Anticipo (si aplica) - siempre después del subtotal/precio negociado
-    // Mostrar anticipo si está definido y es mayor a 0
+    // 4. Anticipo/Pago (si aplica)
     if (condiciones.monto_anticipo !== undefined && condiciones.monto_anticipo > 0) {
+      const isFullPayment = condiciones.porcentaje_anticipo === 100;
+      
       const montoAnticipoFormateado = new Intl.NumberFormat("es-MX", {
         style: "currency",
         currency: "MXN",
       }).format(condiciones.monto_anticipo);
       
-      html += `<div class="flex justify-between items-center">`;
-      html += `<span class="text-zinc-400">Anticipo`;
-      if (condiciones.porcentaje_anticipo && condiciones.tipo_anticipo === "percentage") {
-        html += ` (${condiciones.porcentaje_anticipo}%)`;
-      }
-      html += `:</span>`;
-      html += `<span class="text-zinc-300 font-medium">${montoAnticipoFormateado}</span>`;
-      html += `</div>`;
+      let anticipoLabel = isFullPayment 
+        ? 'Monto para reservar'
+        : 'Anticipo mínimo';
       
-      // 5. Diferido (calcular basado en total_final menos anticipo)
-      // En negociación: usar precio negociado (total_final)
-      // En normal: usar total_final (subtotal si hay descuento, precio si no)
-      const baseParaDiferido = condiciones.total_final;
-      const diferido = baseParaDiferido - condiciones.monto_anticipo;
-      const diferidoFormateado = new Intl.NumberFormat("es-MX", {
-        style: "currency",
-        currency: "MXN",
-      }).format(diferido);
-      html += `<div class="flex justify-between items-center">`;
-      html += `<span class="text-zinc-400">Diferido:</span>`;
-      html += `<span class="text-zinc-300 font-medium">${diferidoFormateado}</span>`;
-      html += `</div>`;
+      if (!isFullPayment && condiciones.porcentaje_anticipo && condiciones.tipo_anticipo === "percentage") {
+        anticipoLabel += ` (${condiciones.porcentaje_anticipo}%)`;
+      }
+      
+      html += `
+        <tr style="border-bottom: 1px solid rgba(63, 63, 70, 0.3); background-color: rgba(52, 211, 153, 0.05);">
+          <td style="padding: 12px 16px; color: rgba(161, 161, 170, 1); font-size: 14px; font-weight: 500;">
+            ${anticipoLabel}
+          </td>
+          <td style="padding: 12px 16px; text-align: right; color: rgba(52, 211, 153, 1); font-weight: 600; font-size: 15px;">
+            ${montoAnticipoFormateado}
+          </td>
+        </tr>
+      `;
+      
+      // 5. Diferido - Solo si NO es pago completo
+      if (!isFullPayment) {
+        const baseParaDiferido = condiciones.total_final;
+        const diferido = baseParaDiferido - condiciones.monto_anticipo;
+        
+        if (diferido > 0) {
+          const diferidoFormateado = new Intl.NumberFormat("es-MX", {
+            style: "currency",
+            currency: "MXN",
+          }).format(diferido);
+          
+          html += `
+            <tr style="border-bottom: 1px solid rgba(63, 63, 70, 0.3);">
+              <td style="padding: 12px 16px; color: rgba(161, 161, 170, 1); font-size: 14px;">
+                Saldo pendiente
+              </td>
+              <td style="padding: 12px 16px; text-align: right; color: rgba(212, 212, 216, 1); font-weight: 500; font-size: 14px;">
+                ${diferidoFormateado}
+              </td>
+            </tr>
+          `;
+        }
+      }
     }
 
-    // 6. Total a pagar (total_final)
+    // 6. Total a pagar (total_final) - Row destacado
     const totalFinalFormateado = new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: "MXN",
     }).format(condiciones.total_final);
-    html += `<div class="flex justify-between items-center pt-2 border-t border-zinc-800">`;
-    html += `<span class="text-zinc-200 font-semibold">Total a pagar:</span>`;
-    html += `<span class="text-emerald-400 font-bold text-lg">${totalFinalFormateado}</span>`;
-    html += `</div>`;
+    
+    html += `
+          <tr style="border-top: 2px solid rgba(63, 63, 70, 1); background-color: rgba(39, 39, 42, 0.6);">
+            <td style="padding: 14px 16px; color: rgba(228, 228, 231, 1); font-weight: 700; font-size: 15px;">
+              TOTAL A PAGAR
+            </td>
+            <td style="padding: 14px 16px; text-align: right; color: rgba(52, 211, 153, 1); font-weight: 700; font-size: 18px;">
+              ${totalFinalFormateado}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+    
+    // Mensaje de flexibilidad - Solo si NO es pago completo y hay anticipo
+    if (condiciones.monto_anticipo !== undefined && condiciones.monto_anticipo > 0) {
+      const isFullPayment = condiciones.porcentaje_anticipo === 100;
+      
+      if (!isFullPayment) {
+        html += `
+          <div style="margin-top: 16px; padding: 12px; background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.5); border-radius: 4px;">
+            <p style="font-size: 12px; color: rgba(161, 161, 170, 1); line-height: 1.6;">
+              💡 <span style="font-weight: 600;">Flexibilidad de pago:</span> Este es el monto mínimo para formalizar tu fecha. 
+              Si prefieres abonar una cantidad mayor, puedes hacerlo y se acreditará a tu saldo pendiente.
+            </p>
+          </div>
+        `;
+      } else {
+        html += `
+          <div style="margin-top: 16px; padding: 12px; background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.5); border-radius: 4px;">
+            <p style="font-size: 12px; color: rgba(161, 161, 170, 1); line-height: 1.6;">
+              Este contrato requiere liquidación total para confirmar tu reserva.
+            </p>
+          </div>
+        `;
+      }
+    }
+    
     html += '</div>';
   }
 

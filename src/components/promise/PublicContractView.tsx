@@ -191,17 +191,18 @@ export function PublicContractView({
   }, [studioSlug, promiseId, cotizacionId, contractTemplateId, condicionesComerciales]);
 
   // Cargar contrato y datos
-  // IMPORTANTE: Si hay condiciones comerciales, usar template.content para permitir re-renderizado
-  // con el desglose completo. Si no hay condiciones comerciales o es contrato firmado, usar customContent.
-  const shouldUseTemplate = condicionesComerciales && !isSigned && contractTemplateId;
+  // ⚠️ FIX: SIEMPRE usar template si hay condiciones comerciales para asegurar renderizado correcto del desglose
+  // Esto aplica incluso si el contrato ya está firmado, para garantizar consistencia en la vista
+  const shouldUseTemplate = condicionesComerciales && contractTemplateId;
   
   useEffect(() => {
     if (isOpen) {
       if (shouldUseTemplate && contractTemplateId) {
-        // PRIORIDAD 1: Si hay condiciones comerciales, usar template original para re-renderizar con desglose
+        // PRIORIDAD 1: Si hay condiciones comerciales, SIEMPRE usar template para re-renderizar con desglose completo
+        // Esto asegura que el contrato firmado muestre exactamente lo mismo que antes de firmar
         loadContractFromTemplate();
       } else if (contractContent) {
-        // PRIORIDAD 2: Si hay contenido personalizado, usarlo directamente
+        // PRIORIDAD 2: Si NO hay condiciones o hay contenido personalizado, usarlo directamente
         setRenderedContent(contractContent);
         setTemplateContent(null);
         // Cargar datos en segundo plano para variables básicas
@@ -443,22 +444,7 @@ export function PublicContractView({
           )}
 
           {/* Acciones: habilitar solo cuando el preview del contrato está montado */}
-          <div className="flex flex-row gap-2 pt-4 border-t border-zinc-800">
-            <ZenButton
-              variant="ghost"
-              onClick={handleExportPDF}
-              disabled={!isPreviewMounted || isExportingPDF || isSigned}
-              className="flex-1 text-sm py-2"
-            >
-              {isExportingPDF ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  Exportando...
-                </>
-              ) : (
-                <>Exportar PDF</>
-              )}
-            </ZenButton>
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-zinc-800">
             {!isSigned && (
               <ZenButton
                 variant="primary"
@@ -480,19 +466,57 @@ export function PublicContractView({
               </ZenButton>
             )}
             {isSigned && (
-              <div className="flex-1 flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-2.5">
-                <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-400" />
-                <span className="text-sm font-medium text-emerald-400">Firmado</span>
-              </div>
+              <>
+                <ZenButton
+                  variant="outline"
+                  onClick={handleExportPDF}
+                  disabled={!isPreviewMounted || isExportingPDF}
+                  className="flex-1 text-sm py-2"
+                >
+                  {isExportingPDF ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                      Exportando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5 mr-1.5" />
+                      Exportar PDF
+                    </>
+                  )}
+                </ZenButton>
+                <ZenButton
+                  variant="primary"
+                  onClick={onClose}
+                  className="flex-1 text-sm py-2"
+                >
+                  Cerrar
+                </ZenButton>
+              </>
             )}
           </div>
-          {contractVersion && (
-            <div className="pt-2 border-t border-zinc-800">
+          
+          {/* Info de versión y estado de firma */}
+          <div className="pt-2 border-t border-zinc-800 space-y-2">
+            {contractVersion && (
               <p className="text-xs text-zinc-500 text-center">
                 Versión {contractVersion} del contrato
               </p>
-            </div>
-          )}
+            )}
+            {isSigned && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2 justify-center">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <p className="text-sm font-medium text-emerald-400">
+                    Contrato firmado digitalmente
+                  </p>
+                </div>
+                <p className="text-xs text-emerald-400/70 text-center mt-1">
+                  Este documento tiene validez legal y puede ser descargado en formato PDF
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </ZenDialog>
 
