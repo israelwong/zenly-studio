@@ -42,8 +42,10 @@ export const createCotizacionSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
   descripcion: z.string().optional(),
   precio: z.number().min(0, 'El precio debe ser mayor o igual a 0'),
+  visible_to_client: z.boolean().optional().default(false),
   items: z.record(z.string(), z.number().int().min(1)).optional().default({}),
   customItems: z.array(customItemSchema).optional().default([]),
+  event_duration: z.number().positive().optional().nullable(),
 }).refine(
   (data) => {
     const hasCatalogItems = Object.values(data.items || {}).some((qty) => qty > 0);
@@ -91,6 +93,8 @@ export interface CotizacionResponse {
     id: string;
     name: string;
     evento_id?: string;
+    promise_id?: string;
+    status?: string;
     cotizacion?: {
       id: string;
       name: string;

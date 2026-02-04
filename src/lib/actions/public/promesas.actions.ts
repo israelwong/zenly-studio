@@ -1139,6 +1139,7 @@ export async function getPublicPromisePendientes(
     type CotizacionItem = {
       id: string;
       item_id: string | null;
+      service_category_id?: string | null;
       name_snapshot: string | null;
       description_snapshot: string | null;
       category_name_snapshot: string | null;
@@ -1154,6 +1155,14 @@ export async function getPublicPromisePendientes(
       order: number;
       is_courtesy: boolean;
       billing_type?: string | null;
+      service_categories?: {
+        name: string;
+        section_categories?: {
+          service_sections?: {
+            name: string;
+          };
+        };
+      } | null;
     };
 
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
@@ -1168,26 +1177,42 @@ export async function getPublicPromisePendientes(
         }
       });
 
-      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+      // Incluir items del catálogo Y custom items (con snapshots)
+      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
+        // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
+        return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
+      });
 
       const estructura = construirEstructuraJerarquicaCotizacion(
-        itemsFiltrados.map((item: CotizacionItem) => ({
-          item_id: item.item_id!,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          subtotal: item.subtotal,
-          order: item.order,
-          name_snapshot: item.name_snapshot,
-          description_snapshot: item.description_snapshot,
-          category_name_snapshot: item.category_name_snapshot,
-          seccion_name_snapshot: item.seccion_name_snapshot,
-          name: item.name,
-          description: item.description,
-          category_name: item.category_name,
-          seccion_name: item.seccion_name,
-          id: item.id,
-          billing_type: item.billing_type,
-        })),
+        itemsFiltrados.map((item: CotizacionItem) => {
+          // Obtener nombres de categoría y sección desde snapshots o desde relación service_categories
+          let categoryName = item.category_name_snapshot || item.category_name;
+          let sectionName = item.seccion_name_snapshot || item.seccion_name;
+          
+          // Si faltan los snapshots pero hay service_category_id, obtener desde la relación
+          if ((!categoryName || !sectionName) && item.service_category_id && item.service_categories) {
+            categoryName = categoryName || item.service_categories.name;
+            sectionName = sectionName || item.service_categories.section_categories?.service_sections?.name || null;
+          }
+          
+          return {
+            item_id: item.item_id, // Puede ser null para custom items
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            subtotal: item.subtotal,
+            order: item.order,
+            name_snapshot: item.name_snapshot,
+            description_snapshot: item.description_snapshot,
+            category_name_snapshot: categoryName,
+            seccion_name_snapshot: sectionName,
+            name: item.name,
+            description: item.description,
+            category_name: categoryName,
+            seccion_name: sectionName,
+            id: item.id,
+            billing_type: item.billing_type,
+          };
+        }),
         {
           incluirPrecios: true,
           incluirDescripciones: true,
@@ -1673,6 +1698,7 @@ export async function getPublicPromiseActiveQuote(
     type CotizacionItem = {
       id: string;
       item_id: string | null;
+      service_category_id?: string | null;
       name_snapshot: string | null;
       description_snapshot: string | null;
       category_name_snapshot: string | null;
@@ -1688,6 +1714,14 @@ export async function getPublicPromiseActiveQuote(
       order: number;
       is_courtesy: boolean;
       billing_type?: string | null;
+      service_categories?: {
+        name: string;
+        section_categories?: {
+          service_sections?: {
+            name: string;
+          };
+        };
+      } | null;
     };
 
     // ⚠️ HIGIENE DE DATOS: Crear mapa de orden de sección y categoría desde catálogo
@@ -1710,7 +1744,11 @@ export async function getPublicPromiseActiveQuote(
       // ⚠️ TAREA 1: No cargar multimedia en vista previa (se carga on-demand)
       const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
 
-      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+      // Incluir items del catálogo Y custom items (con snapshots)
+      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
+        // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
+        return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
+      });
 
       // ⚠️ HIGIENE DE DATOS: Ordenar items por sección, categoría e item antes de construir estructura
       const itemsOrdenados = itemsFiltrados
@@ -1735,26 +1773,41 @@ export async function getPublicPromiseActiveQuote(
         .map(({ item }) => item);
 
       const estructura = construirEstructuraJerarquicaCotizacion(
-        itemsOrdenados.map((item: CotizacionItem) => ({
-          item_id: item.item_id!,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          subtotal: item.subtotal,
-          order: item.order,
-          name_snapshot: item.name_snapshot,
-          description_snapshot: item.description_snapshot,
-          category_name_snapshot: item.category_name_snapshot,
-          seccion_name_snapshot: item.seccion_name_snapshot,
-          name: item.name,
-          description: item.description,
-          category_name: item.category_name,
-          seccion_name: item.seccion_name,
-          id: item.id,
-          billing_type: item.billing_type,
-          // ⚠️ HIGIENE DE DATOS: Pasar orden de sección y categoría desde catálogo
-          seccion_orden: seccionOrdenMap.get((item.seccion_name_snapshot || item.seccion_name || '').toLowerCase().trim()) ?? 999,
-          categoria_orden: categoriaOrdenMap.get(`${(item.seccion_name_snapshot || item.seccion_name || '').toLowerCase().trim()}::${(item.category_name_snapshot || item.category_name || '').toLowerCase().trim()}`) ?? 999,
-        })),
+        itemsOrdenados.map((item: CotizacionItem) => {
+          // Obtener nombres de categoría y sección desde snapshots o desde relación service_categories
+          let categoryName = item.category_name_snapshot || item.category_name;
+          let sectionName = item.seccion_name_snapshot || item.seccion_name;
+          
+          // Si faltan los snapshots pero hay service_category_id, obtener desde la relación
+          if ((!categoryName || !sectionName) && item.service_category_id && (item as any).service_categories) {
+            const categoria = (item as any).service_categories;
+            if (categoria) {
+              categoryName = categoryName || categoria.name;
+              sectionName = sectionName || categoria.section_categories?.service_sections?.name || null;
+            }
+          }
+          
+          return {
+            item_id: item.item_id, // Puede ser null para custom items
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            subtotal: item.subtotal,
+            order: item.order,
+            name_snapshot: item.name_snapshot,
+            description_snapshot: item.description_snapshot,
+            category_name_snapshot: categoryName,
+            seccion_name_snapshot: sectionName,
+            name: item.name,
+            description: item.description,
+            category_name: categoryName,
+            seccion_name: sectionName,
+            id: item.id,
+            billing_type: item.billing_type,
+            // ⚠️ HIGIENE DE DATOS: Pasar orden de sección y categoría desde catálogo
+            seccion_orden: seccionOrdenMap.get((sectionName || '').toLowerCase().trim()) ?? 999,
+            categoria_orden: categoriaOrdenMap.get(`${(sectionName || '').toLowerCase().trim()}::${(categoryName || '').toLowerCase().trim()}`) ?? 999,
+          };
+        }),
         {
           incluirPrecios: true,
           incluirDescripciones: false, // ⚠️ TAREA 1: No incluir descripciones en vista previa
@@ -1780,7 +1833,7 @@ export async function getPublicPromiseActiveQuote(
               ? calcularCantidadEfectiva(billingType, item.cantidad, promiseDurationHours)
               : item.cantidad;
             return {
-              id: item.item_id || item.id || '',
+              id: item.item_id || item.id || '', // Usar id del cotizacion_item si no hay item_id
               name: item.nombre,
               name_snapshot: item.nombre,
               description: null, // ⚠️ TAREA 1: Descripciones se cargan on-demand
@@ -2533,6 +2586,7 @@ export async function getPublicPromiseNegociacion(
     type CotizacionItem = {
       id: string;
       item_id: string | null;
+      service_category_id?: string | null;
       name_snapshot: string | null;
       description_snapshot: string | null;
       category_name_snapshot: string | null;
@@ -2548,6 +2602,14 @@ export async function getPublicPromiseNegociacion(
       order: number;
       is_courtesy: boolean;
       billing_type?: string | null;
+      service_categories?: {
+        name: string;
+        section_categories?: {
+          service_sections?: {
+            name: string;
+          };
+        };
+      } | null;
     };
 
     const cotizacionMedia: Array<{ id: string; file_url: string; file_type: 'IMAGE' | 'VIDEO'; thumbnail_url?: string | null }> = [];
@@ -2561,29 +2623,46 @@ export async function getPublicPromiseNegociacion(
       }
     });
 
-    const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+    // Incluir items del catálogo Y custom items (con snapshots)
+    const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
+      // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
+      return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
+    });
 
     // ⚠️ OPTIMIZADO: Construir estructura jerárquica usando solo snapshots
     // No necesitamos el catálogo completo, los snapshots tienen toda la información necesaria
     const estructura = construirEstructuraJerarquicaCotizacion(
-      itemsFiltrados.map((item: CotizacionItem) => ({
-        item_id: item.item_id!,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        subtotal: item.subtotal,
-        order: item.order,
-        // Priorizar snapshots (inmutables) sobre datos del catálogo
-        name_snapshot: item.name_snapshot || item.name,
-        description_snapshot: item.description_snapshot || item.description,
-        category_name_snapshot: item.category_name_snapshot || item.category_name,
-        seccion_name_snapshot: item.seccion_name_snapshot || item.seccion_name,
-        // Fallback a datos del catálogo si no hay snapshots
-        name: item.name_snapshot || item.name,
-        description: item.description_snapshot || item.description,
-        category_name: item.category_name_snapshot || item.category_name,
-        seccion_name: item.seccion_name_snapshot || item.seccion_name,
-        id: item.id,
-      })),
+      itemsFiltrados.map((item: CotizacionItem) => {
+        // Obtener nombres de categoría y sección desde snapshots o desde relación service_categories
+        let categoryName = item.category_name_snapshot || item.category_name;
+        let sectionName = item.seccion_name_snapshot || item.seccion_name;
+        
+        // Si faltan los snapshots pero hay service_category_id, obtener desde la relación
+        if ((!categoryName || !sectionName) && item.service_category_id && item.service_categories) {
+          categoryName = categoryName || item.service_categories.name;
+          sectionName = sectionName || item.service_categories.section_categories?.service_sections?.name || null;
+        }
+        
+        return {
+          item_id: item.item_id, // Puede ser null para custom items
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: item.subtotal,
+          order: item.order,
+          // Priorizar snapshots (inmutables) sobre datos del catálogo
+          name_snapshot: item.name_snapshot || item.name,
+          description_snapshot: item.description_snapshot || item.description,
+          category_name_snapshot: categoryName,
+          seccion_name_snapshot: sectionName,
+          // Fallback a datos del catálogo si no hay snapshots
+          name: item.name_snapshot || item.name,
+          description: item.description_snapshot || item.description,
+          category_name: categoryName,
+          seccion_name: sectionName,
+          id: item.id,
+          billing_type: item.billing_type,
+        };
+      }),
       {
         incluirPrecios: true,
         incluirDescripciones: true,
@@ -3060,29 +3139,46 @@ export async function getPublicPromiseCierre(
       }
     });
 
-    const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+    // Incluir items del catálogo Y custom items (con snapshots)
+    const itemsFiltrados = (cotizacion.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
+      // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
+      return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
+    });
 
     // ⚠️ OPTIMIZADO: Construir estructura jerárquica usando solo snapshots
     // No necesitamos el catálogo completo, los snapshots tienen toda la información necesaria
     const estructura = construirEstructuraJerarquicaCotizacion(
-      itemsFiltrados.map((item: CotizacionItem) => ({
-        item_id: item.item_id!,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        subtotal: item.subtotal,
-        order: item.order,
-        // Priorizar snapshots (inmutables) sobre datos del catálogo
-        name_snapshot: item.name_snapshot || item.name,
-        description_snapshot: item.description_snapshot || item.description,
-        category_name_snapshot: item.category_name_snapshot || item.category_name,
-        seccion_name_snapshot: item.seccion_name_snapshot || item.seccion_name,
-        // Fallback a datos del catálogo si no hay snapshots
-        name: item.name_snapshot || item.name,
-        description: item.description_snapshot || item.description,
-        category_name: item.category_name_snapshot || item.category_name,
-        seccion_name: item.seccion_name_snapshot || item.seccion_name,
-        id: item.id,
-      })),
+      itemsFiltrados.map((item: CotizacionItem) => {
+        // Obtener nombres de categoría y sección desde snapshots o desde relación service_categories
+        let categoryName = item.category_name_snapshot || item.category_name;
+        let sectionName = item.seccion_name_snapshot || item.seccion_name;
+        
+        // Si faltan los snapshots pero hay service_category_id, obtener desde la relación
+        if ((!categoryName || !sectionName) && item.service_category_id && item.service_categories) {
+          categoryName = categoryName || item.service_categories.name;
+          sectionName = sectionName || item.service_categories.section_categories?.service_sections?.name || null;
+        }
+        
+        return {
+          item_id: item.item_id, // Puede ser null para custom items
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: item.subtotal,
+          order: item.order,
+          // Priorizar snapshots (inmutables) sobre datos del catálogo
+          name_snapshot: item.name_snapshot || item.name,
+          description_snapshot: item.description_snapshot || item.description,
+          category_name_snapshot: categoryName,
+          seccion_name_snapshot: sectionName,
+          // Fallback a datos del catálogo si no hay snapshots
+          name: item.name_snapshot || item.name,
+          description: item.description_snapshot || item.description,
+          category_name: categoryName,
+          seccion_name: sectionName,
+          id: item.id,
+          billing_type: item.billing_type,
+        };
+      }),
       {
         incluirPrecios: true,
         incluirDescripciones: true,
@@ -3421,6 +3517,7 @@ export async function getPublicPromiseData(
               select: {
                 id: true,
                 item_id: true,
+                service_category_id: true,
                 // Snapshots (prioridad - inmutables)
                 name_snapshot: true,
                 description_snapshot: true,
@@ -3437,6 +3534,21 @@ export async function getPublicPromiseData(
                 status: true,
                 order: true,
                 is_courtesy: true,
+                billing_type: true,
+                service_categories: {
+                  select: {
+                    name: true,
+                    section_categories: {
+                      select: {
+                        service_sections: {
+                          select: {
+                            name: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
               orderBy: {
                 order: 'asc',
@@ -3658,6 +3770,7 @@ export async function getPublicPromiseData(
     type CotizacionItem = {
       id: string;
       item_id: string | null;
+      service_category_id?: string | null;
       name_snapshot: string | null;
       description_snapshot: string | null;
       category_name_snapshot: string | null;
@@ -3673,6 +3786,14 @@ export async function getPublicPromiseData(
       order: number;
       is_courtesy?: boolean;
       billing_type?: string | null;
+      service_categories?: {
+        name: string;
+        section_categories?: {
+          service_sections?: {
+            name: string;
+          };
+        };
+      } | null;
     };
 
     const mappedCotizaciones: PublicCotizacion[] = (quotesOrdenadas as any[]).map((cot: any) => {
@@ -3688,28 +3809,44 @@ export async function getPublicPromiseData(
         }
       });
 
-      // Filtrar items con item_id válido
-      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+      // Incluir items del catálogo Y custom items (con snapshots)
+      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
+        // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
+        return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
+      });
 
       // Usar función centralizada para construir estructura jerárquica
       const estructura = construirEstructuraJerarquicaCotizacion(
-        itemsFiltrados.map((item: CotizacionItem) => ({
-          item_id: item.item_id!,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          subtotal: item.subtotal,
-          order: item.order,
-          // Snapshots primero, luego campos operacionales
-          name_snapshot: item.name_snapshot,
-          description_snapshot: item.description_snapshot,
-          category_name_snapshot: item.category_name_snapshot,
-          seccion_name_snapshot: item.seccion_name_snapshot,
-          name: item.name,
-          description: item.description,
-          category_name: item.category_name,
-          seccion_name: item.seccion_name,
-          id: item.id,
-        })),
+        itemsFiltrados.map((item: CotizacionItem) => {
+          // Obtener nombres de categoría y sección desde snapshots o desde relación service_categories
+          let categoryName = item.category_name_snapshot || item.category_name;
+          let sectionName = item.seccion_name_snapshot || item.seccion_name;
+          
+          // Si faltan los snapshots pero hay service_category_id, obtener desde la relación
+          if ((!categoryName || !sectionName) && item.service_category_id && item.service_categories) {
+            categoryName = categoryName || item.service_categories.name;
+            sectionName = sectionName || item.service_categories.section_categories?.service_sections?.name || null;
+          }
+          
+          return {
+            item_id: item.item_id, // Puede ser null para custom items
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            subtotal: item.subtotal,
+            order: item.order,
+            // Snapshots primero, luego campos operacionales
+            name_snapshot: item.name_snapshot,
+            description_snapshot: item.description_snapshot,
+            category_name_snapshot: categoryName,
+            seccion_name_snapshot: sectionName,
+            name: item.name,
+            description: item.description,
+            category_name: categoryName,
+            seccion_name: sectionName,
+            id: item.id,
+            billing_type: item.billing_type,
+          };
+        }),
         {
           incluirPrecios: true,
           incluirDescripciones: true,
@@ -4785,6 +4922,7 @@ export async function getPublicPromiseUpdate(
                   select: {
                     id: true,
                     item_id: true,
+                    service_category_id: true,
                     name_snapshot: true,
                     description_snapshot: true,
                     category_name_snapshot: true,
@@ -4799,6 +4937,21 @@ export async function getPublicPromiseUpdate(
                     status: true,
                     order: true,
                     is_courtesy: true,
+                    billing_type: true,
+                    service_categories: {
+                      select: {
+                        name: true,
+                        section_categories: {
+                          select: {
+                            service_sections: {
+                              select: {
+                                name: true,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
                   },
                   orderBy: { order: 'asc' },
                 },
@@ -4895,6 +5048,7 @@ export async function getPublicPromiseUpdate(
     type CotizacionItem = {
       id: string;
       item_id: string | null;
+      service_category_id?: string | null;
       name_snapshot: string | null;
       description_snapshot: string | null;
       category_name_snapshot: string | null;
@@ -4910,6 +5064,14 @@ export async function getPublicPromiseUpdate(
       order: number;
       is_courtesy: boolean;
       billing_type?: string | null;
+      service_categories?: {
+        name: string;
+        section_categories?: {
+          service_sections?: {
+            name: string;
+          };
+        };
+      } | null;
     };
 
     const mappedCotizaciones: PublicCotizacion[] = promise.quotes.map((cot: any) => {
@@ -4924,11 +5086,15 @@ export async function getPublicPromiseUpdate(
         }
       });
 
-      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => item.item_id !== null);
+      // Incluir items del catálogo Y custom items (con snapshots)
+      const itemsFiltrados = (cot.cotizacion_items as CotizacionItem[]).filter((item: CotizacionItem) => {
+        // Incluir items del catálogo (con item_id) O custom items (sin item_id pero con snapshots)
+        return item.item_id !== null || (item.item_id === null && (item.name_snapshot || item.name));
+      });
 
       const estructura = construirEstructuraJerarquicaCotizacion(
         itemsFiltrados.map((item: CotizacionItem) => ({
-          item_id: item.item_id!,
+          item_id: item.item_id, // Puede ser null para custom items
           quantity: item.quantity,
           unit_price: item.unit_price,
           subtotal: item.subtotal,

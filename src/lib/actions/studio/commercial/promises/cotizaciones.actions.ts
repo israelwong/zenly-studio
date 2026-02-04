@@ -119,6 +119,19 @@ export async function createCotizacion(
       };
     }
 
+    // Validar nombre único dentro de la promise
+    const nombreExistente = await prisma.studio_cotizaciones.findFirst({
+      where: {
+        promise_id: validatedData.promise_id,
+        name: validatedData.nombre.trim(),
+        archived: false,
+      },
+    });
+
+    if (nombreExistente) {
+      return { success: false, error: 'Ya existe una cotización con ese nombre en esta promesa' };
+    }
+
     // Crear cotizaciรณn SIN evento (evento_id serรก null)
     // El evento se crearรก cuando se autorice la cotizaciรณn
     const cotizacion = await prisma.studio_cotizaciones.create({
@@ -132,7 +145,7 @@ export async function createCotizacion(
         description: validatedData.descripcion || null,
         price: validatedData.precio,
         status: 'pendiente',
-        visible_to_client: validatedData.visible_to_client ?? false,
+        visible_to_client: validatedData.visible_to_client ?? false, // Usar valor del schema (default false si no se proporciona)
         event_duration: validatedData.event_duration ?? durationHours, // Prioridad: input manual > promise.duration_hours
       },
     });
@@ -164,6 +177,34 @@ export async function createCotizacion(
         billing_type: billingTypeMap.get(itemId) || 'SERVICE', // Default SERVICE para compatibilidad legacy
       }));
 
+    // Obtener nombres de categoría y sección para custom items
+    const categoriaIds = (validatedData.customItems || [])
+      .map(item => item.categoriaId)
+      .filter((id): id is string => !!id);
+    
+    const categoriasMap = new Map<string, { categoryName: string; sectionName: string | null }>();
+    if (categoriaIds.length > 0) {
+      const categorias = await prisma.studio_service_categories.findMany({
+        where: { id: { in: categoriaIds } },
+        include: {
+          section_categories: {
+            include: {
+              service_sections: {
+                select: { name: true },
+              },
+            },
+          },
+        },
+      });
+      
+      categorias.forEach(categoria => {
+        categoriasMap.set(categoria.id, {
+          categoryName: categoria.name,
+          sectionName: categoria.section_categories?.service_sections?.name || null,
+        });
+      });
+    }
+
     // Crear items personalizados (custom items)
     const customItemsToCreate = (validatedData.customItems || []).map((customItem, index) => {
       const totalGastos = (customItem.expense || 0);
@@ -173,9 +214,14 @@ export async function createCotizacion(
         durationHours
       );
       
+      // Obtener nombres de categoría y sección desde el mapa
+      const categoriaInfo = customItem.categoriaId ? categoriasMap.get(customItem.categoriaId) : null;
+      
       return {
         cotizacion_id: cotizacion.id,
         item_id: null, // ⚠️ NULL para items personalizados
+        service_category_id: customItem.categoriaId || null, // Guardar categoriaId para custom items
+        original_service_id: customItem.originalItemId || null, // Guardar originalItemId si es reemplazo
         quantity: customItem.quantity,
         order: catalogItemsToCreate.length + index,
         billing_type: (customItem.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
@@ -190,6 +236,10 @@ export async function createCotizacion(
         // Snapshots iguales a campos operacionales para items custom
         name_snapshot: customItem.name,
         description_snapshot: customItem.description || null,
+        category_name_snapshot: categoriaInfo?.categoryName || null,
+        seccion_name_snapshot: categoriaInfo?.sectionName || null,
+        category_name: categoriaInfo?.categoryName || null,
+        seccion_name: categoriaInfo?.sectionName || null,
         unit_price_snapshot: customItem.unit_price,
         cost_snapshot: customItem.cost || 0,
         expense_snapshot: totalGastos,
@@ -236,11 +286,37 @@ export async function createCotizacion(
 
     revalidatePath(`/${validatedData.studio_slug}/studio/commercial/promises`);
 
+    // Obtener cotizaciรณn con promise_id y status para redirección
+    const cotizacionConPromise = await prisma.studio_cotizaciones.findUnique({
+      where: { id: cotizacion.id },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        promise_id: true,
+        evento_id: true,
+      },
+    });
+
     return {
       success: true,
       data: {
         id: cotizacion.id,
         name: cotizacion.name,
+        evento_id: cotizacionConPromise?.evento_id || undefined,
+        promise_id: cotizacionConPromise?.promise_id || undefined,
+        status: cotizacionConPromise?.status || 'pendiente',
+        cotizacion: {
+          id: cotizacion.id,
+          name: cotizacion.name,
+          price: cotizacion.price,
+          status: cotizacionConPromise?.status || 'pendiente',
+          description: cotizacion.description,
+          created_at: cotizacion.created_at,
+          updated_at: cotizacion.updated_at,
+          order: cotizacion.order,
+          archived: cotizacion.archived,
+        },
       },
     };
   } catch (error) {
@@ -518,7 +594,7 @@ export async function getCotizacionById(
     negociacion_precio_original?: number | null;
     negociacion_precio_personalizado?: number | null;
     items: Array<{
-      item_id: string;
+      item_id: string | null; // null para custom items
       quantity: number;
       unit_price: number;
       subtotal: number;
@@ -532,7 +608,7 @@ export async function getCotizacionById(
       description: string | null;
       category_name: string | null;
       seccion_name: string | null;
-      // Snapshots raw (para usar con funciรณn centralizada)
+      // Snapshots raw (para usar con función centralizada)
       name_snapshot?: string | null;
       description_snapshot?: string | null;
       category_name_snapshot?: string | null;
@@ -542,6 +618,9 @@ export async function getCotizacionById(
       description_raw?: string | null;
       category_name_raw?: string | null;
       seccion_name_raw?: string | null;
+      // Campo para custom items (service_category_id)
+      categoria_id?: string | null; // Presente solo para custom items (item_id === null)
+      original_item_id?: string | null; // ID del item del catálogo que reemplaza (desde original_service_id)
     }>;
   };
   error?: string;
@@ -585,6 +664,9 @@ export async function getCotizacionById(
             ...COTIZACION_ITEMS_SELECT_STANDARD,
             cost: true,
             expense: true,
+            service_category_id: true, // Incluir service_category_id para custom items
+            is_custom: true, // Incluir is_custom para identificar custom items
+            original_service_id: true, // Incluir original_service_id para identificar reemplazos
           },
           orderBy: {
             order: "asc",
@@ -597,9 +679,8 @@ export async function getCotizacionById(
       return { success: false, error: 'Cotizaciรณn no encontrada' };
     }
 
-    // Los items ya vienen ordenados por order: "asc" desde la consulta
-    // Devolver items con snapshots para que componentes cliente puedan usar funciรณn centralizada
-    const itemsOrdenados = cotizacion.cotizacion_items
+    // Separar items del catálogo y custom items
+    const catalogItems = cotizacion.cotizacion_items
       .filter((item) => item.item_id !== null)
       .map((item) => ({
         item_id: item.item_id!,
@@ -627,6 +708,42 @@ export async function getCotizacionById(
         category_name_raw: item.category_name,
         seccion_name_raw: item.seccion_name,
       }));
+
+    // Custom items (items con item_id null o is_custom true)
+    const customItems = cotizacion.cotizacion_items
+      .filter((item) => item.item_id === null || item.is_custom === true)
+      .map((item) => ({
+        item_id: null,
+        quantity: item.quantity,
+        unit_price: item.unit_price ?? 0,
+        subtotal: item.subtotal ?? 0,
+        cost: item.cost ?? 0,
+        expense: item.expense ?? 0,
+        order: item.order ?? 0,
+        id: item.id,
+        billing_type: item.billing_type,
+        // Campos operacionales (para compatibilidad)
+        name: item.name_snapshot || item.name || '',
+        description: item.description_snapshot || item.description,
+        category_name: item.category_name_snapshot || item.category_name,
+        seccion_name: item.seccion_name_snapshot || item.seccion_name,
+        // Snapshots raw (para usar con función centralizada)
+        name_snapshot: item.name_snapshot,
+        description_snapshot: item.description_snapshot,
+        category_name_snapshot: item.category_name_snapshot,
+        seccion_name_snapshot: item.seccion_name_snapshot,
+        // Campos operacionales raw (fallback)
+        name_raw: item.name,
+        description_raw: item.description,
+        category_name_raw: item.category_name,
+        seccion_name_raw: item.seccion_name,
+        // Campo específico para custom items
+        categoria_id: item.service_category_id, // Guardar categoriaId para custom items
+        original_item_id: item.original_service_id, // Guardar originalItemId desde original_service_id
+      }));
+
+    // Combinar ambos tipos de items manteniendo el orden
+    const itemsOrdenados = [...catalogItems, ...customItems].sort((a, b) => a.order - b.order);
 
     return {
       success: true,
@@ -1523,6 +1640,22 @@ export async function updateCotizacion(
       return { success: false, error: 'No se puede actualizar una cotizaciรณn autorizada o aprobada' };
     }
 
+    // Validar nombre único dentro de la promise (excluyendo la cotización actual)
+    if (validatedData.nombre.trim() !== cotizacion.name) {
+      const nombreExistente = await prisma.studio_cotizaciones.findFirst({
+        where: {
+          promise_id: cotizacion.promise_id,
+          name: validatedData.nombre.trim(),
+          archived: false,
+          id: { not: validatedData.cotizacion_id },
+        },
+      });
+
+      if (nombreExistente) {
+        return { success: false, error: 'Ya existe una cotización con ese nombre en esta promesa' };
+      }
+    }
+
     // Obtener catálogo para obtener billing_type de cada item
     const { obtenerCatalogo } = await import('@/lib/actions/studio/config/catalogo.actions');
     const catalogoResult = await obtenerCatalogo(validatedData.studio_slug);
@@ -1553,6 +1686,34 @@ export async function updateCotizacion(
         billing_type: billingTypeMap.get(itemId) || 'SERVICE', // Default SERVICE para compatibilidad legacy
       }));
 
+    // Obtener nombres de categoría y sección para custom items
+    const categoriaIds = (validatedData.customItems || [])
+      .map(item => item.categoriaId)
+      .filter((id): id is string => !!id);
+    
+    const categoriasMap = new Map<string, { categoryName: string; sectionName: string | null }>();
+    if (categoriaIds.length > 0) {
+      const categorias = await prisma.studio_service_categories.findMany({
+        where: { id: { in: categoriaIds } },
+        include: {
+          section_categories: {
+            include: {
+              service_sections: {
+                select: { name: true },
+              },
+            },
+          },
+        },
+      });
+      
+      categorias.forEach(categoria => {
+        categoriasMap.set(categoria.id, {
+          categoryName: categoria.name,
+          sectionName: categoria.section_categories?.service_sections?.name || null,
+        });
+      });
+    }
+
     // Preparar items personalizados
     const customItemsToCreate = (validatedData.customItems || []).map((customItem, index) => {
       const totalGastos = (customItem.expense || 0);
@@ -1562,9 +1723,14 @@ export async function updateCotizacion(
         durationHours
       );
       
+      // Obtener nombres de categoría y sección desde el mapa
+      const categoriaInfo = customItem.categoriaId ? categoriasMap.get(customItem.categoriaId) : null;
+      
       return {
         cotizacion_id: validatedData.cotizacion_id,
         item_id: null, // ⚠️ NULL para items personalizados
+        service_category_id: customItem.categoriaId || null, // Guardar categoriaId para custom items
+        original_service_id: customItem.originalItemId || null, // Guardar originalItemId si es reemplazo
         quantity: customItem.quantity,
         order: catalogItemsToCreate.length + index,
         billing_type: (customItem.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
@@ -1579,6 +1745,10 @@ export async function updateCotizacion(
         // Snapshots iguales a campos operacionales para items custom
         name_snapshot: customItem.name,
         description_snapshot: customItem.description || null,
+        category_name_snapshot: categoriaInfo?.categoryName || null,
+        seccion_name_snapshot: categoriaInfo?.sectionName || null,
+        category_name: categoriaInfo?.categoryName || null,
+        seccion_name: categoriaInfo?.sectionName || null,
         unit_price_snapshot: customItem.unit_price,
         cost_snapshot: customItem.cost || 0,
         expense_snapshot: totalGastos,
@@ -1635,7 +1805,7 @@ export async function updateCotizacion(
       });
     }
 
-    // Obtener cotizaciรณn actualizada
+    // Obtener cotizaciรณn actualizada con promise_id para redirección
     const updated = await prisma.studio_cotizaciones.findUnique({
       where: { id: validatedData.cotizacion_id },
       select: {
@@ -1653,6 +1823,7 @@ export async function updateCotizacion(
         revision_status: true,
         selected_by_prospect: true,
         selected_at: true,
+        promise_id: true,
       },
     });
 
@@ -1685,6 +1856,8 @@ export async function updateCotizacion(
       data: {
         id: updated!.id,
         name: updated!.name,
+        promise_id: updated!.promise_id || undefined,
+        status: updated!.status,
         cotizacion: updated!,
       },
     };

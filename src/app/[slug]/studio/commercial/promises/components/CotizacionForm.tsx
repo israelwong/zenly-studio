@@ -279,11 +279,19 @@ export function CotizacionForm({
               expense?: number | null;
               billing_type?: string | null;
               categoria_id?: string | null;
+              original_item_id?: string | null; // ID del item original que reemplaza
             }) => {
               if (item.item_id && item.quantity > 0) {
-                // Item del catálogo
-                cotizacionItems[item.item_id] = item.quantity;
-              } else if (!item.item_id && item.name && item.unit_price) {
+                // Item del catálogo - verificar si hay un custom item que lo reemplace
+                const hasReplacement = cotizacionData.items.some(
+                  (ci: typeof item) => !ci.item_id && ci.original_item_id === item.item_id
+                );
+                
+                // Solo agregar al estado si NO tiene reemplazo
+                if (!hasReplacement) {
+                  cotizacionItems[item.item_id] = item.quantity;
+                }
+              } else if (!item.item_id && item.name && item.unit_price !== undefined) {
                 // Item personalizado - usar categoriaId del item o fallback a primera categoría
                 const categoriaId = item.categoria_id || primeraCategoriaId;
                 if (!categoriaId) {
@@ -300,7 +308,7 @@ export function CotizacionForm({
                   billing_type: (item.billing_type || 'SERVICE') as 'HOUR' | 'SERVICE' | 'UNIT',
                   tipoUtilidad: 'servicio', // Default, se puede inferir de otros campos si es necesario
                   categoriaId: categoriaId,
-                  originalItemId: null, // Al cargar desde DB, no sabemos si era reemplazo (solo existe en sesión actual)
+                  originalItemId: item.original_item_id || null, // Cargar originalItemId desde DB
                 });
               }
             });
@@ -1244,6 +1252,19 @@ export function CotizacionForm({
         startTransition(() => {
           if (redirectOnSuccess) {
             router.push(redirectOnSuccess);
+          } else if (result.data?.promise_id) {
+            // Redirigir según el estado de la cotización
+            const status = result.data.status || cotizacionData?.status || 'pendiente';
+            if (status === 'negociacion') {
+              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cotizacion/${result.data.id}/negociacion`);
+            } else if (status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
+              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
+            } else if (status === 'autorizada' || status === 'aprobada' || status === 'approved') {
+              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/autorizada`);
+            } else {
+              // Estado pendiente por defecto
+              router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/pendiente`);
+            }
           } else if (promiseId) {
             router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
           } else {
@@ -1319,6 +1340,19 @@ export function CotizacionForm({
       startTransition(() => {
         if (redirectOnSuccess) {
           router.push(redirectOnSuccess);
+        } else if (result.data?.promise_id) {
+          // Redirigir según el estado de la cotización
+          const status = result.data.status || 'pendiente';
+          if (status === 'negociacion') {
+            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cotizacion/${result.data.id}/negociacion`);
+          } else if (status === 'en_cierre' || status === 'contract_generated' || status === 'contract_signed') {
+            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/cierre`);
+          } else if (status === 'autorizada' || status === 'aprobada' || status === 'approved') {
+            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/autorizada`);
+          } else {
+            // Estado pendiente por defecto
+            router.push(`/${studioSlug}/studio/commercial/promises/${result.data.promise_id}/pendiente`);
+          }
         } else if (promiseId) {
           router.push(`/${studioSlug}/studio/commercial/promises/${promiseId}`);
         } else {
