@@ -430,7 +430,7 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                     <div className="border-t border-zinc-700/30 pt-1.5"></div>
 
                     {/* Fecha de evento - Separada debajo */}
-                    {eventDate && (
+                    {eventDate ? (
                         <div className={`flex items-center gap-1.5 text-xs ${getDateColor()}`}>
                             <Calendar className="h-3 w-3 shrink-0" />
                             <span className="font-medium">
@@ -444,6 +444,13 @@ export function PromiseKanbanCard({ promise, onClick, studioSlug, onArchived, on
                                     </span>
                                 )}
                             </span>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-1.5">
+                            <ZenBadge variant="destructive" className="text-[10px] px-1.5 py-0.5 gap-1">
+                                <Calendar className="h-2.5 w-2.5" />
+                                Fecha no definida
+                            </ZenBadge>
                         </div>
                     )}
 

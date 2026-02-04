@@ -32,6 +32,8 @@ export interface ZenDialogProps {
   headerActions?: React.ReactNode;
   fullScreen?: boolean;
   footerLeftContent?: React.ReactNode;
+  /** Si true, permite que los dropdowns y elementos absolutos se muestren fuera del contenedor */
+  allowOverflow?: boolean;
 }
 
 const maxWidthClasses = {
@@ -69,7 +71,8 @@ export function ZenDialog({
   zIndex = 10050,
   headerActions,
   fullScreen = false,
-  footerLeftContent
+  footerLeftContent,
+  allowOverflow = false
 }: ZenDialogProps) {
   const [mounted, setMounted] = React.useState(false);
   const [isAnimating, setIsAnimating] = React.useState(false);
@@ -198,7 +201,8 @@ export function ZenDialog({
 
           {/* Content */}
           <ZenCardContent className={cn(
-            'overflow-y-auto flex-1 min-h-0',
+            allowOverflow ? 'overflow-visible' : 'overflow-y-auto',
+            'flex-1 min-h-0',
             title ? 'px-6 py-4' : 'px-6 py-4',
             title ? '' : 'border-0'
           )} style={{

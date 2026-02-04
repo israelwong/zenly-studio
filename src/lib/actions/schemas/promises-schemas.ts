@@ -50,6 +50,7 @@ export const createPromiseSchema = z.object({
   sales_agent_id: z.string().cuid().optional(),
   referrer_id: z.string().optional(),
   referrer_type: z.enum(['STAFF', 'CONTACT']).optional(),
+  notes: z.string().max(500, 'Las notas son demasiado largas').optional().or(z.literal('')),
 });
 
 export const updatePromiseSchema = createPromiseSchema.partial().extend({
@@ -137,6 +138,7 @@ export interface PromiseWithContact {
   social_network_name?: string | null;
   referrer_contact_id: string | null;
   referrer_name: string | null;
+  notes: string | null;
   created_at: Date;
   updated_at: Date;
   event_type?: {

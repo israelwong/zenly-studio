@@ -46,6 +46,7 @@ interface EventFormModalProps {
         sales_agent_id?: string;
         referrer_id?: string;
         referrer_type?: 'STAFF' | 'CONTACT';
+        notes?: string;
     };
     onSuccess?: (updatedData?: {
         id: string;
@@ -156,6 +157,7 @@ export function EventFormModal({
         sales_agent_id: initialData?.sales_agent_id,
         referrer_id: initialData?.referrer_id,
         referrer_type: initialData?.referrer_type,
+        notes: initialData?.notes || '',
     });
     const [eventTypes, setEventTypes] = useState<Array<{ id: string; name: string }>>([]);
     const [acquisitionChannels, setAcquisitionChannels] = useState<Array<{ id: string; name: string }>>([]);
@@ -166,7 +168,6 @@ export function EventFormModal({
     const [allContacts, setAllContacts] = useState<Array<{ id: string; name: string; phone: string; email: string | null; status?: string; type?: 'contact' | 'crew' }>>([]);
     const [salesAgents, setSalesAgents] = useState<Array<{ id: string; full_name: string; phone: string | null }>>([]);
     const [crewMembers, setCrewMembers] = useState<Array<{ id: string; name: string; phone: string | null }>>([]);
-    const [referrerType, setReferrerType] = useState<'STAFF' | 'CONTACT' | null>(null);
 
     // Estado para fecha única (solo una fecha permitida)
     const [selectedDates, setSelectedDates] = useState<Date[]>(() => {
@@ -193,6 +194,7 @@ export function EventFormModal({
     const [filteredReferrerContacts, setFilteredReferrerContacts] = useState<Array<{ id: string; name: string; phone: string; status?: string; type?: 'contact' | 'crew' }>>([]);
     const [selectedContactIndex, setSelectedContactIndex] = useState(-1);
     const [selectedReferrerIndex, setSelectedReferrerIndex] = useState(-1);
+    const [selectedReferrerStatus, setSelectedReferrerStatus] = useState<string | undefined>(undefined);
     const [conflictosPorFecha, setConflictosPorFecha] = useState<Map<string, AgendaItem[]>>(new Map());
     const referrerSyncedRef = useRef(false);
     const [showCreateReferrerModal, setShowCreateReferrerModal] = useState(false);
@@ -370,10 +372,13 @@ export function EventFormModal({
                 await loadAllContacts();
 
                 // Asociar el nuevo contacto como referido
+                // Los contactos creados son siempre tipo 'contact' (no crew)
                 setReferrerInputValue(`@${result.data.name}`);
                 setFormData((prev) => ({
                     ...prev,
-                    referrer_contact_id: result.data!.id,
+                    referrer_id: result.data!.id,
+                    referrer_type: 'CONTACT', // ✅ Contactos nuevos son siempre CONTACT
+                    referrer_contact_id: undefined, // Limpiar campo legacy
                     referrer_name: undefined,
                 }));
 
@@ -414,6 +419,7 @@ export function EventFormModal({
                     sales_agent_id: initialData.sales_agent_id,
                     referrer_id: initialData.referrer_id,
                     referrer_type: initialData.referrer_type,
+                    notes: initialData.notes || '',
                 });
                 setNameInput(initialData.name || '');
 
@@ -443,8 +449,8 @@ export function EventFormModal({
                     // Si hay referrer_name, usarlo directamente
                     setReferrerInputValue(initialData.referrer_name);
                     referrerSyncedRef.current = true;
-                } else if (initialData.referrer_contact_id) {
-                    // Si hay referrer_contact_id pero no referrer_name, inicializar vacío
+                } else if (initialData.referrer_contact_id || initialData.referrer_id) {
+                    // Si hay referrer_contact_id o referrer_id pero no referrer_name, inicializar vacío
                     // Se sincronizará cuando se carguen los contactos con el formato @nombre
                     setReferrerInputValue('');
                     referrerSyncedRef.current = false;
@@ -458,12 +464,7 @@ export function EventFormModal({
                 setReferrerInputValue('');
             }
 
-            // Inicializar referrer_type si hay referrer_id
-            if (initialData?.referrer_id && initialData?.referrer_type) {
-                setReferrerType(initialData.referrer_type);
-            } else {
-                setReferrerType(null);
-            }
+            // referrer_type se detectará automáticamente basado en el contacto seleccionado
 
             // Cargar catálogos en segundo plano
             setIsInitialLoading(true);
@@ -494,7 +495,6 @@ export function EventFormModal({
                     referrer_id: undefined,
                     referrer_type: undefined,
                 });
-                setReferrerType(null);
                 setNameInput('');
                 setSelectedDates([]);
                 setEventDate(undefined);
@@ -583,24 +583,39 @@ export function EventFormModal({
     useEffect(() => {
         // Solo sincronizar si:
         // 1. El modal está abierto
-        // 2. Hay referrer_contact_id en formData
+        // 2. Hay referrer_contact_id O referrer_id en formData
         // 3. No hay referrer_name (o está vacío)
         // 4. Los contactos ya se cargaron
         // 5. Aún no se ha sincronizado (evitar parpadeos)
         if (
             isOpen &&
-            formData.referrer_contact_id &&
+            (formData.referrer_contact_id || formData.referrer_id) &&
             !formData.referrer_name &&
             allContacts.length > 0 &&
             !referrerSyncedRef.current
         ) {
-            const referrerContact = allContacts.find((c) => c.id === formData.referrer_contact_id);
+            const referrerId = formData.referrer_id || formData.referrer_contact_id;
+            const referrerContact = allContacts.find((c) => c.id === referrerId);
             if (referrerContact) {
                 const expectedValue = `@${referrerContact.name}`;
                 // Actualizar siempre si el valor actual está vacío o no coincide con el esperado
                 setReferrerInputValue((current) => {
                     if (!current || current === '' || current !== expectedValue) {
                         referrerSyncedRef.current = true;
+                        
+                        // Establecer el status del referido para mostrar la ficha informativa si es necesario
+                        setSelectedReferrerStatus(referrerContact.status);
+                        
+                        // ✅ Si no hay referrer_type establecido, detectarlo automáticamente
+                        if (!formData.referrer_type && referrerContact.type) {
+                            setFormData((prev) => ({
+                                ...prev,
+                                referrer_type: referrerContact.type === 'crew' ? 'STAFF' : 'CONTACT',
+                                referrer_id: referrerContact.id,
+                                referrer_contact_id: undefined, // Limpiar campo legacy si existe
+                            }));
+                        }
+                        
                         return expectedValue;
                     }
                     return current;
@@ -608,7 +623,14 @@ export function EventFormModal({
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, formData.referrer_contact_id, formData.referrer_name, allContacts.length]);
+    }, [
+        isOpen,
+        formData.referrer_contact_id ?? null,
+        formData.referrer_id ?? null,
+        formData.referrer_type ?? null,
+        formData.referrer_name ?? null,
+        allContacts.length,
+    ]);
 
     const handleNameChange = (value: string) => {
         setNameInput(value);
@@ -656,15 +678,37 @@ export function EventFormModal({
                     handleSelectContact(filteredContactSuggestions[selectedContactIndex]);
                 }
             }
-            if (showReferrerSuggestions && filteredReferrerContacts.length > 0) {
+                if (showReferrerSuggestions && filteredReferrerContacts.length > 0) {
                 if (selectedReferrerIndex >= 0 && selectedReferrerIndex < filteredReferrerContacts.length) {
                     const contact = filteredReferrerContacts[selectedReferrerIndex];
                     setReferrerInputValue(`@${contact.name}`);
-                    setFormData((prev) => ({
-                        ...prev,
-                        referrer_contact_id: contact.id,
-                        referrer_name: undefined,
-                    }));
+                    
+                    // ✅ Detección automática del tipo basado en contact.type
+                    if (contact.type === 'crew') {
+                        setFormData((prev) => ({
+                            ...prev,
+                            referrer_id: contact.id,
+                            referrer_type: 'STAFF',
+                            referrer_contact_id: undefined,
+                            referrer_name: undefined,
+                        }));
+                    } else if (contact.type === 'contact') {
+                        setFormData((prev) => ({
+                            ...prev,
+                            referrer_id: contact.id,
+                            referrer_type: 'CONTACT',
+                            referrer_contact_id: undefined,
+                            referrer_name: undefined,
+                        }));
+                    } else {
+                        // Fallback: usar sistema legacy
+                        setFormData((prev) => ({
+                            ...prev,
+                            referrer_contact_id: contact.id,
+                            referrer_name: undefined,
+                        }));
+                    }
+                    
                     setShowReferrerSuggestions(false);
                     setSelectedReferrerIndex(-1);
                 }
@@ -799,7 +843,8 @@ export function EventFormModal({
                     formData.referrer_name !== (initialData.referrer_name || undefined) ||
                     formData.sales_agent_id !== (initialData.sales_agent_id || undefined) ||
                     formData.referrer_id !== (initialData.referrer_id || undefined) ||
-                    formData.referrer_type !== (initialData.referrer_type || undefined);
+                    formData.referrer_type !== (initialData.referrer_type || undefined) ||
+                    formData.notes !== (initialData.notes || '');
 
                 // Si solo cambió la fecha y hay una fecha seleccionada, usar actualizarFechaEvento
                 if (datesChanged && !otherFieldsChanged && selectedDates.length === 1) {
@@ -934,6 +979,7 @@ export function EventFormModal({
             cancelLabel="Cancelar"
             isLoading={loading}
             zIndex={zIndex}
+            allowOverflow={true}
         >
             {isInitialLoading && !initialData ? (
                 <div className="space-y-4">
@@ -969,7 +1015,7 @@ export function EventFormModal({
                             error={errors.name}
                         />
                         {showContactSuggestions && filteredContactSuggestions.length > 0 && (
-                            <div className="absolute z-50 mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-48 overflow-y-auto">
+                            <div className="absolute z-[9999] mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-48 overflow-y-auto">
                                 {filteredContactSuggestions.map((contact, index) => (
                                     <button
                                         key={contact.id}
@@ -1030,6 +1076,19 @@ export function EventFormModal({
                             placeholder="Dirección del cliente (opcional)"
                             rows={2}
                             className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors resize-none"
+                        />
+                    </div>
+
+                    {/* Notas o comentarios */}
+                    <div className="space-y-2">
+                        <ZenInput
+                            label="Nota o comentarios"
+                            value={formData.notes || ''}
+                            onChange={(e) => {
+                                setFormData((prev) => ({ ...prev, notes: e.target.value }));
+                            }}
+                            placeholder="Ej: Prima de María, mamá de Hanna"
+                            maxLength={500}
                         />
                     </div>
 
@@ -1190,7 +1249,14 @@ export function EventFormModal({
                                     setFormData((prev) => ({ ...prev, social_network_id: undefined }));
                                 }
                                 if (value !== referidosChannelId) {
-                                    setFormData((prev) => ({ ...prev, referrer_contact_id: undefined, referrer_name: undefined }));
+                                    // Limpiar todos los campos de referido cuando se cambia el canal
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        referrer_contact_id: undefined,
+                                        referrer_name: undefined,
+                                        referrer_id: undefined,
+                                        referrer_type: undefined,
+                                    }));
                                     setReferrerInputValue('');
                                     setShowReferrerSuggestions(false);
                                 }
@@ -1304,11 +1370,18 @@ export function EventFormModal({
                                             } else {
                                                 setShowReferrerSuggestions(false);
                                             }
+                                            // Limpiar campos de atribución cuando se borra el texto
                                             setFormData((prev) => ({
                                                 ...prev,
                                                 referrer_name: value || undefined,
                                                 referrer_contact_id: undefined,
+                                                referrer_id: undefined,
+                                                referrer_type: undefined,
                                             }));
+                                            // Limpiar también el status del referido
+                                            if (!value) {
+                                                setSelectedReferrerStatus(undefined);
+                                            }
                                         }
                                     }}
                                     onKeyDown={handleReferrerInputKeyDown}
@@ -1365,7 +1438,7 @@ export function EventFormModal({
                                 />
 
                                 {showReferrerSuggestions && (
-                                    <div className="absolute z-50 mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-48 overflow-y-auto">
+                                    <div className="absolute z-[9999] mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 shadow-lg max-h-48 overflow-y-auto">
                                         {filteredReferrerContacts.length > 0 ? (
                                             <>
                                                 {filteredReferrerContacts.map((contact, index) => (
@@ -1375,11 +1448,38 @@ export function EventFormModal({
                                                         onClick={() => {
                                                             const hasAt = referrerInputValue.includes('@');
                                                             setReferrerInputValue(hasAt ? `@${contact.name}` : contact.name);
-                                                            setFormData((prev) => ({
-                                                                ...prev,
-                                                                referrer_contact_id: contact.id,
-                                                                referrer_name: undefined,
-                                                            }));
+                                                            
+                                                            // Guardar el status del referido seleccionado
+                                                            setSelectedReferrerStatus(contact.status);
+                                                            
+                                                            // ✅ Detección automática del tipo basado en contact.type
+                                                            if (contact.type === 'crew') {
+                                                                // Es Staff (crew member)
+                                                                setFormData((prev) => ({
+                                                                    ...prev,
+                                                                    referrer_id: contact.id,
+                                                                    referrer_type: 'STAFF',
+                                                                    referrer_contact_id: undefined, // Limpiar campo legacy
+                                                                    referrer_name: undefined,
+                                                                }));
+                                                            } else if (contact.type === 'contact') {
+                                                                // Es Contact
+                                                                setFormData((prev) => ({
+                                                                    ...prev,
+                                                                    referrer_id: contact.id,
+                                                                    referrer_type: 'CONTACT',
+                                                                    referrer_contact_id: undefined, // Limpiar campo legacy
+                                                                    referrer_name: undefined,
+                                                                }));
+                                                            } else {
+                                                                // Fallback: usar sistema legacy
+                                                                setFormData((prev) => ({
+                                                                    ...prev,
+                                                                    referrer_contact_id: contact.id,
+                                                                    referrer_name: undefined,
+                                                                }));
+                                                            }
+                                                            
                                                             setShowReferrerSuggestions(false);
                                                             setSelectedReferrerIndex(-1);
                                                         }}
@@ -1397,6 +1497,15 @@ export function EventFormModal({
                                                                     : 'bg-blue-500/20 text-blue-300'
                                                                 }`}>
                                                                 {contact.status === 'personal' ? 'Personal' : contact.status === 'cliente' ? 'Cliente' : 'Prospecto'}
+                                                            </span>
+                                                        )}
+                                                        {contact.type && (
+                                                            <span className={`text-xs px-2 py-0.5 rounded ${
+                                                                contact.type === 'crew'
+                                                                    ? 'bg-amber-500/20 text-amber-300'
+                                                                    : 'bg-blue-500/20 text-blue-300'
+                                                            }`}>
+                                                                {contact.type === 'crew' ? 'Staff' : 'Contacto'}
                                                             </span>
                                                         )}
                                                     </button>
@@ -1436,140 +1545,24 @@ export function EventFormModal({
                         </div>
                     )}
 
-                    {/* Atribución y Origen */}
-                    <div className="space-y-4 pt-2 border-t border-zinc-800">
-                        <h3 className="text-sm font-semibold text-zinc-200">Atribución y Origen</h3>
-                        
-                        {/* Agente de Ventas */}
-                        <div>
-                            <ZenSelect
-                                label="Agente de Ventas"
-                                value={formData.sales_agent_id || ''}
-                                onValueChange={(value) => {
-                                    setFormData((prev) => ({
-                                        ...prev,
-                                        sales_agent_id: value === '' ? undefined : value,
-                                    }));
-                                }}
-                                options={[
-                                    { value: '', label: 'Ninguno' },
-                                    ...salesAgents.map((agent) => ({
-                                        value: agent.id,
-                                        label: agent.full_name,
-                                    })),
-                                ]}
-                                placeholder="Seleccionar agente de ventas"
-                            />
-                        </div>
-
-                        {/* Referido por (Nuevo sistema) */}
-                        <div className="space-y-3">
-                            <label className="text-sm font-medium text-zinc-300 block">
-                                Tipo de Referido
-                            </label>
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="referrer_type"
-                                        checked={referrerType === 'STAFF'}
-                                        onChange={() => {
-                                            setReferrerType('STAFF');
-                                            setFormData((prev) => ({
-                                                ...prev,
-                                                referrer_type: 'STAFF',
-                                                referrer_id: undefined,
-                                            }));
-                                        }}
-                                        className="w-4 h-4 text-emerald-500 bg-zinc-900 border-zinc-600 focus:ring-emerald-500"
-                                    />
-                                    <span className="text-sm text-zinc-300">Staff</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="referrer_type"
-                                        checked={referrerType === 'CONTACT'}
-                                        onChange={() => {
-                                            setReferrerType('CONTACT');
-                                            setFormData((prev) => ({
-                                                ...prev,
-                                                referrer_type: 'CONTACT',
-                                                referrer_id: undefined,
-                                            }));
-                                        }}
-                                        className="w-4 h-4 text-emerald-500 bg-zinc-900 border-zinc-600 focus:ring-emerald-500"
-                                    />
-                                    <span className="text-sm text-zinc-300">Contacto</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="referrer_type"
-                                        checked={referrerType === null}
-                                        onChange={() => {
-                                            setReferrerType(null);
-                                            setFormData((prev) => ({
-                                                ...prev,
-                                                referrer_type: undefined,
-                                                referrer_id: undefined,
-                                            }));
-                                        }}
-                                        className="w-4 h-4 text-emerald-500 bg-zinc-900 border-zinc-600 focus:ring-emerald-500"
-                                    />
-                                    <span className="text-sm text-zinc-300">Ninguno</span>
-                                </label>
+                    {/* Ficha informativa cuando el referido es Personal (Staff) */}
+                    {selectedReferrerStatus === 'personal' && (
+                        <div className="mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                            <div className="flex items-start gap-2">
+                                <div className="flex-shrink-0 mt-0.5">
+                                    <AlertCircle className="w-4 h-4 text-purple-400" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-xs font-medium text-purple-300 mb-1">
+                                        Atribución de Comisión
+                                    </p>
+                                    <p className="text-xs text-purple-200/80 leading-relaxed">
+                                        Este referido es un miembro del equipo. La comisión por referido se asignará automáticamente según la configuración de comisiones del estudio.
+                                    </p>
+                                </div>
                             </div>
-
-                            {referrerType === 'STAFF' && (
-                                <ZenSelect
-                                    label="Referido por (Staff)"
-                                    value={formData.referrer_id || ''}
-                                    onValueChange={(value) => {
-                                        setFormData((prev) => ({
-                                            ...prev,
-                                            referrer_id: value === '' ? undefined : value,
-                                        }));
-                                    }}
-                                    options={[
-                                        { value: '', label: 'Seleccionar staff' },
-                                        ...salesAgents.map((agent) => ({
-                                            value: agent.id,
-                                            label: agent.full_name,
-                                        })),
-                                        ...crewMembers.map((member) => ({
-                                            value: member.id,
-                                            label: member.name,
-                                        })),
-                                    ]}
-                                    placeholder="Buscar staff..."
-                                />
-                            )}
-
-                            {referrerType === 'CONTACT' && (
-                                <ZenSelect
-                                    label="Referido por (Contacto)"
-                                    value={formData.referrer_id || ''}
-                                    onValueChange={(value) => {
-                                        setFormData((prev) => ({
-                                            ...prev,
-                                            referrer_id: value === '' ? undefined : value,
-                                        }));
-                                    }}
-                                    options={[
-                                        { value: '', label: 'Seleccionar contacto' },
-                                        ...allContacts
-                                            .filter((c) => c.type === 'contact')
-                                            .map((contact) => ({
-                                                value: contact.id,
-                                                label: contact.name,
-                                            })),
-                                    ]}
-                                    placeholder="Buscar contacto..."
-                                />
-                            )}
                         </div>
-                    </div>
+                    )}
 
                     {/* Fecha de Interés / Fecha del Evento */}
                     <div className="space-y-2">

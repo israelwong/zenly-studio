@@ -751,6 +751,8 @@ export async function createPromise(
         sales_agent_id: validatedData.sales_agent_id || null,
         referrer_id: validatedData.referrer_id || null,
         referrer_type: validatedData.referrer_type || null,
+        // Notas contextuales
+        notes: validatedData.notes?.trim() || null,
       },
       include: {
         event_type: {
@@ -800,6 +802,7 @@ export async function createPromise(
       social_network_id: contact.social_network_id,
       referrer_contact_id: contact.referrer_contact_id,
       referrer_name: contact.referrer_name,
+      notes: promise.notes,
       created_at: contact.created_at,
       updated_at: promise.updated_at,
       event_type: promise.event_type || null,
@@ -1073,6 +1076,10 @@ export async function updatePromise(
       if (validatedData.referrer_type !== undefined) {
         updateData.referrer_type = validatedData.referrer_type || null;
       }
+      // Notas contextuales
+      if (validatedData.notes !== undefined) {
+        updateData.notes = validatedData.notes?.trim() || null;
+      }
 
       // Solo actualizar si hay cambios en los datos de la promesa
       if (Object.keys(updateData).length > 0) {
@@ -1148,6 +1155,8 @@ export async function updatePromise(
           sales_agent_id: validatedData.sales_agent_id || null,
           referrer_id: validatedData.referrer_id || null,
           referrer_type: validatedData.referrer_type || null,
+          // Notas contextuales
+          notes: validatedData.notes?.trim() || null,
         },
         include: {
           event_type: {
@@ -1311,6 +1320,7 @@ export async function updatePromise(
       social_network_id: contact.social_network_id,
       referrer_contact_id: contact.referrer_contact_id,
       referrer_name: contact.referrer_name,
+      notes: promise.notes,
       created_at: contact.created_at,
       updated_at: promise.updated_at,
       event_type: promise.event_type || null,
@@ -1601,6 +1611,7 @@ export async function movePromise(
       social_network_id: contact.social_network_id,
       referrer_contact_id: contact.referrer_contact_id,
       referrer_name: contact.referrer_name,
+      notes: promise.notes,
       created_at: contact.created_at,
       updated_at: promise.updated_at,
       event_type: promise.event_type || null,
@@ -1796,6 +1807,7 @@ export async function archivePromise(
       social_network_id: contact.social_network_id,
       referrer_contact_id: contact.referrer_contact_id,
       referrer_name: contact.referrer_name,
+      notes: promise.notes,
       created_at: contact.created_at,
       updated_at: updatedPromise.updated_at,
       event_type: updatedPromise.event_type || null,
@@ -1942,6 +1954,7 @@ export async function unarchivePromise(
       social_network_id: contact.social_network_id,
       referrer_contact_id: contact.referrer_contact_id,
       referrer_name: contact.referrer_name,
+      notes: promise.notes,
       created_at: contact.created_at,
       updated_at: updatedPromise.updated_at,
       event_type: updatedPromise.event_type || null,

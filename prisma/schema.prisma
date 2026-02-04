@@ -1382,6 +1382,7 @@ model studio_promises {
   referrer_id                    String?                         // ID del referidor (puede ser studio_users, studio_crew_members o studio_contacts)
   referrer_type                  PromiseReferrerType?            // Tipo de referidor: STAFF | CONTACT
   commission_payout_total        Float?                          // Monto total calculado de comisión al momento del cierre
+  notes                          String?                         // Notas contextuales (ej: "Prima de María, mamá de Hanna")
   agenda                          studio_agenda[]
   client_notifications            studio_client_notifications[]
   quotes                          studio_cotizaciones[]
